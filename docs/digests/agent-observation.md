@@ -1,6 +1,6 @@
 # Agent observation substrate
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; reader schema `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; query thread `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; reader schema `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; query thread `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; test citations re-anchored on `9e0761f5f103449b59a79176c30bc3bcfbab12b0` and accompanying changes; re-read cited symbols when changing behavior.
 
 [FACT] Each agent box gets a tmpfs at
 `/run/yoloctl/controller/agent-observe/<box>`. It sits in the reserved
@@ -117,5 +117,5 @@ Claude run need the isolated live check. [12](#source-12) [13](#source-13) [14](
 10. <a id="source-10"></a> [Catalog entry](../../internal/features/features.go#L88-L92) — `yolo.agent.observe`.
 11. <a id="source-11"></a> [Reader](../../internal/agentsession/observe/read.go#L1-L514) — `Health`, `Context`, `StatusLine`, `Query`, the states, `Cursor`, `Observation`, `Read`, `listEvents`, `wireEvent`, `parseLine`.
 12. <a id="source-12"></a> [Substrate regressions](../../internal/agentsession/observe/observe_test.go#L1-L839) — root, generations, exhaustion recovery, reader, status line and query validation, the Claude and Codex vectors.
-13. <a id="source-13"></a> [Writer regressions](../../scripts/test_agent_observe.py#L1-L843) — fields, payload shapes, absence, links, contention, rotation, full tmpfs, status line and hand-over, Codex mode and its daemon read; bounds and interpreter resolution in internal/features/agent_observe_test.go.
+13. <a id="source-13"></a> [Writer regressions](../../scripts/test_agent_observe.py#L1-L889) — fields, payload shapes, absence, links, contention, rotation, full tmpfs, status line and hand-over, Codex mode and its daemon read; bounds and interpreter resolution in internal/features/agent_observe_test.go.
 14. <a id="source-14"></a> [Binding regressions](../../internal/agentbox/observe_test.go#L1-L128) — bind, overlap, runtime remount, destroy, no recreate reason.

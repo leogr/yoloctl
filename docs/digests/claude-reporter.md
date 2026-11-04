@@ -1,6 +1,6 @@
 # Claude status line and hook reporter
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; test citations re-anchored on `9e0761f5f103449b59a79176c30bc3bcfbab12b0` and accompanying changes; re-read cited symbols when changing behavior.
 
 [FACT] The Claude profile requires `yolo.agent.observe` and names it as
 `session.observe.push`. A push feature must also appear in `requires_features`.
@@ -98,11 +98,11 @@ facts of that version, not a contract. [6](#source-6) [7](#source-7) [8](#source
 2. <a id="source-2"></a> [Requirement regressions](../../cmd/yoloctl/session_observe_test.go#L244-L273) — `TestEveryClaudeBoxRequiresItsReporter`; profile cases in internal/agentprofile/profile_test.go (`session-observe-*`); the older container's recreate note in `TestLaunchCarriesTheGenerationOnlyWhenObservable`.
 3. <a id="source-3"></a> [Feature](../../internal/features/agent_observe.go#L12-L174) — `agentObserveEvents`, `agentObserveSettingsJSON`, `agentObservePython`, `agentObserveInstallDockerfile`; async-only regression in agent_observe_test.go `TestAgentObserveSettingsRegisterOnlyTheContractHooks`.
 4. <a id="source-4"></a> [Writer fields](../../internal/features/agent-observe.py#L75-L214) — `NOTIFICATION_STATES`, `EFFORTS`, `record`, `statusline_record`; `write` at L593, `user_command` L618, `stage` L683, `statusline` L779, `main` L814.
-5. <a id="source-5"></a> [Field regressions](../../scripts/test_agent_observe.py#L174-L292) — vectors, status line allowlist/context and real `/tmp` staging.
-6. <a id="source-6"></a> [Hand-over regressions](../../scripts/test_agent_observe.py#L294-L398) — settings lookup, record-then-exec, same bytes/status, no command, record failure, skipped hand-over and recursion.
+5. <a id="source-5"></a> [Field regressions](../../scripts/test_agent_observe.py#L184-L311) — vectors, status line allowlist/context and real `/tmp` staging.
+6. <a id="source-6"></a> [Hand-over regressions](../../scripts/test_agent_observe.py#L313-L413) — settings lookup, record-then-exec, same bytes/status, no command, record failure, skipped hand-over and recursion.
 7. <a id="source-7"></a> [S0 vectors](../../internal/agentsession/observe/testdata/claude-2.1.311/expected.jsonl#L1-L6) — payloads beside it, copied from the S0 capture (`.yolo-team/tasks/feat-runtime-metadata/S0/runE-final/payloads`, devOpUs, 2026-10-27).
 8. <a id="source-8"></a> [Reader vector tests](../../internal/agentsession/observe/observe_test.go#L669-L724) — `TestReadAcceptsTheClaudeVectors`, `TestReadAcceptsTheClaudeStateVectors`; context-only case `TestReadKeepsAContextWithoutUsedTokens` at L780.
-9. <a id="source-9"></a> [State fixtures](../../internal/agentsession/observe/testdata/claude-2.1.312-state/payloads.json#L1-L127) — per-case capture provenance and synthetic boundaries; `test_claude_state_vectors`, privacy, unknown-notification, subagent and task-array regressions in scripts/test_agent_observe.py L186-L243.
+9. <a id="source-9"></a> [State fixtures](../../internal/agentsession/observe/testdata/claude-2.1.312-state/payloads.json#L1-L127) — per-case capture provenance and synthetic boundaries; `test_claude_state_vectors`, privacy, unknown-notification, subagent and task-array regressions in scripts/test_agent_observe.py L196-L261.
 10. <a id="source-10"></a> [Official hooks reference](https://code.claude.com/docs/en/hooks#notification) — Notification timing/types, `stop-input` arrays and `stopfailure-input`, checked 2026-10-28.
 
 11. <a id="source-11"></a> [Capture limits](../../internal/agentsession/observe/testdata/claude-2.1.312-state/SOURCE.txt#L1-L16) — raw hashes, normalization, exec scope and remaining synthetic cases.

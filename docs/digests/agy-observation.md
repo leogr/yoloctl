@@ -1,6 +1,6 @@
 # Antigravity CLI status line reporter
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; live observation and disable outcomes `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; Antigravity CLI status line, settings and hooks documentation read 2026-10-28; shared-code anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9`; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; live observation and disable outcomes `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; Antigravity CLI status line, settings and hooks documentation read 2026-10-28; shared-code anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9`; test citations re-anchored on `9e0761f5f103449b59a79176c30bc3bcfbab12b0` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] agy documents no system settings layer: user settings live in
 `~/.gemini/antigravity-cli/settings.json`, and its hooks are synchronous and
@@ -83,7 +83,7 @@ is the basis of `used_percentage`, as it is for Claude. [1](#source-1) [7](#sour
 3. <a id="source-3"></a> [Feature](../../internal/features/agent_observe.go#L46-L51) — `AgentObserveAgyStatusLine`, `agentObserveAgyInstallDockerfile`; catalog entry in features.go L98.
 4. <a id="source-4"></a> [Feature regression](../../internal/features/agent_observe_test.go#L139-L223) — `TestAgentObserveAgyInstall`; `STATES` against the reader in `TestAgentObserveWriterMatchesReaderBounds`.
 5. <a id="source-5"></a> [Writer](../../internal/features/agent-observe.py#L211-L270) — `AGY_STATES`, `agy_percent`, `agy_record`; `read_settings`, `chained_command`, `agy_command` at L637/L655/L665, `statusline` at L779, `main` at L814.
-6. <a id="source-6"></a> [Writer regressions](../../scripts/test_agent_observe.py#L400-L539) — `AgyWriterTests`, `AgyHandOverTests`.
+6. <a id="source-6"></a> [Writer regressions](../../scripts/test_agent_observe.py#L419-L557) — `AgyWriterTests`, `AgyHandOverTests`.
 7. <a id="source-7"></a> [Vectors](../../internal/agentsession/observe/testdata/agy-docs-synthetic/SOURCE.txt#L1) — payloads, order and expected lines; read in observe_test.go `TestReadAcceptsTheAgyVectors`.
 8. <a id="source-8"></a> [Launcher seed](../../internal/features/agy-launch.py#L8-L30) — `OBSERVE`, the seeded `statusLine`.
 9. <a id="source-9"></a> [Seed regression](../../internal/features/agy_test.go#L8-L47) — new and existing accounts; the installed check in scripts/smoke/agy.sh L60.
