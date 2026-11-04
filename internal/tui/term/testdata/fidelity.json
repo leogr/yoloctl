@@ -1,0 +1,682 @@
+[
+  {
+    "id": "ascii",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "AB"
+      }
+    ],
+    "want": {
+      "cursor": [
+        2,
+        0
+      ],
+      "lines": {
+        "0": "AB"
+      }
+    }
+  },
+  {
+    "id": "carriage-return",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "ABC\rX"
+      }
+    ],
+    "want": {
+      "cursor": [
+        1,
+        0
+      ],
+      "lines": {
+        "0": "XBC"
+      }
+    }
+  },
+  {
+    "id": "linefeed-preserves-column",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "AB\nX"
+      }
+    ],
+    "want": {
+      "cursor": [
+        3,
+        1
+      ],
+      "lines": {
+        "0": "AB",
+        "1": "  X"
+      }
+    }
+  },
+  {
+    "id": "tab-stop",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "A\tB"
+      }
+    ],
+    "want": {
+      "cursor": [
+        9,
+        0
+      ],
+      "lines": {
+        "0": "A       B"
+      }
+    }
+  },
+  {
+    "id": "backspace",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "ABC\bX"
+      }
+    ],
+    "want": {
+      "cursor": [
+        3,
+        0
+      ],
+      "lines": {
+        "0": "ABX"
+      }
+    }
+  },
+  {
+    "id": "cursor-next-line",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "AB\u001b[E"
+      }
+    ],
+    "want": {
+      "cursor": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "id": "cursor-previous-line",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "\u001b[3;5H\u001b[F"
+      }
+    ],
+    "want": {
+      "cursor": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "id": "cursor-horizontal-absolute",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "ABC\u001b[1G"
+      }
+    ],
+    "want": {
+      "cursor": [
+        0,
+        0
+      ]
+    }
+  },
+  {
+    "id": "origin-mode",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "\u001b[3;4r\u001b[?6h\u001b[1;1H"
+      }
+    ],
+    "want": {
+      "cursor": [
+        0,
+        2
+      ]
+    }
+  },
+  {
+    "id": "cursor-up-clamped",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "\u001b[100A"
+      }
+    ],
+    "want": {
+      "cursor": [
+        0,
+        0
+      ]
+    }
+  },
+  {
+    "id": "autowrap-off",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 3,
+    "cols": 5,
+    "steps": [
+      {
+        "write": "\u001b[?7lABCDEFG"
+      }
+    ],
+    "want": {
+      "cursor": [
+        4,
+        0
+      ],
+      "lines": {
+        "0": "ABCDG",
+        "1": ""
+      }
+    }
+  },
+  {
+    "id": "autowrap-on",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 3,
+    "cols": 5,
+    "steps": [
+      {
+        "write": "ABCDEFG"
+      }
+    ],
+    "want": {
+      "cursor": [
+        2,
+        1
+      ],
+      "lines": {
+        "0": "ABCDE",
+        "1": "FG"
+      }
+    }
+  },
+  {
+    "id": "insert-clipped",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 3,
+    "cols": 8,
+    "steps": [
+      {
+        "write": "abcdefgh\u001b[1;7H\u001b[100@"
+      }
+    ],
+    "want": {
+      "lines": {
+        "0": "abcdef"
+      }
+    }
+  },
+  {
+    "id": "delete-clipped",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 3,
+    "cols": 8,
+    "steps": [
+      {
+        "write": "abcdefgh\u001b[1;4H\u001b[100P"
+      }
+    ],
+    "want": {
+      "lines": {
+        "0": "abc"
+      }
+    }
+  },
+  {
+    "id": "erase-clipped",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 3,
+    "cols": 8,
+    "steps": [
+      {
+        "write": "abcdefgh\u001b[1;7H\u001b[5X"
+      }
+    ],
+    "want": {
+      "lines": {
+        "0": "abcdef"
+      }
+    }
+  },
+  {
+    "id": "erase-line-right",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "ABCDEFG\u001b[1;3H\u001b[K"
+      }
+    ],
+    "want": {
+      "lines": {
+        "0": "AB"
+      }
+    }
+  },
+  {
+    "id": "erase-display",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "ABC\u001b[2J"
+      }
+    ],
+    "want": {
+      "cursor": [
+        3,
+        0
+      ],
+      "lines": {
+        "0": ""
+      }
+    }
+  },
+  {
+    "id": "save-restore-cursor",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "AB\u001b7\u001b[3;4H\u001b8"
+      }
+    ],
+    "want": {
+      "cursor": [
+        2,
+        0
+      ]
+    }
+  },
+  {
+    "id": "alt-1047",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "main\u001b[?1047h"
+      }
+    ],
+    "want": {
+      "alt": true
+    }
+  },
+  {
+    "id": "alt-1049-clear",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "\u001b[?1049hSTALE\u001b[?1049l\u001b[?1049h"
+      }
+    ],
+    "want": {
+      "lines": {
+        "0": ""
+      },
+      "alt": true
+    }
+  },
+  {
+    "id": "alt-1049-restore",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "main\u001b[?1049hALT\u001b[?1049l"
+      }
+    ],
+    "want": {
+      "cursor": [
+        4,
+        0
+      ],
+      "lines": {
+        "0": "main"
+      },
+      "alt": false
+    }
+  },
+  {
+    "id": "ris-resets",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "OLD\u001b[?7l\u001bcNEW"
+      }
+    ],
+    "want": {
+      "cursor": [
+        3,
+        0
+      ],
+      "lines": {
+        "0": "NEW"
+      },
+      "alt": false
+    }
+  },
+  {
+    "id": "dsr",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "\u001b[5n"
+      }
+    ],
+    "want": {
+      "replies": "\u001b[0n"
+    }
+  },
+  {
+    "id": "cpr",
+    "profile": "vt",
+    "source": "xterm",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "AB\u001b[6n"
+      }
+    ],
+    "want": {
+      "replies": "\u001b[1;3R"
+    }
+  },
+  {
+    "id": "wide-cjk",
+    "profile": "unicode",
+    "source": "unicode",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "界"
+      }
+    ],
+    "want": {
+      "cursor": [
+        2,
+        0
+      ],
+      "lines": {
+        "0": "界"
+      }
+    }
+  },
+  {
+    "id": "combining-mark",
+    "profile": "unicode",
+    "source": "unicode",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "é"
+      }
+    ],
+    "want": {
+      "cursor": [
+        1,
+        0
+      ],
+      "lines": {
+        "0": "é"
+      }
+    }
+  },
+  {
+    "id": "zwj-emoji",
+    "profile": "grapheme",
+    "source": "grapheme-policy",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "👩‍💻"
+      }
+    ],
+    "want": {
+      "cursor": [
+        2,
+        0
+      ],
+      "lines": {
+        "0": "👩‍💻"
+      }
+    }
+  },
+  {
+    "id": "combining-overwrite",
+    "profile": "unicode",
+    "source": "unicode",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "éX\bY"
+      }
+    ],
+    "want": {
+      "cursor": [
+        2,
+        0
+      ],
+      "lines": {
+        "0": "éY"
+      }
+    }
+  },
+  {
+    "id": "wide-margin-wrap",
+    "profile": "unicode",
+    "source": "unicode",
+    "rows": 3,
+    "cols": 5,
+    "steps": [
+      {
+        "write": "ABCD界X"
+      }
+    ],
+    "want": {
+      "cursor": [
+        3,
+        1
+      ],
+      "lines": {
+        "0": "ABCD",
+        "1": "界X"
+      }
+    }
+  },
+  {
+    "id": "resize-clamps-cursor",
+    "profile": "geometry",
+    "source": "geometry",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "\u001b[5;12H"
+      },
+      {
+        "resize": [
+          3,
+          8
+        ]
+      },
+      {
+        "write": "Z"
+      }
+    ],
+    "want": {}
+  },
+  {
+    "id": "resize-roundtrip-retains-text",
+    "profile": "reflow",
+    "source": "reflow-policy",
+    "rows": 3,
+    "cols": 10,
+    "steps": [
+      {
+        "write": "ABCDEFGHIJ"
+      },
+      {
+        "resize": [
+          3,
+          5
+        ]
+      },
+      {
+        "resize": [
+          3,
+          10
+        ]
+      }
+    ],
+    "want": {
+      "lines": {
+        "0": "ABCDEFGHIJ"
+      }
+    }
+  },
+  {
+    "id": "kitty-push-pop",
+    "profile": "kitty",
+    "source": "kitty",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "\u001b[?u\u001b[>1u\u001b[?u\u001b[<u\u001b[?u"
+      }
+    ],
+    "want": {
+      "replies": "\u001b[?0u\u001b[?1u\u001b[?0u"
+    }
+  },
+  {
+    "id": "kitty-set-add-remove",
+    "profile": "kitty",
+    "source": "kitty",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "\u001b[=1u\u001b[=2;2u\u001b[?u\u001b[=1;3u\u001b[?u"
+      }
+    ],
+    "want": {
+      "replies": "\u001b[?3u\u001b[?2u"
+    }
+  },
+  {
+    "id": "kitty-screen-stacks",
+    "profile": "kitty",
+    "source": "kitty",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "\u001b[>7u\u001b[?1049h\u001b[?u\u001b[>3u\u001b[?u\u001b[?1049l\u001b[?u"
+      }
+    ],
+    "want": {
+      "replies": "\u001b[?0u\u001b[?3u\u001b[?7u"
+    }
+  },
+  {
+    "id": "kitty-old-crash-sequence",
+    "profile": "kitty",
+    "source": "kitty",
+    "rows": 5,
+    "cols": 12,
+    "steps": [
+      {
+        "write": "\u001b[>7u\u001b[?u"
+      },
+      {
+        "resize": [
+          2,
+          5
+        ]
+      },
+      {
+        "write": "ok"
+      }
+    ],
+    "want": {
+      "replies": "\u001b[?7u"
+    }
+  }
+]
