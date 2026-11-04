@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "command": "cmd/yoloctl-openshell-helper",
+  "goos": "linux",
+  "cgo_enabled": "0",
+  "architectures": ["amd64", "arm64"],
+  "flags": ["-buildvcs=false", "-trimpath", "-ldflags=-s -w -buildid="],
+  "modules": ["golang.org/x/crypto", "golang.org/x/mod", "golang.org/x/sys", "gopkg.in/yaml.v3"]
+}

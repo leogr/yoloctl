@@ -1,0 +1,142 @@
+--- a/fs/fuse/dax.c
++++ b/fs/fuse/dax.c
+@@ -701,6 +701,13 @@
+ 	struct inode *inode = file_inode(iocb->ki_filp);
+ 	ssize_t ret;
+ 
++	if (get_fuse_conn(inode)->coordinated_io) {
++		if (iocb->ki_flags & IOCB_NOWAIT)
++			return -EAGAIN;
++		ret = fuse_update_attributes(inode, iocb->ki_filp, STATX_SIZE);
++		if (ret)
++			return ret;
++	}
+ 	if (iocb->ki_flags & IOCB_NOWAIT) {
+ 		if (!inode_trylock_shared(inode))
+ 			return -EAGAIN;
+@@ -795,6 +802,10 @@
+ 	struct fuse_conn_dax *fcd = fc->dax;
+ 	bool retry = false;
+ 
++	/* Attribute updates may need the exclusive invalidate lock: do this first. */
++	if (fc->coordinated_io &&
++	    fuse_update_attributes(inode, vmf->vma->vm_file, STATX_SIZE))
++		return VM_FAULT_SIGBUS;
+ 	if (write)
+ 		sb_start_pagefault(sb);
+ retry:
+--- a/fs/fuse/file.c
++++ b/fs/fuse/file.c
+@@ -1104,6 +1104,10 @@
+ 	args->out_numargs = 1;
+ 	args->out_args[0].size = sizeof(ia->write.out);
+ 	args->out_args[0].value = &ia->write.out;
++	if (ff->fm->fc->coordinated_io) {
++		ia->write.in.write_flags |= FUSE_WRITE_COORDINATED;
++		args->out_args[0].size += sizeof(ia->write.coordinated_end);
++	}
+ }
+ 
+ static unsigned int fuse_write_flags(struct kiocb *iocb)
+@@ -1632,6 +1636,7 @@
+ 	io->should_dirty = !write && user_backed_iter(iter);
+ 	while (count) {
+ 		ssize_t nres;
++		u64 coordinated_end = 0;
+ 		fl_owner_t owner = current->files;
+ 		size_t nbytes = min(count, nmax);
+ 
+@@ -1645,6 +1650,12 @@
+ 				ia->write.in.write_flags |= FUSE_WRITE_KILL_SUIDGID;
+ 
+ 			nres = fuse_send_write(ia, pos, nbytes, owner);
++			if (fc->coordinated_io && nres >= 0) {
++				coordinated_end = ia->write.coordinated_end;
++				if (coordinated_end < nres ||
++				    coordinated_end > MAX_LFS_FILESIZE)
++					nres = -EIO;
++			}
+ 		} else {
+ 			nres = fuse_send_read(ia, pos, nbytes, owner);
+ 		}
+@@ -1663,7 +1674,10 @@
+ 
+ 		count -= nres;
+ 		res += nres;
+-		pos += nres;
++		if (write && fc->coordinated_io)
++			pos = coordinated_end;
++		else
++			pos += nres;
+ 		if (nres != nbytes) {
+ 			iov_iter_revert(iter, nbytes - nres);
+ 			break;
+@@ -1778,6 +1792,12 @@
+ 	if (fuse_is_bad(inode))
+ 		return -EIO;
+ 
++	if (ff->fm->fc->coordinated_io) {
++		/* The first prototype deliberately supports synchronous writes only. */
++		if (!is_sync_kiocb(iocb))
++			return -EOPNOTSUPP;
++		return fuse_direct_write_iter(iocb, from);
++	}
+ 	if (FUSE_IS_DAX(inode))
+ 		return fuse_dax_write_iter(iocb, from);
+ 
+--- a/fs/fuse/fuse_i.h
++++ b/fs/fuse/fuse_i.h
+@@ -703,6 +703,9 @@
+ 	/** write-back cache policy (default is write-through) */
+ 	unsigned writeback_cache:1;
+ 
++	/* Experimental coordinator supplies the completed write offset. */
++	unsigned coordinated_io:1;
++
+ 	/** allow parallel lookups and readdir (default is serialized) */
+ 	unsigned parallel_dirops:1;
+ 
+@@ -1068,6 +1071,7 @@
+ 		struct {
+ 			struct fuse_write_in in;
+ 			struct fuse_write_out out;
++			u64 coordinated_end;
+ 			bool page_locked;
+ 		} write;
+ 	};
+--- a/fs/fuse/inode.c
++++ b/fs/fuse/inode.c
+@@ -1277,7 +1277,9 @@
+ 				if (flags & FUSE_READDIRPLUS_AUTO)
+ 					fc->readdirplus_auto = 1;
+ 			}
+-			if (flags & FUSE_ASYNC_DIO)
++			if (flags & FUSE_COORDINATED_IO)
++				fc->coordinated_io = 1;
++			if ((flags & FUSE_ASYNC_DIO) && !fc->coordinated_io)
+ 				fc->async_dio = 1;
+ 			if (flags & FUSE_WRITEBACK_CACHE)
+ 				fc->writeback_cache = 1;
+@@ -1398,7 +1400,8 @@
+ 		FUSE_HANDLE_KILLPRIV_V2 | FUSE_SETXATTR_EXT | FUSE_INIT_EXT |
+ 		FUSE_SECURITY_CTX | FUSE_CREATE_SUPP_GROUP |
+ 		FUSE_HAS_EXPIRE_ONLY | FUSE_DIRECT_IO_ALLOW_MMAP |
+-		FUSE_NO_EXPORT_SUPPORT | FUSE_HAS_RESEND | FUSE_ALLOW_IDMAP;
++		FUSE_NO_EXPORT_SUPPORT | FUSE_HAS_RESEND | FUSE_ALLOW_IDMAP |
++		FUSE_COORDINATED_IO;
+ #ifdef CONFIG_FUSE_DAX
+ 	if (fm->fc->dax)
+ 		flags |= FUSE_MAP_ALIGNMENT;
+--- a/include/uapi/linux/fuse.h
++++ b/include/uapi/linux/fuse.h
+@@ -426,6 +426,10 @@
+  *		    of the request ID indicates resend requests
+  * FUSE_ALLOW_IDMAP: allow creation of idmapped mounts
+  */
++/* Private bounded-prototype ABI. Never use with an unpatched service. */
++#define FUSE_COORDINATED_IO	(1ULL << 63)
++#define FUSE_WRITE_COORDINATED	(1U << 31)
++
+ #define FUSE_ASYNC_READ		(1 << 0)
+ #define FUSE_POSIX_LOCKS	(1 << 1)
+ #define FUSE_FILE_OPS		(1 << 2)

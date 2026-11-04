@@ -1,0 +1,590 @@
+--- a/src/devices/src/virtio/fs/augment_fs.rs
++++ b/src/devices/src/virtio/fs/augment_fs.rs
+@@ -393,6 +393,38 @@
+             kill_priv,
+             flags,
+         )
++    }
++
++    fn coordinated_write<R: io::Read + ZeroCopyReader>(
++        &self,
++        ctx: Context,
++        inode: Inode,
++        handle: Handle,
++        reader: R,
++        size: u32,
++        offset: u64,
++        kill_priv: bool,
++        flags: u32,
++    ) -> io::Result<(usize, u64)> {
++        if self.is_virtual(inode) {
++            return Err(linux_errno::eperm());
++        }
++        self.inner
++            .coordinated_write(ctx, inode, handle, reader, size, offset, kill_priv, flags)
++    }
++
++    fn getlk(&self, inode: Inode, request: fuse::LkIn) -> io::Result<fuse::FileLock> {
++        if self.is_virtual(inode) {
++            return Err(linux_errno::eperm());
++        }
++        self.inner.getlk(inode, request)
++    }
++
++    fn setlk(&self, inode: Inode, request: fuse::LkIn, wait: bool) -> io::Result<()> {
++        if self.is_virtual(inode) {
++            return Err(linux_errno::eperm());
++        }
++        self.inner.setlk(inode, request, wait)
+     }
+ 
+     fn flush(&self, ctx: Context, inode: Inode, handle: Handle, lock_owner: u64) -> io::Result<()> {
+--- a/src/devices/src/virtio/fs/filesystem.rs
++++ b/src/devices/src/virtio/fs/filesystem.rs
+@@ -1174,18 +1174,25 @@
+         Err(io::Error::from_raw_os_error(bindings::LINUX_ENOSYS))
+     }
+ 
+-    /// TODO: support this
+-    fn getlk(&self) -> io::Result<()> {
+-        Err(io::Error::from_raw_os_error(bindings::LINUX_ENOSYS))
+-    }
+-
+-    /// TODO: support this
+-    fn setlk(&self) -> io::Result<()> {
+-        Err(io::Error::from_raw_os_error(bindings::LINUX_ENOSYS))
+-    }
+-
+-    /// TODO: support this
+-    fn setlkw(&self) -> io::Result<()> {
++    fn getlk(&self, inode: Self::Inode, request: fuse::LkIn) -> io::Result<fuse::FileLock> {
++        Err(io::Error::from_raw_os_error(bindings::LINUX_ENOSYS))
++    }
++
++    fn setlk(&self, inode: Self::Inode, request: fuse::LkIn, wait: bool) -> io::Result<()> {
++        Err(io::Error::from_raw_os_error(bindings::LINUX_ENOSYS))
++    }
++
++    fn coordinated_write<R: io::Read + ZeroCopyReader>(
++        &self,
++        ctx: Context,
++        inode: Self::Inode,
++        handle: Self::Handle,
++        reader: R,
++        size: u32,
++        offset: u64,
++        kill_priv: bool,
++        flags: u32,
++    ) -> io::Result<(usize, u64)> {
+         Err(io::Error::from_raw_os_error(bindings::LINUX_ENOSYS))
+     }
+ 
+--- a/src/devices/src/virtio/fs/fuse.rs
++++ b/src/devices/src/virtio/fs/fuse.rs
+@@ -188,6 +188,8 @@
+     /// A bitfield passed in as a parameter to and returned from the `init` method of the
+     /// `FileSystem` trait.
+     pub struct FsOptions: u64 {
++        /// Private synthetic-prototype ABI, paired with the patched kernel.
++        const COORDINATED_IO = 1 << 63;
+         /// Indicates that the filesystem supports asynchronous read requests.
+         ///
+         /// If this capability is not requested/available, the kernel will ensure that there is at
+@@ -943,6 +945,15 @@
+ 
+ #[repr(C)]
+ #[derive(Debug, Default, Copy, Clone)]
++pub struct CoordinatedWriteOut {
++    pub size: u32,
++    pub padding: u32,
++    pub end: u64,
++}
++unsafe impl ByteValued for CoordinatedWriteOut {}
++
++#[repr(C)]
++#[derive(Debug, Default, Copy, Clone)]
+ pub struct StatfsOut {
+     pub st: Kstatfs,
+ }
+--- a/src/devices/src/virtio/fs/linux/mod.rs
++++ b/src/devices/src/virtio/fs/linux/mod.rs
+@@ -1,2 +1,6 @@
++pub mod coordinated;
+ pub mod fs_utils;
+ pub mod passthrough;
++
++#[cfg(feature = "test_utils")]
++pub mod coordinated_native_fs;
+--- a/src/devices/src/virtio/fs/linux/passthrough.rs
++++ b/src/devices/src/virtio/fs/linux/passthrough.rs
+@@ -2,6 +2,7 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++use super::coordinated::Coordinator;
+ use std::collections::btree_map;
+ use std::collections::BTreeMap;
+ use std::convert::TryInto;
+@@ -12,7 +13,7 @@
+ use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+ use std::str::FromStr;
+ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
+-use std::sync::{Arc, RwLock};
++use std::sync::{Arc, Mutex, RwLock};
+ use std::time::Duration;
+ 
+ use caps::{has_cap, CapSet, Capability};
+@@ -423,6 +424,8 @@
+     my_gid: Option<libc::gid_t>,
+     cap_fowner: bool,
+ 
++    coordinator: Option<Coordinator>,
++    posix_owners: Mutex<BTreeMap<(Inode, u64), File>>,
+     cfg: Config,
+ }
+ 
+@@ -434,7 +437,14 @@
+ }
+ 
+ impl PassthroughFs {
+-    pub fn new(cfg: Config, inode_alloc: Arc<InodeAllocator>) -> io::Result<PassthroughFs> {
++    pub fn new(mut cfg: Config, inode_alloc: Arc<InodeAllocator>) -> io::Result<PassthroughFs> {
++        let coordinator = Coordinator::connect(&cfg.root_dir)?;
++        if coordinator.is_some() {
++            cfg.entry_timeout = Duration::ZERO;
++            cfg.attr_timeout = Duration::ZERO;
++            cfg.writeback = false;
++            cfg.cache_policy = CachePolicy::Auto;
++        }
+         let fd = if let Some(fd) = cfg.proc_sfd_rawfd {
+             fd
+         } else {
+@@ -492,7 +502,86 @@
+             my_uid,
+             my_gid,
+             cap_fowner,
++            coordinator,
++            posix_owners: Mutex::new(BTreeMap::new()),
+             cfg,
++        })
++    }
++
++    fn posix_lock(
++        &self,
++        inode: Inode,
++        request: fuse::LkIn,
++        query: bool,
++    ) -> io::Result<fuse::FileLock> {
++        let data = self
++            .handles
++            .read()
++            .unwrap()
++            .get(&request.fh)
++            .filter(|hd| hd.inode == inode)
++            .cloned()
++            .ok_or_else(ebadf)?;
++        let file = data.file.read().unwrap();
++        let mode = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
++        if mode < 0 {
++            return Err(io::Error::last_os_error());
++        }
++        if !query
++            && ((request.lk.type_ == libc::F_RDLCK as u32
++                && mode & libc::O_ACCMODE == libc::O_WRONLY)
++                || (request.lk.type_ == libc::F_WRLCK as u32
++                    && mode & libc::O_ACCMODE == libc::O_RDONLY))
++        {
++            return Err(ebadf());
++        }
++        if request.lk.start > i64::MAX as u64
++            || request.lk.end < request.lk.start
++            || ![
++                libc::F_RDLCK as u32,
++                libc::F_WRLCK as u32,
++                libc::F_UNLCK as u32,
++            ]
++            .contains(&request.lk.type_)
++        {
++            return Err(einval());
++        }
++        let mut owners = self.posix_owners.lock().unwrap();
++        if !owners.contains_key(&(inode, request.owner)) {
++            // One host OFD per guest POSIX owner, not per handle or per inode.
++            // Read-only fallback cannot subsequently acquire a write lock.
++            let lockfile = self
++                .open_inode(inode, libc::O_RDWR)
++                .or_else(|_| self.open_inode(inode, libc::O_RDONLY))?;
++            owners.insert((inode, request.owner), lockfile);
++        }
++        let lockfile = owners.get(&(inode, request.owner)).unwrap();
++        let mut lock: libc::flock = unsafe { std::mem::zeroed() };
++        lock.l_type = request.lk.type_ as i16;
++        lock.l_whence = libc::SEEK_SET as i16;
++        lock.l_start = request.lk.start as i64;
++        lock.l_len = if request.lk.end >= i64::MAX as u64 {
++            0
++        } else {
++            (request.lk.end - request.lk.start + 1) as i64
++        };
++        let command = if query {
++            libc::F_OFD_GETLK
++        } else {
++            libc::F_OFD_SETLK
++        };
++        if unsafe { libc::fcntl(lockfile.as_raw_fd(), command, &mut lock) } < 0 {
++            return Err(io::Error::last_os_error());
++        }
++        Ok(fuse::FileLock {
++            start: lock.l_start as u64,
++            end: if lock.l_len == 0 {
++                i64::MAX as u64
++            } else {
++                (lock.l_start + lock.l_len - 1) as u64
++            },
++            type_: lock.l_type as u32,
++            pid: 0,
+         })
+     }
+ 
+@@ -685,6 +774,10 @@
+         mut flags: u32,
+     ) -> io::Result<(Option<Handle>, OpenOptions)> {
+         debug!("do_open: {inode:?}");
++        if self.coordinator.is_some() && flags & libc::O_TRUNC as u32 != 0 {
++            // ATOMIC_O_TRUNC is deliberately not negotiated for this export.
++            return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP));
++        }
+         if !self.cap_fowner {
+             // O_NOATIME can only be used with CAP_FOWNER or if we are the file
+             // owner. Not worth checking the latter, just drop it if we don't
+@@ -909,6 +1002,12 @@
+         );
+ 
+         let mut opts = FsOptions::DO_READDIRPLUS | FsOptions::READDIRPLUS_AUTO;
++        if self.coordinator.is_some() {
++            if !capable.contains(FsOptions::COORDINATED_IO) {
++                return Err(io::Error::from_raw_os_error(libc::EPROTO));
++            }
++            opts |= FsOptions::COORDINATED_IO | FsOptions::POSIX_LOCKS | FsOptions::FLOCK_LOCKS;
++        }
+         if self.cfg.writeback && capable.contains(FsOptions::WRITEBACK_CACHE) {
+             opts |= FsOptions::WRITEBACK_CACHE;
+             self.writeback.store(true, Ordering::Relaxed);
+@@ -1173,6 +1272,9 @@
+         umask: u32,
+         extensions: Extensions,
+     ) -> io::Result<(Entry, Option<Handle>, OpenOptions)> {
++        if self.coordinator.is_some() && flags & libc::O_TRUNC as u32 != 0 {
++            return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP));
++        }
+         if extensions.secctx.is_some() {
+             unimplemented!("SECURITY_CTX is not supported and should not be used by the guest");
+         }
+@@ -1275,6 +1377,9 @@
+         kill_priv: bool,
+         _flags: u32,
+     ) -> io::Result<usize> {
++        if self.coordinator.is_some() {
++            return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP));
++        }
+         let _killpriv_guard = if kill_priv {
+             // We need to drop FSETID during a write so that the kernel will remove setuid
+             // or setgid bits from the file if it was written to by someone other than the
+@@ -1297,6 +1402,96 @@
+         // offset is not affected by this operation.
+         let f = data.file.read().unwrap();
+         r.read_to(&f, size as usize, offset)
++    }
++
++    fn coordinated_write<R: io::Read + ZeroCopyReader>(
++        &self,
++        _ctx: Context,
++        inode: Inode,
++        handle: Handle,
++        mut reader: R,
++        size: u32,
++        offset: u64,
++        kill_priv: bool,
++        flags: u32,
++    ) -> io::Result<(usize, u64)> {
++        let coordinator = self.coordinator.as_ref().ok_or_else(einval)?;
++        let _killpriv_guard = if kill_priv {
++            drop_effective_cap(Capability::CAP_FSETID)?
++        } else {
++            None
++        };
++        let data = self
++            .handles
++            .read()
++            .unwrap()
++            .get(&handle)
++            .filter(|hd| hd.inode == inode)
++            .cloned()
++            .ok_or_else(ebadf)?;
++        let mut transaction = coordinator.begin()?;
++        let file = data.file.write().unwrap();
++        let old = file.metadata()?.len();
++        // F_SETFL can change O_APPEND after OPEN. Honor the flags of this write.
++        let oldflags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
++        if oldflags < 0 {
++            return Err(io::Error::last_os_error());
++        }
++        let newflags = (oldflags & !libc::O_APPEND) | (flags as i32 & libc::O_APPEND);
++        if unsafe { libc::fcntl(file.as_raw_fd(), libc::F_SETFL, newflags) } < 0 {
++            return Err(io::Error::last_os_error());
++        }
++        let count = reader.read_to(&file, size as usize, offset)?;
++        let start = if flags & libc::O_APPEND as u32 != 0 {
++            old
++        } else {
++            offset
++        };
++        let end = start.checked_add(count as u64).ok_or_else(einval)?;
++        let new = file.metadata()?.len();
++        if new != old {
++            transaction.resize(&file, new)?;
++        }
++        transaction.finish()?;
++        Ok((count, end))
++    }
++
++    fn getlk(&self, inode: Inode, request: fuse::LkIn) -> io::Result<fuse::FileLock> {
++        if self.coordinator.is_none() || request.lk_flags != 0 {
++            return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP));
++        }
++        self.posix_lock(inode, request, true)
++    }
++
++    fn setlk(&self, inode: Inode, request: fuse::LkIn, wait: bool) -> io::Result<()> {
++        if self.coordinator.is_none() || (wait && request.lk.type_ != libc::F_UNLCK as u32) {
++            return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP));
++        }
++        if request.lk_flags == fuse::LK_FLOCK {
++            let data = self
++                .handles
++                .read()
++                .unwrap()
++                .get(&request.fh)
++                .filter(|hd| hd.inode == inode)
++                .cloned()
++                .ok_or_else(ebadf)?;
++            let file = data.file.read().unwrap();
++            let operation = match request.lk.type_ as i32 {
++                libc::F_RDLCK => libc::LOCK_SH | libc::LOCK_NB,
++                libc::F_WRLCK => libc::LOCK_EX | libc::LOCK_NB,
++                libc::F_UNLCK => libc::LOCK_UN,
++                _ => return Err(einval()),
++            };
++            if unsafe { libc::flock(file.as_raw_fd(), operation) } < 0 {
++                return Err(io::Error::last_os_error());
++            }
++            Ok(())
++        } else if request.lk_flags == 0 {
++            self.posix_lock(inode, request, false).map(|_| ())
++        } else {
++            Err(einval())
++        }
+     }
+ 
+     fn getattr(
+@@ -1395,7 +1590,20 @@
+             }
+         }
+ 
+-        if valid.contains(SetattrValid::SIZE) {
++        if valid.contains(SetattrValid::SIZE) && self.coordinator.is_some() {
++            let file = self.open_inode(inode, libc::O_RDWR)?;
++            let mut transaction = self.coordinator.as_ref().unwrap().begin()?;
++            let old = file.metadata()?.len();
++            let new: u64 = attr.st_size.try_into().map_err(|_| einval())?;
++            if new < old {
++                transaction.resize(&file, new)?;
++            }
++            file.set_len(new)?;
++            if new > old {
++                transaction.resize(&file, new)?;
++            }
++            transaction.finish()?;
++        } else if valid.contains(SetattrValid::SIZE) {
+             // Safe because this doesn't modify any memory and we check the return value.
+             let res = match data {
+                 Data::Handle(fd) => unsafe { libc::ftruncate(fd, attr.st_size) },
+@@ -1645,8 +1853,12 @@
+         _ctx: Context,
+         inode: Inode,
+         handle: Handle,
+-        _lock_owner: u64,
++        lock_owner: u64,
+     ) -> io::Result<()> {
++        self.posix_owners
++            .lock()
++            .unwrap()
++            .remove(&(inode, lock_owner));
+         let data = self
+             .handles
+             .read()
+@@ -1945,6 +2157,9 @@
+         offset: u64,
+         length: u64,
+     ) -> io::Result<()> {
++        if self.coordinator.is_some() {
++            return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP));
++        }
+         let data = self
+             .handles
+             .read()
+@@ -2011,6 +2226,9 @@
+         len: u64,
+         flags: u64,
+     ) -> io::Result<usize> {
++        if self.coordinator.is_some() {
++            return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP));
++        }
+         let data_in = self
+             .handles
+             .read()
+@@ -2078,15 +2296,22 @@
+             libc::PROT_READ
+         };
+ 
+-        if (moffset + len) > shm_size {
++        if moffset
++            .checked_add(len)
++            .filter(|end| *end <= shm_size)
++            .is_none()
++        {
+             return Err(einval());
+         }
+ 
+-        let addr = host_shm_base + moffset;
++        let addr = host_shm_base.checked_add(moffset).ok_or_else(einval)?;
+ 
+         debug!("setupmapping: ino {inode:?} addr={addr:x} len={len}");
+ 
+         let file = self.open_inode(inode, open_flags)?;
++        if let Some(coordinator) = &self.coordinator {
++            return coordinator.setup(file, addr, len, foffset, prot_flags);
++        }
+         let fd = file.as_raw_fd();
+ 
+         let ret = unsafe {
+@@ -2114,9 +2339,18 @@
+         shm_size: u64,
+     ) -> io::Result<()> {
+         for req in requests {
+-            let addr = host_shm_base + req.moffset;
+-            if (req.moffset + req.len) > shm_size {
++            let addr = host_shm_base.checked_add(req.moffset).ok_or_else(einval)?;
++            if req
++                .moffset
++                .checked_add(req.len)
++                .filter(|end| *end <= shm_size)
++                .is_none()
++            {
+                 return Err(einval());
++            }
++            if let Some(coordinator) = &self.coordinator {
++                coordinator.remove(addr, req.len)?;
++                continue;
+             }
+             debug!("removemapping: addr={:x} len={:?}", addr, req.len);
+             let ret = unsafe {
+--- a/src/devices/src/virtio/fs/server.rs
++++ b/src/devices/src/virtio/fs/server.rs
+@@ -621,6 +621,37 @@
+         let kill_priv = write_flags & WRITE_KILL_PRIV != 0;
+ 
+         let data_reader = ZCReader(r);
++        if write_flags & (1 << 31) != 0 {
++            if self.options.load(Ordering::Relaxed) & FsOptions::COORDINATED_IO.bits() == 0 {
++                return reply_error(
++                    io::Error::from_raw_os_error(libc::EINVAL),
++                    in_header.unique,
++                    w,
++                );
++            }
++            return match self.fs.coordinated_write(
++                Context::from(in_header),
++                in_header.nodeid.into(),
++                fh.into(),
++                data_reader,
++                size,
++                offset,
++                kill_priv,
++                flags,
++            ) {
++                Ok((count, end)) => reply_ok(
++                    Some(CoordinatedWriteOut {
++                        size: count as u32,
++                        padding: 0,
++                        end,
++                    }),
++                    None,
++                    in_header.unique,
++                    w,
++                ),
++                Err(error) => reply_error(error, in_header.unique, w),
++            };
++        }
+ 
+         match self.fs.write(
+             Context::from(in_header),
+@@ -920,6 +951,9 @@
+ 
+         match self.fs.init(capable) {
+             Ok(want) => {
++                if want.contains(FsOptions::COORDINATED_IO) {
++                    supported.remove(FsOptions::ASYNC_DIO | FsOptions::ATOMIC_O_TRUNC);
++                }
+                 let enabled = (capable & (want | supported)).bits();
+                 self.options.store(enabled, Ordering::Relaxed);
+ 
+@@ -1070,27 +1104,27 @@
+         }
+     }
+ 
+-    fn getlk(&self, in_header: InHeader, mut _r: Reader, w: Writer) -> Result<usize> {
+-        if let Err(e) = self.fs.getlk() {
+-            reply_error(e, in_header.unique, w)
+-        } else {
+-            Ok(0)
+-        }
+-    }
+-
+-    fn setlk(&self, in_header: InHeader, mut _r: Reader, w: Writer) -> Result<usize> {
+-        if let Err(e) = self.fs.setlk() {
+-            reply_error(e, in_header.unique, w)
+-        } else {
+-            Ok(0)
+-        }
+-    }
+-
+-    fn setlkw(&self, in_header: InHeader, mut _r: Reader, w: Writer) -> Result<usize> {
+-        if let Err(e) = self.fs.setlkw() {
+-            reply_error(e, in_header.unique, w)
+-        } else {
+-            Ok(0)
++    fn getlk(&self, in_header: InHeader, mut r: Reader, w: Writer) -> Result<usize> {
++        let request: LkIn = r.read_obj().map_err(Error::DecodeMessage)?;
++        match self.fs.getlk(in_header.nodeid.into(), request) {
++            Ok(lk) => reply_ok(Some(LkOut { lk }), None, in_header.unique, w),
++            Err(e) => reply_error(e, in_header.unique, w),
++        }
++    }
++
++    fn setlk(&self, in_header: InHeader, mut r: Reader, w: Writer) -> Result<usize> {
++        let request: LkIn = r.read_obj().map_err(Error::DecodeMessage)?;
++        match self.fs.setlk(in_header.nodeid.into(), request, false) {
++            Ok(()) => reply_ok(None::<u8>, None, in_header.unique, w),
++            Err(e) => reply_error(e, in_header.unique, w),
++        }
++    }
++
++    fn setlkw(&self, in_header: InHeader, mut r: Reader, w: Writer) -> Result<usize> {
++        let request: LkIn = r.read_obj().map_err(Error::DecodeMessage)?;
++        match self.fs.setlk(in_header.nodeid.into(), request, true) {
++            Ok(()) => reply_ok(None::<u8>, None, in_header.unique, w),
++            Err(e) => reply_error(e, in_header.unique, w),
+         }
+     }
+ 

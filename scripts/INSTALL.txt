@@ -1,0 +1,21 @@
+yoloctl release bundle (macOS / Linux)
+
+Download and install the latest release (pick your os/arch):
+  curl -fsSL https://github.com/leogr/yoloctl/releases/latest/download/yoloctl-linux-amd64.tar.gz | tar xzf - && ./yoloctl-linux-amd64/yoloctl install
+install verifies the bundle before installing anything.
+
+Optional: verify a download first with SHA256SUMS from the same release:
+  awk -v name='<archive>' '$2 == name' SHA256SUMS | shasum -a 256 -c -
+  (Linux without shasum: the same awk line piped to sha256sum -c -)
+  gh attestation verify <archive> --repo leogr/yoloctl
+
+Keep every companion beside yoloctl. Installation uses immutable per-bundle
+directories and a ~/.local/bin/yoloctl link; when ~/.local/bin is not on PATH,
+install prints the line that adds it for your shell.
+The hidden installer asks before upgrades and prints per-space migration
+commands. Executing each migration needs separate terminal confirmation.
+
+Supported downloads use curl. Darwin binaries ship exactly as linked, with no
+post-link signing. arm64 relies on the Go linker's ad-hoc signature, verified
+by macOS CI. Intel execution is a separate host/CI gate. Browser quarantine,
+Developer ID signing and notarization are outside this distribution flow.

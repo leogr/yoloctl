@@ -1,0 +1,20 @@
+{
+  "libkrun": {
+    "revision": "20aa1ef06e31b66e6860a05512a99e40caf186fc",
+    "archive": "libkrun.tar.gz",
+    "url": "https://codeload.github.com/containers/libkrun/tar.gz/20aa1ef06e31b66e6860a05512a99e40caf186fc",
+    "sha256": "9afd7c5ef54d3e297f517d7975f2ed19dde608885f1a9f84d8a7d3f1f1a119ba"
+  },
+  "libkrunfw": {
+    "revision": "8d540f346e952a521bec0fa1fa1439ee65d9fea2",
+    "archive": "libkrunfw.tar.gz",
+    "url": "https://codeload.github.com/containers/libkrunfw/tar.gz/8d540f346e952a521bec0fa1fa1439ee65d9fea2",
+    "sha256": "c0819a6f0dc702085c65f7b20b7fb3c6b54f57e3d535365dc3b28e435a9cdac0"
+  },
+  "kernel": {
+    "revision": "6.12.109",
+    "archive": "linux-6.12.109.tar.xz",
+    "url": "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.109.tar.xz",
+    "sha256": "5484e552a334e15019f4aeba89e5b58f04651cf2f4e24e04de9f152f1c38e3fa"
+  }
+}

@@ -1,0 +1,23 @@
+# Match production's compatibility mode. The external denial tests make the
+# benchmark fail if actual Landlock enforcement is absent or incomplete.
+filesystem_policy:
+  include_workdir: false
+  read_only:
+    - /usr
+    - /bin
+    - /lib
+    - /lib64
+    - /etc
+    - /proc
+    - /poc
+  read_write:
+    - /poc-workdir
+    - /tmp
+    - /dev/null
+    - /dev/urandom
+landlock:
+  compatibility: best_effort
+process:
+  run_as_user: poc-sandbox
+  run_as_group: poc-sandbox
+network_policies: {}
