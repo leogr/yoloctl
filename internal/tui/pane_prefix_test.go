@@ -467,7 +467,7 @@ func TestPrefixTabKeys(t *testing.T) {
 func TestPrefixNewTabEntry(t *testing.T) {
 	old := executable
 	t.Cleanup(func() { executable = old })
-	executable = func() (string, error) { return "/bin/true", nil }
+	executable = func() (string, error) { return truePath(t), nil }
 	m := newTestModel(t, 100, 14)
 	m.tabs.Add(testTab(paneSession(t, 12, 100, "sleep", "30"), "yoloctl space view", false))
 	m.layoutTab(m.tabs.Current())

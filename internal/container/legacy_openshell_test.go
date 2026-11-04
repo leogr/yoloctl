@@ -54,6 +54,21 @@ func retainedLegacyFixture(t *testing.T, arch string, payload []byte, kind strin
 	if err := os.WriteFile(filepath.Join(dir, "uname"), []byte("#!/bin/sh\nprintf '%s\\n' \"$TEST_RETAINED_ARCH\"\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
+	// The script runs in the Linux guest, whose GNU sha256sum it uses. On the
+	// host that tool may be missing or differ (macOS), so the fixture supplies
+	// the one behaviour the script needs: --check --status of "hash  path".
+	const sha256sum = `#!/usr/bin/env python3
+import hashlib,sys
+if sys.argv[1:]!=['--check','--status']: sys.exit(64)
+for line in sys.stdin.read().splitlines():
+ want,path=line.split('  ',1)
+ try: got=hashlib.sha256(open(path,'rb').read()).hexdigest()
+ except OSError: sys.exit(1)
+ if got!=want: sys.exit(1)
+`
+	if err := os.WriteFile(filepath.Join(dir, "sha256sum"), []byte(sha256sum), 0755); err != nil {
+		t.Fatal(err)
+	}
 	const adapter = `#!/usr/bin/env python3
 import os,sys,subprocess
 from pathlib import Path

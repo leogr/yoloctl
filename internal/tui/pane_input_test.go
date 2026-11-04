@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -316,7 +317,7 @@ func TestWheelScrollsThePaneUnderThePointer(t *testing.T) {
 func TestEmptyPaneTransitions(t *testing.T) {
 	old := executable
 	t.Cleanup(func() { executable = old })
-	executable = func() (string, error) { return "/bin/true", nil } // never the test binary
+	executable = func() (string, error) { return truePath(t), nil } // never the test binary
 	m := newTestModel(t, 100, 26)
 	view := paneSession(t, 24, 100, "sleep", "30")
 	other := paneSession(t, 24, 100, "sleep", "30")
@@ -367,7 +368,7 @@ func TestEmptyPaneTransitions(t *testing.T) {
 	if tab.Layout.Empty() != e || len(m.tabs.Tabs) != 2 {
 		t.Fatal("an ordinary command runs in the overlay and keeps the empty pane")
 	}
-	executable = func() (string, error) { return "/bin/true", nil }
+	executable = func() (string, error) { return truePath(t), nil }
 	request := termio.TabRequest{Op: "attach", Space: "dev", Box: "api"}
 	_, _ = m.Update(tabRequestMsg{req: request, from: other})
 	if len(m.tabs.Tabs) != 3 || tab.Layout.Empty() != e {
@@ -410,7 +411,7 @@ func TestEmptyPaneTransitions(t *testing.T) {
 	if tab.Layout.Empty() != e || !strings.Contains(m.status, "cannot locate") {
 		t.Fatalf("a failed start keeps the empty pane: %q", m.status)
 	}
-	executable = func() (string, error) { return "/bin/true", nil }
+	executable = func() (string, error) { return truePath(t), nil }
 	m.focusPalette = true
 	typeLine("box attach web")
 	if tab.Layout.Empty() != nil || tab.Focused().Command != "yoloctl box attach web" || m.focusPalette {
@@ -478,4 +479,15 @@ func TestPixelChildInAnUnfocusedPaneGetsTheCellCentre(t *testing.T) {
 	if got, want := rightInput(), "\x1b[<0;35;50M\x1b[<0;35;50m"; got != want {
 		t.Fatalf("pixel child got %q, want %q", got, want)
 	}
+}
+
+// truePath is the host's `true` (/bin/true on Linux, /usr/bin/true on macOS),
+// so a launched tab exits at once on every test host.
+func truePath(t *testing.T) string {
+	t.Helper()
+	path, err := exec.LookPath("true")
+	if err != nil {
+		t.Skip("no true command on this host")
+	}
+	return path
 }

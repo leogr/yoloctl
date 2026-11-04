@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -208,6 +209,9 @@ func TestSpaceStorageIsHostOnlyRead(t *testing.T) {
 }
 
 func TestDiskUsageCountsEachInodeOnce(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("disk usage is measured only inside the Linux VM (storage_usage_other.go refuses elsewhere)")
+	}
 	dir := t.TempDir()
 	if n, err := diskUsage(t.Context(), filepath.Join(dir, "absent")); err != nil || n != 0 {
 		t.Fatalf("absent = %d %v", n, err)

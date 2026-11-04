@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -381,7 +382,7 @@ func TestOwnedAttachSetupSurvivesClientProcessLoss(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					consumer := exec.Command("/bin/true")
+					consumer := exec.Command("true") // /usr/bin/true on macOS
 					consumer.Stdin = read
 					if err := consumer.Run(); err != nil {
 						t.Fatal(err)
@@ -882,7 +883,11 @@ func TestClientSinkDetachesOnceAndNeverFails(t *testing.T) {
 
 func openDescriptors(t *testing.T) int {
 	t.Helper()
-	entries, err := os.ReadDir("/proc/self/fd")
+	dir := "/proc/self/fd"
+	if runtime.GOOS != "linux" {
+		dir = "/dev/fd" // macOS lists this process's descriptors here
+	}
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
