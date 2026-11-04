@@ -1,0 +1,127 @@
+[
+  {
+    "name": "prompt",
+    "evidence": "Claude Code 2.1.312 D6 capture: UserPromptSubmit-1793168659513184698.json",
+    "payload": {
+      "session_id": "04255c19-bd66-4b0b-afeb-30636678c393",
+      "hook_event_name": "UserPromptSubmit"
+    }
+  },
+  {
+    "name": "stop-idle",
+    "evidence": "Claude Code 2.1.312 D6 capture: Stop-1793168661163686827.json",
+    "payload": {
+      "session_id": "04255c19-bd66-4b0b-afeb-30636678c393",
+      "effort": {
+        "level": "medium"
+      },
+      "hook_event_name": "Stop",
+      "stop_hook_active": false,
+      "background_tasks": [],
+      "session_crons": []
+    }
+  },
+  {
+    "name": "stop-background",
+    "evidence": "Claude Code 2.1.312 D6 capture: Stop-1793168737941442906.json",
+    "payload": {
+      "session_id": "04255c19-bd66-4b0b-afeb-30636678c393",
+      "effort": {
+        "level": "medium"
+      },
+      "hook_event_name": "Stop",
+      "stop_hook_active": false,
+      "background_tasks": [
+        {
+          "id": "bgs4ab0ok",
+          "type": "shell",
+          "status": "running"
+        }
+      ],
+      "session_crons": []
+    }
+  },
+  {
+    "name": "idle-notification",
+    "evidence": "Claude Code 2.1.312 D6 capture: Notification-1793168721164810090.json",
+    "payload": {
+      "session_id": "04255c19-bd66-4b0b-afeb-30636678c393",
+      "hook_event_name": "Notification",
+      "notification_type": "idle_prompt"
+    }
+  },
+  {
+    "name": "stop-cron",
+    "evidence": "Synthetic, hooks#stop-input (2026-10-28)",
+    "payload": {
+      "session_id": "04255c19-bd66-4b0b-afeb-30636678c393",
+      "hook_event_name": "Stop",
+      "background_tasks": [],
+      "session_crons": [
+        {
+          "id": "cron-1",
+          "schedule": "0 * * * *",
+          "recurring": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "permission_prompt",
+    "evidence": "Captured, Claude Code 2.1.312 A+ (2026-10-28): Notification-1793210329031263284.json; Bash prompt paired with PermissionRequest-1793210323011742330.json",
+    "raw_sha256": "39769a9aee8bcb5653df3544aa10fb2cc5983a1c53c1a74eb083eac4d3d7fe4a",
+    "normalization": "session_id replaced with the shared fixture UUID; transcript_path, cwd, scratchpad_dir, prompt_id and message stripped",
+    "payload": {
+      "session_id": "04255c19-bd66-4b0b-afeb-30636678c393",
+      "hook_event_name": "Notification",
+      "notification_type": "permission_prompt"
+    }
+  },
+  {
+    "name": "permission_prompt-ask-user-question",
+    "evidence": "Captured, Claude Code 2.1.312 A+ (2026-10-28): Notification-1793210062200102297.json; AskUserQuestion prompt paired with PermissionRequest-1793210056200256870.json",
+    "raw_sha256": "ed7c9f26f486c224276dda75a31474d47b2fa0da8ff4537d8c25a520cf124a42",
+    "normalization": "session_id replaced with the shared fixture UUID; transcript_path, cwd, scratchpad_dir, prompt_id and message stripped",
+    "payload": {
+      "session_id": "04255c19-bd66-4b0b-afeb-30636678c393",
+      "hook_event_name": "Notification",
+      "notification_type": "permission_prompt"
+    }
+  },
+  {
+    "name": "agent_needs_input",
+    "evidence": "Synthetic, hooks#notification-input (2026-10-28)",
+    "payload": {
+      "session_id": "04255c19-bd66-4b0b-afeb-30636678c393",
+      "hook_event_name": "Notification",
+      "notification_type": "agent_needs_input"
+    }
+  },
+  {
+    "name": "elicitation_dialog",
+    "evidence": "Synthetic, hooks#notification-input (2026-10-28)",
+    "payload": {
+      "session_id": "04255c19-bd66-4b0b-afeb-30636678c393",
+      "hook_event_name": "Notification",
+      "notification_type": "elicitation_dialog"
+    }
+  },
+  {
+    "name": "elicitation_url_dialog",
+    "evidence": "Synthetic, hooks#notification-input (2026-10-28)",
+    "payload": {
+      "session_id": "04255c19-bd66-4b0b-afeb-30636678c393",
+      "hook_event_name": "Notification",
+      "notification_type": "elicitation_url_dialog"
+    }
+  },
+  {
+    "name": "failure",
+    "evidence": "Synthetic, hooks#stopfailure-input (2026-10-28)",
+    "payload": {
+      "session_id": "04255c19-bd66-4b0b-afeb-30636678c393",
+      "hook_event_name": "StopFailure",
+      "error": "rate_limit"
+    }
+  }
+]

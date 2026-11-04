@@ -1,0 +1,16 @@
+Claude Code 2.1.312 state captures, devOpUs, 2026-10-28.
+D6 raw source: .yolo-team/tasks/feat-agent-stats/devops-capture/raw/ (case filenames in payloads.json).
+A+ raw source: .yolo-team/tasks/feat-agent-stats/devops-sd-raw/{RESULT.md,SHA256SUMS,raw/}.
+A+ dispatch: yolo-cla m:wRCqDJ_uSHGgkB9QPCb_qA; capture receipt: devOpUs m:wug6AKBZQMWYmT8Z9lu66w.
+A+ used an exec'd Claude in a disposable box with prompts on and session-only --settings capture hooks.
+DevOpUs reports: managed session never started; account settings untouched; box destroyed after capture.
+Bash: Notification-1793210329031263284.json, sha256 39769a9aee8bcb5653df3544aa10fb2cc5983a1c53c1a74eb083eac4d3d7fe4a.
+Paired PermissionRequest-1793210323011742330.json, sha256 51f3494082f9debec6a4b738ed58f8fc29b00a38702f4c8b562180b9a6a41834.
+AskUserQuestion: Notification-1793210062200102297.json, sha256 ed7c9f26f486c224276dda75a31474d47b2fa0da8ff4537d8c25a520cf124a42.
+Paired PermissionRequest-1793210056200256870.json, sha256 7bce45087f56cceb1e6fcf0f8dffa216702646ed9eb7fd31f373eb637978a053.
+Notification/PermissionRequest pairs have identical session_id and prompt_id; both Notifications are permission_prompt.
+Capture-hook filename timestamps differ by approximately six seconds per pair; answering an earlier Bash prompt sooner yielded only PermissionRequest (run2).
+These are observations of these runs/version, not a timing guarantee or proof of managed tool-permission prompting.
+Sanitization: Notification paths, prompt_id and message removed; session_id replaced with the shared fixture UUID; event/type unchanged.
+Separate ordinary managed AskUserQuestion run: devops-sd-live/RESULT.md and input/reports-{ask,answer}.txt report waiting_permission, then idle after answer; no raw inputs retained there.
+Remaining cron/input/elicitation/failure vectors are synthetic, from the official hooks reference checked 2026-10-28; no live claims for those types.

@@ -1,0 +1,11 @@
+{"v":1,"event":"UserPromptSubmit","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"04255c19-bd66-4b0b-afeb-30636678c393","state":"working"}
+{"v":1,"event":"Stop","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"04255c19-bd66-4b0b-afeb-30636678c393","state":"idle","effort":"medium"}
+{"v":1,"event":"Stop","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"04255c19-bd66-4b0b-afeb-30636678c393","state":"working","effort":"medium"}
+{"v":1,"event":"Notification","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"04255c19-bd66-4b0b-afeb-30636678c393","state":"idle"}
+{"v":1,"event":"Stop","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"04255c19-bd66-4b0b-afeb-30636678c393","state":"working"}
+{"v":1,"event":"Notification","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"04255c19-bd66-4b0b-afeb-30636678c393","state":"waiting_permission"}
+{"v":1,"event":"Notification","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"04255c19-bd66-4b0b-afeb-30636678c393","state":"waiting_permission"}
+{"v":1,"event":"Notification","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"04255c19-bd66-4b0b-afeb-30636678c393","state":"waiting_input"}
+{"v":1,"event":"Notification","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"04255c19-bd66-4b0b-afeb-30636678c393","state":"waiting_dialog"}
+{"v":1,"event":"Notification","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"04255c19-bd66-4b0b-afeb-30636678c393","state":"waiting_dialog"}
+{"v":1,"event":"StopFailure","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"04255c19-bd66-4b0b-afeb-30636678c393","state":"failed"}

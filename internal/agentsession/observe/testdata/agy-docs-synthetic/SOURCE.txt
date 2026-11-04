@@ -1,0 +1,14 @@
+# Antigravity CLI status line payloads, synthetic
+
+Built from the documented status line JSON (Antigravity CLI docs, "Status
+line", read 2026-10-28): conversation_id and session_id, model {id,
+display_name, effort}, version, context_window {context_window_size (0 when
+unknown), used_percentage (a float), remaining_percentage, current_usage
+{input_tokens, output_tokens, cache_creation_input_tokens,
+cache_read_input_tokens}}, agent_state (idle, working, tool_use, reviewing,
+authenticating, initializing, error), tool_confirmation_pending,
+pending_input_count and the other fields the writer drops. The model ID and
+version are the agy 1.4.9 capture's; the rest is not a capture. Replace these
+with the fixtures of leogr's trial (D-d).
+ORDER lists the payloads in the order the writer runs them; expected.jsonl
+holds its lines, with pid, ts and dur_ms normalized.

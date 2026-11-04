@@ -1,0 +1,8 @@
+{"v":1,"event":"SessionStart","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"4f9a2c1e-8b3d-4e7a-9c5f-1d2e3f4a5b6c","source":"startup","model":"gpt-5.6-luna"}
+{"v":1,"event":"Stop","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"4f9a2c1e-8b3d-4e7a-9c5f-1d2e3f4a5b6c","model":"gpt-5.6-luna","state":"idle"}
+{"v":1,"event":"SubagentStart","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"4f9a2c1e-8b3d-4e7a-9c5f-1d2e3f4a5b6c","model":"gpt-5.6-luna","subagent":true}
+{"v":1,"event":"SessionStart","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"9b8c7d6e-5f4a-4b3c-8d2e-1f0a9b8c7d6e","source":"resume","model":"gpt-5.6-luna"}
+{"v":1,"event":"SessionEnd","pid":42,"ts":"2026-10-28T00:00:00Z","session_id":"9b8c7d6e-5f4a-4b3c-8d2e-1f0a9b8c7d6e"}
+{"v":1,"pid":42,"ts":"2026-10-28T00:00:00Z","event":"UserPromptSubmit","session_id":"4f9a2c1e-8b3d-4e7a-9c5f-1d2e3f4a5b6c","model":"gpt-5.6-luna","state":"working"}
+{"v":1,"pid":42,"ts":"2026-10-28T00:00:00Z","event":"PostModelRequest","session_id":"4f9a2c1e-8b3d-4e7a-9c5f-1d2e3f4a5b6c","ctx_used":172000,"state":"working"}
+{"v":1,"pid":42,"ts":"2026-10-28T00:00:00Z","event":"PermissionRequest","session_id":"4f9a2c1e-8b3d-4e7a-9c5f-1d2e3f4a5b6c","state":"waiting_permission"}

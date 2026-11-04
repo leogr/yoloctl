@@ -1,0 +1,86 @@
+--- a/src/input/mouse_encode.zig
++++ b/src/input/mouse_encode.zig
+@@ -22,6 +22,10 @@
+     /// pixel coordinates (for SGR-Pixels), as well as to determine
+     /// whether a position falls outside the visible viewport.
+     size: renderer_size.Size,
++
++    /// Already-routed terminal-space reports have no physical window padding.
++    /// The caller owns viewport admission; keep their signed coordinates.
++    position_is_report: bool = false,
+ 
+     /// Whether any mouse button is currently pressed. When a motion
+     /// event occurs outside the viewport, it is only reported if a
+@@ -87,7 +91,7 @@
+ 
+     // Handle scenarios where the mouse position is outside the viewport.
+     // We always report release events no matter where they happen.
+-    if (event.action != .release and
++    if (!opts.position_is_report and event.action != .release and
+         posOutOfViewport(event.pos, opts.size))
+     {
+         // If we don't have a motion-tracking event mode, do nothing,
+@@ -134,10 +138,12 @@
+         .utf8 => {
+             try writer.writeAll("\x1B[M");
+ 
+-            // The button code always fits in a single byte.
+-            try writer.writeByte(32 + button_code);
+-
++            // All three fields are UTF-8 codepoints. Extended buttons can
++            // put Cb + 32 above ASCII even though it fits in a byte.
+             var buf: [4]u8 = undefined;
++            const cb_len = std.unicode.utf8Encode(@as(u21, button_code) + 32, &buf) catch unreachable;
++            try writer.writeAll(buf[0..cb_len]);
++
+             const x_cp: u21 = @intCast(@as(u32, cell.x) + 33);
+             const y_cp: u21 = @intCast(cell.y + 33);
+ 
+@@ -222,6 +228,8 @@
+             .seven => 67,
+             .eight => 128,
+             .nine => 129,
++            .ten => 130,
++            .eleven => 131,
+             else => return null,
+         };
+     };
+@@ -612,12 +620,12 @@
+     try testing.expectEqualStrings("\x1B[35;3;4M", writer.buffered());
+ }
+ 
+-test "unsupported button is ignored" {
+-    var data: [32]u8 = undefined;
+-    var writer: std.Io.Writer = .fixed(&data);
+-    var last: ?point.Coordinate = null;
+-    try encode(&writer, .{
+-        .button = .ten,
++test "unknown button is ignored" {
++    var data: [32]u8 = undefined;
++    var writer: std.Io.Writer = .fixed(&data);
++    var last: ?point.Coordinate = null;
++    try encode(&writer, .{
++        .button = .unknown,
+         .action = .press,
+         .pos = .{ .x = 1, .y = 1 },
+     }, .{
+--- a/src/terminal/formatter.zig
++++ b/src/terminal/formatter.zig
+@@ -1345,6 +1345,17 @@
+ 
+                     // Cells with no text are blank
+                     if (!cell.hasText()) {
++                        // yoloctl: a styled blank is not blank (above), so
++                        // this one renders unstyled. Close an open VT style
++                        // first, or the spaces emitted for it later would
++                        // inherit it (an underline running into erased cells).
++                        if (comptime emit == .vt) {
++                            if (!style.default()) {
++                                try self.formatStyleClose(emit, writer);
++                                style = .{};
++                                style_id = 0;
++                            }
++                        }
+                         blank_cells += 1;
+                         continue;
+                     }

@@ -1,0 +1,6 @@
+{"v":1,"event":"SessionStart","pid":42,"ts":"2026-10-27T00:00:00Z","session_id":"40acee27-150e-430e-8d6a-b69fdbfa6b32","source":"startup","model":"claude-opus-5-5"}
+{"v":1,"event":"Stop","pid":42,"ts":"2026-10-27T00:00:00Z","session_id":"40acee27-150e-430e-8d6a-b69fdbfa6b32","effort":"high","state":"idle"}
+{"v":1,"event":"SessionEnd","pid":42,"ts":"2026-10-27T00:00:00Z","session_id":"4554fa0d-3786-45f1-8e7b-b37e99bb93df"}
+{"v":1,"event":"SessionStart","pid":42,"ts":"2026-10-27T00:00:00Z","session_id":"bd964db0-95f7-4719-a960-8c2155f8e43d","source":"clear"}
+{"v":1,"event":"SessionStart","pid":42,"ts":"2026-10-27T00:00:00Z","session_id":"faba30c1-1fcc-4673-8fb6-9fa105e7bced","source":"resume"}
+{"v":1,"event":"statusline","pid":42,"ts":"2026-10-27T00:00:00Z","wrapped":false,"session_id":"40acee27-150e-430e-8d6a-b69fdbfa6b32","model":"claude-opus-5-5","effort":"high","version":"2.1.311","ctx_size":1000000,"ctx_pct":4,"ctx_used":39763}

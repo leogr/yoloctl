@@ -1,0 +1,64 @@
+{
+  "cwd": "/workdir/project",
+  "session_id": "bad9968c-952f-48bd-8c7b-035e4f0b8858",
+  "conversation_id": "bad9968c-952f-48bd-8c7b-035e4f0b8858",
+  "conversation_title": "Fix the build",
+  "transcript_path": "/home/sandbox/.gemini/antigravity-cli/conversations/x.jsonl",
+  "model": {
+    "id": "gemini-3.8-flash-low",
+    "display_name": "Gemini 3.8 Flash (Low)",
+    "effort": "low"
+  },
+  "workspace": {
+    "current_dir": "/workdir/project",
+    "project_dir": "/workdir/project"
+  },
+  "version": "1.4.9",
+  "context_window": {
+    "total_input_tokens": 151230,
+    "total_output_tokens": 2210,
+    "context_window_size": 1048576,
+    "used_percentage": 14.24,
+    "remaining_percentage": 85.76,
+    "current_usage": {
+      "input_tokens": 148900,
+      "output_tokens": 1200,
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 330
+    }
+  },
+  "exceeds_200k_tokens": false,
+  "product": "antigravity",
+  "quota": {
+    "weekly": {
+      "remaining_fraction": 0.77,
+      "reset_time": "2026-11-02T00:00:00Z",
+      "reset_in_seconds": 400000
+    }
+  },
+  "agent_state": "reviewing",
+  "vcs": {
+    "type": "git"
+  },
+  "cycle_mode": "plan",
+  "sandbox": {
+    "enabled": false
+  },
+  "subagents": [
+    {
+      "name": "explorer",
+      "role": "search",
+      "status": "completed"
+    }
+  ],
+  "artifact_count": 2,
+  "plan_tier": "Pro",
+  "email": "someone@example.com",
+  "task_count": 1,
+  "terminal_width": 111,
+  "cost": {
+    "total_usd": 0.4213,
+    "subagent_usd": 0.01,
+    "estimated": true
+  }
+}

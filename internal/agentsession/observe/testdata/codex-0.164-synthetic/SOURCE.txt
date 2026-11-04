@@ -1,0 +1,8 @@
+# Codex 0.164 synthetic hook payloads
+
+Built from the documented hook input fields (Codex 0.164 `hooks/src/events`, and 0.165 `hooks/src/schema.rs` for UserPromptSubmit, PostModelRequest and PermissionRequest):
+`session_id`, `hook_event_name`, `model`, `source`, `cwd`, `permission_mode`,
+`transcript_path` and `turn_id`. They are not a capture: replace them with the
+fixtures of the first live Codex run of the stage 2 check.
+`expected.jsonl` holds the writer's lines for them, with pid, ts and dur_ms
+normalized; no daemon answers, so there are no query lines.

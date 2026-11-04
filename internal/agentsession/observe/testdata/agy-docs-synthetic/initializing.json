@@ -1,0 +1,55 @@
+{
+  "cwd": "/workdir/project",
+  "session_id": "",
+  "conversation_id": "",
+  "conversation_title": "Fix the build",
+  "transcript_path": "/home/sandbox/.gemini/antigravity-cli/conversations/x.jsonl",
+  "model": null,
+  "workspace": {
+    "current_dir": "/workdir/project",
+    "project_dir": "/workdir/project"
+  },
+  "version": "1.4.9",
+  "context_window": {
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "context_window_size": 0,
+    "used_percentage": 0,
+    "remaining_percentage": 100,
+    "current_usage": null
+  },
+  "exceeds_200k_tokens": false,
+  "product": "antigravity",
+  "quota": {
+    "weekly": {
+      "remaining_fraction": 0.77,
+      "reset_time": "2026-11-02T00:00:00Z",
+      "reset_in_seconds": 400000
+    }
+  },
+  "agent_state": "initializing",
+  "vcs": {
+    "type": "git"
+  },
+  "cycle_mode": "plan",
+  "sandbox": {
+    "enabled": false
+  },
+  "subagents": [
+    {
+      "name": "explorer",
+      "role": "search",
+      "status": "completed"
+    }
+  ],
+  "artifact_count": 2,
+  "plan_tier": "Pro",
+  "email": "someone@example.com",
+  "task_count": 1,
+  "terminal_width": 111,
+  "cost": {
+    "total_usd": 0.4213,
+    "subagent_usd": 0.01,
+    "estimated": true
+  }
+}
