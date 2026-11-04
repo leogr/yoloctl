@@ -65,8 +65,8 @@ RUN --mount=type=cache,id=yoloctl-apt-archives-v1,target=/var/cache/yoloctl/apt,
        else test "\$(cat /var/cache/yoloctl/apt/smoke-retained)" = "\$SMOKE_TOKEN" && rm /var/cache/yoloctl/apt/smoke-retained; fi
 RUN if [ -d /var/cache/yoloctl/apt ]; then test -z "\$(find /var/cache/yoloctl/apt -type f -print -quit)"; fi
 RUN --mount=type=cache,id=yoloctl-apt-lists-v1,target=/var/lib/apt/lists,sharing=locked \
-    if [ "\$SMOKE_PHASE" = before ]; then printf '%s' "\$SMOKE_TOKEN" > /var/lib/apt/lists/smoke-retained; \
-    else test "\$(cat /var/lib/apt/lists/smoke-retained)" = "\$SMOKE_TOKEN" && rm /var/lib/apt/lists/smoke-retained; fi
+    if [ "\$SMOKE_PHASE" = before ]; then mkdir -p /var/lib/apt/lists/auxfiles && printf '%s' "\$SMOKE_TOKEN" > /var/lib/apt/lists/auxfiles/yoloctl-smoke-retained; \
+    else test "\$(cat /var/lib/apt/lists/auxfiles/yoloctl-smoke-retained)" = "\$SMOKE_TOKEN" && rm /var/lib/apt/lists/auxfiles/yoloctl-smoke-retained; fi
 RUN if [ -d /var/lib/apt/lists ]; then test -z "\$(find /var/lib/apt/lists -type f -print -quit)"; fi
 RUN --mount=type=cache,id=yoloctl-npm-v1,target=/var/cache/yoloctl/npm,sharing=locked,mode=0777 \
     test -d /var/cache/yoloctl/npm/0/_cacache \
