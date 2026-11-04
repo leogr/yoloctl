@@ -399,7 +399,7 @@ func Publish(ctx context.Context, o Options) (result Result, err error) {
 		temp := ".yoloctl-link-" + rand.Text()
 		if err := makeSymlink(result.Executable, bins.fd, temp); err != nil {
 			if errors.Is(err, unix.EPERM) || errors.Is(err, unix.ENOTSUP) || errors.Is(err, unix.EOPNOTSUPP) {
-				return result, fmt.Errorf("%s does not allow symbolic links (%w); the installed build is %s: choose a bin directory on a local disk with --bin-dir", bins.path, err, result.Executable)
+				return result, fmt.Errorf("%s does not allow symbolic links (%w); the published bundle is %s: choose a bin directory on a local disk with --bin-dir", bins.path, err, result.Executable)
 			}
 			return result, err
 		}
