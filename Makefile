@@ -150,6 +150,7 @@ test-scripts:
 	python3 -B -m unittest discover -s scripts -p test_helper_release.py
 	python3 -B -m unittest discover -s scripts -p test_release.py
 	python3 -B -m unittest discover -s scripts -p test_agent_observe.py
+	python3 -B -m unittest discover -s scripts -p test_image_cache_probe.py
 	python3 -B -m unittest discover -s scripts -p test_airc_runtime.py
 	python3 -B -m unittest discover -s scripts -p test_pty_run.py
 	python3 -B -m unittest discover -s scripts -p test_attach_mixed.py
