@@ -1,0 +1,226 @@
+yoloctl local patch 0004: restore process-group signals as in OpenShell v0.0.72.
+
+OpenShell 0.1.6 routes every kill and rt_sigqueueinfo through the sandbox's
+seccomp-notify broker (openshell-sandbox src/linux/process_signal.rs,
+mediate_process_signal), which delivers only to one positive PID and rejects
+every target <= 0 with EPERM. v0.0.72 never mediated signals, so killpg,
+`kill -TERM -PGID`, kill(0) and process-group test suites failed in boxes.
+
+A process-group kill (PID zero = the caller's own group, or -PGID other than
+-1) is now delivered by the broker with kill(-PGID) unless the group is the
+sandbox's own (or 0/1). The group is resolved once and the broker signals
+that numeric group itself, so the caller cannot redirect it into the
+sandbox's group. Broadcast kill(-1) and queued group signals
+(rt_sigqueueinfo with PID <= 0) stay denied, as upstream decided. The child
+filter keeps denying kill(-sandbox TGID) first (patch 0003).
+
+Also tidies two test-only lints in patch 0003's test (no behaviour change).
+
+diff --git a/crates/openshell-sandbox/src/linux/child_seccomp.rs b/crates/openshell-sandbox/src/linux/child_seccomp.rs
+index 0ef8846..1139a5a 100644
+--- a/crates/openshell-sandbox/src/linux/child_seccomp.rs
++++ b/crates/openshell-sandbox/src/linux/child_seccomp.rs
+@@ -509,6 +509,7 @@ mod tests {
+     // the child filter (GNU make's posix_spawn RESETIDS, nice, ulimit).
+     #[test]
+     fn filter_allows_v0_0_72_identity_priority_and_limit_calls() {
++        const IOPRIO_WHO_PROCESS: libc::c_long = 1;
+         // SAFETY: the child uses only raw syscalls after fork and exits with
+         // `_exit`, so it does not run copied Rust cleanup state.
+         let child = unsafe { libc::fork() };
+@@ -537,7 +538,10 @@ mod tests {
+             if unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, priority) } != 0 {
+                 unsafe { libc::_exit(5) };
+             }
+-            let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
++            let mut limit = libc::rlimit {
++                rlim_cur: 0,
++                rlim_max: 0,
++            };
+             let me = unsafe { libc::getpid() };
+             let read = unsafe {
+                 libc::syscall(
+@@ -561,13 +565,12 @@ mod tests {
+                 unsafe { libc::_exit(6) };
+             }
+             let mut set = unsafe { std::mem::zeroed::<libc::cpu_set_t>() };
+-            let size = std::mem::size_of::<libc::cpu_set_t>();
++            let size = size_of::<libc::cpu_set_t>();
+             if unsafe { libc::sched_getaffinity(me, size, &raw mut set) } != 0
+                 || unsafe { libc::sched_setaffinity(me, size, &raw const set) } != 0
+             {
+                 unsafe { libc::_exit(7) };
+             }
+-            const IOPRIO_WHO_PROCESS: libc::c_long = 1;
+             let ioprio = unsafe { libc::syscall(libc::SYS_ioprio_get, IOPRIO_WHO_PROCESS, 0) };
+             let restored =
+                 unsafe { libc::syscall(libc::SYS_ioprio_set, IOPRIO_WHO_PROCESS, 0, ioprio) };
+diff --git a/crates/openshell-sandbox/src/linux/process_signal.rs b/crates/openshell-sandbox/src/linux/process_signal.rs
+index 464b067..2607be6 100644
+--- a/crates/openshell-sandbox/src/linux/process_signal.rs
++++ b/crates/openshell-sandbox/src/linux/process_signal.rs
+@@ -33,6 +33,22 @@ pub fn mediate_process_signal(
+     listener.validate_id(notification.id)?;
+     let target = scalar_int(notification.args[0]);
+     let signal = scalar_int(notification.args[1]);
++    // yoloctl: a process-group kill (PID zero or -pgid, never -1) works as in
++    // v0.0.72, except for the sandbox's own group.
++    if target <= 0
++        && target != -1
++        && i64::from(notification.syscall) == libc::SYS_kill
++        && (0..=64).contains(&signal)
++    {
++        return mediate_group_signal(
++            listener,
++            notification,
++            target,
++            signal,
++            sandbox_tgid,
++            workload_frozen,
++        );
++    }
+     if target <= 0 || !(0..=64).contains(&signal) {
+         return Err(io::Error::from_raw_os_error(if target <= 0 {
+             libc::EPERM
+@@ -85,6 +101,53 @@ pub fn mediate_process_signal(
+     listener.respond_value(notification.id, 0)
+ }
+ 
++/// yoloctl: deliver a process-group `kill` (PID zero means the caller's own
++/// group) unless the group is the sandbox's own, 0 or 1. The group is resolved
++/// once here and the broker signals that numeric group itself, so a later
++/// `setpgid` by the caller cannot redirect the signal into the sandbox's
++/// group; the workload cannot move the sandbox into another group. Broadcast
++/// (-1) and queued group signals stay denied by the caller above.
++fn mediate_group_signal(
++    listener: &NotificationListener,
++    notification: Notification,
++    target: i32,
++    signal: i32,
++    sandbox_tgid: u32,
++    workload_frozen: &AtomicBool,
++) -> io::Result<()> {
++    let group = if target == 0 {
++        let tid = i32::try_from(notification.tid)
++            .map_err(|_| io::Error::from_raw_os_error(libc::ESRCH))?;
++        // SAFETY: getpgid takes a scalar PID and has no side effects.
++        let caller_group = unsafe { libc::getpgid(tid) };
++        if caller_group < 0 {
++            return Err(io::Error::last_os_error());
++        }
++        caller_group
++    } else {
++        target
++            .checked_neg()
++            .ok_or_else(|| io::Error::from_raw_os_error(libc::EINVAL))?
++    };
++    let sandbox =
++        i32::try_from(sandbox_tgid).map_err(|_| io::Error::from_raw_os_error(libc::EINVAL))?;
++    // SAFETY: getpgid takes a scalar PID and has no side effects.
++    let sandbox_group = unsafe { libc::getpgid(sandbox) };
++    if sandbox_group < 0 {
++        return Err(io::Error::last_os_error());
++    }
++    if group <= 1 || group == sandbox_group || group == sandbox {
++        return Err(io::Error::from_raw_os_error(libc::EPERM));
++    }
++    refuse_resume_while_frozen(signal, workload_frozen)?;
++    listener.validate_id(notification.id)?;
++    // SAFETY: scalar arguments; the target is a validated process group.
++    if unsafe { libc::kill(-group, signal) } < 0 {
++        return Err(io::Error::last_os_error());
++    }
++    listener.respond_value(notification.id, 0)
++}
++
+ /// Continue a thread-directed signal (`tkill`, `tgkill`,
+ /// `rt_tgsigqueueinfo`) aimed at an untrusted workload thread.
+ ///
+@@ -220,6 +283,87 @@ mod tests {
+         assert_eq!(worker.join().unwrap(), (-1, Some(libc::EPERM)));
+     }
+ 
++    /// yoloctl: run one notified `kill` from a filtered worker thread and
++    /// return (mediator errno, worker result, worker errno).
++    fn notified_kill(
++        target: i32,
++        signal: i32,
++        sandbox_tgid: u32,
++    ) -> (Option<i32>, i64, Option<i32>) {
++        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
++        let worker = std::thread::spawn(move || {
++            let listener =
++                crate::linux::seccomp_notify::install_workload_listener_with(true).unwrap();
++            sender.send(listener).unwrap();
++            // SAFETY: scalar arguments only.
++            let result = unsafe { libc::syscall(libc::SYS_kill, target, signal) };
++            (result, io::Error::last_os_error().raw_os_error())
++        });
++        let listener = receiver
++            .recv_timeout(std::time::Duration::from_secs(5))
++            .unwrap();
++        let notification = listener.receive().unwrap();
++        let mediated = mediate_process_signal(
++            &listener,
++            notification,
++            sandbox_tgid,
++            &AtomicBool::new(false),
++        );
++        let mediated_errno = match mediated {
++            Ok(()) => None,
++            Err(error) => {
++                let errno = error.raw_os_error().unwrap_or(libc::EIO);
++                listener.respond_errno(notification.id, errno).unwrap();
++                Some(errno)
++            }
++        };
++        let (result, errno) = worker.join().unwrap();
++        (mediated_errno, result, errno)
++    }
++
++    fn own_group_sleeper() -> std::process::Child {
++        use std::os::unix::process::CommandExt;
++        std::process::Command::new("sleep")
++            .arg("30")
++            .process_group(0)
++            .spawn()
++            .unwrap()
++    }
++
++    #[test]
++    fn workload_killpg_reaches_its_own_group() {
++        let mut child = own_group_sleeper();
++        let group = i32::try_from(child.id()).unwrap();
++        let (mediated, result, _) = notified_kill(-group, libc::SIGTERM, std::process::id());
++        assert_eq!((mediated, result), (None, 0));
++        assert!(!child.wait().unwrap().success());
++    }
++
++    #[test]
++    fn workload_kill_zero_reaches_the_callers_group() {
++        // The "sandbox" here is a child in another group, so the caller's
++        // group (this test process's) is not the sandbox's.
++        let mut sandbox = own_group_sleeper();
++        let (mediated, result, _) = notified_kill(0, 0, sandbox.id());
++        sandbox.kill().unwrap();
++        let _ = sandbox.wait();
++        assert_eq!((mediated, result), (None, 0));
++    }
++
++    #[test]
++    fn group_signals_to_the_sandbox_group_and_broadcast_stay_denied() {
++        // SAFETY: getpgrp has no arguments or side effects.
++        let own_group = unsafe { libc::getpgrp() };
++        for target in [-own_group, 0, -1] {
++            let (mediated, result, errno) = notified_kill(target, 0, std::process::id());
++            assert_eq!(
++                (mediated, result, errno),
++                (Some(libc::EPERM), -1, Some(libc::EPERM)),
++                "target {target}"
++            );
++        }
++    }
++
+     #[test]
+     fn retained_child_can_be_signaled_without_numeric_pid_delivery() {
+         let mut child = std::process::Command::new("sleep")

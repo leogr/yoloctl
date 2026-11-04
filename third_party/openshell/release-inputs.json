@@ -1,0 +1,39 @@
+{
+  "revision": "first-build-1",
+  "fork_commit": "e8605009bed50a05136efe106a0c1e2f283ee771",
+  "fork_tree": "9112ab178200f6751290ac2c2a20150e31c8708b",
+  "patch2_sha256": "77019fe849082581402dc21b366e22afe633973a40aa16d5eba1d66ef8a23b0e",
+  "patch2_record": "sol2-build/fork-patch2-signed-r1/SOURCE-PIN.json",
+  "source_proof": "devops-arm64-cross-r1/finished-release/source-proof.json",
+  "build_proofs": {
+    "amd64": "sol2-build/AMD64-VERIFIED-r1.json",
+    "arm64": "devops-arm64-cross-r1/VERIFIED.json"
+  },
+  "rego": "third_party/openshell/sandbox-policy-0.1.6.rego",
+  "platforms": {
+    "amd64": {
+      "boundary": {
+        "archive": "openshell-sandbox-amd64.tar.gz",
+        "archive_sha256": "d0ff317d0d1368cbd6bbd381fa99d270e529c5748dc60613cbcfbd46a79d5b90",
+        "binary_sha256": "bb0a051ca52ed3267c91d7a1f382a8d99f3635a02d108466653e0a5d2415b62d"
+      },
+      "supervisor": {
+        "archive": "openshell-supervisor-amd64.tar.gz",
+        "archive_sha256": "51477e7b392a94c37cb8d178995e2ab176c291fecef9b18c2ec2ed516a91f558",
+        "binary_sha256": "78c19ba9395005fd3c255a933102d0bc5786e8a981486c9dbbef041e6f04319b"
+      }
+    },
+    "arm64": {
+      "boundary": {
+        "archive": "openshell-sandbox-arm64.tar.gz",
+        "archive_sha256": "cda6f1fd6a15bb15d6d7c0c15cd6682ebac7905bb60c312a13b4f2e0075f6a44",
+        "binary_sha256": "3613fe7791ebf5f8953055332ee32d2a28a2c3cf9ce42a4d29d80f59e8e3a4b8"
+      },
+      "supervisor": {
+        "archive": "openshell-supervisor-arm64.tar.gz",
+        "archive_sha256": "50432a5475a33dd9eabb2f73efadb1c0192c5eddf10362b405811d910fffa366",
+        "binary_sha256": "ac15543da392bab1ec31d1379b17c0be43eac4b6f52ec2414d8d6b1c0933b862"
+      }
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "version": "0.1.6",
+  "rust": "1.95.0",
+  "targets": {
+    "amd64": "x86_64-unknown-linux-musl",
+    "arm64": "aarch64-unknown-linux-musl"
+  },
+  "upstream": {
+    "repository": "https://github.com/NVIDIA/OpenShell",
+    "commit": "ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47",
+    "tree": "c9c1f358cd6f68445c88b65a5e4983a5213e6bab"
+  },
+  "patches": [
+    {
+      "file": "patches/0001-unmediated-network.patch",
+      "sha256": "3a1b73769d14d5d17af7d1a867db530870fbbcaf5f2b75e9a8328442d0c8e034",
+      "result_tree": "c7c8c2847caee9c477f23fc76242298f1ac2eff5"
+    },
+    {
+      "file": "patches/0002-workspace-read-only.patch",
+      "sha256": "77019fe849082581402dc21b366e22afe633973a40aa16d5eba1d66ef8a23b0e",
+      "result_tree": "9112ab178200f6751290ac2c2a20150e31c8708b"
+    },
+    {
+      "file": "patches/0003-v0072-syscall-parity.patch",
+      "sha256": "d927c47d8ed8f6ca95e147a65614acc064d9dea1d1067495838da4c2049eec69",
+      "result_tree": "c5f248c7970e0ea23736f242b70668a135af3785"
+    },
+    {
+      "file": "patches/0004-v0072-process-group-signals.patch",
+      "sha256": "2c6c4d4005cf4dec51f02769bf6319f26b736c36b224c6b9007f372d5566ed55",
+      "result_tree": "a95cfcec31a2627091f4141253c89ef0f88fedae"
+    }
+  ],
+  "source_dir": "OpenShell-patch2-signed",
+  "stamp": {
+    "from": "version = \"0.0.0\"\n",
+    "to": "version = \"0.1.6\"\n",
+    "before": {
+      "Cargo.toml": "e1cb51aaac075e9f4f2d61fbb98385dc0e82b60647ea662b968a5184e568d1f8",
+      "Cargo.lock": "845a694d70974d6eb22f402952daa0ff35d2cbaa3bc25117c39230daa3855776"
+    },
+    "after": {
+      "Cargo.toml": "04a46bda0fea476ab4b4d00eb9b452a2f8eecb45c19b6c2283e3610a9d8cea63",
+      "Cargo.lock": "1642c375e9ec79b9b4d3ba530e66a142584722144954438f8ad049b6bcdfacb3"
+    }
+  },
+  "source_date_epoch": 1793363018,
+  "rego": {
+    "path": "crates/openshell-supervisor-network/data/sandbox-policy.rego",
+    "file": "sandbox-policy-0.1.6.rego",
+    "sha256": "f60349dcfe8f42ff6c6957fd860cbfc1aef536c6f22740025c6771745f637c38"
+  },
+  "outputs_note": "Reviewed release hashes (manual 2026-11 release lanes); the local build records whether it equals them and does not require it.",
+  "outputs": {
+    "amd64": {
+      "openshell-sandbox": {
+        "binary_sha256": "bb0a051ca52ed3267c91d7a1f382a8d99f3635a02d108466653e0a5d2415b62d",
+        "archive_sha256": "d0ff317d0d1368cbd6bbd381fa99d270e529c5748dc60613cbcfbd46a79d5b90"
+      },
+      "openshell-supervisor": {
+        "binary_sha256": "78c19ba9395005fd3c255a933102d0bc5786e8a981486c9dbbef041e6f04319b",
+        "archive_sha256": "51477e7b392a94c37cb8d178995e2ab176c291fecef9b18c2ec2ed516a91f558"
+      }
+    },
+    "arm64": {
+      "openshell-sandbox": {
+        "binary_sha256": "3613fe7791ebf5f8953055332ee32d2a28a2c3cf9ce42a4d29d80f59e8e3a4b8",
+        "archive_sha256": "cda6f1fd6a15bb15d6d7c0c15cd6682ebac7905bb60c312a13b4f2e0075f6a44"
+      },
+      "openshell-supervisor": {
+        "binary_sha256": "ac15543da392bab1ec31d1379b17c0be43eac4b6f52ec2414d8d6b1c0933b862",
+        "archive_sha256": "50432a5475a33dd9eabb2f73efadb1c0192c5eddf10362b405811d910fffa366"
+      }
+    }
+  }
+}

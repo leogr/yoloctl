@@ -1,0 +1,393 @@
+From aae495d2e56791213d3d2ad4acf9af7f4ecd966a Mon Sep 17 00:00:00 2001
+From: Leonardo Grasso <me@leonardograsso.com>
+Date: Wed, 28 Oct 2026 18:58:09 +0100
+Subject: [PATCH] feat(sandbox): add an unmediated-network boundary mode
+
+Add --unmediated-network to openshell-sandbox, also accepted as the first
+argument of launch-capability-free. With it, the workload listener no
+longer forwards the eight network syscalls (socket, connect, bind, listen,
+sendto, sendmsg, sendmmsg, setsockopt), so the kernel handles workload
+sockets directly in the workload's network namespace. Signal and openat
+mediation, Landlock, the main seccomp filter and the capability-free
+identity are unchanged, and the boundary logs a warning when the mode is
+on.
+
+This is a local fork patch for yoloctl's opt-in unconfined network and
+deliberately departs from RFC 0012's network invariants for boxes that use
+it. The default stays fully mediated: start() and run() keep their
+behaviour and signatures, and a test pins the mediated syscall list as
+upstream ships it.
+
+Signed-off-by: Leonardo Grasso <me@leonardograsso.com>
+---
+ .../openshell-sandbox/src/boundary_server.rs  |  14 ++-
+ crates/openshell-sandbox/src/lib.rs           |  17 ++-
+ .../src/linux/process_signal.rs               |   3 +-
+ .../src/linux/seccomp_notify.rs               | 105 ++++++++++++++----
+ .../src/linux/workload_launcher.rs            |  10 +-
+ crates/openshell-sandbox/src/main.rs          |  40 +++++--
+ 6 files changed, 156 insertions(+), 33 deletions(-)
+
+diff --git a/crates/openshell-sandbox/src/boundary_server.rs b/crates/openshell-sandbox/src/boundary_server.rs
+index 2557d40f..6202dc30 100644
+--- a/crates/openshell-sandbox/src/boundary_server.rs
++++ b/crates/openshell-sandbox/src/boundary_server.rs
+@@ -236,6 +236,7 @@ mod linux {
+     pub fn run_boundary(
+         config_path: &Path,
+         qualification: crate::RuntimeQualification,
++        mediate_network: bool,
+     ) -> Result<(), String> {
+         install_boundary_signal_handlers()?;
+         make_boundary_nondumpable()?;
+@@ -266,7 +267,14 @@ mod linux {
+         }
+         crate::managed_children::start_orphan_reaper()
+             .map_err(|error| format!("start sandbox orphan reaper: {error}"))?;
+-        let (launcher, listener) = crate::linux::workload_launcher::start()
++        if !mediate_network {
++            tracing::warn!(
++                "network mediation is off (--unmediated-network): workload sockets use the \
++                 workload network namespace directly, without policy, L7 inspection or OCSF \
++                 network events"
++            );
++        }
++        let (launcher, listener) = crate::linux::workload_launcher::start_with(mediate_network)
+             .map_err(|error| format!("start sandbox workload launcher: {error}"))?;
+         let protected_control_port = match &config.listener {
+             BoundaryListenerConfig::TlsTcp { address, .. } => Some(address.port()),
+@@ -10037,14 +10045,16 @@ mod linux {
+ pub fn run_boundary(
+     config_path: &Path,
+     qualification: crate::RuntimeQualification,
++    mediate_network: bool,
+ ) -> Result<(), String> {
+-    linux::run_boundary(config_path, qualification)
++    linux::run_boundary(config_path, qualification, mediate_network)
+ }
+ 
+ #[cfg(not(target_os = "linux"))]
+ pub fn run_boundary(
+     _config_path: &Path,
+     _qualification: crate::RuntimeQualification,
++    _mediate_network: bool,
+ ) -> Result<(), String> {
+     Err("boundary mode is supported only on Linux".to_string())
+ }
+diff --git a/crates/openshell-sandbox/src/lib.rs b/crates/openshell-sandbox/src/lib.rs
+index 3a7fd8be..095d6013 100644
+--- a/crates/openshell-sandbox/src/lib.rs
++++ b/crates/openshell-sandbox/src/lib.rs
+@@ -73,7 +73,22 @@ pub fn run(
+     config_path: &std::path::Path,
+     qualification: RuntimeQualification,
+ ) -> miette::Result<()> {
+-    boundary_server::run_boundary(config_path, qualification)
++    run_with(config_path, qualification, true)
++}
++
++/// Run the boundary with workload network mediation on or off. Off is the
++/// fork's unmediated network (`--unmediated-network`): no network syscall is
++/// forwarded, every other boundary layer stays.
++///
++/// # Errors
++///
++/// As [`run`].
++pub fn run_with(
++    config_path: &std::path::Path,
++    qualification: RuntimeQualification,
++    mediate_network: bool,
++) -> miette::Result<()> {
++    boundary_server::run_boundary(config_path, qualification, mediate_network)
+         .map_err(|error| miette::miette!(error))
+ }
+ 
+diff --git a/crates/openshell-sandbox/src/linux/process_signal.rs b/crates/openshell-sandbox/src/linux/process_signal.rs
+index f2addd54..464b0674 100644
+--- a/crates/openshell-sandbox/src/linux/process_signal.rs
++++ b/crates/openshell-sandbox/src/linux/process_signal.rs
+@@ -193,7 +193,8 @@ mod tests {
+     fn filtered_worker_cannot_signal_the_sandbox_through_a_tid() {
+         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+         let worker = std::thread::spawn(move || {
+-            let listener = crate::linux::seccomp_notify::install_workload_listener().unwrap();
++            let listener =
++                crate::linux::seccomp_notify::install_workload_listener_with(true).unwrap();
+             sender.send(listener).unwrap();
+             // SAFETY: gettid has no arguments; signal zero checks permission
+             // without delivering a signal to the disposable test thread.
+diff --git a/crates/openshell-sandbox/src/linux/seccomp_notify.rs b/crates/openshell-sandbox/src/linux/seccomp_notify.rs
+index bc98813b..9dd65a57 100644
+--- a/crates/openshell-sandbox/src/linux/seccomp_notify.rs
++++ b/crates/openshell-sandbox/src/linux/seccomp_notify.rs
+@@ -322,25 +322,44 @@ pub fn install_listener(syscalls: &[i64]) -> io::Result<NotificationListener> {
+     install_notification_filter(syscalls)
+ }
+ 
+-/// Install the capability-free workload networking listener on the calling
+-/// launcher thread.
++/// The network syscalls the workload listener forwards to the broker.
++const WORKLOAD_NETWORK_SYSCALLS: [i64; 8] = [
++    libc::SYS_socket,
++    libc::SYS_connect,
++    libc::SYS_bind,
++    libc::SYS_listen,
++    libc::SYS_sendto,
++    libc::SYS_sendmsg,
++    libc::SYS_sendmmsg,
++    libc::SYS_setsockopt,
++];
++
++/// Install the capability-free workload listener on the calling launcher
++/// thread.
+ ///
+-/// The filter mediates every syscall that can create, select, or materially
+-/// reconfigure an INET endpoint. Connected `send()`/null-destination
+-/// `sendto()` retains the audited cBPF fast path. `accept`/`accept4` run
+-/// natively: the broker binds every INET socket to loopback before injecting
+-/// it, and accepted sockets inherit their listener's binding.
+-pub fn install_workload_listener() -> io::Result<NotificationListener> {
+-    #[allow(unused_mut)] // SYS_open is unavailable on some architectures.
+-    let mut syscalls = vec![
+-        libc::SYS_socket,
+-        libc::SYS_connect,
+-        libc::SYS_bind,
+-        libc::SYS_listen,
+-        libc::SYS_sendto,
+-        libc::SYS_sendmsg,
+-        libc::SYS_sendmmsg,
+-        libc::SYS_setsockopt,
++/// With network mediation on, the filter mediates every syscall that can
++/// create, select, or materially reconfigure an INET endpoint. Connected
++/// `send()`/null-destination `sendto()` retains the audited cBPF fast path.
++/// `accept`/`accept4` run natively: the broker binds every INET socket to
++/// loopback before injecting it, and accepted sockets inherit their
++/// listener's binding.
++///
++/// With `mediate_network` false the eight network syscalls are not forwarded:
++/// the kernel handles workload sockets directly in the workload's network
++/// namespace (yoloctl's unconfined network). Signal and `openat` mediation,
++/// Landlock, the main seccomp filter and the capability-free identity are
++/// unchanged.
++pub fn install_workload_listener_with(mediate_network: bool) -> io::Result<NotificationListener> {
++    install_listener(&workload_listener_syscalls(mediate_network))
++}
++
++/// The syscalls the workload listener forwards.
++pub(crate) fn workload_listener_syscalls(mediate_network: bool) -> Vec<i64> {
++    let mut syscalls = Vec::with_capacity(16);
++    if mediate_network {
++        syscalls.extend_from_slice(&WORKLOAD_NETWORK_SYSCALLS);
++    }
++    syscalls.extend_from_slice(&[
+         libc::SYS_kill,
+         libc::SYS_tkill,
+         libc::SYS_tgkill,
+@@ -348,10 +367,10 @@ pub fn install_workload_listener() -> io::Result<NotificationListener> {
+         libc::SYS_rt_sigqueueinfo,
+         libc::SYS_openat,
+         libc::SYS_openat2,
+-    ];
++    ]);
+     #[cfg(target_arch = "x86_64")]
+     syscalls.push(libc::SYS_open);
+-    install_listener(&syscalls)
++    syscalls
+ }
+ 
+ /// Run a no-capability conformance probe.
+@@ -855,6 +874,52 @@ mod tests {
+ 
+     use super::*;
+ 
++    #[test]
++    fn workload_listener_forwards_network_syscalls_only_when_mediating() {
++        // The mediated list is upstream's, unchanged and in order.
++        #[allow(unused_mut)] // SYS_open is unavailable on some architectures.
++        let mut upstream = vec![
++            libc::SYS_socket,
++            libc::SYS_connect,
++            libc::SYS_bind,
++            libc::SYS_listen,
++            libc::SYS_sendto,
++            libc::SYS_sendmsg,
++            libc::SYS_sendmmsg,
++            libc::SYS_setsockopt,
++            libc::SYS_kill,
++            libc::SYS_tkill,
++            libc::SYS_tgkill,
++            libc::SYS_rt_tgsigqueueinfo,
++            libc::SYS_rt_sigqueueinfo,
++            libc::SYS_openat,
++            libc::SYS_openat2,
++        ];
++        #[cfg(target_arch = "x86_64")]
++        upstream.push(libc::SYS_open);
++        assert_eq!(workload_listener_syscalls(true), upstream);
++
++        // Unmediated drops exactly the eight network syscalls; signal and
++        // openat mediation stay.
++        let unmediated = workload_listener_syscalls(false);
++        let expected: Vec<i64> = upstream
++            .into_iter()
++            .filter(|syscall| !WORKLOAD_NETWORK_SYSCALLS.contains(syscall))
++            .collect();
++        assert_eq!(unmediated, expected);
++        for syscall in WORKLOAD_NETWORK_SYSCALLS {
++            assert!(!unmediated.contains(&syscall));
++        }
++        for syscall in [
++            libc::SYS_kill,
++            libc::SYS_tgkill,
++            libc::SYS_openat,
++            libc::SYS_openat2,
++        ] {
++            assert!(unmediated.contains(&syscall));
++        }
++    }
++
+     const NONDUMPABLE_PROBE_CHILD: &str = "OPENSHELL_NONDUMPABLE_PROBE_CHILD";
+     const REJECTED_INSTALL_PROBE_CHILD: &str = "OPENSHELL_REJECTED_INSTALL_PROBE_CHILD";
+ 
+diff --git a/crates/openshell-sandbox/src/linux/workload_launcher.rs b/crates/openshell-sandbox/src/linux/workload_launcher.rs
+index 51b3af62..e17550d9 100644
+--- a/crates/openshell-sandbox/src/linux/workload_launcher.rs
++++ b/crates/openshell-sandbox/src/linux/workload_launcher.rs
+@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
+ use std::sync::mpsc;
+ use std::thread;
+ 
+-use crate::linux::seccomp_notify::{NotificationListener, install_workload_listener};
++use crate::linux::seccomp_notify::{NotificationListener, install_workload_listener_with};
+ 
+ type LaunchJob = Box<dyn FnOnce() + Send + 'static>;
+ 
+@@ -68,6 +68,12 @@ impl WorkloadLauncher {
+ /// Start the only workload launcher and return its listener to an unfiltered
+ /// sandbox thread.
+ pub fn start() -> io::Result<(WorkloadLauncher, NotificationListener)> {
++    start_with(true)
++}
++
++/// Start the workload launcher with network mediation on or off (see
++/// `install_workload_listener_with`).
++pub fn start_with(mediate_network: bool) -> io::Result<(WorkloadLauncher, NotificationListener)> {
+     let (jobs_tx, jobs_rx) = mpsc::sync_channel::<LaunchJob>(64);
+     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
+     let alive = Arc::new(AtomicBool::new(true));
+@@ -75,7 +81,7 @@ pub fn start() -> io::Result<(WorkloadLauncher, NotificationListener)> {
+     thread::Builder::new()
+         .name("openshell-workload-launcher".to_string())
+         .spawn(move || {
+-            match install_workload_listener() {
++            match install_workload_listener_with(mediate_network) {
+                 Ok(listener) => {
+                     if ready_tx.send(Ok(listener)).is_err() {
+                         thread_alive.store(false, Ordering::Release);
+diff --git a/crates/openshell-sandbox/src/main.rs b/crates/openshell-sandbox/src/main.rs
+index 86ef2bb4..8d752c55 100644
+--- a/crates/openshell-sandbox/src/main.rs
++++ b/crates/openshell-sandbox/src/main.rs
+@@ -57,8 +57,17 @@ struct BoundaryArgs {
+     /// Log level (trace, debug, info, warn, error).
+     #[arg(long, default_value = "warn", env = openshell_core::sandbox_env::LOG_LEVEL)]
+     log_level: String,
++
++    /// Do not mediate workload network syscalls: sockets use the workload's
++    /// network namespace directly, without policy. Every other boundary
++    /// layer stays.
++    #[arg(long)]
++    unmediated_network: bool,
+ }
+ 
++/// The flag `launch-capability-free` and the plain boundary share.
++const UNMEDIATED_NETWORK_FLAG: &str = "--unmediated-network";
++
+ /// Run the active Phase 0 probe inside the exact workload runtime profile.
+ #[cfg(target_os = "linux")]
+ #[allow(unsafe_code)]
+@@ -1405,14 +1414,16 @@ fn launch_capability_probe(_args: &[String]) -> Result<()> {
+ fn launch_capability_free(args: &[String]) -> Result<()> {
+     use miette::{Context as _, IntoDiagnostic as _};
+ 
++    let unmediated_network = args.first().map(String::as_str) == Some(UNMEDIATED_NETWORK_FLAG);
++    let args = if unmediated_network { &args[1..] } else { args };
+     let [uid, gid, bootstrap, workspace @ ..] = args else {
+         return Err(miette::miette!(
+-            "usage: openshell-sandbox {CAPABILITY_FREE_LAUNCH_SUBCOMMAND} <UID> <GID> <BOOTSTRAP> [WORKSPACE]"
++            "usage: openshell-sandbox {CAPABILITY_FREE_LAUNCH_SUBCOMMAND} [{UNMEDIATED_NETWORK_FLAG}] <UID> <GID> <BOOTSTRAP> [WORKSPACE]"
+         ));
+     };
+     if workspace.len() > 1 {
+         return Err(miette::miette!(
+-            "usage: openshell-sandbox {CAPABILITY_FREE_LAUNCH_SUBCOMMAND} <UID> <GID> <BOOTSTRAP> [WORKSPACE]"
++            "usage: openshell-sandbox {CAPABILITY_FREE_LAUNCH_SUBCOMMAND} [{UNMEDIATED_NETWORK_FLAG}] <UID> <GID> <BOOTSTRAP> [WORKSPACE]"
+         ));
+     }
+     let uid = uid.parse::<u32>().into_diagnostic().wrap_err("parse UID")?;
+@@ -1439,7 +1450,7 @@ fn launch_capability_free(args: &[String]) -> Result<()> {
+     enter_capability_free_identity(uid, gid)?;
+     let log_level = std::env::var(openshell_core::sandbox_env::LOG_LEVEL)
+         .unwrap_or_else(|_| "warn".to_string());
+-    run_boundary(Path::new(bootstrap), &log_level)
++    run_boundary(Path::new(bootstrap), &log_level, unmediated_network)
+ }
+ 
+ #[cfg(not(target_os = "linux"))]
+@@ -1758,7 +1769,7 @@ fn seed_kubernetes_workspace() -> Result<()> {
+ }
+ 
+ #[cfg(target_os = "linux")]
+-fn run_boundary(bootstrap: &Path, log_level: &str) -> Result<()> {
++fn run_boundary(bootstrap: &Path, log_level: &str, unmediated_network: bool) -> Result<()> {
+     let console_filter =
+         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
+     let _ = tracing_subscriber::registry()
+@@ -1771,11 +1782,11 @@ fn run_boundary(bootstrap: &Path, log_level: &str) -> Result<()> {
+         )
+         .try_init();
+     let (qualification, _) = qualify_runtime()?;
+-    openshell_sandbox::run(bootstrap, qualification)
++    openshell_sandbox::run_with(bootstrap, qualification, !unmediated_network)
+ }
+ 
+ #[cfg(not(target_os = "linux"))]
+-fn run_boundary(_bootstrap: &Path, _log_level: &str) -> Result<()> {
++fn run_boundary(_bootstrap: &Path, _log_level: &str, _unmediated_network: bool) -> Result<()> {
+     Err(miette::miette!("openshell-sandbox requires Linux"))
+ }
+ 
+@@ -1820,7 +1831,7 @@ fn main() -> Result<()> {
+     }
+ 
+     let args = BoundaryArgs::parse();
+-    run_boundary(&args.bootstrap, &args.log_level)
++    run_boundary(&args.bootstrap, &args.log_level, args.unmediated_network)
+ }
+ 
+ #[cfg(all(test, target_os = "linux"))]
+@@ -1828,6 +1839,21 @@ mod tests {
+     use super::*;
+     use std::os::unix::fs::PermissionsExt;
+ 
++    #[test]
++    fn unmediated_network_is_an_explicit_boundary_flag() {
++        let default = BoundaryArgs::try_parse_from(["openshell-sandbox", "--bootstrap", "/b.json"])
++            .expect("parse default boundary args");
++        assert!(!default.unmediated_network);
++        let unmediated = BoundaryArgs::try_parse_from([
++            "openshell-sandbox",
++            "--bootstrap",
++            "/b.json",
++            UNMEDIATED_NETWORK_FLAG,
++        ])
++        .expect("parse unmediated boundary args");
++        assert!(unmediated.unmediated_network);
++    }
++
+     #[test]
+     fn kubernetes_bootstrap_stages_private_memory_bundle() {
+         if nix::unistd::geteuid().is_root() || nix::unistd::getegid().as_raw() == 0 {
+-- 
+2.43.0
+

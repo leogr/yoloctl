@@ -1,0 +1,10 @@
+{
+  "schema": 2,
+  "protocol_fixture_version": "workspace-read-only-v1",
+  "workspace_read_only_flag": "--workspace-read-only",
+  "workspace_read_only_field": "workspace_read_only",
+  "workspace_read_only_default": false,
+  "boundary_fields": ["boundary_id", "generation", "session_id", "session_rotation", "auth_epoch", "gateway_id", "verification_keys", "listener", "resource_claims", "workload_identity", "provisioning_evidence", "child_env"],
+  "descriptor_fields": ["boundary_id", "generation", "session_id", "workload_identity", "transport", "tls", "resource_claims", "provisioning_evidence"],
+  "auth_fields": ["session_id", "runtime_generation", "session_rotation", "auth_epoch", "gateway_token", "gateway_expires_at", "sandbox_token", "sandbox_expires_at", "ssh_host_private_key"]
+}

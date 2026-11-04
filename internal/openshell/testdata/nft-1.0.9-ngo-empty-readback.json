@@ -1,0 +1,1 @@
+{"nftables": [{"metainfo": {"version": "1.0.9", "release_name": "Old Doc Yak #3", "json_schema_version": 1}}, {"table": {"family": "inet", "name": "yoloctl_egress", "handle": 1, "comment": "yoloctl:52f7a090fbba36f877fd93de14d8af04a37699b3d93e34d501a92322d3e4e357"}}]}

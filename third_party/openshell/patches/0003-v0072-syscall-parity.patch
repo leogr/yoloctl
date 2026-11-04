@@ -1,0 +1,243 @@
+yoloctl local patch 0003: restore the workload calls OpenShell v0.0.72 allowed.
+
+OpenShell 0.1.6's child hardening filter (openshell-sandbox
+src/linux/child_seccomp.rs, prepare) newly denies these calls, which the
+v0.0.72 workload filter (openshell-supervisor-process
+src/sandbox/linux/seccomp.rs) never denied. That broke GNU make
+(posix_spawn with POSIX_SPAWN_RESETIDS calls setgid/setuid(own id)), nice,
+ionice, killpg and process-group test suites inside every box. Restored, as
+in v0.0.72:
+
+- unconditionally allowed again: capset, setuid, setgid, setreuid, setregid,
+  setresuid, setresgid, setfsuid, setfsgid, setgroups, setpriority,
+  ioprio_set
+- allowed again on any process except the trusted sandbox itself:
+  prlimit64, sched_setaffinity, sched_setattr, sched_setparam,
+  sched_setscheduler
+- allowed again with PID zero or a negative PID (process groups, killpg),
+  except a signal to the sandbox's own process group (-sandbox TGID):
+  kill, rt_sigqueueinfo
+
+The sandbox-targeted denies stay because the sandbox's own startup probe
+(openshell-sandbox src/main.rs, prlimit sandbox / process-group signal)
+requires them; they also protect the trusted sandbox from the workload.
+The workload has no capabilities and runs with no_new_privs, so the kernel
+still refuses any real identity or capability gain. Every deny v0.0.72 also
+had is kept, and the other 0.1.6 denies (signals to the sandbox's own TGID,
+F_SETOWN, sethostname, ...) are unchanged.
+
+diff --git a/crates/openshell-sandbox/src/linux/child_seccomp.rs b/crates/openshell-sandbox/src/linux/child_seccomp.rs
+index 6fc9f67..0ef8846 100644
+--- a/crates/openshell-sandbox/src/linux/child_seccomp.rs
++++ b/crates/openshell-sandbox/src/linux/child_seccomp.rs
+@@ -175,20 +175,12 @@ pub fn prepare(sandbox_tgid: u32) -> io::Result<ChildHardeningProgram> {
+         libc::SYS_io_uring_setup,
+         libc::SYS_io_uring_enter,
+         libc::SYS_io_uring_register,
+-        libc::SYS_capset,
+-        libc::SYS_setuid,
+-        libc::SYS_setgid,
+-        libc::SYS_setreuid,
+-        libc::SYS_setregid,
+-        libc::SYS_setresuid,
+-        libc::SYS_setresgid,
+-        libc::SYS_setfsuid,
+-        libc::SYS_setfsgid,
+-        libc::SYS_setgroups,
++        // yoloctl: capset, the set-ID calls, setpriority and ioprio_set stay
++        // allowed as in v0.0.72. The workload has no capabilities and runs
++        // with no_new_privs, so the kernel already refuses any real identity
++        // or capability gain; denying no-op calls broke GNU make, nice, etc.
+         libc::SYS_sethostname,
+         libc::SYS_setdomainname,
+-        libc::SYS_setpriority,
+-        libc::SYS_ioprio_set,
+     ] {
+         append_unconditional_deny(&mut instructions, syscall)?;
+     }
+@@ -210,18 +202,19 @@ pub fn prepare(sandbox_tgid: u32) -> io::Result<ChildHardeningProgram> {
+     ] {
+         append_argument_equal_deny(&mut instructions, syscall, argument, sandbox_tgid)?;
+     }
++    // yoloctl: kill/rt_sigqueueinfo with PID zero or a negative PID (process
++    // groups, killpg) stay allowed as in v0.0.72; tools and test suites use
++    // process groups. Signals to the sandbox's own TGID stay denied above, and
++    // so does a signal to the sandbox's own process group (-TGID), which the
++    // sandbox startup probe requires.
++    let sandbox_group = sandbox_tgid.wrapping_neg();
+     for syscall in [libc::SYS_kill, libc::SYS_rt_sigqueueinfo] {
+-        // PID zero targets the caller's process group. Deny it even though
+-        // OpenShell normally gives each workload a dedicated process group:
+-        // an untrusted child can otherwise rejoin a trusted group first.
+-        append_argument_equal_deny(&mut instructions, syscall, 0, 0)?;
++        append_argument_equal_deny(&mut instructions, syscall, 0, sandbox_group)?;
+     }
+-    // Negative PID arguments target process groups or every signalable
+-    // process. The workload never needs that authority and must not be able
+-    // to include the trusted sandbox workers in a broad signal operation.
+-    append_argument_masked_deny(&mut instructions, libc::SYS_kill, 0, 1 << 31)?;
+-    append_argument_masked_deny(&mut instructions, libc::SYS_rt_sigqueueinfo, 0, 1 << 31)?;
+ 
++    // yoloctl: prlimit64 and sched_set* on another process stay allowed as
++    // in v0.0.72; ordinary Unix permission checks still apply. Only the
++    // trusted sandbox itself stays protected (and probed at startup).
+     for syscall in [
+         libc::SYS_prlimit64,
+         libc::SYS_sched_setaffinity,
+@@ -229,7 +222,7 @@ pub fn prepare(sandbox_tgid: u32) -> io::Result<ChildHardeningProgram> {
+         libc::SYS_sched_setparam,
+         libc::SYS_sched_setscheduler,
+     ] {
+-        append_argument_nonzero_deny(&mut instructions, syscall, 0)?;
++        append_argument_equal_deny(&mut instructions, syscall, 0, sandbox_tgid)?;
+     }
+ 
+     // The ordinary workload filter is installed after this program and owns
+@@ -297,22 +290,6 @@ fn append_argument_equal_deny(
+     Ok(())
+ }
+ 
+-fn append_argument_nonzero_deny(
+-    instructions: &mut Vec<libc::sock_filter>,
+-    syscall: i64,
+-    argument: u32,
+-) -> io::Result<()> {
+-    let syscall = syscall_number(syscall)?;
+-    instructions.extend([
+-        stmt(BPF_LD_W_ABS, SECCOMP_DATA_NR_OFFSET),
+-        jump(BPF_JMP_JEQ_K, syscall, 0, 3),
+-        stmt(BPF_LD_W_ABS, argument_word_offset(argument)),
+-        jump(BPF_JMP_JEQ_K, 0, 1, 0),
+-        errno(libc::EPERM),
+-    ]);
+-    Ok(())
+-}
+-
+ fn append_argument_masked_deny(
+     instructions: &mut Vec<libc::sock_filter>,
+     syscall: i64,
+@@ -476,17 +453,8 @@ mod tests {
+             {
+                 unsafe { libc::_exit(4) };
+             }
+-            if unsafe { libc::kill(0, 0) } != -1
+-                || io::Error::last_os_error().raw_os_error() != Some(libc::EPERM)
+-            {
+-                unsafe { libc::_exit(10) };
+-            }
+-            let sandbox_group = -unsafe { libc::getpgrp() };
+-            if unsafe { libc::kill(sandbox_group, 0) } != -1
+-                || io::Error::last_os_error().raw_os_error() != Some(libc::EPERM)
+-            {
+-                unsafe { libc::_exit(7) };
+-            }
++            // Sandbox-targeted resource, scheduling and group-signal calls stay
++            // denied (the sandbox startup probe requires them).
+             if unsafe { libc::syscall(libc::SYS_prlimit64, sandbox_tgid, libc::RLIMIT_CORE, 0, 0) }
+                 != -1
+                 || io::Error::last_os_error().raw_os_error() != Some(libc::EPERM)
+@@ -505,6 +473,11 @@ mod tests {
+             {
+                 unsafe { libc::_exit(11) };
+             }
++            if unsafe { libc::kill(-sandbox_tgid, 0) } != -1
++                || io::Error::last_os_error().raw_os_error() != Some(libc::EPERM)
++            {
++                unsafe { libc::_exit(7) };
++            }
+             if unsafe { libc::fcntl(libc::STDIN_FILENO, libc::F_SETOWN, sandbox_tgid) } != -1
+                 || io::Error::last_os_error().raw_os_error() != Some(libc::EPERM)
+             {
+@@ -532,6 +505,92 @@ mod tests {
+         assert_eq!(libc::WEXITSTATUS(status), 0);
+     }
+ 
++    // yoloctl: calls v0.0.72 allowed stay usable with no-op arguments under
++    // the child filter (GNU make's posix_spawn RESETIDS, nice, ulimit).
++    #[test]
++    fn filter_allows_v0_0_72_identity_priority_and_limit_calls() {
++        // SAFETY: the child uses only raw syscalls after fork and exits with
++        // `_exit`, so it does not run copied Rust cleanup state.
++        let child = unsafe { libc::fork() };
++        assert!(child >= 0, "fork: {}", io::Error::last_os_error());
++        if child == 0 {
++            let sandbox_tgid = unsafe { libc::getppid() };
++            let Ok(mut filter) = prepare(u32::try_from(sandbox_tgid).unwrap_or(0)) else {
++                unsafe { libc::_exit(1) };
++            };
++            if filter.install().is_err() {
++                unsafe { libc::_exit(2) };
++            }
++            let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
++            if unsafe { libc::setgid(gid) } != 0 || unsafe { libc::setuid(uid) } != 0 {
++                unsafe { libc::_exit(3) };
++            }
++            let unchanged = u32::MAX; // -1: keep each ID
++            let setresuid =
++                unsafe { libc::syscall(libc::SYS_setresuid, unchanged, unchanged, unchanged) };
++            let setresgid =
++                unsafe { libc::syscall(libc::SYS_setresgid, unchanged, unchanged, unchanged) };
++            if setresuid != 0 || setresgid != 0 {
++                unsafe { libc::_exit(4) };
++            }
++            let priority = unsafe { libc::getpriority(libc::PRIO_PROCESS, 0) };
++            if unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, priority) } != 0 {
++                unsafe { libc::_exit(5) };
++            }
++            let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
++            let me = unsafe { libc::getpid() };
++            let read = unsafe {
++                libc::syscall(
++                    libc::SYS_prlimit64,
++                    me,
++                    libc::RLIMIT_NOFILE,
++                    std::ptr::null::<libc::rlimit>(),
++                    &raw mut limit,
++                )
++            };
++            let write = unsafe {
++                libc::syscall(
++                    libc::SYS_prlimit64,
++                    me,
++                    libc::RLIMIT_NOFILE,
++                    &raw const limit,
++                    std::ptr::null_mut::<libc::rlimit>(),
++                )
++            };
++            if read != 0 || write != 0 {
++                unsafe { libc::_exit(6) };
++            }
++            let mut set = unsafe { std::mem::zeroed::<libc::cpu_set_t>() };
++            let size = std::mem::size_of::<libc::cpu_set_t>();
++            if unsafe { libc::sched_getaffinity(me, size, &raw mut set) } != 0
++                || unsafe { libc::sched_setaffinity(me, size, &raw const set) } != 0
++            {
++                unsafe { libc::_exit(7) };
++            }
++            const IOPRIO_WHO_PROCESS: libc::c_long = 1;
++            let ioprio = unsafe { libc::syscall(libc::SYS_ioprio_get, IOPRIO_WHO_PROCESS, 0) };
++            let restored =
++                unsafe { libc::syscall(libc::SYS_ioprio_set, IOPRIO_WHO_PROCESS, 0, ioprio) };
++            if ioprio < 0 || restored != 0 {
++                unsafe { libc::_exit(8) };
++            }
++            // Process-group signals (kill(0), killpg) as in v0.0.72.
++            if unsafe { libc::setpgid(0, 0) } != 0
++                || unsafe { libc::kill(0, 0) } != 0
++                || unsafe { libc::killpg(libc::getpgrp(), 0) } != 0
++            {
++                unsafe { libc::_exit(9) };
++            }
++            unsafe { libc::_exit(0) };
++        }
++
++        let mut status = 0;
++        // SAFETY: `child` names our live direct child and status is writable.
++        assert_eq!(unsafe { libc::waitpid(child, &raw mut status, 0) }, child);
++        assert!(libc::WIFEXITED(status));
++        assert_eq!(libc::WEXITSTATUS(status), 0);
++    }
++
+     #[test]
+     fn filter_preserves_thread_and_process_creation() {
+         if std::env::var_os("OPENSHELL_CHILD_SECCOMP_CREATION_PROBE").is_some() {

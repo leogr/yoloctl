@@ -1,0 +1,152 @@
+--- a/cell.go
++++ b/cell.go
+@@ -420,9 +420,28 @@
+ 	if c == nil || o == nil {
+ 		return false
+ 	}
++	// Palette references are identities, not the library's assumed RGB.
++	// A terminal theme can change any index independently of true colors.
++	ci, cp := paletteIndex(c)
++	oi, op := paletteIndex(o)
++	if cp || op {
++		return cp && op && ci == oi
++	}
+ 	cr, cg, cb, ca := c.RGBA()
+ 	or, og, ob, oa := o.RGBA()
+ 	return cr == or && cg == og && cb == ob && ca == oa
++}
++
++// Basic and indexed SGR spellings of the same palette entry are equivalent.
++func paletteIndex(c color.Color) (uint8, bool) {
++	switch c := c.(type) {
++	case ansi.BasicColor:
++		return uint8(c), true
++	case ansi.IndexedColor:
++		return uint8(c), true
++	default:
++		return 0, false
++	}
+ }
+ 
+ // IsZero returns true if the style is empty.
+--- a/decoder.go
++++ b/decoder.go
+@@ -8,6 +8,7 @@
+ 	"image/color"
+ 	"math"
+ 	"slices"
++	"strconv"
+ 	"strings"
+ 	"unicode"
+ 	"unicode/utf8"
+@@ -315,6 +316,12 @@
+ 	if i < len(b) && b[i-1] == ansi.ESC && b[i] == '[' {
+ 		i++
+ 	}
++	if i < len(b) && b[i] == '<' {
++		// SGR pixel coordinates may be signed. '-' is not an ECMA-48
++		// parameter byte: the generic CSI parser splits such reports and
++		// leaks their remaining digits as keyboard input.
++		return parseSGRMouseSequence(b, i+1)
++	}
+ 
+ 	// Initial CSI byte
+ 	if i < len(b) && b[i] >= '<' && b[i] <= '?' {
+@@ -409,11 +416,6 @@
+ 			break
+ 		}
+ 		return i, CursorPositionEvent{Y: row - 1, X: col - 1}
+-	case 'm' | '<'<<parser.PrefixShift, 'M' | '<'<<parser.PrefixShift:
+-		// Handle SGR mouse
+-		if paramsLen == 3 {
+-			return i, parseSGRMouseEvent(cmd, pa)
+-		}
+ 	case 'm' | '>'<<parser.PrefixShift:
+ 		// XTerm modifyOtherKeys
+ 		mok, _, ok := pa.Param(0, 0)
+@@ -1388,6 +1390,7 @@
+ // See https://sw.kovidgoyal.net/kitty/keyboard-protocol/
+ func parseKittyKeyboard(params ansi.Params) (Event Event) {
+ 	var isRelease bool
++	var textOnly bool
+ 	var key Key
+ 
+ 	// The index of parameters separated by semicolons ';'. Sub parameters are
+@@ -1402,7 +1405,13 @@
+ 			case 0:
+ 				var foundKey bool
+ 				code := p.Param(1) // CSI u has a default value of 1
++				textOnly = code == 0
+ 				key, foundKey = kittyKeyMap[code]
++				// Key 0 can be a pure text/IME event. Defer the legacy NUL
++				// interpretation until we know whether associated text exists.
++				if textOnly {
++					key, foundKey = Key{Code: KeyExtended}, true
++				}
+ 				if !foundKey {
+ 					r := rune(code)
+ 					if !utf8.ValidRune(r) {
+@@ -1469,6 +1478,11 @@
+ 			paramIdx++
+ 			sudIdx = 0
+ 		}
++	}
++
++	if textOnly && len(key.Text) == 0 {
++		key.Code = KeySpace
++		key.Mod |= ModCtrl
+ 	}
+ 
+ 	keyMod := key.Mod
+@@ -1586,17 +1600,40 @@
+ //	M is for button press, m is for button release
+ //
+ // https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Extended-coordinates
+-func parseSGRMouseEvent(cmd ansi.Cmd, params ansi.Params) Event {
+-	x, _, ok := params.Param(1, 1)
+-	if !ok {
+-		x = 1
+-	}
+-	y, _, ok := params.Param(2, 1)
+-	if !ok {
+-		y = 1
+-	}
+-	release := cmd.Final() == 'm'
+-	b, _, _ := params.Param(0, 0)
++func parseSGRMouseSequence(seq []byte, start int) (int, Event) {
++	for i := start; i < len(seq); i++ {
++		c := seq[i]
++		if c >= '0' && c <= '9' || c == '-' || c == ';' {
++			continue
++		}
++		if c != 'M' && c != 'm' || i-start > 40 {
++			if c == ansi.ESC {
++				return i, UnknownCsiEvent(seq[:i])
++			}
++			return i + 1, UnknownCsiEvent(seq[:i+1])
++		}
++		fields := bytes.Split(seq[start:i], []byte{';'})
++		if len(fields) != 3 {
++			return i + 1, UnknownCsiEvent(seq[:i+1])
++		}
++		values := [3]int{0, 1, 1} // retain the defaults of the unsigned decoder
++		for j, field := range fields {
++			if len(field) == 0 {
++				continue
++			}
++			v, err := strconv.ParseInt(string(field), 10, 32)
++			if err != nil || v < -2147483647 || j == 0 && (v < 0 || v > 255) {
++				return i + 1, UnknownCsiEvent(seq[:i+1])
++			}
++			values[j] = int(v)
++		}
++		return i + 1, sgrMouseEvent(values[0], values[1], values[2], c == 'm')
++	}
++	// The real input scanner waits for the remainder of an unknown event.
++	return len(seq), UnknownEvent(seq)
++}
++
++func sgrMouseEvent(b, x, y int, release bool) Event {
+ 	mod, btn, _, isMotion := parseMouseButton(b)
+ 
+ 	// (1,1) is the upper left. We subtract 1 to normalize it to (0,0).

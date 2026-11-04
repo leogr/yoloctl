@@ -1,0 +1,119 @@
+{
+  "pins": {
+    "version": "0.1.6",
+    "upstream_commit": "ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47",
+    "upstream_tree": "c9c1f358cd6f68445c88b65a5e4983a5213e6bab",
+    "fork_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "fork_tree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "patches": [
+      {
+        "name": "unmediated-network.patch",
+        "sha256": "3a1b73769d14d5d17af7d1a867db530870fbbcaf5f2b75e9a8328442d0c8e034",
+        "parent_tree": "c9c1f358cd6f68445c88b65a5e4983a5213e6bab",
+        "tree": "c7c8c2847caee9c477f23fc76242298f1ac2eff5"
+      },
+      {
+        "name": "workspace-read-only.patch",
+        "sha256": "0d8709bb39b6ea3855cc4972413fff601e1e113ecca08aa003c6875c167d089b",
+        "parent_tree": "c7c8c2847caee9c477f23fc76242298f1ac2eff5",
+        "tree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "platforms": {
+      "amd64": {
+        "boundary": {
+          "url": "embedded:openshell-sandbox-amd64.tar.gz",
+          "archive_sha256": "3352b90284c4563557455e34da138c7913e51e04fc73d01e44183388e2a0c588",
+          "binary_sha256": "16ad052a50787aadb699cc216649be3aa5c9d1a0392c1852bfca2b06acf53ff6",
+          "member": "openshell-sandbox"
+        },
+        "supervisor": {
+          "url": "embedded:openshell-supervisor-amd64.tar.gz",
+          "archive_sha256": "8ff6af613a740380584d726fe60a838540b021ae83b0e824d786a494d97c2b1e",
+          "binary_sha256": "3e64db7856f39c539a302f7feeb731fb3541ee8da84363516f5b9235cba55220",
+          "member": "openshell-supervisor"
+        },
+        "boundary_loader": "test-only-static",
+        "supervisor_loader": "test-only-static"
+      },
+      "arm64": {
+        "boundary": {
+          "url": "embedded:openshell-sandbox-arm64.tar.gz",
+          "archive_sha256": "0a054a922e9a60a1cc0d41993c3afa24bcacc11caa9ab22a1800a09108cc3d5e",
+          "binary_sha256": "faa5891462439d7d2e450bed2d26f62eb36a0063c89a98968397b0fe49bd8cc4",
+          "member": "openshell-sandbox"
+        },
+        "supervisor": {
+          "url": "embedded:openshell-supervisor-arm64.tar.gz",
+          "archive_sha256": "3c46206187f44b6590effa9eaa43ddc5c3ee65a95049ad4ea2658f73bec9d5e8",
+          "binary_sha256": "946e60486764bd7657448de995ff5b6772806a7a189352c9830eb267665056d0",
+          "member": "openshell-supervisor"
+        },
+        "boundary_loader": "test-only-static",
+        "supervisor_loader": "test-only-static"
+      }
+    },
+    "rego_sha256": "1367fe4ab9450cc16ef5529999b06a5fed2dc1865b3c9fdd2078cc8e5e9e53ce",
+    "bootstrap_schema": 2,
+    "protocol_fixture_version": "workspace-read-only-v1",
+    "protocol_fixture_sha256": "d6603c9915d0425a2ae0d8bff4605717d1d3327eb4f7072f94c51a16d053a7d2",
+    "helper": {
+      "protocol": "2",
+      "inputs": {
+        "schema": 1,
+        "source_sha256": "12bd4d5641c1e70afbcb02dafdbae0a79a51e8fb4c3a09839e30b54fceacdfc9",
+        "modules": [
+          {
+            "path": "golang.org/x/crypto",
+            "version": "v0.54.0",
+            "sum": "h1:test-only"
+          },
+          {
+            "path": "golang.org/x/mod",
+            "version": "v0.35.0",
+            "sum": "h1:test-only"
+          },
+          {
+            "path": "golang.org/x/sys",
+            "version": "v0.47.0",
+            "sum": "h1:test-only"
+          },
+          {
+            "path": "gopkg.in/yaml.v3",
+            "version": "v3.0.1",
+            "sum": "h1:test-only"
+          }
+        ]
+      },
+      "go_version": "go1.27.0",
+      "source_proof_sha256": "51e948c26a3aac0840add00af1d522656ace56b2be5985c3459cba8001c55c42",
+      "build_proof_sha256": {
+        "amd64": "36a33ed321430e60bfc841c02a423f02dddbc521e3411cb127afa5c2b6a4fdc6",
+        "arm64": "1b4c059f6f9004b5f5c694b1137cb2b8f00b93809203740bfe4621c4f93b5d6b"
+      },
+      "platforms": {
+        "amd64": {
+          "url": "embedded:helper-amd64.tar.gz",
+          "archive_sha256": "2a5a7967603e13c1e9dca246f6bf7a29903a8e4a606272b48f2f8e4e1ae90a5d",
+          "binary_sha256": "dd7a4b15507b430d6e536b6a974d05e432fe2002acced0eaad39546d6020df47",
+          "member": "yoloctl-openshell-helper"
+        },
+        "arm64": {
+          "url": "embedded:helper-arm64.tar.gz",
+          "archive_sha256": "41717d83159eaa5e86e259d2d269b0ec1b37f418b0b4053752f9cb873eac5b76",
+          "binary_sha256": "56009bb8c5c49a41433a4e89ddd52d6735dd6f79ddc8ebafdcde855de809e1a5",
+          "member": "yoloctl-openshell-helper"
+        }
+      }
+    }
+  },
+  "qualification": {
+    "revision": "test-fixture",
+    "subject_sha256": "c3956e1aa2ec87280f3ddd9ed13af74c3b6b64bb5414e32078426ff23e42c48c",
+    "source_proof_sha256": "70959edf58bba130e9bcfc76a91e50e45b37d55fc9f65e9d090358c3191e10f9",
+    "build_proof_sha256": {
+      "amd64": "5861314d7fccb39c2192173240eab44fa35ca66426201ca2acd0630a6258dd51",
+      "arm64": "f69162950f235e3cdbbad33f1f912d1a504be90d8a37d002c735d6f3e3882265"
+    }
+  }
+}

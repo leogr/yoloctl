@@ -1,0 +1,867 @@
+diff --git a/crates/openshell-isolation-interface/src/lib.rs b/crates/openshell-isolation-interface/src/lib.rs
+index bfa1b0b5..49609b1b 100644
+--- a/crates/openshell-isolation-interface/src/lib.rs
++++ b/crates/openshell-isolation-interface/src/lib.rs
+@@ -26,10 +26,60 @@ pub struct AgentSpec {
+     pub args: Vec<String>,
+     /// Working directory for the entrypoint, if any.
+     pub workdir: Option<String>,
++    /// Validate an explicit workspace without a write probe. This does not
++    /// enforce read-only access; mounts and filesystem policy still do that.
++    pub workspace_read_only: bool,
+     /// Wall-clock timeout for the entrypoint in seconds (0 = no timeout).
+     pub timeout_secs: u64,
+     /// Whether the entrypoint runs interactively (inherits the parent pgrp).
+     pub interactive: bool,
+ }
+ 
++/// Check explicit read-only workspace intent without touching the filesystem.
++/// Component, traversal and write-probe checks remain boundary-owned.
++pub fn validate_workspace_read_only(workdir: Option<&str>, read_only: bool) -> Result<(), String> {
++    if !read_only {
++        return Ok(());
++    }
++    let root = workdir.ok_or("read-only workspace requires an explicit workdir")?;
++    let resolved = openshell_core::driver_mounts::resolve_oci_workspace_root(root)?;
++    if root.is_empty() || root != resolved {
++        return Err("read-only workspace requires an explicit normalized absolute workdir".into());
++    }
++    Ok(())
++}
++
+ pub mod contract;
++
++#[cfg(test)]
++mod workspace_read_only_tests {
++    use super::*;
++
++    #[test]
++    fn workspace_read_only_requires_an_explicit_valid_path_only_when_true() {
++        for root in [
++            None,
++            Some(""),
++            Some("/"),
++            Some("relative"),
++            Some("/a/../b"),
++            Some("/a//b"),
++            Some("/a\0b"),
++        ] {
++            assert!(
++                validate_workspace_read_only(root, true).is_err(),
++                "{root:?}"
++            );
++            assert!(
++                validate_workspace_read_only(root, false).is_ok(),
++                "legacy {root:?}"
++            );
++        }
++        for root in ["/sandbox", "/workdir", "/workdir/project"] {
++            assert!(
++                validate_workspace_read_only(Some(root), true).is_ok(),
++                "{root}"
++            );
++        }
++    }
++}
+diff --git a/crates/openshell-sandbox-backend/src/boundary_protocol.rs b/crates/openshell-sandbox-backend/src/boundary_protocol.rs
+index 09d7f39d..08d5aea3 100644
+--- a/crates/openshell-sandbox-backend/src/boundary_protocol.rs
++++ b/crates/openshell-sandbox-backend/src/boundary_protocol.rs
+@@ -1257,6 +1257,8 @@ pub struct AgentSpecWire {
+     pub program: String,
+     pub args: Vec<String>,
+     pub workdir: Option<String>,
++    #[serde(default)]
++    pub workspace_read_only: bool,
+     pub timeout_secs: u64,
+     pub interactive: bool,
+ }
+@@ -1267,6 +1269,7 @@ impl From<AgentSpec> for AgentSpecWire {
+             program: spec.program,
+             args: spec.args,
+             workdir: spec.workdir,
++            workspace_read_only: spec.workspace_read_only,
+             timeout_secs: spec.timeout_secs,
+             interactive: spec.interactive,
+         }
+@@ -1696,6 +1699,7 @@ mod tests {
+                     program: "/bin/true".to_string(),
+                     args: Vec::new(),
+                     workdir: Some("/sandbox".to_string()),
++                    workspace_read_only: false,
+                     timeout_secs: 5,
+                     interactive: false,
+                 },
+@@ -1853,6 +1857,7 @@ mod tests {
+                 program: "/bin/true".to_string(),
+                 args: Vec::new(),
+                 workdir: None,
++                workspace_read_only: false,
+                 timeout_secs: 5,
+                 interactive: false,
+             },
+diff --git a/crates/openshell-sandbox-backend/src/protobuf.rs b/crates/openshell-sandbox-backend/src/protobuf.rs
+index c0576798..2a3d0009 100644
+--- a/crates/openshell-sandbox-backend/src/protobuf.rs
++++ b/crates/openshell-sandbox-backend/src/protobuf.rs
+@@ -163,6 +163,7 @@ impl WireMessage for w::AgentSpecWire {
+             program: self.program.clone(),
+             args: self.args.clone(),
+             workdir: self.workdir.clone(),
++            workspace_read_only: self.workspace_read_only,
+             timeout: Some(prost_types::Duration {
+                 seconds: if self.timeout_secs <= 315_576_000_000 {
+                     number(self.timeout_secs)?
+@@ -183,6 +184,7 @@ impl WireMessage for w::AgentSpecWire {
+             program: v.program,
+             args: v.args,
+             workdir: v.workdir,
++            workspace_read_only: v.workspace_read_only,
+             timeout_secs: u64::try_from(timeout.seconds).map_err(invalid)?,
+             interactive: v.interactive,
+         })
+@@ -817,6 +819,48 @@ where
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn workspace_read_only_survives_typed_json_and_protobuf_conversions() {
++        for read_only in [false, true] {
++            let typed = openshell_isolation_interface::AgentSpec {
++                program: "/bin/true".into(),
++                args: vec![],
++                workdir: Some("/workdir/project".into()),
++                workspace_read_only: read_only,
++                timeout_secs: 0,
++                interactive: false,
++            };
++            let wire = w::AgentSpecWire::from(typed);
++            assert_eq!(wire.workspace_read_only, read_only);
++            let json = serde_json::to_vec(&wire).unwrap();
++            assert_eq!(
++                serde_json::from_slice::<w::AgentSpecWire>(&json).unwrap(),
++                wire
++            );
++            let encoded = wire.to_proto().unwrap().encode_to_vec();
++            let decoded = p::AgentSpec::decode(encoded.as_slice()).unwrap();
++            assert_eq!(decoded.workspace_read_only, read_only);
++            assert_eq!(w::AgentSpecWire::from_proto(decoded).unwrap(), wire);
++        }
++    }
++
++    #[test]
++    fn workspace_read_only_is_false_for_old_json_and_protobuf_requests() {
++        let json = br#"{"program":"/bin/true","args":[],"workdir":null,"timeout_secs":0,"interactive":false}"#;
++        assert!(
++            !serde_json::from_slice::<w::AgentSpecWire>(json)
++                .unwrap()
++                .workspace_read_only
++        );
++        // An empty protobuf contains no field 6, as with a pre-patch sender.
++        let old = p::AgentSpec::decode(&[][..]).unwrap();
++        assert!(
++            !w::AgentSpecWire::from_proto(old)
++                .unwrap()
++                .workspace_read_only
++        );
++    }
++
+     #[test]
+     fn request_validation_rejects_missing_context_and_unknown_signal() {
+         let id = uuid::Uuid::new_v4().to_string();
+diff --git a/crates/openshell-sandbox-backend/src/runtime.rs b/crates/openshell-sandbox-backend/src/runtime.rs
+index 2002b306..d39db801 100644
+--- a/crates/openshell-sandbox-backend/src/runtime.rs
++++ b/crates/openshell-sandbox-backend/src/runtime.rs
+@@ -4291,6 +4291,7 @@ mod tests {
+                 program: "/bin/true".to_string(),
+                 args: Vec::new(),
+                 workdir: Some("/sandbox".to_string()),
++                workspace_read_only: false,
+                 timeout_secs: 5,
+                 interactive: false,
+             },
+diff --git a/crates/openshell-sandbox/README.md b/crates/openshell-sandbox/README.md
+index 9ebd3a1d..990e2fe4 100644
+--- a/crates/openshell-sandbox/README.md
++++ b/crates/openshell-sandbox/README.md
+@@ -10,6 +10,15 @@ the lower-level mechanisms used by that orchestration and the boundary server.
+ Unsafe kernel ABI, process-launch, and descriptor-ownership operations stay in
+ this runtime crate behind safe APIs where their contracts can be enforced.
+ 
++The yoloctl fork's StartAgent `workspace_read_only` option requires an explicit
++normalized workdir. It preserves no-follow component opens and effective-identity
++traversal checks while skipping only the final write probe. An explicit
++`/sandbox` receives structural checks too. False or absent preserves the original
++validation, including the default-workspace exception. Mounts and Landlock remain
++responsible for read-only enforcement. The saved workspace is still the actual
++initial and later-exec cwd; later exec does not repeat its write probe. This
++option changes neither HOME selection nor user-environment precedence.
++
+ The network broker retains source socket descriptors only while preparing a
+ workload endpoint. A successful connection or `listen` releases that reference;
+ the kernel then tracks the lifetime through workload-owned descriptors. Native
+diff --git a/crates/openshell-sandbox/src/boundary_server.rs b/crates/openshell-sandbox/src/boundary_server.rs
+index 6202dc30..1d923c15 100644
+--- a/crates/openshell-sandbox/src/boundary_server.rs
++++ b/crates/openshell-sandbox/src/boundary_server.rs
+@@ -4349,6 +4349,10 @@ mod linux {
+     }
+ 
+     fn resolve_agent_spec(mut spec: AgentSpecWire) -> Result<AgentSpecWire, String> {
++        openshell_isolation_interface::validate_workspace_read_only(
++            spec.workdir.as_deref(),
++            spec.workspace_read_only,
++        )?;
+         if !spec.program.is_empty() {
+             return Ok(spec);
+         }
+@@ -4366,6 +4370,25 @@ mod linux {
+         Ok(spec)
+     }
+ 
++    #[cfg(test)]
++    #[test]
++    fn workspace_read_only_agent_resolution_preserves_intent_and_cwd() {
++        let spec = AgentSpecWire {
++            program: "/bin/true".into(),
++            args: vec![],
++            workdir: Some("/sandbox".into()),
++            workspace_read_only: true,
++            timeout_secs: 0,
++            interactive: false,
++        };
++        assert_eq!(resolve_agent_spec(spec.clone()).unwrap(), spec);
++        for root in [None, Some(""), Some("/"), Some("relative")] {
++            let mut invalid = spec.clone();
++            invalid.workdir = root.map(str::to_string);
++            assert!(resolve_agent_spec(invalid).is_err());
++        }
++    }
++
+     impl ManagedProcess {
+         fn spawn(
+             runtime: &tokio::runtime::Handle,
+@@ -4394,6 +4417,7 @@ mod linux {
+                     &spec.program,
+                     &spec.args,
+                     spec.workdir.as_deref(),
++                    spec.workspace_read_only,
+                     spec.timeout_secs,
+                     spec.interactive,
+                     &policy,
+@@ -5402,6 +5426,7 @@ mod linux {
+                 program: String::new(),
+                 args: Vec::new(),
+                 workdir: Some("/sandbox".to_string()),
++                workspace_read_only: false,
+                 timeout_secs: 0,
+                 interactive: true,
+             })
+@@ -8013,6 +8038,7 @@ mod linux {
+                 program: "/bin/sleep".to_string(),
+                 args: vec!["30".to_string()],
+                 workdir: None,
++                workspace_read_only: false,
+                 timeout_secs: 60,
+                 interactive: false,
+             };
+@@ -8454,6 +8480,7 @@ mod linux {
+                     program: "/bin/sleep".to_string(),
+                     args: vec!["60".to_string()],
+                     workdir: None,
++                    workspace_read_only: false,
+                     timeout_secs: 120,
+                     interactive: false,
+                 },
+@@ -8939,6 +8966,7 @@ mod linux {
+                     program: "/bin/sleep".to_string(),
+                     args: vec!["60".to_string()],
+                     workdir: None,
++                    workspace_read_only: false,
+                     timeout_secs: 120,
+                     interactive: false,
+                 },
+@@ -9545,6 +9573,7 @@ mod linux {
+                         program: "/bin/sleep".to_string(),
+                         args: vec!["60".to_string()],
+                         workdir: None,
++                        workspace_read_only: false,
+                         timeout_secs: 120,
+                         interactive: false,
+                     },
+@@ -9681,6 +9710,7 @@ mod linux {
+                 program: "/bin/true".to_string(),
+                 args: Vec::new(),
+                 workdir: None,
++                workspace_read_only: false,
+                 timeout_secs: 5,
+                 interactive: false,
+             };
+diff --git a/crates/openshell-sandbox/src/delegated.rs b/crates/openshell-sandbox/src/delegated.rs
+index 144d3679..94cd3d21 100644
+--- a/crates/openshell-sandbox/src/delegated.rs
++++ b/crates/openshell-sandbox/src/delegated.rs
+@@ -33,6 +33,7 @@ pub async fn spawn_workload(
+     program: &str,
+     args: &[String],
+     workdir: Option<&str>,
++    workspace_read_only: bool,
+     timeout_secs: u64,
+     interactive: bool,
+     policy: &SandboxPolicy,
+@@ -42,6 +43,8 @@ pub async fn spawn_workload(
+     ca_file_paths: Option<(std::path::PathBuf, std::path::PathBuf)>,
+     boundary_runtime: Option<Arc<crate::boundary_io::BoundaryRuntimeState>>,
+ ) -> Result<SpawnedAgent> {
++    openshell_isolation_interface::validate_workspace_read_only(workdir, workspace_read_only)
++        .map_err(|error| miette::miette!(error))?;
+     // Driver-selected workspaces are the sandbox identity's home. This keeps
+     // canonical and later exec processes consistent for image WorkingDir and
+     // the managed /sandbox fallback without consulting privileged account
+@@ -50,11 +53,13 @@ pub async fn spawn_workload(
+ 
+     #[cfg(target_os = "linux")]
+     if let Some(workspace_root) = workspace.root()
+-        && workspace_root != openshell_core::driver_mounts::DEFAULT_WORKSPACE_ROOT
++        && (workspace_read_only
++            || workspace_root != openshell_core::driver_mounts::DEFAULT_WORKSPACE_ROOT)
+     {
+-        crate::process::validate_oci_workspace_as_effective_identity(std::path::Path::new(
+-            workspace_root,
+-        ))
++        crate::process::validate_workspace_as_effective_identity(
++            std::path::Path::new(workspace_root),
++            workspace_read_only,
++        )
+         .wrap_err(openshell_core::driver_utils::WORKSPACE_VALIDATION_ERROR_CONTEXT)?;
+     }
+ 
+diff --git a/crates/openshell-sandbox/src/process.rs b/crates/openshell-sandbox/src/process.rs
+index 1b0f853d..4eeb4b98 100644
+--- a/crates/openshell-sandbox/src/process.rs
++++ b/crates/openshell-sandbox/src/process.rs
+@@ -865,9 +865,25 @@ impl Drop for ProcessHandle {
+ 
+ #[cfg(target_os = "linux")]
+ pub fn validate_oci_workspace_as_effective_identity(root: &Path) -> Result<()> {
++    validate_workspace_as_effective_identity(root, false)
++}
++
++/// Validate every component as the effective workload identity. Read-only
++/// intent skips only the final write probe and permits an explicit /sandbox.
++#[cfg(target_os = "linux")]
++pub fn validate_workspace_as_effective_identity(root: &Path, read_only: bool) -> Result<()> {
++    validate_workspace_with_probe(root, read_only, validate_effective_workspace_write)
++}
++
++#[cfg(target_os = "linux")]
++fn validate_workspace_with_probe(
++    root: &Path,
++    read_only: bool,
++    mut write_probe: impl FnMut(&std::os::fd::OwnedFd, &Path) -> Result<()>,
++) -> Result<()> {
+     use rustix::fs::{Access, AtFlags, FileType, Mode, OFlags};
+ 
+-    let components = validated_workspace_components(root)?;
++    let components = validated_workspace_components(root, read_only)?;
+     let open_flags = OFlags::PATH | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+     let mut current_path = PathBuf::from("/");
+     let mut current_fd = rustix::fs::open("/", open_flags, Mode::empty()).into_diagnostic()?;
+@@ -937,8 +953,8 @@ pub fn validate_oci_workspace_as_effective_identity(root: &Path) -> Result<()> {
+                     current_path.display()
+                 )
+             })?;
+-        if is_workspace {
+-            validate_effective_workspace_write(&next_fd, &current_path)?;
++        if is_workspace && !read_only {
++            write_probe(&next_fd, &current_path)?;
+         }
+         current_fd = next_fd;
+     }
+@@ -996,14 +1012,14 @@ fn validate_effective_workspace_write(fd: &impl std::os::fd::AsFd, path: &Path)
+ }
+ 
+ #[cfg(target_os = "linux")]
+-fn validated_workspace_components(root: &Path) -> Result<Vec<std::ffi::OsString>> {
++fn validated_workspace_components(root: &Path, read_only: bool) -> Result<Vec<std::ffi::OsString>> {
+     let root_str = root
+         .to_str()
+         .ok_or_else(|| miette::miette!("workspace path must be valid UTF-8"))?;
+     let validated_root = openshell_core::driver_mounts::resolve_oci_workspace_root(root_str)
+         .map_err(|error| miette::miette!(error))?;
+     if Path::new(&validated_root) != root
+-        || validated_root == openshell_core::driver_mounts::DEFAULT_WORKSPACE_ROOT
++        || (!read_only && validated_root == openshell_core::driver_mounts::DEFAULT_WORKSPACE_ROOT)
+     {
+         return Err(miette::miette!(
+             "workspace path '{}' must be a normalized absolute non-fallback path",
+@@ -1097,6 +1113,125 @@ mod tests {
+     use std::os::unix::fs::PermissionsExt;
+     use std::process::Stdio as StdStdio;
+ 
++    #[cfg(target_os = "linux")]
++    #[test]
++    fn workspace_read_only_skips_the_entire_write_probe_and_preserves_false_errors() {
++        let dir = tempfile::tempdir_in("/tmp").unwrap();
++        let root = dir.path().canonicalize().unwrap();
++        let mut probes = 0;
++        assert!(
++            validate_workspace_with_probe(&root, true, |_, _| {
++                probes += 1;
++                Err(miette::miette!("write probe must not run"))
++            })
++            .is_ok()
++        );
++        assert_eq!(probes, 0);
++        let error = validate_workspace_with_probe(&root, false, |_, _| {
++            probes += 1;
++            Err(miette::miette!("probe failure sentinel"))
++        })
++        .unwrap_err();
++        assert_eq!(probes, 1);
++        assert!(error.to_string().contains("probe failure sentinel"));
++        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
++    }
++
++    #[cfg(target_os = "linux")]
++    #[allow(unsafe_code)]
++    fn workspace_validation_as_nonroot(root: &Path, read_only: bool) -> bool {
++        match unsafe { fork() }.expect("fork validation child") {
++            ForkResult::Child => {
++                if nix::unistd::geteuid().is_root() {
++                    let dropped = unsafe {
++                        libc::setgroups(0, std::ptr::null()) == 0
++                            && libc::setgid(42_235) == 0
++                            && libc::setuid(42_234) == 0
++                    };
++                    if !dropped {
++                        unsafe { libc::_exit(2) };
++                    }
++                }
++                if nix::unistd::geteuid().is_root() {
++                    unsafe { libc::_exit(2) };
++                }
++                let valid = validate_workspace_as_effective_identity(root, read_only).is_ok();
++                unsafe { libc::_exit(i32::from(!valid)) };
++            }
++            ForkResult::Parent { child } => match waitpid(child, None).unwrap() {
++                WaitStatus::Exited(_, 0) => true,
++                WaitStatus::Exited(_, 1) => false,
++                status => panic!("validation child did not finish as non-root: {status:?}"),
++            },
++        }
++    }
++
++    #[cfg(target_os = "linux")]
++    #[test]
++    fn workspace_read_only_preserves_nonroot_traversal_and_has_no_write_side_effects() {
++        use std::os::unix::fs::{MetadataExt, symlink};
++        let dir = tempfile::tempdir_in("/tmp").unwrap();
++        let base = dir.path().canonicalize().unwrap();
++        std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o755)).unwrap();
++        let project = base.join("project");
++        std::fs::create_dir(&project).unwrap();
++        std::fs::write(project.join("known"), b"unchanged").unwrap();
++        std::fs::set_permissions(&project, std::fs::Permissions::from_mode(0o555)).unwrap();
++        let before = std::fs::metadata(&project).unwrap();
++        assert!(workspace_validation_as_nonroot(&project, true));
++        assert!(!workspace_validation_as_nonroot(&project, false));
++        let after = std::fs::metadata(&project).unwrap();
++        assert_eq!(
++            (
++                before.uid(),
++                before.gid(),
++                before.mode(),
++                before.mtime(),
++                before.mtime_nsec()
++            ),
++            (
++                after.uid(),
++                after.gid(),
++                after.mode(),
++                after.mtime(),
++                after.mtime_nsec()
++            )
++        );
++        assert_eq!(std::fs::read(project.join("known")).unwrap(), b"unchanged");
++        assert_eq!(std::fs::read_dir(&project).unwrap().count(), 1);
++        std::fs::set_permissions(&project, std::fs::Permissions::from_mode(0o777)).unwrap();
++        assert!(workspace_validation_as_nonroot(&project, false));
++        assert_eq!(std::fs::read_dir(&project).unwrap().count(), 1);
++
++        let link = base.join("link");
++        symlink(&project, &link).unwrap();
++        let blocked = base.join("blocked");
++        std::fs::create_dir(&blocked).unwrap();
++        std::fs::create_dir(blocked.join("child")).unwrap();
++        std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o600)).unwrap();
++        for invalid in [
++            base.join("missing"),
++            project.join("known"),
++            link.clone(),
++            link.join("child"),
++            blocked.clone(),
++            blocked.join("child"),
++        ] {
++            assert!(
++                !workspace_validation_as_nonroot(&invalid, true),
++                "{invalid:?}"
++            );
++        }
++        // Restore the fixture directory so the test's own TempDir cleanup works.
++        std::fs::set_permissions(&blocked, std::fs::Permissions::from_mode(0o700)).unwrap();
++        std::fs::set_permissions(&project, std::fs::Permissions::from_mode(0o700)).unwrap();
++        for invalid in ["", "/", "relative", "/a/../b", "/a//b", "/a\0b"] {
++            assert!(validate_workspace_as_effective_identity(Path::new(invalid), true).is_err());
++        }
++        assert!(validated_workspace_components(Path::new("/sandbox"), true).is_ok());
++        assert!(validated_workspace_components(Path::new("/sandbox"), false).is_err());
++    }
++
+     /// Helper to create a minimal `SandboxPolicy` with the given process policy.
+     fn policy_with_process(process: ProcessPolicy) -> SandboxPolicy {
+         SandboxPolicy {
+diff --git a/crates/openshell-supervisor/README.md b/crates/openshell-supervisor/README.md
+index e1db7ec7..50c45273 100644
+--- a/crates/openshell-supervisor/README.md
++++ b/crates/openshell-supervisor/README.md
+@@ -24,6 +24,16 @@ a proxy hook to the isolation interface or the shared Sandbox Protocol descripto
+ 
+ ## Sandbox instance ownership
+ 
++In the yoloctl fork, a dedicated supervisor accepts `--workspace-read-only`
++with an explicit `--workdir`. It sends `workspace_read_only` through the
++authenticated StartAgent spec. The boundary still checks every path component,
++directory and traversal permission, including an explicit `/sandbox`, but skips
++the final temporary-file write probe. The default is false and retains existing
++workspace validation. This option does not enforce read-only access: the driver
++must retain the read-only mount and filesystem policy. Network-proxy and shared
++supervisor modes reject the option. Use the matched fork supervisor and boundary;
++an old boundary can ignore the added field.
++
+ A sandbox instance is one running generation of a stable Sandbox resource.
+ Gateway connections, and the gateway supervisor sessions carried over them,
+ can reconnect within an instance without creating another one; the generation
+diff --git a/crates/openshell-supervisor/src/backend_setup/tests.rs b/crates/openshell-supervisor/src/backend_setup/tests.rs
+index 56ff9b50..10cc4685 100644
+--- a/crates/openshell-supervisor/src/backend_setup/tests.rs
++++ b/crates/openshell-supervisor/src/backend_setup/tests.rs
+@@ -111,6 +111,7 @@ fn registered_backend_selects_operator_endpoint_and_preserves_opaque_payload() {
+ 
+ #[derive(Default)]
+ struct Observed {
++    workspace_read_only: AtomicBool,
+     events: Mutex<Vec<&'static str>>,
+     services: Mutex<Weak<BackendServices>>,
+     discovery_unavailable: AtomicBool,
+@@ -220,6 +221,7 @@ fn agent() -> AgentSpec {
+         program: "test-agent".into(),
+         args: vec!["test-argument".into()],
+         workdir: Some("/test-workspace".into()),
++        workspace_read_only: false,
+         timeout_secs: 15,
+         interactive: false,
+     }
+@@ -355,8 +357,16 @@ impl PreparedBackend for TestLaunch {
+                     }
+                     Request::StartAgent {
+                         provider_env_revision,
++                        spec,
+                         ..
+                     } => {
++                        assert_eq!(
++                            spec.workspace_read_only,
++                            observed.workspace_read_only.load(Ordering::SeqCst)
++                        );
++                        if spec.workspace_read_only {
++                            assert_eq!(spec.workdir.as_deref(), Some("/test-workspace"));
++                        }
+                         if observed.require_networking.load(Ordering::SeqCst) {
+                             let paths = live_services.ca_file_paths.lock().unwrap();
+                             let (certificate, bundle) =
+@@ -758,6 +768,46 @@ fn standard_setup_decodes_native_descriptor_and_preserves_vm_identity() {
+ 
+ /// Auth slots and shutdown signals are process-wide. Run the real startup in a
+ /// child so parallel tests cannot replace credentials or consume its SIGTERM.
++#[cfg(unix)]
++#[tokio::test]
++async fn workspace_read_only_reaches_authenticated_start_agent_from_instance_config() {
++    use std::time::Duration;
++    let root = tempfile::Builder::new()
++        .prefix("readonly-start-")
++        .tempdir_in("/tmp")
++        .unwrap();
++    let mut child = tokio::process::Command::new(std::env::current_exe().unwrap());
++    child.args([
++        "--exact",
++        "backend_setup::tests::shared_startup_uses_selected_backend_through_readiness_and_shutdown",
++        "--nocapture",
++        "--test-threads=1",
++    ]);
++    for (name, _) in std::env::vars_os() {
++        if name.to_string_lossy().starts_with("OPENSHELL_") {
++            child.env_remove(name);
++        }
++    }
++    child
++        .env("OPENSHELL_TEST_SELECTED_BACKEND_ROOT", root.path())
++        .env("OPENSHELL_TEST_READ_ONLY_WORKSPACE", "1")
++        .env(
++            openshell_core::sandbox_env::PROXY_TLS_DIR,
++            root.path().join("tls"),
++        )
++        .kill_on_drop(true);
++    let output = tokio::time::timeout(Duration::from_secs(30), child.output())
++        .await
++        .expect("read-only startup deadline")
++        .expect("read-only startup child");
++    assert!(
++        output.status.success(),
++        "{}\n{}",
++        String::from_utf8_lossy(&output.stdout),
++        String::from_utf8_lossy(&output.stderr)
++    );
++}
++
+ #[cfg(unix)]
+ #[tokio::test]
+ async fn shared_startup_uses_selected_backend_through_readiness_and_shutdown() {
+@@ -818,6 +868,11 @@ async fn shared_startup_uses_selected_backend_through_readiness_and_shutdown() {
+     drop(reservation);
+ 
+     let setup = TestSetup::new();
++    let workspace_read_only = std::env::var_os("OPENSHELL_TEST_READ_ONLY_WORKSPACE").is_some();
++    setup
++        .observed
++        .workspace_read_only
++        .store(workspace_read_only, Ordering::SeqCst);
+     setup
+         .observed
+         .require_networking
+@@ -826,6 +881,7 @@ async fn shared_startup_uses_selected_backend_through_readiness_and_shutdown() {
+         let config = crate::SandboxInstanceConfig {
+             command: vec!["test-agent".into(), "test-argument".into()],
+             workdir: Some("/test-workspace".into()),
++            workspace_read_only,
+             timeout_secs: 15,
+             interactive: false,
+             await_main_process_attachment,
+@@ -1029,6 +1085,7 @@ async fn suspend_signal_exits_without_terminating_boundary() {
+         let config = crate::SandboxInstanceConfig {
+             command: vec!["test-agent".into(), "test-argument".into()],
+             workdir: Some("/test-workspace".into()),
++            workspace_read_only: false,
+             timeout_secs: 15,
+             interactive: false,
+             await_main_process_attachment: false,
+diff --git a/crates/openshell-supervisor/src/legacy_startup_regression_tests.rs b/crates/openshell-supervisor/src/legacy_startup_regression_tests.rs
+index 8e6def65..8deb3ed3 100644
+--- a/crates/openshell-supervisor/src/legacy_startup_regression_tests.rs
++++ b/crates/openshell-supervisor/src/legacy_startup_regression_tests.rs
+@@ -280,6 +280,7 @@ async fn config_push_regression_legacy_gateway_never_observes_ready_before_workl
+     let config = SandboxInstanceConfig {
+         command: vec!["true".into()],
+         workdir: None,
++        workspace_read_only: false,
+         timeout_secs: 0,
+         interactive: false,
+         await_main_process_attachment: false,
+diff --git a/crates/openshell-supervisor/src/lib.rs b/crates/openshell-supervisor/src/lib.rs
+index 07614d74..03f58524 100644
+--- a/crates/openshell-supervisor/src/lib.rs
++++ b/crates/openshell-supervisor/src/lib.rs
+@@ -886,6 +886,8 @@ pub fn trace_context_from_environment() -> Option<RegistrationTraceContext> {
+ pub struct SandboxInstanceConfig {
+     pub command: Vec<String>,
+     pub workdir: Option<String>,
++    /// Skip only the explicit workspace write probe, preserving filesystem policy.
++    pub workspace_read_only: bool,
+     pub timeout_secs: u64,
+     pub interactive: bool,
+     pub await_main_process_attachment: bool,
+@@ -1048,6 +1050,7 @@ pub async fn run_sandbox_instance(
+     let SandboxInstanceConfig {
+         command,
+         workdir,
++        workspace_read_only,
+         timeout_secs,
+         interactive,
+         await_main_process_attachment,
+@@ -1071,6 +1074,11 @@ pub async fn run_sandbox_instance(
+         takeover,
+         supervisor_recovery_timeout_secs,
+     } = config;
++    openshell_isolation_interface::validate_workspace_read_only(
++        workdir.as_deref(),
++        workspace_read_only,
++    )
++    .map_err(|error| miette::miette!(error))?;
+     // The owner binds the event context and log sink to the instance's
+     // threads; the instance itself uses the rest.
+     let SandboxInstanceBindings {
+@@ -1304,6 +1312,7 @@ pub async fn run_sandbox_instance(
+                 program,
+                 args,
+                 workdir: workspace,
++                workspace_read_only,
+                 timeout_secs,
+                 interactive,
+             },
+@@ -4583,6 +4592,7 @@ mod tests {
+         let config = SandboxInstanceConfig {
+             command: vec!["true".to_string()],
+             workdir: None,
++            workspace_read_only: false,
+             timeout_secs: 0,
+             interactive: false,
+             await_main_process_attachment: false,
+diff --git a/crates/openshell-supervisor/src/main.rs b/crates/openshell-supervisor/src/main.rs
+index 9a368110..753c77a1 100644
+--- a/crates/openshell-supervisor/src/main.rs
++++ b/crates/openshell-supervisor/src/main.rs
+@@ -107,6 +107,11 @@ struct Args {
+     #[arg(long, short)]
+     workdir: Option<String>,
+ 
++    /// Validate an explicit workspace without a write probe. Mounts and policy
++    /// must independently enforce read-only access.
++    #[arg(long, requires = "workdir")]
++    workspace_read_only: bool,
++
+     #[arg(long, short, default_value = "0")]
+     timeout: u64,
+ 
+@@ -342,7 +347,21 @@ fn auth_bundle(args: &Args) -> Result<openshell_core::jwt::SupervisorAuthBundle>
+     Ok(bundle)
+ }
+ 
++fn validate_workspace_read_only_arguments(args: &Args) -> Result<()> {
++    if args.workspace_read_only && args.mode != SupervisorMode::Dedicated {
++        return Err(miette::miette!(
++            "--workspace-read-only requires a dedicated workload supervisor"
++        ));
++    }
++    openshell_isolation_interface::validate_workspace_read_only(
++        args.workdir.as_deref(),
++        args.workspace_read_only,
++    )
++    .map_err(|error| miette::miette!(error))
++}
++
+ fn validate_role_arguments(args: &Args) -> Result<()> {
++    validate_workspace_read_only_arguments(args)?;
+     match args.role {
+         SupervisorRole::IsolationBackend => {
+             if args.backend_descriptor_file.is_none() {
+@@ -386,6 +405,7 @@ fn validate_role_arguments(args: &Args) -> Result<()> {
+             }
+             if !args.command.is_empty()
+                 || args.workdir.is_some()
++                || args.workspace_read_only
+                 || args.interactive
+                 || args.timeout != 0
+             {
+@@ -433,6 +453,7 @@ fn main() -> Result<()> {
+     }
+ 
+     let args = Args::parse();
++    validate_workspace_read_only_arguments(&args)?;
+     if args.mode == SupervisorMode::Shared {
+         return shared::run(args);
+     }
+@@ -602,6 +623,7 @@ fn main() -> Result<()> {
+                 let config = openshell_supervisor::SandboxInstanceConfig {
+                     command,
+                     workdir,
++                    workspace_read_only: args.workspace_read_only,
+                     timeout_secs: args.timeout,
+                     interactive,
+                     await_main_process_attachment,
+@@ -762,6 +784,60 @@ fn supervisor_exit(result: Result<i32>) -> Result<i32> {
+ #[cfg(test)]
+ mod tests {
+ 
++    #[test]
++    fn workspace_read_only_cli_is_explicit_and_workload_only() {
++        use super::{
++            Args, SupervisorMode, validate_role_arguments, validate_workspace_read_only_arguments,
++        };
++        use clap::Parser;
++        let defaults = Args::try_parse_from(["openshell-supervisor"]).unwrap();
++        assert!(!defaults.workspace_read_only);
++        assert!(Args::try_parse_from(["openshell-supervisor", "--workspace-read-only"]).is_err());
++        let mut args = Args::try_parse_from([
++            "openshell-supervisor",
++            "--backend-descriptor-file",
++            "/descriptor",
++            "--auth-bundle-file",
++            "/auth",
++            "--workdir",
++            "/workdir/project",
++            "--workspace-read-only",
++        ])
++        .unwrap();
++        assert!(args.workspace_read_only);
++        assert!(validate_role_arguments(&args).is_ok());
++        args.mode = SupervisorMode::Shared;
++        assert!(validate_workspace_read_only_arguments(&args).is_err());
++        let proxy = Args::try_parse_from([
++            "openshell-supervisor",
++            "--role",
++            "network-proxy",
++            "--policy-rules",
++            "/policy.rego",
++            "--policy-data",
++            "/policy.yaml",
++            "--workdir",
++            "/workdir/project",
++            "--workspace-read-only",
++        ])
++        .unwrap();
++        assert!(validate_role_arguments(&proxy).is_err());
++        for root in ["", "/", "relative", "/a/../b"] {
++            let args = Args::try_parse_from([
++                "openshell-supervisor",
++                "--backend-descriptor-file",
++                "/descriptor",
++                "--auth-bundle-file",
++                "/auth",
++                "--workdir",
++                root,
++                "--workspace-read-only",
++            ])
++            .unwrap();
++            assert!(validate_role_arguments(&args).is_err(), "{root}");
++        }
++    }
++
+     #[cfg(unix)]
+     #[test]
+     fn parent_liveness_stdin_child() {
+diff --git a/crates/openshell-supervisor/src/shared_host.rs b/crates/openshell-supervisor/src/shared_host.rs
+index b75e298e..8c1fb40f 100644
+--- a/crates/openshell-supervisor/src/shared_host.rs
++++ b/crates/openshell-supervisor/src/shared_host.rs
+@@ -778,6 +778,7 @@ impl SharedHost {
+         let config = crate::SandboxInstanceConfig {
+             command: main_process.command,
+             workdir: registration.workdir,
++            workspace_read_only: false,
+             timeout_secs: 0,
+             interactive: main_process.tty,
+             await_main_process_attachment: main_process.await_main_process_attachment,
+diff --git a/proto/sandbox_protocol.proto b/proto/sandbox_protocol.proto
+index 076e686b..0ad8d04f 100644
+--- a/proto/sandbox_protocol.proto
++++ b/proto/sandbox_protocol.proto
+@@ -271,6 +271,9 @@ message AgentSpec {
+   // Omitted or zero means no timeout; otherwise whole nonnegative seconds.
+   google.protobuf.Duration timeout = 4;
+   bool interactive = 5;
++  // Explicit workspace validation intent, default false. Requires workdir;
++  // skips only its write probe, without granting access or enforcing read-only.
++  bool workspace_read_only = 6;
+ }
+ message ExecSpec {
+   string program = 1;

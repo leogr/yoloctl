@@ -1,0 +1,4 @@
+# Release archives copied in by `make native-qualify` (hash-checked); never committed.
+*
+!.keep
+!.gitignore

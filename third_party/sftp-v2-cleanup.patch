@@ -1,0 +1,32 @@
+--- a/server.go
++++ b/server.go
+@@ -389,7 +389,16 @@
+ 		return fmt.Errorf("sftp: already serving")
+ 	}
+ 	srv.shutdown = make(chan struct{})
++	srv.wg.Add(1)
+ 	srv.mu.Unlock()
++	defer srv.wg.Done()
++	defer func() {
++		conn.Close()
++		for handle, f := range srv.handles.Range {
++			srv.handles.Delete(handle)
++			f.Close()
++		}
++	}()
+ 
+ 	if srv.MaxDataLength < 0 {
+ 		return fmt.Errorf("sftp: max data length cannot be negative: %d", srv.MaxDataLength)
+@@ -424,12 +433,6 @@
+ 	if err := srv.handshake(conn, maxPktLen); err != nil {
+ 		return fmt.Errorf("sftp: handshake failure: %w", err)
+ 	}
+-
+-	srv.wg.Add(1)
+-	defer func() {
+-		conn.Close()
+-		srv.wg.Done()
+-	}()
+ 
+ 	var reqPkt sshfx.RequestPacket
+ 	scratch := make([]byte, maxPktLen)
