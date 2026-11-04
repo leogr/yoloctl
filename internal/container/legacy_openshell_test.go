@@ -15,7 +15,7 @@ import (
 )
 
 // Execute the production's selected-VM shell script against private files.
-// Only the fixed historical pathname/hash and uname are replaced by the fake
+// Only the fixed historical pathname/hash, uname and sha256sum are replaced by the fake
 // adapter. No VM, old executable, download or installation runs in this test.
 func retainedLegacyFixture(t *testing.T, arch string, payload []byte, kind string) (*Client, string) {
 	t.Helper()
