@@ -71,7 +71,7 @@ func TestCodexFeatureInstallsBubblewrap(t *testing.T) {
 	for _, want := range []string{
 		"update --error-on=any",
 		"install -y --no-install-recommends bubblewrap",
-		"rm -rf /var/lib/apt/lists/*",
+		"target=/var/lib/apt/lists,sharing=locked",
 		"npm install -g @openai/codex@latest --prefix=/home/sandbox/.npm-global",
 	} {
 		if !strings.Contains(out, want) {

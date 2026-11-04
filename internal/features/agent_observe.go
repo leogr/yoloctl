@@ -140,7 +140,7 @@ func agentObserveWriterInstall(feature string, dirs []string, launchers []agentO
 		fmt.Fprintf(&b, "printf '%%s\\n' '#!/bin/sh' \"exec $python -I -S %s\" > %s\n", target, l.path)
 		paths = append(paths, l.path)
 	}
-	return fmt.Sprintf(`RUN <<'AGENT_OBSERVE_INSTALL'
+	return fmt.Sprintf("RUN "+aptCacheMounts+` <<'AGENT_OBSERVE_INSTALL'
 #!/bin/sh
 set -eu
 python=
@@ -148,9 +148,8 @@ for candidate in /usr/local/bin/python3 /usr/bin/python3; do
     if [ -x "$candidate" ] && "$candidate" %s; then python=$candidate; break; fi
 done
 if [ -z "$python" ] && command -v apt-get >/dev/null 2>&1; then
-    apt-get update
-    apt-get install -y --no-install-recommends python3
-    rm -rf /var/lib/apt/lists/*
+    apt-get -o Acquire::Retries=3 update --error-on=any
+    apt-get -o Acquire::Retries=3 -o Dir::Cache::Archives=/var/cache/yoloctl/apt -o APT::Keep-Downloaded-Packages=true install -y --no-install-recommends python3
     if /usr/bin/python3 %s; then python=/usr/bin/python3; fi
 fi
 if [ -z "$python" ]; then

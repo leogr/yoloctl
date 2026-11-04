@@ -39,8 +39,9 @@ installation; npm ownership is set in the install layer to avoid duplicating
 packages. Matching containers
 skip home remapping at startup; images for different identities remain distinct.
 Cached composed images are reused; rebuild refreshes feature layers separately
-from base refresh. Agent packages track `latest`; infrastructure dependencies
-have deliberate pins. npm and base apt downloads use disposable BuildKit caches
+from base refresh. Apt index/deb caches stay outside image layers and refreshes
+still validate signed metadata before installation. Agent packages track
+`latest`; infrastructure dependencies have deliberate pins. npm and base apt downloads use disposable BuildKit caches
 outside the image, with metadata revalidation. Managed rebuilds retain downloads;
 custom bases/raw Dockerfile features keep full cache invalidation.
 Runtime npm maintenance uses the explicit

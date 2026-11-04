@@ -25,7 +25,7 @@ const ComposedImageRepo = "yoloctl/agentbox-composed"
 // composition wiring or GenerateDockerfile/InstallPlan output changes in a way
 // that should invalidate every previously-built composed image globally. A unit
 // test asserts it participates in the hash.
-const builderVersion = "3"
+const builderVersion = "4"
 
 const preparedBaseStage = "yoloctl-prepared-base"
 

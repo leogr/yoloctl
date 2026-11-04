@@ -1,4 +1,5 @@
-RUN <<'AGENT_OBSERVE_INSTALL'
+RUN --mount=type=cache,id=yoloctl-apt-archives-v1,target=/var/cache/yoloctl/apt,sharing=locked \
+    --mount=type=cache,id=yoloctl-apt-lists-v1,target=/var/lib/apt/lists,sharing=locked <<'AGENT_OBSERVE_INSTALL'
 #!/bin/sh
 set -eu
 python=
@@ -6,9 +7,8 @@ for candidate in /usr/local/bin/python3 /usr/bin/python3; do
     if [ -x "$candidate" ] && "$candidate" -I -S -c 'import fcntl, json, os, re, sys, time; sys.exit(sys.version_info < (3, 8))'; then python=$candidate; break; fi
 done
 if [ -z "$python" ] && command -v apt-get >/dev/null 2>&1; then
-    apt-get update
-    apt-get install -y --no-install-recommends python3
-    rm -rf /var/lib/apt/lists/*
+    apt-get -o Acquire::Retries=3 update --error-on=any
+    apt-get -o Acquire::Retries=3 -o Dir::Cache::Archives=/var/cache/yoloctl/apt -o APT::Keep-Downloaded-Packages=true install -y --no-install-recommends python3
     if /usr/bin/python3 -I -S -c 'import fcntl, json, os, re, sys, time; sys.exit(sys.version_info < (3, 8))'; then python=/usr/bin/python3; fi
 fi
 if [ -z "$python" ]; then
