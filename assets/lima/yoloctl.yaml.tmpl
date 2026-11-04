@@ -1,0 +1,137 @@
+# yoloctl Lima VM template
+#
+# Rendered at runtime via text/template. The sandbox policy Rego is
+# substituted from a sibling file in this directory.
+
+# Official release images, verified against Canonical's release-20261001
+# SHA256SUMS. No moving fallback: comparisons must use the same image bytes.
+images:
+- location: https://cloud-images.ubuntu.com/minimal/releases/noble/release-20261001/ubuntu-24.04-minimal-cloudimg-amd64.img
+  arch: x86_64
+  digest: sha256:a8eb6570f87a941f3de2e000c046b9367f8ab1423756a94830d454fae8ad80ff
+- location: https://cloud-images.ubuntu.com/minimal/releases/noble/release-20261001/ubuntu-24.04-minimal-cloudimg-arm64.img
+  arch: aarch64
+  digest: sha256:fbf6b15c50c474dc6dee5b3c74da212bb687a2625e877227828e6492d88dc151
+
+cpus: {{.CPUs}}
+memory: {{printf "%q" .Memory}}
+disk: {{printf "%q" .Disk}}
+
+# Let Lima select vmType, arch and mountType for the host.
+mounts:
+{{ .WritableMounts }}
+
+{{ if .AccountDisk }}additionalDisks:
+- name: "{{.AccountDisk}}"
+  format: {{.FormatAccountDisk}}
+  fsType: ext4
+{{ end }}
+containerd:
+  system: true
+  user: false
+  # Select by guest architecture, including an amd64 CLI under Rosetta.
+  # Keep the full stack aligned with Firecracker; no moving fallback.
+  archives:
+  - location: https://github.com/containerd/nerdctl/releases/download/v2.3.5/nerdctl-full-2.3.5-linux-amd64.tar.gz
+    arch: x86_64
+    digest: sha256:b697295c623639734aaab737523c808fd3cc8d3046039fd94fff1744e4c317aa
+  - location: https://github.com/containerd/nerdctl/releases/download/v2.3.5/nerdctl-full-2.3.5-linux-arm64.tar.gz
+    arch: aarch64
+    digest: sha256:6e4b687f1d138e750a3c8372abc0f81d3d7490b6359c48c0562fc7dfe98859b2
+
+provision:
+
+# 1. Sandbox user (UID/GID 2000), /tmp permissions, yoloctl directory layout.
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    chmod 1777 /tmp
+    if ! getent group sandbox >/dev/null; then
+      groupadd -g 2000 sandbox
+    fi
+    if ! id -u sandbox >/dev/null 2>&1; then
+      useradd -u 2000 -g sandbox -d /home/sandbox -s /bin/bash -m sandbox
+    fi
+    mkdir -p /etc/yoloctl
+
+# 2. VM runtime dependencies. Native OpenShell executables, helper and Rego
+#    are installed from the qualified controller artifacts at box creation.
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    # Lima runs system provisioning again on restart. Query dpkg on each boot
+    # so a missing or incompletely installed package is repaired, without
+    # repeating apt/network work when all runtime dependencies are installed.
+    # The pinned image ships an older CA package. An apt upgrade lets its
+    # package scripts regenerate /etc/ssl/certs, keeping local CAs and
+    # deselections; this release distrusts emSign ECC Root CA - G3
+    # (LP: #2171507).
+    ca_minimum=20260816ubuntu0.24.04.1
+    ca_current() {
+      dpkg-query -W -f='${Version}' ca-certificates 2>/dev/null || true
+    }
+    missing=()
+    for package in ca-certificates curl socat python3; do
+      if [ "$(dpkg-query -W -f='${Status}' "$package" 2>/dev/null || true)" != "install ok installed" ]; then
+        missing+=("$package")
+      elif [ "$package" = ca-certificates ] && ! dpkg --compare-versions "$(ca_current)" ge "$ca_minimum"; then
+        missing+=("$package")
+      fi
+    done
+    if [ "${#missing[@]}" -gt 0 ]; then
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y --no-install-recommends "${missing[@]}"
+    else
+      echo 'yoloctl: VM runtime packages already installed'
+    fi
+    ca_version=$(ca_current)
+    if [ -z "$ca_version" ] || ! dpkg --compare-versions "$ca_version" ge "$ca_minimum"; then
+      echo "yoloctl: ca-certificates ${ca_version:-missing} is older than $ca_minimum" >&2
+      exit 1
+    fi
+
+# Native OpenShell egress needs the distro nft CLI and its matching libraries.
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    # yoloctl-openshell-vm: nftables-v2
+    if [ "$(dpkg-query -W -f='${Status}' nftables 2>/dev/null || true)" != 'install ok installed' ] || [ ! -x /usr/sbin/nft ]; then
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y --no-install-recommends nftables
+    fi
+    test -x /usr/sbin/nft
+    /usr/sbin/nft --version
+
+probes:
+- mode: readiness
+  description: "native OpenShell nftables is installed"
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    test -x /usr/sbin/nft
+    /usr/sbin/nft --version
+  hint: |
+    nftables provisioning failed. Check the Lima cloud-init provision log.
+
+- mode: readiness
+  description: "containerd is running"
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    if ! timeout 30s bash -c "until sudo nerdctl info > /dev/null 2>&1; do sleep 1; done"; then
+      echo >&2 "containerd is not running"
+      exit 1
+    fi
+  hint: |
+    containerd is not running. Check: systemctl status containerd
+
+# Auto-forward all guest localhost ports to host.
+portForwards:
+- guestIP: "127.0.0.1"
+  guestPortRange: [1, 65535]
+  hostIP: "127.0.0.1"

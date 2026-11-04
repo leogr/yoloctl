@@ -1,0 +1,146 @@
+# Built-in agent profile: Claude Code (Anthropic).
+#
+# Embedded read-only. Customize it with:
+#   yoloctl agent copy claude <new-name>
+# then edit the custom definition under ~/.config/yoloctl/agents/.
+
+name: claude
+# Plain base image. The agent CLI is NOT baked in — the `claude` feature below
+# installs it into the feature-composed runtime image (image = base + resolved
+# features). Override with --image to compose onto a different base.
+image: yoloctl/agentbox:ubuntu-24.04
+command: claude
+
+# DefaultArgs note:
+# openshell-sandbox already enforces every action via Landlock +
+# seccomp + L7 proxy, so Claude Code's own permission prompts are
+# redundant friction asking the user the same question yoloctl's
+# policy already answered. `--dangerously-skip-permissions` skips
+# those prompts. The flag's name is upstream's, not a posture we
+# agree with — inside a confined agentbox the action it gates is
+# not actually dangerous.
+#
+# Users who want the prompts back can execute the CLI explicitly, e.g.
+# `yoloctl box exec BOX -- env CLAUDE_CONFIG_DIR=/home/sandbox/.claude claude`.
+default_args:
+  - --dangerously-skip-permissions
+
+npm_package: "@anthropic-ai/claude-code"
+state_container_path: /home/sandbox/.claude
+
+# Required features (manifest/runtime model). The boundary in force is:
+#   agent (this profile) → requires features → features → require capabilities → policy
+# A profile has NO agent_feature and NO agent-level capabilities — egress
+# reaches the policy ONLY via features. So anthropic egress is preserved by
+# listing the `claude` feature here (it requires network.anthropic), alongside
+# `github` for git/gh egress. `--agent claude` prefills the box's features with
+# this list, and the composer derives the box's capabilities from that effective
+# feature set.
+#
+# image = base + resolved features (now wired): the `claude` feature both grants
+# network.anthropic AND installs the Claude Code CLI into the feature-composed
+# runtime image built from the plain base above; `github` adds git/gh egress.
+# `--agent claude` prefills the box's features with this list, and the composer
+# derives the box's capabilities from that effective feature set.
+#
+# yolo.agent.observe is the Claude reporter: a managed status line and async
+# hooks that record what Claude itself reports (model, effort, context,
+# version, conversation identity) for yoloctl's views; see session.observe.
+# Required, so every Claude box gets it; an existing box gets it with its
+# next recreate.
+requires_features:
+  - claude
+  - github
+  - yolo.agent.observe
+
+# Conversation identity (yoloctl owns it unless the box is manual): a new
+# conversation starts with `--session-id <fresh uuid>`, and a later start of
+# the same box resumes it with `--resume <uuid>` instead of opening whatever
+# the shared account leaf saw last. Claude refuses `--session-id` for an ID
+# whose transcript already exists, so a recorded ID is only ever resumed.
+# reserved_args are the arguments that take identity over: a box whose
+# agent_extra_args carry one is manual and yoloctl assigns nothing.
+session:
+  id_format: uuid
+  assign_args: ["--session-id", "{{session_id}}"]
+  resume_argv: ["{{command}}", "--resume", "{{session_id}}"]
+  reserved_args: ["--session-id", "--resume", "-r", "--continue", "-c", "--fork-session", "--bg"]
+  # The record-only reporter, also listed in requires_features above.
+  # selection: reported — Claude reports a SessionStart for every in-app
+  # switch (startup, /clear, /resume; fork), so the last observed
+  # conversation is the one the next start resumes.
+  observe:
+    push: yolo.agent.observe
+    selection: reported
+
+# Relocate claude's whole config footprint into the persisted agent-state
+# mount. Claude Code splits its logged-in state across ~/.claude/ (which IS
+# state_container_path, so it persists) AND a sibling ~/.claude.json
+# (account / onboarding / repository-trust / approved-key state) that lives
+# OUTSIDE the mount and is therefore lost on every `box recreate`.
+# CLAUDE_CONFIG_DIR makes claude read+write .claude.json from inside the
+# config dir ($CLAUDE_CONFIG_DIR/.claude.json) instead of $HOME/.claude.json,
+# pulling it into the mount. {{state_dir}} expands to state_container_path.
+# Delivered as a launch-command env prefix (the sandbox SSH session strips
+# `nerdctl -e` env); non-secret path only (applyLaunchEnv).
+launch_env:
+  CLAUDE_CONFIG_DIR: "{{state_dir}}"
+  # Claude Code's built-in self-updater is disabled on purpose: inside an
+  # agentbox it can never succeed, and every session retries and warns
+  # (`claude doctor`: "Can't auto-update: npm global folder isn't writable").
+  # It fails twice over:
+  #   - it shells out to a plain `npm install -g`, and runtime npm falls back
+  #     to its built-in /usr prefix: the image never configures a prefix for
+  #     the sandbox user (no .npmrc, no NPM_CONFIG_PREFIX) — installs pass
+  #     --prefix=/home/sandbox/.npm-global explicitly instead (see
+  #     cmd/yoloctl/autoupdate.go) — and /usr is not sandbox-writable;
+  #   - a default claude box has no registry.npmjs.org egress anyway — that is
+  #     the opt-in `npm` feature (network.npm), not required by this profile —
+  #     so even with a fixed prefix the L7 proxy refuses the fetch.
+  # Keeping the CLI at @latest is yoloctl's job instead: lifecycle autoupdate
+  # and `yoloctl agent update` run OUTSIDE the sandbox (`nerdctl exec … npm
+  # install -g --prefix=…`, cmd/yoloctl/autoupdate.go), need no in-box egress,
+  # and stay the single update path. Disabling the in-box updater silences the
+  # doomed attempts without widening default egress.
+  DISABLE_AUTOUPDATER: "1"
+  # DISABLE_AUTOUPDATER alone would also turn off marketplace/plugin
+  # auto-updates, which yoloctl does NOT replace (it only owns CLI updates).
+  # This is Anthropic's documented pairing for an externally managed CLI —
+  # keep plugin auto-updates running while the CLI updater stays off:
+  # https://code.claude.com/docs/en/discover-plugins#configure-auto-updates
+  FORCE_AUTOUPDATE_PLUGINS: "1"
+
+# Subscription / OAuth login is written in-box; import/status are account-scoped.
+# The credential file lives in the account's state dir
+# (<account-state>/.credentials.json), which is bind-mounted into the box, so
+# the agent reads it with no create-time bridge. Interactive first-run login
+# happens INSIDE the box: run claude and follow its own `--claudeai`
+# subscription login (vs --console API billing); the captured file persists in
+# the account as agent-owned native state.
+auth:
+  # .credentials.json is Claude Code's DOCUMENTED Linux credentials file
+  # (code.claude.com/docs/en/authentication; CLAUDE_CONFIG_DIR relocates it).
+  # `account auth import` copies it into the account-state dir; an in-box
+  # login writes it there directly.
+  credential_file: .credentials.json
+  # API-key fallback for `account auth import`: when there's no .credentials.json
+  # (subscription/OAuth) to copy, extract the key from ~/.claude.json's
+  # primaryApiKey field and store it as the account's ANTHROPIC_API_KEY secret —
+  # which reaches the box's claude via env injection. We do NOT copy
+  # ~/.claude.json: newer claude ignores primaryApiKey there
+  # (anthropics/claude-code#11631) and reads the env var instead. (The field is
+  # version-coupled to claude's config format; adjust if claude renames it.)
+  import_secret:
+    file: .claude.json
+    field: primaryApiKey
+    secret: ANTHROPIC_API_KEY
+
+# API-key auth: the account secret ANTHROPIC_API_KEY is INJECTED into the
+# agent's ENVIRONMENT by the openshell-sandbox supervisor (via
+# OPENSHELL_USER_ENVIRONMENT) — Claude Code reads ANTHROPIC_API_KEY from the
+# environment (auth precedence #3, code.claude.com/docs/en/authentication). The
+# value never touches a file or the agent command line; the box's account owns
+# it. Native credentials are instead created by Claude's own login or copied
+# once by `account auth import`.
+secret_injection:
+  - secret: ANTHROPIC_API_KEY

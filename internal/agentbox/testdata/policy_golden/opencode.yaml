@@ -1,0 +1,61 @@
+version: 1
+filesystem_policy:
+    include_workdir: true
+    read_only:
+        - /usr
+        - /lib
+        - /lib64
+        - /bin
+        - /sbin
+        - /proc
+        - /dev/urandom
+        - /dev/random
+        - /etc
+        - /app
+        - /var/log
+    read_write:
+        - /tmp
+        - /home/sandbox
+        - /run
+        - /dev/null
+        - /dev/zero
+        - /workdir
+landlock:
+    compatibility: best_effort
+process:
+    run_as_user: sandbox
+    run_as_group: sandbox
+network_policies:
+    opencode:
+        name: opencode
+        endpoints:
+            - host: registry.npmjs.org
+              ports:
+                - 443
+              protocol: rest
+              enforcement: enforce
+              access: full
+              allow_encoded_slash: true
+            - host: opencode.ai
+              ports:
+                - 443
+            - host: api.anthropic.com
+              ports:
+                - 443
+            - host: api.openai.com
+              ports:
+                - 443
+            - host: auth.openai.com
+              ports:
+                - 443
+            - host: chatgpt.com
+              ports:
+                - 443
+            - host: generativelanguage.googleapis.com
+              ports:
+                - 443
+            - host: openrouter.ai
+              ports:
+                - 443
+        binaries:
+            - path: /home/sandbox/.npm-global/lib/node_modules/opencode-ai/bin/opencode.exe

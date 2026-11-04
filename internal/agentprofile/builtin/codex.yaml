@@ -1,0 +1,115 @@
+# Built-in agent profile: Codex (OpenAI).
+#
+# Embedded read-only. Customize it with:
+#   yoloctl agent copy codex <new-name>
+# then edit the custom definition under ~/.config/yoloctl/agents/.
+
+name: codex
+# Plain base image. The agent CLI is NOT baked in — the `codex` feature below
+# installs it into the feature-composed runtime image (image = base + resolved
+# features). Override with --image to compose onto a different base.
+image: yoloctl/agentbox:ubuntu-24.04
+command: codex
+
+# DefaultArgs note (mirrors claude's rationale):
+# openshell-sandbox (Landlock + seccomp + netns + L7 proxy) is THE
+# confinement boundary for the agentbox, so codex's own layers are
+# redundant friction inside it:
+#   --ask-for-approval never      skips codex's approval prompts — the
+#                                 analog to claude's
+#                                 --dangerously-skip-permissions; the
+#                                 action it gates is not actually
+#                                 dangerous inside a confined box.
+#   --sandbox danger-full-access  tells codex NOT to start its own
+#                                 bubblewrap sandbox nested
+#                                 inside openshell-sandbox. That nesting
+#                                 is redundant and can break on
+#                                 kernel/codex updates.
+#                                 Confinement is delegated entirely to
+#                                 openshell-sandbox.
+#
+# Codex still checks for bwrap at startup with these defaults. The codex
+# feature installs the distro bubblewrap package to satisfy that check.
+#
+# Users who want codex's prompts / own sandbox back invoke
+# `yoloctl box exec BOX -- codex`.
+default_args:
+  - --ask-for-approval
+  - never
+  - --sandbox
+  - danger-full-access
+
+npm_package: "@openai/codex"
+state_container_path: /home/sandbox/.codex
+
+# Process-local aliases, control endpoints and PID files are recreated at
+# startup and must not be restored into a new VM/container. Keep settings,
+# history, credentials and the installed daemon releases. Actual socket inodes
+# are excluded from every agent's archive automatically.
+state_archive_excludes:
+  - tmp/arg0
+  - tmp/arg0-linux
+  - app-server-control/app-server-control.sock
+  - app-server-daemon/daemon.pid
+  - app-server-daemon/daemon-updater.pid
+  - app-server-daemon/app-server.pid
+  - app-server-daemon/app-server-updater.pid
+
+# Required features (manifest/runtime model). The boundary in force is:
+#   agent (this profile) → requires features → features → require capabilities → policy
+# A profile has NO agent_feature and NO agent-level capabilities — egress
+# reaches the policy ONLY via features. So openai egress is preserved by listing
+# the `codex` feature here (it requires network.openai), alongside `github` for
+# git/gh egress. `--agent codex` prefills the box's features with this list, and
+# the composer derives the box's capabilities from that effective feature set.
+#
+# image = base + resolved features (now wired): the `codex` feature both grants
+# network.openai AND installs the Codex CLI into the feature-composed runtime
+# image built from the plain base above; `github` adds git/gh egress. `--agent
+# codex` prefills the box's features with this list, and the composer derives the
+# box's capabilities from that effective feature set.
+requires_features:
+  - codex
+  - github
+  - yolo.agent.observe-codex
+
+# Conversation identity. Codex cannot start a conversation under an ID it was
+# given, so yoloctl learns the thread from the first main SessionStart a launch
+# reports and later resumes it with `codex resume <id>`, which keeps the
+# ordinary options (default_args and agent_extra_args follow). A box whose
+# agent_extra_args already carry `resume` stays manual.
+# selection: unknown — Codex's resume picker reports nothing until a turn, so
+# an in-app selection is not reported.
+session:
+  id_format: uuid
+  resume_argv: ["{{command}}", "resume", "{{session_id}}"]
+  reserved_args: ["resume"]
+  # The record-only reporter, also listed in requires_features above.
+  observe:
+    push: yolo.agent.observe-codex
+    selection: unknown
+  # The TUI starts a detached app-server daemon (and its pid-update-loop)
+  # that outlives `/quit`. A later TUI would reuse it, with the hooks still
+  # in the old launch's environment and its egress denied (its node ancestor
+  # is gone), so the holder stops both before each launch and after the exit.
+  daemons: ["codex app-server"]
+
+# Subscription / OAuth login is written in-box; import/status are account-scoped.
+# The auth.json login lives in the account's state dir
+# (<account-state>/auth.json), which is bind-mounted into the box — so the
+# agent reads it with no create-time bridge. Interactive first-run login
+# happens INSIDE the box: run codex and follow its own `codex login
+# --device-auth` device-code flow (a URL + one-time code, no localhost
+# callback), which works through the box's normal egress. `account auth import`
+# copies an existing host auth.json in instead.
+#
+# API-key login is also Codex-owned native state. Use Codex's documented
+# one-time flow inside the box:
+#
+#   <read the key securely> | codex login --with-api-key
+#
+# or import an existing auth.json. yoloctl deliberately does not render or
+# synchronize auth.json from account secrets; after login/import, Codex owns
+# the file and may replace it.
+auth:
+  credential_file: auth.json

@@ -1,0 +1,49 @@
+version: 1
+filesystem_policy:
+    include_workdir: true
+    read_only:
+        - /usr
+        - /lib
+        - /lib64
+        - /bin
+        - /sbin
+        - /proc
+        - /dev/urandom
+        - /dev/random
+        - /etc
+        - /app
+        - /var/log
+    read_write:
+        - /tmp
+        - /home/sandbox
+        - /run
+        - /dev/null
+        - /dev/zero
+        - /workdir
+landlock:
+    compatibility: best_effort
+process:
+    run_as_user: sandbox
+    run_as_group: sandbox
+network_policies:
+    openai:
+        name: openai
+        endpoints:
+            - host: api.openai.com
+              ports:
+                - 443
+            - host: '*.openai.com'
+              ports:
+                - 443
+            - host: chatgpt.com
+              ports:
+                - 443
+            - host: '*.chatgpt.com'
+              ports:
+                - 443
+        binaries:
+            - path: /usr/bin/node
+            - path: /home/sandbox/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
+            - path: /home/sandbox/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex
+            - path: /home/sandbox/.codex/packages/app-server-daemon/releases/*-x86_64-unknown-linux-musl/bin/codex
+            - path: /home/sandbox/.codex/packages/app-server-daemon/releases/*-aarch64-unknown-linux-musl/bin/codex

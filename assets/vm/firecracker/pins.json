@@ -1,0 +1,38 @@
+{
+  "firecracker.tgz": {
+    "url": "https://github.com/firecracker-microvm/firecracker/releases/download/v1.17.0/firecracker-v1.17.0-x86_64.tgz",
+    "sha256": "06094a1108ae9e82aa4c23a775aa92758f53f1175d422270d9d6162cb9ade558"
+  },
+  "ubuntu.squashfs": {
+    "url": "https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v1.15/x86_64/ubuntu-24.04.squashfs",
+    "sha256": "68321e0482baeb3844dafe8a6b08a6902401a7afc41fbfd8c3d9ea08aadd244f"
+  },
+  "nerdctl.tgz": {
+    "url": "https://github.com/containerd/nerdctl/releases/download/v2.3.5/nerdctl-full-2.3.5-linux-amd64.tar.gz",
+    "sha256": "b697295c623639734aaab737523c808fd3cc8d3046039fd94fff1744e4c317aa"
+  },
+  "kernel-6.18.config": {
+    "url": "https://raw.githubusercontent.com/firecracker-microvm/firecracker/v1.17.0/resources/guest_configs/microvm-kernel-ci-x86_64-6.18.config",
+    "sha256": "ba22401a0c7292a4c024ebcd10a562d4a1f1bfd2faed671406d3b159c0cf5215"
+  },
+  "nftables.deb": {
+    "url": "https://archive.ubuntu.com/ubuntu/pool/main/n/nftables/nftables_1.0.9-1build1_amd64.deb",
+    "sha256": "539a2dec3d0178fdb401f7fc351c57b1bddb08024ede5555e33c49d944fa04eb"
+  },
+  "libnftables1.deb": {
+    "url": "https://archive.ubuntu.com/ubuntu/pool/main/n/nftables/libnftables1_1.0.9-1build1_amd64.deb",
+    "sha256": "f74276e2b0a6ab97ac1187d38f5b22a5e742e9d17bf67c1d66dacc4ede6ff923"
+  },
+  "libnftnl11.deb": {
+    "url": "https://archive.ubuntu.com/ubuntu/pool/main/libn/libnftnl/libnftnl11_1.2.6-2build1_amd64.deb",
+    "sha256": "e5bde5c9cbb95082700011f0b7ef2c0a41900b0a9fd7434f6e90448e2a7b4e50"
+  },
+  "libjansson4.deb": {
+    "url": "https://archive.ubuntu.com/ubuntu/pool/main/j/jansson/libjansson4_2.14-2build2_amd64.deb",
+    "sha256": "0cf79113f5d193ce9af2be2ff4b2c3b30dd4e55a0b6c47f7d28f6c849ff3aa60"
+  },
+  "linux-7.2.11.tar.xz": {
+    "url": "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.11.tar.xz",
+    "sha256": "fd0fc479f983a8c05313f13e9c36330fe6651cf725396748c40d5cd93fa1e6a4"
+  }
+}

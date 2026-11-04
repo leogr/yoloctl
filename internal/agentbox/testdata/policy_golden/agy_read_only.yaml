@@ -1,0 +1,51 @@
+version: 1
+filesystem_policy:
+    include_workdir: false
+    read_only:
+        - /usr
+        - /lib
+        - /lib64
+        - /bin
+        - /sbin
+        - /proc
+        - /dev/urandom
+        - /dev/random
+        - /etc
+        - /app
+        - /var/log
+        - /workdir
+    read_write:
+        - /tmp
+        - /home/sandbox
+        - /run
+        - /dev/null
+        - /dev/zero
+landlock:
+    compatibility: best_effort
+process:
+    run_as_user: sandbox
+    run_as_group: sandbox
+network_policies:
+    agy:
+        name: agy
+        endpoints:
+            - host: antigravity-unleash.goog
+              ports:
+                - 443
+            - host: daily-cloudcode-pa.googleapis.com
+              ports:
+                - 443
+            - host: cloudcode-pa.googleapis.com
+              ports:
+                - 443
+            - host: generativelanguage.googleapis.com
+              ports:
+                - 443
+            - host: oauth2.googleapis.com
+              ports:
+                - 443
+            - host: www.googleapis.com
+              ports:
+                - 443
+        binaries:
+            - path: /home/sandbox/.local/share/yoloctl/agy/agy

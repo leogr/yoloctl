@@ -1,0 +1,26 @@
+# Pi's tools run inside OpenShell; Pi has no per-tool approval mode to disable.
+name: pi
+image: yoloctl/agentbox:ubuntu-24.04
+command: pi
+npm_package: "@earendil-works/pi-coding-agent"
+# Persist the whole .pi tree. Keeping this root also makes native import find
+# the conventional host path ~/.pi/agent/auth.json without special-case code.
+state_container_path: /home/sandbox/.pi
+requires_features:
+  - pi
+  - github
+launch_env:
+  PI_CODING_AGENT_DIR: "{{state_dir}}/agent"
+  # Offline means no automatic catalog/package/tool downloads or version checks;
+  # explicit provider requests and login still work. yoloctl owns CLI updates.
+  PI_OFFLINE: "1"
+  PI_TELEMETRY: "0"
+auth:
+  credential_file: agent/auth.json
+# The initial built-in policy supports these providers. Other providers need
+# explicit custom capabilities and native auth or a copied profile's injection.
+secret_injection:
+  - secret: ANTHROPIC_API_KEY
+  - secret: OPENAI_API_KEY
+  - secret: GEMINI_API_KEY
+  - secret: OPENROUTER_API_KEY

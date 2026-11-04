@@ -1,0 +1,37 @@
+# Antigravity CLI's native executable is agy. OpenShell supplies confinement.
+name: agy
+image: yoloctl/agentbox:ubuntu-24.04
+command: agy
+default_args:
+  - --dangerously-skip-permissions
+  - --sandbox=false
+native_release: antigravity
+# Both antigravity-cli/ and config/ are agent-owned persistent state. This
+# binds the account's agy leaf, never its Gemini leaf despite the shared path.
+state_container_path: /home/sandbox/.gemini
+requires_features:
+  - agy
+  - github
+  - yolo.agent.observe-agy
+launch_env:
+  # This must be "true", not "1" (verified with release 1.2.17).
+  AGY_CLI_DISABLE_AUTO_UPDATE: "true"
+auth:
+  credential_file: antigravity-cli/antigravity-oauth-token
+# OAuth is the default. API-key users must also set modelProvider: "gemini"
+# in ~/.gemini/antigravity-cli/settings.json; an injected key alone is ignored.
+secret_injection:
+  - secret: GEMINI_API_KEY
+# Observe-only: agy reports through the status line in the account's own
+# settings (seeded for a new account; `yoloctl account observe` for an
+# existing one). yoloctl does not resume agy conversations, so every start is
+# a new one, tracked only to read the launch's reports.
+session:
+  id_format: uuid
+  observe:
+    push: yolo.agent.observe-agy
+    selection: unknown
+    # Relative to state_container_path: the account's own agy settings.
+    account_status_line:
+      settings: antigravity-cli/settings.json
+      command: /usr/local/libexec/yoloctl/agent-statusline-agy

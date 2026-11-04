@@ -1,0 +1,33 @@
+# Built-in agent profile: Gemini CLI (Google).
+# OpenShell supplies confinement; Gemini's own approval prompts and nested
+# container sandbox are disabled for managed launches.
+name: gemini
+image: yoloctl/agentbox:ubuntu-24.04
+command: gemini
+default_args:
+  - --approval-mode
+  - yolo
+npm_package: "@google/gemini-cli"
+state_container_path: /home/sandbox/.gemini
+requires_features:
+  - gemini
+  - github
+
+# Nonsecret configuration only: launch_env is visible in process argv.
+# The URL/code login works from a remote terminal without a localhost callback.
+# GEMINI_CLI_HOME is intentionally unset: Gemini appends .gemini to HOME.
+launch_env:
+  GEMINI_SANDBOX: "false"
+  NO_BROWSER: "true"
+
+# Google OAuth login, settings and history live in the native account leaf.
+# Import copies the default file once; it does not import host keychain state
+# or settings. Select Google login once in Gemini after importing. A fresh
+# headless OAuth invocation needs GOOGLE_GENAI_USE_GCA=true if no auth method
+# is saved. Do not force that selection here: it would override API-key auth.
+# Verified against upstream v0.62.0 packages/core/src/code_assist/oauth2.ts
+# and packages/cli/src/validateNonInterActiveAuth.ts.
+auth:
+  credential_file: oauth_creds.json
+secret_injection:
+  - secret: GEMINI_API_KEY
