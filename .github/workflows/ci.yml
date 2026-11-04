@@ -37,6 +37,17 @@ jobs:
       - name: Prepare OpenShell build toolchain
         id: native-toolchain
         run: bash scripts/ci-openshell-toolchain.sh
+      - name: OpenShell cache key
+        id: openshell-key
+        run: echo "key=$(python3 scripts/openshell-build.py key)" >> "$GITHUB_OUTPUT"
+      # QA-only cache of the OpenShell build entry (bin/openshell/<key>). A hit is still checked
+      # against its receipt, and make build/dist still runs the full native qualify on every
+      # runner. The toolchain script pins zig and cargo-zigbuild, so it is part of the key.
+      - name: Restore or save the OpenShell build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: bin/openshell/${{ steps.openshell-key.outputs.key }}
+          key: openshell-${{ runner.os }}-${{ runner.arch }}-${{ steps.openshell-key.outputs.key }}-${{ hashFiles('scripts/ci-openshell-toolchain.sh') }}
       - run: make build
       - run: go vet ./...
       - run: go test ./...
