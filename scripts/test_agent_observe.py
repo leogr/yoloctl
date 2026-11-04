@@ -34,6 +34,16 @@ spec.loader.exec_module(agent_observe)
 SID = '0f8fad5b-d9cb-469f-a165-70867728950e'
 
 
+
+# agent-observe.py runs only inside the Linux box. These tests exercise its
+# Linux-only paths, so they run on Linux and are skipped elsewhere (the macOS
+# host CI); every other test runs on all hosts.
+IN_BOX_DAEMON_READ = unittest.skipUnless(
+    sys.platform.startswith('linux'),
+    'reads the Codex daemon peer with SO_PEERCRED and /proc, in-box Linux only')
+IN_BOX_TMPFILE = unittest.skipUnless(
+    sys.platform.startswith('linux'), 'stages through an unnamed O_TMPFILE, in-box Linux only')
+
 class WriterBase(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -277,6 +287,7 @@ class WriterTests(WriterBase):
         self.assertEqual(set(self.lines()[-1]) & {'model', 'effort', 'version'}, {'model', 'effort'},
                          'a control character drops the version')
 
+    @IN_BOX_TMPFILE
     def test_stage_prefers_an_unnamed_tmp_file_then_a_pipe(self):
         # The real /tmp: memfd_create and /dev/shm are refused in the box.
         raw = b'{"model":{"id":"x"}}'
@@ -678,6 +689,7 @@ class CodexWriterTests(WriterBase):
         self.assertNotIn('session_id', odd)
         self.assertNotIn('source', odd)
 
+    @IN_BOX_DAEMON_READ
     def test_a_stale_socket_of_a_stopped_daemon_is_skipped(self):
         # A daemon the holder killed can leave its socket file behind; it
         # sorts first here and refuses connections.
@@ -691,6 +703,7 @@ class CodexWriterTests(WriterBase):
         self.assertEqual((query['event'], query['model']), ('query', 'gpt-5.6-luna'))
         self.assertEqual(len(d.reads), 1)
 
+    @IN_BOX_DAEMON_READ
     def test_main_start_and_stop_add_the_daemons_current_values(self):
         d = self.daemon()
         self.start()
@@ -702,6 +715,7 @@ class CodexWriterTests(WriterBase):
         self.assertEqual(d.reads, [{'threadId': SID, 'includeTurns': False}])
         self.assertLess(query['dur_ms'], 1000)
 
+    @IN_BOX_DAEMON_READ
     def test_the_daemon_status_gives_the_state(self):
         for status, want in (({'type': 'idle'}, 'idle'),
                              ({'type': 'active', 'activeFlags': []}, 'working'),
@@ -714,6 +728,7 @@ class CodexWriterTests(WriterBase):
                 self.start()
                 self.assertEqual(self.lines()[-1]['state'], want)
 
+    @IN_BOX_DAEMON_READ
     def test_a_stop_query_leaves_the_state_to_the_stop_hook(self):
         # The daemon may still call a finishing turn active.
         self.daemon(thread={'id': SID, 'model': 'gpt-5.6-luna', 'reasoningEffort': 'high',
@@ -765,6 +780,7 @@ class CodexWriterTests(WriterBase):
         self.run_hook({**request, 'agent_id': 'a1', 'status': 'completed', 'token_usage': {'total_tokens': 5}}, ['codex'])
         self.assertEqual(len(self.lines()), len(cases), "a child's completed request writes nothing")
 
+    @IN_BOX_DAEMON_READ
     def test_the_controller_refresh_read(self):
         # `codex-query GEN THREAD` takes both from validated argv: the confined
         # exec carries no environment.
@@ -789,6 +805,7 @@ class CodexWriterTests(WriterBase):
                 self.assertEqual(agent_observe.main(args), 2)
         self.assertEqual(self.lines(), [])
 
+    @IN_BOX_DAEMON_READ
     def test_the_refresh_read_writes_only_an_existing_generation(self):
         self.daemon()
         self.assertEqual(agent_observe.main(['codex-query', '4', SID]), 0)
@@ -811,6 +828,7 @@ class CodexWriterTests(WriterBase):
         self.assertEqual([line['event'] for line in self.lines()], ['SessionEnd', 'SubagentStart'])
         self.assertEqual(d.reads, [])
 
+    @IN_BOX_DAEMON_READ
     def test_nothing_is_queried_without_a_trustworthy_daemon(self):
         cases = {
             'no daemon (a -c launch)': lambda: None,
@@ -832,6 +850,7 @@ class CodexWriterTests(WriterBase):
                 self.start()
                 self.assertEqual([line['event'] for line in self.lines()], ['SessionStart'])
 
+    @IN_BOX_DAEMON_READ
     def test_the_peer_must_be_this_users_codex_app_server(self):
         d = self.daemon()
         self.peer = (b'/usr/bin/python3', b'-m', b'fake')
@@ -850,12 +869,14 @@ class CodexWriterTests(WriterBase):
         self.start()
         self.assertEqual([line['event'] for line in self.lines()], ['SessionStart', 'SessionStart'])
 
+    @IN_BOX_DAEMON_READ
     def test_a_resetting_socket_is_skipped_within_the_bound(self):
         self.daemon('0-reset', reset=True)
         self.daemon('5-control')
         self.start()
         self.assertEqual([line['event'] for line in self.lines()], ['SessionStart', 'query'])
 
+    @IN_BOX_DAEMON_READ
     def test_a_slow_daemon_is_abandoned_at_the_bound(self):
         self.daemon(delay=2)
         started = time.monotonic()
