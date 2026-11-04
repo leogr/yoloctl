@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "scope": "Source-input license/NOTICE inventory; not a target-specific binary or VM SBOM or distribution-compliance certification.",
-  "yoloctl_base_revision": "971ca842e4935270d42f295b5717890fc0756211",
+  "yoloctl_base_revision": "1d265df3cfae49026ec4202fe88e9cce83ad1ca9",
   "source_sets": {
     "go": {
       "manifest": "go.mod",
