@@ -369,7 +369,7 @@ func Publish(ctx context.Context, o Options) (result Result, err error) {
 		}
 		phase = "publish directory"
 		if err := publishDirectory(bundles.fd, stageName, m.Key()); err != nil {
-			return result, fmt.Errorf("publish bundle directory: %w", err)
+			return result, fmt.Errorf("publish bundle directory in %s: %w", bundles.path, err)
 		}
 		if err := bundles.sync(); err != nil {
 			return result, &atomicfile.CommitError{Err: err}
@@ -440,4 +440,33 @@ func FileSHA(path string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%x", sha256.Sum256(data)), nil
+}
+
+// Test hooks for the two publication renames.
+var (
+	noReplaceRename = renameNoReplace
+	plainRename     = func(parent int, source, target string) error { return unix.Renameat(parent, source, parent, target) }
+)
+
+// publishDirectory publishes the complete stage under target without
+// replacing what is there. The no-replace rename is always tried first, once.
+// Only when the filesystem lacks that flag (many FUSE mounts: EINVAL) does it
+// fall back, still under install.lock: anything at target (lookup without
+// following links) is EEXIST, only ENOENT permits a plain same-directory
+// rename, and any other lookup error is returned. Cooperating installers hold
+// the lock, and rename(2) cannot replace a non-empty directory or a
+// non-directory; unlike the flag, it would replace an empty directory that a
+// foreign process creates between the lookup and the rename.
+func publishDirectory(parent int, source, target string) error {
+	err := noReplaceRename(parent, source, target)
+	if err == nil || !noReplaceUnsupported(err) {
+		return err
+	}
+	var st unix.Stat_t
+	if lookup := unix.Fstatat(parent, target, &st, unix.AT_SYMLINK_NOFOLLOW); lookup == nil {
+		return unix.EEXIST
+	} else if !errors.Is(lookup, unix.ENOENT) {
+		return lookup
+	}
+	return plainRename(parent, source, target)
 }

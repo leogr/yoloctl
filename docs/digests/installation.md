@@ -68,7 +68,11 @@ aliases and missing descendants, before mutation. A symlinked prefix (a home or
 bin directory that is itself a symlink is still refused, never written through. It locks
 `~/.local/share/yoloctl/install.lock`, stages a complete
 bundle through no-follow descriptor writes/fsync, publishes its immutable
-`bundles/<version>-<os>-<arch>-<bundle>` key without replacement, then atomically
+`bundles/<version>-<os>-<arch>-<bundle>` key without replacement (a filesystem
+without the no-replace rename flag, e.g. a FUSE mount replying EINVAL, gets an
+absence check plus a plain rename under the lock; unlike the flag, that would
+replace an empty directory a foreign process creates in between;
+`publishDirectory`), then atomically
 swaps `<bin-dir>/yoloctl` (default `~/.local/bin`). Corrupt/different existing keys
 fail; identical bytes are a no-op. Old bundles, failed stages and explicitly
 replaced unknown regular executables are retained. Nothing is pruned or called
@@ -118,7 +122,9 @@ prompting stops. Skips continue; failures stop without replay. [10](#source-10)
    [publication](../../scripts/publish-release.py#L1-L199), `identity`, `verify_artifact`, `main`;
    [archive checks](../../scripts/check-dist.go#L1-L172), `run`, `extract`.
 7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L256), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go.
-8. <a id="source-8"></a> [Publication engine](../../internal/installer/engine.go#L1-L431), `Inspect`, `Publish`;
+8. <a id="source-8"></a> [Publication engine](../../internal/installer/engine.go#L1-L472), `Inspect`, `Publish`, `publishDirectory`
+   (platform `renameNoReplace`/`noReplaceUnsupported` in rename_linux.go and rename_darwin.go);
+   [no-replace fallback regressions](../../internal/installer/publish_fallback_test.go#L1);
    [destination boundary](../../internal/installer/paths.go#L1-L87), `ValidatePaths`;
    [fault/concurrency regressions](../../internal/installer/engine_test.go#L1-L278);
    [overlap regressions](../../internal/installer/paths_test.go#L1-L193).
