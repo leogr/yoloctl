@@ -193,3 +193,29 @@ func TestPublishInstallsWhenNoReplaceIsUnsupported(t *testing.T) {
 		t.Fatal("collision replaced the existing directory", err)
 	}
 }
+
+// A bin directory whose filesystem refuses symbolic links (the yolo-dev
+// fuseblk share replies EPERM) gets an error naming that folder and the
+// remedy; the published bundle stays in the store.
+func TestPublishNamesABinDirectoryWithoutSymbolicLinks(t *testing.T) {
+	source := fixtureBundle(t, "v1.0.0", strings.Repeat("c", 32))
+	root := physicalTemp(t)
+	o := Options{Source: source, Store: filepath.Join(root, "store"), BinDir: filepath.Join(root, "bin")}
+	old := makeSymlink
+	t.Cleanup(func() { makeSymlink = old })
+	makeSymlink = func(string, int, string) error { return unix.EPERM }
+	result, err := Publish(t.Context(), o)
+	if !errors.Is(err, unix.EPERM) || !strings.Contains(err.Error(), o.BinDir+" does not allow symbolic links") || !strings.Contains(err.Error(), "--bin-dir") {
+		t.Fatal("missing folder-naming error for a bin directory without symbolic links", err)
+	}
+	if _, verr := releasebundle.Verify(filepath.Dir(result.Executable)); verr != nil {
+		t.Fatal("published bundle lost", verr)
+	}
+	if _, lerr := os.Lstat(filepath.Join(o.BinDir, "yoloctl")); !errors.Is(lerr, os.ErrNotExist) {
+		t.Fatal("a selection link appeared", lerr)
+	}
+	makeSymlink = func(string, int, string) error { return unix.EACCES }
+	if _, err := Publish(t.Context(), o); !errors.Is(err, unix.EACCES) || strings.Contains(err.Error(), "symbolic links") {
+		t.Fatal("other link errors must stay unchanged", err)
+	}
+}

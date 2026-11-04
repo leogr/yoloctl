@@ -397,7 +397,10 @@ func Publish(ctx context.Context, o Options) (result Result, err error) {
 		}
 		phase = "stage link"
 		temp := ".yoloctl-link-" + rand.Text()
-		if err := unix.Symlinkat(result.Executable, bins.fd, temp); err != nil {
+		if err := makeSymlink(result.Executable, bins.fd, temp); err != nil {
+			if errors.Is(err, unix.EPERM) || errors.Is(err, unix.ENOTSUP) || errors.Is(err, unix.EOPNOTSUPP) {
+				return result, fmt.Errorf("%s does not allow symbolic links (%w); the installed build is %s: choose a bin directory on a local disk with --bin-dir", bins.path, err, result.Executable)
+			}
 			return result, err
 		}
 		if err := fail("link"); err != nil {
@@ -442,8 +445,9 @@ func FileSHA(path string) (string, error) {
 	return fmt.Sprintf("%x", sha256.Sum256(data)), nil
 }
 
-// Test hooks for the two publication renames.
+// Test hooks for the two publication renames and the selection link.
 var (
+	makeSymlink     = unix.Symlinkat
 	noReplaceRename = renameNoReplace
 	plainRename     = func(parent int, source, target string) error { return unix.Renameat(parent, source, parent, target) }
 )
