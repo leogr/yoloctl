@@ -20,11 +20,13 @@ ENV PYTHON_VERSION=3.13
 # - build-essential: native module compilation (npm, pip)
 # - git, curl: dev tooling
 # - procps, dnsutils, netcat-openbsd: diagnostics
-# - gnupg: NodeSource setup script
+# - gnupg: NodeSource signing key
 # Keep downloaded debs across failed builds, outside image layers. The custom
 # archive path also avoids Ubuntu's docker-clean hook deleting the cache.
-# Refresh indexes normally; only package archives are shared, under a lock.
+# Revalidate signed indexes on every install while retaining both caches.
+# Cache mounts stay outside the committed image layers.
 RUN --mount=type=cache,id=yoloctl-apt-archives-v1,target=/var/cache/yoloctl/apt,sharing=locked \
+    --mount=type=cache,id=yoloctl-apt-lists-v1,target=/var/lib/apt/lists,sharing=locked \
     apt-get -o Acquire::Retries=3 update --error-on=any \
     && apt-get -o Acquire::Retries=3 -o Dir::Cache::Archives=/var/cache/yoloctl/apt \
         -o APT::Keep-Downloaded-Packages=true install -y --no-install-recommends \
@@ -38,29 +40,28 @@ RUN --mount=type=cache,id=yoloctl-apt-archives-v1,target=/var/cache/yoloctl/apt,
         netcat-openbsd \
         curl \
         git \
-        gnupg \
-    && rm -rf /var/lib/apt/lists/*
+        gnupg
 
-# Node.js 22 from NodeSource.
+# Register NodeSource and deadsnakes together, then refresh/install once.
+# Avoid the mutable NodeSource setup script's prerequisite and repository
+# updates: curl, GnuPG and CA certificates are already present above.
+# Python 3.13 lives alongside Ubuntu's system 3.12; keep the existing aliases.
 RUN --mount=type=cache,id=yoloctl-apt-archives-v1,target=/var/cache/yoloctl/apt,sharing=locked \
-    curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
-    && apt-get -o Acquire::Retries=3 -o Dir::Cache::Archives=/var/cache/yoloctl/apt \
-        -o APT::Keep-Downloaded-Packages=true install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
-
-# Python 3.13 from deadsnakes. 3.13 lives alongside Ubuntu's system 3.12;
-# /usr/local/bin symlinks make `python`/`python3` resolve to 3.13 first.
-# ensurepip bootstraps pip into the new interpreter.
-# Register without the implicit best-effort update: retry transient index
-# failures, then fail here instead of reporting misleading missing packages.
-RUN --mount=type=cache,id=yoloctl-apt-archives-v1,target=/var/cache/yoloctl/apt,sharing=locked \
-    add-apt-repository -y --no-update ppa:deadsnakes/ppa \
+    --mount=type=cache,id=yoloctl-apt-lists-v1,target=/var/lib/apt/lists,sharing=locked \
+    install -d -m 0755 /usr/share/keyrings \
+    && curl -fsSL --proto '=https' --tlsv1.2 https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key -o /tmp/yoloctl-nodesource.asc \
+    && gpg --batch --yes --dearmor -o /usr/share/keyrings/nodesource.gpg /tmp/yoloctl-nodesource.asc \
+    && chmod 0644 /usr/share/keyrings/nodesource.gpg \
+    && rm /tmp/yoloctl-nodesource.asc \
+    && printf 'Types: deb\nURIs: https://deb.nodesource.com/node_%s.x\nSuites: nodistro\nComponents: main\nArchitectures: %s\nSigned-By: /usr/share/keyrings/nodesource.gpg\n' "$NODE_MAJOR" "$(dpkg --print-architecture)" > /etc/apt/sources.list.d/nodesource.sources \
+    && printf 'Package: nodejs\nPin: origin deb.nodesource.com\nPin-Priority: 600\n' > /etc/apt/preferences.d/nodejs \
+    && add-apt-repository -y --no-update ppa:deadsnakes/ppa \
     && apt-get -o Acquire::Retries=3 update --error-on=any \
     && apt-get -o Acquire::Retries=3 -o Dir::Cache::Archives=/var/cache/yoloctl/apt \
         -o APT::Keep-Downloaded-Packages=true install -y --no-install-recommends \
+        nodejs \
         "python${PYTHON_VERSION}" \
         "python${PYTHON_VERSION}-venv" \
-    && rm -rf /var/lib/apt/lists/* \
     && "python${PYTHON_VERSION}" -m ensurepip --upgrade \
     && ln -sf "/usr/bin/python${PYTHON_VERSION}" /usr/local/bin/python \
     && ln -sf "/usr/bin/python${PYTHON_VERSION}" /usr/local/bin/python3

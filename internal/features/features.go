@@ -219,11 +219,8 @@ RUN install -d -o sandbox -g sandbox /home/sandbox/.agents /home/sandbox/.agents
 		Name:        "python-3.12",
 		Description: "Ubuntu Python + pip via apt (3.12 on Ubuntu 24.04); leaves the base's default Python unchanged; pair with `pypi` for egress",
 		Install: &Install{
-			Kind: InstallDockerfile,
-			Dockerfile: `RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 \
-        python3-pip \
-    && rm -rf /var/lib/apt/lists/*`,
+			Kind:       InstallDockerfile,
+			Dockerfile: aptInstallDockerfile("python3 python3-pip"),
 		},
 		// No capability by design — pair with `pypi` for egress.
 	},
@@ -231,11 +228,8 @@ RUN install -d -o sandbox -g sandbox /home/sandbox/.agents /home/sandbox/.agents
 		Name:        "cargo",
 		Description: "Rust toolchain (cargo + rustc) + crates.io egress, restricted to /usr/bin/cargo",
 		Install: &Install{
-			Kind: InstallDockerfile,
-			Dockerfile: `RUN apt-get update && apt-get install -y --no-install-recommends \
-        cargo \
-        rustc \
-    && rm -rf /var/lib/apt/lists/*`,
+			Kind:       InstallDockerfile,
+			Dockerfile: aptInstallDockerfile("cargo rustc"),
 		},
 		RequiresCapabilities: []string{"network.cargo"},
 	},

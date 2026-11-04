@@ -58,10 +58,16 @@ FROM $runtime_image
 ARG SMOKE_PHASE
 ARG SMOKE_TOKEN
 RUN --mount=type=cache,id=yoloctl-apt-archives-v1,target=/var/cache/yoloctl/apt,sharing=locked \
-    test -n "\$(find /var/cache/yoloctl/apt -maxdepth 1 -name 'python3.13_*.deb' -print -quit)" \
+    --mount=type=cache,id=yoloctl-apt-lists-v1,target=/var/lib/apt/lists,sharing=locked \
+    test -n "\$(find /var/lib/apt/lists -maxdepth 1 -name '*InRelease' -print -quit)" \
+    && test -n "\$(find /var/cache/yoloctl/apt -maxdepth 1 -name 'python3.13_*.deb' -print -quit)" \
     && if [ "\$SMOKE_PHASE" = before ]; then printf '%s' "\$SMOKE_TOKEN" > /var/cache/yoloctl/apt/smoke-retained; \
        else test "\$(cat /var/cache/yoloctl/apt/smoke-retained)" = "\$SMOKE_TOKEN" && rm /var/cache/yoloctl/apt/smoke-retained; fi
 RUN if [ -d /var/cache/yoloctl/apt ]; then test -z "\$(find /var/cache/yoloctl/apt -type f -print -quit)"; fi
+RUN --mount=type=cache,id=yoloctl-apt-lists-v1,target=/var/lib/apt/lists,sharing=locked \
+    if [ "\$SMOKE_PHASE" = before ]; then printf '%s' "\$SMOKE_TOKEN" > /var/lib/apt/lists/smoke-retained; \
+    else test "\$(cat /var/lib/apt/lists/smoke-retained)" = "\$SMOKE_TOKEN" && rm /var/lib/apt/lists/smoke-retained; fi
+RUN if [ -d /var/lib/apt/lists ]; then test -z "\$(find /var/lib/apt/lists -type f -print -quit)"; fi
 RUN --mount=type=cache,id=yoloctl-npm-v1,target=/var/cache/yoloctl/npm,sharing=locked,mode=0777 \
     test -d /var/cache/yoloctl/npm/0/_cacache \
     && if [ "\$SMOKE_PHASE" = before ]; then printf '%s' "\$SMOKE_TOKEN" > /var/cache/yoloctl/npm/smoke-retained; \

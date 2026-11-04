@@ -1,6 +1,6 @@
 # Policy boundaries and image composition
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; static composition coverage `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; static composition coverage `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Effective features combine box selections and agent requirements;
 effective capabilities combine box grants and feature requirements. Features
@@ -60,11 +60,14 @@ resets cache mounts under that flag. [6](#source-6) [7](#source-7) [32](#source-
 GC. `--prefer-online` revalidates metadata; agent features retain `latest`.
 [28](#source-28) [29](#source-29)
 
-[FACT] Explicit base apt installs use a locked archive cache outside image
-layers and Ubuntu's cleanup path. Indexes are refreshed normally; downloads
-allow three retries. Ubuntu/PPA updates use `--error-on=any`, and PPA registration
-skips its implicit update. Unavailable indexes stop installation.
-[30](#source-30) [31](#source-31)
+[FACT] Base and builtin apt installers retain both signed indexes and debs in
+locked BuildKit caches outside image layers. Each install still revalidates
+indexes with three retries and `--error-on=any`; unavailable indexes stop it.
+The base registers NodeSource directly with its signing key and deadsnakes
+without implicit updates, then installs Node/Python in one transaction. This
+leaves two base refreshes, avoids the NodeSource bootstrap script's extra
+updates, and keeps Node 22/Python 3.13. Raw custom/OCI feature order is unchanged.
+[30](#source-30) [31](#source-31) [41](#source-41) [42](#source-42)
 
 [FACT] Runtime updates target latest with explicit `/home/sandbox/.npm-global`
 and a separate maintenance cache. Failed version probes skip with notice;
@@ -73,7 +76,7 @@ package-maintenance exception, never an agent launch path.
 [2](#source-2) [8](#source-8) [17](#source-17)
 
 [FACT] Image/Pi/AIRC smokes bypass the entrypoint to check baked ownership.
-The image smoke asserts a small final ownership layer, apt/npm marker retention
+The image smoke asserts a small final ownership layer, apt-list/deb/npm marker retention
 across base refresh/composed rebuild but absence from image layers, and isolated maintenance
 despite a poisoned default npm cache. Numeric ownership handles duplicate GID 20.
 [16](#source-16) [27](#source-27)
@@ -163,3 +166,5 @@ hosts gain no grant. Existing ancestor matching remains unchanged. [37](#source-
 38. <a id="source-38"></a> [Codex egress regressions](../../internal/agentbox/codex_egress_test.go#L19) — `TestCodexEgressGlobScope` checks composed binary paths with OPA glob.match; skips without the optional OPA tool.
 39. <a id="source-39"></a> [Extra mount regressions](../../internal/agentbox/policy_golden_test.go#L376) — `TestPolicyGrantsDeclaredExtraMounts`; golden `extra_mounts`.
 40. <a id="source-40"></a> [Static composition regressions](../../internal/agentbox/compose_surface_test.go#L1) — `TestComposeExplicitNetworkCapabilitiesMatchGoldens`, `TestComposeUnconfinedNetworkKeepsFilesystemPolicy`, `TestComposeExtraReadOnlyMountDesiredPolicy`; `ComposePolicy` and `compilePolicy` in compose.go L40-L226.
+41. <a id="source-41"></a> [Apt installers](../../internal/features/apt.go#L3-L14) — shared locked metadata/archive mounts and strict refresh/install recipe; callers in codex.go, pi.go, opencode.go and features.go; conditional Python fallback in agent_observe.go.
+42. <a id="source-42"></a> [Apt regressions](../../internal/features/apt_test.go#L11-L69) — builtin cache coverage and unavailable-index failure before installation.

@@ -112,7 +112,7 @@ Claude run need the isolated live check. [12](#source-12) [13](#source-13) [14](
 5. <a id="source-5"></a> [Create and inspect](../../internal/agentbox/live.go#L125-L128) — `ObservationEnabled` classification; `Create` calls `addObservationRunOptions` after chat options; `ActualState.ObservationEnabled` in diff.go.
 6. <a id="source-6"></a> [Start and destroy](../../cmd/yoloctl/agentbox.go#L1947-L1951) — `startExistingAgentboxContainer` remounts; destroy calls `RemoveObservationRuntime` after the container's VM state.
 7. <a id="source-7"></a> [Generations](../../internal/agentsession/observe/generation.go#L1-L108) — `Prepare` (discardable evidence, proof-gated retry), `parseGenName`, `createGeneration`; `removeAt` in root.go.
-8. <a id="source-8"></a> [Feature](../../internal/features/agent_observe.go#L1-L174) — status line, async hooks, interpreter resolution, wrappers and drop-in.
+8. <a id="source-8"></a> [Feature](../../internal/features/agent_observe.go#L1-L173) — status line, async hooks, interpreter resolution, wrappers and drop-in.
 9. <a id="source-9"></a> [Writer](../../internal/features/agent-observe.py#L1-L829) — `record`, `statusline_record`, `codex_record`, `lock`, `append`, `write`, `main`.
 10. <a id="source-10"></a> [Catalog entry](../../internal/features/features.go#L88-L92) — `yolo.agent.observe`.
 11. <a id="source-11"></a> [Reader](../../internal/agentsession/observe/read.go#L1-L514) — `Health`, `Context`, `StatusLine`, `Query`, the states, `Cursor`, `Observation`, `Read`, `listEvents`, `wireEvent`, `parseLine`.
