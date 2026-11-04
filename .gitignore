@@ -1,0 +1,27 @@
+# Codex marker file
+.codex
+
+# Go build output
+/dist/
+/bin/
+/yoloctl
+/cmd/yoloctl/yoloctl
+
+# Claude Code local state + registered worktrees
+.claude/
+
+# Shared development coordination, worktrees and intermediate artifacts
+/.yolo-team/
+
+# Local research artifacts; not part of the maintained source tree
+/ycf-build-*/
+/ycf-trial-*/
+/ycf-followup-*/
+/ygi-*/
+/ykw-*/
+/yfc-*/
+/yoloctl-startup.*/
+/scripts/**/__pycache__/
+
+/assets/vm/firecracker/__pycache__/
+/internal/features/__pycache__/

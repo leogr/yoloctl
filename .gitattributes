@@ -1,0 +1,4 @@
+# Unified-diff context intentionally prefixes blank lines and tabs with a space.
+*.patch whitespace=-blank-at-eol,-space-before-tab
+# Preserve original third-party payload bytes and INVENTORY.json byte offsets.
+/LICENSES/THIRD_PARTY_LICENSES.txt binary
