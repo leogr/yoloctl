@@ -18,8 +18,8 @@ func TestRulesKeepPrivacyAndExplicitNoiseBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	allowed := map[string]bool{"proc.exepath": true, "container.id": true, "evt.res": true, "fd.name": true, "fs.path.name": true, "fs.path.source": true, "fs.path.target": true}
-	for _, key := range []string{"yoloctl.kind", "yoloctl.audit.schema", "yoloctl.agentbox", "yoloctl.space", "yoloctl.agent", "yoloctl.audit.account", "yoloctl.audit.runtime_mode", "yoloctl.audit.network_unconfined"} {
-		allowed["container.label["+key+"]"] = true
+	for _, key := range []string{"box", "space", "agent", "account", "runtime_mode", "network_unconfined", "metadata_available"} {
+		allowed["yolo."+key] = true
 	}
 	fields := regexp.MustCompile(`%([a-z][a-z0-9_.]*(?:\[[^]]+\])?)`)
 	rules, disabled := 0, 0
@@ -55,7 +55,7 @@ func TestRulesKeepPrivacyAndExplicitNoiseBoundaries(t *testing.T) {
 }
 
 func TestContainerPluginUsesNativeContainerdOnly(t *testing.T) {
-	raw, err := Configuration("/private/audit", "/private/tools")
+	raw, err := Configuration("/private/audit", "/private/tools", "/private/metadata.tsv")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestContainerPluginUsesNativeContainerdOnly(t *testing.T) {
 		Load    []string `json:"load_plugins"`
 		Plugins []struct {
 			Name, LibraryPath string
-			Init              map[string]any `json:"init_config"`
+			Init              json.RawMessage `json:"init_config"`
 		} `json:"plugins"`
 	}
 	// Decode exact JSON keys rather than relying on Go's underscore matching.
@@ -74,14 +74,14 @@ func TestContainerPluginUsesNativeContainerdOnly(t *testing.T) {
 	if err := json.Unmarshal(raw, &config); err != nil {
 		t.Fatal(err)
 	}
-	if len(config.Load) != 1 || config.Load[0] != "container" || len(config.Plugins) != 1 {
+	if len(config.Load) != 2 || config.Load[0] != "container" || config.Load[1] != "yolo" || len(config.Plugins) != 2 {
 		t.Fatal(string(raw))
 	}
 	plugin := doc["plugins"].([]any)[0].(map[string]any)
 	if plugin["library_path"] != "/private/tools/plugins/libcontainer.so" {
 		t.Fatal(plugin)
 	}
-	engines := config.Plugins[0].Init["engines"].(map[string]any)
+	engines := plugin["init_config"].(map[string]any)["engines"].(map[string]any)
 	for name, engine := range engines {
 		item := engine.(map[string]any)
 		if item["enabled"] != (name == "containerd") {

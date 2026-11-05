@@ -227,7 +227,7 @@ func TestPinnedArchivesInstallVerifyAndRuleSyntax(t *testing.T) {
 				t.Fatal(err)
 			}
 			if arch == runtime.GOARCH && runtime.GOOS == "linux" {
-				config, err := Configuration(root, tools)
+				config, err := Configuration(root, tools, filepath.Join(root, "metadata.tsv"))
 				if err != nil {
 					t.Fatal(err)
 				}

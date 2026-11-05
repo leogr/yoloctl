@@ -118,3 +118,11 @@ v1-client and handle/cleanup/permission/fsync regressions in `internal/vmshare`
 lifecycle smoke. Upstream tests are not vendored. Remove patches only when a
 verified pinned upstream version covers their cases. See the
 [share contract](../docs/digests/vm-shares.md) for durability and filesystem limits.
+
+## Pinned audit extraction plugin
+
+The yoloctl-owned C++ plugin uses the pinned Falco C ABI and static C++ runtime
+notices in [audit-plugin](audit-plugin/README.md). Ordinary Go builds embed the
+qualified Linux artifacts; maintenance regenerates with Zig 0.15.2 and checks
+both targets twice. See the [metadata digest](../docs/digests/audit-metadata.md)
+for the snapshot and qualification limits.

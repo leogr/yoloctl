@@ -19,7 +19,7 @@
   desc: Workload access to VM runtime or admin sockets; result distinguishes success and refusal
   condition: >-
     evt.type = connect and yolo_workload and fd.name in (/run/containerd/containerd.sock, /run/buildkit/buildkitd.sock, /var/run/docker.sock, /run/docker.sock, /run/yoloctl/controller/admin.sock)
-  output: "Yolo runtime socket socket=%fd.name executable=%proc.exepath container=%container.id result=%evt.res kind=%container.label[yoloctl.kind] schema=%container.label[yoloctl.audit.schema] box=%container.label[yoloctl.agentbox] space=%container.label[yoloctl.space] agent=%container.label[yoloctl.agent] account=%container.label[yoloctl.audit.account] runtime=%container.label[yoloctl.audit.runtime_mode] network_unconfined=%container.label[yoloctl.audit.network_unconfined]"
+  output: "Yolo runtime socket socket=%fd.name executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available"
   priority: WARNING
   tags: [yoloctl]
 
@@ -27,7 +27,7 @@
   desc: Unexpected infrastructure write or namespace change; expected controller deployment/config writes are scoped by executable and host context
   condition: >-
     yolo_fs_mutation and (fs.path.name pmatch (yolo_infrastructure) or fs.path.source pmatch (yolo_infrastructure) or fs.path.target pmatch (yolo_infrastructure) or fs.path.name regex "^/mnt/lima-y[a-z2-7]{10}/(config|audit)(/|$)" or fs.path.source regex "^/mnt/lima-y[a-z2-7]{10}/(config|audit)(/|$)" or fs.path.target regex "^/mnt/lima-y[a-z2-7]{10}/(config|audit)(/|$)") and not (container.id = host and proc.exepath = /opt/yoloctl/bin/yoloctl)
-  output: "Yolo infrastructure change path=%fs.path.name source=%fs.path.source target=%fs.path.target executable=%proc.exepath container=%container.id result=%evt.res kind=%container.label[yoloctl.kind] schema=%container.label[yoloctl.audit.schema] box=%container.label[yoloctl.agentbox] space=%container.label[yoloctl.space] agent=%container.label[yoloctl.agent] account=%container.label[yoloctl.audit.account] runtime=%container.label[yoloctl.audit.runtime_mode] network_unconfined=%container.label[yoloctl.audit.network_unconfined]"
+  output: "Yolo infrastructure change path=%fs.path.name source=%fs.path.source target=%fs.path.target executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available"
   priority: WARNING
   tags: [yoloctl]
 
@@ -35,7 +35,7 @@
   desc: Workload BPF or module operations; root Falco setup is outside containers
   condition: >-
     evt.type in (bpf, init_module, finit_module, delete_module) and yolo_workload
-  output: "Yolo kernel instrumentation  executable=%proc.exepath container=%container.id result=%evt.res kind=%container.label[yoloctl.kind] schema=%container.label[yoloctl.audit.schema] box=%container.label[yoloctl.agentbox] space=%container.label[yoloctl.space] agent=%container.label[yoloctl.agent] account=%container.label[yoloctl.audit.account] runtime=%container.label[yoloctl.audit.runtime_mode] network_unconfined=%container.label[yoloctl.audit.network_unconfined]"
+  output: "Yolo kernel instrumentation  executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available"
   priority: WARNING
   tags: [yoloctl]
 
@@ -43,7 +43,7 @@
   desc: Workload namespace/mount operations outside the fixed OpenShell setup executables
   condition: >-
     evt.type in (mount, umount, umount2, setns, unshare, pivot_root) and yolo_workload and not yolo_openshell_setup
-  output: "Yolo namespace change  executable=%proc.exepath container=%container.id result=%evt.res kind=%container.label[yoloctl.kind] schema=%container.label[yoloctl.audit.schema] box=%container.label[yoloctl.agentbox] space=%container.label[yoloctl.space] agent=%container.label[yoloctl.agent] account=%container.label[yoloctl.audit.account] runtime=%container.label[yoloctl.audit.runtime_mode] network_unconfined=%container.label[yoloctl.audit.network_unconfined]"
+  output: "Yolo namespace change  executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available"
   priority: WARNING
   tags: [yoloctl]
 
@@ -51,7 +51,7 @@
   desc: Workload cross-process inspection outside known debugger executable paths; names are context rather than authenticity proof
   condition: >-
     evt.type in (ptrace, process_vm_readv, process_vm_writev) and yolo_workload and not (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and proc.exepath in (/usr/bin/gdb, /usr/bin/lldb, /usr/bin/strace, /usr/local/bin/dlv))
-  output: "Yolo process inspection  executable=%proc.exepath container=%container.id result=%evt.res kind=%container.label[yoloctl.kind] schema=%container.label[yoloctl.audit.schema] box=%container.label[yoloctl.agentbox] space=%container.label[yoloctl.space] agent=%container.label[yoloctl.agent] account=%container.label[yoloctl.audit.account] runtime=%container.label[yoloctl.audit.runtime_mode] network_unconfined=%container.label[yoloctl.audit.network_unconfined]"
+  output: "Yolo process inspection  executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available"
   priority: NOTICE
   tags: [yoloctl]
 
@@ -59,7 +59,7 @@
   desc: Selected sensitive file opens refused by the kernel; errno does not identify Landlock or seccomp
   condition: >-
     evt.type in (open, openat, openat2) and evt.res in (EACCES, EPERM) and fs.path.name in (/etc/shadow, /etc/gshadow, /proc/kcore, /proc/kallsyms, /dev/mem)
-  output: "Yolo protected file denial path=%fs.path.name executable=%proc.exepath container=%container.id result=%evt.res kind=%container.label[yoloctl.kind] schema=%container.label[yoloctl.audit.schema] box=%container.label[yoloctl.agentbox] space=%container.label[yoloctl.space] agent=%container.label[yoloctl.agent] account=%container.label[yoloctl.audit.account] runtime=%container.label[yoloctl.audit.runtime_mode] network_unconfined=%container.label[yoloctl.audit.network_unconfined]"
+  output: "Yolo protected file denial path=%fs.path.name executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available"
   priority: NOTICE
   tags: [yoloctl]
 
@@ -67,7 +67,7 @@
   desc: Noisy memfd or temporary-path execution detection; disabled until explicitly qualified for developer workloads
   condition: >-
     evt.type in (execve, execveat) and yolo_workload and (proc.is_exe_from_memfd = true or proc.exepath startswith /tmp/ or proc.exepath startswith /var/tmp/)
-  output: "Yolo anonymous executable  executable=%proc.exepath container=%container.id result=%evt.res kind=%container.label[yoloctl.kind] schema=%container.label[yoloctl.audit.schema] box=%container.label[yoloctl.agentbox] space=%container.label[yoloctl.space] agent=%container.label[yoloctl.agent] account=%container.label[yoloctl.audit.account] runtime=%container.label[yoloctl.audit.runtime_mode] network_unconfined=%container.label[yoloctl.audit.network_unconfined]"
+  output: "Yolo anonymous executable  executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available"
   priority: NOTICE
   tags: [yoloctl]
   enabled: false
@@ -76,7 +76,7 @@
   desc: Unexpected VM/container unit cron SSH-key or loader changes; host package maintenance is normal
   condition: >-
     yolo_fs_mutation and (fs.path.name pmatch (yolo_persistence) or fs.path.source pmatch (yolo_persistence) or fs.path.target pmatch (yolo_persistence) or fs.path.name glob "/home/*/.ssh/authorized_keys" or fs.path.target glob "/home/*/.ssh/authorized_keys") and not (container.id = host and proc.exepath in (/usr/bin/apt, /usr/bin/apt-get, /usr/bin/dpkg, /usr/bin/systemctl, /opt/yoloctl/bin/yoloctl))
-  output: "Yolo persistence change path=%fs.path.name source=%fs.path.source target=%fs.path.target executable=%proc.exepath container=%container.id result=%evt.res kind=%container.label[yoloctl.kind] schema=%container.label[yoloctl.audit.schema] box=%container.label[yoloctl.agentbox] space=%container.label[yoloctl.space] agent=%container.label[yoloctl.agent] account=%container.label[yoloctl.audit.account] runtime=%container.label[yoloctl.audit.runtime_mode] network_unconfined=%container.label[yoloctl.audit.network_unconfined]"
+  output: "Yolo persistence change path=%fs.path.name source=%fs.path.source target=%fs.path.target executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available"
   priority: WARNING
   tags: [yoloctl]
 
@@ -84,6 +84,6 @@
   desc: Controlled acceptance event; no ordinary shell/git/compiler rule
   condition: >-
     evt.type in (execve, execveat) and proc.name = yolo-audit-test
-  output: "Yolo audit test  executable=%proc.exepath container=%container.id result=%evt.res kind=%container.label[yoloctl.kind] schema=%container.label[yoloctl.audit.schema] box=%container.label[yoloctl.agentbox] space=%container.label[yoloctl.space] agent=%container.label[yoloctl.agent] account=%container.label[yoloctl.audit.account] runtime=%container.label[yoloctl.audit.runtime_mode] network_unconfined=%container.label[yoloctl.audit.network_unconfined]"
+  output: "Yolo audit test  executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available"
   priority: NOTICE
   tags: [yoloctl]

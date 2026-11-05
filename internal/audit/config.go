@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 
+	"github.com/leogr/yoloctl/internal/auditplugin"
 	"github.com/leogr/yoloctl/internal/vmwire"
 )
 
@@ -16,9 +17,9 @@ const ServiceName = vmwire.AuditUnitName
 //go:embed rules.yaml
 var Rules string
 
-func RulesDigest() string { return Digest([]byte(Rules)) }
+func RulesDigest() string { return Digest(append([]byte(Rules), auditplugin.Manifest()...)) }
 
-func Configuration(root, tools string) ([]byte, error) {
+func Configuration(root, tools, metadata string) ([]byte, error) {
 	return json.MarshalIndent(map[string]any{
 		"rules_files":          []string{filepath.Join(root, "rules.yaml")},
 		"engine":               map[string]any{"kind": "modern_ebpf"},
@@ -33,7 +34,7 @@ func Configuration(root, tools string) ([]byte, error) {
 		"http_output":    map[string]bool{"enabled": false},
 		"webserver":      map[string]bool{"enabled": false},
 		"log_stderr":     true, "log_syslog": false, "log_level": "warning",
-		"watch_config_files": false, "load_plugins": []string{"container"},
+		"watch_config_files": false, "load_plugins": []string{"container", "yolo"},
 		"plugins": []any{map[string]any{
 			"name": "container", "library_path": filepath.Join(tools, "plugins", "libcontainer.so"),
 			"init_config": map[string]any{
@@ -44,7 +45,7 @@ func Configuration(root, tools string) ([]byte, error) {
 					"lxc": map[string]any{"enabled": false}, "libvirt_lxc": map[string]any{"enabled": false}, "bpm": map[string]any{"enabled": false},
 				},
 			},
-		}},
+		}, map[string]any{"name": "yolo", "library_path": filepath.Join(tools, "plugins", "libyolo.so"), "init_config": metadata}},
 		"priority": "debug",
 		"metrics":  map[string]any{"enabled": true, "interval": "15s", "output_rule": true, "output_file": "", "rules_counters_enabled": false, "resource_utilization_enabled": false, "state_counters_enabled": false, "kernel_event_counters_enabled": true},
 	}, "", "  ")

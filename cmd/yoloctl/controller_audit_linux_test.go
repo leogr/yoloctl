@@ -194,7 +194,7 @@ func TestAuditQueryRejectsHostPaths(t *testing.T) {
 func TestAuditRetentionInactiveCollector(t *testing.T) {
 	scenario := os.Getenv("YOLOCTL_TEST_AUDIT_RETENTION")
 	if scenario == "" {
-		for _, scenario := range []string{"enabled-failed", "enabled-inactive", "disabled-failed", "active", "activating", "deactivating", "unknown", "observation-failed", "audit-held", "global-held", "lock-failed"} {
+		for _, scenario := range []string{"enabled-failed", "enabled-failed-observer", "enabled-inactive", "disabled-failed", "active", "activating", "deactivating", "unknown", "observation-failed", "audit-held", "global-held", "lock-failed"} {
 			t.Run(scenario, func(t *testing.T) {
 				cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestAuditRetentionInactiveCollector$")
 				cmd.Env = append(os.Environ(), "YOLOCTL_TEST_AUDIT_RETENTION="+scenario)
@@ -248,7 +248,7 @@ func TestAuditRetentionInactiveCollector(t *testing.T) {
 	held, observed, unlocked := false, false, false
 	sentinel := errors.New("unavailable")
 	auditAcquire = func(_ context.Context, space string, write bool) (func(), error) {
-		if space != c.Space || !write {
+		if space != c.Space || (!write && scenario != "enabled-failed-observer") {
 			t.Fatal("incorrect lock")
 		}
 		if scenario == "lock-failed" {
@@ -278,8 +278,17 @@ func TestAuditRetentionInactiveCollector(t *testing.T) {
 		return nil
 	}
 	auditServiceStop = func(context.Context, *container.Client, string) error { t.Fatal("pruning stopped service"); return nil }
-	err = pruneInactiveAudit(t.Context())
-	wantErr := scenario == "observation-failed" || scenario == "audit-held" || scenario == "global-held" || scenario == "lock-failed"
+	if scenario == "enabled-failed-observer" {
+		auditObserveLabels = func(context.Context, string) ([]container.AuditLabelObservation, error) { return nil, sentinel }
+		var checked bool
+		checked, err = maintainNativeAudit(t.Context(), true)
+		if !checked {
+			t.Fatal("metadata failure skipped expiry")
+		}
+	} else {
+		err = pruneInactiveAudit(t.Context())
+	}
+	wantErr := scenario == "enabled-failed-observer" || scenario == "observation-failed" || scenario == "audit-held" || scenario == "global-held" || scenario == "lock-failed"
 	if (err != nil) != wantErr {
 		t.Fatalf("error=%v want error=%t", err, wantErr)
 	}
@@ -293,7 +302,7 @@ func TestAuditRetentionInactiveCollector(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shouldPrune := scenario == "enabled-failed" || scenario == "enabled-inactive" || scenario == "disabled-failed"
+	shouldPrune := scenario == "enabled-failed-observer" || scenario == "enabled-failed" || scenario == "enabled-inactive" || scenario == "disabled-failed"
 	if shouldPrune {
 		if len(files) != 0 {
 			t.Fatalf("expired data remains: %v", files)

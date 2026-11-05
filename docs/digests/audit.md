@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `a180f6fe013336a6bf454c9e126008463a273ea7` and accompanying changes.
+Verification: `d4edfda0fc41e34e9c9333c059802a5cf4256b24` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
@@ -50,13 +50,13 @@ maintenance. These are detection heuristics, not executable authenticity proofs.
 with a two-second engine timeout; its pinned implementation enumerates namespaces,
 including native nerdctl's default namespace, without CRI. New containers carry
 schema-1 observation labels with explicit account/network/runtime defaults;
-legacy reconcile labels retain their omitted-default semantics. Enrichment
-requires complete supported labels; legacy/missing/invalid metadata stays
-unavailable and never discards the event. A present `yolo.metadata_available`
-field takes precedence, including false. Labels describe launch context rather
-than per-process confinement. Native identity, controlled hits and benign
-workloads require host qualification; syntax validation alone is not evidence.
-[12](#source-12) [13](#source-13) [15](#source-15) [17](#source-17)
+legacy reconcile labels retain their omitted-default semantics. The C++ plugin
+joins a bounded private controller snapshot to event container IDs and exports
+only selected `yolo.*` fields. Missing/stale/ambiguous metadata stays unavailable,
+never discards the event and never falls back after a false plugin availability
+field. Context is not per-process confinement proof. Native identity/hits/noise
+still need host qualification. [12](#source-12) [13](#source-13)
+[15](#source-15) [17](#source-17) [18](#source-18)
 
 [FACT] The collector accepts bounded JSON and persists only time, rule/severity,
 executable, container identity, supported box metadata and selected path/IP/result
@@ -98,3 +98,5 @@ Export also works with auditing disabled while the controller is running.
 15. <a id="source-15"></a> [Observation labels](../../internal/agentbox/labels.go#L1) — `EncodeLabels`, `DecodeLabels`; explicit audit defaults do not change drift fields.
 16. <a id="source-16"></a> [Pinned rules](../../internal/audit/rules.yaml#L1) — signal families, selected outputs and narrow actor exceptions.
 17. <a id="source-17"></a> [Container 0.7.6 implementation](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/go-worker/pkg/container/containerd.go) — `get`, `getFullContainersInfos`, namespace enumeration and bounded lookups.
+
+18. <a id="source-18"></a> [Metadata extraction](audit-metadata.md) — C ABI, generation/freshness/identity bounds, packaging and limits.

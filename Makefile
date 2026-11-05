@@ -139,6 +139,11 @@ test-terminal-fidelity:
 terminal-artifact-check:
 	python3 scripts/build-terminal.py --check
 
+# Maintenance only; ordinary Go checks verify the qualified plugin artifacts.
+.PHONY: audit-plugin-check
+audit-plugin-check:
+	python3 scripts/build-audit-plugin.py --check
+
 # Maintenance verification of the pinned Go renderer and its isolated patch.
 .PHONY: host-renderer-check
 host-renderer-check:

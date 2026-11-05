@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/falcosecurity/libs",
+  "revision": "0.26.1",
+  "api": "3.12.0",
+  "sha256": {
+    "plugin_api.h": "24d880e2fa65a664608888fdd8c6a72a3b42b8ead425141443ce96502b84ea8f",
+    "plugin_types.h": "940fbe9ac86bcfaffbe32ff50385dc485a8297bc3b7619b58d39b8f65a2202bc"
+  }
+}
