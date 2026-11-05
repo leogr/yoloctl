@@ -41,8 +41,15 @@ KERNEL_EXTRAS = ["NF_TABLES_INET", "NFT_REJECT", "NFT_REJECT_INET", "NFT_REJECT_
                  "NETFILTER_XT_MATCH_COMMENT", "NETFILTER_XT_MATCH_MARK", "NETFILTER_XT_MATCH_MULTIPORT",
                  "NETFILTER_XT_MATCH_STATISTIC", "NETFILTER_XT_MATCH_STATE", "NETFILTER_XT_MATCH_LIMIT",
                  "NETFILTER_XT_TARGET_MARK", "NETFILTER_XT_TARGET_TCPMSS"]
-KERNEL_EXTRAS = sorted(set(KERNEL_EXTRAS + REQUIRED))
-KERNEL_DISABLED = ["PSI_DEFAULT_DISABLED", "LOCALVERSION_AUTO"]
+KERNEL_EXTRAS = sorted(set(KERNEL_EXTRAS + REQUIRED + [
+ "BPF", "BPF_SYSCALL", "BPF_JIT", "BPF_EVENTS", "PERF_EVENTS",
+ "KPROBES", "KPROBE_EVENTS", "UPROBES", "UPROBE_EVENTS", "FTRACE",
+ "FTRACE_SYSCALLS", "TRACEPOINTS", "DEBUG_INFO_DWARF4", "DEBUG_INFO_BTF",
+]))
+KERNEL_DISABLED = ["PSI_DEFAULT_DISABLED", "LOCALVERSION_AUTO", "DEBUG_INFO_NONE"]
+# Linux 7's flags for pinned pahole 1.25, with serial encoding: its parallel
+# optimized-function deduplication changes type IDs between identical builds.
+KERNEL_PAHOLE_FLAGS = "--btf_gen_floats -j1 --skip_encoding_btf_inconsistent_proto --btf_gen_optimized --lang_exclude=rust"
 
 
 def digest(path):
@@ -128,7 +135,7 @@ def require_tools(names):
             raise RuntimeError(f"missing prerequisite: {name}")
 
 
-def publish_kernel(out, build):
+def publish_kernel(out, build, cc="gcc", cross=""):
     config = (build / ".config").read_text()
     validate_config(config)
     for option in KERNEL_EXTRAS:
@@ -137,13 +144,25 @@ def publish_kernel(out, build):
     for option in KERNEL_DISABLED:
         if f"# CONFIG_{option} is not set" not in config.splitlines():
             raise RuntimeError(f"unsupported optional kernel module enabled: {option}")
-    shutil.copyfile(build / "vmlinux", out / "kernel")
+    # BTF stays built into the loadable kernel; only standalone DWARF sections
+    # are removed after pahole encoded them, keeping the embedded ELF bounded.
+    run([cross + "objcopy", "--strip-debug", build / "vmlinux", out / "kernel"])
+    toolchain = {}
+    for name, binary in [("cc", cc), ("pahole", os.environ.get("PAHOLE", "pahole")),
+                         ("ld", cross + "ld"), ("objcopy", cross + "objcopy")]:
+        executable = Path(shutil.which(binary) or binary).resolve(strict=True)
+        version = run([binary, "--version"], capture_output=True, text=True).stdout.splitlines()[0]
+        toolchain[name] = {"version": version, "sha256": digest(executable)}
+    sections = run([cross + "readelf", "-S", out / "kernel"], capture_output=True, text=True).stdout
+    if ".BTF" not in sections or ".debug_info" in sections:
+        raise RuntimeError("bundled kernel must retain BTF and omit standalone DWARF")
     shutil.copyfile(build / ".config", out / "kernel.config")
     save_json(out / "kernel.json", {"schema": 1,
               "inputs": {name: PINS[name] for name in sorted(KERNEL_INPUTS)},
               "enabled": KERNEL_EXTRAS, "disabled": KERNEL_DISABLED, "kernel_sha256": digest(out / "kernel"),
               "config_sha256": digest(out / "kernel.config"),
-              "compiler": run(["gcc", "--version"], capture_output=True, text=True).stdout.splitlines()[0]})
+              "compiler": toolchain["cc"]["version"], "build_tools": toolchain,
+              "pahole_flags": KERNEL_PAHOLE_FLAGS})
 
 
 def validate_config(config):
@@ -161,8 +180,17 @@ def validate_config(config):
 
 
 def kernel(args):
-    require_platform()
-    require_tools(["gcc", "make", "tar", "xz", "flex", "bison", "m4", "bc"])
+    if platform.system() != "Linux" or os.geteuid() == 0:
+        raise RuntimeError("kernel compilation requires a normal Linux user; it needs no VM/KVM")
+    cross = getattr(args, "cross_compile", "")
+    if platform.machine() != "x86_64" and not cross:
+        raise RuntimeError("non-x86 hosts must explicitly select an x86_64 cross-compiler prefix")
+    cc = getattr(args, "cc", None) or (cross + "gcc" if cross else "gcc")
+    require_tools([cc, cross + "objcopy", cross + "readelf", "make", "tar", "xz", "flex", "bison", "m4", "bc", "pahole"])
+    if run([cc, "-dumpfullversion"], capture_output=True, text=True).stdout.strip() != "13.3.0":
+        raise RuntimeError("kernel recipe requires GCC 13.3.0")
+    if run([os.environ.get("PAHOLE", "pahole"), "--version"], capture_output=True, text=True).stdout.strip() != "v1.25":
+        raise RuntimeError("kernel recipe requires pinned pahole v1.25")
     if not 1 <= args.jobs <= 64:
         raise RuntimeError("kernel build jobs must be between 1 and 64")
     out = new_directory(args.output)
@@ -185,7 +213,12 @@ def kernel(args):
     # Stable build metadata; provenance still records the actual compiler.
     env = dict(os.environ, KBUILD_BUILD_USER="yoloctl", KBUILD_BUILD_HOST="linux7",
                KBUILD_BUILD_TIMESTAMP="2026-10-15 00:00:00 UTC", KBUILD_BUILD_VERSION="1")
-    make = ["make", "-C", source, f"O={build}"]
+    make = ["make", "-C", source, f"O={build}", "ARCH=x86", f"CC={cc}", f"CROSS_COMPILE={cross}",
+            f"PAHOLE_FLAGS={KERNEL_PAHOLE_FLAGS}"]
+    # Prefix maps keep BTF/DWARF and __FILE__ independent of owned build paths.
+    common_flags = f"-ffile-prefix-map={source}=/src -fdebug-prefix-map={source}=/src -ffile-prefix-map={build}=/build -fdebug-prefix-map={build}=/build"
+    env["KCFLAGS"] = common_flags
+    env["KAFLAGS"] = common_flags
     print(f"Linux {VERSION} build log: {out / 'build.log'}", flush=True)
     with (out / "build.log").open("x") as log:
         run([*make, "olddefconfig"], env=env, stdout=log, stderr=log)
@@ -200,5 +233,20 @@ def kernel(args):
         if release != VERSION:
             raise RuntimeError(f"unexpected kernel release: {release!r}")
         run([*make, "-j", args.jobs, "vmlinux"], env=env, stdout=log, stderr=log)
-    publish_kernel(out, build)
+    publish_kernel(out, build, cc, cross)
+    if getattr(args, "reproduce", False):
+        second = out / "reproduce-build"
+        second.mkdir()
+        shutil.copyfile(build / ".config", second / ".config")
+        second_flags = common_flags.replace(str(build), str(second))
+        second_env = dict(env, KCFLAGS=second_flags, KAFLAGS=second_flags)
+        second_make = ["make", "-C", source, f"O={second}", "ARCH=x86", f"CC={cc}", f"CROSS_COMPILE={cross}",
+                       f"PAHOLE_FLAGS={KERNEL_PAHOLE_FLAGS}"]
+        with (out / "reproduce.log").open("x") as log:
+            run([*second_make, "olddefconfig"], env=second_env, stdout=log, stderr=log)
+            run([*second_make, "-j", args.jobs, "vmlinux"], env=second_env, stdout=log, stderr=log)
+        run([cross + "objcopy", "--strip-debug", second / "vmlinux", out / "reproduced-kernel"])
+        if digest(out / "kernel") != digest(out / "reproduced-kernel") or digest(build / ".config") != digest(second / ".config"):
+            raise RuntimeError("kernel/config differ between independent object-directory builds")
+        save_json(out / "reproducibility.json", {"reproducible": True, "kernel_sha256": digest(out / "kernel"), "config_sha256": digest(out / "kernel.config")})
     print(f"Prepared Linux {VERSION} kernel: {out}")

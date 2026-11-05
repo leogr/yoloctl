@@ -192,7 +192,8 @@ version probe is bounded. Ordinary commands retain startup setup. [18](#source-1
 [FACT] Host-only `audit` opens the read-only Falco view; `audit status`,
 `enable`, `disable`, `logs --follow --json` and finite JSONL `export --output`
 use the running controller. Audit never starts a stopped space. Enable is
-explicit; viewing never installs tools. Exports refuse overwrite and publish
+explicit; viewing never installs tools. Old Firecracker images require explicit
+`space recreate NAME --update-vm-image`; audit never replaces media. Exports refuse overwrite and publish
 only completed privacy-filtered output. [24](#source-24)
 
 ## Sources

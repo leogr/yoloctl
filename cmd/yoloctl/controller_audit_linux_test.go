@@ -30,9 +30,9 @@ import (
 func TestAuditNativeToggleGateAndStopFailure(t *testing.T) {
 	scenario := os.Getenv("YOLOCTL_TEST_AUDIT_TOGGLE")
 	if scenario == "" {
-		scenarios := []string{"gate-denied", "stop-failed", "disabled"}
+		scenarios := []string{"gate-denied", "stop-failed", "disabled", "microvm-disabled"}
 		if os.Getenv("FALCO_TEST_ARCHIVES") != "" {
-			scenarios = append(scenarios, "enabled", "start-failed")
+			scenarios = append(scenarios, "enabled", "start-failed", "microvm-enabled")
 		}
 		for _, scenario := range scenarios {
 			cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestAuditNativeToggleGateAndStopFailure$", "-test.v")
@@ -43,8 +43,14 @@ func TestAuditNativeToggleGateAndStopFailure(t *testing.T) {
 		}
 		return
 	}
+	microvm := strings.HasPrefix(scenario, "microvm-")
+	scenario = strings.TrimPrefix(scenario, "microvm-")
 	disk := t.TempDir()
 	c := spaceenv.Context{Schema: 1, Space: "test", DiskID: strings.Repeat("a", 32), DiskUUID: "fixture", DiskMount: disk, ConfigDir: filepath.Join(disk, "config"), CatalogDir: spaceenv.CatalogRoot, HostConfigRoot: filepath.Join(disk, "host"), UID: 1000, GID: 1000, Bundle: "fixture", Generation: "fixture", Mounts: []spaceenv.Mount{{Source: "/projects", Writable: true}}}
+	if microvm {
+		c.ServiceManager = "microvm"
+		auditBackendSupport = func(context.Context, *container.Client) error { return nil }
+	}
 	if err := spaceenv.Configure(c); err != nil {
 		t.Fatal(err)
 	}

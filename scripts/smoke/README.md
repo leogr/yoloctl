@@ -740,8 +740,20 @@ space. Record actual metadata gaps, false positives and missing syscall evidence
 a rule-validation or synthetic event fixture PASS does not establish these hits.
 
 
-The current Firecracker audit path refuses unsupported images. Firecracker
-qualification additionally requires the explicit image/kernel migration and
-native amd64/KVM gate; do not infer driver support from rule validation or a
-simulated backend. Audit logs/tools are omitted from ordinary space backup;
+For Firecracker, begin with a separately owned old-image fixture. Audit enable
+must refuse before installing tools or changing desired state, with the explicit
+image-update hint. From the host run
+`YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl space recreate NAME --update-vm-image`
+using the candidate bundle. This discards sessions/ephemeral workdirs and
+preserves native data/accounts/declarations; boxes need explicit starts. Verify
+the same native disk UUID and selected account/declaration bytes afterward.
+A controller-only update cannot change the kernel or PID-1.
+
+On the updated native amd64/KVM fixture, verify `/sys/kernel/btf/vmlinux`, then
+repeat the Lima enable/event/export/disable and metadata/rule cases above.
+Confirm a loaded modern-eBPF probe, fixed PID-1 service ownership, acknowledged
+collector/descendant teardown, controller/VM restart reconciliation and no box
+restart on a toggle. Do not infer driver support from rule validation, BTF
+section inspection or a simulated backend. Repeat the Lima checks against
+this final candidate. Audit logs/tools are omitted from ordinary space backup;
 an import must have auditing disabled.

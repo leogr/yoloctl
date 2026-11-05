@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `d4edfda0fc41e34e9c9333c059802a5cf4256b24` and accompanying changes.
+Verification: `0445aa7690401d237b25be3fef1808659e62d039` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
@@ -24,8 +24,10 @@ archive and selected-file digests/modes are checked before reuse/execution.
 No package scripts, falcoctl, floating rules updates or external event sinks
 are installed. [7](#source-7) [8](#source-8)
 
-[FACT] Lima runs the fixed `yoloctl-audit` root service through systemd, outside
-boxes, with control-group teardown and a ten-second stop timeout. The collector
+[FACT] The fixed `yoloctl-audit` root service runs outside boxes: Lima uses
+systemd with control-group teardown and a ten-second stop timeout; Firecracker
+uses PID-1 owned cgroups/reaping with exact launcher/environment validation,
+without automatic restart. The collector
 checks kernel BTF, validates its pinned rule/config and performs a bounded real
 modern-eBPF capture before reporting loaded health. There is no kmod fallback.
 The controller applies certain enabled desired state after verified startup;
@@ -33,10 +35,15 @@ a reserved/uncertain audit operation prevents that reconciliation. Disable
 requires acknowledged service stop and retains logs/tools. Falco failure does
 not stop workloads; control uncertainty uses a separate audit receipt domain.
 The controller's ordinary global storage-uncertainty rules still apply.
-[2](#source-2) [9](#source-9) [10](#source-10) [11](#source-11)
+[2](#source-2) [9](#source-9) [10](#source-10) [11](#source-11) [19](#source-19)
 
-[FACT] The current Firecracker path reports unsupported; audit commands do not
-replace its kernel/image. Pinned rules cover runtime/admin socket access,
+[FACT] Firecracker audit first makes a bounded read-only PID-1 support query;
+old images are refused before toggle effects, with an explicit
+`space recreate NAME --update-vm-image` hint. Audit commands never replace
+media. The bundled kernel includes BTF/JIT/tracing; this is not live load proof.
+[19](#source-19) [20](#source-20) [21](#source-21)
+
+[FACT] Pinned rules cover runtime/admin socket access,
 infrastructure changes, workload BPF/modules, namespace changes, cross-process
 inspection, selected protected-file denials and persistence paths. The noisy
 anonymous/temporary executable rule is disabled. `yolo-audit-test` remains the
@@ -100,3 +107,7 @@ Export also works with auditing disabled while the controller is running.
 17. <a id="source-17"></a> [Container 0.7.6 implementation](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/go-worker/pkg/container/containerd.go) — `get`, `getFullContainersInfos`, namespace enumeration and bounded lookups.
 
 18. <a id="source-18"></a> [Metadata extraction](audit-metadata.md) — C ABI, generation/freshness/identity bounds, packaging and limits.
+
+19. <a id="source-19"></a> [Fixed PID-1 audit unit](../../internal/vmguest/units_linux.go#L39) — `validateUnit`, `manageUnit`; closed launch/query regressions in audit_unit_linux_test.go.
+20. <a id="source-20"></a> [Firecracker support query](../../internal/vmservice/service.go#L170) — `AuditSupported`; old-image pre-effect regression in cmd/yoloctl/audit_image_linux_test.go.
+21. <a id="source-21"></a> [Kernel recipe](../../assets/vm/firecracker/inputs.py#L38) — `KERNEL_EXTRAS`, `publish_kernel`; cross-host ELF/config regression in assets/audit_kernel_test.go.

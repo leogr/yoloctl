@@ -37,6 +37,13 @@ var unitManager = struct {
 }{units: map[string]*managedUnit{}}
 
 func validateUnit(u vmwire.Unit, start bool) error {
+	if u.Name == vmwire.AuditUnitName {
+		expected := vmwire.AuditUnit()
+		if start && (u.Restart || !slices.Equal(u.Args, expected.Args) || !slices.Equal(u.Env, expected.Env)) {
+			return errors.New("audit must use its fixed launcher and environment without restart")
+		}
+		return nil
+	}
 	if len(u.Name) > 180 || !strings.HasSuffix(u.Name, ".service") || strings.ContainsAny(u.Name, "/\\\x00\r\n") || (!strings.HasPrefix(u.Name, "yoloctl-session-") && !strings.HasPrefix(u.Name, "yoloctl-port-") && !strings.HasPrefix(u.Name, port.OpenShellUnitPrefix)) {
 		return errors.New("invalid managed service identity")
 	}
@@ -145,7 +152,7 @@ func (u *managedUnit) start() error {
 	defer func() { _ = log.Close() }()
 	cmd := exec.Command(u.spec.Args[0], u.spec.Args[1:]...)
 	cmd.Env = append(os.Environ(), u.spec.Env...)
-	if strings.HasPrefix(u.spec.Name, port.OpenShellUnitPrefix) {
+	if strings.HasPrefix(u.spec.Name, port.OpenShellUnitPrefix) || u.spec.Name == vmwire.AuditUnitName {
 		cmd.Env = append([]string{"PATH=" + vmwire.GuestSystemPath}, u.spec.Env...)
 	}
 	cmd.Stdout, cmd.Stderr = log, log
@@ -192,6 +199,12 @@ func (u *managedUnit) watch() {
 	}
 }
 func manageUnit(r vmwire.UnitRequest) (string, error) {
+	if r.Action == vmwire.AuditCapabilityAction {
+		if r.Unit.Name != vmwire.AuditUnitName || len(r.Unit.Args) != 0 || len(r.Unit.Env) != 0 || r.Unit.Restart {
+			return "", errors.New("invalid audit capability query")
+		}
+		return vmwire.AuditCapability, nil
+	}
 	if r.Action == "list" || r.Action == "inventory" {
 		if r.Unit.Name != vmwire.LegacyPortUnitPrefix && r.Unit.Name != vmwire.OpenShellPortUnitPrefix && r.Unit.Name != "yoloctl-session-" {
 			return "", errors.New("unsupported service inventory")
