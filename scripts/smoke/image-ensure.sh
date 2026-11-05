@@ -129,7 +129,12 @@ smoke_info "creating a Claude + Codex + Go box from an empty yoloctl image cache
 	--workdir-mode ephemeral \
 	--no-autoupdate 2>&1 | tee "$FIRST_CREATE_LOG"
 first_create_output="$(<"$FIRST_CREATE_LOG")"
-if [[ "$first_create_output" != *"not present in space; building"* ]]; then
+# Native creation reports preparation through the controller ("Preparing image
+# <ref> for box <name>", internal/controller/image_progress.go); the older
+# "not present in space; building" notice belongs to the non-native path. The
+# absent-before / present-after image checks prove the build itself.
+if [[ "$first_create_output" != *"Preparing image "* &&
+	"$first_create_output" != *"not present in space; building"* ]]; then
 	smoke_fail "fresh create did not report an on-demand image build"
 fi
 
