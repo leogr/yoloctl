@@ -170,9 +170,14 @@ func TestInstallShellStepsStopOnInputErrorOrInterrupt(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err = runShellStepsFrom(ctx, bin, link, shellRequest{apply: true, addPath: true, completion: true}, strings.NewReader(""))
-	if _, statErr := os.Stat(rc); !errors.Is(err, context.Canceled) || !errors.Is(statErr, os.ErrNotExist) {
-		t.Fatalf("interrupted: %v, rc %v", err, statErr)
+	for _, shell := range []string{"/usr/bin/bash", "/bin/tcsh"} {
+		t.Setenv("SHELL", shell)
+		for _, req := range []shellRequest{{apply: true, addPath: true, completion: true}, {}, {interactive: true}} {
+			_, err = runShellStepsFrom(ctx, bin, link, req, strings.NewReader(""))
+			if _, statErr := os.Stat(rc); !errors.Is(err, context.Canceled) || !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("interrupted %s %+v: %v, rc %v", shell, req, err, statErr)
+			}
+		}
 	}
 }
 
@@ -185,6 +190,11 @@ func TestInstallShellStepsManualLineUsesResolvedFile(t *testing.T) {
 	out, err := runShellSteps(t, bin, link, shellRequest{apply: true}, "")
 	if err != nil || !strings.Contains(out, `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.config/zsh/.zshrc`) || strings.Contains(out, ">> ~/.zshrc") {
 		t.Fatalf("%v\n%s", err, out)
+	}
+	t.Setenv("ZDOTDIR", "relative/zsh")
+	out, err = runShellSteps(t, bin, link, shellRequest{apply: true}, "")
+	if err != nil || strings.Contains(out, ".zshrc") || !strings.Contains(out, "add it in your shell's startup file") {
+		t.Fatalf("an unusable ZDOTDIR names no guessed file: %v\n%s", err, out)
 	}
 	if got := manualPathCommand(shellSetup{Shell: "bash", RC: "/odd dir/.bashrc"}, "/x", "/odd dir/.bashrc"); got != `echo 'export PATH="/x:$PATH"' >> '/odd dir/.bashrc'` {
 		t.Fatal(got)

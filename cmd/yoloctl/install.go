@@ -143,8 +143,9 @@ func newInstallCmd() *cobra.Command {
 		if printOnly {
 			printSpaceAdvice(o, installSpaceAdvice(cmd.Context(), manifest.Bundle), link, false)
 			// Nothing is written: requested shell setup is only described.
-			if err := installShellSteps(cmd.Context(), o, bin, link, shell); cmd.Context().Err() != nil {
-				return err
+			_ = installShellSteps(cmd.Context(), o, bin, link, shell)
+			if err := cmd.Context().Err(); err != nil {
+				return err // interrupted: never a clean print-only exit
 			}
 			o.line()
 			if dry {

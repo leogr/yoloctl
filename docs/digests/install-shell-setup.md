@@ -16,8 +16,11 @@ and `atomicfile.Write` keep the mode (not ACLs/xattrs). Other shells get the
 until `compinit` has run; install says so after adding it. Removal is manual:
 delete the lines from `# >>> yoloctl` to `# <<< yoloctl` (install help and
 `docs/install.md`). A declined or non-terminal PATH step prints the line for
-the resolved file (`ZDOTDIR` included). An unreadable answer or an interrupted
-command stops setup with that error; nothing later is asked or written.
+the resolved file (`ZDOTDIR` included); an unusable `ZDOTDIR` or home gets
+generic guidance, never a guessed file. An unreadable answer or an interrupted
+command stops setup with that error (also on paths that neither ask nor
+write, so an interrupted print-only run never exits 0); nothing later is
+asked or written.
 Every block has an exact string test; bash blocks are sourced in a clean bash,
 zsh (before and after `compinit`) and fish blocks only where those shells are
 installed (the author's environment had neither).
@@ -25,5 +28,5 @@ installed (the author's environment had neither).
 
 ## Sources
 
-1. <a id="source-1"></a> [Shell setup](../../cmd/yoloctl/install_shell.go#L1-L416), `installShellSetup`, `blockState`, `readRC`, `addBlock`, `installShellSteps`, `manualPathCommand`; flags and help in install.go `newInstallCmd`.
-2. <a id="source-2"></a> [Tests](../../cmd/yoloctl/install_shell_test.go#L1-L343), `TestAddBlockAppendsAtomicallyAndRefusesUnsafeFiles`, `TestInstallShellStepsAskWriteOnceAndPrintOnly`, `TestInstallShellBlocksSourceInBash`, `TestInstallShellBlocksSourceInZshAndFish`, `TestInstallShellStepsStopOnInputErrorOrInterrupt`.
+1. <a id="source-1"></a> [Shell setup](../../cmd/yoloctl/install_shell.go#L1-L436), `installShellSetup`, `blockState`, `readRC`, `addBlock`, `installShellSteps`, `manualPathCommand`; flags and help in install.go `newInstallCmd`.
+2. <a id="source-2"></a> [Tests](../../cmd/yoloctl/install_shell_test.go#L1-L353), `TestAddBlockAppendsAtomicallyAndRefusesUnsafeFiles`, `TestInstallShellStepsAskWriteOnceAndPrintOnly`, `TestInstallShellBlocksSourceInBash`, `TestInstallShellBlocksSourceInZshAndFish`, `TestInstallShellStepsStopOnInputErrorOrInterrupt`.

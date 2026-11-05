@@ -244,6 +244,9 @@ type shellRequest struct {
 // An interrupted command, or an answer that cannot be read, stops at once:
 // nothing after it is asked or written.
 func installShellSteps(ctx context.Context, o installOut, bin, link string, req shellRequest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	home, _ := os.UserHomeDir()
 	shell := os.Getenv("SHELL")
 	setup, known := installShellSetup(shell, home, os.Getenv)
@@ -316,9 +319,20 @@ func installShellSteps(ctx context.Context, o installOut, bin, link string, req 
 		switch {
 		case !known || !plain || command == "":
 			o.line()
-			o.warn(text)
-			if command != "" {
-				o.line("    ", o.paint(roleBold, command))
+			switch filepath.Base(shell) {
+			case "zsh", "bash", "fish":
+				if !known {
+					// A supported shell whose startup files could not be
+					// resolved (a relative ZDOTDIR, ...): never guess a file.
+					o.warn(bin, " is not on your PATH; add it in your shell's startup file to run yoloctl from anywhere.")
+					break
+				}
+				fallthrough
+			default:
+				o.warn(text)
+				if command != "" {
+					o.line("    ", o.paint(roleBold, command))
+				}
 			}
 		default:
 			body := pathBlockBody(setup.Shell, display)
@@ -349,6 +363,9 @@ func installShellSteps(ctx context.Context, o installOut, bin, link string, req 
 		if req.completion {
 			o.warn("completion setup supports zsh, bash and fish; for ", filepath.Base(shell), " see yoloctl completion --help")
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		return setupResult(failed)
 	}
 	body := completionBlockBody(setup.Shell, link)
@@ -369,6 +386,9 @@ func installShellSteps(ctx context.Context, o installOut, bin, link string, req 
 		if setup.Shell == "zsh" {
 			o.dim(2, "It loads where compinit already ran (most setups, e.g. oh-my-zsh). Otherwise add `autoload -Uz compinit && compinit` above the yoloctl block.")
 		}
+	}
+	if stop == nil {
+		stop = ctx.Err()
 	}
 	if stop != nil {
 		return stop
