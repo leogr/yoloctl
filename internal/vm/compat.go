@@ -7,6 +7,7 @@ import "github.com/leogr/yoloctl/internal/lima"
 var (
 	SetupHome                = lima.SetupHome
 	Command                  = lima.Command
+	CommandForSpace          = lima.CommandForSpace
 	InstanceName             = lima.InstanceName
 	TemplateWithAccountDisk  = lima.TemplateWithAccountDisk
 	TemplateWithBootSettings = lima.TemplateWithBootSettings

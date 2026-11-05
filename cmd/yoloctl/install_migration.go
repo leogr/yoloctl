@@ -64,7 +64,7 @@ func installSpaceAdvice(ctx context.Context, target string) []spaceAdvice {
 			continue
 		}
 		a := spaceAdvice{Name: name}
-		if err := layout.ValidateName("space", name); err != nil || !entry.IsDir() {
+		if err := layout.ValidateExistingSpaceName(name); err != nil || !entry.IsDir() {
 			a.Problem = "not a readable space directory"
 			advice = append(advice, a)
 			continue
@@ -229,7 +229,7 @@ func installLimaAdvice(space string) (*adviceItem, string) {
 	if len(desired) == 0 {
 		return nil, ""
 	}
-	home, err := layout.LimaHome()
+	home, err := spaceconfig.LimaHome(space)
 	if err != nil {
 		return nil, "could not find the Lima home: " + err.Error()
 	}

@@ -2,13 +2,14 @@ package lima
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 )
 
@@ -33,11 +34,9 @@ func spaceFromInstance(instance string) (space string, ok bool) {
 	return strings.TrimPrefix(instance, InstancePrefix), true
 }
 
-// SetupHome points limactl at yoloctl's private Lima home for the rest of the
-// process by setting LIMA_HOME (creating the directory if needed).
-// Call once at startup, before any limactl invocation: every exec of
-// limactl inherits the process environment, so this single call relocates
-// all of yoloctl's Lima instances. Idempotent.
+// SetupHome initializes the legacy default at startup. Space/disk commands
+// override LIMA_HOME in their child environment from the persisted bootstrap;
+// no existing storage is moved or searched as a replacement for missing data.
 func SetupHome() error {
 	if spaceenv.Native() {
 		return nil
@@ -53,25 +52,75 @@ func SetupHome() error {
 }
 
 // InstanceDir returns the on-disk directory limactl uses for the named
-// space's instance (LimaHome/<yolo-space>). Pure path construction — does not
-// check existence; callers that need that stat the result.
+// space's instance (selected home/yolo-<space>). Resolution never creates or
+// moves storage; callers that need existence checks stat the result.
 func InstanceDir(space string) (string, error) {
-	home, err := layout.LimaHome()
+	home, err := spaceconfig.LimaHome(space)
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, InstanceName(space)), nil
+	return layout.LimaInstanceDir(home, space)
 }
 
 // Command builds an *exec.Cmd for `limactl <args...>`. Every yoloctl
 // limactl invocation should originate here (or via ShellCommand) so the
-// binary name lives in one place; LIMA_HOME is carried by the process
-// environment set up in SetupHome.
+// binary name lives in one place. Use CommandForSpace for VM operations;
+// Command without a target is only for process-global queries such as --version.
 func Command(ctx context.Context, args ...string) *exec.Cmd {
 	if spaceenv.Native() {
 		return exec.CommandContext(ctx, "sh", "-c", "echo 'host VM administration is unavailable inside the controller' >&2; exit 2")
 	}
 	return exec.CommandContext(ctx, DefaultBinary, args...)
+}
+
+// CommandForSpace overrides LIMA_HOME only in this child. A single process may
+// operate legacy and newly placed spaces concurrently without global env races.
+func CommandForSpace(ctx context.Context, space string, args ...string) *exec.Cmd {
+	return New().spaceCommand(ctx, space, args...)
+}
+
+func failedCommand(ctx context.Context, err error) *exec.Cmd {
+	return exec.CommandContext(ctx, "sh", "-c", `printf '%s\n' "$1" >&2; exit 2`, "lima-error", err.Error())
+}
+
+func (c *Client) commandAtHome(ctx context.Context, home string, args ...string) *exec.Cmd {
+	if spaceenv.Native() {
+		return failedCommand(ctx, errors.New("VM controller cannot execute host Lima operations"))
+	}
+	cmd := exec.CommandContext(ctx, c.binary, args...)
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, value := range os.Environ() {
+		if !strings.HasPrefix(value, "LIMA_HOME=") {
+			env = append(env, value)
+		}
+	}
+	cmd.Env = append(env, "LIMA_HOME="+home)
+	return cmd
+}
+
+func (c *Client) spaceCommand(ctx context.Context, space string, args ...string) *exec.Cmd {
+	home, err := spaceconfig.LimaHome(space)
+	if err != nil {
+		return failedCommand(ctx, err)
+	}
+	return c.commandAtHome(ctx, home, args...)
+}
+
+func (c *Client) diskCommand(ctx context.Context, id string, args ...string) *exec.Cmd {
+	home, err := spaceconfig.LimaHomeForDisk(id)
+	if err != nil {
+		return failedCommand(ctx, err)
+	}
+	return c.commandAtHome(ctx, home, args...)
+}
+
+// AccountDiskDir uses the same placement as disk inspection/allocation/removal.
+func AccountDiskDir(id string) (string, error) {
+	home, err := spaceconfig.LimaHomeForDisk(id)
+	if err != nil {
+		return "", err
+	}
+	return layout.LimaAccountDiskDir(home, id)
 }
 
 // ShellCommand builds `limactl shell <instance> -- args...` for the given
@@ -82,7 +131,7 @@ func ShellCommand(ctx context.Context, space string, args ...string) *exec.Cmd {
 		return localCommand(ctx, space, "", args...)
 	}
 	full := append([]string{"shell", InstanceName(space), "--"}, args...)
-	return Command(ctx, full...)
+	return CommandForSpace(ctx, space, full...)
 }
 
 // ShellCommandWithWorkdir is ShellCommand with a remote --workdir, which
@@ -92,7 +141,7 @@ func ShellCommandWithWorkdir(ctx context.Context, space, workdir string, args ..
 		return localCommand(ctx, space, workdir, args...)
 	}
 	full := append([]string{"shell", "--workdir", workdir, InstanceName(space), "--"}, args...)
-	return Command(ctx, full...)
+	return CommandForSpace(ctx, space, full...)
 }
 
 func localCommand(ctx context.Context, space, workdir string, args ...string) *exec.Cmd {

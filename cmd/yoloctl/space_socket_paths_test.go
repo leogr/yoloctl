@@ -161,3 +161,71 @@ func shortYoloctlHome(t *testing.T) {
 	})
 	t.Setenv("YOLOCTL_HOME", root)
 }
+
+func TestNewSpaceNameCapPrecedesEffectsForEveryBackend(t *testing.T) {
+	for _, backend := range []string{"lima", "firecracker"} {
+		for _, action := range []string{"create", "import"} {
+			t.Run(backend+"/"+action, func(t *testing.T) {
+				calls := socketPathCLIHome(t)
+				args := []string{"space", action, strings.Repeat("a", 17), "--backend", backend}
+				if action == "create" {
+					args = append(args, "--account", "personal", "--workdir", t.TempDir())
+				} else {
+					args = append(args, "/missing-archive.tar.gz")
+				}
+				err := resourceCommand(t, args...)
+				if err == nil || !strings.Contains(err.Error(), "1–16") {
+					t.Fatalf("new name not refused before backend work: %v", err)
+				}
+				if _, err := os.Stat(calls); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("reached VM: %v", err)
+				}
+				spaces, _ := layout.SpacesDir()
+				if _, err := os.Stat(spaces); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("published bundle: %v", err)
+				}
+				locks, _ := layout.SpaceLockPath(strings.Repeat("a", 17))
+				if _, err := os.Stat(locks); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("created lifecycle lock: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestExistingLongSpaceResolutionAndRecordedHomeProtection(t *testing.T) {
+	stubOperatorClient(t, nil)
+	t.Setenv("YOLOCTL_HOME", t.TempDir())
+	boot := imageUpdateFixture(t)
+	boot.Name = strings.Repeat("a", 63)
+	boot.VM.Backend = "lima"
+	boot.VM.Image = ""
+	boot.VM.LimaHome = filepath.Join(t.TempDir(), "new-lima-home")
+	if err := boot.Save(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := resolveSpacePositional([]string{boot.Name})
+	if err != nil || got != boot.Name {
+		t.Fatalf("existing target: %s %v", got, err)
+	}
+	if err := rejectManagedHostPath(boot.VM.LimaHome); err == nil {
+		t.Fatal("recorded VM storage can be granted")
+	}
+	parent := filepath.Dir(boot.VM.LimaHome)
+	if err := rejectManagedHostPath(parent); err == nil {
+		t.Fatal("ancestor of recorded VM storage can be granted")
+	}
+	if err := rejectManagedHostPath(boot.VM.LimaHome + "-project"); err != nil {
+		t.Fatal("unrelated project rejected", err)
+	}
+	if err := os.MkdirAll(boot.VM.LimaHome, 0700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "storage-link")
+	if err := os.Symlink(boot.VM.LimaHome, alias); err != nil {
+		t.Fatal(err)
+	}
+	if err := rejectManagedHostPath(alias); err == nil {
+		t.Fatal("storage symlink can be granted")
+	}
+}

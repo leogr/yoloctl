@@ -8,8 +8,9 @@ import (
 	"github.com/leogr/yoloctl/internal/layout"
 )
 
-// validateAgentboxName / validateSpaceName wrap layout.ValidateName so the
-// rest of the CLI doesn't need to know the "kind" tag for each concept.
+// validateAgentboxName validates box admission; validateSpaceName accepts
+// existing space references, including the historical 63-character names.
+// New-space admission separately calls layout.ValidateName("space", name).
 //
 // Every CLI entry that takes a name and either (a) interpolates it into
 // a shell command, (b) joins it into a path on the env VM, or (c) uses
@@ -20,7 +21,7 @@ import (
 func validateAgentboxName(name string) error {
 	return asUserError(layout.ValidateName("agentbox", name))
 }
-func validateSpaceName(name string) error { return asUserError(layout.ValidateName("space", name)) }
+func validateSpaceName(name string) error { return asUserError(layout.ValidateExistingSpaceName(name)) }
 
 // expandUserPath resolves p to an absolute path, expanding a leading `~`
 // (or `~/`) to the user's home dir. Does not require the path to exist —

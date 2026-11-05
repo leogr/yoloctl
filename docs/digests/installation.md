@@ -98,7 +98,7 @@ show only recovery guidance. [9](#source-9)
 
 1. <a id="source-1"></a> [Identity](../../internal/buildinfo/buildinfo.go#L1-L47), `IsRelease`, `Channel`;
    [Make flags](../../Makefile#L12-L58).
-2. <a id="source-2"></a> [Roots](../../internal/layout/layout.go#L96-L151), `ConfigRoot`, `CacheRoot`, `selectedHome`;
+2. <a id="source-2"></a> [Roots](../../internal/layout/layout.go#L117-L171), `ConfigRoot`, `CacheRoot`, `selectedHome`;
    [matrix](../../internal/layout/homes_test.go#L1-L91); test-binary isolation in [testhome.go](../../internal/layout/testhome.go#L1), sentinel regression in [home_isolation_test.go](../../internal/layout/home_isolation_test.go#L1).
 3. <a id="source-3"></a> [Startup](../../cmd/yoloctl/main.go#L69-L110), `main`;
    [routing](../../cmd/yoloctl/main.go#L225-L230), `readOnlyStartup`;

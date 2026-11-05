@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/lima"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/vmapi"
@@ -28,7 +27,7 @@ func (d limaDriver) Stop(ctx context.Context, name string, force bool) error {
 	if !force {
 		return d.Client.Stop(ctx, name)
 	}
-	return lima.Command(ctx, "stop", "--force", "--tty=false", lima.InstanceName(name)).Run()
+	return lima.CommandForSpace(ctx, name, "stop", "--force", "--tty=false", lima.InstanceName(name)).Run()
 }
 func (limaDriver) Shell(ctx context.Context, name, dir string, args []string) *exec.Cmd {
 	if dir != "" {
@@ -51,7 +50,7 @@ func (d limaDriver) SetMounts(name string, m []vmapi.Mount) error {
 func (d limaDriver) SetResources(ctx context.Context, name string, r vmapi.Resources) error {
 	return d.SetInstanceResources(ctx, name, r)
 }
-func (limaDriver) AccountDiskDir(id string) (string, error) { return layout.AccountDiskDir(id) }
+func (limaDriver) AccountDiskDir(id string) (string, error) { return lima.AccountDiskDir(id) }
 func (limaDriver) ProcessIDs(name string) ([]int, error)    { return lima.VMProcessIDs(name) }
 func (limaDriver) RequireStopped(name, kind string, pids []int) error {
 	return lima.RequireVMProcessesStopped(name, kind, pids)
@@ -94,17 +93,19 @@ func (d limaDriver) List(ctx context.Context) ([]vmapi.Instance, error) {
 				return nil, errors.New("lima is required for an existing space")
 			}
 		}
-		home, e := layout.LimaHome()
+		homes, e := spaceconfig.LimaHomes()
 		if e != nil {
 			return nil, e
 		}
-		rows, e := os.ReadDir(home)
-		if e != nil && !errors.Is(e, os.ErrNotExist) {
-			return nil, e
-		}
-		for _, r := range rows {
-			if strings.HasPrefix(r.Name(), "yolo-") {
-				return nil, errors.New("lima metadata exists; install limactl to inspect it")
+		for _, home := range homes {
+			rows, e := os.ReadDir(home)
+			if e != nil && !errors.Is(e, os.ErrNotExist) {
+				return nil, e
+			}
+			for _, r := range rows {
+				if strings.HasPrefix(r.Name(), "yolo-") {
+					return nil, errors.New("lima metadata exists; install limactl to inspect it")
+				}
 			}
 		}
 		return nil, nil
@@ -118,5 +119,5 @@ func (d limaDriver) InteractiveShell(ctx context.Context, name string, args []st
 		tail = append(tail, "--")
 		tail = append(tail, args...)
 	}
-	return lima.Command(ctx, tail...)
+	return lima.CommandForSpace(ctx, name, tail...)
 }

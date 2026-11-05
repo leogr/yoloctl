@@ -57,11 +57,13 @@ type ImportState struct {
 }
 
 type VMSettings struct {
-	Backend string `yaml:"backend,omitempty" json:"backend,omitempty"`
-	Image   string `yaml:"image,omitempty" json:"image,omitempty"`
-	CPUs    int    `yaml:"cpus" json:"cpus"`
-	Memory  string `yaml:"memory" json:"memory"`
-	Disk    string `yaml:"disk" json:"disk"`
+	// LimaHome is fixed at new macOS space admission; empty retains legacy storage.
+	LimaHome string `yaml:"lima_home,omitempty" json:"lima_home,omitempty"`
+	Backend  string `yaml:"backend,omitempty" json:"backend,omitempty"`
+	Image    string `yaml:"image,omitempty" json:"image,omitempty"`
+	CPUs     int    `yaml:"cpus" json:"cpus"`
+	Memory   string `yaml:"memory" json:"memory"`
+	Disk     string `yaml:"disk" json:"disk"`
 	// DataDisk is the data disk's size; empty is the original 10GiB.
 	DataDisk string `yaml:"data_disk,omitempty" json:"data_disk,omitempty"`
 }
@@ -79,7 +81,7 @@ func (b *Bootstrap) Validate() error {
 	if b.SchemaVersion != BootstrapVersion {
 		return fmt.Errorf("unsupported bootstrap schema %d", b.SchemaVersion)
 	}
-	if err := layout.ValidateName("space", b.Name); err != nil {
+	if err := layout.ValidateExistingSpaceName(b.Name); err != nil {
 		return err
 	}
 	if id, err := hex.DecodeString(b.DiskID); err != nil || len(id) != 16 {
@@ -96,6 +98,14 @@ func (b *Bootstrap) Validate() error {
 	}
 	if b.VM.Backend != "" && b.VM.Backend != "lima" && b.VM.Backend != "firecracker" {
 		return fmt.Errorf("unsupported VM backend %q", b.VM.Backend)
+	}
+	if b.VM.LimaHome != "" {
+		if b.VM.Backend == "firecracker" {
+			return errors.New("lima_home applies only to Lima")
+		}
+		if _, err := layout.ResolveLimaHome(b.VM.LimaHome); err != nil {
+			return err
+		}
 	}
 	if b.VM.Backend == "firecracker" && (!filepath.IsAbs(b.VM.Image) || filepath.Clean(b.VM.Image) != b.VM.Image) {
 		return errors.New("firecracker requires a clean absolute image bundle path")

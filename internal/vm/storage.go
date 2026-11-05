@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/vmapi"
 	"golang.org/x/sys/unix"
 )
@@ -24,7 +26,24 @@ func BackingAvailable(kind, space string) (uint64, string, error) {
 	if err != nil {
 		return 0, "", err
 	}
-	path := filepath.Dir(dir)
+	// Before new-space publication, capacity belongs to its admission home.
+	// Once a bootstrap exists, InstanceDir above uses its recorded/legacy home.
+	if d.Kind() == "lima" {
+		if _, err := spaceconfig.LoadBootstrap(space); errors.Is(err, os.ErrNotExist) {
+			home, err := layout.NewLimaHome()
+			if err != nil {
+				return 0, "", err
+			}
+			return backingAvailableAt(home)
+		} else if err != nil && !errors.Is(err, spaceconfig.ErrLegacySchema) {
+			return 0, "", err
+		}
+	}
+	return backingAvailableAt(filepath.Dir(dir))
+}
+
+func backingAvailableAt(path string) (uint64, string, error) {
+	original := path
 	for {
 		if _, err := os.Stat(path); err == nil {
 			break
@@ -33,7 +52,7 @@ func BackingAvailable(kind, space string) (uint64, string, error) {
 		}
 		parent := filepath.Dir(path)
 		if parent == path {
-			return 0, "", fmt.Errorf("no existing directory above %s", dir)
+			return 0, "", fmt.Errorf("no existing directory above %s", original)
 		}
 		path = parent
 	}

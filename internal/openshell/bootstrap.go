@@ -51,7 +51,7 @@ type Binding struct {
 }
 
 func (b Binding) Validate() error {
-	if err := layout.ValidateName("space", b.Space); err != nil {
+	if err := layout.ValidateExistingSpaceName(b.Space); err != nil {
 		return err
 	}
 	if err := layout.ValidateName("agentbox", b.Box); err != nil {

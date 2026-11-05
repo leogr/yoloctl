@@ -5,12 +5,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/account"
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/resources"
 	"github.com/leogr/yoloctl/internal/spacearchive"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
@@ -113,6 +115,16 @@ func TestImportRemapsGrantsAndCreatesIndependentIdentity(t *testing.T) {
 	if boot.DiskID == source.DiskID || boot.DiskUUID != "" || !boot.Initializing || boot.Generation == source.Generation {
 		t.Fatal("source disk or generation reused", boot)
 	}
+	wantHome := ""
+	if runtime.GOOS == "darwin" {
+		wantHome, err = layout.NewLimaHome()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if boot.VM.LimaHome != wantHome {
+		t.Fatalf("import retained source Lima placement: %s", boot.VM.LimaHome)
+	}
 	if boot.VM.CPUs != 7 || *cpuProbes != 0 {
 		t.Fatalf("import must keep archived CPUs without measuring: %d, %d probes", boot.VM.CPUs, *cpuProbes)
 	}
@@ -143,5 +155,51 @@ func TestImportRemapsGrantsAndCreatesIndependentIdentity(t *testing.T) {
 	}
 	if err := validateImportedGrants(restored, composed); err == nil {
 		t.Fatal("accepted bind outside remapped grants")
+	}
+}
+
+func TestImportSelectsDestinationLimaHome(t *testing.T) {
+	t.Setenv("YOLOCTL_HOME", t.TempDir())
+	project, _, err := canonicalizeMountArg(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := spaceconfig.New("source", project, "personal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.AccountDiskUUID = "source-uuid"
+	source, settings, err := spaceconfig.Split(c, 1000, 20, "source-generation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.VM.Backend = "lima"
+	source.VM.LimaHome = "/other-host/old-lima-home"
+	if err := source.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	accountRaw, err := yaml.Marshal(account.New("source", "personal"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed := &controller.StoreBundle{Schema: 1, Settings: *settings, Accounts: map[string][]byte{"personal": accountRaw}, Boxes: map[string][]byte{}}
+	cmd := newSpaceImportCmd()
+	cmd.SetContext(t.Context())
+	if err := cmd.Flags().Set("backend", "lima"); err != nil {
+		t.Fatal(err)
+	}
+	boot, err := prepareImportedSpace(cmd, "restored", spacearchive.Manifest{Bootstrap: *source}, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ""
+	if runtime.GOOS == "darwin" {
+		want, err = layout.NewLimaHome()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if boot.VM.LimaHome != want || boot.VM.LimaHome == source.VM.LimaHome {
+		t.Fatalf("source placement reused: %q", boot.VM.LimaHome)
 	}
 }

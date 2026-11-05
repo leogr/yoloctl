@@ -64,7 +64,7 @@ func captureNativeOriginObservationBoundary(verifyCurrent func(context.Context) 
 	if err := snapshot.Validate(); err != nil {
 		return nil, err
 	}
-	if layout.ValidateName("space", snapshot.Space) != nil || snapshot.DiskMount != layout.AccountDiskMount(snapshot.DiskID) {
+	if layout.ValidateExistingSpaceName(snapshot.Space) != nil || snapshot.DiskMount != layout.AccountDiskMount(snapshot.DiskID) {
 		return nil, errors.New("native origin trusted disk/layout selection mismatch")
 	}
 	b := &nativeOriginObservationBoundary{original: c, snapshot: snapshot, verifyCurrent: verifyCurrent}

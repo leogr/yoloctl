@@ -25,7 +25,8 @@ deployment and low-level Lima create/start also check. Errors identify the
 path, byte count and limit. [38](#source-38) [39](#source-39)
 [40](#source-40) [42](#source-42)
 This optional adapter check leaves Firecracker,
-identifier syntax, reads and cleanup unchanged. [41](#source-41)
+reads and cleanup unchanged. New-space naming and per-space Lima storage
+selection are recorded separately in [Lima storage](lima-storage.md). [41](#source-41)
 
 ## Lima stack upgrades
 
