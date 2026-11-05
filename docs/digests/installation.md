@@ -68,7 +68,9 @@ when it fails); TUI dark-theme colors only on a terminal without `NO_COLOR` or
 aliases and missing descendants, before mutation. A symlinked prefix (a home or
 `~/.local` behind a symlink) is resolved first (`CanonicalPath`); a store or
 bin directory that is itself a symlink is still refused, never written through. It locks
-`~/.local/share/yoloctl/install.lock`, stages a complete
+`~/.local/share/yoloctl/install.lock` (creating it makes up to five open
+attempts 10 ms apart on ENOENT, which two installs on a fresh store hit on
+macOS CI), stages a complete
 bundle through no-follow descriptor writes/fsync, publishes its immutable
 `bundles/<version>-<os>-<arch>-<bundle>` key without replacement (without the
 no-replace rename flag, e.g. FUSE replying EINVAL: an absence check and plain
@@ -118,11 +120,11 @@ show only recovery guidance. [9](#source-9)
    [archive checks](../../scripts/check-dist.go#L1-L172), `run`, `extract`.
 7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L279), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go;
    [output](../../cmd/yoloctl/install_output.go#L1-L133), `installOut`, `installColor`, `installCommand`.
-8. <a id="source-8"></a> [Publication engine](../../internal/installer/engine.go#L1-L476), `Inspect`, `Publish`, `publishDirectory`
+8. <a id="source-8"></a> [Publication engine](../../internal/installer/engine.go#L1-L496), `Inspect`, `Publish`, `lock`, `publishDirectory`
    (platform `renameNoReplace`/`noReplaceUnsupported` in rename_linux.go and rename_darwin.go);
    [no-replace fallback regressions](../../internal/installer/publish_fallback_test.go#L1);
    [destination boundary](../../internal/installer/paths.go#L1-L87), `ValidatePaths`;
-   [fault/concurrency regressions](../../internal/installer/engine_test.go#L1-L278);
+   [fault/concurrency regressions](../../internal/installer/engine_test.go#L1-L307), `TestLockRetriesOnlySpuriousENOENT` in lock_retry_test.go;
    [overlap regressions](../../internal/installer/paths_test.go#L1-L193).
 9. <a id="source-9"></a> [Space advice](../../cmd/yoloctl/install_migration.go#L1-L292), `installSpaceAdvice`, `printSpaceAdvice`, `installLimaAdvice`;
    [inventory](../../cmd/yoloctl/install_inventory.go#L1-L48), `consentSnapshot`, `readInstallConsent`;

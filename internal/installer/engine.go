@@ -184,8 +184,28 @@ func (d directory) write(name string, data []byte, mode uint32) error {
 }
 func (d directory) sync() error { return unix.Fsync(d.fd) }
 
+// openLockFile opens or creates install.lock in the store; tests replace it.
+var openLockFile = func(dirfd int) (int, error) {
+	return unix.Openat(dirfd, "install.lock", unix.O_CREAT|unix.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
+}
+
+// lockOpenAttempts bounds the open attempts when creating install.lock
+// returns ENOENT. The retry handles a possible concurrent-create ENOENT
+// (two installs on a fresh store failed this way on macOS CI; the kernel
+// cause is not proved). Any other error, or ENOENT on the last attempt, is
+// returned.
+const lockOpenAttempts = 5
+
 func lock(ctx context.Context, d directory) (func(), error) {
-	fd, err := unix.Openat(d.fd, "install.lock", unix.O_CREAT|unix.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
+	fd, err := openLockFile(d.fd)
+	for attempt := 1; errors.Is(err, unix.ENOENT) && attempt < lockOpenAttempts; attempt++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+		}
+		fd, err = openLockFile(d.fd)
+	}
 	if err != nil {
 		return nil, err
 	}
