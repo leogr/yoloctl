@@ -32,7 +32,8 @@ bottom pane's button but not an upper split pane's. Popups stay on top. [1](#sou
 [3](#source-3) [4](#source-4)
 
 [FACT] In place: the new view starts with the ended view's rectangle and
-`Layout.Replace` puts it in the same slot. Split, zoom and focus are kept.
+`Layout.Replace` puts it in the same slot. Layout and zoom are kept; the
+re-attached view is focused (a click focuses the pane it lands on).
 The ended view's gesture owners are dropped and its session is closed. If the
 new view cannot start locally, the ended view stays and the status line says
 why. A late exit message for the replaced session matches no pane. There is
