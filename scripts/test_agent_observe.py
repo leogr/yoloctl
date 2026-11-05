@@ -561,12 +561,13 @@ class FakeCodexDaemon:
     """A Unix-socket app-server answering initialize and one thread/read over
     a WebSocket upgrade of /rpc, as Codex 0.164/0.165 does."""
 
-    def __init__(self, path, thread=None, delay=0, reset=False):
+    def __init__(self, path, thread=None, delay=0, reset=False, init=None):
         import base64
         import hashlib
         import socket
         import threading
         self.b64, self.sha1, self.thread, self.delay, self.reset = base64, hashlib.sha1, thread, delay, reset
+        self.init = {'userAgent': 'codex/0.165.0'} if init is None else init
         self.reads = []
         self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.server.bind(path)
@@ -624,7 +625,7 @@ class FakeCodexDaemon:
                 self.frame(conn, {'method': 'thread/status/changed', 'params': {}})
                 result = {'thread': self.thread}
             else:
-                result = {'userAgent': 'codex/0.165.0'}
+                result = self.init
             self.frame(conn, {'id': msg['id'], 'result': result})
 
     @staticmethod
@@ -709,9 +710,9 @@ class CodexWriterTests(WriterBase):
         self.start()
         hook, query = self.lines()
         self.assertEqual(hook['event'], 'SessionStart')
-        self.assertEqual(set(query) - {'pid', 'ts', 'dur_ms'}, {'v', 'event', 'session_id', 'model', 'effort', 'state'})
-        self.assertEqual((query['event'], query['session_id'], query['model'], query['effort'], query['state']),
-                         ('query', SID, 'gpt-5.6-luna', 'high', 'idle'), 'labelled with the thread it read')
+        self.assertEqual(set(query) - {'pid', 'ts', 'dur_ms'}, {'v', 'event', 'session_id', 'model', 'effort', 'state', 'version'})
+        self.assertEqual((query['event'], query['session_id'], query['model'], query['effort'], query['state'], query['version']),
+                         ('query', SID, 'gpt-5.6-luna', 'high', 'idle', '0.165.0'), 'labelled with the thread it read')
         self.assertEqual(d.reads, [{'threadId': SID, 'includeTurns': False}])
         self.assertLess(query['dur_ms'], 1000)
 
@@ -791,9 +792,28 @@ class CodexWriterTests(WriterBase):
                                 'status': {'type': 'active', 'activeFlags': ['waitingOnUserInput']}})
         self.assertEqual(agent_observe.main(['codex-query', '3', SID]), 0)
         query, = self.lines()
-        self.assertEqual((query['event'], query['session_id'], query['model'], query['effort'], query['state']),
-                         ('query', SID, 'gpt-5.6-luna', 'high', 'waiting_input'), 'labelled with the thread it read')
+        self.assertEqual((query['event'], query['session_id'], query['model'], query['effort'], query['state'], query['version']),
+                         ('query', SID, 'gpt-5.6-luna', 'high', 'waiting_input', '0.165.0'), 'labelled with the thread it read')
         self.assertEqual(d.reads, [{'threadId': SID, 'includeTurns': False}])
+
+    @IN_BOX_DAEMON_READ
+    def test_the_cli_version_comes_from_the_initialize_user_agent(self):
+        # archyAstra's live read of Codex 0.166.0: the first userAgent token is
+        # codex-tui/0.166.0. The client name is not pinned; anything that is
+        # not a bounded version gives no version and changes nothing else.
+        for user_agent, want in (('codex-tui/0.166.0 (Linux 6.8; x86_64) xterm-256color', '0.166.0'),
+                                 ('codex_cli_rs/0.167.1-alpha.2', '0.167.1-alpha.2'),
+                                 (None, None), ('', None), ('codex-tui', None), ('codex-tui/latest', None),
+                                 ('codex-tui/0.166', None), ('codex-tui/0.166.0\x1b[31m', None),
+                                 ('codex-tui/1.2.3' + 'a' * 40, None), (42, None)):
+            with self.subTest(user_agent):
+                for f in list(self.gen.glob('events.*')) + list(self.dir.iterdir()):
+                    f.unlink()
+                self.daemon(init={} if user_agent is None else {'userAgent': user_agent})
+                self.assertEqual(agent_observe.main(['codex-query', '3', SID]), 0)
+                query, = self.lines()
+                self.assertEqual((query['model'], query['effort']), ('gpt-5.6-luna', 'high'), 'model and effort unchanged')
+                self.assertEqual(query.get('version'), want)
 
     def test_the_refresh_read_refuses_invalid_arguments(self):
         self.daemon()

@@ -468,16 +468,17 @@ class CodexRead:
         return pid, ident
 
     def run(self, path):
-        """(model, effort, state) when model and effort are current for the
-        thread, else None. state is the thread's working, idle or waiting
-        state from its status and active flags."""
+        """(model, effort, state, version) when model and effort are current
+        for the thread, else None. state is the thread's working, idle or
+        waiting state from its status and active flags; version is the CLI
+        version the daemon's initialize response names, or None."""
         self.sock = self.socket.socket(self.socket.AF_UNIX, self.socket.SOCK_STREAM)
         try:
             self.sock.settimeout(self.remaining())
             self.sock.connect(path)
             pid, ident = self.peer()
             self.upgrade()
-            self.call('initialize', 'initialize', {
+            init = self.call('initialize', 'initialize', {
                 'clientInfo': {'name': 'yoloctl-agent-observe', 'title': None, 'version': '1'},
                 'capabilities': {'experimentalApi': False}})
             self.send(0x1, b'{"method":"initialized"}')
@@ -505,7 +506,23 @@ class CodexRead:
             state = 'waiting_input'
         else:
             state = 'working'
-        return model, effort, state
+        return model, effort, state, codex_version(init)
+
+
+# The CLI version in an app-server initialize response's userAgent, whose
+# first token is CLIENT/VERSION (observed: "codex-tui/0.166.0 (…)"); the
+# client name is not pinned. Anything else gives no version.
+CODEX_VERSION = re.compile(r'[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*')
+
+
+def codex_version(init):
+    agent = init.get('userAgent') if isinstance(init, dict) else None
+    if not isinstance(agent, str) or not agent.strip():
+        return None
+    _, slash, version = agent.split()[0].rpartition('/')
+    if not slash or not printable(version, 32) or not CODEX_VERSION.fullmatch(version):
+        return None
+    return version
 
 
 def daemon_sockets(uid):
@@ -532,7 +549,7 @@ def daemon_sockets(uid):
 
 
 def codex_query(thread):
-    """The daemon's current (model, effort, state) for thread, or None."""
+    """The daemon's current (model, effort, state, version) for thread, or None."""
     deadline = time.monotonic() + QUERY_BUDGET
     try:
         sockets = daemon_sockets(os.getuid())
@@ -754,6 +771,8 @@ def codex_hook(started):
             # only while that thread is the box's current conversation.
             line = {'v': 1, 'event': 'query', 'pid': out['pid'], 'ts': now, 'session_id': out['session_id'],
                     'model': found[0], 'effort': found[1]}
+            if found[3] is not None:
+                line['version'] = found[3]
             # The daemon may still report a finishing turn as active: the Stop
             # hook's idle stays authoritative.
             if out['event'] == 'SessionStart':
@@ -775,9 +794,12 @@ def codex_query_mode(args, started):
     gen, thread = args
     found = codex_query(thread)
     if found is not None:
-        write(gen, {'v': 1, 'event': 'query', 'pid': os.getpid(),
-                    'ts': time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime()) + 'Z', 'session_id': thread,
-                    'model': found[0], 'effort': found[1], 'state': found[2]}, started)
+        line = {'v': 1, 'event': 'query', 'pid': os.getpid(),
+                'ts': time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime()) + 'Z', 'session_id': thread,
+                'model': found[0], 'effort': found[1], 'state': found[2]}
+        if found[3] is not None:
+            line['version'] = found[3]
+        write(gen, line, started)
     return 0
 
 

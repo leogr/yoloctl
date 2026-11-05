@@ -1,6 +1,6 @@
 # Codex hook reporter
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; states, tokens used and the refresh read `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; completed-request recovery `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; query version from initialize `f28bf6f93e5c002fd127e67c6c671c7aadc5bad2` and accompanying changes; states, tokens used and the refresh read `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; completed-request recovery `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
 
 [FACT] The `yolo.agent.observe-codex` feature installs the shared observation
 writer (the same interpreter check, `agent-observe.py` and build-time Python
@@ -59,7 +59,10 @@ own Codex app-server daemon:
 - **Recorded only** when the peer is the same process afterwards, the thread ID
   is exact, its status is idle or active and both `model` and an enumerated
   `reasoningEffort` are present: a `query` line with the model and effort,
-  labelled with the thread's `session_id`.
+  labelled with the thread's `session_id`. It also carries `version` when the
+  `initialize` response's `userAgent` begins with a `CLIENT/VERSION` token
+  whose version is a bounded dotted number, such as `codex-tui/0.166.0` →
+  `0.166.0`. The client name is not pinned; anything else writes no version.
   After a `SessionStart` it also carries the state: `idle`, or `working`,
   `waiting_permission` or `waiting_input` from the active flags. After a
   `Stop` it carries none, since the daemon may still call a finishing turn

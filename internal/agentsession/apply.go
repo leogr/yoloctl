@@ -248,6 +248,9 @@ func (r *Record) applyLine(o *Observed, ob observe.Observation) bool {
 		}
 	case observe.Query:
 		o.Model, o.Effort, changed = value(ob.Model), value(ob.Effort), true
+		if ob.Version != "" {
+			o.Version = value(ob.Version)
+		}
 	case observe.StatusLine:
 		if ob.Model != "" {
 			o.Model, changed = value(ob.Model), true

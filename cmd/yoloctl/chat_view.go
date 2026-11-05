@@ -407,11 +407,30 @@ func (s *chatSession) refreshAgents() {
 	}
 }
 
+// agentsRefresh is how often an open view rereads its members' agents and
+// the reports they made (model, effort, version…), so a change shows within
+// about one interval. Each read is one finite box.inventory request that the
+// controller bounds with its own live-read budget; Codex in-app changes
+// without a hook still wait for the controller's minute-throttled daemon
+// refresh, which these reads only wake.
+var agentsRefresh = 10 * time.Second
+
 // agentsLoop reads the members' agents and runtime one read at a time: when
-// asked (connect, reconnect, membership change) and at the catalog cadence,
+// asked (connect, reconnect, membership change) and every agentsRefresh,
 // until the view closes.
 func (s *chatSession) agentsLoop() {
-	ticker := time.NewTicker(catalogRefresh)
+	s.agentsLoopEvery(agentsRefresh, func(ctx context.Context) ([]controllerBoxView, error) {
+		boot, err := checkControllerSpace(ctx, s.target.Space)
+		if err != nil {
+			return nil, err
+		}
+		var view []controllerBoxView
+		return view, controllerJSON(ctx, boot, "box.inventory", nil, nil, &view, io.Discard)
+	}, func(msg tea.Msg) { s.program.Send(msg) })
+}
+
+func (s *chatSession) agentsLoopEvery(every time.Duration, read func(context.Context) ([]controllerBoxView, error), send func(tea.Msg)) {
+	ticker := time.NewTicker(every)
 	defer ticker.Stop()
 	for {
 		select {
@@ -420,15 +439,8 @@ func (s *chatSession) agentsLoop() {
 		case <-s.agentsWake:
 		case <-ticker.C:
 		}
-		if msg := s.loadAgents(func(ctx context.Context) ([]controllerBoxView, error) {
-			boot, err := checkControllerSpace(ctx, s.target.Space)
-			if err != nil {
-				return nil, err
-			}
-			var view []controllerBoxView
-			return view, controllerJSON(ctx, boot, "box.inventory", nil, nil, &view, io.Discard)
-		}); msg != nil {
-			s.program.Send(msg)
+		if msg := s.loadAgents(read); msg != nil {
+			send(msg)
 		}
 	}
 }

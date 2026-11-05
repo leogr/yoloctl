@@ -455,6 +455,23 @@ func TestApplyAppliesAQueryOnlyToItsThread(t *testing.T) {
 	}
 }
 
+// A query's version is folded with its model and effort, only for its own
+// thread: a read of another conversation sets nothing, and a query without a
+// version keeps the one already known.
+func TestApplyFoldsAQueryVersionOnlyForItsThread(t *testing.T) {
+	query := func(off int64, id, version string) observe.Observation {
+		return line(3, off, observe.Query, func(o *observe.Observation) {
+			o.SessionID, o.Model, o.Effort, o.Version = id, "gpt-6-astra", "high", version
+		})
+	}
+	r := resuming()
+	r.Apply(result(3, observe.HealthOK, query(1, convA, "0.166.0"), query(2, convB, "9.9.9"), query(3, convA, "")))
+	v := r.Observed.Version
+	if v == nil || v.Value != "0.166.0" || v.Source != SourceQuery {
+		t.Fatalf("the matching read's version, from the query: %+v", v)
+	}
+}
+
 // The latest state report wins, in line order; a status line or query line
 // without a state resolves a waiting state to working, and nothing else
 // changes a state without reporting one. Subagent lines never touch it.

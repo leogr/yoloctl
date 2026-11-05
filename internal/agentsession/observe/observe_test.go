@@ -419,6 +419,22 @@ func TestReadRejectsTamperedEntriesWithoutFollowingOrBlocking(t *testing.T) {
 	}
 }
 
+// A query line may carry the agent CLI's version, read from the agent's own
+// server; it is bounded like a status line's.
+func TestReadAcceptsAVersionOnAQueryLine(t *testing.T) {
+	f := preparedGen(t, 1)
+	writeEvents(t, f, 1, 0,
+		event(Query, `,"model":"gpt-5.6-luna","effort":"high","session_id":"`+sidA+`","version":"0.166.0"`),
+		event(Query, `,"model":"gpt-5.6-luna","effort":"high","session_id":"`+sidA+`"`))
+	res := read(t, f, 1, Cursor{})
+	if res.Health != HealthOK || res.Rejected != 0 || len(res.Observations) != 2 {
+		t.Fatalf("query lines with and without a version are accepted: %+v", res)
+	}
+	if res.Observations[0].Version != "0.166.0" || res.Observations[1].Version != "" {
+		t.Fatalf("versions: %q %q", res.Observations[0].Version, res.Observations[1].Version)
+	}
+}
+
 func TestReadValidatesEveryLine(t *testing.T) {
 	f := preparedGen(t, 1)
 	bad := []string{
@@ -457,6 +473,9 @@ func TestReadValidatesEveryLine(t *testing.T) {
 		event(Query, `,"model":"gpt-5.6-luna","effort":"high","session_id":"not-a-uuid"`),
 		event(Query, `,"model":"gpt-5.6-luna","effort":"high","subagent":true`),
 		event(Query, `,"model":"gpt-5.6-luna","effort":"high","wrapped":false`),
+		event(Query, `,"model":"gpt-5.6-luna","effort":"high","version":"`+strings.Repeat("9", 33)+`"`),
+		event(Query, `,"model":"gpt-5.6-luna","effort":"high","version":"0.166.0\u001b[31m"`),
+		event("PostModelRequest", `,"version":"0.166.0"`),
 	}
 	good := event("SubagentStop", `,"effort":"low","session_id":"`+sidB+`"`)
 	writeEvents(t, f, 1, 0, append(bad, good)...)

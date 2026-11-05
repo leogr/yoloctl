@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/agentsession"
 	"github.com/leogr/yoloctl/internal/boxstate"
@@ -259,5 +260,89 @@ func TestResolveAttachIsBoundedAndRechecksMembership(t *testing.T) {
 	wrong.MemberID = "m2"
 	if msg := s.resolveAttachWith("mopus", answer(wrong, nil)).(chatui.AttachTargetMsg); msg.Err == nil {
 		t.Fatal("an answer for another member was accepted")
+	}
+}
+
+// The agent CLI's version reaches the card's runtime with its source, like
+// model and effort; a box without one keeps it unknown.
+func TestParticipantRuntimeCarriesTheReportedVersion(t *testing.T) {
+	cfg := &agentbox.Config{Name: "archyAstra", ID: "box-astra", Agent: "codex"}
+	b := currentObservation(cfg, "gpt-6-astra", "high")
+	b.State.Conversation.Observed.Version = &agentsession.ObservedValueView{Value: "0.166.0", Source: agentsession.SourceQuery, At: time.Now(), ReadAt: time.Now()}
+	if rt := participantRuntime(b); rt.Version != (chatui.RuntimeValue{Value: "0.166.0", Source: agentsession.SourceQuery}) || rt.Hint != "" {
+		t.Fatalf("version: %+v hint %q", rt.Version, rt.Hint)
+	}
+	b.State.Conversation.Observed.Live = ""
+	if rt := participantRuntime(b); rt.Version.Value != "" {
+		t.Fatalf("a launch not read now shows no version: %+v", rt.Version)
+	}
+}
+
+// D0: a running agy launch whose reports are all empty (no-report) gets the
+// tentative next step, naming the account, every box using it and the one
+// command; other agents keep their plain note, and other reasons get none.
+func TestReporterHintOnlyForAnAccountStatusLineAgentWithoutReports(t *testing.T) {
+	noReport := func(agent string) controllerBoxView {
+		cfg := &agentbox.Config{Name: agent, ID: "box-" + agent, Agent: agent, Account: "leogr", Space: "yolospace"}
+		b := currentObservation(cfg, "", "")
+		o := b.State.Conversation.Observed
+		o.Health, o.Model, o.Effort, o.Context = "no-report", nil, nil, nil
+		return b
+	}
+	rt := participantRuntime(noReport("agy"))
+	want := "no usable report has been observed for this launch; the agy status line reporter may be off for account leogr. " +
+		"To turn it on: stop every box that uses account leogr, run yoloctl account observe leogr agy --enable --space yolospace, then start the boxes again."
+	if rt.Hint != want || rt.Note != "agent reports are no-report" || rt.Model.Value != "" {
+		t.Fatalf("agy hint:\n got %q\nwant %q (note %q)", rt.Hint, want, rt.Note)
+	}
+	for _, agent := range []string{"claude", "codex"} {
+		if rt := participantRuntime(noReport(agent)); rt.Hint != "" || rt.Note == "" {
+			t.Errorf("%s keeps its plain note: hint %q note %q", agent, rt.Hint, rt.Note)
+		}
+	}
+	gap := noReport("agy")
+	gap.State.Conversation.Observed.Health = "gap"
+	stopped := noReport("agy")
+	stopped.State.Runtime = boxstate.RuntimeStopped
+	for name, b := range map[string]controllerBoxView{"gap": gap, "stopped": stopped} {
+		if rt := participantRuntime(b); rt.Hint != "" {
+			t.Errorf("%s: only a readable current launch without reports gets the hint: %q", name, rt.Hint)
+		}
+	}
+}
+
+// The agents loop reads once per interval and once per wake, publishes each
+// read, and stops when the view closes; the production interval is 10 s.
+func TestAgentsLoopReadsEveryIntervalAndStopsOnClose(t *testing.T) {
+	if agentsRefresh != 10*time.Second {
+		t.Fatalf("agentsRefresh = %v, want 10s", agentsRefresh)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	s := &chatSession{ctx: ctx, header: runtimeHeader(), agentsWake: make(chan struct{}, 1)}
+	reads := make(chan struct{}, 64)
+	sent := make(chan tea.Msg, 64)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.agentsLoopEvery(15*time.Millisecond, func(context.Context) ([]controllerBoxView, error) {
+			reads <- struct{}{}
+			return nil, nil
+		}, func(msg tea.Msg) { sent <- msg })
+	}()
+	for i := 0; i < 3; i++ {
+		select {
+		case <-reads:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("tick %d: no read", i)
+		}
+		if msg, ok := (<-sent).(chatui.AgentsMsg); !ok || msg.Err != nil {
+			t.Fatalf("tick %d: published %+v", i, msg)
+		}
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the loop did not stop when the view closed")
 	}
 }

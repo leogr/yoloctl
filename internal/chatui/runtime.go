@@ -11,15 +11,22 @@ import (
 	"github.com/leogr/yoloctl/internal/spacetelemetry"
 )
 
-// AgentRuntime is what the box agent reported of its model, effort and
-// context window for its current launch. Every value is the agent's own
-// report; an unknown one is empty.
+// AgentRuntime is what the box agent reported of its model, effort, CLI
+// version and context window for its current launch. Every value is the
+// agent's own report; an unknown one is empty.
 type AgentRuntime struct {
 	Model, Effort RuntimeValue
+	// Version is the agent CLI's version as the agent reported it (a status
+	// line, or its own server); the card shows it, the panel line never.
+	Version RuntimeValue
 	// Context is nil when unknown.
 	Context *RuntimeContext
 	// Note explains missing or unusable observation, for the details card.
 	Note string
+	// Hint is a next step the card shows in full even when it has no other
+	// row: an agent whose reporter may be off for its account, with the one
+	// command that turns it on. Empty for everything else.
+	Hint string
 	// Conversation is the running launch's conversation, such as
 	// "0f8fad5b… · resumed"; empty when it is not certain.
 	Conversation string
@@ -71,8 +78,10 @@ type RuntimeContext struct {
 	Percent    int
 }
 
-// runtimeFreshness is how long a successful host read stays current: two of
-// the host's one-minute refreshes. A failed read makes it stale at once.
+// runtimeFreshness is how long a successful host read stays current: about a
+// dozen of the host's 10-second agent reads (cmd/yoloctl agentsRefresh), so a
+// few slow or skipped reads do not blank the line. A failed read makes it
+// stale at once.
 const runtimeFreshness = 2 * time.Minute
 
 // maxRuntimeText bounds a displayed model or effort value.
@@ -215,7 +224,7 @@ func (m *Model) runtimeRows(w who, now time.Time) [][2]string {
 	for _, f := range []struct {
 		name string
 		v    RuntimeValue
-	}{{"Model", rt.Model}, {"Effort", rt.Effort}} {
+	}{{"Model", rt.Model}, {"Effort", rt.Effort}, {"Version", rt.Version}} {
 		if f.v.Value == "" {
 			continue
 		}
@@ -235,6 +244,11 @@ func (m *Model) runtimeRows(w who, now time.Time) [][2]string {
 		rows = append(rows, [2]string{"Conversation", runtimeText(rt.Conversation)})
 	}
 	if len(rows) == 0 {
+		if rt.Hint != "" {
+			// Nothing was observed, but there is a next step: shown whole,
+			// never truncated, since it carries a command to run.
+			return [][2]string{{"Note", oneLine(rt.Hint)}}
+		}
 		return nil
 	}
 	switch {
@@ -248,6 +262,9 @@ func (m *Model) runtimeRows(w who, now time.Time) [][2]string {
 	if rt.Note != "" {
 		// Keep the metadata safety bound stable across terminal reports.
 		rows = append(rows, [2]string{"Note", ansi.TruncateWc(oneLine(rt.Note), 4*maxRuntimeText, "…")})
+	}
+	if rt.Hint != "" {
+		rows = append(rows, [2]string{"Note", oneLine(rt.Hint)})
 	}
 	return rows
 }

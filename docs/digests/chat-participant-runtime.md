@@ -1,6 +1,6 @@
 # Chat participant model and effort
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; state row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; conversation row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; 10 s reads, Version row and reporter hint `f28bf6f93e5c002fd127e67c6c671c7aadc5bad2` and accompanying changes; state row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; conversation row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
 
 [FACT] A roomy Participants panel's card detail line is exactly
 `Model (effort) · away reason`, such as `Opus 5.5 (max) · reviewing C`, below
@@ -42,7 +42,12 @@ line too narrow to scroll, nothing moves and the footer hover hint names the
 full line (an empty one adds nothing); a notice keeps priority. [9](#source-9) [10](#source-10)
 
 [FACT] One worker reads values with one finite `box.inventory` request (5 s
-bound) at connect and reconnect, after a membership change and every minute. Requests coalesce; a read made while the trusted catalog
+bound) at connect and reconnect, after a membership change and every 10 s
+(`agentsRefresh`); the trusted catalog keeps its one-minute cadence. A Claude
+or agy change therefore shows within about 10 s. A Codex in-app change
+without a hook still waits for the controller's minute-throttled daemon
+refresh ([Codex refresh read](codex-refresh-read.md)), which these reads only
+wake. The times are nominal: admission or failed reads can delay them. Requests coalesce; a read made while the trusted catalog
 moved to another room, disk, account or generation is discarded and repeated.
 A failed read keeps earlier values for the details card only; a successful one
 replaces them all. Values are keyed by the trusted catalog's immutable box ID of
@@ -58,6 +63,17 @@ model report does not age it; the read time does. Missing effort stays unknown
 beside a known model. Nothing else fills a gap: `--model` in a box's
 `agent_extra_args` yields no value and the note `no agent reports for this box`.
 The space telemetry worker is not used: its live-read budget is process-wide. [3](#source-3) [5](#source-5) [7](#source-7)
+
+[FACT] The card has a Version row, the agent CLI's version with the report
+that carried it (a status line, or a query of the agent's own server), under
+the same current-launch rule and with the same stale Evidence as model and
+effort. The panel line never shows it. A readable current launch with health
+`no-report`, whose profile declares an account status line reporter (agy),
+gets a tentative hint as its card Note, shown whole even when the card has no
+other row. The hint says the reporter may be off for the account and gives the
+explicit step: stop every box using that account, then `yoloctl account observe
+ACCOUNT AGENT --enable --space SPACE`. Nothing is enabled. Other empty cards stay
+empty. [1](#source-1) [3](#source-3) [11](#source-11)
 
 [FACT] Claude boxes report through the reporter their profile requires; a box
 created before it reports after its next recreate, a print-mode session never.
@@ -75,3 +91,4 @@ Codex boxes report through their hook reporter ([Codex reporter](codex-observati
 8. <a id="source-8"></a> [Claude reporter](claude-reporter.md) — the required status line and hook reporter.
 9. <a id="source-9"></a> [Hover scrolling](../../internal/chatui/marquee.go#L12-L202) — `marqueeHold`/`marqueeStep`/`marqueeEnd`/`marqueeMin`, `hoveredLabel`, `marqueeSteps`, `marqueeWindow`, `roleText`, `settleMarquee`, `marqueeAdvance`; `cardWidth` set in roster.go `participantRows` L127, the footer fallback in hover.go `hoverHint` L192, the update hook in model.go L386 and L442.
 10. <a id="source-10"></a> [Hover regressions](../../internal/chatui/marquee_test.go#L88-L319) — injected ticks: fitting, clipped and empty rows, delays, width, true suffix, invalidation and stale ticks, compact/NoMotion/narrow, CJK, combining and ZWJ graphemes.
+11. <a id="source-11"></a> [Version and hint regressions](../../internal/chatui/participant_version_test.go#L1) — card Version row, stale card, hint-only empty card; chat_participant_runtime_test.go `TestParticipantRuntimeCarriesTheReportedVersion`, `TestReporterHintOnlyForAnAccountStatusLineAgentWithoutReports`, `TestAgentsLoopReadsEveryIntervalAndStopsOnClose`; `reporterHint` in chat_participant_runtime.go.

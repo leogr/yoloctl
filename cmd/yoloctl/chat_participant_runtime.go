@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+
+	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/agentsession"
 	"github.com/leogr/yoloctl/internal/agentsession/observe"
 	"github.com/leogr/yoloctl/internal/boxstate"
@@ -40,6 +43,7 @@ func participantRuntime(b controllerBoxView) chatui.AgentRuntime {
 	o, note := observedRuntime(b)
 	rt := chatui.AgentRuntime{Note: note}
 	if o == nil {
+		rt.Hint = reporterHint(b, note)
 		return rt
 	}
 	value := func(v *agentsession.ObservedValueView) chatui.RuntimeValue {
@@ -48,7 +52,7 @@ func participantRuntime(b controllerBoxView) chatui.AgentRuntime {
 		}
 		return chatui.RuntimeValue{Value: v.Value, Source: v.Source}
 	}
-	rt.Model, rt.Effort = value(o.Model), value(o.Effort)
+	rt.Model, rt.Effort, rt.Version = value(o.Model), value(o.Effort), value(o.Version)
 	if c := o.Context; c != nil {
 		rt.Context = &chatui.RuntimeContext{Size: c.Size, Used: -1, Percent: -1}
 		if c.Used != nil {
@@ -132,4 +136,24 @@ func observedRuntime(b controllerBoxView) (*agentsession.ObservedView, string) {
 		return nil, "agent reports are " + st.Observed.Health
 	}
 	return st.Observed, ""
+}
+
+// reporterHint is the next step for a current launch whose reports were all
+// readable but empty (health no-report), when the agent's reporter is the
+// status line of its account's own settings (agy): it may be off for that
+// account. Turning it on is the explicit `account observe` command, which
+// refuses while any running box uses the account; nothing is changed here.
+// Every other case keeps its plain note.
+func reporterHint(b controllerBoxView, note string) string {
+	if note != "agent reports are "+string(observe.HealthNoReport) || b.Config == nil {
+		return ""
+	}
+	profile, err := agentprofile.Lookup(b.Config.Agent)
+	if err != nil || profile.Session == nil || profile.Session.Observe == nil || profile.Session.Observe.AccountStatusLine == nil {
+		return ""
+	}
+	account, space, agent := b.Config.Account, b.Config.Space, b.Config.Agent
+	return fmt.Sprintf("no usable report has been observed for this launch; the %s status line reporter may be off for account %s. "+
+		"To turn it on: stop every box that uses account %s, run yoloctl account observe %s %s --enable --space %s, then start the boxes again.",
+		agent, account, account, account, agent, space)
 }

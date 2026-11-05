@@ -168,8 +168,9 @@ type Observation struct {
 	Source    string
 	Model     string
 	Effort    string
-	// Version comes only from status line reports, Context from status
-	// line, query and PostModelRequest reports.
+	// Version comes from status line and query reports (a query takes it
+	// from the agent's own server), Context from status line, query and
+	// PostModelRequest reports.
 	Version string
 	Context *Context
 	// State is the agent's state as this report gives it, or empty.
@@ -406,8 +407,9 @@ type wireEvent struct {
 }
 
 // statusLineOnly reports whether w carries a field only status line lines may.
+// A version may also come on a query line (versionEvents).
 func (w wireEvent) statusLineOnly() bool {
-	return w.Version != "" || w.Wrapped != nil || w.Handover != ""
+	return w.Wrapped != nil || w.Handover != ""
 }
 
 // hasContext reports whether w carries any context field.
@@ -445,6 +447,9 @@ var (
 	// stateEvents may carry a state; contextEvents a context.
 	stateEvents   = []string{"SessionStart", "SessionEnd", "Stop", StatusLine, Query, "UserPromptSubmit", "Notification", "StopFailure", "PostModelRequest", "PermissionRequest"}
 	contextEvents = []string{StatusLine, Query, "PostModelRequest"}
+	// versionEvents may carry the agent CLI's version: a status line, or a
+	// query of the agent's own server (its initialize response).
+	versionEvents = []string{StatusLine, Query}
 	// stateOnlyEvents carry a state and nothing the agent said: no prompt,
 	// message, tool input, model or context.
 	stateOnlyEvents = []string{"Notification", "PermissionRequest"}
@@ -484,6 +489,8 @@ func parseLine(line []byte, gen, k uint64, end int64, readAt time.Time) (Observa
 	case statusLine != (w.Wrapped != nil) || (!statusLine && w.statusLineOnly()) || (statusLine && w.Subagent):
 		return Observation{}, false
 	case !ctxOK || !printable(w.Version, 32):
+		return Observation{}, false
+	case w.Version != "" && !slices.Contains(versionEvents, w.Event):
 		return Observation{}, false
 	case w.Event == Query && (w.Model == "" || w.Effort == "" || w.Subagent):
 		return Observation{}, false
