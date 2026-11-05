@@ -170,7 +170,8 @@ type Observed struct {
 	Detail     string         `yaml:"detail,omitempty"`
 	Model      *ObservedValue `yaml:"model,omitempty"`
 	Effort     *ObservedValue `yaml:"effort,omitempty"`
-	// Version comes only from status line reports.
+	// Version is the agent CLI's: from status line reports, or a query of
+	// the agent's own server (applied only for its own thread).
 	Version *ObservedValue   `yaml:"version,omitempty"`
 	Context *ObservedContext `yaml:"context,omitempty"`
 	// State is the agent's reported state in this launch (see Apply).

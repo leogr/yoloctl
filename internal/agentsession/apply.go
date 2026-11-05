@@ -110,8 +110,11 @@ func (r *Record) Observable(gen uint64) bool {
 //     field leaves the value unknown or as last reported in this generation.
 //     Hooks report the model on a startup SessionStart or a PostModelSwitch
 //     and the effort on a Stop; every status line reports model, effort,
-//     version and context, and is the only source of the last two. Status
-//     lines never change conversation identity or the resume outcome.
+//     version and context. A query of the agent's own server reports model
+//     and effort and may carry its version, and context also comes from
+//     query and PostModelRequest lines; a query applies only while its
+//     thread is the conversation. Status lines never change conversation
+//     identity or the resume outcome.
 //   - Health keeps the worst read of the generation and never changes the
 //     outcome.
 func (r *Record) Apply(res observe.Result) bool {
