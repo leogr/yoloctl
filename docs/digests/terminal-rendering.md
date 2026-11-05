@@ -1,6 +1,6 @@
 # VT rendering and PTY child lifecycle
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; macOS slave retention on `3736b1c` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; slave retention on `0d2ab61`; re-read cited sources when changing behavior.
 
 [FACT] Each terminal owns an isolated libghostty-vt WebAssembly instance under
 wazero. The embedded artifact pins Ghostty revision
@@ -54,9 +54,9 @@ are visible and skip that packet; later input retains its order.
 [7](#source-7) [8](#source-8)
 
 [FACT] Local PTY children receive `TERM=xterm-256color` and `YOLOCTL_TUI=1`. Managed session data uses a separate trusted channel. The parent
-keeps its PTY slave until the direct child is reaped, because macOS discards
-unread output at the last slave close. After direct child exit, one 200 ms budget
-covers the slave's output-queue drain and the final reads; pumps then close the pollable master,
+keeps its PTY slave until the direct child is reaped, so a child exiting before
+the first read keeps its output. One 200 ms post-reap budget covers the slave
+drain and final reads; pumps then close the pollable master,
 join input/output workers and drain the managed channel with a bounded wait.
 Completed managed views recover their local dimensions before appending the
 exit banner; resizing an exited tab remains local. A console cannot replace
@@ -84,27 +84,27 @@ or native application parity. [12](#source-12)
 
 ## Sources
 
-1. <a id="source-1"></a> [terminal.go](../../internal/terminal/terminal.go#L1-L313) — module imports, memory, ownership, row API, events and cleanup.
-2. <a id="source-2"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L42) — private ABI, configured defaults, native rows and keyboard encoder.
-3. <a id="source-3"></a> [build-terminal.py](../../scripts/build-terminal.py#L1-L80) — source/toolchain pins, hashes, regeneration and reproduction check.
-4. <a id="source-4"></a> [emulator.go](../../internal/tui/term/emulator.go#L1-L249) — synchronization, output interception, reset and close.
+1. <a id="source-1"></a> [terminal.go](../../internal/terminal/terminal.go#L1-L313) — imports, memory, ownership, rows, events, cleanup.
+2. <a id="source-2"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L42) — private ABI, defaults, native rows, keyboard encoder.
+3. <a id="source-3"></a> [build-terminal.py](../../scripts/build-terminal.py#L1-L80) — pins, hashes, regeneration, reproduction.
+4. <a id="source-4"></a> [emulator.go](../../internal/tui/term/emulator.go#L1-L249) — synchronization, interception, reset, close.
 5. <a id="source-5"></a> [handler.go](../../internal/tui/term/handler.go#L10) — `SetColors`; shared query handling in `internal/terminal/colors.go`.
 6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L1625) — `View`, `hostCursor`, `runningCursor`.
-7. <a id="source-7"></a> [input.go](../../internal/tui/term/input.go#L11) — queue bounds, prepared/ordinary input, failures and close.
-8. <a id="source-8"></a> [pty_test.go](../../internal/tui/term/pty_test.go#L1-L52) — real PTY close with blocked I/O and retained slave.
+7. <a id="source-7"></a> [input.go](../../internal/tui/term/input.go#L11) — queue bounds, prepared input, failures, close.
+8. <a id="source-8"></a> [pty_test.go](../../internal/tui/term/pty_test.go#L1-L52) — PTY close with blocked I/O, retained slave.
 9. <a id="source-9"></a> [session.go](../../internal/tui/term/session.go#L66) — `Start`, pumps, reset/banner, `Wait`, `Close`.
 10. <a id="source-10"></a> [console.go](../../internal/tui/term/console.go#L15-L255) — direct-child completion, ordered reuse, `Kill`, `Close`.
 11. <a id="source-11"></a> [reset.go](../../internal/termio/reset.go#L1-L49) — `SessionEndResetInPlace`, `SessionEndResetHost`.
-12. <a id="source-12"></a> [fidelity_test.go](../../internal/tui/term/fidelity_test.go#L1-L128) — strict harness and adjacent JSON/source map; independent expectations and fragmented writes.
-13. <a id="source-13"></a> [Display snapshots, history and focus](terminal-display.md) — frame ownership, synchronized output and bounded acceptance evidence.
-14. <a id="source-14"></a> [Host colors and live terminal bells](terminal-colors-bells.md) — palette overrides, deferred queries, native event filtering and tests.
-15. <a id="source-15"></a> [Native terminal snapshots](terminal-snapshots.md) — encoding, isolated restoration, limits and regression coverage.
-16. <a id="source-16"></a> [lifecycle_test.go](../../internal/tui/term/lifecycle_test.go#L92) — retained-descendant console reuse and sustained output/resize/frame/status contracts.
-17. <a id="source-17"></a> [Measured geometry and pixel input](terminal-geometry.md) — query ownership, geometry transport, input decoding and limits.
-18. <a id="source-18"></a> [Compatibility evidence](terminal-compatibility.md) — committed text, focus/cursor and host-input/PTY acceptance.
+12. <a id="source-12"></a> [fidelity_test.go](../../internal/tui/term/fidelity_test.go#L1-L128) — strict harness, JSON/source map, fragmented writes.
+13. <a id="source-13"></a> [Display snapshots, history and focus](terminal-display.md) — frames, synchronized output, acceptance.
+14. <a id="source-14"></a> [Host colors and live terminal bells](terminal-colors-bells.md) — palette overrides, deferred queries, event filtering.
+15. <a id="source-15"></a> [Native terminal snapshots](terminal-snapshots.md) — encoding, restoration, limits.
+16. <a id="source-16"></a> [lifecycle_test.go](../../internal/tui/term/lifecycle_test.go#L92) — descendant console reuse, sustained-output contracts.
+17. <a id="source-17"></a> [Measured geometry and pixel input](terminal-geometry.md) — queries, geometry transport, input decoding.
+18. <a id="source-18"></a> [Compatibility evidence](terminal-compatibility.md) — text, focus/cursor, host-input/PTY acceptance.
 19. <a id="source-19"></a> [native.patch](../../internal/terminal/wasm/native.patch#L67-L86) — formatter style close before blank cells.
 20. <a id="source-20"></a> [terminal_test.go](../../internal/terminal/terminal_test.go#L96-L114) — `TestErasedCellsDoNotInheritStyle`.
 21. <a id="source-21"></a> [terminal_reader.go](../../third_party/ultraviolet/terminal_reader.go#L289-L296) — split string-terminator wait.
-22. <a id="source-22"></a> [stray_backslash_test.go](../../internal/tui/stray_backslash_test.go#L159) — `TestSTReplySplitAtEveryPoint`, every split of OSC, DCS and APC replies (PM/SOS share the guard).
-23. <a id="source-23"></a> [pty.go](../../internal/tui/term/pty.go#L28-L90) — retained slave and bounded release.
-24. <a id="source-24"></a> [pty_output_test.go](../../internal/tui/term/pty_output_test.go#L21) — `TestPTYKeepsOutputOfChildThatExitsBeforeRead`.
+22. <a id="source-22"></a> [stray_backslash_test.go](../../internal/tui/stray_backslash_test.go#L159) — `TestSTReplySplitAtEveryPoint`, OSC/DCS/APC splits.
+23. <a id="source-23"></a> [pty.go](../../internal/tui/term/pty.go#L28-L90) — retained slave, bounded release.
+24. <a id="source-24"></a> [pty_output_test.go](../../internal/tui/term/pty_output_test.go#L23-L102) — late-read regression.

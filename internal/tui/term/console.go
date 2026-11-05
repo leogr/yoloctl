@@ -18,10 +18,10 @@ import (
 // ptyDrainGrace is the one post-reap budget: how long the pump waits, AFTER
 // the direct child has exited, for the parent's slave release and the reader
 // to flush the command's final output, before it force-closes the PTY
-// master. It only elapses when a daemonized
-// grandchild (e.g. `limactl start`'s long-lived host-agent) still holds
-// the slave open — in the common case the master EOFs first and this is
-// never reached.
+// master. The slave release can use part of it while queued output is still
+// being read; it fully elapses only when a daemonized grandchild (e.g.
+// `limactl start`'s long-lived host-agent) still holds the slave open — in
+// the common case the master EOFs well within it.
 const ptyDrainGrace = 200 * time.Millisecond
 
 // Console is the TUI's persistent index-0 view (eyeball finding E5):
