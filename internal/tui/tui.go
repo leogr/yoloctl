@@ -1561,7 +1561,7 @@ func (m *model) handleExitedTabKey(k tea.Key) tea.Cmd {
 		if m.tabs.Current() == nil {
 			m.focusPalette = true // no tabs left: route input to the palette
 		}
-	case k.Code == 'r' && k.Mod == 0:
+	case k.Code == 'r' && k.Mod&^(tea.ModCapsLock|tea.ModNumLock) == 0:
 		m.reattachPane(m.tabs.Current(), m.tabs.Focused())
 	case k.Code == tea.KeyPgUp:
 		page := max(m.viewRows()-1, 1)

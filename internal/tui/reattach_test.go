@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/tui/panes"
 	"github.com/leogr/yoloctl/internal/tui/tabs"
@@ -186,5 +187,40 @@ func TestReattachButton(t *testing.T) {
 	}
 	if len(m.reattachSlots()) != 0 {
 		t.Fatal("the live view has no button")
+	}
+}
+
+// r re-attaches as the host's decoder delivers it: a kitty CSI u report
+// (Ghostty) with Num Lock or Caps Lock on still counts as a plain r; a real
+// modifier (Ctrl+r) does not.
+func TestReattachKeyIgnoresLockModifiers(t *testing.T) {
+	old := executable
+	t.Cleanup(func() { executable = old })
+	executable = func() (string, error) { return truePath(t), nil }
+	for _, c := range []struct {
+		name, seq string
+		want      bool
+	}{
+		{"plain", "\x1b[114u", true},
+		{"num lock", "\x1b[114;129u", true},
+		{"caps lock", "\x1b[114;65u", true},
+		{"num lock with text", "\x1b[114;129;114u", true},
+		{"ctrl", "\x1b[114;5u", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var decoder uv.EventDecoder
+			n, event := decoder.Decode([]byte(c.seq))
+			press, ok := event.(uv.KeyPressEvent)
+			if !ok || n != len(c.seq) {
+				t.Fatalf("decode %q: %d %#v", c.seq, n, event)
+			}
+			m := newTestModel(t, 100, 26)
+			ended := endedAttach(t, "box", "attach", "api")
+			tab, _ := splitWithEnded(t, m, ended)
+			_, _ = m.Update(tea.KeyPressMsg(press))
+			if got := tab.Focused() != ended; got != c.want {
+				t.Fatalf("%q (mod %v): re-attached=%v", c.seq, press.Mod, got)
+			}
+		})
 	}
 }

@@ -19,7 +19,9 @@ verbatim: `--space`, `--passthrough` and the chat guards, including
 [1](#source-1)
 
 [FACT] Two actions run the same function (`reattachPane`):
-- **`r`:** on the focused ended pane. Enter and Ctrl+W still close it, the
+- **`r`:** on the focused ended pane, with Caps Lock and Num Lock ignored as
+  in the other TUI keys (kitty-protocol terminals report them as modifiers).
+  Enter and Ctrl+W still close it, the
   scroll and tab-navigation keys still work, and every other key stays inert.
 - **Button:** a left press on the yoloctl-drawn `[ Re-attach ]` button, in
   reverse video at the first cells of the ended view's last row. It works on
@@ -53,5 +55,5 @@ attach's setup tail drops the close line by its `ExitCloseHint` prefix.
 2. <a id="source-2"></a> [Pane start and keys](../../internal/tui/tui.go#L1548-L1570) — `handleExitedTabKey`; `startPane` (L852) sets `Args` and `EndHint`; `Pane.Args` in panes/layout.go.
 3. <a id="source-3"></a> [Mouse routing](../../internal/tui/mouse.go#L236-L241) — `handleMouse` calls `reattachClick` after popups and before chrome.
 4. <a id="source-4"></a> [Drawing order](../../internal/tui/tui.go#L1787-L1790) — `applyReattachButtons` before `applyOverlay`.
-5. <a id="source-5"></a> [Tests](../../internal/tui/reattach_test.go#L16-L190) — `TestReattachArgs`, `TestEndedAttachReattachesInPlace`, `TestReattachOnlyEndedAttachViews`, `TestReattachButton`.
+5. <a id="source-5"></a> [Tests](../../internal/tui/reattach_test.go#L16-L226) — `TestReattachArgs`, `TestEndedAttachReattachesInPlace`, `TestReattachOnlyEndedAttachViews`, `TestReattachButton`, `TestReattachKeyIgnoresLockModifiers`.
 6. <a id="source-6"></a> [End banner](../../internal/tui/term/session.go#L248-L277) — `writeExitBanner`, `ExitCloseHint`; `TestExitBannerEndHint` in term_test.go; `attachedSetupOutput` in attach.go.
