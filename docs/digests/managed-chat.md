@@ -65,6 +65,9 @@ A revocation that is saved but not applied by the server warns and names
 replay the reload. Release-time role publication is unchanged, so an unreadable
 chat store or inventory still fails the command there, as for every box
 lifecycle command. [19](#source-19) [20](#source-20)
+A membership left active this way is never revoked implicitly: its `chat status`
+line and the reused-name enroll refusal name `chat revoke <member-id> --space S`.
+[21](#source-21)
 
 [FACT] Archives include the room declaration and server data, after the existing
 drain/stop/export gates. They exclude projected credentials, generated server
@@ -106,3 +109,4 @@ they establish no live VM, SQLite, Unix-socket or AIRC revocation behavior.
 18. <a id="source-18"></a> [Controller/copy regressions](../../cmd/yoloctl/controller_chat_test.go#L1) — authorization, inventory, copy boundary.
 19. <a id="source-19"></a> [Destroy revocation](../../cmd/yoloctl/agentbox_destroy_chat.go#L1) — `revokeDestroyedChatMember`, `activeChatMember`; caller in agentbox_destroy.go; `chatMemberServer` and the `box destroy` case of `spaceOperationIntent` in operation_scope.go.
 20. <a id="source-20"></a> [Destroy revocation regressions](../../cmd/yoloctl/agentbox_destroy_chat_test.go#L1) — reuse after destroy, other or unknown identities, warn-only cleanup, footprint, wrapped release (unapplied revocation succeeds without replay; unreadable store keeps the release failure).
+21. <a id="source-21"></a> [Stale member messages](../../cmd/yoloctl/chat_status.go#L1) — `staleMemberReason`; `resolveChatEnrollment` in chat_runtime.go; `TestStaleMemberMessagesNameTheExactRevokeCommand` in cmd/yoloctl/chat_reused_name_test.go (main `a27b598` and accompanying changes).

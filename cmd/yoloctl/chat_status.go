@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -111,7 +112,7 @@ func observeManagedChatRoom(ctx context.Context, space string, store managedchat
 			}
 		} else if !found || box.Config == nil || box.Config.ID != m.BoxID {
 			if !m.Revoked {
-				observed.Reason = "declaration identity is missing or its name was reused; revoke this immutable member explicitly"
+				observed.Reason = staleMemberReason(m.ID, space)
 			}
 		} else if box.Container == nil {
 			if !m.Revoked {
@@ -135,4 +136,11 @@ func observeManagedChatRoom(ctx context.Context, space string, store managedchat
 	}
 	result.RuntimeApplied = result.ServerReady && len(result.Pending) == 0
 	return result, nil
+}
+
+// staleMemberReason names the explicit command for an active membership whose
+// declaration is gone or reused. Revocation stays explicit: the member ID
+// names exactly this immutable membership.
+func staleMemberReason(memberID, space string) string {
+	return fmt.Sprintf("declaration identity is missing or its name was reused; if this membership is stale, run yoloctl chat revoke %s --space %s", memberID, space)
 }

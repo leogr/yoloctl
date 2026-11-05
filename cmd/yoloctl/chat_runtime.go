@@ -514,7 +514,7 @@ func resolveChatEnrollment(space, name string, r *managedchat.Room, generation u
 	}
 	for _, m := range r.Members {
 		if !m.Revoked && m.Name == name && m.BoxID != id {
-			return nil, errors.New("revoke the previous immutable member before enrolling a reused name")
+			return nil, fmt.Errorf("box %s's previous membership (member %s) is still active; if it is stale, run yoloctl chat revoke %s --space %s, then enroll again", name, m.ID, m.ID, space)
 		}
 	}
 	cfg, err := agentbox.Load(space, name)
