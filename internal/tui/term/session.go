@@ -59,6 +59,10 @@ type Session struct {
 	done    chan struct{} // closed when pump finishes (status written)
 	exited  chan struct{} // closed when the direct child has been reaped
 	waitErr error         // set before exited closes; read after
+	release func(time.Time)
+	// drainBy bounds the whole post-reap drain (slave release plus reader
+	// join); set before exited closes.
+	drainBy time.Time
 }
 
 // Start launches argv under a PTY of the given size and begins pumping
@@ -117,7 +121,7 @@ func Start(opts Options) (*Session, error) {
 		cmd.ExtraFiles = append(cmd.ExtraFiles, requestChild)
 		cmd.Env = forceEnv(cmd.Env, fmt.Sprintf("%s=%d", termio.TabRequestFDEnv, 2+len(cmd.ExtraFiles)))
 	}
-	ptmx, err := startPTYGeometry(cmd, size)
+	ptmx, releaseSlave, err := startPTYGeometry(cmd, size)
 	if viewChild != nil {
 		_ = viewChild.Close()
 	}
@@ -149,6 +153,7 @@ func Start(opts Options) (*Session, error) {
 		cmd:       cmd,
 		writer:    writer,
 		onBrowser: opts.OnBrowser,
+		release:   releaseSlave,
 		done:      make(chan struct{}),
 		exited:    make(chan struct{}),
 	}
@@ -170,6 +175,8 @@ func Start(opts Options) (*Session, error) {
 // there's no double-reap.
 func (s *Session) waitChild() {
 	s.waitErr = s.cmd.Wait()
+	s.drainBy = time.Now().Add(ptyDrainGrace)
+	s.release(s.drainBy)
 	close(s.exited)
 }
 
@@ -200,12 +207,12 @@ func (s *Session) pump(onData func()) {
 	}()
 
 	<-s.exited
-	// Child reaped. Give the reader a beat to flush the final output
-	// (only matters when a grandchild still holds the slave; otherwise
-	// the master already EOF'd and readDone is closed).
+	// Child reaped and the parent's slave released. The reader gets the rest
+	// of the same post-reap budget to flush the final output (only matters
+	// when a grandchild still holds the slave; otherwise the master EOFs).
 	select {
 	case <-readDone:
-	case <-time.After(ptyDrainGrace):
+	case <-time.After(time.Until(s.drainBy)):
 	}
 	// The pollable master makes closing interrupt outstanding I/O. Join both
 	// pumps before publishing completion so neither input nor output survives

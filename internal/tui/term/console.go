@@ -15,9 +15,10 @@ import (
 	"github.com/leogr/yoloctl/internal/terminal"
 )
 
-// ptyDrainGrace is how long the pump waits for the reader to flush a
-// command's final output AFTER the direct child has exited, before it
-// force-closes the PTY master. It only elapses when a daemonized
+// ptyDrainGrace is the one post-reap budget: how long the pump waits, AFTER
+// the direct child has exited, for the parent's slave release and the reader
+// to flush the command's final output, before it force-closes the PTY
+// master. It only elapses when a daemonized
 // grandchild (e.g. `limactl start`'s long-lived host-agent) still holds
 // the slave open — in the common case the master EOFs first and this is
 // never reached.
@@ -80,7 +81,7 @@ func (c *Console) Run(env []string, display string, argv ...string) (bool, error
 		env = os.Environ()
 	}
 	cmd.Env = forceEnv(env, "TERM=xterm-256color", "YOLOCTL_TUI=1")
-	ptmx, err := startPTYGeometry(cmd, c.LocalGeometry())
+	ptmx, releaseSlave, err := startPTYGeometry(cmd, c.LocalGeometry())
 	if err != nil {
 		c.echo(fmt.Sprintf("\x1b[31m%v\x1b[0m\r\n", err))
 		return true, err
@@ -89,7 +90,7 @@ func (c *Console) Run(env []string, display string, argv ...string) (bool, error
 	c.done = make(chan struct{})
 	c.writer = newInputQueue(ptmx, c.onData)
 	c.input.setTarget(c.writer)
-	go c.pump(cmd, ptmx, c.writer)
+	go c.pump(cmd, ptmx, releaseSlave, c.writer)
 	return true, nil
 }
 
@@ -113,7 +114,7 @@ func (c *Console) ShowError(message string) bool {
 	return true
 }
 
-func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, writer *inputQueue) {
+func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, releaseSlave func(time.Time), writer *inputQueue) {
 	defer close(c.done)
 	// Reader: copy PTY output into the emulator until the master errors
 	// (EOF or close). Runs concurrently with the child wait below so a
@@ -143,11 +144,14 @@ func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, writer *inputQueue) {
 	// holding the PTY slave as its controlling terminal (an open fd on
 	// /dev/tty), so the master never EOFs; gating on EOF would leave the
 	// overlay "running" forever. Once the child is reaped, give the reader a
-	// beat to flush the child's final output.
+	// beat to flush the child's final output. The parent's slave is released
+	// first (see startPTYGeometry); both share one post-reap budget.
 	err := cmd.Wait()
+	drainBy := time.Now().Add(ptyDrainGrace)
+	releaseSlave(drainBy)
 	select {
 	case <-readDone:
-	case <-time.After(ptyDrainGrace):
+	case <-time.After(time.Until(drainBy)):
 	}
 	// Interrupt and join both pumps before making the console available for
 	// another command. This also prevents trailing filter state or a late reader

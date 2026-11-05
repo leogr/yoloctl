@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 	"time"
 
 	"github.com/creack/pty"
@@ -12,27 +13,80 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// startPTYGeometry registers the master with Go's poller so closing it interrupts both
-// reads and writes, even when descendants retain the slave. creack/pty uses Fd
+// startPTYGeometry starts cmd on a new PTY with creack/pty's setup (child
+// stdio on the slave, a new session with it as controlling terminal) and
+// registers the master with Go's poller so closing it interrupts both reads
+// and writes, even when descendants retain the slave. creack/pty uses Fd
 // during setup, which leaves its original os.File in blocking mode. Duplicate
 // the descriptor and construct a fresh File from an explicitly nonblocking fd;
 // this gives it an independent lifetime without retaining the original wrapper.
-func startPTYGeometry(cmd *exec.Cmd, g terminal.Geometry) (*os.File, error) {
+//
+// The parent keeps its slave descriptor until the caller has reaped the child
+// and calls release. On macOS the kernel discards unread output when the last
+// slave reference closes, so a child that writes and exits before the master
+// is read would otherwise lose that output; Linux retains it either way.
+func startPTYGeometry(cmd *exec.Cmd, g terminal.Geometry) (*os.File, func(time.Time), error) {
 	if !g.Valid() {
-		return nil, errors.New("invalid PTY geometry")
+		return nil, nil, errors.New("invalid PTY geometry")
 	}
 	x, y := ptyPixels(g)
-	master, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: uint16(g.Rows), Cols: uint16(g.Cols), X: x, Y: y})
+	master, slave, err := pty.Open()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if err := pty.Setsize(master, &pty.Winsize{Rows: uint16(g.Rows), Cols: uint16(g.Cols), X: x, Y: y}); err != nil {
+		_ = master.Close()
+		_ = slave.Close()
+		return nil, nil, err
+	}
+	if cmd.Stdout == nil {
+		cmd.Stdout = slave
+	}
+	if cmd.Stderr == nil {
+		cmd.Stderr = slave
+	}
+	if cmd.Stdin == nil {
+		cmd.Stdin = slave
+	}
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setsid = true
+	cmd.SysProcAttr.Setctty = true
+	if err := cmd.Start(); err != nil {
+		_ = master.Close()
+		_ = slave.Close()
+		return nil, nil, err
 	}
 	pollable, err := pollablePTY(master)
 	if err != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return nil, fmt.Errorf("prepare interruptible PTY: %w", err)
+		_ = slave.Close()
+		return nil, nil, fmt.Errorf("prepare interruptible PTY: %w", err)
 	}
-	return pollable, nil
+	return pollable, func(deadline time.Time) { releaseSlave(slave, deadline) }, nil
+}
+
+// releaseSlave runs once the direct child is reaped. It waits, until
+// deadline, for the master to read the slave's queued output, then closes
+// the parent's slave reference. An ioctl error (for example a tty revoked by
+// the exiting session leader) ends the wait; it is not proof of a drain.
+func releaseSlave(slave *os.File, deadline time.Time) {
+	defer func() { _ = slave.Close() }()
+	raw, err := slave.SyscallConn()
+	if err != nil {
+		return
+	}
+	for {
+		queued, ioctlErr := 0, error(nil)
+		if err := raw.Control(func(fd uintptr) {
+			queued, ioctlErr = unix.IoctlGetInt(int(fd), unix.TIOCOUTQ)
+		}); err != nil || ioctlErr != nil || queued <= 0 || !time.Now().Before(deadline) {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 // pollablePTY consumes master on both success and error.

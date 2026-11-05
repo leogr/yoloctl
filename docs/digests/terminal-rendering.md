@@ -1,6 +1,6 @@
 # VT rendering and PTY child lifecycle
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; macOS slave retention on `3736b1c` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Each terminal owns an isolated libghostty-vt WebAssembly instance under
 wazero. The embedded artifact pins Ghostty revision
@@ -53,8 +53,10 @@ reserves one queue position and a 32 KiB result budget. Preparation errors
 are visible and skip that packet; later input retains its order.
 [7](#source-7) [8](#source-8)
 
-[FACT] Local PTY children receive `TERM=xterm-256color` and `YOLOCTL_TUI=1`. Managed session data uses a separate trusted channel. After direct
-child exit, pumps allow 200 ms to drain final output, close the pollable master,
+[FACT] Local PTY children receive `TERM=xterm-256color` and `YOLOCTL_TUI=1`. Managed session data uses a separate trusted channel. The parent
+keeps its PTY slave until the direct child is reaped, because macOS discards
+unread output at the last slave close. After direct child exit, one 200 ms budget
+covers the slave's output-queue drain and the final reads; pumps then close the pollable master,
 join input/output workers and drain the managed channel with a bounded wait.
 Completed managed views recover their local dimensions before appending the
 exit banner; resizing an exited tab remains local. A console cannot replace
@@ -62,7 +64,7 @@ its command before the old reader and filters finish. Closing releases its
 core; session close kills the local client, whose managed attach detaches from
 the persistent holder. In-place reset preserves the visible screen;
 host-boundary reset also leaves the alternate screen. [9](#source-9)
-[10](#source-10) [11](#source-11)
+[10](#source-10) [11](#source-11) [23](#source-23) [24](#source-24)
 
 [FACT] Lifecycle tests use real child processes and PTYs to combine sustained
 output, concurrent resize/rendering, bounded ordered history and final exit status.
@@ -104,3 +106,5 @@ or native application parity. [12](#source-12)
 20. <a id="source-20"></a> [terminal_test.go](../../internal/terminal/terminal_test.go#L96-L114) — `TestErasedCellsDoNotInheritStyle`.
 21. <a id="source-21"></a> [terminal_reader.go](../../third_party/ultraviolet/terminal_reader.go#L289-L296) — split string-terminator wait.
 22. <a id="source-22"></a> [stray_backslash_test.go](../../internal/tui/stray_backslash_test.go#L159) — `TestSTReplySplitAtEveryPoint`, every split of OSC, DCS and APC replies (PM/SOS share the guard).
+23. <a id="source-23"></a> [pty.go](../../internal/tui/term/pty.go#L28-L90) — retained slave and bounded release.
+24. <a id="source-24"></a> [pty_output_test.go](../../internal/tui/term/pty_output_test.go#L21) — `TestPTYKeepsOutputOfChildThatExitsBeforeRead`.

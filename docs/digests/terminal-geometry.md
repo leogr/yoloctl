@@ -78,7 +78,7 @@ behavior or current macOS support. [2](#source-2) [7](#source-7) [10](#source-10
 12. <a id="source-12"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L137) — cell-only compatibility resize.
 13. <a id="source-13"></a> [geometry.go](../../internal/terminal/geometry.go#L8) — bounds and native resize.
 14. <a id="source-14"></a> [geometry_test.go](../../internal/terminal/geometry_test.go#L9) — native query/snapshot contracts.
-15. <a id="source-15"></a> [pty.go](../../internal/tui/term/pty.go#L73) — bounded kernel pixels.
+15. <a id="source-15"></a> [pty.go](../../internal/tui/term/pty.go#L127) — bounded kernel pixels.
 16. <a id="source-16"></a> [geometry_test.go](../../internal/tui/term/geometry_test.go#L36) — actual local PTY dimensions.
 17. <a id="source-17"></a> [ultraviolet.patch](../../third_party/ultraviolet.patch#L35) — signed decoder.
 18. <a id="source-18"></a> [host_mouse_decoder_test.go](../../internal/tui/host_mouse_decoder_test.go#L17) — signed/fragmented host input.
