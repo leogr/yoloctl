@@ -16,6 +16,7 @@ var (
 	AttachFilteredStderr     = lima.AttachFilteredStderr
 	WriteFilteredStderr      = lima.WriteFilteredStderr
 	LogDiagnostics           = lima.LogDiagnostics
+	RecordDiagnostics        = lima.RecordDiagnostics
 	FilterStderrText         = lima.FilterStderrText
 	DebugEnabled             = lima.DebugEnabled
 )

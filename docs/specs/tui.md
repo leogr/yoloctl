@@ -14,6 +14,8 @@ when local text is selected.
 and telemetry callbacks retain private stderr captures and return failure
 context to the view. Empty/absent Lima homes are skipped before listing;
 foreground application streams retain their explicit destinations.
+The log is bounded (1 MiB plus one previous generation), and a failure to
+write it never fails an operation that succeeded.
 [42](#source-42)
 
 [FACT] Palette commands echo without PWD. A fixed-width ASCII wave replaces the

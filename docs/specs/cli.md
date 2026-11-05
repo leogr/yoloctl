@@ -63,6 +63,8 @@ explicit start synchronizes them before booting. [10](#source-10)
 and telemetry callbacks retain private stderr captures and return failure
 context to the view. Empty/absent Lima homes are skipped before listing;
 foreground application streams retain their explicit destinations.
+The log is bounded (1 MiB plus one previous generation), and a failure to
+write it never fails an operation that succeeded.
 [21](#source-21)
 
 [FACT] Box/account/runtime commands require a running matching controller.

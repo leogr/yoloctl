@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -103,12 +102,6 @@ func (t *stderrTail) finish(operation string, err error) error {
 	t.mu.Lock()
 	raw := append([]byte(nil), t.buf...)
 	t.mu.Unlock()
-	if logErr := vmhost.LogDiagnostics(operation, raw); logErr != nil {
-		if err == nil {
-			err = fmt.Errorf("operation completed but recording diagnostics failed: %w", logErr)
-		} else {
-			err = errors.Join(err, logErr)
-		}
-	}
-	return t.annotate(err)
+	// A log failure never fails a call that succeeded.
+	return t.annotate(vmhost.RecordDiagnostics(operation, raw, err))
 }

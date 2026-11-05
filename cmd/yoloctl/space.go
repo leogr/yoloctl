@@ -67,6 +67,7 @@ open as new lines arrive.
 
 Host-side Lima and interactive bridge diagnostics are captured separately in
 logs/host.log under yoloctl's config root; they are not printed over live views.
+It is kept under about 1 MiB, plus one previous file, host.log.1.
 
 For guest service diagnostics, use 'space ssh --root'. Lima guests use
 journalctl; Firecracker guests keep managed service logs under

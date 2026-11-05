@@ -25,6 +25,9 @@ if mutation_log and args[0] == 'shell':
                 if operation in tail:
                     with Path(mutation_log).open('a') as out:
                         out.write(f'{program} {operation}\n')
+# Optional launcher warning on every call, as Lima prints on success.
+if os.environ.get('FAKE_LIMA_STDERR'):
+    sys.stderr.write(os.environ['FAKE_LIMA_STDERR'] + '\n')
 fail = os.environ.get('FAKE_LIMA_FAIL', '')
 if fail and ' '.join(args[:2]).startswith(fail):
     sys.exit(23)

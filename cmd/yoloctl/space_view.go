@@ -161,9 +161,7 @@ func streamSpaceView(ctx context.Context, space string, interval time.Duration, 
 		req := controller.Request{ID: rand.Text(), Method: spaceTelemetryMethod, Space: space, Dash: -1,
 			Flags: map[string][]string{"interval": {interval.String()}}}
 		err := callHostController(streamCtx, boot, req, controller.ClientIO{Out: pw, Err: stderr})
-		if logErr := vmhost.LogDiagnostics("space telemetry", []byte(stderr.String())); logErr != nil {
-			err = errors.Join(err, logErr)
-		}
+		err = vmhost.RecordDiagnostics("space telemetry", []byte(stderr.String()), err)
 		if err == nil {
 			err = io.EOF
 		}

@@ -224,8 +224,22 @@ func TestHostDiagnosticsRefusePlantedLogAndReportLogFailures(t *testing.T) {
 				}
 			}
 			withoutLimaTerminalWrites(t, func() {
-				if err := c.Stop(t.Context(), "fixture"); err == nil || !strings.Contains(err.Error(), "completed but recording") {
-					t.Fatalf("lost log failure: %v", err)
+				// The refused log never fails a stop that succeeded, so
+				// callers do not fall back to a forced stop.
+				if err := c.Stop(t.Context(), "fixture"); err != nil {
+					t.Fatalf("log failure failed a successful stop: %v", err)
+				}
+			})
+			failingBinary := filepath.Join(filepath.Dir(c.binary), "limactl-failing")
+			if err := os.WriteFile(failingBinary, []byte("#!/bin/sh\necho warning >&2\nexit 7\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			failing := &Client{binary: failingBinary, stdout: io.Discard}
+			withoutLimaTerminalWrites(t, func() {
+				err := failing.Stop(t.Context(), "fixture")
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() != 7 || !strings.Contains(err.Error(), "recording diagnostics also failed") {
+					t.Fatalf("failed stop must keep its error and report the log: %v", err)
 				}
 			})
 			if kind == "file-link" {
@@ -234,5 +248,56 @@ func TestHostDiagnosticsRefusePlantedLogAndReportLogFailures(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// host.log keeps at most one previous generation; concurrent writers from
+// separate opens never rotate twice or lose the bound, and records stay whole.
+func TestHostDiagnosticsLogRotatesWithinItsBound(t *testing.T) {
+	base := socketTestRoot(t)
+	t.Setenv("YOLOCTL_HOME", base)
+	path, err := layout.HostDiagnosticsLogPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := bytes.Repeat([]byte("w"), 60<<10)
+	done := make(chan error, 8)
+	for w := range 8 {
+		go func() {
+			var err error
+			for range 10 {
+				if e := LogDiagnostics("writer "+string(rune('a'+w)), record); e != nil && err == nil {
+					err = e
+				}
+			}
+			done <- err
+		}()
+	}
+	for range 8 {
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
+	total := 0
+	for _, name := range []string{path, path + ".1"} {
+		raw, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if len(raw) > hostLogLimit {
+			t.Fatalf("%s is %d bytes, over %d", name, len(raw), hostLogLimit)
+		}
+		for _, line := range strings.SplitAfter(string(raw), "\n") {
+			if line != "" && (!strings.HasSuffix(line, "\n") || !strings.Contains(line, `"writer `) || len(line) < len(record)) {
+				t.Fatalf("%s holds a partial record of %d bytes", name, len(line))
+			}
+		}
+		total += len(raw)
+	}
+	if entries, err := os.ReadDir(filepath.Dir(path)); err != nil || len(entries) != 2 {
+		t.Fatalf("rotation kept %d files: %v", len(entries), err)
+	}
+	if total < hostLogLimit {
+		t.Fatalf("rotation dropped the current generation: %d bytes", total)
 	}
 }

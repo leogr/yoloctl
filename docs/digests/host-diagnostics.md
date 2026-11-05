@@ -1,6 +1,6 @@
 # Host and Lima diagnostics
 
-Verification: `8931e8df3abebc5c0fdd6f77bd473110a2e7d23b` and accompanying changes.
+Verification: `8931e8df3abebc5c0fdd6f77bd473110a2e7d23b` and accompanying changes; log bound and failure semantics at `2060bcc8a46f0bfd1d6dcde7de8cdc9bb71a958d` and accompanying changes.
 
 [FACT] The Lima Client’s inventory, VM create/start/stop/delete/copy and account-disk commands
 capture launcher stderr, including successful warnings and debug output. They
@@ -9,9 +9,17 @@ config root follows the ordinary `YOLOCTL_HOME`/XDG/platform selection. The log
 is shared across homes because inventory spans spaces. Entries contain a UTC
 timestamp, operation label and quoted diagnostic bytes; terminal controls are
 escaped. The directory is owned and private (0700), the file owned and private
-(0600); symlinks are refused. An append failure becomes a returned error,
-including when the command completed successfully. [1](#source-1) [2](#source-2)
-[3](#source-3) [9](#source-9)
+(0600); symlinks are refused. A failure to record diagnostics, including a
+refused planted file, never fails an operation that succeeded: that record is
+dropped. When the operation itself failed, its error also reports the log
+failure. [1](#source-1) [2](#source-2) [3](#source-3) [9](#source-9) [15](#source-15)
+
+[FACT] The log is bounded: before an append would take `host.log` past 1 MiB,
+it is renamed to `host.log.1`, replacing the previous one, so about 2 MiB
+remain. Each append holds an exclusive lock on the current file and first
+checks that it is still the file at that name, so concurrent yoloctl
+processes neither rotate twice nor write into a rotated file; each record is
+one write. [2](#source-2) [5](#source-5)
 
 [FACT] Command failures retain the underlying exit error and include a bounded,
 printable 2 KiB stderr suffix. Capture completion follows the direct child,
@@ -38,22 +46,24 @@ streams the VM boot/runtime log; its help points to this separate host log.
 
 [FACT] Fake-command and controller tests verify silent terminal sinks, logged
 success warnings, error context/exit status, debug capture, empty-home skips,
-log-link refusal and direct-child completion. They establish scripted coverage,
+log-link refusal, successful stops despite an unwritable log (no forced
+stop), concurrent rotation within the bound and direct-child completion. They establish scripted coverage,
 not native macOS/Lima/TUI runtime validation. [5](#source-5) [8](#source-8)
 
 ## Sources
 
 1. <a id="source-1"></a> [Layout](../../internal/layout/layout.go#L118-L210) — `HostDiagnosticsLogPath` and `ConfigRoot` selection.
-2. <a id="source-2"></a> [Capture and log](../../internal/lima/diagnostics.go#L24) — `LogDiagnostics`, `runWithDiagnostics`.
+2. <a id="source-2"></a> [Capture and log](../../internal/lima/diagnostics.go#L24-L191) — `LogDiagnostics`, `appendHostLog`, `appendLocked` (bound, lock, rotation), `recordDiagnostics`, `runWithDiagnostics`.
 3. <a id="source-3"></a> [Lima commands](../../internal/lima/lima.go#L31-L122) — `Create`, `runSpace`, `runDisk`.
-4. <a id="source-4"></a> [Inventory](../../internal/lima/list.go#L28) — `Client.List`, `homeHasInstances`.
-5. <a id="source-5"></a> [Lima regressions](../../internal/lima/diagnostics_test.go#L63) — warning, skip, operation, error, daemon and log tests.
-6. <a id="source-6"></a> [Interactive helpers](../../cmd/yoloctl/chat_stream_stderr.go#L26) — `callChatStream`, `callChatViewControllerInto`, `stderrTail.finish`; its callers are `chat_open.go:38` and `chat_view.go:86,416,662`.
+4. <a id="source-4"></a> [Inventory](../../internal/lima/list.go#L28-L158) — `Client.List`, `homeHasInstances`.
+5. <a id="source-5"></a> [Lima regressions](../../internal/lima/diagnostics_test.go#L63-L303) — warning, skip, operation, error, daemon, planted-log and rotation tests.
+6. <a id="source-6"></a> [Interactive helpers](../../cmd/yoloctl/chat_stream_stderr.go#L26-L107) — `callChatStream`, `callChatViewControllerInto`, `stderrTail.finish`; its callers are `chat_open.go:38` and `chat_view.go:86,416,662`.
 7. <a id="source-7"></a> [Telemetry](../../cmd/yoloctl/space_view.go#L147-L191) — `streamSpaceView`.
-8. <a id="source-8"></a> [Chat regressions](../../cmd/yoloctl/chat_view_diagnostics_test.go#L17) — interactive methods, success/error diagnostics and terminal sinks.
+8. <a id="source-8"></a> [Chat regressions](../../cmd/yoloctl/chat_view_diagnostics_test.go#L17-L57) — interactive methods, success/error diagnostics and terminal sinks.
 9. <a id="source-9"></a> [Disk inspection](../../internal/lima/disk.go#L21-L40) — `AccountDisk`.
 10. <a id="source-10"></a> [Explicit streaming](../../internal/lima/stderr.go#L68-L146) — caller-owned application stderr.
-11. <a id="source-11"></a> [VM log help](../../cmd/yoloctl/space.go#L58) — `newSpaceLogsCmd`.
-12. <a id="source-12"></a> [Catalog regressions](../../cmd/yoloctl/chat_catalog_diagnostics_test.go#L38) — real controller frames and private concurrent tails.
-13. <a id="source-13"></a> [Chat callbacks](../../cmd/yoloctl/chat_view.go#L86) — nickname, participant polling (`agentsLoop`) and attach (`resolveAttach`); setup/reconnect use `openChatHeader` in `chat_open.go:38`.
+11. <a id="source-11"></a> [VM log help](../../cmd/yoloctl/space.go#L53-L87) — `newSpaceLogsCmd`.
+12. <a id="source-12"></a> [Catalog regressions](../../cmd/yoloctl/chat_catalog_diagnostics_test.go#L38-L116) — real controller frames and private concurrent tails.
+13. <a id="source-13"></a> [Chat callbacks](../../cmd/yoloctl/chat_view.go#L86-L700) — nickname, participant polling (`agentsLoop`) and attach (`resolveAttach`); setup/reconnect use `openChatHeader` in `chat_open.go:38`.
 14. <a id="source-14"></a> [Lima v2.2.1 instance enumeration](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/store/store.go#L47-L70) — directory-only, dot/underscore exclusions.
+15. <a id="source-15"></a> [Stop regression](../../cmd/yoloctl/lima_log_failure_stop_test.go#L1-L56) — `stopSpaceRuntime` with a planted log; `RecordDiagnostics` callers in `chat_stream_stderr.go` and `space_view.go`.
