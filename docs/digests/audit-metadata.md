@@ -1,6 +1,6 @@
 # Audit metadata extraction
 
-Verification: `9f21466f639bdda1c4edde353998991781df22e7` and accompanying changes.
+Verification: `d79ce925e4f91ea96fecfd03fb1f3e59a3577d22` and accompanying changes.
 
 [FACT] The yolo C++ extraction plugin uses Falco's pinned C ABI 3.12.0
 (`falcosecurity/libs` 0.26.1, matching pinned Falco 0.45.2). Its separate required

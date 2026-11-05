@@ -1,12 +1,14 @@
 # VM-native Falco auditing
 
-Verification: `3933d13318aec32653d72f806327b18291bc4a18` and accompanying changes.
+Verification: `d79ce925e4f91ea96fecfd03fb1f3e59a3577d22` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
 the running matching controller. They never boot or recreate a VM. Operators
 have neither the registered frontend surface nor server authority for audit
-operations. Opening or filtering the view does not install or enable auditing.
+operations. Opening or filtering the view does not install or enable auditing. Existing
+native settings with absent or disabled audit state remain off during controller
+startup; no BPF/image capability probe or service start is required.
 [1](#source-1) [2](#source-2) [3](#source-3)
 
 [FACT] Desired enablement, tool version and rules digest belong to native space

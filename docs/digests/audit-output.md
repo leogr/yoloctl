@@ -1,6 +1,6 @@
 # Audit event output and following
 
-Verification: `3933d13318aec32653d72f806327b18291bc4a18` and accompanying changes.
+Verification: `d79ce925e4f91ea96fecfd03fb1f3e59a3577d22` and accompanying changes.
 
 [FACT] `audit logs --follow` prints the first bounded-history summary to stderr,
 then prints another only when collector drops, metadata gaps or retention-gap
