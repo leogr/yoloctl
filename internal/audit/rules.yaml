@@ -9,6 +9,12 @@
 - macro: yolo_fs_mutation
   condition: (evt.type in (open, openat, openat2, creat, truncate, ftruncate, rename, renameat, renameat2, unlink, unlinkat, mkdir, mkdirat, rmdir, symlink, symlinkat, link, linkat) and (evt.is_open_write = true or not evt.type in (open, openat, openat2)))
 
+# For symlink creation, source is the new link location and target is only its
+# payload. Unpacking a link to /etc/... does not modify that VM path. Rename and
+# hard-link targets still refer to real objects and remain covered.
+- macro: yolo_fs_target_mutation
+  condition: (not evt.type in (symlink, symlinkat))
+
 - list: yolo_infrastructure
   items: [/.openshell/runtime, /.openshell/channel, /.openshell/supervisor/config, /opt/yoloctl/bin, /run/yoloctl/controller]
 
@@ -26,7 +32,7 @@
 - rule: Yolo infrastructure change
   desc: Unexpected infrastructure write or namespace change; expected controller deployment/config writes are scoped by executable and host context
   condition: >-
-    yolo_fs_mutation and (fs.path.name pmatch (yolo_infrastructure) or fs.path.source pmatch (yolo_infrastructure) or fs.path.target pmatch (yolo_infrastructure) or fs.path.name regex "^/mnt/lima-y[a-z2-7]{10}/(config|audit)(/|$)" or fs.path.source regex "^/mnt/lima-y[a-z2-7]{10}/(config|audit)(/|$)" or fs.path.target regex "^/mnt/lima-y[a-z2-7]{10}/(config|audit)(/|$)") and not (container.id = host and proc.exepath = /opt/yoloctl/bin/yoloctl)
+    yolo_fs_mutation and (fs.path.name pmatch (yolo_infrastructure) or fs.path.source pmatch (yolo_infrastructure) or fs.path.name regex "^/mnt/lima-y[a-z2-7]{10}/(config|audit)(/|$)" or fs.path.source regex "^/mnt/lima-y[a-z2-7]{10}/(config|audit)(/|$)" or (yolo_fs_target_mutation and (fs.path.target pmatch (yolo_infrastructure) or fs.path.target regex "^/mnt/lima-y[a-z2-7]{10}/(config|audit)(/|$)"))) and not yolo_openshell_setup and not (container.id = host and proc.exepath = /opt/yoloctl/bin/yoloctl)
   output: "Yolo infrastructure change path=%fs.path.name source=%fs.path.source target=%fs.path.target executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
   priority: WARNING
   tags: [yoloctl]
@@ -75,7 +81,7 @@
 - rule: Yolo persistence change
   desc: Unexpected VM/container unit cron SSH-key or loader changes; host package maintenance is normal
   condition: >-
-    yolo_fs_mutation and (fs.path.name pmatch (yolo_persistence) or fs.path.source pmatch (yolo_persistence) or fs.path.target pmatch (yolo_persistence) or fs.path.name glob "/home/*/.ssh/authorized_keys" or fs.path.target glob "/home/*/.ssh/authorized_keys") and not (container.id = host and proc.exepath in (/usr/bin/apt, /usr/bin/apt-get, /usr/bin/dpkg, /usr/bin/systemctl, /opt/yoloctl/bin/yoloctl))
+    yolo_fs_mutation and (fs.path.name pmatch (yolo_persistence) or fs.path.source pmatch (yolo_persistence) or fs.path.name glob "/home/*/.ssh/authorized_keys" or fs.path.source glob "/home/*/.ssh/authorized_keys" or (yolo_fs_target_mutation and (fs.path.target pmatch (yolo_persistence) or fs.path.target glob "/home/*/.ssh/authorized_keys"))) and not (container.id = host and proc.exepath in (/usr/bin/apt, /usr/bin/apt-get, /usr/bin/dpkg, /usr/bin/systemctl, /opt/yoloctl/bin/yoloctl))
   output: "Yolo persistence change path=%fs.path.name source=%fs.path.source target=%fs.path.target executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
   priority: WARNING
   tags: [yoloctl]

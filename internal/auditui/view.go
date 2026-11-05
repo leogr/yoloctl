@@ -187,7 +187,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func eventLine(e audit.Event, color bool) string {
 	box := audit.Clean(e.Box)
 	if !e.MetadataAvailable {
-		box = "(no box)"
+		switch e.Container {
+		case "host":
+			box = "(vm)"
+		case "":
+			box = "(unknown)"
+		default:
+			box = "(no box)"
+		}
 	}
 	severity := fmt.Sprintf("%-9s", audit.Clean(e.Severity))
 	if color {
@@ -214,16 +221,44 @@ func styled(text, code string, color bool) string {
 
 // EventText is shared by finite and following pretty logs. JSON logs retain the
 // complete stored event instead of a projection of these human-readable lines.
-func EventText(e audit.Event, color bool) string {
-	lines := []string{eventLine(e, color)}
-	if output := audit.RenderPrettyOutput(e); output != "" {
-		lines = append(lines, "  "+output)
+type EventOptions struct {
+	Color, Verbose bool
+	Width          int
+}
+
+func EventText(e audit.Event, options EventOptions) string {
+	width := options.Width
+	if width <= 0 {
+		width = 100
 	}
-	lines = append(lines, "  "+eventFields(e, color))
+	heading := strings.Split(ansi.Wrap(eventLine(e, options.Color), max(1, width-4), ""), "\n")
+	lines := []string{heading[0]}
+	for _, continuation := range heading[1:] {
+		lines = append(lines, "    "+continuation)
+	}
+	appendIndented := func(text string, indent string) {
+		for _, line := range strings.Split(ansi.Wrap(text, max(1, width-len(indent)), ""), "\n") {
+			lines = append(lines, indent+line)
+		}
+	}
+	if output := eventMessage(e, options.Color); output != "" {
+		appendIndented(output, "    ")
+	}
+	if options.Verbose {
+		for _, field := range eventFieldLines(e, options.Color) {
+			appendIndented(field, "        ")
+		}
+	}
 	return strings.Join(lines, "\n")
 }
 
-func eventFields(e audit.Event, color bool) string {
+func eventMessage(e audit.Event, color bool) string {
+	return audit.FormatPrettyOutput(e, func(key, value string) string {
+		return styled(key+"=", "2", color) + styled(value, "1", color)
+	})
+}
+
+func eventFieldLines(e audit.Event, color bool) []string {
 	fields := audit.SelectedFields(e)
 	keys := make([]string, 0, len(fields))
 	for key := range fields {
@@ -236,7 +271,7 @@ func eventFields(e audit.Event, color bool) string {
 	for _, key := range keys {
 		parts = append(parts, styled(key+"=", "2", color)+styled(strconv.Quote(fields[key]), "1", color))
 	}
-	return strings.Join(parts, " ")
+	return parts
 }
 
 func (m Model) View() tea.View {
@@ -272,12 +307,12 @@ func (m Model) View() tea.View {
 	var details []string
 	if len(events) > 0 {
 		e := events[selected]
-		text := audit.RenderPrettyOutput(e)
+		text := eventMessage(e, m.color)
 		if m.details {
-			text += "\n" + eventFields(e, m.color)
+			text += "\n" + strings.Join(eventFieldLines(e, m.color), "\n")
 		}
 		if text != "" {
-			details = strings.Split(ansi.Wrap(text, max(1, width-2), ""), "\n")
+			details = strings.Split(ansi.Wrap(text, max(1, width-4), ""), "\n")
 			limit := max(0, min(8, height-len(lines)-3))
 			if len(details) > limit {
 				details = details[:limit]
@@ -300,7 +335,7 @@ func (m Model) View() tea.View {
 		lines = append(lines, prefix+eventLine(events[i], m.color))
 	}
 	for _, detail := range details {
-		lines = append(lines, "  "+detail)
+		lines = append(lines, "    "+detail)
 	}
 	lines = append(lines, "↑↓ select · Enter fields · Space pause/follow · b box · v severity · r retry · q close")
 	if len(lines) > height {

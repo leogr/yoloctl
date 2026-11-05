@@ -41,7 +41,11 @@ func Configuration(root, tools, metadata string) ([]byte, error) {
 				"label_max_len": 1024, "with_size": false, "hooks": []string{"create", "start"}, "engine_timeout": 2,
 				"engines": map[string]any{
 					"containerd": map[string]any{"enabled": true, "sockets": []string{"/run/containerd/containerd.sock"}},
-					"cri":        map[string]any{"enabled": false}, "docker": map[string]any{"enabled": false}, "podman": map[string]any{"enabled": false},
+					// In container0.7.6 the CRI matcher also recognizes nerdctl's
+					// systemd scope layout. Both engines use only the native system
+					// containerd socket; its native API supplies non-CRI metadata.
+					"cri":    map[string]any{"enabled": true, "sockets": []string{"/run/containerd/containerd.sock"}},
+					"docker": map[string]any{"enabled": false}, "podman": map[string]any{"enabled": false},
 					"lxc": map[string]any{"enabled": false}, "libvirt_lxc": map[string]any{"enabled": false}, "bpm": map[string]any{"enabled": false},
 				},
 			},

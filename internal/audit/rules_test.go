@@ -59,7 +59,7 @@ func TestRulesKeepPrivacyAndExplicitNoiseBoundaries(t *testing.T) {
 	}
 }
 
-func TestContainerPluginUsesNativeContainerdOnly(t *testing.T) {
+func TestContainerPluginUsesSystemContainerdSocket(t *testing.T) {
 	raw, err := Configuration("/private/audit", "/private/tools", "/private/metadata.tsv")
 	if err != nil {
 		t.Fatal(err)
@@ -89,10 +89,10 @@ func TestContainerPluginUsesNativeContainerdOnly(t *testing.T) {
 	engines := plugin["init_config"].(map[string]any)["engines"].(map[string]any)
 	for name, engine := range engines {
 		item := engine.(map[string]any)
-		if item["enabled"] != (name == "containerd") {
+		if item["enabled"] != (name == "containerd" || name == "cri") {
 			t.Fatal(name, item)
 		}
-		if name == "containerd" {
+		if name == "containerd" || name == "cri" {
 			sockets := item["sockets"].([]any)
 			if len(sockets) != 1 || sockets[0] != "/run/containerd/containerd.sock" {
 				t.Fatal(sockets)
@@ -112,6 +112,54 @@ func TestEventSelectedPathAndUnknownMetadata(t *testing.T) {
 		event, err := ParseEvent(raw)
 		if err != nil || event.Path != "/etc/shadow" || event.MetadataAvailable || event.Result != "EACCES" {
 			t.Fatal(field, event, err)
+		}
+	}
+}
+
+func TestProtectedPathsIgnoreOnlySymlinkPayloads(t *testing.T) {
+	var entries []struct{ Rule, Macro, Condition string }
+	if err := yaml.Unmarshal([]byte(Rules), &entries); err != nil {
+		t.Fatal(err)
+	}
+	conditions := make(map[string]string)
+	for _, entry := range entries {
+		name := entry.Rule
+		if name == "" {
+			name = entry.Macro
+		}
+		conditions[name] = strings.Join(strings.Fields(entry.Condition), " ")
+	}
+	// This is a structural rule regression; pinned Falco separately compiles it.
+	// Only symlink payloads are excluded, not real rename/hard-link destinations.
+	if conditions["yolo_fs_target_mutation"] != "(not evt.type in (symlink, symlinkat))" {
+		t.Fatal("target guard excludes real namespace operations", conditions["yolo_fs_target_mutation"])
+	}
+	for _, rule := range []struct{ name, list, target string }{
+		{"Yolo persistence change", "yolo_persistence", `(yolo_fs_target_mutation and (fs.path.target pmatch (yolo_persistence) or fs.path.target glob "/home/*/.ssh/authorized_keys"))`},
+		{"Yolo infrastructure change", "yolo_infrastructure", `(yolo_fs_target_mutation and (fs.path.target pmatch (yolo_infrastructure) or fs.path.target regex "^/mnt/lima-y[a-z2-7]{10}/(config|audit)(/|$)"))`},
+	} {
+		condition := conditions[rule.name]
+		if !strings.Contains(condition, "fs.path.name pmatch ("+rule.list+")") || !strings.Contains(condition, "fs.path.source pmatch ("+rule.list+")") || !strings.Contains(condition, rule.target) {
+			t.Fatal("protected link locations or guarded targets lost", rule.name, condition)
+		}
+		if strings.Contains(strings.Replace(condition, rule.target, "", 1), "fs.path.target") {
+			t.Fatal("unguarded link payload can match", rule.name, condition)
+		}
+		for _, executable := range []string{"containerd", "buildkitd", "nerdctl", "containerd-shim"} {
+			if strings.Contains(condition, executable) {
+				t.Fatal("blanket runtime exemption", rule.name, executable)
+			}
+		}
+	}
+	if !strings.Contains(conditions["Yolo persistence change"], `fs.path.source glob "/home/*/.ssh/authorized_keys"`) {
+		t.Fatal("a real authorized_keys symlink location would be missed")
+	}
+	if !strings.Contains(conditions["Yolo infrastructure change"], "and not yolo_openshell_setup") {
+		t.Fatal("known OpenShell setup would report its own private bootstrap writes")
+	}
+	for _, boundary := range []string{`container.label[yoloctl.audit.schema] = "1"`, `container.label[yoloctl.audit.runtime_mode] = confined`, `container.label[yoloctl.openshell.protocol] = "2"`, "proc.exepath in ("} {
+		if !strings.Contains(conditions["yolo_openshell_setup"], boundary) {
+			t.Fatal("setup exemption lost its context", boundary)
 		}
 	}
 }

@@ -2,9 +2,11 @@ package auditui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -136,8 +138,8 @@ func TestAuditViewIdlePollPreservesSelectionAndOnlyAppendsNewEvents(t *testing.T
 
 func TestAuditPrettyMessageFieldsAndColor(t *testing.T) {
 	event := audit.Event{Rule: "Yolo audit test", Severity: "Warning", Executable: "/tmp/probe\x1b[31m", Container: "host", Result: "SUCCESS", OutputFields: map[string]string{"proc.name": "probe", "user.name": "root", "user.uid": "0", "container.name": "<NA>", "fs.path.target": "/etc/target", "proc.args": "SECRET"}}
-	plain := EventText(event, false)
-	for _, required := range []string{"(no box)", "Yolo audit test executable=", "process=probe", "user=root uid=0", "fs.path.target="} {
+	plain := EventText(event, EventOptions{})
+	for _, required := range []string{"(vm)", "Yolo audit test executable=", "process=probe", "user=root", "uid=0"} {
 		if !strings.Contains(plain, required) {
 			t.Fatal("missing field", required, plain)
 		}
@@ -145,8 +147,20 @@ func TestAuditPrettyMessageFieldsAndColor(t *testing.T) {
 	if strings.ContainsAny(plain, "\x1b\r") || strings.Contains(plain, "<NA>") || strings.Contains(plain, "SECRET") {
 		t.Fatal(plain)
 	}
-	colored := EventText(event, true)
-	if ansi.Strip(colored) != plain || !strings.Contains(colored, "\x1b[93m") || !strings.Contains(colored, "\x1b[1mYolo audit test") || !strings.Contains(colored, "\x1b[2mproc.name=") {
+	if strings.Contains(plain, "fs.path.target=") || strings.Contains(plain, "proc.name=") {
+		t.Fatal("default output repeated raw fields", plain)
+	}
+	verbose := EventText(event, EventOptions{Verbose: true, Width: 48})
+	if !strings.Contains(verbose, "        fs.path.target=") || !strings.Contains(verbose, "        proc.name=") {
+		t.Fatal(verbose)
+	}
+	for _, line := range strings.Split(verbose, "\n") {
+		if ansi.StringWidth(line) > 48 {
+			t.Fatal("wrapped output exceeds width", line)
+		}
+	}
+	colored := EventText(event, EventOptions{Color: true})
+	if ansi.Strip(colored) != plain || !strings.Contains(colored, "\x1b[93m") || !strings.Contains(colored, "\x1b[1mYolo audit test") || !strings.Contains(colored, "\x1b[2mprocess=") {
 		t.Fatal("styles changed content or omitted severity/key/rule emphasis", colored)
 	}
 	m := New(t.Context(), "test", nil).WithColor(true)
@@ -158,5 +172,41 @@ func TestAuditPrettyMessageFieldsAndColor(t *testing.T) {
 	m, _ = apply(m, key(tea.KeyEnter))
 	if !strings.Contains(ansi.Strip(m.View().Content), "fs.path.target=") {
 		t.Fatal("selected fields hidden", m.View().Content)
+	}
+}
+
+func TestAuditOriginLabelsDoNotInventBoxIdentity(t *testing.T) {
+	for _, fixture := range []struct {
+		event audit.Event
+		want  string
+	}{
+		{audit.Event{Container: "host"}, "(vm)"},
+		{audit.Event{}, "(unknown)"},
+		{audit.Event{Container: "abcdef123456"}, "(no box)"},
+		{audit.Event{Container: "abcdef123456", Box: "worker", MetadataAvailable: true}, "worker"},
+	} {
+		got := eventLine(fixture.event, false)
+		if !strings.Contains(got, "  "+fmt.Sprintf("%-14s", fixture.want)+"  ") {
+			t.Fatal(got, fixture.want)
+		}
+	}
+}
+
+func TestAuditLongPathsWrapWithIndentedContinuations(t *testing.T) {
+	event := audit.Event{Rule: "Yolo persistence change", Severity: "Warning", Container: "host", OutputFields: map[string]string{
+		"fs.path.source": "/var/lib/containerd/" + strings.Repeat("层/", 120) + "getty.service",
+		"fs.path.target": "/usr/lib/systemd/system/getty@.service",
+	}}
+	for _, verbose := range []bool{false, true} {
+		plain := EventText(event, EventOptions{Verbose: verbose, Width: 48})
+		colored := EventText(event, EventOptions{Verbose: verbose, Width: 48, Color: true})
+		if !utf8.ValidString(plain) || ansi.Strip(colored) != plain || !strings.Contains(plain, "层/") {
+			t.Fatal("wrapping lost text or changed styled content", plain)
+		}
+		for i, line := range strings.Split(plain, "\n") {
+			if ansi.StringWidth(line) > 48 || (i > 0 && !strings.HasPrefix(line, "    ")) {
+				t.Fatal("long path lost width or indentation", line)
+			}
+		}
 	}
 }

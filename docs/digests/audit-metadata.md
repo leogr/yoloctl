@@ -1,6 +1,6 @@
 # Audit metadata extraction
 
-Verification: `d79ce925e4f91ea96fecfd03fb1f3e59a3577d22` and accompanying changes.
+Verification: `3c3fdffd7b50cc818649e21f916df8d35d8ac15b` and accompanying changes.
 
 [FACT] The yolo C++ extraction plugin uses Falco's pinned C ABI 3.12.0
 (`falcosecurity/libs` 0.26.1, matching pinned Falco 0.45.2). Its separate required
@@ -13,6 +13,12 @@ entry. The plugin exposes only `yolo.box`, `yolo.space`, `yolo.account`,
 `yolo.metadata_available`. These are recorded launch context, not per-process
 confinement or authority. No per-event RPC, secret lookup or mutation occurs.
 [1](#source-1) [2](#source-2) [16](#source-16)
+
+[FACT] Container recognition enables the pinned CRI matcher for nerdctl's
+systemd scopes alongside native-containerd metadata, using only the system
+containerd socket. Without a recognized thread container ID, the snapshot
+cannot enrich an event; a reported host ID alone does not prove a VM process.
+The guest CRI service need not be enabled. [17](#source-17)
 
 [FACT] After the audit startup attempt, the controller refreshes an observation
 on a five-second ticker under native locking and receipt-hold checks.
@@ -82,3 +88,5 @@ qualification. [11](#source-11) [14](#source-14)
 15. <a id="source-15"></a> [Audit maintenance](../../cmd/yoloctl/controller_audit_linux.go#L1) — `startAuditRetention`, startup ordering and due-expiry retry.
 
 16. <a id="source-16"></a> [Event schema contract](../../third_party/audit-plugin/include/plugin/plugin_api.h#L1148) — required minimum schema callback; absent/null defaults to 3.0.0, separate from API version.
+
+17. <a id="source-17"></a> [Container recognition](audit-rules.md) — pinned matcher/provider configuration and native-qualification limits.

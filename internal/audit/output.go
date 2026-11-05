@@ -83,8 +83,15 @@ func RenderOutput(e Event) string {
 // RenderPrettyOutput hides unavailable assignments in human-readable output;
 // the stored/JSON message continues to include their explicit <NA> values.
 func RenderPrettyOutput(e Event) string {
+	return FormatPrettyOutput(e, nil)
+}
+
+// FormatPrettyOutput optionally decorates the already sanitized key/value
+// assignments. Only pinned template keys reach format; raw output is never used.
+func FormatPrettyOutput(e Event, format func(string, string) string) string {
 	fields := SelectedFields(e)
 	var parts []string
+	remaining := 1024
 	for _, part := range strings.Fields(outputTemplates()[e.Rule]) {
 		missing := false
 		part = outputField.ReplaceAllStringFunc(part, func(token string) string {
@@ -95,8 +102,22 @@ func RenderPrettyOutput(e Event) string {
 			return value
 		})
 		if !missing {
+			part = Clean(part)
+			if len(parts) != 0 {
+				remaining--
+			}
+			if remaining <= 0 {
+				break
+			}
+			if len(part) > remaining {
+				part = strings.ToValidUTF8(part[:remaining], "")
+			}
+			remaining -= len(part)
+			if key, value, ok := strings.Cut(part, "="); ok && format != nil {
+				part = format(key, value)
+			}
 			parts = append(parts, part)
 		}
 	}
-	return Clean(strings.Join(parts, " "))
+	return strings.Join(parts, " ")
 }

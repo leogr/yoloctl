@@ -1,6 +1,6 @@
 # Audit event output and following
 
-Verification: `d79ce925e4f91ea96fecfd03fb1f3e59a3577d22` and accompanying changes.
+Verification: `3c3fdffd7b50cc818649e21f916df8d35d8ac15b` and accompanying changes.
 
 [FACT] `audit logs --follow` prints the first bounded-history summary to stderr,
 then prints another only when collector drops, metadata gaps or retention-gap
@@ -10,9 +10,12 @@ events. JSONL stdout contains complete retained events, never summaries.
 [1](#source-1) [2](#source-2)
 
 [FACT] Pretty logs show time, severity, box and rule, then the rendered pinned
-Falco message and selected fields. Missing box metadata displays `(no box)`;
-this includes direct VM processes and does not assert their identity or
-confinement. Pretty assignments with unavailable values are hidden; JSON keeps
+Falco message. `--verbose` adds the raw retained fields, one per indented row;
+JSON always includes them. Message continuations use four spaces, fields eight;
+output wraps to terminal width, or 100 columns for scripts. The origin column
+shows `(vm)` for Falco's literal `host` ID inside the VM, `(unknown)` for absent
+IDs and `(no box)` for a container lacking box metadata. These labels describe
+reported context, not per-process confinement proof. Pretty assignments with unavailable values are hidden; JSON keeps
 explicit `<NA>` values. Terminal output colours severity, bolds the rule and
 values, and dims field keys. Redirection, nonempty `NO_COLOR` or `TERM=dumb`
 select plain text. [1](#source-1) [3](#source-3)
@@ -46,6 +49,6 @@ rules digest. [4](#source-4) [5](#source-5) [6](#source-6) [7](#source-7)
 2. <a id="source-2"></a> [Bounded history](../../internal/audit/logs.go#L101) — `Store.Scan`, filtered cursor advancement.
 3. <a id="source-3"></a> [Read-only view](../../internal/auditui/view.go#L1) — `Model.load`, `Model.Update`, `EventText`, `Model.View`.
 4. <a id="source-4"></a> [Event schema/privacy](../../internal/audit/types.go#L1) — `Event`, `ParseEvent`, `Clean`.
-5. <a id="source-5"></a> [Selected rendering](../../internal/audit/output.go#L1) — `retainedFields`, `SelectedFields`, `RenderOutput`, `RenderPrettyOutput`.
+5. <a id="source-5"></a> [Selected rendering](../../internal/audit/output.go#L1) — `retainedFields`, `SelectedFields`, `RenderOutput`, `FormatPrettyOutput`.
 6. <a id="source-6"></a> [Pinned rules](../../internal/audit/rules.yaml#L1) — rule output templates.
 7. <a id="source-7"></a> [Native toggle](../../cmd/yoloctl/controller_audit_linux.go#L1) — `audit.enable`.
