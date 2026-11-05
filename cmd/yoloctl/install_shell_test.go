@@ -212,8 +212,9 @@ func TestInstallShellBlockBodies(t *testing.T) {
 		{pathBlockBody("zsh", "$HOME/.local/bin"), `export PATH="$HOME/.local/bin:$PATH"`},
 		{pathBlockBody("fish", "$HOME/.local/bin"), `fish_add_path -g "$HOME/.local/bin"`},
 		{completionBlockBody("zsh", link), `(( $+functions[compdef] )) && source <(/home/u/.local/bin/yoloctl completion zsh)`},
-		{completionBlockBody("bash", link), `[ -x /home/u/.local/bin/yoloctl ] && source <(/home/u/.local/bin/yoloctl completion bash)`},
+		{completionBlockBody("bash", link), `[ -x /home/u/.local/bin/yoloctl ] && eval "$(/home/u/.local/bin/yoloctl completion bash)"`},
 		{completionBlockBody("fish", link), `/home/u/.local/bin/yoloctl completion fish | source`},
+		{completionBlockBody("bash", "/it's/yoloctl"), `[ -x '/it'\''s/yoloctl' ] && eval "$('/it'\''s/yoloctl' completion bash)"`},
 		{completionBlockBody("zsh", "/it's/yoloctl"), `(( $+functions[compdef] )) && source <('/it'\''s/yoloctl' completion zsh)`},
 	} {
 		if c.got != c.want {

@@ -77,14 +77,15 @@ func pathBlockBody(shell, display string) string {
 }
 
 // completionBlockBody loads the installed link's own completion, so it never
-// depends on PATH order. zsh needs compinit to have run first.
+// depends on PATH order. zsh needs compinit to have run first. bash uses eval:
+// macOS's bash 3.2 reads nothing from `source <(...)`.
 func completionBlockBody(shell, link string) string {
 	l := shellArg(link)
 	switch shell {
 	case "zsh":
 		return fmt.Sprintf("(( $+functions[compdef] )) && source <(%s completion zsh)", l)
 	case "bash":
-		return fmt.Sprintf("[ -x %s ] && source <(%s completion bash)", l, l)
+		return fmt.Sprintf("[ -x %s ] && eval \"$(%s completion bash)\"", l, l)
 	}
 	return l + " completion fish | source"
 }
