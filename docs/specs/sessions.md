@@ -18,6 +18,13 @@ afterwards, and a client timeout is no proof of a failed launch; inspect
 `box session` or the request ID instead of retrying. After the attachment
 starts, one signal is forwarded to it and ends it (the ordinary detach, status
 0); a second ends the client unconditionally. [16](#source-16)
+[INFERENCE] Inside a box the bundled sandbox's signal broker delivers a
+mediated `kill` before answering it, and its listener lets a signal interrupt
+and restart that call, so one `kill` can arrive twice. The attach-signal
+regression has occasionally seen a single test signal reach the client twice
+there, ending it with status 2 instead of the forwarded detach; no yoloctl
+sender was found and nothing is changed. The mechanism and the unpatched
+listener flags are recorded in [22](#source-22).
 
 [FACT] A fresh session in an existing container refuses verified recipe-image
 drift before launch, with explicit inspect/recreate guidance. Existing live
@@ -182,3 +189,4 @@ stop. A declared daemon a user started from `box exec` is stopped too.
 
 20. <a id="source-20"></a> [Session remedies](../digests/session-remedies.md) — fresh-session image guard.
 21. <a id="source-21"></a> [Tracked agent launches and settlement](../digests/agent-launches.md).
+22. <a id="source-22"></a> [OpenShell compatibility](../digests/openshell-compatibility.md) — mediated signal delivery and listener flags.

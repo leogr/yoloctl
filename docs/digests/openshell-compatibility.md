@@ -1,6 +1,6 @@
 # OpenShell 0.1.6 image and environment compatibility
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47` plus `third_party/openshell/patches/`; runtime selection `1d265df` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47` plus `third_party/openshell/patches/`; runtime selection `1d265df` and accompanying changes; mediated signal delivery at `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes.
 
 [FACT] On the upgrade integration tree a native space selects the embedded
 0.1.6 runtime for every new ordinary (non-privileged) box and for an explicit
@@ -105,6 +105,33 @@ optional third and fourth patches; two- and three-patch releases stay valid
 (`qualifiedPatchStack`).
 [27](#source-27)
 
+[FACT] Inside a box, a `kill` or `rt_sigqueueinfo` aimed at a positive PID is
+seccomp-notified to the sandbox broker, which checks that the notification is
+still live (`validate_id`), delivers the signal itself through
+`pidfd_send_signal` on a retained pidfd and only then answers the
+notification; patch 4's group path (`mediate_group_signal`: `kill(-group)`,
+then the answer) keeps that order. Thread-directed signals (`tkill`,
+`tgkill`, `rt_tgsigqueueinfo`) are not delivered by the broker: after its
+checks it continues them and the kernel performs the call, and the last two
+are notified only for `SIGCONT`.
+The workload listener is installed with `SECCOMP_FILTER_FLAG_NEW_LISTENER`
+alone, without `WAIT_KILLABLE_RECV`, the kernel flag that makes a notifying
+process ignore non-fatal signals once the supervisor has received the
+notification. Upstream states the consequence: a signal can interrupt a
+notified syscall, which the kernel restarts or fails with `EINTR`, and
+handlers answer a repeated operation as the kernel would. There is no repeat
+detection, so a `kill` interrupted after delivery and restarted arrives as a
+new notification and is delivered again. Go workloads take this path:
+`pidfd_open` returns `ENOSYS` in a box, so `os.Process.Signal` falls back to
+plain `kill`, and Go installs every signal handler with `SA_RESTART`. The
+attach client forwards its first signal and cancels its context on a second,
+so a duplicate can race the attach's detach reply: the exit status then
+depends on whether the final reply arrived before the cancellation.
+`commandSignalContext` sends no signal itself, and no yoloctl patch changes
+the listener flags or adds repeat detection: the limit is documented, not
+fixed. [28](#source-28) [29](#source-29) [30](#source-30) [31](#source-31)
+[32](#source-32) [33](#source-33)
+
 [FACT] OpenShell 0.1.6 removes secret-provided `HTTP_PROXY`, `HTTPS_PROXY`,
 `ALL_PROXY` and `NO_PROXY` settings, including their lowercase forms, from the
 private workload environment even in unconfined boxes. Custom-profile secret
@@ -181,3 +208,9 @@ operator-box case was not rerun separately. [26](#source-26)
 25. <a id="source-25"></a> [scripts](../../scripts/guest-hashes.go#L1) — `scripts/openshell-embed-key.py` (`closure_files`, `helper_hash`) and the Makefile `native-embed` rule.
 26. <a id="source-26"></a> [internal/agentbox/openshell_withdraw.go](../../internal/agentbox/openshell_withdraw.go#L1) — `WithdrawNativeForwards` lost-reply rule, leftover warning, `vmservice.Collect`; `port.UnforwardAgentbox` in internal/port/port.go.
 27. <a id="source-27"></a> [third_party/openshell/patches/0003-v0072-syscall-parity.patch](../../third_party/openshell/patches/0003-v0072-syscall-parity.patch#L1) — restored calls (header) against upstream `crates/openshell-sandbox/src/linux/child_seccomp.rs` `prepare` and v0.0.72 `crates/openshell-supervisor-process/src/sandbox/linux/seccomp.rs`; `qualifiedPatchStack` in `internal/openshell/release.go`.
+28. <a id="source-28"></a> [Upstream seccomp_notify.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/seccomp_notify.rs#L170-L176) — `NotificationListener`: installed without `WAIT_KILLABLE_RECV`, interrupted syscalls restart; `install_workload_listener` notified syscalls L333-L356; `install_notification_filter` flags `NEW_LISTENER` only, L636-L650; `build_filter` notifies `tgkill`/`rt_tgsigqueueinfo` only for `SIGCONT`, L665-L745.
+29. <a id="source-29"></a> [Upstream process_signal.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/process_signal.rs#L20-L85) — `mediate_process_signal`: `validate_id`, `pidfd_send_signal`, then `respond_value`; `mediate_thread_signal` L88-L129 ends in `respond_continue`; the group path `mediate_group_signal` (`kill(-group)`, then `respond_value`) is added by `third_party/openshell/patches/0004-v0072-process-group-signals.patch`.
+30. <a id="source-30"></a> [Upstream child_seccomp.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/child_seccomp.rs#L150-L201) — `pidfd_send_signal` denied to the workload, `pidfd_open` answered with `ENOSYS`.
+31. <a id="source-31"></a> [Go 1.27.3 os/exec_unix.go](https://github.com/golang/go/blob/go1.27.3/src/os/exec_unix.go#L77-L91) — `(*Process).signal`: pidfd when `checkPidfd` passes (`os/pidfd_linux.go` L154-L197), otherwise `kill`; `runtime/os_linux.go` L480 sets `SA_RESTART` on every handler.
+32. <a id="source-32"></a> [Linux v6.12 seccomp_filter.rst](https://github.com/torvalds/linux/blob/v6.12/Documentation/userspace-api/seccomp_filter.rst#L276-L282) — `SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV` semantics.
+33. <a id="source-33"></a> [cmd/yoloctl/signals.go](../../cmd/yoloctl/signals.go#L17-L50) — `commandSignalContext`: first signal forwarded, a second cancels; `TestAttachClientSignalDuringOwnedSetupDetaches` in `attach_signal_test.go` sends one `Process.Signal` and expects status 75.
