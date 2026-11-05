@@ -515,9 +515,10 @@ func writeAgentboxShowJSON(w io.Writer, d *container.Details, querySpace string,
 		LogHint         string `json:"log_hint,omitempty"`
 	}
 	type agentStateJSON struct {
-		Source      string `json:"source,omitempty"`
-		Destination string `json:"destination,omitempty"`
-		Enabled     bool   `json:"enabled"`
+		Additional  []inspectAgentState `json:"additional,omitempty"`
+		Source      string              `json:"source,omitempty"`
+		Destination string              `json:"destination,omitempty"`
+		Enabled     bool                `json:"enabled"`
 	}
 	type agentJSON struct {
 		Profile          string `json:"profile"`
@@ -615,7 +616,10 @@ func writeAgentboxShowJSON(w io.Writer, d *container.Details, querySpace string,
 			ProbeError:      ll.ProbeError,
 			LogHint:         ll.LogHint,
 		},
-		AccountState: agentStateJSON(state),
+		AccountState: agentStateJSON{Source: state.Source, Destination: state.Destination, Enabled: state.Enabled},
+	}
+	for _, extra := range state.Additional {
+		out.AccountState.Additional = append(out.AccountState.Additional, inspectAgentState{Source: extra.Source, Destination: extra.Destination})
 	}
 	if resolved != nil {
 		out.State = string(resolved.State)
@@ -1970,6 +1974,11 @@ func finishAgentboxRuntimePreparation(ctx context.Context, c *container.Client, 
 		if _, err := accountStateOperation(ctx, cfg.Space, accountstate.Request{Action: "mkdir", Account: cfg.Account, Agent: cfg.Agent}); err != nil {
 			return err
 		}
+		for _, state := range prep.stateMount.Additional {
+			if _, err := accountStateOperation(ctx, cfg.Space, accountstate.Request{Action: "mkdir", Account: cfg.Account, Agent: cfg.Agent, Path: state.Relative}); err != nil {
+				return err
+			}
+		}
 	}
 	// Sandbox socket dir must exist before nerdctl run binds it.
 	if !native {
@@ -2016,9 +2025,8 @@ func rejectAccountRootBinds(cfg *agentbox.Config) error {
 			return err
 		}
 	}
-	managedDest := managedStateDest(cfg)
 	for _, m := range cfg.Mounts {
-		if managedDest != "" && m.Target == managedDest {
+		if isManagedStateDest(cfg, m.Target) {
 			continue // the managed slot: normalized to the box's own leaf
 		}
 		if err := check("mount source", m.Source); err != nil {

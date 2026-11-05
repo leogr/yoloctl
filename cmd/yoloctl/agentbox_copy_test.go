@@ -75,6 +75,7 @@ func copySourceConfig(t *testing.T, wd string) *agentbox.Config {
 		Mounts: []agentbox.Mount{
 			{Source: "/host/data", Target: "/data", ReadOnly: true},
 			{Source: stateSource, Target: claudeStateDest},
+			{Source: filepath.Join(stateSource, "anthropic"), Target: "/home/sandbox/.config/anthropic"},
 		},
 	}
 }

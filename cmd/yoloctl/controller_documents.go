@@ -33,10 +33,11 @@ type editDocument struct {
 }
 
 type authImportDocument struct {
-	Source        string `json:"source"`
-	ProfileDigest string `json:"profile_digest"`
-	Native        []byte `json:"native,omitempty"`
-	SecretValue   string `json:"secret_value,omitempty"`
+	Source        string           `json:"source"`
+	ProfileDigest string           `json:"profile_digest"`
+	Native        []byte           `json:"native,omitempty"`
+	NativeFiles   []authImportFile `json:"native_files,omitempty"`
+	SecretValue   string           `json:"secret_value,omitempty"`
 }
 
 type copySourceKey struct{}
@@ -291,11 +292,9 @@ func applyControllerAuthImport(ctx context.Context, req controller.Request) (res
 	if doc.ProfileDigest != hex.EncodeToString(digest[:]) {
 		return errors.New("agent import conventions changed; retry with current catalogs")
 	}
-	if (len(doc.Native) == 0) == (doc.SecretValue == "") {
-		return errors.New("exactly one native login or imported secret is required")
-	}
-	if len(doc.Native) > controller.MaxDocument || len(doc.SecretValue) > controller.MaxDocument {
-		return errors.New("import exceeds size limit")
+	writes, err := nativeAuthWrites(target, doc)
+	if err != nil {
+		return err
 	}
 	releaseSpace, err := spacelock.Acquire(ctx, req.Space, true)
 	if err != nil {
@@ -333,22 +332,23 @@ func applyControllerAuthImport(ctx context.Context, req controller.Request) (res
 		printSecretPickupNote(os.Stderr, target.name)
 		return nil
 	}
-	if len(bytes.TrimSpace(doc.Native)) == 0 {
-		return errors.New("login file is empty")
-	}
 	if err := accountStopUsers(ctx, target.space, target.name, false, os.Stderr); err != nil {
 		return err
 	}
-	if _, err := accountStateOperation(ctx, target.space, accountstate.Request{
-		Action: "write", Account: target.name, Agent: target.profile.Name, Path: target.profile.Auth.CredentialFile, Data: doc.Native,
-	}); err != nil {
-		return err
+	for _, write := range writes {
+		if _, err := accountStateOperation(ctx, target.space, accountstate.Request{Action: "write", Account: target.name, Agent: target.profile.Name, Path: write.Path, Data: write.Data}); err != nil {
+			return err
+		}
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "imported %s login into account %s (%s)\n", target.profile.Name, target.name, target.authFilePath())
+	destination := target.authFilePath()
+	if len(doc.NativeFiles) > 0 {
+		destination = target.stateDir + "/" + target.profile.Auth.ProfilesDir
+	}
+	_, _ = fmt.Fprintf(os.Stdout, "imported %s login into account %s (%s)\n", target.profile.Name, target.name, destination)
 	return nil
 }
 
-func prepareAuthImport(args []string, file, space string) (authImportDocument, error) {
+func prepareAuthImport(args []string, file, anthropicDir, space string) (authImportDocument, error) {
 	var doc authImportDocument
 	target, err := resolveAccountAuthTarget(space, args)
 	if err != nil {
@@ -360,6 +360,14 @@ func prepareAuthImport(args []string, file, space string) (authImportDocument, e
 	}
 	digest := sha256.Sum256(profile)
 	doc.ProfileDigest = hex.EncodeToString(digest[:])
+	if file != "" && anthropicDir != "" {
+		return doc, errors.New("choose --file or --anthropic-dir, not both")
+	}
+	if anthropicDir != "" {
+		bundle, err := prepareAnthropicImport(target, anthropicDir)
+		bundle.ProfileDigest = doc.ProfileDigest
+		return bundle, err
+	}
 	if file != "" {
 		file, err = expandUserPath(file)
 		if err != nil {
@@ -371,6 +379,18 @@ func prepareAuthImport(args []string, file, space string) (authImportDocument, e
 			return doc, err
 		}
 		file = firstExistingFile(candidates)
+		dir, err := defaultAnthropicImportDir(target)
+		if err != nil {
+			return doc, err
+		}
+		if dir != "" {
+			if file != "" {
+				return doc, errors.New("both legacy and Anthropic login state exist; choose --file PATH or --anthropic-dir DIR")
+			}
+			bundle, err := prepareAnthropicImport(target, dir)
+			bundle.ProfileDigest = doc.ProfileDigest
+			return bundle, err
+		}
 	}
 	read := func(path string) ([]byte, error) {
 		f, err := os.Open(path)
@@ -392,6 +412,9 @@ func prepareAuthImport(args []string, file, space string) (authImportDocument, e
 		doc.Native, err = read(file)
 		if err == nil && len(bytes.TrimSpace(doc.Native)) == 0 {
 			err = errors.New("login file is empty")
+		}
+		if err == nil {
+			err = rejectMisplacedAnthropicFile(target, doc.Native)
 		}
 		return doc, err
 	}

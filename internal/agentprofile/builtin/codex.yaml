@@ -112,4 +112,5 @@ session:
 # synchronize auth.json from account secrets; after login/import, Codex owns
 # the file and may replace it.
 auth:
+  format: codex
   credential_file: auth.json

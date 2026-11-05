@@ -81,6 +81,8 @@ type Profile struct {
 	// chain in cmd/yoloctl/agentstate.go. Empty means the profile
 	// has no managed state (no bind mount added).
 	StateContainerPath string `yaml:"state_container_path,omitempty"`
+	// StateMounts exposes additional directories from the same selected native leaf.
+	StateMounts []StateMount `yaml:"state_mounts,omitempty"`
 	// StateArchiveExcludes lists literal paths relative to the native agent
 	// leaf that space export omits as disposable process state. Directories
 	// exclude their subtree. No globs, parent traversal or leaf-root exclusion.
@@ -89,7 +91,7 @@ type Profile struct {
 	// LaunchEnv is non-secret environment prepended to the agent command
 	// as an `env K=V … <command>` prefix at every managed session launch
 	// (create/start/recreate/attach). Its main purpose is to RELOCATE the agent's whole
-	// config footprint into StateContainerPath — the single persisted
+	// related config footprint into StateContainerPath — the primary persisted
 	// bind mount — so state the agent writes OUTSIDE that dir survives
 	// `box recreate`. The motivating case: claude scatters its login
 	// across ~/.claude/ (mounted) AND ~/.claude.json (a sibling, lost on
@@ -232,8 +234,19 @@ func (p *Profile) PushFeature() string {
 // SessionIDFormatUUID is the only supported SessionSpec.IDFormat.
 const SessionIDFormatUUID = "uuid"
 
+// StateMount is an additional view of a directory below the selected agent leaf.
+// Source never names an arbitrary VM/host path; Destination is sandbox-home local.
+type StateMount struct {
+	Source      string `yaml:"source" json:"source"`
+	Destination string `yaml:"destination" json:"destination"`
+}
+
+// Auth formats select credential schemas, independently of profile/agent names.
+const AuthFormatClaude = "claude"
+const AuthFormatCodex = "codex"
+
 // AuthSpec is the optional `auth:` block on a Profile. It makes the
-// account-scoped one-time import and presence-status flow profile-driven rather
+// account-scoped one-time import and local credential-status flow profile-driven rather
 // than hardcoded per agent, so a user who drops a profile YAML with an auth
 // block gets `yoloctl account auth …` for free.
 //
@@ -241,6 +254,11 @@ const SessionIDFormatUUID = "uuid"
 // StateContainerPath, so an auth block only makes sense when
 // StateContainerPath is set (Validate enforces this).
 type AuthSpec struct {
+	// Format selects bounded native material recognition; empty retains file-presence status.
+	Format string `yaml:"format,omitempty"`
+	// ProfilesDir is the Claude Anthropic profile tree inside the same native leaf.
+	ProfilesDir string `yaml:"profiles_dir,omitempty"`
+
 	// CredentialFile is the agent's on-disk auth file, RELATIVE to
 	// StateContainerPath (e.g. "auth.json" for codex at
 	// /home/sandbox/.codex/auth.json, ".credentials.json" for claude). It is
@@ -467,6 +485,9 @@ func (p *Profile) Validate() error {
 	}
 	if p.StateContainerPath != "" && !filepath.IsAbs(p.StateContainerPath) {
 		return fmt.Errorf("agent-profile %q: state_container_path %q must be absolute", p.Name, p.StateContainerPath)
+	}
+	if err := p.validateStateMounts(); err != nil {
+		return err
 	}
 	if len(p.StateArchiveExcludes) > 0 && p.StateContainerPath == "" {
 		return fmt.Errorf("agent-profile %q: state_archive_excludes requires state_container_path", p.Name)
@@ -714,6 +735,26 @@ func (p *Profile) validateAuth() error {
 		return nil
 	}
 	a := p.Auth
+	if a.Format != "" && a.Format != AuthFormatClaude && a.Format != AuthFormatCodex {
+		return fmt.Errorf("agent-profile %q: unsupported auth.format", p.Name)
+	}
+	if a.ProfilesDir != "" {
+		if a.Format != AuthFormatClaude {
+			return fmt.Errorf("agent-profile %q: auth.profiles_dir requires Claude format", p.Name)
+		}
+		if err := validateRelativeAuthFile(p.Name, "auth.profiles_dir", a.ProfilesDir); err != nil {
+			return err
+		}
+		declared := false
+		for _, mount := range p.StateMounts {
+			if mount.Source == a.ProfilesDir {
+				declared = true
+			}
+		}
+		if !declared {
+			return fmt.Errorf("agent-profile %q: auth.profiles_dir requires its state_mounts declaration", p.Name)
+		}
+	}
 	if a.ImportHomeDir != "" {
 		if err := validateRelativeAuthFile(p.Name, "auth.import_home_dir", a.ImportHomeDir); err != nil {
 			return err

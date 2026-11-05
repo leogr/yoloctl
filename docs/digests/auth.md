@@ -1,6 +1,6 @@
 # Account authentication and mutation safety
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Account secrets and native state are separate delivery paths. At container
 creation, `userEnvironmentJSON` reloads the selected account and projects only
@@ -48,10 +48,15 @@ consumers; forced account destruction stops them. Destruction removes native
 state before the account manifest, retaining the declaration when native
 cleanup fails. [6](#source-6) [7](#source-7)
 
-[FACT] Auth status tests native-file existence with bounded guest reads; it
-is not a provider acceptance check. Guest unavailability is reported separately
-from missing credentials. List/show output does not reveal secret values.
-[5](#source-5) [7](#source-7)
+[FACT] Auth status recognizes local Claude/Codex credential material with bounded
+VM-native reads. Empty/malformed or tokenless objects do not count as credentials;
+unknown formats remain unverified. Codex recognizes a nonempty API key or access
+token; other adapters retain file-presence status. The output explicitly leaves
+provider validity and environment/external auth unverified. Storage/access errors
+remain unavailable. Codex file-store guidance does not force a store/provider
+or add a mount; use --file for a host CODEX_HOME override. Claude's second native
+view and selected-profile import are detailed separately. List/show never reveal
+secret values. [5](#source-5) [7](#source-7) [15](#source-15) [16](#source-16)
 
 [FACT] Reconcile compares the account reference, not account secret/native
 contents. Changing a secret does not automatically restart or recreate a box;
@@ -91,3 +96,6 @@ selects a home-relative host import directory; custom XDG roots use --file. [14]
 13. <a id="source-13"></a> [Pi adapter](pi.md) — install, state, provider and runtime contracts.
 
 14. <a id="source-14"></a> [OpenCode adapter](opencode.md) — native runtime, account and validation contracts.
+
+15. <a id="source-15"></a> [Claude profile storage](claude-auth.md) — additional view, supported local formats, import and preservation order.
+16. <a id="source-16"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1) — same primary state path, native status format and unchanged secret delivery.

@@ -439,7 +439,7 @@ func TestSpaceAccountsNativeReadsAllowColdTransport(t *testing.T) {
 		case <-ctx.Done():
 			return accountstate.Result{}, ctx.Err()
 		case <-time.After(3200 * time.Millisecond):
-			return accountstate.Result{Present: true, Leaves: []string{"codex"}}, nil
+			return accountstate.Result{Present: true, Leaves: []string{"codex"}, Auth: []accountstate.AuthFinding{{Source: "auth.json", Outcome: "credentials-present"}}}, nil
 		}
 	}
 	profile, err := agentprofile.Lookup("codex")
@@ -448,7 +448,7 @@ func TestSpaceAccountsNativeReadsAllowColdTransport(t *testing.T) {
 	}
 	results := make(chan error, 2)
 	go func() {
-		files, err := accountAuthFiles(t.Context(), accountAuthTarget{space: "work", name: "personal", profile: profile})
+		files, err := accountAuthStatus(t.Context(), accountAuthTarget{space: "work", name: "personal", profile: profile})
 		if err == nil && len(files) != 1 {
 			err = errors.New("native auth was lost")
 		}
@@ -470,7 +470,7 @@ func TestSpaceAccountsNativeReadsAllowColdTransport(t *testing.T) {
 	// A shorter caller deadline still wins.
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 	defer cancel()
-	if _, err := accountAuthFiles(ctx, accountAuthTarget{space: "work", name: "personal", profile: profile}); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err := accountAuthStatus(ctx, accountAuthTarget{space: "work", name: "personal", profile: profile}); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("lost caller deadline: %v", err)
 	}
 }

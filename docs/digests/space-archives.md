@@ -1,6 +1,6 @@
 # Space archives and restore
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying fixes; archive-path expansion `1d265df3` and accompanying changes; grow guard `1d265df3cfae49026ec4202fe88e9cce83ad1ca9`; native links `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying fixes; archive-path expansion `1d265df3` and accompanying changes; grow guard `1d265df3cfae49026ec4202fe88e9cce83ad1ca9`; native links `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Host-only `space export SPACE ARCHIVE.tar.gz` stores a version-1
 manifest and `state.tar` in gzip. The manifest records source boot settings,
@@ -41,7 +41,8 @@ not rewritten. AIRC feature selections and literal agentless session arguments
 survive backend/workdir remapping. [1](#source-1) [10](#source-10)
 
 [FACT] Export translates clean absolute symlinks beneath the same native leaf,
-its VM bind alias or the profile's `state_container_path` into relative links.
+its VM bind alias, the profile's `state_container_path`, or an additional
+`state_mounts` view into relative links within the same leaf.
 It never follows targets or changes source files. Other clean absolute symlink
 targets are retained verbatim, including dangling targets; their contents are
 not archived. Unclean absolute targets fail with the entry name. Unix socket

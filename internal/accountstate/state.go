@@ -35,10 +35,21 @@ type Request struct {
 	UID     int    `json:"uid"`
 	GID     int    `json:"gid"`
 }
+type AuthFinding struct {
+	Source  string `json:"source"`
+	Outcome string `json:"outcome"`
+}
+
+type AuthStatusSpec struct {
+	Format      string `json:"format"`
+	ProfilesDir string `json:"profiles_dir,omitempty"`
+}
+
 type Result struct {
-	UUID    string   `json:"uuid"`
-	Present bool     `json:"present"`
-	Leaves  []string `json:"leaves"`
+	Auth    []AuthFinding `json:"auth,omitempty"`
+	UUID    string        `json:"uuid"`
+	Present bool          `json:"present"`
+	Leaves  []string      `json:"leaves"`
 	// Outcome of a statusline action: enabled, restored, removed, unchanged
 	// or absent.
 	Outcome string `json:"outcome,omitempty"`

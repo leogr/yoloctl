@@ -25,6 +25,7 @@ func TestAgentProfiles_BuiltIns(t *testing.T) {
 			DefaultArgs:        []string{"--dangerously-skip-permissions"},
 			NpmPackage:         "@anthropic-ai/claude-code",
 			StateContainerPath: "/home/sandbox/.claude",
+			StateMounts:        []agentprofile.StateMount{{Source: "anthropic", Destination: "/home/sandbox/.config/anthropic"}},
 			LaunchEnv: map[string]string{
 				"CLAUDE_CONFIG_DIR":        "{{state_dir}}",
 				"DISABLE_AUTOUPDATER":      "1",
@@ -32,6 +33,7 @@ func TestAgentProfiles_BuiltIns(t *testing.T) {
 			},
 			Auth: &agentprofile.AuthSpec{
 				CredentialFile: ".credentials.json",
+				Format:         agentprofile.AuthFormatClaude, ProfilesDir: "anthropic",
 				ImportSecret: &agentprofile.ImportSecret{
 					File: ".claude.json", Field: "primaryApiKey", Secret: "ANTHROPIC_API_KEY",
 				},
@@ -60,6 +62,7 @@ func TestAgentProfiles_BuiltIns(t *testing.T) {
 			},
 			Auth: &agentprofile.AuthSpec{
 				CredentialFile: "auth.json",
+				Format:         agentprofile.AuthFormatCodex,
 			},
 			RequiresFeatures: []string{"codex", "github", "yolo.agent.observe-codex"},
 			Session: &agentprofile.SessionSpec{

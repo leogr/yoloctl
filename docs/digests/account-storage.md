@@ -1,6 +1,6 @@
 # Native data disk and integrity
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Native account state and controller configuration share a dedicated
 space-owned native ext4 data disk. Layout
@@ -16,6 +16,12 @@ Python helper (locally for native workers); file contents are not passed in argv
 file descriptors and no-follow opens. Writes create an exclusive temporary
 0600 file, set its owner, fsync, rename and fsync the directory. Native removal
 uses symlink-resistant directory-relative traversal. [2](#source-2) [3](#source-3)
+
+[FACT] Claude exposes its existing native leaf through the primary legacy bind
+and an additional view of its anthropic subtree. Both remain selected-account
+state; no host share is added. Native directory preparation and auth reads use
+the same verified helper. Whole-space archives preserve the subtree and map
+additional-view symlinks back into that leaf. [15](#source-15)
 
 [FACT] New space creation durably publishes its boot identity and initialization
 seed before allocating the disk. Interrupted allocation can create only that
@@ -73,3 +79,5 @@ account disk's preservation contract does not cover it. [9](#source-9)
 13. <a id="source-13"></a> [Firecracker disks](../../internal/firecracker/disk_linux.go#L1) — `AccountDiskBlank`, `blank`, `formatDisk`.
 
 14. <a id="source-14"></a> [internal/controller/runtime.go](../../internal/controller/runtime.go#L19) — `LoadRuntime`, `VerifyRuntimeStorage`, `PrepareRuntimeForLifecycle`; deployController and restoreNativeSpace select preparation explicitly.
+
+15. <a id="source-15"></a> [Claude native views](claude-auth.md) — mapping, helper, import and archive evidence.

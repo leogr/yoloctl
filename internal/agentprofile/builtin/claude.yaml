@@ -27,6 +27,11 @@ default_args:
 
 npm_package: "@anthropic-ai/claude-code"
 state_container_path: /home/sandbox/.claude
+# Claude's Anthropic Console profile store is independent of CLAUDE_CONFIG_DIR.
+# Bind the complete tree from this account's existing Claude leaf.
+state_mounts:
+  - source: anthropic
+    destination: /home/sandbox/.config/anthropic
 
 # Required features (manifest/runtime model). The boundary in force is:
 #   agent (this profile) → requires features → features → require capabilities → policy
@@ -118,6 +123,8 @@ launch_env:
 # subscription login (vs --console API billing); the captured file persists in
 # the account as agent-owned native state.
 auth:
+  format: claude
+  profiles_dir: anthropic
   # .credentials.json is Claude Code's DOCUMENTED Linux credentials file
   # (code.claude.com/docs/en/authentication; CLAUDE_CONFIG_DIR relocates it).
   # `account auth import` copies it into the account-state dir; an in-box
