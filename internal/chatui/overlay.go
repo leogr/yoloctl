@@ -108,7 +108,7 @@ var helpSections = []struct {
 	}},
 	{"Messages", [][2]string{
 		{"Alt+↑  Alt+↓  click", "Select a message. Its actions stay at the bottom, naming it, until you send, press Esc or select another; clicking them works while typing."},
-		{"← →  Enter  Esc", "With a message selected: choose an action, run it, or return to typing. Typing returns too."},
+		{"← →  Enter  Esc", "With a message selected: choose an action, run it, or return to typing. Typing returns too. Enter starts on Reply, or on Quote while a highlight lies in the selected message."},
 		{"Ctrl+R", "Reply to the selected message"},
 		{"Alt+Q  ❝ Quote", "Quote the highlighted part of one message in the draft at the cursor, as > lines of its original Markdown, and reply to that message. Uses no clipboard. Ctrl+Z removes the quote; a highlight that cuts formatting the view adds is refused (source view, Ctrl+S, quotes any part). Table Quote keeps selected cell text, separates cells with TAB and rows with newlines; use source view for original Markdown."},
 		{"Alt+Y  Ctrl+Shift+C", "Copy the selected message's original text"},
@@ -119,7 +119,7 @@ var helpSections = []struct {
 	{"Selecting text", [][2]string{
 		{"Drag", "Select message text; releasing copies it. Names, times, gutters and the participants panel are never copied. Wrapped lines rejoin and messages are separated by a blank line."},
 		{"", "Copy uses what is displayed: rendered Markdown, tabs as spaces. Use Alt+Y for the exact original, or Ctrl+S to select source."},
-		{"Alt+Q  ❝ Quote", "Quote the highlight in the draft and reply to its message (see Messages)"},
+		{"Alt+Q  ❝ Quote", "Quote the highlight in the draft and reply to its message (see Messages); with that message selected, Enter quotes too"},
 		{"Esc", "Clear the highlight"},
 	}},
 	{"Channels", [][2]string{

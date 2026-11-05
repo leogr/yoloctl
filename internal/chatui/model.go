@@ -934,7 +934,8 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 func (m *Model) escape() {
 	switch {
 	case m.sel != nil:
-		m.sel = nil
+		// The pick stays; Enter returns to the first action, Reply.
+		m.sel, m.actionIndex = nil, 0
 	case m.behindLatest():
 		m.jumpToLatest()
 	case m.replyTo != "":
@@ -1018,11 +1019,13 @@ func (m *Model) messageActions() []messageAction {
 		return nil
 	}
 	var out []messageAction
-	if msg.ID != "" {
-		out = append(out, messageAction{"reply", "↩ Reply", "Ctrl+R"})
-	}
+	// A highlight in this message makes Quote the first action, so Enter
+	// quotes it; without one, Reply comes first and Enter replies.
 	if i, _, why := m.quoteTarget(); why == "" && &m.messages[i] == msg {
 		out = append(out, messageAction{"quote", quoteLabel, "Alt+Q"})
+	}
+	if msg.ID != "" {
+		out = append(out, messageAction{"reply", "↩ Reply", "Ctrl+R"})
 	}
 	out = append(out, messageAction{"copy", "Copy", "Alt+Y"})
 	if messageID(msg.ID) {

@@ -23,10 +23,10 @@ Enter sends. Whole-draft commands include `/help`, `/settings`, `/participants`,
 operations, never raw IRC. Other text, folds and partial-send remainders are
 sent, never run. [2](#source-2) [3](#source-3)
 
-[FACT] Alt+↑/↓ or a click selects a message; its actions (reply, [quote](chat-quote.md)
-while a highlight lies in it, copy, copy reference, copy code, open link, attach, mention) hold the footer until a send, Esc or another
+[FACT] Alt+↑/↓ or a click selects a message; its actions ([quote](chat-quote.md)
+first while a highlight lies in it, reply, copy, copy reference, copy code, open link, attach, mention) hold the footer until a send, Esc or another
 pick, despite focus, typing, notices or arrivals; a pick clears info notices,
-eviction ends it. Message focus gives arrows and Enter to them; typing returns
+eviction ends it. Message focus gives arrows and Enter (from the first action) to them; typing returns
 to the composer. Ctrl+R, Alt+Y, Alt+C and Ctrl+O act on
 the selected (default latest) message or explain why not. [1](#source-1)
 [3](#source-3) [9](#source-9) A click on a code block's `copy` button copies

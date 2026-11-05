@@ -1,15 +1,17 @@
 # Native chat Quote
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; Enter default at `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
 
 [FACT] Only the chat view's own drag highlight can be quoted: the view
 requests all mouse motion, so yoloctl's local tab selection does not act over
 it, and a host-terminal selection never reaches the view. While a highlight
 lies inside one confirmed message, the footer leads with a `❝ Quote` chip,
 also beside a release's copy notice, the highlight hints offer `Alt+Q quote`,
-and a picked message holding the highlight lists Quote among its actions.
-Alt+Q (repeats ignored), the chip or the action run it. [1](#source-1)
-[2](#source-2) [3](#source-3) [4](#source-4)
+and a picked message holding the highlight lists Quote first, so Enter runs
+it; a drag release or a highlight-clearing Esc returns Enter to the first
+action (Reply without a highlight). A highlight in an unpicked message leaves
+Enter to the composer. Alt+Q (repeats ignored), the chip or the action run it.
+[1](#source-1) [2](#source-2) [3](#source-3) [4](#source-4) [9](#source-9)
 
 [FACT] Quote inserts the highlighted part's original Markdown, or a rendered
 table's selected cell text, at the cursor as one block: a line break first
@@ -86,3 +88,4 @@ They use fake callbacks, not a live room. [7](#source-7) [8](#source-8)
 6. <a id="source-6"></a> [Line builders](../../internal/chatui/body.go#L111-L224) — `displayLinesMap`; `tableLines` (L607-L732, cell ranges) and `tableCells`; `inlineMarkdownMap`, `listItem` in inline.go; `expandTabsMap` in render.go; `selectedParts` in selection.go.
 7. <a id="source-7"></a> [Quote regressions](../../internal/chatui/quote_test.go#L1-L435) — nine tests, `TestQuoteInsertsTheSourceAndReplies` through `TestQuoteEveryHighlightIsExactOrRefused` with `tableOracle`; `TestTableSpacersCopyNothing` in table_spacing_test.go (L151-L219).
 8. <a id="source-8"></a> [Table Quote regressions](../../internal/chatui/quote_table_test.go#L1-L363) — eight tests, `TestQuoteTableExamples` through `TestQuoteTableKeepsSourceBesideTables`.
+9. <a id="source-9"></a> [Enter regressions](../../internal/chatui/quote_enter_test.go#L1) — Enter quotes from a pick (clipboard off too), Esc and ↑/↓ return it to Reply, Reply chip click; `escape` in model.go and `mouseUp` in mouse.go reset the action.

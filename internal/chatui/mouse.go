@@ -187,6 +187,9 @@ func (m *Model) mouseUp(mo tea.Mouse) tea.Cmd {
 			if p, ok := m.pointAt(mo.X, mo.Y); ok && m.sel != nil && d.edge == 0 {
 				m.sel.focus = p
 			}
+			// A new highlight returns Enter to the first action: Quote
+			// when it lies in the picked message, whatever the copy does.
+			m.actionIndex = 0
 			return m.copySelection()
 		}
 		row, _ := m.rowAt(mo.Y)
