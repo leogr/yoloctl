@@ -226,7 +226,11 @@ Lima/vendor and parsed marker formats retain their existing owners and bytes.
 use the running controller. Audit never starts a stopped space. Enable is
 explicit; viewing never installs tools. Old Firecracker images require explicit
 `space recreate NAME --update-vm-image`; audit never replaces media. Exports refuse overwrite and publish
-only completed privacy-filtered output. [29](#source-29)
+only completed privacy-filtered output. Pretty logs show the rule message and
+selected metadata, hide unavailable assignments and use `(no box)` when box
+metadata is unavailable; JSON retains the complete selected fields. Follow
+summaries appear initially and when loss/gap state changes. Terminal colour
+respects `NO_COLOR` and redirection. [29](#source-29)
 
 ## Sources
 

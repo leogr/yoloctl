@@ -40,22 +40,24 @@ func (d Desired) Validate() error {
 }
 
 type Event struct {
-	Cursor            uint64    `json:"cursor"`
-	Time              time.Time `json:"time"`
-	Rule              string    `json:"rule"`
-	Severity          string    `json:"severity"`
-	Executable        string    `json:"executable,omitempty"`
-	Container         string    `json:"container,omitempty"`
-	Box               string    `json:"box,omitempty"`
-	Space             string    `json:"space,omitempty"`
-	Account           string    `json:"account,omitempty"`
-	Agent             string    `json:"agent,omitempty"`
-	RuntimeMode       string    `json:"runtime_mode,omitempty"`
-	NetworkUnconfined string    `json:"network_unconfined,omitempty"`
-	MetadataAvailable bool      `json:"metadata_available"`
-	Path              string    `json:"path,omitempty"`
-	Endpoint          string    `json:"endpoint,omitempty"`
-	Result            string    `json:"result,omitempty"`
+	Cursor            uint64            `json:"cursor"`
+	Time              time.Time         `json:"time"`
+	Rule              string            `json:"rule"`
+	Severity          string            `json:"severity"`
+	Output            string            `json:"output,omitempty"`
+	OutputFields      map[string]string `json:"output_fields,omitempty"`
+	Executable        string            `json:"executable,omitempty"`
+	Container         string            `json:"container,omitempty"`
+	Box               string            `json:"box,omitempty"`
+	Space             string            `json:"space,omitempty"`
+	Account           string            `json:"account,omitempty"`
+	Agent             string            `json:"agent,omitempty"`
+	RuntimeMode       string            `json:"runtime_mode,omitempty"`
+	NetworkUnconfined string            `json:"network_unconfined,omitempty"`
+	MetadataAvailable bool              `json:"metadata_available"`
+	Path              string            `json:"path,omitempty"`
+	Endpoint          string            `json:"endpoint,omitempty"`
+	Result            string            `json:"result,omitempty"`
 }
 
 type Status struct {
@@ -190,5 +192,39 @@ func ParseEvent(raw []byte) (Event, error) {
 	if e.Path == "" {
 		e.Path = get("fd.name")
 	}
+	e.OutputFields = make(map[string]string)
+	metadata := map[string]string{
+		"yolo.box": e.Box, "yolo.space": e.Space, "yolo.account": e.Account, "yolo.agent": e.Agent,
+		"yolo.runtime_mode": e.RuntimeMode, "yolo.network_unconfined": e.NetworkUnconfined,
+	}
+	remaining := 4096
+	for _, key := range retainedFields {
+		value := get(key)
+		if key == "user.uid" && value == "" {
+			var uid json.Number
+			if json.Unmarshal(input.Fields[key], &uid) == nil {
+				if _, err := strconv.ParseUint(uid.String(), 10, 32); err == nil {
+					value = uid.String()
+				}
+			}
+		}
+		if _, present := input.Fields[key]; present && value == "" {
+			value = "<NA>"
+		}
+		if strings.HasPrefix(key, "yolo.") {
+			value = metadata[key]
+			if value == "" {
+				value = "<NA>"
+			}
+		}
+		if key == "yolo.metadata_available" {
+			value = strconv.FormatBool(e.MetadataAvailable)
+		}
+		if value != "" && len(value) <= remaining {
+			e.OutputFields[key] = value
+			remaining -= len(value)
+		}
+	}
+	e.Output = RenderOutput(e)
 	return e, nil
 }

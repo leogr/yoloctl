@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `9f21466f639bdda1c4edde353998991781df22e7` and accompanying changes.
+Verification: `3933d13318aec32653d72f806327b18291bc4a18` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
@@ -70,13 +70,14 @@ field. Context is not per-process confinement proof. Native identity/hits/noise
 still need host qualification. [12](#source-12) [13](#source-13)
 [15](#source-15) [17](#source-17) [18](#source-18)
 
-[FACT] The collector accepts bounded JSON and persists only time, rule/severity,
-executable, container identity, supported box metadata and selected path/IP/result
-fields. Raw output, argv, environment and buffers are omitted from templates
-and storage. Terminal controls are escaped; unknown metadata stays unavailable.
+[FACT] The collector persists bounded, selected process/user/container/path/result
+fields and a rendering of the pinned rule template. Arbitrary raw output,
+argv, environment and buffers remain excluded. Unknown metadata stays unavailable;
+[output and follow contracts](audit-output.md) define JSON, pretty/TUI display,
+colour and quiet polling. Terminal controls are escaped.
 Collector drops, driver drops (unknown until reported), metadata gaps and
 retention gaps are visible. This is best-effort detection, without remediation
-or a complete, VM-root-tamper-proof trail. [12](#source-12) [13](#source-13)
+or a complete, VM-root-tamper-proof trail. [12](#source-12) [13](#source-13) [22](#source-22)
 
 [FACT] Event segments rotate at 64 MiB total. Reads exclude events older than
 seven days; minutely collector/controller maintenance expires them while
@@ -116,3 +117,5 @@ Export also works with auditing disabled while the controller is running.
 19. <a id="source-19"></a> [Fixed PID-1 audit unit](../../internal/vmguest/units_linux.go#L39) — `validateUnit`, `manageUnit`; closed launch/query regressions in audit_unit_linux_test.go.
 20. <a id="source-20"></a> [Firecracker support query](../../internal/vmservice/service.go#L170) — `AuditSupported`; old-image pre-effect regression in cmd/yoloctl/audit_image_linux_test.go.
 21. <a id="source-21"></a> [Kernel recipe](../../assets/vm/firecracker/inputs.py#L38) — `KERNEL_EXTRAS`, `publish_kernel`; cross-host ELF/config regression in assets/audit_kernel_test.go.
+
+22. <a id="source-22"></a> [Selected rendering](../../internal/audit/output.go#L1) — `SelectedFields`, `RenderOutput`.

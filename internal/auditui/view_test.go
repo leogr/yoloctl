@@ -86,3 +86,77 @@ func TestAuditViewPauseAndFilterDoNotApplyStaleResponses(t *testing.T) {
 		t.Fatal("cancelled draft changed filter")
 	}
 }
+
+func TestAuditViewFollowsAnInitiallyEmptyHistoryWithoutRepeatingTail(t *testing.T) {
+	var queries []audit.Query
+	m := New(t.Context(), "test", func(_ context.Context, q audit.Query) (Batch, error) {
+		queries = append(queries, q)
+		return Batch{}, nil
+	})
+	m, _ = apply(m, m.Init()())
+	m, cmd := apply(m, tick{})
+	m, _ = apply(m, cmd())
+	if len(queries) != 2 || !queries[0].Tail || queries[1].Tail || queries[1].After != 0 {
+		t.Fatal("idle poll repeated the initial tail", queries)
+	}
+	m, _ = apply(m, key('b'))
+	m, _ = apply(m, key('x'))
+	m, cmd = apply(m, key(tea.KeyEnter))
+	_, _ = apply(m, cmd())
+	if !queries[2].Tail || queries[2].After != 0 || queries[2].Box != "x" {
+		t.Fatal("new filter did not start its own history", queries)
+	}
+}
+
+func TestAuditViewIdlePollPreservesSelectionAndOnlyAppendsNewEvents(t *testing.T) {
+	m := New(t.Context(), "test", nil)
+	status := audit.Status{State: "running", Driver: "modern_ebpf"}
+	summary := audit.Summary{Last: 2, Upper: 2, Count: 2, Until: time.Now()}
+	events := []audit.Event{{Cursor: 1, Rule: "one"}, {Cursor: 2, Rule: "two"}}
+	m, _ = apply(m, loaded{Batch: Batch{Events: events, Summary: summary, Status: status}})
+	m, _ = apply(m, key(tea.KeyUp))
+	before := m.View().Content
+	summary.Count = 0
+	summary.Until = summary.Until.Add(time.Second)
+	m, _ = apply(m, loaded{Batch: Batch{Summary: summary, Status: status}})
+	if m.selected != 0 || m.after != 2 || len(m.events) != 2 || m.View().Content != before {
+		t.Fatal("idle poll churned the view", m.selected, m.View().Content)
+	}
+	summary.Last, summary.Upper, summary.Count = 3, 3, 1
+	m, _ = apply(m, loaded{Batch: Batch{Events: []audit.Event{{Cursor: 3, Rule: "three"}}, Summary: summary, Status: status}})
+	if len(m.events) != 3 || m.selected != 2 || m.after != 3 {
+		t.Fatal(m.events, m.selected, m.after)
+	}
+	summary.Drops, summary.MetadataGaps, summary.Gap = 2, 3, true
+	m, _ = apply(m, loaded{Batch: Batch{Summary: summary, Status: status}})
+	if !strings.Contains(m.View().Content, "collector drops=2") || !strings.Contains(m.View().Content, "metadata-gaps=3") || !strings.Contains(m.View().Content, "retention-gap=true") {
+		t.Fatal("loss changes hidden", m.View().Content)
+	}
+}
+
+func TestAuditPrettyMessageFieldsAndColor(t *testing.T) {
+	event := audit.Event{Rule: "Yolo audit test", Severity: "Warning", Executable: "/tmp/probe\x1b[31m", Container: "host", Result: "SUCCESS", OutputFields: map[string]string{"proc.name": "probe", "user.name": "root", "user.uid": "0", "container.name": "<NA>", "fs.path.target": "/etc/target", "proc.args": "SECRET"}}
+	plain := EventText(event, false)
+	for _, required := range []string{"(no box)", "Yolo audit test executable=", "process=probe", "user=root uid=0", "fs.path.target="} {
+		if !strings.Contains(plain, required) {
+			t.Fatal("missing field", required, plain)
+		}
+	}
+	if strings.ContainsAny(plain, "\x1b\r") || strings.Contains(plain, "<NA>") || strings.Contains(plain, "SECRET") {
+		t.Fatal(plain)
+	}
+	colored := EventText(event, true)
+	if ansi.Strip(colored) != plain || !strings.Contains(colored, "\x1b[93m") || !strings.Contains(colored, "\x1b[1mYolo audit test") || !strings.Contains(colored, "\x1b[2mproc.name=") {
+		t.Fatal("styles changed content or omitted severity/key/rule emphasis", colored)
+	}
+	m := New(t.Context(), "test", nil).WithColor(true)
+	m, _ = apply(m, tea.WindowSizeMsg{Width: 120, Height: 32})
+	m, _ = apply(m, loaded{Batch: Batch{Events: []audit.Event{event}, Summary: audit.Summary{Last: 1}}})
+	if !strings.Contains(ansi.Strip(m.View().Content), "Yolo audit test executable=") {
+		t.Fatal("selected message hidden", m.View().Content)
+	}
+	m, _ = apply(m, key(tea.KeyEnter))
+	if !strings.Contains(ansi.Strip(m.View().Content), "fs.path.target=") {
+		t.Fatal("selected fields hidden", m.View().Content)
+	}
+}

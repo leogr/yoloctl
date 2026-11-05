@@ -17,7 +17,7 @@ func TestRulesKeepPrivacyAndExplicitNoiseBoundaries(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(Rules), &entries); err != nil {
 		t.Fatal(err)
 	}
-	allowed := map[string]bool{"proc.exepath": true, "container.id": true, "evt.res": true, "fd.name": true, "fs.path.name": true, "fs.path.source": true, "fs.path.target": true}
+	allowed := map[string]bool{"proc.name": true, "proc.exepath": true, "user.name": true, "user.uid": true, "container.id": true, "container.name": true, "evt.res": true, "fd.name": true, "fs.path.name": true, "fs.path.source": true, "fs.path.target": true}
 	for _, key := range []string{"box", "space", "agent", "account", "runtime_mode", "network_unconfined", "metadata_available"} {
 		allowed["yolo."+key] = true
 	}
@@ -44,6 +44,11 @@ func TestRulesKeepPrivacyAndExplicitNoiseBoundaries(t *testing.T) {
 		}
 		if !strings.Contains(entry.Output, "%evt.res") {
 			t.Fatal("attempt outcome omitted", entry.Rule)
+		}
+		for _, field := range []string{"proc.name", "proc.exepath", "user.name", "user.uid", "container.id", "container.name"} {
+			if !strings.Contains(entry.Output, "%"+field) {
+				t.Fatal("display context omitted", entry.Rule, field)
+			}
 		}
 	}
 	if rules != 9 || disabled != 1 {
