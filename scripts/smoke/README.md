@@ -741,6 +741,31 @@ second export to the same file is refused. Disable auditing; prove the service
 and probe are stopped and retained export still works. Verify boxes were not
 restarted. Measure idle/build overhead and drops; no SLA is asserted.
 
+For rules/labels qualification, create a fresh disposable box with this build.
+Verify the native system containerd/default-namespace identity and the selected
+`yoloctl.audit.*` labels, then compare exported box/space/account/agent/runtime
+and network fields to the actual launch. Missing legacy labels and delayed
+metadata must produce an unlabelled event, not silence. Run the controlled test
+inside both confined and declared unrestricted-network boxes. Exercise ordinary
+shell, git, compiler and permitted debugger workloads; do not assert that every
+alert is malicious or that labels prove the triggering PID was confined.
+
+| Rule family | Disposable positive case | Negative/noise control |
+|---|---|---|
+| Runtime/admin socket | Attempt a listed admin socket; inspect success/refusal | Ordinary operator endpoint traffic |
+| Infrastructure | Attempt a write to selected infrastructure | Controller deployment and audit rotation |
+| Kernel instrumentation | Attempt a workload BPF/module syscall | The supervised VM-root Falco probe load |
+| Namespace | Attempt a workload namespace/mount syscall | Verified OpenShell launch paths/context |
+| Process inspection | Unexpected cross-process inspection | Configured debugger executable in known confined context |
+| Protected file | Denied open of a listed sensitive file | Ordinary allowed project reads |
+| Persistence | Change a selected unit/cron/key/loader path in an owned fixture | Normal host package/controller maintenance |
+| Anonymous executable | Explicit opt-in test only; rule starts disabled | Compiler/package temporary executables |
+
+These are later host acceptance cases, not actions for the active development
+space. Record actual metadata gaps, false positives and missing syscall evidence;
+a rule-validation or synthetic event fixture PASS does not establish these hits.
+
+
 The current Firecracker audit path refuses unsupported images. Firecracker
 qualification additionally requires the explicit image/kernel migration and
 native amd64/KVM gate; do not infer driver support from rule validation or a

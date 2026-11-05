@@ -130,7 +130,10 @@ lifecycle requirements fail before declaration persistence. [10](#source-10)
 [FACT] Opt-in Falco auditing observes the space VM through modern eBPF and
 performs no remediation. It is outside box confinement; access is host-only.
 Filtered events omit raw argv/environment/buffers, and metadata availability
-is not proof that a particular process is confined. [16](#source-16)
+is not proof that a particular process is confined. Pinned rules report selected
+runtime, infrastructure and kernel signals, with explicit noise exceptions;
+unknown metadata remains visible. No syscall errno proves which policy denied it.
+[16](#source-16)
 
 ## Sources
 

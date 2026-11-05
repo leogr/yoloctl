@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `d0332e38b0707ff2e1c3ce84695ecb6bf4427125` and accompanying changes.
+Verification: `a180f6fe013336a6bf454c9e126008463a273ea7` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
@@ -36,10 +36,27 @@ The controller's ordinary global storage-uncertainty rules still apply.
 [2](#source-2) [9](#source-9) [10](#source-10) [11](#source-11)
 
 [FACT] The current Firecracker path reports unsupported; audit commands do not
-replace its kernel/image. A controlled exec rule for `yolo-audit-test` checks
-the event pipeline. Native driver loads, container enrichment and benign
-workload behavior require separate disposable host qualification; rule
-validation alone is not runtime evidence. [2](#source-2) [12](#source-12)
+replace its kernel/image. Pinned rules cover runtime/admin socket access,
+infrastructure changes, workload BPF/modules, namespace changes, cross-process
+inspection, selected protected-file denials and persistence paths. The noisy
+anonymous/temporary executable rule is disabled. `yolo-audit-test` remains the
+controlled acceptance signal. Results distinguish success/refusal; they do not
+identify a policy mechanism. Fixed OpenShell paths and explicit context narrow
+setup/debugger exceptions; host controller/package exceptions cover expected
+maintenance. These are detection heuristics, not executable authenticity proofs.
+[2](#source-2) [16](#source-16)
+
+[FACT] The bundled container plugin 0.7.6 uses only the system containerd socket,
+with a two-second engine timeout; its pinned implementation enumerates namespaces,
+including native nerdctl's default namespace, without CRI. New containers carry
+schema-1 observation labels with explicit account/network/runtime defaults;
+legacy reconcile labels retain their omitted-default semantics. Enrichment
+requires complete supported labels; legacy/missing/invalid metadata stays
+unavailable and never discards the event. A present `yolo.metadata_available`
+field takes precedence, including false. Labels describe launch context rather
+than per-process confinement. Native identity, controlled hits and benign
+workloads require host qualification; syntax validation alone is not evidence.
+[12](#source-12) [13](#source-13) [15](#source-15) [17](#source-17)
 
 [FACT] The collector accepts bounded JSON and persists only time, rule/severity,
 executable, container identity, supported box metadata and selected path/IP/result
@@ -77,3 +94,7 @@ Export also works with auditing disabled while the controller is running.
 12. <a id="source-12"></a> [Pinned config/rule](../../internal/audit/config.go#L1) — `Configuration`, `Rules`, `ServiceConfig`.
 13. <a id="source-13"></a> [Event privacy](../../internal/audit/types.go#L1) — `ParseEvent`, `Clean`, explicit availability and counters.
 14. <a id="source-14"></a> [Log storage](../../internal/audit/logs.go#L1) — `Scan`, `Append`, `Prune`, finite cursors and bounds.
+
+15. <a id="source-15"></a> [Observation labels](../../internal/agentbox/labels.go#L1) — `EncodeLabels`, `DecodeLabels`; explicit audit defaults do not change drift fields.
+16. <a id="source-16"></a> [Pinned rules](../../internal/audit/rules.yaml#L1) — signal families, selected outputs and narrow actor exceptions.
+17. <a id="source-17"></a> [Container 0.7.6 implementation](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/go-worker/pkg/container/containerd.go) — `get`, `getFullContainersInfos`, namespace enumeration and bounded lookups.

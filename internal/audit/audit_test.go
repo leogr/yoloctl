@@ -32,7 +32,7 @@ func testEvent(now time.Time, box string) Event {
 }
 
 func TestEventPrivacyAndTerminalControls(t *testing.T) {
-	raw := []byte(`{"time":"2026-11-04T22:00:00Z","rule":"test\u001b[31m","priority":"Notice","output":"SECRET_OUTPUT","output_fields":{"proc.exepath":"/bin/evil\nname","proc.args":"SECRET_ARGV","proc.env":"SECRET_ENV","evt.buffer":"SECRET_BUFFER","container.id":"0123456789abcdef","yolo.box":"worker","yolo.space":"test","yolo.metadata_available":true,"yolo.network_unconfined":true}}`)
+	raw := []byte(`{"time":"2026-11-04T22:00:00Z","rule":"test\u001b[31m","priority":"Notice","output":"SECRET_OUTPUT","output_fields":{"proc.exepath":"/bin/evil\nname","proc.args":"SECRET_ARGV","proc.env":"SECRET_ENV","evt.buffer":"SECRET_BUFFER","container.id":"0123456789abcdef","yolo.box":"worker","yolo.space":"test","yolo.agent":"none","yolo.account":"none","yolo.runtime_mode":"confined","yolo.metadata_available":true,"yolo.network_unconfined":true}}`)
 	event, err := ParseEvent(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -238,7 +238,7 @@ func TestPinnedArchivesInstallVerifyAndRuleSyntax(t *testing.T) {
 					t.Fatal(err)
 				}
 				cmd := exec.CommandContext(t.Context(), filepath.Join(tools, "bin", "falco"), "-c", filepath.Join(root, "falco.json"), "-V", filepath.Join(root, "rules.yaml"))
-				if output, err := cmd.CombinedOutput(); err != nil {
+				if output, err := cmd.CombinedOutput(); err != nil || bytes.Contains(output, []byte("schema validation: failed")) {
 					t.Fatalf("pinned-engine validation failed: %s %v", output, err)
 				}
 			}
