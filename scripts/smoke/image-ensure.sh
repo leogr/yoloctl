@@ -129,11 +129,12 @@ smoke_info "creating a Claude + Codex + Go box from an empty yoloctl image cache
 	--workdir-mode ephemeral \
 	--no-autoupdate 2>&1 | tee "$FIRST_CREATE_LOG"
 first_create_output="$(<"$FIRST_CREATE_LOG")"
-# Native creation reports preparation through the controller ("Preparing image
-# <ref> for box <name>", internal/controller/image_progress.go); the older
-# "not present in space; building" notice belongs to the non-native path. The
-# absent-before / present-after image checks prove the build itself.
-if [[ "$first_create_output" != *"Preparing image "* &&
+# Native creation reports each controller image job's stage before its backend
+# runs ("Building image <id>", "Pulling image <id>" or "Retaining local image
+# <id>", internal/controller/image_jobs.go); the older "not present in space;
+# building" notice belongs to the non-native path. The absent-before /
+# present-after image checks below also prove the build.
+if [[ "$first_create_output" != *"Building image "* &&
 	"$first_create_output" != *"not present in space; building"* ]]; then
 	smoke_fail "fresh create did not report an on-demand image build"
 fi
@@ -172,7 +173,9 @@ smoke_info "creating a second box and asserting the composed image is selected f
 	--workdir-mode ephemeral \
 	--no-autoupdate 2>&1 | tee "$SECOND_CREATE_LOG"
 second_create_output="$(<"$SECOND_CREATE_LOG")"
-if [[ "$second_create_output" == *"not present in space; building"* ||
+if [[ "$second_create_output" == *"Building image "* ||
+	"$second_create_output" == *"Pulling image "* ||
+	"$second_create_output" == *"not present in space; building"* ||
 	"$second_create_output" == *"rebuilding composed image"* ]]; then
 	smoke_fail "the second compatible box unexpectedly rebuilt an image"
 fi
