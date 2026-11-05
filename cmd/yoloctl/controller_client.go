@@ -365,6 +365,14 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 		}
 		return err
 	}
+	// The recreate offer runs once, on the path that sends this request
+	// (the standalone view above re-enters here as its child), before any
+	// reader, view or raw mode starts.
+	if box, kind, ok := boxRecreateOffer(req); ok {
+		if err := offerRecreate(cmd, target, box, kind, flagTrue(req.Flags, "no-autoupdate")); err != nil {
+			return err
+		}
+	}
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 	if op, ok := controllerOperations[req.Method]; ok && !op.Mutates && req.Method != "box.logs" {

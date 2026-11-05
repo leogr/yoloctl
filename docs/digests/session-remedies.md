@@ -53,6 +53,19 @@ refuse a fresh launch without asserting recreation. A normal exit 137 remains
 its original exit status; this guard establishes image drift, not the mechanism
 behind a killed process. [8](#source-8) [9](#source-9) [10](#source-10)
 
+[FACT] Recreate-only drift is refused before image work: `box start` and
+`box restart` of an existing container and an attach of a stopped box call
+`refuseRecreateBeforeImageWork` (shared resolver; unreadable evidence decides
+nothing) before warming, with the start/restart refusal text; a running
+container without a holder runs `guardFreshSessionImage` before its effect gate;
+the chat server's own restart/recreate rule runs in `warmChatServer` before its
+warm. The later checks stay. Interactive `box start`/`restart`/`attach` and
+`chat`/`chat ensure` first read `box inspect --json`; only a `recreate` strategy
+(or `restart` for the room's server) prompts once, and a yes sends
+`box recreate --force --no-attach` and then the original request unchanged. A
+running box's start or attach, `--no-attach`, structured use and chat-guarded
+attaches are never offered. [11](#source-11)
+
 [FACT] Regressions cover the classification through a fake holder and the
 relay, both attach paths end to end with an older protocol, every remedy and
 pass-through, the bounded host-only view, a real resolver batch whose
@@ -74,3 +87,4 @@ live update was run. [5](#source-5) [6](#source-6)
 8. <a id="source-8"></a> [Fresh-session guard](../../cmd/yoloctl/session_remedy.go#L174) — `guardFreshSessionImage`; caller in session_client.go before `beginTrackedSession`.
 9. <a id="source-9"></a> [Shared diff](../../internal/agentbox/diff.go#L179) — `Diff`, `imageRecreateReason`, `ImageRecreateReason`.
 10. <a id="source-10"></a> [Guard regressions](../../cmd/yoloctl/session_image_test.go#L1) — isolated resolver, live-holder and preserved exit status.
+11. <a id="source-11"></a> [Early recreation](../../cmd/yoloctl/recreate_offer.go#L1) — `offerRecreate`, `boxRecreateOffer`; `refuseRecreateBeforeImageWork` in session_remedy.go; callers in agentbox.go (start, restart), session_client.go (`ensureAgentSession`), chat_runtime.go (`warmChatServer`), controller_client.go (`callControllerTerminal`), chat_open.go and chat.go; regressions in recreate_offer_test.go (main `3736b1c` and accompanying changes).

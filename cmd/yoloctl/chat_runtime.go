@@ -414,19 +414,10 @@ func ensureManagedServer(ctx context.Context, space string, store managedchat.St
 	}); err != nil {
 		return err
 	}
-	actual, err := (agentbox.LiveInspector{Client: c}).Inspect(ctx, cfg)
+	plan, policy, err := managedServerPlan(ctx, c, cfg)
 	if err != nil {
 		return err
 	}
-	policy, err := agentbox.ComposePolicy(cfg)
-	if err != nil {
-		return err
-	}
-	image, _, err := agentbox.ResolvedImage(cfg)
-	if err != nil {
-		return err
-	}
-	plan := agentbox.Diff(cfg, actual, image, policy)
 	if err := managedServerPlanError(plan, cfg.Name, space); err != nil {
 		return err
 	}
@@ -556,6 +547,27 @@ func recreateChatMember(ctx context.Context, space string, m managedchat.Member,
 	}
 	_, err = reconcileManaged(agentbox.WithChatRecreate(ctx), lock, newChatRuntimeClient(space, notice), cfg, notice)
 	return err
+}
+
+// managedServerPlanFn is managedServerPlan, a seam for the pre-warm check.
+var managedServerPlanFn = managedServerPlan
+
+// managedServerPlan is the server box's reconcile plan: inspect plus Diff
+// against its declaration, with the image name resolved without building.
+func managedServerPlan(ctx context.Context, c *container.Client, cfg *agentbox.Config) (agentbox.DiffPlan, []byte, error) {
+	actual, err := (agentbox.LiveInspector{Client: c}).Inspect(ctx, cfg)
+	if err != nil {
+		return agentbox.DiffPlan{}, nil, err
+	}
+	policy, err := agentbox.ComposePolicy(cfg)
+	if err != nil {
+		return agentbox.DiffPlan{}, nil, err
+	}
+	image, _, err := agentbox.ResolvedImage(cfg)
+	if err != nil {
+		return agentbox.DiffPlan{}, nil, err
+	}
+	return agentbox.Diff(cfg, actual, image, policy), policy, nil
 }
 
 // managedServerPlanError refuses drift of an existing server, including its
@@ -714,7 +726,15 @@ func warmChatServer(ctx context.Context, space string, store managedchat.Store, 
 					return err
 				}
 			}
-			return warmBoxBeforeEffects(defaultCreationContext(ctx, box.Config), container.New(space), box.Config, true)
+			// The server's own refusal (recreate or restart drift), before
+			// any image work: ensure never repairs an existing server.
+			c := container.New(space)
+			if plan, _, err := managedServerPlanFn(ctx, c, box.Config); err != nil {
+				return err
+			} else if err := managedServerPlanError(plan, box.Config.Name, space); err != nil {
+				return err
+			}
+			return warmBoxBeforeEffects(defaultCreationContext(ctx, box.Config), c, box.Config, true)
 		}
 	}
 	cfg := &agentbox.Config{Name: server, Space: space, Agent: "none", Account: "none", Image: defaultAgentboxImage, Workdir: agentbox.NewEphemeralWorkdir(server), Features: []string{"yolo.chat.skill"}, SessionCommand: managedServerArgv()}

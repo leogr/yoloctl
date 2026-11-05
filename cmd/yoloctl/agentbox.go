@@ -152,7 +152,10 @@ scripted command output. Closing either view leaves the session running.
 
 Ensure-semantics (deliberate divergence from strict kubectl): when the
 box has no live session — it exited, the VM rebooted, the box stopped —
-attach starts one, restarting the box first if needed. A detached
+attach starts one, restarting the box first if needed. If a stopped box
+needs recreation, attach says so before any image build; at a terminal it
+offers to recreate it (box recreate --force --no-attach) and then attaches.
+A detached
 session exit is reported once (exit status + time), then a fresh session
 starts. The revived session runs the box's agent profile command with
 its default args and agent_extra_args — or session_command for an agentless
@@ -788,6 +791,13 @@ func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, 
 	// restart hint instead of a low-level `nerdctl start` failure
 	// (it also normalizes the agent-state mount and enforces strict
 	// account existence).
+	// Refuse recreate-only drift before any image work: the same read-only
+	// check repeats after preflight as the race guard.
+	if stopped {
+		if err := refuseRecreateBeforeImageWork(cmd.Context(), spaceName, cfg); err != nil {
+			return err
+		}
+	}
 	var prepared recordedNativeStart
 	defer func() { closeNativeStart(prepared) }()
 	nativeStart := false
@@ -2296,6 +2306,11 @@ func preflightAgentboxRestartWithIntent(ctx context.Context, c *container.Client
 	defer release()
 	cfg, err := loadManagedAgentbox(space, name)
 	if err != nil {
+		return nil, err
+	}
+	// Refuse recreate-only drift before preflight's image work; the check
+	// after preflight stays as the race guard.
+	if err := refuseRecreateBeforeImageWork(ctx, space, cfg); err != nil {
 		return nil, err
 	}
 	if err := preflightAgentboxRuntimeQualified(ctx, c, cfg, true, func(check context.Context, declared *agentbox.Config) (bool, error) {

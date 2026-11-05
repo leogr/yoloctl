@@ -110,8 +110,13 @@ func checkStartPlan(c *Config, plan DiffPlan) error {
 	if !plan.NeedsRecreate {
 		return nil
 	}
+	return StartRecreateError(c, plan.RecreateReason)
+}
+
+// StartRecreateError is the start/restart refusal for recreate-only drift.
+func StartRecreateError(c *Config, reason string) error {
 	return fmt.Errorf("box %q requires recreation (%s); start/restart preserves the existing container: inspect with yoloctl box inspect %s --space %s, then explicitly use yoloctl box recreate %s --space %s if replacement is intended",
-		c.Name, plan.RecreateReason, c.Name, c.Space, c.Name, c.Space)
+		c.Name, reason, c.Name, c.Space, c.Name, c.Space)
 }
 
 func planReconcile(ctx context.Context, c *Config, inspector StateInspector) (DiffPlan, []byte, error) {

@@ -40,6 +40,9 @@ func TestManagedAttachDefaultsAndPassthroughRouting(t *testing.T) {
 		return false, &session.ExitError{Status: 7}
 	}
 	target := controllerTarget{Space: "fixture", Operator: true, Call: func(_ context.Context, req controller.Request, s controller.ClientIO) error {
+		if req.Method == "box.inspect" {
+			return nil // the read-only recreate-offer preflight; no drift reported
+		}
 		forwarded++
 		if req.View || s.View != nil {
 			t.Fatal("raw routing acquired private view")

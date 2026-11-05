@@ -28,6 +28,14 @@ func newChatCmd() *cobra.Command {
 	chatIdentityFlags(ensure)
 	ensure.Flags().Bool("json", false, "Print observed desired and applied state as JSON")
 	ensure.RunE = func(cmd *cobra.Command, _ []string) error {
+		if jsonOutput, _ := cmd.Flags().GetBool("json"); !jsonOutput && recreateOfferInteractive(cmd) {
+			// Interactive only: read the room's server, then offer before ensure.
+			if status, err := callChatController(cmd.Context(), cmd, "chat.status", chatRuntimeRequest{}); err == nil {
+				if err := offerChatServerRecreate(cmd, status); err != nil {
+					return err
+				}
+			}
+		}
 		return runChatCommand(cmd, "chat.ensure", chatEnsureInput(cmd))
 	}
 	status := &cobra.Command{Use: "status", Short: "Inspect the room, server and pending member binds", Args: cobra.NoArgs}

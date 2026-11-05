@@ -38,7 +38,30 @@ func inspectOrEnsureChat(ctx context.Context, input chatRuntimeRequest, call fun
 }
 
 func openChatHeader(cmd *cobra.Command) (chatstream.Header, error) {
+	var last managedchat.Status
 	return inspectOrEnsureChat(cmd.Context(), chatEnsureInput(cmd), func(ctx context.Context, method string, input chatRuntimeRequest) (managedchat.Status, error) {
-		return callChatController(ctx, cmd, method, input)
+		if method == "chat.ensure" {
+			if err := offerChatServerRecreate(cmd, last); err != nil {
+				return managedchat.Status{}, err
+			}
+		}
+		status, err := callChatController(ctx, cmd, method, input)
+		if method == "chat.status" {
+			last = status
+		}
+		return status, err
 	})
+}
+
+// offerChatServerRecreate offers to recreate the room's selected server box
+// (never an assumed name) before an interactive chat ensure.
+func offerChatServerRecreate(cmd *cobra.Command, status managedchat.Status) error {
+	if status.Room == nil || status.Room.Server.Name == "" || !recreateOfferInteractive(cmd) {
+		return nil
+	}
+	target, err := selectControllerTarget(cmd.Context(), cmd)
+	if err != nil {
+		return err
+	}
+	return offerRecreate(cmd, target, status.Room.Server.Name, offerChatServer, false)
 }

@@ -358,12 +358,16 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 	if opts.NewSession && tracking == nil {
 		return "", asUserError(fmt.Errorf("box %s does not track its agent conversation (resume policy manual or unsupported); --new-session has nothing to replace", name))
 	}
-	if running {
-		if err := gateWithoutImageBuild(ctx); err != nil {
+	// A stopped box refuses recreate-only drift before any image work; the
+	// running branch begins effects only after its holder decisions and the
+	// fresh-session image guard below.
+	if !running {
+		if err := refuseRecreateBeforeImageWork(ctx, space, cfg); err != nil {
 			return "", err
 		}
-	} else if err := warmBoxBeforeEffects(ctx, c, cfg, true); err != nil {
-		return "", err
+		if err := warmBoxBeforeEffects(ctx, c, cfg, true); err != nil {
+			return "", err
+		}
 	}
 	// Identity decisions need definite holder evidence: an undecidable unit
 	// or marker probe refuses before any record change or launch, and
@@ -379,6 +383,11 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 		if active {
 			if opts.NewSession {
 				return "", asUserError(fmt.Errorf("a session is running in box %s; replace its conversation with yoloctl box restart %s --new-session", name, name))
+			}
+			if running {
+				if err := gateWithoutImageBuild(ctx); err != nil {
+					return "", err
+				}
 			}
 			bindLiveLaunch(ctx, c, space, name)
 			foldLiveLaunch(ctx, space, name)
@@ -398,6 +407,11 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 	// existing lost-holder path rather than being treated as a fresh launch.
 	if !trackedMarkerPresent && (resolved.Runtime == boxstate.RuntimeRunning || resolved.Runtime == boxstate.RuntimeStopped) {
 		if err := guardFreshSessionImage(ctx, space, name); err != nil {
+			return "", err
+		}
+	}
+	if running {
+		if err := gateWithoutImageBuild(ctx); err != nil {
 			return "", err
 		}
 	}

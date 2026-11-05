@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/session"
 )
@@ -184,4 +185,19 @@ func guardFreshSessionImage(ctx context.Context, space, name string) error {
 		return asUserError(fmt.Errorf("box %q needs recreation before a new agent session (%s). Inspect with yoloctl box inspect %s --space %s, then explicitly use yoloctl box recreate %s --space %s --no-attach and attach again. Recreation ends its sessions and replaces its container: the workdir and the account's native state are kept, other files in the container are lost", name, b.DiffPlan.ImageRecreateReason, name, space, name, space))
 	}
 	return nil
+}
+
+// refuseRecreateBeforeImageWork refuses recreate-only drift of an existing
+// container before any image build, with the start/restart refusal text. It
+// reads through the shared box-state resolver (the same Diff as box diff and
+// agentbox.CheckStart). Evidence it cannot read decides nothing: the later
+// CheckStart after preparation stays the authoritative guard.
+func refuseRecreateBeforeImageWork(ctx context.Context, space string, cfg *agentbox.Config) error {
+	ctx, cancel := context.WithTimeout(ctx, staleSessionInspectTimeout)
+	defer cancel()
+	b, err := newBoxStateResolver().ResolveOne(ctx, space, cfg.Name, boxstate.FullDiff)
+	if err != nil || b.DiffPlan == nil || !b.DiffPlan.NeedsRecreate {
+		return nil
+	}
+	return asUserError(agentbox.StartRecreateError(cfg, b.DiffPlan.RecreateReason))
 }
