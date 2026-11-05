@@ -88,7 +88,10 @@ func readDesiredChatCatalogTarget(ctx context.Context, target controllerTarget) 
 	var snapshot chatDesiredCatalog
 	tail := &stderrTail{}
 	if err := callChatTargetInto(ctx, target, "chat.channel.catalog", struct{}{}, &snapshot, tail); err != nil {
-		return chatstream.Catalog{}, tail.annotate(err)
+		return chatstream.Catalog{}, tail.finish("chat catalog", err)
+	}
+	if err := tail.finish("chat catalog", nil); err != nil {
+		return chatstream.Catalog{}, err
 	}
 	if !snapshot.RuntimeUnobserved {
 		return chatstream.Catalog{}, errors.New("desired catalog lacks runtime-not-observed discriminator")

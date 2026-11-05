@@ -17,6 +17,7 @@ import (
 // stream error carries that reason, bounded and sanitized, instead of a bare
 // exit status.
 func TestChatStreamFailureCarriesWorkerStderr(t *testing.T) {
+	t.Setenv("YOLOCTL_HOME", t.TempDir())
 	ctx := t.Context()
 	hello := controller.Hello{Protocol: controller.ProtocolVersion, Bundle: "fixture", Space: "work", Generation: "generation"}
 	server := &controller.Server{Hello: hello, Receipts: controller.Receipts{Dir: t.TempDir()}, Operations: map[string]controller.Operation{

@@ -102,11 +102,12 @@ func TestImportArchivePathExpandsHomeBeforeValidation(t *testing.T) {
 				t.Fatalf("published destination from invalid archive: exists=%t, err=%v", exists, err)
 			}
 			calls, err := os.ReadFile(filepath.Join(limaHome, "calls"))
-			if err != nil {
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				t.Fatal(err)
 			}
+			// An empty home needs no limactl list at all.
 			for _, line := range strings.Split(strings.TrimSpace(string(calls)), "\n") {
-				if fields := strings.Fields(line); len(fields) == 0 || fields[0] != "list" {
+				if fields := strings.Fields(line); len(fields) != 0 && fields[0] != "list" {
 					t.Fatalf("VM effect before archive validation: %q", calls)
 				}
 			}

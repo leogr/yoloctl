@@ -66,6 +66,7 @@ or session history. Repository working rules are in [AGENTS.md](../AGENTS.md).
 | How do chat hover highlights and collapsed `[Pasted…]` chips work? | [TUI](specs/tui.md) | [Hover and pastes](digests/chat-hover-paste.md) |
 | How do inline `[Image #n]` drafts keep their order and send text and images safely? | [TUI](specs/tui.md) | [Composer image drafts](digests/chat-composer-images.md) |
 | How does a draft with images become one message for people and agents? | [TUI](specs/tui.md) | [Text and images as one message](digests/chat-staged-images.md), [AIRC staged attachments](digests/airc-attachments.md) |
+| Why do Lima warnings stay off live views, and where are host diagnostics logged? | [TUI](specs/tui.md), [CLI](specs/cli.md) | [Host and Lima diagnostics](digests/host-diagnostics.md) |
 | Why do input, display, titles, selection preferences, paste or clipboard behave this way? | [TUI](specs/tui.md) | [Compatibility evidence](digests/terminal-compatibility.md), [input](digests/tui-input.md), [mouse](digests/terminal-mouse.md), [geometry and pixels](digests/terminal-geometry.md), [selection](digests/terminal-selection.md), [core and PTY](digests/terminal-rendering.md), [display](digests/terminal-display.md), [colors and bells](digests/terminal-colors-bells.md), [titles](digests/sessions.md), [clipboard](digests/clipboard.md) |
 | How do explicit image paste and guest browser requests reach the host? | [TUI](specs/tui.md) | [Host integrations](digests/host-integrations.md), [clipboard boundary](digests/clipboard.md) |
 

@@ -92,7 +92,8 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 	opts.Attach = chatAttacher(target.Space, requests)
 	opts.SaveNick = func(nick string) tea.Cmd {
 		return func() tea.Msg {
-			status, err := callChatController(ctx, cmd, "chat.nickname", chatRuntimeRequest{Nickname: nick})
+			var status managedchat.Status
+			err := callChatViewControllerInto(ctx, cmd, "chat.nickname", chatRuntimeRequest{Nickname: nick}, &status)
 			if err != nil {
 				return chatui.NickSavedMsg{Err: err}
 			}
@@ -425,7 +426,9 @@ func (s *chatSession) agentsLoop() {
 			return nil, err
 		}
 		var view []controllerBoxView
-		return view, controllerJSON(ctx, boot, "box.inventory", nil, nil, &view, io.Discard)
+		tail := &stderrTail{}
+		err = controllerJSON(ctx, boot, "box.inventory", nil, nil, &view, tail)
+		return view, tail.finish("chat participants", err)
 	}, func(msg tea.Msg) { s.program.Send(msg) })
 }
 
@@ -661,7 +664,9 @@ var attachLookupTimeout = 10 * time.Second
 // the trusted identity map selects it; the guarded attach checks again.
 func (s *chatSession) resolveAttach(cmd *cobra.Command, account string) tea.Msg {
 	return s.resolveAttachWith(account, func(ctx context.Context, member string) (managedchat.AttachTarget, error) {
-		return callChatAttachTarget(ctx, cmd, member)
+		var target managedchat.AttachTarget
+		err := callChatViewControllerInto(ctx, cmd, "chat.attach-target", chatRuntimeRequest{MemberID: member}, &target)
+		return target, err
 	})
 }
 

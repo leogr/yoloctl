@@ -9,6 +9,13 @@ and focus. Live tabs reserve the palette chord and an explicit copy shortcut
 when local text is selected.
 [1](#source-1)
 
+[FACT] Lima launcher diagnostics are captured in the private host log
+`<config-root>/logs/host.log`, including successful warnings. Native chat
+and telemetry callbacks retain private stderr captures and return failure
+context to the view. Empty/absent Lima homes are skipped before listing;
+foreground application streams retain their explicit destinations.
+[42](#source-42)
+
 [FACT] Palette commands echo without PWD. A fixed-width ASCII wave replaces the
 left brand while busy; bold `(space)` is the rightmost status item.
 [1](#source-1)
@@ -307,3 +314,5 @@ checks transport behavior; it does not measure graphical parity. [4](#source-4)
 39. <a id="source-39"></a> [Chat participants, settings and attachment](../digests/chat-participants.md).
 40. <a id="source-40"></a> [Chat reading and selection](../digests/chat-reading.md).
 41. <a id="source-41"></a> [TUI re-attach of an ended box view](../digests/tui-reattach.md).
+
+42. <a id="source-42"></a> [Host and Lima diagnostics](../digests/host-diagnostics.md).
