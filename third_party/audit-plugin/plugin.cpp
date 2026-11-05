@@ -49,7 +49,10 @@ struct State {
 }
 #define EXPORT extern "C" __attribute__((visibility("default")))
 EXPORT const char *plugin_get_required_api_version() { return "3.12.0"; }
-EXPORT const char *plugin_get_version() { return "1.0.0"; }
+// Only the common event TID and a foreign state-table field are read; no
+// version-specific syscall parameters are decoded. API and event schema differ.
+EXPORT const char *plugin_get_required_event_schema_version(ss_plugin_t *) { return "4.0.0"; }
+EXPORT const char *plugin_get_version() { return "1.0.1"; }
 EXPORT const char *plugin_get_name() { return "yolo"; }
 EXPORT const char *plugin_get_description() { return "Bounded nonsecret yoloctl box metadata; not process-confinement proof"; }
 EXPORT const char *plugin_get_contact() { return "https://github.com/leogr/yoloctl"; }

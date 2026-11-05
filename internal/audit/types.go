@@ -99,7 +99,8 @@ type Frame struct {
 }
 
 // Clean escapes terminal controls before data enters storage or a view. Limits
-// are bytes, preserving UTF-8 boundaries; Falco's free-form output is discarded.
+// are bytes, preserving UTF-8 boundaries. Event output stays filtered; only a
+// bounded Falco stderr prefix is exposed through host-only failure health.
 func Clean(s string) string {
 	s = strings.ToValidUTF8(s, "�")
 

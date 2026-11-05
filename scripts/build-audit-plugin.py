@@ -57,8 +57,11 @@ def build(zig, destination):
                    'ZIG_GLOBAL_CACHE_DIR': str(destination / 'global-cache')})
         raw = output.read_bytes()
         artifacts[arch] = {'file': output.name, 'sha256': sha(raw), 'bytes': len(raw)}
-    return {'schema': 1, 'name': 'yolo', 'version': '1.0.0', 'api': '3.12.0',
-            'sdk': 'falcosecurity/libs@0.26.1', 'zig': ZIG_VERSION,
+    pins = json.loads((SOURCE / 'include/pins.json').read_text())
+    return {'schema': 1, 'name': 'yolo', 'version': '1.0.1', 'api': pins['api'],
+            'sdk': 'falcosecurity/libs@' + pins['revision'], 'zig': ZIG_VERSION,
+            'required_event_schema': pins['required_event_schema'],
+            'falco_version': pins['falco_version'], 'falco_libs': pins['revision'],
             'source_sha256': source_digest(), 'notices_sha256': sha(notices()), 'artifacts': artifacts}
 
 
@@ -98,8 +101,10 @@ def main():
             native = root / 'test-plugin'
             triple = TARGETS['arm64' if platform.machine() in ('aarch64', 'arm64') else 'amd64']
             subprocess.run([args.zig, 'c++', '-target', triple, '-std=c++17', '-O1', '-I',
-                            str(SOURCE / 'include'), str(SOURCE / 'test_plugin.cpp'), '-o', str(native)], check=True)
-            subprocess.run([str(native), str(SOURCE / "testdata/snapshot.tsv")], check=True)
+                            str(SOURCE / 'include'), str(SOURCE / 'test_plugin.cpp'), '-ldl', '-o', str(native)], check=True)
+            arch = 'arm64' if platform.machine() in ('aarch64', 'arm64') else 'amd64'
+            subprocess.run([str(native), str(SOURCE / "testdata/snapshot.tsv"),
+                            str(root / 'first' / first['artifacts'][arch]['file'])], check=True)
         print(json.dumps({'reproducible': args.check, **first}, indent=2))
 
 

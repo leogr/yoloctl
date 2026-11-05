@@ -19,12 +19,15 @@ func TestEmbeddedPluginPinsAndSource(t *testing.T) {
 	var manifest struct {
 		Schema                       int
 		Name, Version, API, SDK, Zig string
+		EventSchema                  string `json:"required_event_schema"`
+		Falco                        string `json:"falco_version"`
+		Libs                         string `json:"falco_libs"`
 		Source                       string `json:"source_sha256"`
 	}
 	if err := json.Unmarshal(Manifest(), &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if manifest.Schema != 1 || manifest.Name != "yolo" || manifest.API != "3.12.0" || manifest.SDK != "falcosecurity/libs@0.26.1" || manifest.Zig != "0.15.2" {
+	if manifest.Schema != 1 || manifest.Name != "yolo" || manifest.Version != "1.0.1" || manifest.API != "3.12.0" || manifest.SDK != "falcosecurity/libs@0.26.1" || manifest.Zig != "0.15.2" || manifest.EventSchema != "4.0.0" || manifest.Falco != "0.45.2" || manifest.Libs != "0.26.1" {
 		t.Fatal(manifest)
 	}
 	for _, arch := range []string{"amd64", "arm64"} {
@@ -53,7 +56,7 @@ func TestEmbeddedPluginPinsAndSource(t *testing.T) {
 				found[symbol.Name] = true
 			}
 		}
-		for _, name := range []string{"plugin_init", "plugin_extract_fields", "plugin_get_fields", "plugin_get_required_api_version", "plugin_destroy"} {
+		for _, name := range []string{"plugin_init", "plugin_extract_fields", "plugin_get_fields", "plugin_get_required_api_version", "plugin_get_required_event_schema_version", "plugin_destroy"} {
 			if !found[name] {
 				t.Fatal("missing ABI export", name)
 			}
