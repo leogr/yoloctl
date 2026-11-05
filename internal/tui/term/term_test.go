@@ -348,6 +348,7 @@ func TestSessionForcesEnv(t *testing.T) {
 		t.Fatalf("child exit: %v", err)
 	}
 	grid := s.GridText()
+	t.Logf("DIAG pty timeline:\n%s", s.PTYTimeline())
 	for _, want := range []string{"TERM=xterm-256color", "YOLOCTL_TUI=1", "KEEP=1"} {
 		if !strings.Contains(grid, want) {
 			t.Errorf("child env missing %s:\n%s", want, grid)

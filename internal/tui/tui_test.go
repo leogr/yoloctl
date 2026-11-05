@@ -718,7 +718,9 @@ func TestOverlayTrailingBlank(t *testing.T) {
 func TestPageScroll(t *testing.T) {
 	m := newTestModel(t, 80, 20)
 	runOverlayCommand(t, m, "seq", "1", "100") // overflow -> scrollback
+	t.Logf("DIAG pty timeline:\n%s", m.console.PTYTimeline())
 	if len(m.console.Scrollback()) == 0 {
+		t.Logf("DIAG grid:\n%s", m.console.GridText())
 		t.Fatal("precondition: no scrollback")
 	}
 	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})

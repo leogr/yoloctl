@@ -61,9 +61,10 @@ type Session struct {
 	onBrowser func(*Session, session.BrowserRequest, <-chan struct{})
 	endHint   string
 
-	done    chan struct{} // closed when pump finishes (status written)
-	exited  chan struct{} // closed when the direct child has been reaped
-	waitErr error         // set before exited closes; read after
+	done     chan struct{} // closed when pump finishes (status written)
+	exited   chan struct{} // closed when the direct child has been reaped
+	waitErr  error         // set before exited closes; read after
+	timeline ptyTimeline   // DIAGNOSTIC ONLY
 }
 
 // Start launches argv under a PTY of the given size and begins pumping
@@ -165,6 +166,8 @@ func Start(opts Options) (*Session, error) {
 	if viewParent != nil {
 		s.startView(viewParent)
 	}
+	s.timeline.reset()
+	s.timeline.add("started pid=%d", cmd.Process.Pid)
 	go s.waitChild()
 	go s.pump(opts.OnData)
 	return s, nil
@@ -176,6 +179,7 @@ func Start(opts Options) (*Session, error) {
 // there's no double-reap.
 func (s *Session) waitChild() {
 	s.waitErr = s.cmd.Wait()
+	s.timeline.add("reaped err=%v master-pending=%s", s.waitErr, pending(s.ptmx))
 	close(s.exited)
 }
 
@@ -189,8 +193,12 @@ func (s *Session) pump(onData func()) {
 	readDone := make(chan struct{})
 	go func() {
 		buf := make([]byte, 32*1024)
+		s.timeline.add("reader start")
+		total := 0
 		for {
 			n, err := s.ptmx.Read(buf)
+			total += n
+			s.timeline.add("read n=%d err=%v", n, err)
 			if n > 0 {
 				_, _ = s.writeOutput(buf[:n], true) // atomic with publishing a snapshot
 				if onData != nil {
@@ -201,6 +209,7 @@ func (s *Session) pump(onData func()) {
 				break
 			}
 		}
+		s.timeline.add("reader end total=%d", total)
 		s.FlushOutputFilters()
 		close(readDone)
 	}()
@@ -211,7 +220,9 @@ func (s *Session) pump(onData func()) {
 	// the master already EOF'd and readDone is closed).
 	select {
 	case <-readDone:
+		s.timeline.add("drain: reader done")
 	case <-time.After(ptyDrainGrace):
+		s.timeline.add("drain: grace expired master-pending=%s", pending(s.ptmx))
 	}
 	// The pollable master makes closing interrupt outstanding I/O. Join both
 	// pumps before publishing completion so neither input nor output survives
@@ -219,6 +230,7 @@ func (s *Session) pump(onData func()) {
 	s.input.setTarget(nil)
 	s.writer.Close()
 	<-readDone
+	s.timeline.add("master closed, reader joined")
 
 	if s.managed != nil {
 		select {
@@ -230,6 +242,7 @@ func (s *Session) pump(onData func()) {
 		s.managed.cancel()
 		s.finishView()
 	}
+	s.timeline.add("grid before banner: %q", diagGrid(s.GridText()))
 	writeExitBanner(s.emulator, exitCode(s.cmd, s.waitErr), s.endHint)
 	s.EndRenderHold()
 	if onData != nil {

@@ -56,6 +56,7 @@ func TestPTYKeepsOutputOfChildThatExitsBeforeRead(t *testing.T) {
 	go func() {
 		_ = cmd.Wait()
 		at := time.Since(started)
+		t.Logf("DIAG master-pending at reap=%s", pending(master)) // diagnostic branch only
 		release(time.Now().Add(2 * time.Second))
 		reaped <- at
 	}()

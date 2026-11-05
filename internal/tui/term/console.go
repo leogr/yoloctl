@@ -39,6 +39,7 @@ type Console struct {
 	done       chan struct{}
 	closed     bool
 	rows, cols int
+	timeline   ptyTimeline // DIAGNOSTIC ONLY
 }
 
 // NewConsole builds the console emulator at the given size.
@@ -86,6 +87,8 @@ func (c *Console) Run(env []string, display string, argv ...string) (bool, error
 		return true, err
 	}
 	c.cmd, c.ptmx = cmd, ptmx
+	c.timeline.reset()
+	c.timeline.add("started pid=%d", cmd.Process.Pid)
 	c.done = make(chan struct{})
 	c.writer = newInputQueue(ptmx, c.onData)
 	c.input.setTarget(c.writer)
@@ -122,8 +125,12 @@ func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, writer *inputQueue) {
 	readDone := make(chan struct{})
 	go func() {
 		buf := make([]byte, 32*1024)
+		c.timeline.add("reader start")
+		total := 0
 		for {
 			n, err := ptmx.Read(buf)
+			total += n
+			c.timeline.add("read n=%d err=%v", n, err)
 			if n > 0 {
 				_, _ = c.Write(buf[:n])
 				if c.onData != nil {
@@ -134,6 +141,7 @@ func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, writer *inputQueue) {
 				break
 			}
 		}
+		c.timeline.add("reader end total=%d", total)
 		c.FlushOutputFilters()
 		close(readDone)
 	}()
@@ -145,9 +153,12 @@ func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, writer *inputQueue) {
 	// overlay "running" forever. Once the child is reaped, give the reader a
 	// beat to flush the child's final output.
 	err := cmd.Wait()
+	c.timeline.add("reaped err=%v master-pending=%s", err, pending(ptmx))
 	select {
 	case <-readDone:
+		c.timeline.add("drain: reader done")
 	case <-time.After(ptyDrainGrace):
+		c.timeline.add("drain: grace expired master-pending=%s", pending(ptmx))
 	}
 	// Interrupt and join both pumps before making the console available for
 	// another command. This also prevents trailing filter state or a late reader
@@ -155,7 +166,9 @@ func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, writer *inputQueue) {
 	c.input.setTarget(nil)
 	writer.Close()
 	<-readDone
+	c.timeline.add("master closed, reader joined")
 	c.EndRenderHold()
+	c.timeline.add("grid before status: %q", diagGrid(c.GridText()))
 	// Always close with a status line — green ✓ on success, red ✗ on
 	// failure — so the overlay shows every command's exit code; a blank
 	// line after it (laid in by the overlay's content-fit padding)

@@ -52,6 +52,18 @@ jobs:
       - run: make build
       - run: go vet ./...
       - run: go test ./...
+      # DIAGNOSTIC ONLY (diag/macos-pty-timeline, never merge): verbose, uncached
+      # repeats of the macOS PTY output-loss tests with their reader timelines.
+      - name: Diagnostic PTY timeline (macOS)
+        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        run: |
+          set +e
+          go test -v -count=20 -run '^(TestPTYKeepsOutputOfChildThatExitsBeforeRead|TestSessionForcesEnv)$' ./internal/tui/term
+          a=$?
+          go test -v -count=20 -run '^TestPageScroll$' ./internal/tui
+          b=$?
+          echo "diag exit term=$a tui=$b"
+          exit $((a | b))
 
   lint:
     runs-on: ubuntu-latest
