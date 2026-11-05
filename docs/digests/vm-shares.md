@@ -1,6 +1,6 @@
 # Firecracker host shares
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `8931e8df3abebc5c0fdd6f77bd473110a2e7d23b` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Each host grant has its own `os.Root` and SFTP server. The guest mounts
 SSHFS 3.7.3 with attribute/content caching disabled and normal guest permission
@@ -40,10 +40,15 @@ storage. [3](#source-3) [9](#source-9) [10](#source-10)
 renamed/unlinked handles, mode-000 metadata, read-only/escaping paths, special
 files, malformed counts/packets, disconnect cleanup, fsync ordering/failure,
 parent-sync ordering/failure, large transfer bytes and concurrent connections.
+Mode-preservation fixtures explicitly establish their initial permissions rather
+than assuming creation bypasses umask. Read handles on writable grants exercise
+descriptor chmod after rename and unlink; read-only grants still reject it.
+A macOS host script runs the package and race tests under masks 022 and 077,
+recording the actual Go/host architectures, without creating a VM.
 The lifecycle smoke separately exercises the mounted filesystem and checks
 bytes from the host. Unit and local-filesystem passes are not SSHFS/KVM runtime
 validation or power-loss durability proof. [6](#source-6) [7](#source-7)
-[8](#source-8) [10](#source-10) [11](#source-11) [12](#source-12) [15](#source-15)
+[8](#source-8) [10](#source-10) [11](#source-11) [12](#source-12) [15](#source-15) [16](#source-16)
 
 ## Sources
 
@@ -62,3 +67,4 @@ validation or power-loss durability proof. [6](#source-6) [7](#source-7)
 13. <a id="source-13"></a> [Guest runtime pins](../../assets/vm/firecracker/runtime-pins.json#L14) — SSHFS 3.7.3 package.
 14. <a id="source-14"></a> [Count-bounds changes](https://github.com/pkg/sftp/pull/649/commits/a422f1388530aaa616ebe3de224d9f6bb6a313cb) — upstream patch source.
 15. <a id="source-15"></a> [Host verification](../../scripts/smoke/space-lifecycle.sh#L74) — guest probe plus host bytes/modes.
+16. <a id="source-16"></a> [macOS unit/race verification](../../scripts/check-vmshare-macos.sh#L1) — umask matrix and recorded toolchain/architecture; no mounted-filesystem qualification.

@@ -206,6 +206,11 @@ func TestV2OpeningExistingFileDoesNotChmod(t *testing.T) {
 	if e = s.root.WriteFile("existing", []byte("keep"), 0644); e != nil {
 		t.Fatal(e)
 	}
+	// Establish the pre-existing mode independently of the host umask; OPEN's
+	// requested 0600 below must not replace it.
+	if e = s.root.Chmod("existing", 0644); e != nil {
+		t.Fatal(e)
+	}
 	b, _ := rawServer(t, s)
 	wirePacket(t, b, 1, wireUint(3))
 	data := append(wireUint(1), wireString("/existing")...)
