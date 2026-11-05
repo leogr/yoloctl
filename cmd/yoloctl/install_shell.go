@@ -77,8 +77,9 @@ func pathBlockBody(shell, display string) string {
 }
 
 // completionBlockBody loads the installed link's own completion, so it never
-// depends on PATH order. zsh needs compinit to have run first. bash uses eval:
-// macOS's bash 3.2 reads nothing from `source <(...)`.
+// depends on PATH order. zsh needs compinit to have run first. bash evals the
+// link's completion output, avoiding process substitution, which did not
+// load completion on macOS's bash 3.2 in CI (cause inferred, not isolated).
 func completionBlockBody(shell, link string) string {
 	l := shellArg(link)
 	switch shell {

@@ -13,9 +13,10 @@ and `atomicfile.Write` keep the mode (not ACLs/xattrs). Other shells get the
 `installPathHint` line. [1](#source-1) [2](#source-2)
 
 [FACT] zsh's completion line runs only when `compdef` exists, so it is silent
-until `compinit` has run; install says so after adding it. The bash line uses
-`eval "$(LINK completion bash)"`, since macOS's bash 3.2 reads nothing from
-`source <(...)`. Removal is manual:
+until `compinit` has run; install says so after adding it. The bash line evals the
+link's completion output (`eval "$(LINK completion bash)"`), avoiding process
+substitution; the earlier `source <(...)` line failed the bash sourcing test on
+macOS CI (bash 3.2). Removal is manual:
 delete the lines from `# >>> yoloctl` to `# <<< yoloctl` (install help and
 `docs/install.md`). A declined or non-terminal PATH step prints the line for
 the resolved file (`ZDOTDIR` included); an unusable `ZDOTDIR` or home gets
@@ -30,5 +31,5 @@ installed (the author's environment had neither).
 
 ## Sources
 
-1. <a id="source-1"></a> [Shell setup](../../cmd/yoloctl/install_shell.go#L1-L437), `installShellSetup`, `blockState`, `readRC`, `addBlock`, `installShellSteps`, `manualPathCommand`; flags and help in install.go `newInstallCmd`.
+1. <a id="source-1"></a> [Shell setup](../../cmd/yoloctl/install_shell.go#L1-L438), `installShellSetup`, `blockState`, `readRC`, `addBlock`, `installShellSteps`, `manualPathCommand`; flags and help in install.go `newInstallCmd`.
 2. <a id="source-2"></a> [Tests](../../cmd/yoloctl/install_shell_test.go#L1-L354), `TestAddBlockAppendsAtomicallyAndRefusesUnsafeFiles`, `TestInstallShellStepsAskWriteOnceAndPrintOnly`, `TestInstallShellBlocksSourceInBash`, `TestInstallShellBlocksSourceInZshAndFish`, `TestInstallShellStepsStopOnInputErrorOrInterrupt`.
