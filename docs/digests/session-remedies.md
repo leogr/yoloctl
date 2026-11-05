@@ -1,6 +1,6 @@
 # Remedies for sessions of another build
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `3736b1cf9ac349827782dcbe01070d3e5d922a15` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] A view's admission is classified like the stats handshake. The holder's
 exact `session build/core mismatch` refusal, alone or followed by `; ` and the
@@ -87,4 +87,4 @@ live update was run. [5](#source-5) [6](#source-6)
 8. <a id="source-8"></a> [Fresh-session guard](../../cmd/yoloctl/session_remedy.go#L174) — `guardFreshSessionImage`; caller in session_client.go before `beginTrackedSession`.
 9. <a id="source-9"></a> [Shared diff](../../internal/agentbox/diff.go#L179) — `Diff`, `imageRecreateReason`, `ImageRecreateReason`.
 10. <a id="source-10"></a> [Guard regressions](../../cmd/yoloctl/session_image_test.go#L1) — isolated resolver, live-holder and preserved exit status.
-11. <a id="source-11"></a> [Early recreation](../../cmd/yoloctl/recreate_offer.go#L1) — `offerRecreate`, `boxRecreateOffer`; `refuseRecreateBeforeImageWork` in session_remedy.go; callers in agentbox.go (start, restart), session_client.go (`ensureAgentSession`), chat_runtime.go (`warmChatServer`), controller_client.go (`callControllerTerminal`), chat_open.go and chat.go; regressions in recreate_offer_test.go (main `3736b1c` and accompanying changes).
+11. <a id="source-11"></a> [Early recreation](../../cmd/yoloctl/recreate_offer.go#L1-L127) — `offerRecreate`, `boxRecreateOffer`; `refuseRecreateBeforeImageWork` in session_remedy.go; callers in agentbox.go (start, restart), session_client.go (`ensureAgentSession`), chat_runtime.go (`warmChatServer`), controller_client.go (`callControllerTerminal`), chat_open.go and chat.go; regressions in recreate_offer_test.go (main `3736b1c` and accompanying changes).

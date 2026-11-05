@@ -85,7 +85,14 @@ func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind
 		flags["no-autoupdate"] = []string{"true"}
 	}
 	recreate := controller.Request{ID: rand.Text(), Method: "box.recreate", Space: target.Space, Args: []string{box}, Dash: -1, Flags: flags}
-	return target.Call(cmd.Context(), recreate, controller.ClientIO{Out: cmd.OutOrStdout(), Err: cmd.ErrOrStderr()})
+	// As on the regular path: interrupts are forwarded to the operation
+	// instead of abandoning it, and an interrupted shared image build keeps
+	// its explicit retry question.
+	signals := make(chan int, 4)
+	stopSignals := forwardCommandSignals(cmd.Context(), signals)
+	defer stopSignals()
+	streams := controller.ClientIO{Out: cmd.OutOrStdout(), Err: cmd.ErrOrStderr(), Signals: signals}
+	return callWithImageRetry(cmd.Context(), cmd, recreate, streams, target.Call)
 }
 
 // boxRecreateOffer selects the offer for an outgoing box request, or none:

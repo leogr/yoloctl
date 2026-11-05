@@ -5,13 +5,18 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/creack/pty"
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/managedchat"
+	"github.com/leogr/yoloctl/internal/termio"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
 )
@@ -224,6 +229,194 @@ func TestChatServerDriftRefusedBeforeWarm(t *testing.T) {
 	ctx := context.WithValue(t.Context(), warmKey{}, state)
 	err = warmChatServer(ctx, "work", s, chatRuntimeRequest{}, []boxstate.Box{{Name: cfg.Name, Config: cfg}}, i)
 	want := managedServerPlanError(agentbox.DiffPlan{NeedsRestart: true, RestartReason: "lacks its temporary directory"}, cfg.Name, "work").Error()
+	if err == nil || err.Error() != want || len(imageCalls) != 0 {
+		t.Fatalf("got %v (image calls %v), want %q", err, imageCalls, want)
+	}
+}
+
+// A chat ensure naming another server or human never offers (ensure refuses
+// that owner conflict before any effect); the room's own owner does.
+func TestChatServerOfferRespectsTheRequestedOwner(t *testing.T) {
+	previousInteractive, previousTarget := recreateOfferInteractive, chatOfferTargetFn
+	t.Cleanup(func() { recreateOfferInteractive, chatOfferTargetFn = previousInteractive, previousTarget })
+	recreateOfferInteractive = func(*cobra.Command) bool { return true }
+	report := `{"identity":{"runtime":"running"},"drift":{"strategy":"recreate","reason":"image: a -> b"}}`
+	status := managedchat.Status{Room: &managedchat.Room{Server: managedchat.Box{Name: "chat-server"}, Human: managedchat.Member{Name: "alice"}}}
+	for _, tc := range []struct {
+		input    chatRuntimeRequest
+		recreate bool
+	}{
+		{chatRuntimeRequest{Human: "bob"}, false},
+		{chatRuntimeRequest{ServerBox: "other"}, false},
+		{chatRuntimeRequest{ServerBox: "chat-server", Human: "alice", DefaultHuman: "someone"}, true},
+		{chatRuntimeRequest{DefaultHuman: "someone"}, true},
+	} {
+		var calls []offerCall
+		chatOfferTargetFn = func(context.Context, *cobra.Command) (controllerTarget, error) {
+			return offerTarget(report, &calls), nil
+		}
+		cmd, _ := offerCmd("y\n")
+		if err := offerChatServerRecreate(cmd, status, tc.input); err != nil {
+			t.Fatal(err)
+		}
+		recreated := len(calls) == 2 && calls[1].method == "box.recreate"
+		if recreated != tc.recreate || (!tc.recreate && len(calls) != 0) {
+			t.Errorf("%+v: calls %+v", tc.input, calls)
+		}
+	}
+}
+
+// The offered recreate forwards interrupts like the regular request path.
+func TestOfferedRecreateForwardsSignals(t *testing.T) {
+	previous := recreateOfferInteractive
+	t.Cleanup(func() { recreateOfferInteractive = previous })
+	recreateOfferInteractive = func(*cobra.Command) bool { return true }
+	withSignals := false
+	target := controllerTarget{Space: "work", Call: func(_ context.Context, req controller.Request, streams controller.ClientIO) error {
+		if req.Method == "box.inspect" {
+			_, _ = io.WriteString(streams.Out, `{"identity":{"runtime":"stopped"},"drift":{"strategy":"recreate","reason":"r"}}`)
+		}
+		if req.Method == "box.recreate" {
+			withSignals = streams.Signals != nil
+		}
+		return nil
+	}}
+	cmd, _ := offerCmd("y\n")
+	if err := offerRecreate(cmd, target, "api", offerAttach, false); err != nil || !withSignals {
+		t.Fatal("recreate request without a signal channel", err)
+	}
+}
+
+// Through the real request-sending wrapper (a TUI tab skips the standalone
+// view branch): No sends only the original request after one prompt; Yes
+// sends one recreate, then the original request unchanged; a failed
+// recreation stops before the original request.
+func TestRecreateOfferContinuationThroughTheTerminalPath(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("YOLOCTL_TUI", "1")
+	t.Setenv(termio.ViewFDEnv, "")
+	previous := recreateOfferInteractive
+	t.Cleanup(func() { recreateOfferInteractive = previous })
+	recreateOfferInteractive = func(*cobra.Command) bool { return true }
+	stopped := `{"identity":{"runtime":"stopped"},"drift":{"strategy":"recreate","reason":"image: a -> b"}}`
+	for _, tc := range []struct {
+		name, method, answer string
+		flags                map[string][]string
+		failRecreate         bool
+		want                 []string
+	}{
+		{"attach no", "box.attach", "n\n", map[string][]string{}, false, []string{"box.inspect", "box.attach"}},
+		{"attach yes keeps new-session", "box.attach", "y\n", map[string][]string{"new-session": {"true"}}, false, []string{"box.inspect", "box.recreate", "box.attach"}},
+		{"start yes keeps no-autoupdate", "box.start", "y\n", map[string][]string{"no-autoupdate": {"true"}}, false, []string{"box.inspect", "box.recreate", "box.start"}},
+		{"restart yes keeps new-session", "box.restart", "y\n", map[string][]string{"new-session": {"true"}}, false, []string{"box.inspect", "box.recreate", "box.restart"}},
+		{"failed recreate stops", "box.restart", "y\n", map[string][]string{}, true, []string{"box.inspect", "box.recreate"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls []offerCall
+			target := controllerTarget{Space: "work", Operator: true, Call: func(_ context.Context, req controller.Request, streams controller.ClientIO) error {
+				calls = append(calls, offerCall{req.Method, req.Flags})
+				switch req.Method {
+				case "box.inspect":
+					_, _ = io.WriteString(streams.Out, stopped)
+				case "box.recreate":
+					if tc.failRecreate {
+						return errors.New("recreate failed")
+					}
+				}
+				return nil
+			}}
+			cmd := newAgentboxAttachCmd()
+			cmd.SetContext(context.Background())
+			var errw bytes.Buffer
+			cmd.SetIn(strings.NewReader(tc.answer))
+			cmd.SetOut(io.Discard)
+			cmd.SetErr(&errw)
+			req := controller.Request{ID: "r", Method: tc.method, Space: "work", Args: []string{"api"}, Flags: tc.flags, Dash: -1}
+			err := callControllerTerminal(cmd, target, req)
+			if (err != nil) != tc.failRecreate || strings.Count(errw.String(), "[y/N]") != 1 {
+				t.Fatalf("err %v, prompt %q", err, errw.String())
+			}
+			var methods []string
+			for _, c := range calls {
+				methods = append(methods, c.method)
+			}
+			if strings.Join(methods, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("calls %v, want %v", methods, tc.want)
+			}
+			if last := calls[len(calls)-1]; !tc.failRecreate && !reflect.DeepEqual(last.flags, tc.flags) {
+				t.Fatalf("original request changed: %+v vs %+v", last.flags, tc.flags)
+			}
+			if len(calls) > 2 && flagTrue(calls[1].flags, "no-autoupdate") != flagTrue(tc.flags, "no-autoupdate") {
+				t.Fatalf("recreate flags %+v", calls[1].flags)
+			}
+		})
+	}
+}
+
+// The standalone parent never asks: it re-enters the binary as the managed
+// child, which is the one path that offers.
+func TestStandaloneParentDoesNotOffer(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("YOLOCTL_TUI", "")
+	t.Setenv(termio.ViewFDEnv, "")
+	master, slave, err := pty.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = master.Close() }()
+	defer func() { _ = slave.Close() }()
+	oldOut, oldRun := os.Stdout, runAttachedView
+	defer func() { os.Stdout = oldOut; runAttachedView = oldRun }()
+	os.Stdout = slave
+	runAttachedView = func(context.Context, []string) (bool, error) { return false, nil }
+	previous := recreateOfferInteractive
+	t.Cleanup(func() { recreateOfferInteractive = previous })
+	recreateOfferInteractive = func(*cobra.Command) bool { return true }
+	calls := 0
+	target := controllerTarget{Space: "work", Operator: true, Call: func(context.Context, controller.Request, controller.ClientIO) error { calls++; return nil }}
+	cmd := newAgentboxAttachCmd()
+	cmd.SetContext(context.Background())
+	cmd.SetIn(slave)
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	if err := callControllerTerminal(cmd, target, controller.Request{ID: "view-request-fixture", Method: "box.attach", Space: "work", Args: []string{"api"}, Flags: map[string][]string{}, Dash: -1}); err != nil || calls != 0 {
+		t.Fatal("standalone parent called the controller", calls, err)
+	}
+}
+
+// box restart refuses recreate-only drift before its preflight's image work.
+func TestRestartPreflightRefusesRecreateDriftBeforeImageWork(t *testing.T) {
+	cfg := savedNoneBox(t, "api")
+	fakeDriftResolver(t, cfg, "Up 1 minute", "yoloctl/agentbox-composed:old", "yoloctl/agentbox-composed:new")
+	var imageCalls []string
+	state := &imageWarmState{enabled: true, entries: map[string]warmImage{}, call: func(_ context.Context, r controller.ImageRequest) (controller.ImageReply, error) {
+		imageCalls = append(imageCalls, r.Action)
+		return controller.ImageReply{}, errors.New("image work must not start")
+	}}
+	ctx := context.WithValue(t.Context(), warmKey{}, state)
+	_, err := preflightAgentboxRestartWithIntent(ctx, container.New(cfg.Space), cfg.Space, cfg.Name)
+	want := agentbox.StartRecreateError(cfg, "image: yoloctl/agentbox-composed:old -> yoloctl/agentbox-composed:new").Error()
+	if err == nil || err.Error() != want || len(imageCalls) != 0 {
+		t.Fatalf("got %v (image calls %v), want %q", err, imageCalls, want)
+	}
+}
+
+// box start of a stopped container refuses recreate-only drift before its
+// preflight's image work.
+func TestStartRefusesRecreateDriftBeforeImageWork(t *testing.T) {
+	cfg := savedNoneBox(t, "api")
+	fakeDriftResolver(t, cfg, "Exited (0)", "yoloctl/agentbox-composed:old", "yoloctl/agentbox-composed:new")
+	var imageCalls []string
+	state := &imageWarmState{enabled: true, entries: map[string]warmImage{}, call: func(_ context.Context, r controller.ImageRequest) (controller.ImageReply, error) {
+		imageCalls = append(imageCalls, r.Action)
+		return controller.ImageReply{}, errors.New("image work must not start")
+	}}
+	cmd := newAgentboxStartCmd()
+	cmd.SetContext(context.WithValue(held(t.Context()), warmKey{}, state))
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	err := startAgentboxWithForwardIntent(cmd, cfg.Space, cfg.Name, true, true, false, nil, nil)
+	want := agentbox.StartRecreateError(cfg, "image: yoloctl/agentbox-composed:old -> yoloctl/agentbox-composed:new").Error()
 	if err == nil || err.Error() != want || len(imageCalls) != 0 {
 		t.Fatalf("got %v (image calls %v), want %q", err, imageCalls, want)
 	}

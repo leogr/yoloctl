@@ -31,7 +31,7 @@ func newChatCmd() *cobra.Command {
 		if jsonOutput, _ := cmd.Flags().GetBool("json"); !jsonOutput && recreateOfferInteractive(cmd) {
 			// Interactive only: read the room's server, then offer before ensure.
 			if status, err := callChatController(cmd.Context(), cmd, "chat.status", chatRuntimeRequest{}); err == nil {
-				if err := offerChatServerRecreate(cmd, status); err != nil {
+				if err := offerChatServerRecreate(cmd, status, chatEnsureInput(cmd)); err != nil {
 					return err
 				}
 			}

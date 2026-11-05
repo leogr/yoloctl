@@ -41,7 +41,7 @@ func openChatHeader(cmd *cobra.Command) (chatstream.Header, error) {
 	var last managedchat.Status
 	return inspectOrEnsureChat(cmd.Context(), chatEnsureInput(cmd), func(ctx context.Context, method string, input chatRuntimeRequest) (managedchat.Status, error) {
 		if method == "chat.ensure" {
-			if err := offerChatServerRecreate(cmd, last); err != nil {
+			if err := offerChatServerRecreate(cmd, last, input); err != nil {
 				return managedchat.Status{}, err
 			}
 		}
@@ -54,14 +54,24 @@ func openChatHeader(cmd *cobra.Command) (chatstream.Header, error) {
 }
 
 // offerChatServerRecreate offers to recreate the room's selected server box
-// (never an assumed name) before an interactive chat ensure.
-func offerChatServerRecreate(cmd *cobra.Command, status managedchat.Status) error {
+// (never an assumed name) before an interactive chat ensure. A request naming
+// another server or human gets no offer: ensure refuses that owner conflict
+// before any effect, and an accepted recreation must not precede it.
+func offerChatServerRecreate(cmd *cobra.Command, status managedchat.Status, input chatRuntimeRequest) error {
 	if status.Room == nil || status.Room.Server.Name == "" || !recreateOfferInteractive(cmd) {
 		return nil
 	}
-	target, err := selectControllerTarget(cmd.Context(), cmd)
+	if (input.ServerBox != "" && input.ServerBox != status.Room.Server.Name) || (input.Human != "" && input.Human != status.Room.Human.Name) {
+		return nil
+	}
+	target, err := chatOfferTargetFn(cmd.Context(), cmd)
 	if err != nil {
 		return err
 	}
 	return offerRecreate(cmd, target, status.Room.Server.Name, offerChatServer, false)
+}
+
+// chatOfferTargetFn is selectControllerTarget, a seam for the chat offer tests.
+var chatOfferTargetFn = func(ctx context.Context, cmd *cobra.Command) (controllerTarget, error) {
+	return selectControllerTarget(ctx, cmd)
 }
