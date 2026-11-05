@@ -38,7 +38,10 @@ func (r Rect) contains(x, y int) bool { return x >= r.X && x < r.X+r.W && y >= r
 type Pane struct {
 	Session *term.Session // nil for an empty pane
 	Command string        // the verbatim palette line, for title fallback
-	Exited  bool          // subprocess ended; the pane stays until closed
+	// Args is a private copy of the argv the pane was started with (without
+	// the binary). Command is display text only; actions read Args.
+	Args   []string
+	Exited bool // subprocess ended; the pane stays until closed
 	// Mark is attention (bell, exit, request) while the pane was not the
 	// focused pane of the current tab; focusing it clears the mark.
 	Mark bool

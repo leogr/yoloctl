@@ -19,6 +19,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -870,6 +871,7 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 		OnBell:          m.paneBellHandler(&self),
 		OnBrowser:       m.browserHandler(),
 		OnTabRequest:    m.tabRequestHandler(args, &self),
+		EndHint:         m.reattachHint(args),
 		Foreground:      m.foreground,
 		Background:      m.background,
 		Palette:         m.hostPalette,
@@ -879,7 +881,7 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 		return nil
 	}
 	self.Store(s)
-	return &panes.Pane{Session: s, Command: "yoloctl " + strings.Join(args, " ")}
+	return &panes.Pane{Session: s, Command: "yoloctl " + strings.Join(args, " "), Args: slices.Clone(args)}
 }
 
 // watchPaneExit reports a pane's subprocess exit to the event loop.
@@ -1547,8 +1549,9 @@ func (m *model) handleRunningKey(k tea.Key, paletteKey bool) (tea.Model, tea.Cmd
 // exited. The tab keeps showing the command's last screen plus its
 // exit-status + close hint; Enter (the advertised affordance) or Ctrl+W
 // closes it — the child already exited, so this is a plain dismiss, not
-// a session detach. Scroll and tab-nav chrome stay live (there is no child
-// left to feed); every other key is inert.
+// a session detach. On an ended box attach, r re-attaches in place.
+// Scroll and tab-nav chrome stay live (there is no child left to feed);
+// every other key is inert.
 func (m *model) handleExitedTabKey(k tea.Key) tea.Cmd {
 	switch {
 	case k.Code == tea.KeyEnter,
@@ -1558,6 +1561,8 @@ func (m *model) handleExitedTabKey(k tea.Key) tea.Cmd {
 		if m.tabs.Current() == nil {
 			m.focusPalette = true // no tabs left: route input to the palette
 		}
+	case k.Code == 'r' && k.Mod == 0:
+		m.reattachPane(m.tabs.Current(), m.tabs.Focused())
 	case k.Code == tea.KeyPgUp:
 		page := max(m.viewRows()-1, 1)
 		m.scrollBy(page)
@@ -1779,7 +1784,9 @@ func (m *model) View() tea.View {
 	for i, line := range base {
 		base[i] = ansi.Truncate(line, max(m.width, 1), "")
 	}
-	// The pane menu or inert notice, over whichever path drew the base.
+	// An ended box view's re-attach button, then the pane menu or inert
+	// notice, over whichever path drew the base.
+	m.applyReattachButtons(base)
 	m.applyOverlay(base)
 
 	// Compose top-to-bottom. With the palette focused the overlay

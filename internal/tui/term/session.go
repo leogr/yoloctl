@@ -44,6 +44,10 @@ type Options struct {
 	// attach tabs; only `space view` tabs get one. It is called from a reader
 	// goroutine and must only queue a model event.
 	OnTabRequest func(termio.TabRequest)
+	// EndHint, when set, extends the end banner's close hint with one more
+	// plain-text action (for example how to re-attach). The TUI sets it
+	// only for panes that offer that action.
+	EndHint string
 }
 
 // Session is one PTY child rendered through the emulator: the unit a
@@ -55,6 +59,7 @@ type Session struct {
 	writer    *inputQueue
 	managed   *managedView
 	onBrowser func(*Session, session.BrowserRequest, <-chan struct{})
+	endHint   string
 
 	done    chan struct{} // closed when pump finishes (status written)
 	exited  chan struct{} // closed when the direct child has been reaped
@@ -149,6 +154,7 @@ func Start(opts Options) (*Session, error) {
 		cmd:       cmd,
 		writer:    writer,
 		onBrowser: opts.OnBrowser,
+		endHint:   opts.EndHint,
 		done:      make(chan struct{}),
 		exited:    make(chan struct{}),
 	}
@@ -224,7 +230,7 @@ func (s *Session) pump(onData func()) {
 		s.managed.cancel()
 		s.finishView()
 	}
-	writeExitBanner(s.emulator, exitCode(s.cmd, s.waitErr))
+	writeExitBanner(s.emulator, exitCode(s.cmd, s.waitErr), s.endHint)
 	s.EndRenderHold()
 	if onData != nil {
 		onData()
@@ -245,7 +251,8 @@ func (s *Session) pump(onData func()) {
 // before appending. That preserves short command output when unused rows are
 // available while still scrolling a full dead frame enough to make room.
 // Exactly one blank line separates the previous visible content and banner.
-func writeExitBanner(e *emulator, code int) {
+// A non-empty hint follows the close hint on the same line, after " · ".
+func writeExitBanner(e *emulator, code int, hint string) {
 	var status string
 	if code == 0 {
 		status = "\x1b[32m✓ exit 0\x1b[0m"
@@ -258,9 +265,16 @@ func writeExitBanner(e *emulator, code int) {
 	if hasContent {
 		sep += "\r\n"
 	}
+	closeHint := ExitCloseHint
+	if hint != "" {
+		closeHint += " · " + hint
+	}
 	_, _ = e.Write([]byte(fmt.Sprintf("\x1b[%d;1H", row+1) + sep + "\x1b[K" + status +
-		"\r\n\x1b[K\x1b[38;5;243mPress Enter to close this tab\x1b[0m\r\n"))
+		"\r\n\x1b[K\x1b[38;5;243m" + closeHint + "\x1b[0m\r\n"))
 }
+
+// ExitCloseHint starts the end banner's last line; an EndHint follows it.
+const ExitCloseHint = "Press Enter to close this tab"
 
 // SendInput shares one ordered queue with terminal query replies.
 func (s *Session) SendInput(p []byte) error {

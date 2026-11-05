@@ -59,3 +59,11 @@ func TestStandaloneSetupOutputIsBoundedPlainTail(t *testing.T) {
 		t.Fatalf("setup output was not bounded plain tail: len=%d", len(text))
 	}
 }
+
+// The re-attach hint extends the close line; the setup tail drops it too.
+func TestStandaloneSetupOutputDropsHintedBanner(t *testing.T) {
+	text := attachedSetupOutput("Error: cause\n✗ exit 137\nPress Enter to close this tab · r to re-attach to api\n")
+	if text != "Error: cause" {
+		t.Fatalf("setup output kept the banner: %q", text)
+	}
+}

@@ -44,6 +44,11 @@ holder-backed view keeps its session running and closes at once, while any
 other live command asks first in a popup bound to the commands it lists.
 [35](#source-35)
 
+[FACT] An ended `attach`/`box attach` view offers re-attach in place: `r`, or
+a click on its `[ Re-attach ]` button, runs the same attach again (without
+`--new-session`) in the same pane slot; Enter still closes. Nothing
+re-attaches on its own, and other ended views are unchanged. [41](#source-41)
+
 [FACT] Private attachment failures use the palette's wrapped result area,
 deferred while a palette command runs. Background failures leave another live
 tab's input focus intact. [1](#source-1)
@@ -299,3 +304,4 @@ checks transport behavior; it does not measure graphical parity. [4](#source-4)
 38. <a id="source-38"></a> [TUI pane menu](../digests/tui-pane-menu.md).
 39. <a id="source-39"></a> [Chat participants, settings and attachment](../digests/chat-participants.md).
 40. <a id="source-40"></a> [Chat reading and selection](../digests/chat-reading.md).
+41. <a id="source-41"></a> [TUI re-attach of an ended box view](../digests/tui-reattach.md).

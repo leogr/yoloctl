@@ -233,6 +233,9 @@ func (m *model) handleMouse(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Gestures begun before the popup opened finish at their owners.
 	}
+	if m.reattachClick(msg, mo) {
+		return m, nil
+	}
 	if handled := m.chromeMouse(msg, mo); handled {
 		return m, nil
 	}

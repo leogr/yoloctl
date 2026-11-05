@@ -117,7 +117,7 @@ func attachedSetupOutput(grid string) string {
 	for _, line := range strings.Split(grid, "\n") {
 		line = strings.TrimRight(line, " \t")
 		// Session.Wait has already appended the frontend's own exit banner.
-		if strings.HasPrefix(line, "✗ exit ") || strings.HasPrefix(line, "✓ exit ") || line == "Press Enter to close this tab" {
+		if strings.HasPrefix(line, "✗ exit ") || strings.HasPrefix(line, "✓ exit ") || strings.HasPrefix(line, term.ExitCloseHint) {
 			continue
 		}
 		lines = append(lines, line)
