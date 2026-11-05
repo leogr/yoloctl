@@ -116,10 +116,13 @@ func newAuditCmd() *cobra.Command {
 			return err
 		}})
 	}
-	logs := &cobra.Command{Use: "logs", Short: "Read bounded audit history or follow new events", Args: cobra.NoArgs, RunE: runAuditLogs}
+	logs := &cobra.Command{Use: "logs", Short: "Read bounded audit history or follow new events",
+		Long: "Read retained Falco events. The origin column shows a box name when metadata\nis available, (vm) when Falco reports container=host inside the space VM,\n(no box) for a container without box metadata, or (unknown) when no container\nID was retained. Use --verbose for all retained fields or --json for JSONL.",
+		Args: cobra.NoArgs, RunE: runAuditLogs}
 	addAuditQueryFlags(logs)
 	logs.Flags().Bool("follow", false, "Follow new events until interrupted")
 	logs.Flags().Bool("json", false, "Print privacy-filtered JSONL")
+	logs.Flags().Bool("verbose", false, "Show all retained fields below each rule message")
 	logs.Flags().Int("limit", 500, "Maximum events per history page (1–1000)")
 	export := &cobra.Command{Use: "export --output PATH", Short: "Export a finite privacy-filtered JSONL interval", Args: cobra.NoArgs, RunE: runAuditExport}
 	addAuditQueryFlags(export)
@@ -299,6 +302,13 @@ func runAuditLogs(cmd *cobra.Command, _ []string) error {
 
 func streamAuditLogs(cmd *cobra.Command, target controllerTarget, query audit.Query, follow bool, pause func(context.Context) error) error {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
+	verbose, _ := cmd.Flags().GetBool("verbose")
+	options := auditui.EventOptions{Color: auditColorEnabled(writerIsTerminal(cmd.OutOrStdout())), Verbose: verbose, Width: 100}
+	if output, ok := cmd.OutOrStdout().(*os.File); ok && writerIsTerminal(output) {
+		if width, _, err := term.GetSize(int(output.Fd())); err == nil {
+			options.Width = width
+		}
+	}
 	var previous audit.Summary
 	first := true
 	for {
@@ -306,7 +316,7 @@ func streamAuditLogs(cmd *cobra.Command, target controllerTarget, query audit.Qu
 			if jsonOutput {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(event)
 			}
-			_, err := fmt.Fprintln(cmd.OutOrStdout(), auditui.EventText(event, auditColorEnabled(writerIsTerminal(cmd.OutOrStdout()))))
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), auditui.EventText(event, options))
 			return err
 		})
 		if err != nil {

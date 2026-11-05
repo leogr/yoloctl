@@ -20,14 +20,16 @@ import (
 )
 
 func TestAuditFollowReportsOnlyInitialAndLossChanges(t *testing.T) {
-	for _, jsonOutput := range []bool{false, true} {
-		t.Run(fmt.Sprint("json=", jsonOutput), func(t *testing.T) {
+	for _, mode := range []struct{ json, verbose bool }{{false, false}, {false, true}, {true, false}, {true, true}} {
+		jsonOutput, verbose := mode.json, mode.verbose
+		t.Run(fmt.Sprint("json=", jsonOutput, "/verbose=", verbose), func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			cmd := &cobra.Command{}
 			cmd.SetContext(t.Context())
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
 			cmd.Flags().Bool("json", jsonOutput, "")
+			cmd.Flags().Bool("verbose", verbose, "")
 			when := time.Date(2026, 11, 5, 14, 40, 1, 0, time.UTC)
 			calls := 0
 			target := controllerTarget{Space: "test", Call: func(_ context.Context, request controller.Request, streams controller.ClientIO) error {
@@ -91,7 +93,7 @@ func TestAuditFollowReportsOnlyInitialAndLossChanges(t *testing.T) {
 						t.Fatal("JSON lost retained fields", line, err)
 					}
 				}
-			} else if strings.Count(stdout.String(), "14:40:01  ") != 2 || !strings.Contains(stdout.String(), "(no box)") || !strings.Contains(stdout.String(), "fs.path.target=") || strings.Contains(stdout.String(), "<NA>") {
+			} else if strings.Count(stdout.String(), "14:40:01  ") != 2 || !strings.Contains(stdout.String(), "(vm)") || strings.Contains(stdout.String(), "fs.path.target=") != verbose || strings.Contains(stdout.String(), "<NA>") {
 				t.Fatal(stdout.String())
 			}
 		})

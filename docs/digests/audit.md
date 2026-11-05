@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `d79ce925e4f91ea96fecfd03fb1f3e59a3577d22` and accompanying changes.
+Verification: `3c3fdffd7b50cc818649e21f916df8d35d8ac15b` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
@@ -50,27 +50,23 @@ old images are refused before toggle effects, with an explicit
 media. The bundled kernel includes BTF/JIT/tracing; this is not live load proof.
 [19](#source-19) [20](#source-20) [21](#source-21)
 
-[FACT] Pinned rules cover runtime/admin socket access,
-infrastructure changes, workload BPF/modules, namespace changes, cross-process
-inspection, selected protected-file denials and persistence paths. The noisy
-anonymous/temporary executable rule is disabled. `yolo-audit-test` remains the
-controlled acceptance signal. Results distinguish success/refusal; they do not
-identify a policy mechanism. Fixed OpenShell paths and explicit context narrow
-setup/debugger exceptions; host controller/package exceptions cover expected
-maintenance. These are detection heuristics, not executable authenticity proofs.
-[2](#source-2) [16](#source-16)
+[FACT] Pinned rules cover runtime/admin sockets, infrastructure, workload
+BPF/modules, namespaces, process inspection, selected file denials and persistence.
+The noisy anonymous-executable rule is disabled; `yolo-audit-test` is the controlled
+signal. Results distinguish success/refusal, not policy mechanism. Fixed paths
+and explicit context narrow setup/debugger and host-maintenance exceptions.
+[Rule paths and container recognition](audit-rules.md) explain symlink unpack
+noise and the scope of these detection heuristics. [2](#source-2) [16](#source-16)
 
-[FACT] The bundled container plugin 0.7.6 uses only the system containerd socket,
-with a two-second engine timeout; its pinned implementation enumerates namespaces,
-including native nerdctl's default namespace, without CRI. New containers carry
-schema-1 observation labels with explicit account/network/runtime defaults;
-legacy reconcile labels retain their omitted-default semantics. The C++ plugin
-joins a bounded private controller snapshot to event container IDs and exports
-only selected `yolo.*` fields. Missing/stale/ambiguous metadata stays unavailable,
-never discards the event and never falls back after a false plugin availability
-field. Context is not per-process confinement proof. Native identity/hits/noise
-still need host qualification. [12](#source-12) [13](#source-13)
-[15](#source-15) [17](#source-17) [18](#source-18)
+[FACT] Container plugin 0.7.6 enables native-containerd and CRI matching on only
+the system containerd socket, with a two-second engine timeout. The CRI matcher
+recognizes nerdctl systemd scopes; native metadata enumeration still covers its
+default namespace without requiring the guest CRI service. Schema-1 launch
+labels feed the C++ plugin's bounded private controller snapshot. Missing,
+stale or ambiguous identity stays unavailable; events remain visible. Context
+is not per-process confinement proof; native identity/hits/noise need host
+qualification. [12](#source-12) [15](#source-15) [17](#source-17)
+[18](#source-18) [23](#source-23)
 
 [FACT] The collector persists bounded, selected process/user/container/path/result
 fields and a rendering of the pinned rule template. Arbitrary raw output,
@@ -121,3 +117,5 @@ Export also works with auditing disabled while the controller is running.
 21. <a id="source-21"></a> [Kernel recipe](../../assets/vm/firecracker/inputs.py#L38) — `KERNEL_EXTRAS`, `publish_kernel`; cross-host ELF/config regression in assets/audit_kernel_test.go.
 
 22. <a id="source-22"></a> [Selected rendering](../../internal/audit/output.go#L1) — `SelectedFields`, `RenderOutput`.
+
+23. <a id="source-23"></a> [Rule paths and container recognition](audit-rules.md) — pinned matcher configuration, symlink semantics and qualification limits.

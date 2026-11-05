@@ -718,11 +718,13 @@ cp /usr/bin/true "$audit_probe_dir/yolo-audit-test"
 "$audit_probe_dir/yolo-audit-test"
 ```
 
-A direct VM execution has no box metadata and displays `(no box)`. A box
+A direct VM execution has no box metadata and displays `(vm)`. A box
 execution needs live container/plugin metadata for enrichment. Check that
 pretty output shows the pinned rule message, available process/user/container
-and file fields without `<NA>` clutter; JSON retains unavailable values and all
-selected fields. Old records cannot recover newly added fields. In follow mode,
+and file fields without `<NA>` clutter or a repeated raw field dump; `--verbose`
+adds raw fields, JSON always retains them. Check narrow-terminal wrapping and
+four/eight-space message/field indentation. Old records cannot recover newly
+added fields. In follow mode,
 the initial summary appears once; idle sliding-window polls and new events do
 not repeat it unless loss/gap state changes. Verify idle TUI selection is stable,
 selected messages/fields are readable, and terminal colours become plain when
@@ -749,13 +751,19 @@ alert is malicious or that labels prove the triggering PID was confined.
 | Rule family | Disposable positive case | Negative/noise control |
 |---|---|---|
 | Runtime/admin socket | Attempt a listed admin socket; inspect success/refusal | Ordinary operator endpoint traffic |
-| Infrastructure | Attempt a write to selected infrastructure | Controller deployment and audit rotation |
+| Infrastructure | Attempt a write to selected infrastructure | Controller deployment, audit rotation and verified OpenShell setup |
 | Kernel instrumentation | Attempt a workload BPF/module syscall | The supervised VM-root Falco probe load |
 | Namespace | Attempt a workload namespace/mount syscall | Verified OpenShell launch paths/context |
 | Process inspection | Unexpected cross-process inspection | Configured debugger executable in known confined context |
 | Protected file | Denied open of a listed sensitive file | Ordinary allowed project reads |
-| Persistence | Change a selected unit/cron/key/loader path in an owned fixture | Normal host package/controller maintenance |
+| Persistence | Change selected unit/cron/key/loader paths, including real symlink locations and rename/hard-link targets | Host package maintenance and containerd/BuildKit image-layer symlinks pointing at protected VM paths |
 | Anonymous executable | Explicit opt-in test only; rule starts disabled | Compiler/package temporary executables |
+
+Repeat image-build/unpack controls with containerd, BuildKit, nerdctl and shims;
+verify their genuine writes to protected VM paths still alert. After explicit
+updated enable, compare a box event with its native full container ID and labels
+on both Lima systemd scopes and Firecracker cgroupfs. A `(vm)` label reflects
+Falco's host report and is not proof that container recognition succeeded.
 
 These are later host acceptance cases, not actions for the active development
 space. Record actual metadata gaps, false positives and missing syscall evidence;
