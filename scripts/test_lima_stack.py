@@ -643,36 +643,51 @@ class CommandGroupTests(unittest.TestCase):
 
 
     def test_escaped_pipe_holder_retains_recovery_state_after_bounded_drain(self):
-        with tempfile.TemporaryDirectory(prefix='lima-stack-drain-') as temp:
-            root = Path(temp)
-            runner = STACK.Runner()
-            pidfile = root / 'pipe-holder.pid'
-            child = 'import time; time.sleep(20)'
-            parent = ('import pathlib,subprocess,sys; p=subprocess.Popen([sys.executable,"-c",'
-                      + repr(child) + '],start_new_session=True); pathlib.Path('
-                      + repr(str(pidfile)) + ').write_text(str(p.pid))')
-            pgid = None
-            try:
-                start = time.monotonic()
-                with self.assertRaises(STACK.Failure) as raised:
-                    runner.command([sys.executable, '-c', parent], seconds=.1)
-                self.assertEqual(raised.exception.code, 124)
-                self.assertLess(time.monotonic() - start, 2)
-                self.assertTrue(runner.report['unsettled_commands'])
-                with self.assertRaisesRegex(STACK.Failure, 'cancellation is unverified'):
-                    runner.cleanup()
-                self.assertTrue(pidfile.exists())
-            finally:
-                # Exact PID of this test's explicitly created private process
-                # group, settled before TemporaryDirectory removes its paths.
-                if pidfile.exists():
-                    pgid = int(pidfile.read_text())
-                    try: os.killpg(pgid, signal.SIGKILL)
-                    except ProcessLookupError: pass
-                    deadline = time.monotonic() + 2
-                    while runner.group_alive(pgid) and time.monotonic() < deadline:
+        # The timeout must strike after the leader has started its escaped
+        # pipe holder. Under load interpreter startup can exceed a short budget;
+        # the leader then dies first, nothing holds the pipes and cancellation
+        # settles cleanly (asserted), so retry with a longer budget.
+        for seconds in (.1, .4, 1.6, 6.4):
+            with tempfile.TemporaryDirectory(prefix='lima-stack-drain-') as temp:
+                root = Path(temp)
+                runner = STACK.Runner()
+                pidfile = root / 'pipe-holder.pid'
+                # The holder records itself, so an escaped holder is always found.
+                child = ('import os,pathlib,time; pathlib.Path(' + repr(str(pidfile))
+                         + ').write_text(str(os.getpid())); time.sleep(20)')
+                parent = ('import subprocess,sys; subprocess.Popen([sys.executable,"-c",'
+                          + repr(child) + '],start_new_session=True)')
+                escaped = False
+                try:
+                    start = time.monotonic()
+                    with self.assertRaises(STACK.Failure) as raised:
+                        runner.command([sys.executable, '-c', parent], seconds=seconds)
+                    self.assertEqual(raised.exception.code, 124)
+                    self.assertLess(time.monotonic() - start, seconds + 2)
+                    escaped = 'unsettled_commands' in runner.report
+                    if not escaped:
+                        # The bounded drain completed: no process holds the pipes.
+                        self.assertTrue(runner.report['commands'][-1]['cancellation']['settled'])
+                        continue
+                    with self.assertRaisesRegex(STACK.Failure, 'cancellation is unverified'):
+                        runner.cleanup()
+                    return
+                finally:
+                    # Exact PID of this test's explicitly created private process
+                    # group, settled before TemporaryDirectory removes its paths.
+                    recorded = lambda: pidfile.exists() and pidfile.read_text().isdigit()
+                    deadline = time.monotonic() + 5
+                    while escaped and not recorded() and time.monotonic() < deadline:
                         time.sleep(.02)
-                    self.assertFalse(runner.group_alive(pgid))
-
+                    if recorded():
+                        pgid = int(pidfile.read_text())
+                        try: os.killpg(pgid, signal.SIGKILL)
+                        except ProcessLookupError: pass
+                        deadline = time.monotonic() + 2
+                        while runner.group_alive(pgid) and time.monotonic() < deadline:
+                            time.sleep(.02)
+                        self.assertFalse(runner.group_alive(pgid))
+                    self.assertEqual(pidfile.exists(), escaped)
+        self.fail('the leader never started its pipe holder before the timeout')
 
 if __name__ == '__main__': unittest.main()
