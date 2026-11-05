@@ -355,6 +355,7 @@ func prepareImportedSpace(cmd *cobra.Command, name string, m spacearchive.Manife
 		}
 		boot.Mounts = append(boot.Mounts, mount)
 	}
+	seed.Settings.Audit = nil // Import never inherits audit enablement.
 	seed.Settings.Name = name
 	seed.Settings.DefaultWorkdir = workdir
 	imported, err := seed.Settings.Compose(boot)

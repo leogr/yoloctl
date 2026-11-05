@@ -38,6 +38,11 @@ import (
 // These are operation identities, not shell commands. New commands require an
 // explicit entry and an explicit operator authorization decision.
 var controllerOperations = map[string]controller.Operation{
+	"audit.status":          {},
+	"audit.logs":            {},
+	"audit.export":          {},
+	"audit.enable":          {Mutates: true, EffectGated: true, Footprint: controller.FootprintAudit},
+	"audit.disable":         {Mutates: true, EffectGated: true, Footprint: controller.FootprintAudit},
 	"chat.artifact.upload":  {Mutates: true, EffectGated: true, Footprint: controller.FootprintChat},
 	"chat.artifact.read":    {}, // host-only, read-only: one confined artifact download
 	"chat.channel.list":     {BoxAllowed: true},
@@ -256,6 +261,8 @@ func runControllerInternal(ctx context.Context, args []string) error {
 		return serveController(ctx)
 	case "verify":
 		return runControllerVerifier(ctx)
+	case "audit-collect":
+		return collectNativeAudit(ctx)
 	case "collect-storage":
 		return collectControllerStorage(ctx)
 	case "observe-codex":
@@ -447,6 +454,9 @@ func serveController(ctx context.Context) (result error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+
+	stopAuditRetention := startAuditRetention(ctx, server)
+	defer stopAuditRetention()
 	stopStorageGC := startControllerStorageGC(ctx, server)
 	defer stopStorageGC()
 	stopCodexObserve := startControllerCodexObserve(ctx, server)
@@ -676,6 +686,9 @@ func executeControllerWorker(ctx context.Context, work controller.WorkerInput) e
 		}
 		return collector.beforeBuild(ctx, refs, os.Stderr)
 	})
+	if handled, err := runControllerAudit(ctx, work.Request, os.Stdin, os.Stdout); handled {
+		return err
+	}
 	if handled, err := runControllerChatRuntime(ctx, work.Request, os.Stdout, os.Stderr); handled {
 		return err
 	}

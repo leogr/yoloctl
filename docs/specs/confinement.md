@@ -127,6 +127,11 @@ disables self-updates, model-catalog fetching, sharing and automatic LSP downloa
 shell/palette completion. They add no runtime grants; incompatible privilege or
 lifecycle requirements fail before declaration persistence. [10](#source-10)
 
+[FACT] Opt-in Falco auditing observes the space VM through modern eBPF and
+performs no remediation. It is outside box confinement; access is host-only.
+Filtered events omit raw argv/environment/buffers, and metadata availability
+is not proof that a particular process is confined. [16](#source-16)
+
 ## Sources
 
 1. <a id="source-1"></a> [Policy, image and maintenance implementation](../digests/policy-images.md).
@@ -150,3 +155,5 @@ lifecycle requirements fail before declaration persistence. [10](#source-10)
 13. <a id="source-13"></a> [Landlock status](../digests/landlock-status.md) — `box show` probe, verdicts and limits.
 14. <a id="source-14"></a> [Go environment](../digests/go.md) — resolved binary grant, local toolchain and smoke.
 15. <a id="source-15"></a> [OpenShell compatibility](../digests/openshell-compatibility.md) — inherited entrypoints, private proxy environment and pending integration limits.
+
+16. <a id="source-16"></a> [VM-native audit contracts](../digests/audit.md).

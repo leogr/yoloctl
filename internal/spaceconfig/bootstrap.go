@@ -74,10 +74,11 @@ type VMSettings struct {
 // Settings is the controller-owned portion of a space declaration. Boot
 // authority (including host grants) cannot be changed by writing this file.
 type Settings struct {
-	SchemaVersion  int    `yaml:"schema_version" json:"schema_version"`
-	Name           string `yaml:"name" json:"name"`
-	DefaultAccount string `yaml:"default_account" json:"default_account"`
-	DefaultWorkdir string `yaml:"default_workdir" json:"default_workdir"`
+	Audit          *AuditSettings `yaml:"audit,omitempty" json:"audit,omitempty"`
+	SchemaVersion  int            `yaml:"schema_version" json:"schema_version"`
+	Name           string         `yaml:"name" json:"name"`
+	DefaultAccount string         `yaml:"default_account" json:"default_account"`
+	DefaultWorkdir string         `yaml:"default_workdir" json:"default_workdir"`
 }
 
 func (b *Bootstrap) Validate() error {
@@ -257,7 +258,7 @@ func Split(c *Config, uid, gid int, generation string) (*Bootstrap, *Settings, e
 		UID: uid, GID: gid, Mounts: append([]Mount(nil), c.Mounts...), Generation: generation,
 		VM: VMSettings{CPUs: 4, Memory: "4GiB", Disk: DiskSize(AutoDiskMin)},
 	}
-	s := &Settings{SchemaVersion: 1, Name: c.Name, DefaultAccount: c.DefaultAccount, DefaultWorkdir: c.DefaultWorkdir}
+	s := &Settings{SchemaVersion: 1, Name: c.Name, DefaultAccount: c.DefaultAccount, DefaultWorkdir: c.DefaultWorkdir, Audit: c.Audit}
 	if err := b.Validate(); err != nil {
 		return nil, nil, err
 	}
@@ -286,7 +287,7 @@ func (s *Settings) Compose(b *Bootstrap) (*Config, error) {
 		return nil, errors.New("space settings schema/identity mismatch")
 	}
 	c := &Config{
-		SchemaVersion: SchemaVersion, Name: s.Name, DefaultAccount: s.DefaultAccount,
+		SchemaVersion: SchemaVersion, Name: s.Name, DefaultAccount: s.DefaultAccount, Audit: s.Audit,
 		DefaultWorkdir: s.DefaultWorkdir, AccountDiskID: b.DiskID, AccountDiskUUID: b.DiskUUID,
 		AccountDiskInitializing: b.Initializing, Mounts: append([]Mount(nil), b.Mounts...),
 	}

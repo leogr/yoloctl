@@ -221,6 +221,12 @@ current/previous generations;
 Lima/vendor and parsed marker formats retain their existing owners and bytes.
 [28](#source-28)
 
+[FACT] Host-only `audit` opens the read-only Falco view; `audit status`,
+`enable`, `disable`, `logs --follow --json` and finite JSONL `export --output`
+use the running controller. Audit never starts a stopped space. Enable is
+explicit; viewing never installs tools. Exports refuse overwrite and publish
+only completed privacy-filtered output. [29](#source-29)
+
 ## Sources
 
 1. <a id="source-1"></a> [CLI, output and completion evidence](../digests/cli-state.md).
@@ -263,3 +269,5 @@ Lima/vendor and parsed marker formats retain their existing owners and bytes.
 27. <a id="source-27"></a> [CLI logging and outcomes](../digests/cli-logging.md).
 
 28. <a id="source-28"></a> [Background logs](../digests/background-logs.md).
+
+29. <a id="source-29"></a> [VM-native audit contracts](../digests/audit.md).

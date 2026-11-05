@@ -193,11 +193,12 @@ const (
 	FootprintChat
 	FootprintImages
 	FootprintPorts
+	FootprintAudit
 )
 
 var footprintKinds = map[string]Footprint{
 	ResourceBox: FootprintBox, ResourceAccount: FootprintAccount, ResourceChat: FootprintChat,
-	ResourceImages: FootprintImages, ResourcePorts: FootprintPorts,
+	ResourceImages: FootprintImages, ResourcePorts: FootprintPorts, ResourceAudit: FootprintAudit,
 }
 
 // allows checks declared writes against the method policy. A worker cannot

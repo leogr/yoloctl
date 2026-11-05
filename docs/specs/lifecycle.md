@@ -162,6 +162,11 @@ sessions/ephemeral workdirs. Controller-only updates cannot replace PID 1.
 commands for the user to run, and `space start`/`recreate` take no installer
 consent input. [20](#source-20)
 
+[FACT] Opt-in Falco runs as root VM infrastructure outside boxes. Audit control
+does not boot/recreate a VM or restart a box; failure is reported separately.
+The independent native disk retains audit state/logs through recreation, while
+space backup omits audit infrastructure and import starts disabled. [21](#source-21)
+
 ## Sources
 
 1. <a id="source-1"></a> [Reconcile, locking and teardown evidence](../digests/lifecycle.md).
@@ -187,3 +192,5 @@ consent input. [20](#source-20)
 19. <a id="source-19"></a> [Controller supervision](../digests/controller-supervision.md) — failure episodes, stop and image rollout.
 
 20. <a id="source-20"></a> [Installation and space advice](../digests/installation.md).
+
+21. <a id="source-21"></a> [VM-native audit contracts](../digests/audit.md).

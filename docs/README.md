@@ -9,6 +9,7 @@ or session history. Repository working rules are in [AGENTS.md](../AGENTS.md).
 
 | Question | Entry spec | Implementation evidence |
 |---|---|---|
+| How can the host enable Falco, inspect health/events and export a finite audit interval? | [CLI](specs/cli.md), [Controller](specs/controller.md) | [VM-native auditing](digests/audit.md) |
 | How are releases installed and verified, which home does each build use, what does install advise for spaces, and how does it set up PATH and completion? | [Model](specs/model.md), [CLI](specs/cli.md) | [Build identity and installation](digests/installation.md), [install shell setup](digests/install-shell-setup.md); [installation guide](install.md) |
 | Where do commands execute, and how are compatibility/recovery/operator authority enforced? | [Controller and storage diagram](specs/controller.md) | [Controller](digests/controller.md), [operator](digests/operator.md) |
 | When does a crashed Firecracker controller restart, when does it stay failed, and how is that policy deployed? | [Controller](specs/controller.md), [Lifecycle](specs/lifecycle.md) | [Controller supervision](digests/controller-supervision.md) |
