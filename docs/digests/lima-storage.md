@@ -1,7 +1,7 @@
 # Lima storage and space names
 
 Verification: `3736b1cf9ac349827782dcbe01070d3e5d922a15` and accompanying changes;
-re-read cited sources when changing behavior.
+share smoke scope on `d4da1dc` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] New spaces, including imports, use 1–16 ASCII characters: an
 alphanumeric first character, then alphanumeric, dot, underscore or hyphen.
@@ -82,6 +82,13 @@ and disk routing, conflicting homes, admission before effects and byte-boundary
 preflight. These tests do not establish native macOS VM lifecycle parity.
 [3](#source-3) [10](#source-10) [11](#source-11) [13](#source-13) [19](#source-19)
 
+[FACT] Lima selects the host mount type; yoloctl only adds `9p: cache: none`
+to uncached mounts. QEMU 8.2.2's 9p server applies a size change by path, so
+there truncating an open file after unlink returns ENOENT. The lifecycle smoke
+asserts that operation only on Firecracker shares and does not qualify it on
+Lima; workloads in Lima host workdirs can still meet it.
+[25](#source-25) [26](#source-26) [27](#source-27) [28](#source-28)
+
 ## Sources
 
 1. <a id="source-1"></a> [Layout](../../internal/layout/layout.go#L55) — name validation and Lima path constructors.
@@ -110,3 +117,7 @@ preflight. These tests do not establish native macOS VM lifecycle parity.
 22. <a id="source-22"></a> [Strict inventory regressions](../../internal/spaceconfig/lima_placement_inventory_test.go#L1) — unprivileged access errors, absence/incomplete controls and no-follow refusal.
 23. <a id="source-23"></a> [Start beside an unreadable bundle](../../internal/lima/start_placement_test.go#L1) — `Client.Start` preflight skips the grant inventory; create still refuses; `ValidateInstancePlacement` in socket_paths.go and its recreate call in cmd/yoloctl/controller_lifecycle.go.
 24. <a id="source-24"></a> [Existing-grant regression](../../cmd/yoloctl/lima_existing_grant_test.go#L1) — `RecordedLimaHomes` in internal/spaceconfig/lima_home.go and `rejectExistingSpaceHostPath` in space_lifecycle.go; simulated macOS new home, new-grant and placement refusals, recorded-home control.
+25. <a id="source-25"></a> [Lima template](../../assets/lima/yoloctl.yaml.tmpl#L20) — mount type left to Lima; `MarshalMounts` in internal/lima/mounts.go.
+26. <a id="source-26"></a> [QEMU v8.2.2 9p setattr](https://github.com/qemu/qemu/blob/v8.2.2/hw/9pfs/9p.c#L1633-L1638) — path-based truncate.
+27. <a id="source-27"></a> [Share smoke](../../scripts/smoke/vm-shares.py#L33-L42) — backend-gated post-unlink truncation.
+28. <a id="source-28"></a> [Firecracker host shares](vm-shares.md) — descriptor-based handle contract.

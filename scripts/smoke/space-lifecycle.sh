@@ -72,7 +72,7 @@ smoke_info "mount add restarts the running space and returns with the mount live
 	smoke_fail "VM write through the added mount did not reach the host"
 
 smoke_info "host shares: creation modes, open handles, fsync and atomic replacement"
-"$YOLOCTL" space ssh "$SMOKE_SPACE" -- python3 - "$EXTRA_MOUNT" < "$(dirname "${BASH_SOURCE[0]}")/vm-shares.py"
+"$YOLOCTL" space ssh "$SMOKE_SPACE" -- python3 - "$EXTRA_MOUNT" "$SMOKE_BACKEND" < "$(dirname "${BASH_SOURCE[0]}")/vm-shares.py"
 python3 - "$EXTRA_MOUNT" <<'PY'
 import hashlib, pathlib, stat, sys
 root = pathlib.Path(sys.argv[1])

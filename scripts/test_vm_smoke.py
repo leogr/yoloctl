@@ -431,6 +431,27 @@ if os.environ.get('FAIL_PHASE') == root.name:
         self.assertIn("PASS: both cross-backend archive directions", result.stdout)
         self.assertNotIn("PASS: both complete live gates", result.stdout)
 
+    def test_share_probe_backend_selection(self):
+        # The guest probe runs locally here; Firecracker keeps the
+        # post-unlink truncation assertion, Lima reports it unqualified, and
+        # a missing or misspelled backend fails instead of skipping it.
+        probe = SCRIPTS / "vm-shares.py"
+        for backend, skipped in [("firecracker", False), ("lima", True)]:
+            root = self.root / backend
+            root.mkdir()
+            result = subprocess.run([sys.executable, str(probe), str(root), backend],
+                                    capture_output=True, text=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual("skip: post-unlink truncation" in result.stdout, skipped, result.stdout)
+            self.assertTrue((root / "expected.sha256").is_file())
+        for args in [[], ["Firecracker"], ["qemu"]]:
+            root = self.root / ("bad-" + "-".join(args))
+            root.mkdir()
+            result = subprocess.run([sys.executable, str(probe), str(root), *args],
+                                    capture_output=True, text=True, timeout=60)
+            self.assertNotEqual(result.returncode, 0, args)
+            self.assertFalse((root / "private").exists(), args)
+
     def test_lima_interruption_explicitly_selects_lima(self):
         for name in ["common.sh", "space-lifecycle.sh"]:
             shutil.copy(SCRIPTS / name, self.scripts)

@@ -308,7 +308,8 @@ The phases are:
 
 - `smoke-space-lifecycle`: a declined mount change leaves config and host
   untouched, accepted mount add/remove is live when the command returns,
-  mounted host-file creation modes, renamed/unlinked handles, file fsync and
+  mounted host-file creation modes, renamed/unlinked handles (post-unlink
+  truncation asserted on Firecracker only), file fsync and
   atomic replacement, `space recreate` preserving declarations, Firecracker
   image preflight/replacement retaining native bytes and UUID, and
   `space destroy` removes accounts and declarations while preserving host workdirs;

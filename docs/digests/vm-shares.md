@@ -63,7 +63,7 @@ validation or power-loss durability proof. [6](#source-6) [7](#source-7)
 9. <a id="source-9"></a> [SSHFS 3.7.3](https://github.com/libfuse/sshfs/blob/sshfs-3.7.3/sshfs.c) — `sshfs_fsync`, `sshfs_oper`, no fsyncdir callback.
 10. <a id="source-10"></a> [Namespace regressions](../../internal/vmshare/namespace_test.go#L16) — affected parents, host rename, failure, dangling symlinks.
 11. <a id="source-11"></a> [Validation regressions](../../internal/vmshare/validation_test.go#L22) — bytes, times, concurrent connections, malformed packets and read-only modes.
-12. <a id="source-12"></a> [Mounted-filesystem smoke](../../scripts/smoke/vm-shares.py#L10) — guest operations.
+12. <a id="source-12"></a> [Mounted-filesystem smoke](../../scripts/smoke/vm-shares.py#L12) — guest operations.
 13. <a id="source-13"></a> [Guest runtime pins](../../assets/vm/firecracker/runtime-pins.json#L14) — SSHFS 3.7.3 package.
 14. <a id="source-14"></a> [Count-bounds changes](https://github.com/pkg/sftp/pull/649/commits/a422f1388530aaa616ebe3de224d9f6bb6a313cb) — upstream patch source.
 15. <a id="source-15"></a> [Host verification](../../scripts/smoke/space-lifecycle.sh#L74) — guest probe plus host bytes/modes.
