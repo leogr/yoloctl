@@ -27,7 +27,10 @@ func ValidateInstancePaths(space string) error {
 	if err != nil {
 		return err
 	}
-	return validateHomeSocketPath(space, home)
+	if err := validateHomeSocketPath(space, home); err != nil {
+		return err
+	}
+	return spaceconfig.ValidateLimaPlacement(home)
 }
 
 // ValidateNewInstancePaths is the read-only admission check before publication.
@@ -36,7 +39,10 @@ func ValidateNewInstancePaths(space string) error {
 	if err != nil {
 		return err
 	}
-	return validateHomeSocketPath(space, home)
+	if err := validateHomeSocketPath(space, home); err != nil {
+		return err
+	}
+	return spaceconfig.ValidateLimaPlacement(home)
 }
 
 func validateHomeSocketPath(space, home string) error {

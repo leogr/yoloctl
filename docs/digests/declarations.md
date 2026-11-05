@@ -61,7 +61,9 @@ host path under `/workdir`. Ephemeral workdirs are disposable VM-local storage
 at `/workdir`. Ordinary binds need a compatible most-specific host grant and a
 live shared directory; box commands never widen grants. Managed account binds
 are derived separately. Host grant/bind checks cover intersections with config, the host VM build cache,
-Lima homes, account disk aliases and controller infrastructure. [9](#source-9)
+Lima homes, account disk aliases and controller infrastructure. Before new Lima
+storage is placed, the [placement check](lima-storage.md) also rejects overlaps
+with previously saved grants, including during pending-allocation recovery. [9](#source-9)
 [10](#source-10) [11](#source-11)
 
 [FACT] Host RPC path expansion checks canonical mount/workdir arguments against
