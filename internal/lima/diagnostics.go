@@ -63,8 +63,15 @@ func LogDiagnostics(operation string, raw []byte) error {
 // holding the lock, that its descriptor is still the file at the name, so a
 // concurrent rotation is never repeated and no record goes to a rotated file.
 func appendHostLog(dir int, name, path, line string) error {
-	for range 4 {
-		fd, err := unix.Openat(dir, name, unix.O_WRONLY|unix.O_CREAT|unix.O_APPEND|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0600)
+	var openErr error
+	for range hostLogAttempts {
+		fd, err := openHostLog(dir, name)
+		if errors.Is(err, unix.ENOENT) {
+			// macOS can report ENOENT for O_CREAT while another writer
+			// renames the name away; the next attempt opens the new file.
+			openErr = err
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("open host diagnostics log %q: %w", path, err)
 		}
@@ -75,7 +82,19 @@ func appendHostLog(dir int, name, path, line string) error {
 			return err // includes a failed sync after rotation
 		}
 	}
+	if openErr != nil {
+		return fmt.Errorf("open host diagnostics log %q: %w", path, openErr)
+	}
 	return fmt.Errorf("host diagnostics log %q kept changing while appending", path)
+}
+
+// hostLogAttempts bounds the opens of one append across concurrent
+// rotations and spurious ENOENT from O_CREAT racing a rename.
+const hostLogAttempts = 4
+
+// openHostLog opens or creates host.log in the logs directory; tests replace it.
+var openHostLog = func(dir int, name string) (int, error) {
+	return unix.Openat(dir, name, unix.O_WRONLY|unix.O_CREAT|unix.O_APPEND|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0600)
 }
 
 func appendLocked(f *os.File, fd, dir int, name, path, line string) (bool, error) {

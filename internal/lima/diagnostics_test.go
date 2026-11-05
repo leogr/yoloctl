@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/layout"
+	"golang.org/x/sys/unix"
 )
 
 const noInstanceWarning = "time=\"2026-11-05T18:02:52+01:00\" level=warning msg=\"No instance found. Run \x60limactl create\x60 to create an instance.\""
@@ -299,5 +300,46 @@ func TestHostDiagnosticsLogRotatesWithinItsBound(t *testing.T) {
 	}
 	if total < hostLogLimit {
 		t.Fatalf("rotation dropped the current generation: %d bytes", total)
+	}
+}
+
+// A spurious ENOENT from creating host.log (macOS, O_CREAT racing another
+// writer's rotation) is retried within the bound; any other open error is
+// returned at once, and ENOENT on every attempt is reported.
+func TestHostDiagnosticsRetryOnlySpuriousENOENT(t *testing.T) {
+	base := socketTestRoot(t)
+	t.Setenv("YOLOCTL_HOME", base)
+	saved := openHostLog
+	t.Cleanup(func() { openHostLog = saved })
+	for _, tc := range []struct {
+		name  string
+		fail  []error
+		calls int
+		ok    bool
+	}{
+		{"once", []error{unix.ENOENT}, 2, true},
+		{"always", []error{unix.ENOENT, unix.ENOENT, unix.ENOENT, unix.ENOENT}, hostLogAttempts, false},
+		{"other", []error{unix.EACCES}, 1, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			openHostLog = func(dir int, name string) (int, error) {
+				calls++
+				if calls <= len(tc.fail) {
+					return -1, tc.fail[calls-1]
+				}
+				return saved(dir, name)
+			}
+			err := LogDiagnostics(tc.name, []byte("record "+tc.name))
+			if calls != tc.calls || (err == nil) != tc.ok {
+				t.Fatalf("calls %d err %v", calls, err)
+			}
+			if !tc.ok && !errors.Is(err, tc.fail[len(tc.fail)-1]) {
+				t.Fatalf("lost the open error: %v", err)
+			}
+			if tc.ok && !strings.Contains(readDiagnostics(t), "record "+tc.name) {
+				t.Fatal("retried append lost the record")
+			}
+		})
 	}
 }
