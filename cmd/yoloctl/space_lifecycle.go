@@ -18,7 +18,19 @@ import (
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 )
 
+// New grants exclude every Lima root a space may use, including the one new
+// spaces would select; existing grants are revalidated only against storage
+// that exists now. Placement still refuses new storage under an old grant.
+var (
+	limaHomesForNewGrants      = spaceconfig.LimaHomes
+	limaHomesForExistingGrants = spaceconfig.RecordedLimaHomes
+)
+
 func rejectManagedHostPath(path string) error {
+	return rejectManagedHostPathWith(path, limaHomesForNewGrants)
+}
+
+func rejectManagedHostPathWith(path string, limaHomes func() ([]string, error)) error {
 	root, err := layout.ConfigRoot()
 	if err != nil {
 		return err
@@ -33,7 +45,7 @@ func rejectManagedHostPath(path string) error {
 	}
 	protectedPaths := []string{root, buildCache}
 	if !spaceenv.Native() {
-		homes, err := spaceconfig.LimaHomes()
+		homes, err := limaHomes()
 		if err != nil {
 			return err
 		}
@@ -54,7 +66,16 @@ func rejectManagedHostPath(path string) error {
 // Host paths retain their names in the guest. Reject both native account
 // aliases (and their ancestors) before a share can shadow the data disk.
 func rejectSpaceHostPath(path string, cfg *spaceconfig.Config) error {
-	if err := rejectManagedHostPath(path); err != nil {
+	return rejectSpaceHostPathWith(path, cfg, limaHomesForNewGrants)
+}
+
+// rejectExistingSpaceHostPath revalidates a saved grant at start.
+func rejectExistingSpaceHostPath(path string, cfg *spaceconfig.Config) error {
+	return rejectSpaceHostPathWith(path, cfg, limaHomesForExistingGrants)
+}
+
+func rejectSpaceHostPathWith(path string, cfg *spaceconfig.Config, limaHomes func() ([]string, error)) error {
+	if err := rejectManagedHostPathWith(path, limaHomes); err != nil {
 		return err
 	}
 	root, err := layout.AccountStateRoot()

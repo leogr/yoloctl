@@ -19,6 +19,9 @@ const longestSocketName = "ssh.sock.1234567890123456"
 
 // ValidateInstancePaths checks Lima's existing socket-path bound without
 // creating directories or invoking limactl. Reads and cleanup do not use it.
+// It is the start preflight: only a space still initializing, whose start
+// allocates its storage, also checks placement against host grants; for an
+// initialized space it reads no other space's grants.
 func ValidateInstancePaths(space string) error {
 	if spaceenv.Native() {
 		return nil
@@ -28,6 +31,22 @@ func ValidateInstancePaths(space string) error {
 		return err
 	}
 	if err := validateHomeSocketPath(space, home); err != nil {
+		return err
+	}
+	if b, err := spaceconfig.LoadBootstrap(space); err == nil && b.Initializing {
+		return spaceconfig.ValidateLimaPlacement(home)
+	}
+	return nil
+}
+
+// ValidateInstancePlacement checks an existing space's Lima home against
+// host grants where VM storage is allocated: instance creation and recreate.
+func ValidateInstancePlacement(space string) error {
+	if spaceenv.Native() {
+		return nil
+	}
+	home, err := spaceconfig.LimaHome(space)
+	if err != nil {
 		return err
 	}
 	return spaceconfig.ValidateLimaPlacement(home)

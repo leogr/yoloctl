@@ -1,6 +1,6 @@
 # Lima storage and space names
 
-Verification: `da2a42fa3efae62ec43c0a40ac2126e5e8208a9f` and accompanying changes;
+Verification: `3736b1cf9ac349827782dcbe01070d3e5d922a15` and accompanying changes;
 re-read cited sources when changing behavior.
 
 [FACT] New spaces, including imports, use 1–16 ASCII characters: an
@@ -33,7 +33,10 @@ Missing recorded storage never triggers a fallback to a different home.
 
 [FACT] Host mount/workdir checks exclude the legacy, new and recorded Lima
 homes as well as the existing config/cache/native infrastructure exclusions.
-Those checks exclude new grant requests; placement also checks previously
+Those checks exclude new grant requests. Revalidating a saved grant at start
+(`controllerMounts`, `spaceWritableMounts`) excludes only the legacy and
+recorded homes, so an older grant covering the not-yet-used new home still
+starts [24](#source-24); placement also checks previously
 saved grants of every existing space before create/import publication and
 allocation. Ancestor, exact and descendant overlaps refuse, including read-only
 grants and stopped spaces. Existing ancestors/symlinks are resolved without
@@ -45,8 +48,12 @@ inventories refuse placement. Display-oriented space listing is unchanged.
 schema-2 records contribute grants to this exclusion inventory only; ordinary
 schema-2 boot/declaration support remains removed. The error names the
 space and grant and suggests a non-overlapping installation home. No other
-space is stopped or remounted. Boot preflight and the disk-allocation seam
-repeat the check, including pending-allocation recovery. New-space disk sizing
+space is stopped or remounted. Instance creation, recreate (before teardown),
+the disk-allocation seam and the start of a space still initializing
+(pending-allocation recovery) repeat the check; the start preflight of an
+initialized space reads no other space's grants (listing Lima homes and disk
+owners still reads other bootstraps).
+[23](#source-23) New-space disk sizing
 measures the destination filesystem; existing spaces measure their
 recorded/legacy location.
 [7](#source-7) [8](#source-8) [20](#source-20) [21](#source-21)
@@ -101,3 +108,5 @@ preflight. These tests do not establish native macOS VM lifecycle parity.
 21. <a id="source-21"></a> [Placement regressions](../../cmd/yoloctl/lima_placement_grant_test.go#L1) — allocation, admission and pending recovery refusals, unrelated allocation control.
 
 22. <a id="source-22"></a> [Strict inventory regressions](../../internal/spaceconfig/lima_placement_inventory_test.go#L1) — unprivileged access errors, absence/incomplete controls and no-follow refusal.
+23. <a id="source-23"></a> [Start beside an unreadable bundle](../../internal/lima/start_placement_test.go#L1) — `Client.Start` preflight skips the grant inventory; create still refuses; `ValidateInstancePlacement` in socket_paths.go and its recreate call in cmd/yoloctl/controller_lifecycle.go.
+24. <a id="source-24"></a> [Existing-grant regression](../../cmd/yoloctl/lima_existing_grant_test.go#L1) — `RecordedLimaHomes` in internal/spaceconfig/lima_home.go and `rejectExistingSpaceHostPath` in space_lifecycle.go; simulated macOS new home, new-grant and placement refusals, recorded-home control.

@@ -41,6 +41,9 @@ func (c *Client) Create(ctx context.Context, name string, template []byte) error
 	if err := ValidateInstancePaths(name); err != nil {
 		return err
 	}
+	if err := ValidateInstancePlacement(name); err != nil {
+		return err
+	}
 	home, err := spaceconfig.LimaHome(name)
 	if err != nil {
 		return err

@@ -27,7 +27,7 @@ func controllerMounts(boot *spaceconfig.Bootstrap) ([]vmhost.Mount, error) {
 	var mounts []vmhost.Mount
 	identity := &spaceconfig.Config{AccountDiskID: boot.DiskID}
 	for _, m := range boot.Mounts {
-		if err := rejectSpaceHostPath(m.Source, identity); err != nil {
+		if err := rejectExistingSpaceHostPath(m.Source, identity); err != nil {
 			return nil, err
 		}
 		mounts = append(mounts, vmhost.Mount{Location: m.Source, Writable: m.Writable})

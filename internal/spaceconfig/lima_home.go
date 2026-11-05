@@ -76,17 +76,27 @@ func LimaHomeForDisk(id string) (string, error) {
 }
 
 // LimaHomes inventories legacy, new and explicitly recorded Lima roots. This
-// serves both runtime listing and host-grant exclusions; it creates nothing.
-func LimaHomes() ([]string, error) {
+// serves both runtime listing and new host-grant exclusions; it creates nothing.
+func LimaHomes() ([]string, error) { return limaHomes(true) }
+
+// RecordedLimaHomes is the legacy root plus the roots existing bootstraps
+// record: the storage that exists now. Revalidating an existing grant uses it,
+// so the unused new-space root never stops an older space from starting.
+func RecordedLimaHomes() ([]string, error) { return limaHomes(false) }
+
+func limaHomes(withNew bool) ([]string, error) {
 	legacy, err := layout.LimaHome()
 	if err != nil {
 		return nil, err
 	}
-	next, err := layout.NewLimaHome()
-	if err != nil {
-		return nil, err
+	homes := map[string]bool{legacy: true}
+	if withNew {
+		next, err := layout.NewLimaHome()
+		if err != nil {
+			return nil, err
+		}
+		homes[next] = true
 	}
-	homes := map[string]bool{legacy: true, next: true}
 	names, err := List()
 	if err != nil {
 		return nil, err

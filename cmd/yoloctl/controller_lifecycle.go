@@ -120,6 +120,13 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				return asUserError(err)
 			}
 		}
+		// Only recreate allocates VM storage; start leaves other spaces'
+		// bundles uninspected.
+		if action == "recreate" {
+			if err := vmhost.ValidateInstancePlacement(boot.VM.Backend, space); err != nil {
+				return asUserError(err)
+			}
+		}
 		switch action {
 		case "start":
 			seed, err := loadControllerSeed(space)

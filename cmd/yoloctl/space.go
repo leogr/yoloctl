@@ -553,7 +553,7 @@ func spaceWritableMounts(spaceName string) ([]vmhost.Mount, error) {
 	}
 	var mounts []vmhost.Mount
 	for _, m := range cfg.Mounts {
-		if err := rejectSpaceHostPath(m.Source, cfg); err != nil {
+		if err := rejectExistingSpaceHostPath(m.Source, cfg); err != nil {
 			return nil, err
 		}
 		mounts = append(mounts, vmhost.Mount{Location: m.Source, Writable: m.Writable})

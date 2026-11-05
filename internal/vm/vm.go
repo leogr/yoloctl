@@ -94,6 +94,19 @@ func ValidateInstancePaths(kind, space string) error {
 	return nil
 }
 
+// ValidateInstancePlacement checks an existing space's VM storage placement
+// before recreate tears it down; only Lima places storage in a host home.
+func ValidateInstancePlacement(kind, space string) error {
+	d, err := Driver(kind)
+	if err != nil {
+		return err
+	}
+	if d.Kind() == "lima" {
+		return lima.ValidateInstancePlacement(space)
+	}
+	return nil
+}
+
 // ValidateNewInstancePaths checks the destination home before a new bootstrap
 // exists. Existing-space checks always use its recorded/legacy placement.
 func ValidateNewInstancePaths(kind, space string) error {
