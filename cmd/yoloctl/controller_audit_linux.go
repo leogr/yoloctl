@@ -22,11 +22,14 @@ import (
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/spacelock"
 	"github.com/leogr/yoloctl/internal/vmservice"
+	"github.com/leogr/yoloctl/internal/vmwire"
+	"golang.org/x/sys/unix"
 )
 
 var auditAcquire = spacelock.Acquire
 var auditRuntimeDir = layout.AuditRunDir
 var auditKernelSupport = audit.ProbeSupport
+var auditBackendSupport = vmservice.AuditSupported
 var auditServiceState = vmservice.State
 var auditServiceStart = vmservice.Start
 var auditServiceStop = vmservice.StopAcknowledged
@@ -58,9 +61,15 @@ func nativeAuditStatus(ctx context.Context) (audit.Status, error) {
 		return status, err
 	}
 	status.Drops, status.MetadataGaps = summary.Drops, summary.MetadataGaps
-	if c.ServiceManager == "microvm" {
-		status.State, status.Error = "unsupported", "audit needs an updated Firecracker image; explicitly recreate with --update-vm-image"
+	if err := auditBackendSupport(ctx, container.New(c.Space)); err != nil {
+		status.State, status.Error = "unsupported", audit.Clean(err.Error())
 		return status, nil
+	}
+	if c.ServiceManager == "microvm" {
+		if err := auditKernelSupport(); err != nil {
+			status.State, status.Error = "unsupported", audit.Clean(err.Error())
+			return status, nil
+		}
 	}
 	readCtx, stopRead := context.WithTimeout(ctx, 5*time.Second)
 	defer stopRead()
@@ -155,8 +164,8 @@ func runControllerAudit(ctx context.Context, req controller.Request, in io.Reade
 	if c == nil {
 		return true, errors.New("audit requires native storage")
 	}
-	if c.ServiceManager == "microvm" {
-		return true, errors.New("audit needs an updated Firecracker image; explicitly recreate with --update-vm-image")
+	if err := auditBackendSupport(ctx, container.New(c.Space)); err != nil {
+		return true, err
 	}
 	enable := req.Method == "audit.enable"
 	var raw []byte
@@ -256,7 +265,7 @@ func runControllerAudit(ctx context.Context, req controller.Request, in io.Reade
 }
 
 func auditUnit() vmservice.Unit {
-	return vmservice.Unit{Name: audit.ServiceName, Description: "yoloctl Falco audit", Args: []string{"/opt/yoloctl/bin/yoloctl", "controller-internal", "audit-collect"}}
+	return vmwire.AuditUnit()
 }
 
 func waitAuditReady(ctx context.Context, epoch string) error {
@@ -289,6 +298,8 @@ func waitAuditReady(ctx context.Context, epoch string) error {
 }
 
 func collectNativeAudit(ctx context.Context) error {
+	// This dedicated service process keeps any incidental child output private.
+	unix.Umask(0077)
 	c := spaceenv.Current()
 	if c == nil {
 		return errors.New("audit collector needs native storage")
@@ -350,8 +361,8 @@ func reconcileNativeAudit(ctx context.Context) error {
 	if err != nil || cfg.Audit == nil || !cfg.Audit.Enabled {
 		return err
 	}
-	if c.ServiceManager == "microvm" {
-		return errors.New("audit awaits a compatible Firecracker image")
+	if err := auditBackendSupport(ctx, container.New(c.Space)); err != nil {
+		return err
 	}
 	state, err := auditServiceState(ctx, container.New(c.Space), audit.ServiceName)
 	if err != nil {

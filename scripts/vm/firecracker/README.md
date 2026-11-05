@@ -105,7 +105,7 @@ on a native filesystem with several GiB free; only the final image is needed for
 the host gate. These are experiment prerequisites, not installed-CLI requirements.
 
 ```sh
-python3 scripts/vm/firecracker/linux7.py kernel --jobs 2 --output yfc-linux7-kernel
+python3 scripts/vm/firecracker/linux7.py kernel --jobs 2 --reproduce --output yfc-linux7-kernel
 python3 scripts/vm/firecracker/linux7.py image \
   --kernel-build yfc-linux7-kernel --output yfc-linux7-image
 make BIN_DIR=bin/linux7 build

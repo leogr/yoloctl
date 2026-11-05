@@ -1,6 +1,6 @@
 # VM image preparation and replacement
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; OpenShell retirement `1d265df3` and accompanying changes; grow capability `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; OpenShell retirement `1d265df3` and accompanying changes; grow capability `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; audit kernel `0445aa7690401d237b25be3fef1808659e62d039` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Firecracker create/import and explicit image updates resolve immutable
 media under config-root `vm-images/firecracker`. Automatic selection hashes the
@@ -82,7 +82,12 @@ there is no unified OCI resolver/publisher. [11](#source-11) [12](#source-12)
 [FACT] The bundled kernel is upstream Linux 7.2.11, checksum-pinned with its
 complete configuration and compiler provenance. The maintainer recipe adapts
 Firecracker's 6.18 configuration with `olddefconfig`, enables pressure telemetry,
-checks confinement/resource requirements and fixes build metadata. It requires
+checks confinement/resource requirements and fixes build metadata. The audit
+update adds BPF JIT, built-in BTF from DWARF4 and probe tracing options with
+GCC 13.3.0/pahole 1.25. Packaging strips standalone DWARF after BTF encoding;
+`--reproduce` compares two object-directory builds. Build-tool pins and actual
+compiler/linker/pahole identities accompany the recipe/output. These checks
+do not prove a live modern-eBPF load. It requires
 built-in `VIRTUALIZATION`, `KVM`, `KVM_INTEL` and `KVM_AMD`, so nested KVM needs
 no guest module tree; `KVM_INTEL` selects `X86_FRED`. Qualification
 retains the selected kernel across image replacement/import and probes Landlock,
@@ -135,12 +140,12 @@ mutation. An explicit Lima recreate selects the current build, so no
 15. <a id="source-15"></a> [Coordinated build](../../Makefile#L42) — host, Linux companions, init hash linkage and cgo settings.
 16. <a id="source-16"></a> [Deployment admission](../../cmd/yoloctl/controller_deploy.go#L83) — pending-image gate, drain/state proof and start.
 17. <a id="source-17"></a> [Recipe tests](../../internal/firecracker/recipe_linux_test.go#L15) — all inputs, default isolation and retained media.
-18. <a id="source-18"></a> [Linux 7 recipe and gate](../../scripts/vm/firecracker/linux7.py#L57) — `kernel`, `verify_image`, `smoke`.
+18. <a id="source-18"></a> [Linux 7 recipe and gate](../../scripts/vm/firecracker/linux7.py#L57) — `kernel`, `verify_image`, `smoke`; two object-directory builds via `--reproduce`.
 19. <a id="source-19"></a> [Runtime probe](../../scripts/smoke/linux7.sh#L23) — Landlock, controllers and telemetry before the full gate.
 20. <a id="source-20"></a> [Per-phase kernel check](../../scripts/smoke/common.sh#L135) — `smoke_ensure_space`.
-21. <a id="source-21"></a> [Bundled recipe](../../assets/vm/firecracker/inputs.py#L24-L44) — `REQUIRED`, `KERNEL_EXTRAS`; `kernel` at L163.
+21. <a id="source-21"></a> [Bundled recipe](../../assets/vm/firecracker/inputs.py#L24) — `REQUIRED`, `KERNEL_EXTRAS`, `kernel`, `publish_kernel`; exact qualified tool packages in kernel-tools.json.
 22. <a id="source-22"></a> [Bundled provenance](../../assets/vm/firecracker/kernel.json#L1) — source, configuration and compiler identities.
-23. <a id="source-23"></a> [Effective configuration](../../assets/vm/firecracker/kernel.config#L711-L718) — built-in KVM; `X86_FRED` at L364.
+23. <a id="source-23"></a> [Effective configuration](../../assets/vm/firecracker/kernel.config#L714) — built-in KVM/Intel/AMD; `X86_FRED` at L368.
 24. <a id="source-24"></a> [CA trust stores](trust-stores.md) — package pin and store regeneration.
 25. <a id="source-25"></a> [Grow capability](../../internal/firecracker/config.go#L28-L43) — `Image.DataDiskGrow`, `DataDiskGrowVersion`; `verifyRuntime` in assemble_linux.go; `imageRecipeVersion` in recipe_linux.go.
 26. <a id="source-26"></a> [Retired inputs](../../internal/firecracker/recipe_linux.go#L21) — `imageRecipeVersion` 4; retired paths in assemble_linux.go; `assets/vm/firecracker/pins.json` without `openshell.tgz`; Lima template without the download/Rego sections (retirement tree `3cc5e841`).

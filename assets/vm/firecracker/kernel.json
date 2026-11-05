@@ -15,17 +15,27 @@
     "ACPI",
     "BLK_CGROUP",
     "BLK_DEV_LOOP",
+    "BPF",
+    "BPF_EVENTS",
+    "BPF_JIT",
+    "BPF_SYSCALL",
     "BRIDGE",
     "CFS_BANDWIDTH",
     "CGROUPS",
     "CGROUP_PIDS",
     "CGROUP_SCHED",
+    "DEBUG_INFO_BTF",
+    "DEBUG_INFO_DWARF4",
     "DEVTMPFS",
     "EXT4_FS",
     "FAIR_GROUP_SCHED",
+    "FTRACE",
+    "FTRACE_SYSCALLS",
     "FUSE_FS",
     "IKCONFIG",
     "IKCONFIG_PROC",
+    "KPROBES",
+    "KPROBE_EVENTS",
     "KVM",
     "KVM_AMD",
     "KVM_GUEST",
@@ -57,6 +67,7 @@
     "NF_TABLES_INET",
     "OVERLAY_FS",
     "PCI",
+    "PERF_EVENTS",
     "PID_NS",
     "PROC_FS",
     "PSI",
@@ -67,8 +78,11 @@
     "SERIAL_8250_CONSOLE",
     "SYSFS",
     "TMPFS",
+    "TRACEPOINTS",
     "TUN",
     "UNIX",
+    "UPROBES",
+    "UPROBE_EVENTS",
     "USER_NS",
     "VETH",
     "VIRTIO_BLK",
@@ -80,9 +94,29 @@
   ],
   "disabled": [
     "PSI_DEFAULT_DISABLED",
-    "LOCALVERSION_AUTO"
+    "LOCALVERSION_AUTO",
+    "DEBUG_INFO_NONE"
   ],
-  "kernel_sha256": "03c16e9e7cdcd81b48e956d2151c450df1aaf857d8e98177beb75cc4518cab9f",
-  "config_sha256": "48aba3a38e1f3f64feb36fa82b0293fab9c1785d916e87a12396c3feb599a9b2",
-  "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  "kernel_sha256": "6dae9bea592712fbec43e92b0c6bae8ff86c52af308cd65ab707e1175ed14787",
+  "config_sha256": "a81416752e32808e5720f4ab2a7f86e2b4cb4d4d6cd6dd555abd0a1824144b5c",
+  "compiler": "x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "build_tools": {
+    "cc": {
+      "version": "x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "sha256": "c7c4fabc77f03e165c2f3ae339b181ef974375f761a20a21f94a1b7e0101bd1d"
+    },
+    "pahole": {
+      "version": "v1.25",
+      "sha256": "6ad2e798fe3b6147d82f1dff13957c5998d02910b92b8fc3b3a4d9bd3653b026"
+    },
+    "ld": {
+      "version": "GNU ld (GNU Binutils for Ubuntu) 2.42",
+      "sha256": "a3ef754c93653b732af112fd93cd5912a1c5c7de10004fea140b82e6aa75787c"
+    },
+    "objcopy": {
+      "version": "GNU objcopy (GNU Binutils for Ubuntu) 2.42",
+      "sha256": "58d45761ca76e6c59ad32f8582bd9273a990dd81ab78f44e4d3643858c1c0366"
+    }
+  },
+  "pahole_flags": "--btf_gen_floats -j1 --skip_encoding_btf_inconsistent_proto --btf_gen_optimized --lang_exclude=rust"
 }

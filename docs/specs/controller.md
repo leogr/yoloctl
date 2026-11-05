@@ -164,7 +164,9 @@ metadata comes only from validated reserved tags, never message text.
 operator authority grants no audit access. Desired state is native, while a
 separate audit receipt domain isolates uncertain control from unrelated boxes.
 Startup reconciliation skips reserved/held audit state and retains the existing
-global uncertainty rules. [18](#source-18)
+global uncertainty rules. Firecracker uses a fixed PID-1 collector unit and a
+read-only support query before toggles; unsupported media needs explicit host
+image recreation. [18](#source-18)
 
 ## Sources
 

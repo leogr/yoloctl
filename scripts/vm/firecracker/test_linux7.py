@@ -48,7 +48,10 @@ class Linux7Tests(unittest.TestCase):
     def test_missing_runtime_requirements_fail_before_compilation(self):
         linux7.validate_config(self.config, self.inputs)
         for option in ['SECCOMP_FILTER', 'MEMCG', 'CGROUP_PIDS', 'FUSE_FS',
-                       'VIRTIO_BLK', 'VIRTIO_VSOCKETS', 'SECURITY_LANDLOCK', 'NFT_REJECT_INET']:
+                       'VIRTIO_BLK', 'VIRTIO_VSOCKETS', 'SECURITY_LANDLOCK', 'NFT_REJECT_INET',
+                       'BPF_SYSCALL', 'BPF_JIT', 'BPF_EVENTS', 'PERF_EVENTS',
+                       'KPROBE_EVENTS', 'UPROBE_EVENTS', 'FTRACE_SYSCALLS',
+                       'TRACEPOINTS', 'DEBUG_INFO_DWARF4', 'DEBUG_INFO_BTF']:
             with self.subTest(option=option), self.assertRaisesRegex(RuntimeError, option):
                 linux7.validate_config(self.config.replace(f'CONFIG_{option}=y', f'CONFIG_{option}=m'), self.inputs)
         with self.assertRaisesRegex(RuntimeError, 'activate Landlock'):
@@ -56,6 +59,9 @@ class Linux7Tests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'PSI_DEFAULT_DISABLED'):
             linux7.validate_config(self.config.replace('# CONFIG_PSI_DEFAULT_DISABLED is not set',
                                                       'CONFIG_PSI_DEFAULT_DISABLED=y'), self.inputs)
+        with self.assertRaisesRegex(RuntimeError, 'DEBUG_INFO_NONE'):
+            linux7.validate_config(self.config.replace('# CONFIG_DEBUG_INFO_NONE is not set',
+                                                      'CONFIG_DEBUG_INFO_NONE=y'), self.inputs)
 
     def test_nested_kvm_must_be_built_in(self):
         lines = self.config.splitlines(keepends=True)
