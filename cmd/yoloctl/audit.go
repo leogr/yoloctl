@@ -294,28 +294,50 @@ func runAuditLogs(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	return streamAuditLogs(cmd, target, query, follow, waitAuditPoll)
+}
+
+func streamAuditLogs(cmd *cobra.Command, target controllerTarget, query audit.Query, follow bool, pause func(context.Context) error) error {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
+	var previous audit.Summary
+	first := true
 	for {
 		summary, err := scanAudit(cmd.Context(), target, "audit.logs", query, func(event audit.Event) error {
 			if jsonOutput {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(event)
 			}
-			_, err := fmt.Fprintln(cmd.OutOrStdout(), auditui.EventLine(event))
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), auditui.EventText(event, auditColorEnabled(writerIsTerminal(cmd.OutOrStdout()))))
 			return err
 		})
 		if err != nil {
 			return err
 		}
-		reportAuditSummary(cmd.ErrOrStderr(), summary)
+		// Count, cursors and interval timestamps describe each bounded page.
+		// Only the initial page and changes in loss/gap state need a notice.
+		if first || summary.Drops != previous.Drops || summary.MetadataGaps != previous.MetadataGaps || summary.Gap != previous.Gap {
+			reportAuditSummary(cmd.ErrOrStderr(), summary)
+		}
+		first, previous = false, summary
 		if !follow {
 			return nil
 		}
 		query.After, query.Tail = summary.Last, false
-		select {
-		case <-cmd.Context().Done():
-			return cmd.Context().Err()
-		case <-time.After(time.Second):
+		if err := pause(cmd.Context()); err != nil {
+			return err
 		}
+	}
+}
+
+func auditColorEnabled(tty bool) bool {
+	return tty && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
+}
+
+func waitAuditPoll(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(time.Second):
+		return nil
 	}
 }
 
@@ -421,6 +443,7 @@ func runAuditView(cmd *cobra.Command, _ []string) error {
 		batch.Summary, err = scanAudit(ctx, target, "audit.logs", q, func(e audit.Event) error { batch.Events = append(batch.Events, e); return nil })
 		return batch, err
 	}
-	_, err = tea.NewProgram(auditui.New(cmd.Context(), target.Space, fetch), tea.WithInput(cmd.InOrStdin()), tea.WithOutput(cmd.OutOrStdout())).Run()
+	model := auditui.New(cmd.Context(), target.Space, fetch).WithColor(auditColorEnabled(writerIsTerminal(cmd.OutOrStdout())))
+	_, err = tea.NewProgram(model, tea.WithInput(cmd.InOrStdin()), tea.WithOutput(cmd.OutOrStdout())).Run()
 	return err
 }

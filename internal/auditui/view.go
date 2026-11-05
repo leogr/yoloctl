@@ -5,6 +5,8 @@ package auditui
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +37,8 @@ type Model struct {
 	status                     audit.Status
 	summary                    audit.Summary
 	after                      uint64
+	loadedOnce                 bool
+	color                      bool
 	selected, offset           int
 	paused, details, filtering bool
 	filter, severity           string
@@ -47,9 +51,11 @@ type Model struct {
 func New(ctx context.Context, space string, fetch Fetch) Model {
 	return Model{ctx: ctx, space: audit.Clean(space), fetch: fetch, width: 80, height: 24, fetching: true}
 }
-func (m Model) Init() tea.Cmd { return m.load() }
+
+func (m Model) WithColor(enabled bool) Model { m.color = enabled; return m }
+func (m Model) Init() tea.Cmd                { return m.load() }
 func (m Model) load() tea.Cmd {
-	generation, query := m.generation, audit.Query{After: m.after, Box: m.filter, Limit: 500, Tail: m.after == 0}
+	generation, query := m.generation, audit.Query{After: m.after, Box: m.filter, Limit: 500, Tail: !m.loadedOnce}
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(m.ctx, 10*time.Second)
 		defer cancel()
@@ -87,11 +93,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = ""
 		m.status, m.summary = msg.Batch.Status, msg.Batch.Summary
 		m.after = msg.Batch.Summary.Last
-		m.events = append(m.events, msg.Batch.Events...)
-		if len(m.events) > 500 {
-			m.events = m.events[len(m.events)-500:]
+		m.loadedOnce = true
+		if len(msg.Batch.Events) != 0 {
+			m.events = append(m.events, msg.Batch.Events...)
+			if len(m.events) > 500 {
+				m.events = m.events[len(m.events)-500:]
+			}
+			m.selected = max(0, len(m.visible())-1)
 		}
-		m.selected = max(0, len(m.visible())-1)
 		return m, next()
 	case tick:
 		if !m.paused && !m.fetching {
@@ -109,6 +118,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.filtering = false
 				m.events = nil
 				m.after = 0
+				m.loadedOnce = false
 				m.generation++
 				if m.fetching || m.paused {
 					return m, nil
@@ -174,13 +184,61 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
-func EventLine(e audit.Event) string {
+func eventLine(e audit.Event, color bool) string {
 	box := audit.Clean(e.Box)
 	if !e.MetadataAvailable {
-		box = "?"
+		box = "(no box)"
 	}
-	return fmt.Sprintf("%s  %-9s  %-14s  %s", e.Time.UTC().Format("15:04:05"), audit.Clean(e.Severity), box, audit.Clean(e.Rule))
+	severity := fmt.Sprintf("%-9s", audit.Clean(e.Severity))
+	if color {
+		code := "36"
+		switch strings.ToLower(e.Severity) {
+		case "emergency", "alert", "critical", "error":
+			code = "91"
+		case "warning":
+			code = "93"
+		case "debug":
+			code = "90"
+		}
+		severity = styled(severity, code, true)
+	}
+	return fmt.Sprintf("%s  %s  %-14s  %s", e.Time.UTC().Format("15:04:05"), severity, box, styled(audit.Clean(e.Rule), "1", color))
 }
+
+func styled(text, code string, color bool) string {
+	if !color {
+		return text
+	}
+	return "\x1b[" + code + "m" + text + "\x1b[0m"
+}
+
+// EventText is shared by finite and following pretty logs. JSON logs retain the
+// complete stored event instead of a projection of these human-readable lines.
+func EventText(e audit.Event, color bool) string {
+	lines := []string{eventLine(e, color)}
+	if output := audit.RenderPrettyOutput(e); output != "" {
+		lines = append(lines, "  "+output)
+	}
+	lines = append(lines, "  "+eventFields(e, color))
+	return strings.Join(lines, "\n")
+}
+
+func eventFields(e audit.Event, color bool) string {
+	fields := audit.SelectedFields(e)
+	keys := make([]string, 0, len(fields))
+	for key := range fields {
+		if fields[key] != "<NA>" && fields[key] != "" {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, styled(key+"=", "2", color)+styled(strconv.Quote(fields[key]), "1", color))
+	}
+	return strings.Join(parts, " ")
+}
+
 func (m Model) View() tea.View {
 	width, height := max(1, m.width), max(1, m.height)
 	mode := "FOLLOW"
@@ -210,8 +268,26 @@ func (m Model) View() tea.View {
 			lines = append(lines, "Enable with yoloctl audit enable.")
 		}
 	}
-	rows := max(0, height-len(lines)-2)
 	selected := min(m.selected, max(0, len(events)-1))
+	var details []string
+	if len(events) > 0 {
+		e := events[selected]
+		text := audit.RenderPrettyOutput(e)
+		if m.details {
+			text += "\n" + eventFields(e, m.color)
+		}
+		if text != "" {
+			details = strings.Split(ansi.Wrap(text, max(1, width-2), ""), "\n")
+			limit := max(0, min(8, height-len(lines)-3))
+			if len(details) > limit {
+				details = details[:limit]
+				if limit > 0 {
+					details[limit-1] = ansi.Truncate(details[limit-1], max(1, width-3), "") + "…"
+				}
+			}
+		}
+	}
+	rows := max(0, height-len(lines)-len(details)-1)
 	offset := max(0, min(m.offset, selected))
 	if selected >= offset+rows {
 		offset = max(0, selected-rows+1)
@@ -221,17 +297,12 @@ func (m Model) View() tea.View {
 		if i == selected {
 			prefix = "> "
 		}
-		lines = append(lines, prefix+EventLine(events[i]))
+		lines = append(lines, prefix+eventLine(events[i], m.color))
 	}
-	if m.details && len(events) > 0 {
-		e := events[selected]
-		details := fmt.Sprintf("Executable: %s · Path: %s · Endpoint: %s · Result: %s", audit.Clean(e.Executable), audit.Clean(e.Path), audit.Clean(e.Endpoint), audit.Clean(e.Result))
-		if len(lines) >= height-1 && len(lines) > 4 {
-			lines = lines[:height-2]
-		}
-		lines = append(lines, details)
+	for _, detail := range details {
+		lines = append(lines, "  "+detail)
 	}
-	lines = append(lines, "↑↓ select · Enter details · Space pause/follow · b box · v severity · r retry · q close")
+	lines = append(lines, "↑↓ select · Enter fields · Space pause/follow · b box · v severity · r retry · q close")
 	if len(lines) > height {
 		lines = lines[:height]
 	}

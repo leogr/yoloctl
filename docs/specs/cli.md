@@ -194,7 +194,11 @@ version probe is bounded. Ordinary commands retain startup setup. [18](#source-1
 use the running controller. Audit never starts a stopped space. Enable is
 explicit; viewing never installs tools. Old Firecracker images require explicit
 `space recreate NAME --update-vm-image`; audit never replaces media. Exports refuse overwrite and publish
-only completed privacy-filtered output. [24](#source-24)
+only completed privacy-filtered output. Pretty logs show the rule message and
+selected metadata, hide unavailable assignments and use `(no box)` when box
+metadata is unavailable; JSON retains the complete selected fields. Follow
+summaries appear initially and when loss/gap state changes. Terminal colour
+respects `NO_COLOR` and redirection. [24](#source-24)
 
 ## Sources
 

@@ -709,6 +709,25 @@ second export to the same file is refused. Disable auditing; prove the service
 and probe are stopped and retained export still works. Verify boxes were not
 restarted. Measure idle/build overhead and drops; no SLA is asserted.
 
+For that controlled rule, in the disposable VM (or a writable directory of a
+disposable box), copy an ELF executable rather than using a shell script:
+
+```sh
+audit_probe_dir=$(mktemp -d /tmp/yoloctl-audit-test-XXXXXXXX)
+cp /usr/bin/true "$audit_probe_dir/yolo-audit-test"
+"$audit_probe_dir/yolo-audit-test"
+```
+
+A direct VM execution has no box metadata and displays `(no box)`. A box
+execution needs live container/plugin metadata for enrichment. Check that
+pretty output shows the pinned rule message, available process/user/container
+and file fields without `<NA>` clutter; JSON retains unavailable values and all
+selected fields. Old records cannot recover newly added fields. In follow mode,
+the initial summary appears once; idle sliding-window polls and new events do
+not repeat it unless loss/gap state changes. Verify idle TUI selection is stable,
+selected messages/fields are readable, and terminal colours become plain when
+piped or with `NO_COLOR=1`. These remain host checks, not fixture-test proof.
+
 For metadata-plugin qualification, confirm the pinned `yolo` and `container`
 plugins loaded. The controller publishes a private snapshot with generation metadata;
 read/exported events must show the selected `yolo.*` fields. Stop publication in

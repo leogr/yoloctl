@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,7 +16,104 @@ import (
 	"github.com/leogr/yoloctl/internal/audit"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/spaceenv"
+	"github.com/spf13/cobra"
 )
+
+func TestAuditFollowReportsOnlyInitialAndLossChanges(t *testing.T) {
+	for _, jsonOutput := range []bool{false, true} {
+		t.Run(fmt.Sprint("json=", jsonOutput), func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			cmd := &cobra.Command{}
+			cmd.SetContext(t.Context())
+			cmd.SetOut(&stdout)
+			cmd.SetErr(&stderr)
+			cmd.Flags().Bool("json", jsonOutput, "")
+			when := time.Date(2026, 11, 5, 14, 40, 1, 0, time.UTC)
+			calls := 0
+			target := controllerTarget{Space: "test", Call: func(_ context.Context, request controller.Request, streams controller.ClientIO) error {
+				var input auditRequest
+				if err := json.Unmarshal(request.Payload, &input); err != nil {
+					return err
+				}
+				poll := calls
+				calls++
+				expected := uint64(2)
+				if poll == 0 {
+					expected = 0
+				} else if poll <= 2 {
+					expected = 1
+				}
+				if request.Method != "audit.logs" || input.Query.After != expected || input.Query.Tail != (poll == 0) {
+					return fmt.Errorf("poll %d lost cursor/tail: %+v", poll, input.Query)
+				}
+				summary := audit.Summary{First: 1, Last: expected, Upper: expected, Since: when.Add(-audit.RetainAge).Add(time.Duration(poll) * time.Second), Until: when.Add(time.Duration(poll) * time.Second)}
+				encoder := json.NewEncoder(streams.Out)
+				if poll == 0 || poll == 2 {
+					event := audit.Event{Cursor: expected + 1, Time: when, Rule: "Yolo audit test", Severity: "Notice", Executable: "/tmp/probe", Container: "host", Output: "retained message", OutputFields: map[string]string{"proc.name": "yolo-audit-test", "user.uid": "0", "fs.path.target": "/etc/target"}}
+					if err := encoder.Encode(audit.Frame{Type: "event", Event: &event}); err != nil {
+						return err
+					}
+					summary.Last, summary.Upper, summary.Count = event.Cursor, event.Cursor, 1
+				}
+				if poll >= 3 {
+					summary.Drops = 2
+				}
+				if poll >= 5 {
+					summary.MetadataGaps = 3
+					summary.Gap = poll < 7
+				}
+				return encoder.Encode(audit.Frame{Type: "summary", Summary: &summary})
+			}}
+			stop := errors.New("finished polls")
+			err := streamAuditLogs(cmd, target, audit.Query{Tail: true, Limit: 500}, true, func(context.Context) error {
+				if calls == 8 {
+					return stop
+				}
+				return nil
+			})
+			if !errors.Is(err, stop) || calls != 8 {
+				t.Fatal(calls, err)
+			}
+			if strings.Count(stderr.String(), "Audit interval ") != 4 || strings.Contains(stderr.String(), "14:40:02Z") || strings.Contains(stderr.String(), "14:40:03Z") {
+				t.Fatal("follow summary churn", stderr.String())
+			}
+			if strings.Contains(stdout.String(), "Audit interval") || strings.Contains(stdout.String(), "\x1b") {
+				t.Fatal(stdout.String())
+			}
+			if jsonOutput {
+				lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+				if len(lines) != 2 {
+					t.Fatal(stdout.String())
+				}
+				for i, line := range lines {
+					var event audit.Event
+					if err := json.Unmarshal([]byte(line), &event); err != nil || event.Cursor != uint64(i+1) || event.Output != "retained message" || event.OutputFields["fs.path.target"] != "/etc/target" {
+						t.Fatal("JSON lost retained fields", line, err)
+					}
+				}
+			} else if strings.Count(stdout.String(), "14:40:01  ") != 2 || !strings.Contains(stdout.String(), "(no box)") || !strings.Contains(stdout.String(), "fs.path.target=") || strings.Contains(stdout.String(), "<NA>") {
+				t.Fatal(stdout.String())
+			}
+		})
+	}
+}
+
+func TestAuditColorHonorsTerminalAndNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("TERM", "xterm-256color")
+	if !auditColorEnabled(true) || auditColorEnabled(false) || writerIsTerminal(&bytes.Buffer{}) {
+		t.Fatal("wrong terminal color selection")
+	}
+	t.Setenv("NO_COLOR", "1")
+	if auditColorEnabled(true) {
+		t.Fatal("ignored NO_COLOR")
+	}
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("TERM", "dumb")
+	if auditColorEnabled(true) {
+		t.Fatal("colored a dumb terminal")
+	}
+}
 
 func TestAuditAuthorizationIsHostOnly(t *testing.T) {
 	for _, method := range []string{"audit.status", "audit.enable", "audit.disable", "audit.logs", "audit.export"} {
