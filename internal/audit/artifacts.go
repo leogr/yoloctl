@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/atomicfile"
+	"github.com/leogr/yoloctl/internal/auditplugin"
 	"github.com/leogr/yoloctl/internal/safepath"
 )
 
@@ -99,8 +100,14 @@ func Install(root, arch string, raw []byte) (string, error) {
 	if err := a.Verify(raw); err != nil {
 		return "", err
 	}
-	version := Version + "-" + a.SHA256[:16]
-	dest := filepath.Join(root, "tools", version)
+	plugin, _, err := auditplugin.Plugin(arch)
+	if err != nil {
+		return "", err
+	}
+	dest, err := a.InstalledDir(root)
+	if err != nil {
+		return "", err
+	}
 
 	if _, err := os.Lstat(dest); err == nil {
 		return dest, a.VerifyInstalled(dest)
@@ -155,6 +162,9 @@ func Install(root, arch string, raw []byte) (string, error) {
 	if len(found) != len(selected) {
 		return "", errors.New("falco archive lacks executable or container plugin")
 	}
+	if err := safepath.WriteFile(stage, "plugins/libyolo.so", plugin, 0500); err != nil {
+		return "", err
+	}
 	if err := safepath.WriteFile(stage, "archive.sha256", []byte(a.SHA256), 0400); err != nil {
 		return "", err
 	}
@@ -173,11 +183,24 @@ func (a Artifact) VerifyInstalled(dest string) error {
 	if err != nil || string(manifest) != a.SHA256 {
 		return errors.New("installed audit tools do not match the archive pin")
 	}
-	for rel, digest := range map[string]string{"bin/falco": a.FalcoSHA256, "plugins/libcontainer.so": a.ContainerSHA256} {
+	_, pluginDigest, err := auditplugin.Plugin(a.Arch)
+	if err != nil {
+		return err
+	}
+	for rel, digest := range map[string]string{"plugins/libyolo.so": pluginDigest, "bin/falco": a.FalcoSHA256, "plugins/libcontainer.so": a.ContainerSHA256} {
 		raw, info, err := safepath.ReadFileInfo(dest, rel, 64<<20)
 		if err != nil || Digest(raw) != digest || info.Mode().Perm() != 0500 {
 			return errors.New("installed audit executable or container plugin does not match its pin")
 		}
 	}
 	return nil
+}
+
+// InstalledDir binds immutable tools to both the Falco and extraction pins.
+func (a Artifact) InstalledDir(root string) (string, error) {
+	_, digest, err := auditplugin.Plugin(a.Arch)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, "tools", Version+"-"+a.SHA256[:16]+"-"+digest[:16]), nil
 }

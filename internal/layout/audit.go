@@ -1,7 +1,9 @@
 package layout
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"path/filepath"
 
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -22,4 +24,11 @@ func AuditRunDir() string { return filepath.Join(spaceenv.RunRoot, "audit") }
 func AuditCacheDir() (string, error) {
 	root, err := CacheRoot()
 	return filepath.Join(root, "audit"), err
+}
+
+// AuditMetadataPath stays stable across compatible controller updates, so a
+// running collector follows fresh observations without another service restart.
+func AuditMetadataPath() string { return filepath.Join(AuditRunDir(), "metadata.tsv") }
+func AuditMetadataGeneration(generation string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(generation)))
 }

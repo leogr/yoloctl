@@ -706,6 +706,15 @@ second export to the same file is refused. Disable auditing; prove the service
 and probe are stopped and retained export still works. Verify boxes were not
 restarted. Measure idle/build overhead and drops; no SLA is asserted.
 
+For metadata-plugin qualification, confirm the pinned `yolo` and `container`
+plugins loaded. The controller publishes a private snapshot with generation metadata;
+read/exported events must show the selected `yolo.*` fields. Stop publication in
+the owned fixture, wait beyond the 15-second freshness bound and prove events
+remain visible with unavailable metadata. Check missing/ambiguous IDs and
+container recreation/name reuse. No raw Env/argv may appear in the snapshot,
+logs or export. Repeat on native Linux amd64 and arm64; cross-building and a
+synthetic ABI fixture are not native Falco event evidence.
+
 For rules/labels qualification, create a fresh disposable box with this build.
 Verify the native system containerd/default-namespace identity and the selected
 `yoloctl.audit.*` labels, then compare exported box/space/account/agent/runtime

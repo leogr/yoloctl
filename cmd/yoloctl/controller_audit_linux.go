@@ -219,7 +219,7 @@ func runControllerAudit(ctx context.Context, req controller.Request, in io.Reade
 		if err != nil {
 			return true, err
 		}
-		configuration, err := audit.Configuration(root, tools)
+		configuration, err := audit.Configuration(root, tools, layout.AuditMetadataPath())
 		if err != nil {
 			return true, err
 		}
@@ -320,7 +320,10 @@ func collectNativeAudit(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	tools := filepath.Join(root, "tools", audit.Version+"-"+pin.SHA256[:16])
+	tools, err := pin.InstalledDir(root)
+	if err != nil {
+		return err
+	}
 	if err := pin.VerifyInstalled(tools); err != nil {
 		return err
 	}
@@ -371,17 +374,29 @@ func startAuditRetention(parent context.Context, server *controller.Server) func
 		if startupErr != nil && ctx.Err() == nil {
 			_, _ = fmt.Fprintln(os.Stderr, "audit reconciliation deferred")
 		}
-		ticker := time.NewTicker(time.Minute)
+		// One owner prevents metadata refresh from taking retention's admission.
+		// Keep expiry due after a busy/failed attempt instead of skipping a minute.
+		nextExpiry := time.Now().Add(time.Minute)
+		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 		for {
+			expiryDue := !time.Now().Before(nextExpiry)
+			checked := false
+			_, err := server.RunMaintenance(ctx, func(ctx context.Context) error {
+				var err error
+				checked, err = maintainNativeAudit(ctx, expiryDue)
+				return err
+			})
+			if checked {
+				nextExpiry = time.Now().Add(time.Minute)
+			}
+			if err != nil && ctx.Err() == nil {
+				_, _ = fmt.Fprintln(os.Stderr, "audit maintenance deferred")
+			}
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-			}
-			_, err := server.RunMaintenance(ctx, pruneInactiveAudit)
-			if err != nil && ctx.Err() == nil {
-				_, _ = fmt.Fprintln(os.Stderr, "audit retention deferred")
 			}
 		}
 	}()
