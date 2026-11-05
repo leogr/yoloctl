@@ -684,3 +684,30 @@ Darwin's Go fork/exec error pipe merges session, controlling-TTY and exec errors
 comparison run is a no-reproduction result, not proof that Rosetta caused a
 previous failure. Preserve the first failure and run the ordinary parallel full
 Go suite as well as isolated repetitions; do not substitute `-p1` for that gate.
+
+### Falco audit host qualification
+
+Run only from the host against a separately owned disposable space. Do not use
+the space hosting this development session. Local rule/unit tests do not prove
+modern-eBPF loading or workload identity.
+
+Every host command must explicitly select the fixture home with
+`YOLOCTL_HOME="$SMOKE_ROOT/home"`; never inherit a different home. Verify
+SMOKE_ROOT is the owned test fixture before using these examples.
+
+For Lima, start the disposable space with this controller build, then run
+`yoloctl audit enable --space NAME`. Check `audit status --space NAME --json`
+for enabled desired state, active service, pinned tool version and a loaded
+modern-eBPF driver. In the VM, run an owned executable named
+`yolo-audit-test` to exercise the controlled rule. Read `audit logs --space
+NAME --json`, then `audit export --space NAME --output NEW.jsonl`; check the
+finite interval/count and explicit drops/metadata/retention gaps. Confirm a
+second export to the same file is refused. Disable auditing; prove the service
+and probe are stopped and retained export still works. Verify boxes were not
+restarted. Measure idle/build overhead and drops; no SLA is asserted.
+
+The current Firecracker audit path refuses unsupported images. Firecracker
+qualification additionally requires the explicit image/kernel migration and
+native amd64/KVM gate; do not infer driver support from rule validation or a
+simulated backend. Audit logs/tools are omitted from ordinary space backup;
+an import must have auditing disabled.

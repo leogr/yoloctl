@@ -71,6 +71,9 @@ func Start(ctx context.Context, c *container.Client, u Unit) error {
 	// Keep a failed new forward addressable until its acknowledged stop;
 	// automatic failed-unit collection would discard that ownership first.
 	args = append(args, "--quiet")
+	if u.Name == vmwire.AuditUnitName {
+		args = append(args, "-p", "KillMode=control-group", "-p", "TimeoutStopSec=10", "-p", "UMask=0077")
+	}
 	if u.Restart {
 		args = append(args, "-p", "Restart=on-failure")
 	}

@@ -1,6 +1,7 @@
 package vmwire
 
 const (
+	AuditUnitName           = "yoloctl-audit"
 	LegacyPortUnitPrefix    = "yoloctl-port-"
 	OpenShellPortUnitPrefix = "yoloctl-openshell-port-"
 	GuestSystemPath         = "/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
