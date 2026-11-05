@@ -80,7 +80,7 @@ func (c *Console) Run(env []string, display string, argv ...string) (bool, error
 		env = os.Environ()
 	}
 	cmd.Env = forceEnv(env, "TERM=xterm-256color", "YOLOCTL_TUI=1")
-	ptmx, err := startPTYGeometry(cmd, c.LocalGeometry())
+	ptmx, _, err := startPTYGeometry(cmd, c.LocalGeometry())
 	if err != nil {
 		c.echo(fmt.Sprintf("\x1b[31m%v\x1b[0m\r\n", err))
 		return true, err
