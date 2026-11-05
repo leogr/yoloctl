@@ -33,6 +33,16 @@ unchanged. The real reader/model/PTY and palette regressions are in
 defines key 0 for text with no known key; the patch prevents IME text becoming
 a shortcut. The yoloctl encoder emits that text according to child negotiation.
 
+The reader patch waits when a read ends between the ESC and `\` of a 7-bit
+string terminator. Upstream's OSC and APC/PM/SOS parsers cancel such a reply
+and its DCS parser accepts it early, so the next read's `\` became a key (the
+TUI's OSC 4 probe, re-sent on every focus-in, made this frequent). The rule
+applies only before expiry, to ESC-introduced OSC, DCS, APC, PM and SOS events
+longer than two bytes whose last consumed byte is the buffer's final ESC. Lone
+Esc and Alt keys, the escape timeout, cancellation and bracketed paste keep
+their outcomes. [stray_backslash_test.go](../internal/tui/stray_backslash_test.go)
+splits each family at every byte through the real reader.
+
 Reproduce with `python3 scripts/vendor-ultraviolet.py --check`; omit `--check`
 to regenerate. Maintenance regeneration requires Go and `patch`, and may fetch
 the checksum-verified upstream module. Upstream tests are not vendored; yoloctl's

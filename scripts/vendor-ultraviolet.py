@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproduce the pinned host renderer and its color, mouse and text-input fixes."""
+"""Reproduce the pinned host renderer and its color, mouse, text-input and split-terminator fixes."""
 
 import argparse
 import json
@@ -48,7 +48,7 @@ def main():
             if DEST.exists():
                 shutil.rmtree(DEST)
             shutil.copytree(work, DEST)
-            print(f"Host renderer: {MODULE}@{VERSION} plus palette-identity, signed-mouse and text-input fixes")
+            print(f"Host renderer: {MODULE}@{VERSION} plus palette-identity, signed-mouse, text-input and split-terminator fixes")
 
 
 if __name__ == "__main__":

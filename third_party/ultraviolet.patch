@@ -150,3 +150,21 @@
  	mod, btn, _, isMotion := parseMouseButton(b)
  
  	// (1,1) is the upper left. We subtract 1 to normalize it to (0,0).
+--- a/terminal_reader.go
++++ b/terminal_reader.go
+@@ -286,6 +286,15 @@
+ 		esc := buf[0] == ansi.ESC
+ 		n, event := d.Decode(buf)
+ 
++		// A read can end between the ESC and "\" of a 7-bit string
++		// terminator. The OSC, APC/PM/SOS and DCS parsers then cancel or
++		// accept the sequence early and the "\" becomes a key. Wait for
++		// more input; expiry keeps the old outcome.
++		if esc && !expired && d.paste == nil && n > 2 && n == len(buf) && buf[n-1] == ansi.ESC &&
++			strings.IndexByte("]P_^X", buf[1]) >= 0 {
++			return total, events
++		}
++
+ 		// Handle bracketed-paste
+ 		if d.paste != nil { //nolint:nestif
+ 			if _, ok := event.(PasteEndEvent); !ok {

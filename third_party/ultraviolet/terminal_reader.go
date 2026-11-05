@@ -286,6 +286,15 @@ func (d *eventScanner) scanEvents(buf []byte, expired bool) (total int, events [
 		esc := buf[0] == ansi.ESC
 		n, event := d.Decode(buf)
 
+		// A read can end between the ESC and "\" of a 7-bit string
+		// terminator. The OSC, APC/PM/SOS and DCS parsers then cancel or
+		// accept the sequence early and the "\" becomes a key. Wait for
+		// more input; expiry keeps the old outcome.
+		if esc && !expired && d.paste == nil && n > 2 && n == len(buf) && buf[n-1] == ansi.ESC &&
+			strings.IndexByte("]P_^X", buf[1]) >= 0 {
+			return total, events
+		}
+
 		// Handle bracketed-paste
 		if d.paste != nil { //nolint:nestif
 			if _, ok := event.(PasteEndEvent); !ok {
