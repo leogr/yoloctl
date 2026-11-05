@@ -1,6 +1,6 @@
 # VT rendering and PTY child lifecycle
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Each terminal owns an isolated libghostty-vt WebAssembly instance under
 wazero. The embedded artifact pins Ghostty revision
@@ -38,10 +38,10 @@ complete host-terminal fidelity. [1](#source-1) [2](#source-2)
 [4](#source-4) [5](#source-5) [6](#source-6) [14](#source-14)
 
 [FACT] Bubble Tea uses the pinned local Ultraviolet copy with color, mouse,
-text-input and split-terminator fixes; a read ending at an ST's ESC waits
-instead of turning the next `\` into a key. The maintenance checker reproduces
-the patched sources. Measured geometry and pixel routing have separate bounded
-contracts. [14](#source-14) [17](#source-17) [18](#source-18) [21](#source-21)
+text-input and split-terminator fixes; a nonexpired read of 7-bit input
+ending at an ST's ESC waits instead of turning the next `\` into a key. The
+maintenance checker reproduces the patched sources. Measured geometry and
+pixel routing have separate bounded contracts. [14](#source-14) [17](#source-17) [18](#source-18) [21](#source-21)
 [22](#source-22)
 
 [FACT] Typed input and replies share an asynchronous PTY queue, bounded to
@@ -103,4 +103,4 @@ or native application parity. [12](#source-12)
 19. <a id="source-19"></a> [native.patch](../../internal/terminal/wasm/native.patch#L67-L86) — formatter style close before blank cells.
 20. <a id="source-20"></a> [terminal_test.go](../../internal/terminal/terminal_test.go#L96-L114) — `TestErasedCellsDoNotInheritStyle`.
 21. <a id="source-21"></a> [terminal_reader.go](../../third_party/ultraviolet/terminal_reader.go#L289-L296) — split string-terminator wait.
-22. <a id="source-22"></a> [stray_backslash_test.go](../../internal/tui/stray_backslash_test.go#L159) — `TestSTReplySplitAtEveryPoint`, every split of each ST family.
+22. <a id="source-22"></a> [stray_backslash_test.go](../../internal/tui/stray_backslash_test.go#L159) — `TestSTReplySplitAtEveryPoint`, every split of OSC, DCS and APC replies (PM/SOS share the guard).

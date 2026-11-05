@@ -41,7 +41,8 @@ applies only before expiry, to ESC-introduced OSC, DCS, APC, PM and SOS events
 longer than two bytes whose last consumed byte is the buffer's final ESC. Lone
 Esc and Alt keys, the escape timeout, cancellation and bracketed paste keep
 their outcomes. [stray_backslash_test.go](../internal/tui/stray_backslash_test.go)
-splits each family at every byte through the real reader.
+splits OSC, DCS and APC replies at every byte through the real reader; PM and
+SOS share the same guard.
 
 Reproduce with `python3 scripts/vendor-ultraviolet.py --check`; omit `--check`
 to regenerate. Maintenance regeneration requires Go and `patch`, and may fetch
