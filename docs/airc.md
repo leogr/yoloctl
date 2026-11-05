@@ -402,9 +402,12 @@ and would apply to every box using that account.
 only in interactive sessions: a non-interactive `claude -p` session gets no
 delivery and uses the wait recipe. Claude Code cuts a notification
 line near 500 characters and an event near 3000; the batch bound and `| ` line
-wrapping keep a batch inside both. If `subscribe` stops, for example on a
-disconnect or a pending batch, the monitor prints one `AIRC delivery stopped: …`
-line and does not restart. Use the wait recipe until the next session start.
+wrapping keep a batch inside both. If `subscribe` exits because its
+connection ended, the monitor prints one `AIRC delivery waiting: …` line and
+subscribes again with the same settings once the session is connected again;
+it never connects itself. Any other exit, such as a pending batch or another
+consumer in the same connection, prints one `AIRC delivery stopped: …` line;
+then use the wait recipe until the next session start.
 The installed `references/claude.md` gives the recipe and recovery.
 
 For other harnesses, `airc wait work --deliver --wake mentions` returns the
@@ -509,7 +512,7 @@ its static binaries, skill, Claude plugin and license. Nothing is compiled and
 no AIRC source is embedded in yoloctl. No Rust toolchain enters the host build
 or the image.
 
-The selected release (v0.1.0, source `11c90677`) includes rustls-webpki 0.103.16 and webpki-roots 1.0.10:
+The selected release (v0.1.1, source `6af217cf`) includes rustls-webpki 0.103.16 and webpki-roots 1.0.10:
 external TLS/HTTPS rejects compromised emSign intermediate keys even when a
 configured CA permits the chain. Unrelated private CAs remain supported.
 This updates AIRC's compiled verifier, independently of VM registry tools or

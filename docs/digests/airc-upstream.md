@@ -1,6 +1,6 @@
 # Reviewed AIRC client and server contracts
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream source verified at AIRC `b76ba355863cc3eb51900a313d7647d9190eedfa`.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream source verified at AIRC `b76ba355863cc3eb51900a313d7647d9190eedfa`; Claude plugin launcher at AIRC `6af217cfb6fe2fb05106ba592b75b9bf8225aa73`.
 
 [FACT] The manifest selects the packaged revision/checksum. Reviewed
 contracts do not establish installed support; probe actual binaries.
@@ -107,8 +107,10 @@ headers stay verbatim. [19](#source-19)
 than N bytes at char boundaries into `| ` continuations, so no split begins a
 record- or header-like line. The `airc-delivery` Claude Code plugin's launcher
 waits for `connected;`, pauses 2 s once while a consumer remains, runs
-`subscribe --max-bytes 2560 --wrap 480 -- -`, forwards HUP/INT/TERM and prints
-one stop line when it exits, never restarting. [16](#source-16) [17](#source-17)
+`subscribe --max-bytes 2560 --wrap 480 -- -` and forwards HUP/INT/TERM. When
+the connection ended (status not connected, or a new `epoch=`), it prints one
+waiting line and subscribes again with the same arguments; otherwise one stop
+line. It never connects. [16](#source-16) [17](#source-17)
 
 [FACT] Tests cover HTTP, forged metadata, replay and waiters. Opt-in real-binary
 Unix fixtures cover channel/ACL controls and join/topic/history/send/roster;
@@ -134,7 +136,7 @@ confinement, decoded images or native UI.
 14. <a id="source-14"></a> [AIRC delivery](https://github.com/leogr/airc/blob/b1e88a82d83554b94ff53a04cb2fa8563bf6e37b/src/agent_session/state.rs#L591-L796) — cursor/pending state; `delivery.rs:12–254` bounds/header; `mod.rs:326–445,713–968,1217–1342` lookup, sink and consumer/recovery.
 15. <a id="source-15"></a> [Codex adapter](https://github.com/leogr/airc/blob/b1e88a82d83554b94ff53a04cb2fa8563bf6e37b/src/bin/airc-codex.rs#L1-L220) — bounded queue adapter and receipt; tests in `tests/codex_adapter.rs`.
 16. <a id="source-16"></a> [AIRC wrap](https://github.com/leogr/airc/blob/7cb0c646101c7e64a61f6cfa11cfdc3e06f71c23/src/agent_session/delivery.rs#L174-L204) — `wrap`; `mod.rs:697,733–740,831–834` option and use.
-17. <a id="source-17"></a> [Claude plugin launcher](https://github.com/leogr/airc/blob/7cb0c646101c7e64a61f6cfa11cfdc3e06f71c23/integrations/claude-plugin/scripts/airc-delivery#L1-L41) — launcher; `tests/claude_plugin.rs:1–236` regressions.
+17. <a id="source-17"></a> [Claude plugin launcher](https://github.com/leogr/airc/blob/6af217cfb6fe2fb05106ba592b75b9bf8225aa73/integrations/claude-plugin/scripts/airc-delivery#L1-L103) — launcher and resubscribe loop; `tests/claude_plugin.rs:1–495` regressions.
 18. <a id="source-18"></a> [AIRC deletion](https://github.com/leogr/airc/blob/0c2c8bd4f46e21a682ddd02083408a54854b2c35/src/server/core.rs#L257-L402) — reload; `store.rs:64–150,446–455` transaction/purge; `http.rs:129–178`, `core.rs:2367–2387` upload epochs; `lib.rs:30` feature.
 19. <a id="source-19"></a> [Compact delivery](https://github.com/leogr/airc/blob/0c2c8bd4f46e21a682ddd02083408a54854b2c35/src/agent_session/delivery.rs#L79-L303) — saved settings/render/header; `state.rs:622–854` assembly; `mod.rs:313–331` consumer status.
 

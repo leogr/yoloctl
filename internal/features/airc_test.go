@@ -15,14 +15,14 @@ func TestAIRCReviewedSourceAndPackaging(t *testing.T) {
 	if !regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(manifest.Revision) {
 		t.Fatal("release must name its full source commit")
 	}
-	// The published v0.1.0 release (source 11c90677, which contains the
-	// reviewed TLS verifier); hashes match its SHA256SUMS asset.
+	// The published v0.1.1 release (source 6af217cf: the reviewed TLS verifier
+	// and the resubscribing Claude monitor); hashes match its SHA256SUMS asset.
 	want := map[string]aircAsset{
-		"amd64": {"https://github.com/leogr/airc/releases/download/v0.1.0/airc-linux-amd64.tar.gz", "5e9f08f090fb7d8324081a4322db51de0e09d37957f16d2d97e57b6bf6aa52ec"},
-		"arm64": {"https://github.com/leogr/airc/releases/download/v0.1.0/airc-linux-arm64.tar.gz", "3912c3c5456eaadd6b08c8605e5ce4640c93f883ae52285a8253fbe6f9bf5410"},
+		"amd64": {"https://github.com/leogr/airc/releases/download/v0.1.1/airc-linux-amd64.tar.gz", "e881593c1adc8298d15689a4aa434dcda4a4f536fb2e20fbf567a767981d68c4"},
+		"arm64": {"https://github.com/leogr/airc/releases/download/v0.1.1/airc-linux-arm64.tar.gz", "0dcf949182a83e15debc4e856335fd58021bb8fcb4f8e67591d48f42350527d0"},
 	}
-	if manifest.Release != "v0.1.0" || manifest.Revision != "11c90677be7976b6856358218c0865231a22d5a9" || !maps.Equal(manifest.Assets, want) {
-		t.Fatalf("AIRC must install the published v0.1.0 release assets: %+v", manifest)
+	if manifest.Release != "v0.1.1" || manifest.Revision != "6af217cfb6fe2fb05106ba592b75b9bf8225aa73" || !maps.Equal(manifest.Assets, want) {
+		t.Fatalf("AIRC must install the published v0.1.1 release assets: %+v", manifest)
 	}
 	for _, name := range []string{"yolo.chat.skill"} {
 		f, err := Lookup(name)
