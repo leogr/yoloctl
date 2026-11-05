@@ -119,8 +119,8 @@ prompting stops. Skips continue; failures stop without replay. [10](#source-10)
    [native preparation](../../Makefile#L48-L112), `native-embed`;
    [helper inputs](../../helperinputs.go#L27-L33), production closure.
 6. <a id="source-6"></a> [Toolchain setup](../../scripts/ci-openshell-toolchain.sh#L1);
-   [Workflow](../../.github/workflows/release.yml#L1-L207), OpenShell cache in `install-smoke`;
-   [CI](../../.github/workflows/ci.yml#L37-L51), OpenShell cache in `build`;
+   [Workflow](../../.github/workflows/release.yml#L1-L212), OpenShell cache in `install-smoke`;
+   [CI](../../.github/workflows/ci.yml#L38-L52), OpenShell cache in `build`;
    [publication](../../scripts/publish-release.py#L1-L199), `identity`, `verify_artifact`, `main`;
    [archive checks](../../scripts/check-dist.go#L1-L172), `run`, `extract`.
 7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L256), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go.
