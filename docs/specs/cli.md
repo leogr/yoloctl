@@ -12,6 +12,9 @@ Existing longer names remain usable. New macOS Lima spaces use
 `~/.config/yoloctl/lima`; each records its home in the bootstrap, while absent
 fields preserve the legacy location. Explicit home overrides remain supported;
 Linux storage selection is unchanged. No automatic migration occurs.
+Lima placement also refuses overlaps with existing spaces' host grants,
+naming the conflicting space and path; creating a space never silently stops
+or remounts another space.
 [20](#source-20)
 
 [FACT] Box names use 2–63 ASCII characters: an alphanumeric first, then

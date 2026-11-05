@@ -59,6 +59,11 @@ func (c *Client) CreateAccountDisk(ctx context.Context, id string, size uint64) 
 	if err != nil {
 		return err
 	}
+	// Recheck at the allocation seam, including recovery of a published
+	// bootstrap whose data disk was never created.
+	if err := spaceconfig.ValidateLimaPlacement(home); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(home, 0700); err != nil {
 		return err
 	}

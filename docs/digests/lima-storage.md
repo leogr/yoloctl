@@ -1,6 +1,6 @@
 # Lima storage and space names
 
-Verification: `3736b1cf9ac349827782dcbe01070d3e5d922a15` and accompanying changes;
+Verification: `e22bf914078ecfbf61fd846fbe812c434f3154a0` and accompanying changes;
 re-read cited sources when changing behavior.
 
 [FACT] New spaces, including imports, use 1–16 ASCII characters: an
@@ -33,10 +33,19 @@ Missing recorded storage never triggers a fallback to a different home.
 
 [FACT] Host mount/workdir checks exclude the legacy, new and recorded Lima
 homes as well as the existing config/cache/native infrastructure exclusions.
-This prevents a new home outside the config root from being exposed through
-a host grant. New-space disk sizing measures the destination filesystem;
-existing spaces measure their recorded/legacy location.
-[7](#source-7) [8](#source-8)
+Those checks exclude new grant requests; placement also checks previously
+saved grants of every existing space before create/import publication and
+allocation. Ancestor, exact and descendant overlaps refuse, including read-only
+grants and stopped spaces. Existing ancestors/symlinks are resolved without
+creating missing storage; unreadable inventories refuse. Valid historical
+schema-2 records contribute grants to this exclusion inventory only; ordinary
+schema-2 boot/declaration support remains removed. The error names the
+space and grant and suggests a non-overlapping installation home. No other
+space is stopped or remounted. Boot preflight and the disk-allocation seam
+repeat the check, including pending-allocation recovery. New-space disk sizing
+measures the destination filesystem; existing spaces measure their
+recorded/legacy location.
+[7](#source-7) [8](#source-8) [20](#source-20) [21](#source-21)
 
 [FACT] The existing boot preflight remains path-dependent: resolve an existing
 home's symlinks and require
@@ -83,3 +92,6 @@ preflight. These tests do not establish native macOS VM lifecycle parity.
 17. <a id="source-17"></a> [Disk blankness](../../internal/lima/disk_blank.go#L23).
 18. <a id="source-18"></a> [Adapter](../../internal/vm/lima.go#L21).
 19. <a id="source-19"></a> [Socket regressions](../../internal/lima/socket_paths_test.go#L1).
+
+20. <a id="source-20"></a> [Placement exclusion](../../internal/spaceconfig/lima_placement.go#L18) — existing grants and canonical path intersection.
+21. <a id="source-21"></a> [Placement regressions](../../cmd/yoloctl/lima_placement_grant_test.go#L1) — allocation, admission and pending recovery refusals, unrelated allocation control.
