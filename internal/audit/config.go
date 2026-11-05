@@ -1,6 +1,7 @@
 package audit
 
 import (
+	_ "embed"
 	"encoding/json"
 	"path/filepath"
 
@@ -9,15 +10,11 @@ import (
 
 const ServiceName = vmwire.AuditUnitName
 
-// S1's deliberately narrow test rule is replaced by the yolo ruleset in S2.
-// No output template requests argv, environment, buffers or Falco's raw output.
-const Rules = `- rule: Yolo audit test
-  desc: Controlled audit pipeline acceptance event
-  condition: evt.type = execve and proc.name = yolo-audit-test
-  output: "Audit test executable=%proc.exepath result=%evt.res"
-  priority: NOTICE
-  tags: [yoloctl]
-`
+// Rules and all output templates are pinned with this build. They never ask
+// for argv, environment, aggregate labels or captured buffers.
+//
+//go:embed rules.yaml
+var Rules string
 
 func RulesDigest() string { return Digest([]byte(Rules)) }
 
@@ -32,13 +29,22 @@ func Configuration(root, tools string) ([]byte, error) {
 		"stdout_output":  map[string]bool{"enabled": true},
 		"file_output":    map[string]bool{"enabled": false},
 		"syslog_output":  map[string]bool{"enabled": false},
-		"program_output": map[string]bool{"enabled": false},
+		"program_output": map[string]any{"enabled": false, "program": ""},
 		"http_output":    map[string]bool{"enabled": false},
-		"grpc_output":    map[string]bool{"enabled": false},
 		"webserver":      map[string]bool{"enabled": false},
-		"grpc":           map[string]bool{"enabled": false},
 		"log_stderr":     true, "log_syslog": false, "log_level": "warning",
-		"watch_config_files": false, "load_plugins": []string{},
+		"watch_config_files": false, "load_plugins": []string{"container"},
+		"plugins": []any{map[string]any{
+			"name": "container", "library_path": filepath.Join(tools, "plugins", "libcontainer.so"),
+			"init_config": map[string]any{
+				"label_max_len": 1024, "with_size": false, "hooks": []string{"create", "start"}, "engine_timeout": 2,
+				"engines": map[string]any{
+					"containerd": map[string]any{"enabled": true, "sockets": []string{"/run/containerd/containerd.sock"}},
+					"cri":        map[string]any{"enabled": false}, "docker": map[string]any{"enabled": false}, "podman": map[string]any{"enabled": false},
+					"lxc": map[string]any{"enabled": false}, "libvirt_lxc": map[string]any{"enabled": false}, "bpm": map[string]any{"enabled": false},
+				},
+			},
+		}},
 		"priority": "debug",
 		"metrics":  map[string]any{"enabled": true, "interval": "15s", "output_rule": true, "output_file": "", "rules_counters_enabled": false, "resource_utilization_enabled": false, "state_counters_enabled": false, "kernel_event_counters_enabled": true},
 	}, "", "  ")

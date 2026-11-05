@@ -10,6 +10,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/leogr/yoloctl/internal/layout"
 )
 
 const (
@@ -150,16 +152,42 @@ func ParseEvent(raw []byte) (Event, error) {
 			}
 			return ""
 		}
+		if s == "<NA>" {
+			return ""
+		}
 		return Clean(s)
 	}
 	e.Time, e.Rule, e.Severity = when.UTC(), Clean(input.Rule), Clean(input.Priority)
 	e.Executable, e.Container = get("proc.exepath"), get("container.id")
-	e.Box, e.Space, e.Account, e.Agent = get("yolo.box"), get("yolo.space"), get("yolo.account"), get("yolo.agent")
-	e.RuntimeMode, e.NetworkUnconfined = get("yolo.runtime_mode"), get("yolo.network_unconfined")
-	e.MetadataAvailable = get("yolo.metadata_available") == "true"
+	// A present plugin availability field is authoritative, even when false;
+	// never replace a stale/missing S3 snapshot with older container label data.
+	if _, plugin := input.Fields["yolo.metadata_available"]; plugin {
+		e.Box, e.Space, e.Account, e.Agent = get("yolo.box"), get("yolo.space"), get("yolo.account"), get("yolo.agent")
+		e.RuntimeMode, e.NetworkUnconfined = get("yolo.runtime_mode"), get("yolo.network_unconfined")
+		e.MetadataAvailable = get("yolo.metadata_available") == "true"
+	} else {
+		label := func(key string) string { return get("container.label[" + key + "]") }
+		e.Box, e.Space, e.Agent = label("yoloctl.agentbox"), label("yoloctl.space"), label("yoloctl.agent")
+		e.Account, e.RuntimeMode, e.NetworkUnconfined = label("yoloctl.audit.account"), label("yoloctl.audit.runtime_mode"), label("yoloctl.audit.network_unconfined")
+		e.MetadataAvailable = label("yoloctl.kind") == "agentbox" && label("yoloctl.audit.schema") == "1"
+	}
+	e.MetadataAvailable = e.MetadataAvailable && e.Container != "" && e.Container != "host" &&
+		layout.ValidateName("agentbox", e.Box) == nil && layout.ValidateName("space", e.Space) == nil &&
+		layout.ValidateName("account", e.Account) == nil && layout.ValidateName("agent", e.Agent) == nil &&
+		(e.RuntimeMode == "confined" || e.RuntimeMode == "privileged") &&
+		(e.NetworkUnconfined == "true" || e.NetworkUnconfined == "false")
 	if !e.MetadataAvailable {
 		e.Box, e.Space, e.Account, e.Agent, e.RuntimeMode, e.NetworkUnconfined = "", "", "", "", "", ""
 	}
-	e.Path, e.Endpoint, e.Result = get("fd.name"), get("fd.rip"), get("evt.res")
+	e.Path, e.Endpoint, e.Result = get("fs.path.name"), get("fd.rip"), get("evt.res")
+	if e.Path == "" {
+		e.Path = get("fs.path.target")
+	}
+	if e.Path == "" {
+		e.Path = get("fs.path.source")
+	}
+	if e.Path == "" {
+		e.Path = get("fd.name")
+	}
 	return e, nil
 }
