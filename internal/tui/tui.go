@@ -15,6 +15,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image/color"
 	"os"
@@ -31,6 +32,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
 	"github.com/leogr/yoloctl/internal/tui/palette"
@@ -1172,7 +1174,12 @@ func (m *model) reportInputErrors() {
 
 // Managed admission/stream failures are command results, not status chips.
 // Leave them pending on their session while the palette is busy, and don't
-// steal input focus from another live tab for a background failure.
+// steal input focus from another live tab for a background failure. One
+// exception: a stream that ended without an exit status
+// (session.ErrSessionClosed, as when the box under an attached view stops) is
+// reported with its exact text in the status line, so the palette does not
+// open over the ended view. That error is not proof of a normal stop; the
+// view is still handled as failed.
 func (m *model) reportViewErrors() {
 	if !m.standalone && m.console.Busy() {
 		return
@@ -1185,7 +1192,7 @@ func (m *model) reportViewErrors() {
 		}
 		if err := p.Session.TakeViewError(); err != nil {
 			message := p.Title() + ": " + err.Error()
-			if m.standalone {
+			if m.standalone || errors.Is(err, session.ErrSessionClosed) {
 				m.status = message
 				return
 			}

@@ -1,6 +1,6 @@
 # TUI routing, keyboard, mouse, and paste
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `d4da1dc09daf8766074409600c1433534913c43b` and accompanying changes (holder-closed status line); other facts at `1d265df3`; re-read cited sources when changing behavior.
 
 [FACT] `opensLiveSurface` routes box attach, exec/edit, space shells, catalog
 editors and following logs to tabs; lifecycle commands use attachment flags.
@@ -42,8 +42,11 @@ command group. Leaving the overlay does not stop that command. [4](#source-4)
 
 [FACT] Private attachment failures appear as wrapped palette results. A busy
 palette command delays their display; background failures mark their tabs
-without stealing focus. Standalone attachment retains its error notice and
-returned diagnostic. [6](#source-6) [17](#source-17)
+without stealing focus. A stream that ended without an exit status
+(`session.ErrSessionClosed`, as when the box under a view stops) is instead
+shown with its exact text in the status line, so the palette does not open over
+the ended view; the view is still handled as failed. Standalone attachment
+retains its error notice and returned diagnostic. [6](#source-6) [17](#source-17)
 
 [FACT] Host Bubble Tea keyboard enhancements request event types, alternate
 keys, all keys and associated text. The core owns child Kitty negotiation and
@@ -120,7 +123,7 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 14. <a id="source-14"></a> [Display snapshots, history and focus](terminal-display.md) — focus state, mode gating and input-delivery regressions.
 15. <a id="source-15"></a> [Native selection and explicit copy](terminal-selection.md) — local selection and conditional copy-key ownership.
 16. <a id="source-16"></a> [box-attach.sh](../../scripts/smoke/box-attach.sh#L15) — scripted Enter bytes in `pty_run` and shared detach/reattach input fixtures.
-17. <a id="source-17"></a> [view_errors_test.go](../../internal/tui/view_errors_test.go#L93) — inherited-channel rejection, palette wrapping/defer, background focus and standalone diagnostics.
+17. <a id="source-17"></a> [view_errors_test.go](../../internal/tui/view_errors_test.go#L93) — inherited-channel rejection, palette wrapping/defer, background focus and standalone diagnostics; holder_closed_test.go covers the status-line report and a real failure still in the palette.
 18. <a id="source-18"></a> [Compatibility evidence](terminal-compatibility.md) — legacy input, committed text, focus/cursor coverage and limits.
 19. <a id="source-19"></a> [Host integrations](host-integrations.md) — explicit PNG paste ownership and live browser approval.
 20. <a id="source-20"></a> [palette_paste_test.go](../../internal/tui/palette_paste_test.go#L13) — host-reader paste/focus and cursor alignment regression.

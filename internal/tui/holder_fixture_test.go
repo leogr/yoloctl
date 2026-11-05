@@ -138,6 +138,14 @@ func (fs *fakeSandbox) lastSize() [2]int {
 // attach socket and sandbox.
 func startManagedHolder(t *testing.T) (string, *fakeSandbox) {
 	t.Helper()
+	sock, fs, _ := startStoppableHolder(t)
+	return sock, fs
+}
+
+// startStoppableHolder is startManagedHolder plus stop, which ends the holder
+// without an exit status, as a box stop does.
+func startStoppableHolder(t *testing.T) (string, *fakeSandbox, func()) {
+	t.Helper()
 	// Short socket paths (macOS's 104-byte limit), as the session tests do.
 	dir, err := os.MkdirTemp("", "yp")
 	if err != nil {
@@ -153,14 +161,15 @@ func startManagedHolder(t *testing.T) (string, *fakeSandbox) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { defer close(done); _, _ = session.RunHolder(ctx, opts) }()
-	t.Cleanup(func() {
+	stop := func() {
 		cancel()
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
 			t.Error("holder did not stop")
 		}
-	})
+	}
+	t.Cleanup(stop)
 	select {
 	case <-fs.started:
 	case <-time.After(5 * time.Second):
@@ -169,7 +178,7 @@ func startManagedHolder(t *testing.T) (string, *fakeSandbox) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		if _, err := os.Stat(opts.AttachSocket); err == nil {
-			return opts.AttachSocket, fs
+			return opts.AttachSocket, fs, stop
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("the holder never served its attach socket")
@@ -189,6 +198,16 @@ func TestManagedRelayChild(t *testing.T) {
 	local, err := termio.InheritedView()
 	if err != nil || local == nil {
 		os.Exit(80)
+	}
+	if reason := os.Getenv("YOLOCTL_TEST_RELAY_REFUSE"); reason != "" {
+		// A real view failure: one session error frame ('!', length, reason),
+		// then the stream stays open until the frontend gives up on it.
+		frame := append([]byte{'!', byte(len(reason) >> 8), byte(len(reason))}, reason...)
+		if _, err := local.Write(frame); err != nil {
+			os.Exit(83)
+		}
+		time.Sleep(30 * time.Second)
+		os.Exit(0)
 	}
 	remote, err := net.Dial("unix", sock)
 	if err != nil {
