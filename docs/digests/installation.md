@@ -116,7 +116,7 @@ show only recovery guidance. [9](#source-9)
    [CI](../../.github/workflows/ci.yml#L38-L52), OpenShell cache in `build`;
    [publication](../../scripts/publish-release.py#L1-L199), `identity`, `verify_artifact`, `main`;
    [archive checks](../../scripts/check-dist.go#L1-L172), `run`, `extract`.
-7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L273), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go;
+7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L278), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go;
    [output](../../cmd/yoloctl/install_output.go#L1-L133), `installOut`, `installColor`, `installCommand`.
 8. <a id="source-8"></a> [Publication engine](../../internal/installer/engine.go#L1-L476), `Inspect`, `Publish`, `publishDirectory`
    (platform `renameNoReplace`/`noReplaceUnsupported` in rename_linux.go and rename_darwin.go);

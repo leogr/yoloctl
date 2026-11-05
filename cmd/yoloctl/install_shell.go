@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -239,7 +240,10 @@ type shellRequest struct {
 // installShellSteps offers the PATH and completion blocks after an install.
 // The install itself already succeeded: a failure here is reported with the
 // block to add by hand, and returned so the exit status says so.
-func installShellSteps(o installOut, bin, link string, req shellRequest) error {
+//
+// An interrupted command, or an answer that cannot be read, stops at once:
+// nothing after it is asked or written.
+func installShellSteps(ctx context.Context, o installOut, bin, link string, req shellRequest) error {
 	home, _ := os.UserHomeDir()
 	shell := os.Getenv("SHELL")
 	setup, known := installShellSetup(shell, home, os.Getenv)
@@ -249,11 +253,19 @@ func installShellSteps(o installOut, bin, link string, req shellRequest) error {
 		}
 		return p
 	}
+	var stop error
 	ask := func(question string) bool {
-		if !req.interactive || !req.apply {
+		if stop != nil || !req.interactive || !req.apply {
+			return false
+		}
+		if stop = ctx.Err(); stop != nil {
 			return false
 		}
 		ok, err := confirmInstall(newInstallOut(req.prompt).paint(roleDim, question), req.in, req.prompt)
+		if err == nil {
+			err = ctx.Err()
+		}
+		stop = err
 		return err == nil && ok
 	}
 	failed := false
@@ -275,6 +287,9 @@ func installShellSteps(o installOut, bin, link string, req shellRequest) error {
 		failed = failed || requested
 	}
 	apply := func(path, purpose, body, done string) {
+		if stop = ctx.Err(); stop != nil {
+			return
+		}
 		err := addBlock(path, purpose, body)
 		var manual *manualBlockError
 		var commit *atomicfile.CommitError
@@ -318,12 +333,16 @@ func installShellSteps(o installOut, bin, link string, req shellRequest) error {
 				o.line(o.paint(roleDim, "Would add "+tilde(bin)+" to PATH in "+tilde(setup.RC)+"."))
 			case req.addPath || ask("Add "+tilde(bin)+" to PATH in "+tilde(setup.RC)+"? [y/N]: "):
 				apply(setup.RC, "PATH", body, "Added "+tilde(bin)+" to PATH in "+tilde(setup.RC)+" (open a new terminal)")
+			case stop != nil:
 			default:
 				o.line()
 				o.warn(text)
-				o.line("    ", o.paint(roleBold, command))
+				o.line("    ", o.paint(roleBold, manualPathCommand(setup, display, tilde(setup.RC))))
 			}
 		}
+	}
+	if stop != nil {
+		return stop
 	}
 
 	if !known {
@@ -351,7 +370,27 @@ func installShellSteps(o installOut, bin, link string, req shellRequest) error {
 			o.dim(2, "It loads where compinit already ran (most setups, e.g. oh-my-zsh). Otherwise add `autoload -Uz compinit && compinit` above the yoloctl block.")
 		}
 	}
+	if stop != nil {
+		return stop
+	}
 	return setupResult(failed)
+}
+
+// manualPathCommand is the one line that adds display to PATH in the file
+// setup resolved (ZDOTDIR included), for a user who declined or has no
+// terminal; shown is that file as displayed (~/ under home).
+func manualPathCommand(setup shellSetup, display, shown string) string {
+	if setup.Shell == "fish" {
+		return fmt.Sprintf("fish_add_path \"%s\"", display)
+	}
+	target := shown
+	for _, r := range strings.TrimPrefix(shown, "~/") {
+		if !plainPathRune(r) {
+			target = shellWord(setup.RC)
+			break
+		}
+	}
+	return fmt.Sprintf("echo '%s' >> %s", pathBlockBody(setup.Shell, display), target)
 }
 
 func setupResult(failed bool) error {

@@ -1,6 +1,6 @@
 # VM adapters and the Firecracker guest
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); other facts at `1d265df3`; re-read cited sources when changing behavior.
 
 [FACT] `internal/vmapi.Driver` separates VM lifecycle, owned disks, shell/copy
 transport, process termination proof and the fixed controller service from

@@ -143,7 +143,9 @@ func newInstallCmd() *cobra.Command {
 		if printOnly {
 			printSpaceAdvice(o, installSpaceAdvice(cmd.Context(), manifest.Bundle), link, false)
 			// Nothing is written: requested shell setup is only described.
-			_ = installShellSteps(o, bin, link, shell)
+			if err := installShellSteps(cmd.Context(), o, bin, link, shell); cmd.Context().Err() != nil {
+				return err
+			}
 			o.line()
 			if dry {
 				o.line(o.paint(roleDim, "Dry run: nothing was installed or changed."))
@@ -185,8 +187,11 @@ func newInstallCmd() *cobra.Command {
 			o.line("  ", o.paint(roleDim, "Install ran no space command."))
 		}
 		printSpaceAdvice(o, advice, result.Link, true)
+		if err := cmd.Context().Err(); err != nil {
+			return err // interrupted: no shell setup after an interrupted inventory
+		}
 		shell.apply = true
-		return installShellSteps(o, bin, result.Link, shell)
+		return installShellSteps(cmd.Context(), o, bin, result.Link, shell)
 	}}
 	cmd.Long = "Install this verified release bundle as <bin-dir>/yoloctl (default ~/.local/bin).\n" +
 		"Install never runs a space command; it prints what each space needs.\n\n" +

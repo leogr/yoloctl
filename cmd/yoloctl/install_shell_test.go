@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -142,10 +144,72 @@ func shellFixture(t *testing.T) (home, bin, link string) {
 
 func runShellSteps(t *testing.T, bin, link string, req shellRequest, answers string) (string, error) {
 	t.Helper()
+	return runShellStepsFrom(t.Context(), bin, link, req, strings.NewReader(answers))
+}
+
+func runShellStepsFrom(ctx context.Context, bin, link string, req shellRequest, in io.Reader) (string, error) {
 	var out, prompts bytes.Buffer
-	req.in, req.prompt = strings.NewReader(answers), &prompts
-	err := installShellSteps(installOut{w: &out}, bin, link, req)
+	req.in, req.prompt = in, &prompts
+	err := installShellSteps(ctx, installOut{w: &out}, bin, link, req)
 	return out.String() + prompts.String(), err
+}
+
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) { return 0, errors.New("terminal gone") }
+
+// An unreadable answer or an interrupted command stops shell setup: the
+// error is returned and nothing later is asked or written, even with a
+// flag that would have written without asking.
+func TestInstallShellStepsStopOnInputErrorOrInterrupt(t *testing.T) {
+	home, bin, link := shellFixture(t)
+	rc := filepath.Join(home, ".bashrc")
+	_, err := runShellStepsFrom(t.Context(), bin, link, shellRequest{apply: true, interactive: true, completion: true}, failingReader{})
+	if _, statErr := os.Stat(rc); err == nil || !strings.Contains(err.Error(), "terminal gone") || !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("input error: %v, rc %v", err, statErr)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err = runShellStepsFrom(ctx, bin, link, shellRequest{apply: true, addPath: true, completion: true}, strings.NewReader(""))
+	if _, statErr := os.Stat(rc); !errors.Is(err, context.Canceled) || !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("interrupted: %v, rc %v", err, statErr)
+	}
+}
+
+// Declining prints the line for the file setup resolved: ZDOTDIR's .zshrc,
+// not ~/.zshrc.
+func TestInstallShellStepsManualLineUsesResolvedFile(t *testing.T) {
+	home, bin, link := shellFixture(t)
+	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("ZDOTDIR", filepath.Join(home, ".config", "zsh"))
+	out, err := runShellSteps(t, bin, link, shellRequest{apply: true}, "")
+	if err != nil || !strings.Contains(out, `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.config/zsh/.zshrc`) || strings.Contains(out, ">> ~/.zshrc") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if got := manualPathCommand(shellSetup{Shell: "bash", RC: "/odd dir/.bashrc"}, "/x", "/odd dir/.bashrc"); got != `echo 'export PATH="/x:$PATH"' >> '/odd dir/.bashrc'` {
+		t.Fatal(got)
+	}
+	if got := manualPathCommand(shellSetup{Shell: "fish"}, "$HOME/.local/bin", ""); got != `fish_add_path "$HOME/.local/bin"` {
+		t.Fatal(got)
+	}
+}
+
+// The exact zsh and fish blocks. They are sourced below only where those
+// shells are installed.
+func TestInstallShellBlockBodies(t *testing.T) {
+	link := "/home/u/.local/bin/yoloctl"
+	for _, c := range []struct{ got, want string }{
+		{pathBlockBody("zsh", "$HOME/.local/bin"), `export PATH="$HOME/.local/bin:$PATH"`},
+		{pathBlockBody("fish", "$HOME/.local/bin"), `fish_add_path -g "$HOME/.local/bin"`},
+		{completionBlockBody("zsh", link), `(( $+functions[compdef] )) && source <(/home/u/.local/bin/yoloctl completion zsh)`},
+		{completionBlockBody("bash", link), `[ -x /home/u/.local/bin/yoloctl ] && source <(/home/u/.local/bin/yoloctl completion bash)`},
+		{completionBlockBody("fish", link), `/home/u/.local/bin/yoloctl completion fish | source`},
+		{completionBlockBody("zsh", "/it's/yoloctl"), `(( $+functions[compdef] )) && source <('/it'\''s/yoloctl' completion zsh)`},
+	} {
+		if c.got != c.want {
+			t.Errorf("got  %s\nwant %s", c.got, c.want)
+		}
+	}
 }
 
 func TestInstallShellStepsAskWriteOnceAndPrintOnly(t *testing.T) {
@@ -225,9 +289,55 @@ func TestInstallShellBlocksSourceInBash(t *testing.T) {
 	if err != nil || !strings.HasPrefix(string(raw), bin+":") || !strings.Contains(string(raw), "complete -W 'fake' yoloctl") {
 		t.Fatalf("%v\n%s", err, raw)
 	}
+}
+
+// zsh: PATH always; completion registers only after compinit (silent
+// before it). fish: PATH and the completions file. Skipped where the shell is
+// not installed: string tests above are then the only check.
+func TestInstallShellBlocksSourceInZshAndFish(t *testing.T) {
 	for _, shell := range []string{"zsh", "fish"} {
-		if _, err := exec.LookPath(shell); err != nil {
-			t.Logf("%s unavailable: its blocks were not sourced", shell)
-		}
+		t.Run(shell, func(t *testing.T) {
+			exe, err := exec.LookPath(shell)
+			if err != nil {
+				t.Skipf("%s unavailable: its blocks were not sourced", shell)
+			}
+			home, bin, link := shellFixture(t)
+			script := map[string]string{
+				"zsh":  "#!/bin/sh\necho 'compdef _files yoloctl'\n",
+				"fish": "#!/bin/sh\necho 'complete -c yoloctl -a fake'\n",
+			}[shell]
+			if err := os.WriteFile(link, []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			setup, _ := installShellSetup("/bin/"+shell, home, func(string) string { return "" })
+			if err := addBlock(setup.RC, "PATH", pathBlockBody(shell, "$HOME/.local/bin")); err != nil {
+				t.Fatal(err)
+			}
+			if err := addBlock(setup.Completion, "completion", completionBlockBody(shell, link)); err != nil {
+				t.Fatal(err)
+			}
+			env := []string{"HOME=" + home, "PATH=/usr/bin:/bin", "XDG_CONFIG_HOME=" + filepath.Join(home, ".config")}
+			run := func(args ...string) string {
+				cmd := exec.Command(exe, args...)
+				cmd.Env = env
+				raw, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("%v\n%s", err, raw)
+				}
+				return string(raw)
+			}
+			if shell == "zsh" {
+				before := run("-f", "-c", `source "$HOME/.zshrc"; print -r -- "$PATH"; (( $+_comps[yoloctl] )) && print registered || print silent`)
+				after := run("-f", "-c", `autoload -Uz compinit && compinit -u -d "$HOME/.zcompdump"; source "$HOME/.zshrc"; (( $+_comps[yoloctl] )) && print registered || print silent`)
+				if !strings.HasPrefix(before, bin+":") || !strings.Contains(before, "silent") || !strings.Contains(after, "registered") {
+					t.Fatalf("before compinit:\n%s\nafter:\n%s", before, after)
+				}
+				return
+			}
+			out := run("-c", `source "$XDG_CONFIG_HOME/fish/config.fish"; echo $PATH[1]; source "$XDG_CONFIG_HOME/fish/completions/yoloctl.fish"; complete -c yoloctl`)
+			if !strings.Contains(out, bin) || !strings.Contains(out, "fake") {
+				t.Fatal(out)
+			}
+		})
 	}
 }

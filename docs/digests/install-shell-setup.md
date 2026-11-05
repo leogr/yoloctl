@@ -15,11 +15,15 @@ and `atomicfile.Write` keep the mode (not ACLs/xattrs). Other shells get the
 [FACT] zsh's completion line runs only when `compdef` exists, so it is silent
 until `compinit` has run; install says so after adding it. Removal is manual:
 delete the lines from `# >>> yoloctl` to `# <<< yoloctl` (install help and
-`docs/install.md`). Bash blocks are tested by sourcing them in a clean bash;
-zsh and fish blocks are string-tested only where those shells are absent.
+`docs/install.md`). A declined or non-terminal PATH step prints the line for
+the resolved file (`ZDOTDIR` included). An unreadable answer or an interrupted
+command stops setup with that error; nothing later is asked or written.
+Every block has an exact string test; bash blocks are sourced in a clean bash,
+zsh (before and after `compinit`) and fish blocks only where those shells are
+installed (the author's environment had neither).
 [1](#source-1) [2](#source-2)
 
 ## Sources
 
-1. <a id="source-1"></a> [Shell setup](../../cmd/yoloctl/install_shell.go#L1-L377), `installShellSetup`, `blockState`, `readRC`, `addBlock`, `installShellSteps`; flags and help in install.go `newInstallCmd`.
-2. <a id="source-2"></a> [Tests](../../cmd/yoloctl/install_shell_test.go#L1), `TestAddBlockAppendsAtomicallyAndRefusesUnsafeFiles`, `TestInstallShellStepsAskWriteOnceAndPrintOnly`, `TestInstallShellBlocksSourceInBash`.
+1. <a id="source-1"></a> [Shell setup](../../cmd/yoloctl/install_shell.go#L1-L416), `installShellSetup`, `blockState`, `readRC`, `addBlock`, `installShellSteps`, `manualPathCommand`; flags and help in install.go `newInstallCmd`.
+2. <a id="source-2"></a> [Tests](../../cmd/yoloctl/install_shell_test.go#L1-L343), `TestAddBlockAppendsAtomicallyAndRefusesUnsafeFiles`, `TestInstallShellStepsAskWriteOnceAndPrintOnly`, `TestInstallShellBlocksSourceInBash`, `TestInstallShellBlocksSourceInZshAndFish`, `TestInstallShellStepsStopOnInputErrorOrInterrupt`.

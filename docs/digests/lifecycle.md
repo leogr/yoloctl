@@ -1,6 +1,6 @@
 # Reconcile, native locks and space lifecycle
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); other facts at `1d265df3`; re-read cited sources when changing behavior.
 
 [FACT] Explicit reconcile selects create, recreate, restart, then live port changes. Account,
 agent, mounts/workdir access, image, literal env and network mode can require
