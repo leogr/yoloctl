@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `9101409dbbb5f2febbe3bdf2f581dff7775ff43b` and accompanying changes.
+Verification: `d0332e38b0707ff2e1c3ce84695ecb6bf4427125` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
@@ -50,8 +50,10 @@ retention gaps are visible. This is best-effort detection, without remediation
 or a complete, VM-root-tamper-proof trail. [12](#source-12) [13](#source-13)
 
 [FACT] Event segments rotate at 64 MiB total. Reads exclude events older than
-seven days; minutely collector/disabled-service maintenance expires them while
-VM infrastructure runs. Viewers own independent bounded reads and cannot block
+seven days; minutely collector/controller maintenance expires them while
+VM infrastructure runs. Controller maintenance requires a confirmed inactive or
+failed collector, regardless of desired enablement, and retains native locking
+and receipt holds. Viewers own independent bounded reads and cannot block
 the collector. Export fixes an upper cursor/time, applies interval/box filters,
 reports gaps/counts, and publishes privacy-filtered JSONL only after a complete
 controller result. The private host file is fsynced and linked without replacing

@@ -379,51 +379,56 @@ func startAuditRetention(parent context.Context, server *controller.Server) func
 				return
 			case <-ticker.C:
 			}
-			_, err := server.RunMaintenance(ctx, func(ctx context.Context) error {
-				c := spaceenv.Current()
-				release, err := auditAcquire(ctx, c.Space, true)
-				if err != nil {
-					return err
-				}
-				defer release()
-				if err := (controller.Receipts{Dir: filepath.Join(c.DiskMount, ".controller", "receipts")}).CheckAuditReconcile(c.Space, c.DiskID); err != nil {
-					return err
-				}
-				cfg, err := spaceconfig.Load(c.Space)
-				if err != nil {
-					return err
-				}
-				if cfg.Audit == nil || cfg.Audit.Enabled {
-					return nil
-				}
-				state, err := auditServiceState(ctx, container.New(c.Space), audit.ServiceName)
-				if err != nil {
-					return err
-				}
-				if state != "inactive" && state != "failed" && state != "unknown" {
-					return nil
-				}
-				root, err := layout.AuditDir()
-				if err != nil {
-					return err
-				}
-				logs := filepath.Join(root, "logs")
-				if _, err := os.Lstat(logs); errors.Is(err, os.ErrNotExist) {
-					return nil
-				} else if err != nil {
-					return err
-				}
-				writer, err := audit.OpenWriter(audit.Store{Root: logs})
-				if err != nil {
-					return err
-				}
-				defer func() { _ = writer.Close() }()
-				return writer.Prune(ctx)
-			})
+			_, err := server.RunMaintenance(ctx, pruneInactiveAudit)
 			if err != nil && ctx.Err() == nil {
 				_, _ = fmt.Fprintln(os.Stderr, "audit retention deferred")
 			}
 		}
 	}()
 	return func() { cancel(); <-done }
+}
+
+// pruneInactiveAudit owns the writer only after the native lock, receipt hold
+// check and service observation exclude an active collector. Desired enablement
+// is independent: a failed collector must still expire its retained events.
+func pruneInactiveAudit(ctx context.Context) error {
+	c := spaceenv.Current()
+	release, err := auditAcquire(ctx, c.Space, true)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := (controller.Receipts{Dir: filepath.Join(c.DiskMount, ".controller", "receipts")}).CheckAuditReconcile(c.Space, c.DiskID); err != nil {
+		return err
+	}
+	cfg, err := spaceconfig.Load(c.Space)
+	if err != nil {
+		return err
+	}
+	if cfg.Audit == nil {
+		return nil
+	}
+	state, err := auditServiceState(ctx, container.New(c.Space), audit.ServiceName)
+	if err != nil {
+		return err
+	}
+	if state != "inactive" && state != "failed" {
+		return nil
+	}
+	root, err := layout.AuditDir()
+	if err != nil {
+		return err
+	}
+	logs := filepath.Join(root, "logs")
+	if _, err := os.Lstat(logs); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	writer, err := audit.OpenWriter(audit.Store{Root: logs})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = writer.Close() }()
+	return writer.Prune(ctx)
 }

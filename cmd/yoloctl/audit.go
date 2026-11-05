@@ -37,12 +37,15 @@ func auditHostAvailable() bool {
 	if auditContainerSignal() != "" {
 		return false
 	}
-	op, err := loadOperatorClient()
-	return err == nil && op == nil
+	return true
 }
 
 func requireAuditHost() error {
 	if !auditHostAvailable() {
+		return asUserError(errors.New("audit control and viewing require the host"))
+	}
+	op, err := loadOperatorClient()
+	if err != nil || op != nil {
 		return asUserError(errors.New("audit control and viewing require the host"))
 	}
 	return nil
@@ -130,6 +133,16 @@ func addAuditQueryFlags(cmd *cobra.Command) {
 	cmd.Flags().String("since", "", "Start time (RFC3339)")
 	cmd.Flags().String("until", "", "End time (RFC3339)")
 	cmd.Flags().String("box", "", "Filter by box (unavailable metadata remains unlabelled)")
+	cmd.Args = func(cmd *cobra.Command, args []string) error {
+		if err := cobra.NoArgs(cmd, args); err != nil {
+			return err
+		}
+		box, _ := cmd.Flags().GetString("box")
+		if box != "" {
+			return validateAgentboxName(box)
+		}
+		return nil
+	}
 }
 
 func auditQuery(cmd *cobra.Command) (audit.Query, error) {

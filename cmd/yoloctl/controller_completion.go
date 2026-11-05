@@ -171,10 +171,10 @@ func runControllerCompletionInto(ctx context.Context, p controller.Principal, re
 	}
 	root := newRootCmd()
 	root.SetOut(out)
-	// Chat uses typed client commands, so it is absent from the ordinary
+	// Chat and audit use typed client commands, so they are absent from the ordinary
 	// native execution root. Completion only runs the local read callbacks;
 	// it never executes these commands' mutation/stream handlers.
-	root.AddCommand(newChatCmd())
+	root.AddCommand(newChatCmd(), newAuditCmd())
 	registerCompletions(root)
 	cmd := findByPath(root, strings.Fields(query.Command)...)
 	if cmd == nil {

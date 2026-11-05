@@ -13,10 +13,13 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/audit"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -184,5 +187,175 @@ func TestAuditQueryRejectsHostPaths(t *testing.T) {
 	_, err := runControllerAudit(t.Context(), controller.Request{Method: "audit.logs", Payload: input}, strings.NewReader(""), io.Discard)
 	if err == nil {
 		t.Fatal("accepted arbitrary guest log path")
+	}
+}
+
+// Native context is process-wide, so every case owns a private subprocess/disk.
+func TestAuditRetentionInactiveCollector(t *testing.T) {
+	scenario := os.Getenv("YOLOCTL_TEST_AUDIT_RETENTION")
+	if scenario == "" {
+		for _, scenario := range []string{"enabled-failed", "enabled-inactive", "disabled-failed", "active", "activating", "deactivating", "unknown", "observation-failed", "audit-held", "global-held", "lock-failed"} {
+			t.Run(scenario, func(t *testing.T) {
+				cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestAuditRetentionInactiveCollector$")
+				cmd.Env = append(os.Environ(), "YOLOCTL_TEST_AUDIT_RETENTION="+scenario)
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("%v: %s", err, out)
+				}
+			})
+		}
+		return
+	}
+	disk := t.TempDir()
+	c := spaceenv.Context{Schema: 1, Space: "test", DiskID: strings.Repeat("a", 32), DiskUUID: "fixture", DiskMount: disk, ConfigDir: filepath.Join(disk, "config"), CatalogDir: spaceenv.CatalogRoot, HostConfigRoot: filepath.Join(disk, "host"), UID: 1000, GID: 1000, Bundle: "fixture", Generation: "fixture", Mounts: []spaceenv.Mount{{Source: "/projects", Writable: true}}}
+	if err := spaceenv.Configure(c); err != nil {
+		t.Fatal(err)
+	}
+	settings := spaceconfig.Settings{SchemaVersion: 1, Name: "test", DefaultAccount: "personal", DefaultWorkdir: "/projects", Audit: &spaceconfig.AuditSettings{Enabled: scenario != "disabled-failed", Version: audit.Version, RulesSHA256: audit.RulesDigest()}}
+	raw, err := yaml.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := safepath.WriteFile(c.ConfigDir, "space.yaml", raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := layout.AuditDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs := filepath.Join(root, "logs")
+	w, err := audit.OpenWriter(audit.Store{Root: logs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Append(audit.Event{Time: time.Now().Add(-8 * 24 * time.Hour), Rule: "expired", Severity: "Notice"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if scenario == "audit-held" || scenario == "global-held" {
+		receipt := controller.Receipt{ID: "audit-retention-held-0123456789", Method: "audit.enable", State: "uncertain", EffectPhase: controller.EffectStarted, Started: time.Now(), Generation: "fixture"}
+		if scenario == "audit-held" {
+			receipt.ProofVersion = controller.ProofVersion
+			receipt.DiskID = c.DiskID
+			receipt.Scope = &controller.Scope{Writes: []controller.Resource{{Kind: controller.ResourceAudit}}}
+		}
+		store := controller.Receipts{Dir: filepath.Join(disk, ".controller", "receipts")}
+		if err := store.Save(receipt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	held, observed, unlocked := false, false, false
+	sentinel := errors.New("unavailable")
+	auditAcquire = func(_ context.Context, space string, write bool) (func(), error) {
+		if space != c.Space || !write {
+			t.Fatal("incorrect lock")
+		}
+		if scenario == "lock-failed" {
+			return nil, sentinel
+		}
+		held = true
+		return func() { held = false; unlocked = true }, nil
+	}
+	auditServiceState = func(context.Context, *container.Client, string) (string, error) {
+		if !held {
+			t.Fatal("observed service outside lock")
+		}
+		observed = true
+		switch scenario {
+		case "observation-failed":
+			return "", sentinel
+		case "active", "activating", "deactivating", "unknown":
+			return scenario, nil
+		case "enabled-inactive":
+			return "inactive", nil
+		default:
+			return "failed", nil
+		}
+	}
+	auditServiceStart = func(context.Context, *container.Client, vmservice.Unit) error {
+		t.Fatal("pruning restarted service")
+		return nil
+	}
+	auditServiceStop = func(context.Context, *container.Client, string) error { t.Fatal("pruning stopped service"); return nil }
+	err = pruneInactiveAudit(t.Context())
+	wantErr := scenario == "observation-failed" || scenario == "audit-held" || scenario == "global-held" || scenario == "lock-failed"
+	if (err != nil) != wantErr {
+		t.Fatalf("error=%v want error=%t", err, wantErr)
+	}
+	if held || (scenario != "lock-failed" && !unlocked) {
+		t.Fatal("lock not released")
+	}
+	if (scenario == "audit-held" || scenario == "global-held" || scenario == "lock-failed") && observed {
+		t.Fatal("service observed before lock/hold clearance")
+	}
+	files, err := filepath.Glob(filepath.Join(logs, "*.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	shouldPrune := scenario == "enabled-failed" || scenario == "enabled-inactive" || scenario == "disabled-failed"
+	if shouldPrune {
+		if len(files) != 0 {
+			t.Fatalf("expired data remains: %v", files)
+		}
+	} else {
+		if len(files) != 1 {
+			t.Fatal("changed excluded writer", files)
+		}
+		body, err := os.ReadFile(files[0])
+		if err != nil || !bytes.Contains(body, []byte("expired")) {
+			t.Fatal("changed excluded events", err)
+		}
+	}
+}
+
+func TestAuditCompletionUsesNativeHostAuthority(t *testing.T) {
+	if os.Getenv("YOLOCTL_TEST_AUDIT_COMPLETION") != "1" {
+		cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestAuditCompletionUsesNativeHostAuthority$")
+		cmd.Env = append(os.Environ(), "YOLOCTL_TEST_AUDIT_COMPLETION=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+		return
+	}
+	disk := t.TempDir()
+	c := spaceenv.Context{Schema: 1, Space: "test", DiskID: strings.Repeat("a", 32), DiskUUID: "fixture", DiskMount: disk, ConfigDir: filepath.Join(disk, "config"), CatalogDir: spaceenv.CatalogRoot, HostConfigRoot: filepath.Join(disk, "host"), UID: 1000, GID: 1000, Bundle: "fixture", Generation: "fixture"}
+	if err := spaceenv.Configure(c); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", t.TempDir()) // Runtime observation fails locally; no real guest/controller access.
+	if err := os.MkdirAll(c.ConfigDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &agentbox.Config{Name: "auditbox", ID: agentbox.NewIdentity(), Space: c.Space, Agent: "none", Account: "none", Image: defaultAgentboxImage, Workdir: agentbox.NewEphemeralWorkdir("auditbox")}
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"logs", "export"} {
+		payload, err := json.Marshal(completionRequest{Command: "audit " + action, Flag: "box", Prefix: "audit"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, operator := range []bool{false, true} {
+			principal := controller.Principal{}
+			if operator {
+				principal = controller.Principal{Box: "caller", Incarnation: "fixture"}
+			}
+			var out bytes.Buffer
+			err := runControllerCompletionInto(t.Context(), principal, controller.Request{Space: c.Space, Payload: payload}, &out)
+			if operator {
+				if err == nil || out.Len() != 0 {
+					t.Fatal("operator completed host audit", out.String(), err)
+				}
+				continue
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var result completionResult
+			if err := json.Unmarshal(out.Bytes(), &result); err != nil || !slices.Equal(result.Values, []string{"auditbox"}) {
+				t.Fatal("native audit completion", out.String(), err)
+			}
+		}
 	}
 }
