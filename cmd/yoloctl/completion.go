@@ -221,6 +221,8 @@ func registerFlagCompleters(root *cobra.Command) {
 		{[]string{"box", "copy"}, "mount", completeGrantedMountSources},
 		{[]string{"box", "list"}, "workdir", completeDeclaredWorkdirs},
 		{[]string{"account", "auth", "import"}, "file", completeHostFiles},
+		{[]string{"audit", "logs"}, "box", completeKnownBoxes},
+		{[]string{"audit", "export"}, "box", completeKnownBoxes},
 		// Chat's --box names the server box a first ensure creates (never an
 		// existing unrelated box); --human and --client are free-form names.
 		{[]string{"chat"}, "box", completeNoArgs},
