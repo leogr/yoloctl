@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `0445aa7690401d237b25be3fef1808659e62d039` and accompanying changes.
+Verification: `79f0d7e323a5c38db5d3e5ba7b19f7fcf748eedf` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
