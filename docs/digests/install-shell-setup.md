@@ -1,0 +1,25 @@
+# Install shell setup
+
+Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes; re-read cited symbols when changing behavior.
+
+[FACT] For bash, zsh (`ZDOTDIR`) or fish (`XDG_CONFIG_HOME`), a successful
+install may append one marked block per purpose: the bin dir on PATH when
+missing, and completion sourcing the install link when absent. A terminal asks
+(default No); `--add-to-path`/`--completion` answer yes; print-only and dry-run
+only describe. A matching block is skipped silently; another install's or a
+broken block is left with a warning. Symlinked, hard-linked, foreign-owned or
+over-1-MiB files are refused with the block printed; otherwise a no-follow read
+and `atomicfile.Write` keep the mode (not ACLs/xattrs). Other shells get the
+`installPathHint` line. [1](#source-1) [2](#source-2)
+
+[FACT] zsh's completion line runs only when `compdef` exists, so it is silent
+until `compinit` has run; install says so after adding it. Removal is manual:
+delete the lines from `# >>> yoloctl` to `# <<< yoloctl` (install help and
+`docs/install.md`). Bash blocks are tested by sourcing them in a clean bash;
+zsh and fish blocks are string-tested only where those shells are absent.
+[1](#source-1) [2](#source-2)
+
+## Sources
+
+1. <a id="source-1"></a> [Shell setup](../../cmd/yoloctl/install_shell.go#L1-L377), `installShellSetup`, `blockState`, `readRC`, `addBlock`, `installShellSteps`; flags and help in install.go `newInstallCmd`.
+2. <a id="source-2"></a> [Tests](../../cmd/yoloctl/install_shell_test.go#L1), `TestAddBlockAppendsAtomicallyAndRefusesUnsafeFiles`, `TestInstallShellStepsAskWriteOnceAndPrintOnly`, `TestInstallShellBlocksSourceInBash`.

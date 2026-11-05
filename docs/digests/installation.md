@@ -59,9 +59,10 @@ conflicts require terminal confirmation; `--yes` accepts managed upgrades only.
 Output: one `✓ Installed yoloctl V → LINK (was OLD)` line, `!` warnings
 (PATH shadowing, unknown build, downgrade), `✗` failures (a prerequisite only
 when it fails); TUI dark-theme colors only on a terminal without `NO_COLOR` or
-`TERM=dumb`. A bin directory missing from PATH
-gets one line for `$SHELL` (bash/zsh rc `export`, fish `fish_add_path`, else
-generic; `installPathHint`). [7](#source-7)
+`TERM=dumb`. [7](#source-7)
+
+[FACT] Shell setup (PATH and completion blocks) is in
+[install shell setup](install-shell-setup.md). [10](#source-10)
 
 [FACT] Publication rejects bin-directory overlap with source/store trees, including
 aliases and missing descendants, before mutation. A symlinked prefix (a home or
@@ -78,7 +79,7 @@ filesystem refuses symbolic links (EPERM/ENOTSUP) fails with an error naming it
 and asking for a local-disk `--bin-dir`; the published bundle stays. Corrupt/different existing keys
 fail; identical bytes are a no-op. Old bundles, failed stages and explicitly
 replaced unknown regular executables are retained. Nothing is pruned or called
-safe to delete; rc files are not edited. [8](#source-8)
+safe to delete. [8](#source-8)
 
 [FACT] Install never runs a space command. A read-only inventory (no boot,
 lock or write) prints a block per space needing something; commands use the
@@ -115,7 +116,7 @@ show only recovery guidance. [9](#source-9)
    [CI](../../.github/workflows/ci.yml#L38-L52), OpenShell cache in `build`;
    [publication](../../scripts/publish-release.py#L1-L199), `identity`, `verify_artifact`, `main`;
    [archive checks](../../scripts/check-dist.go#L1-L172), `run`, `extract`.
-7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L274), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go;
+7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L273), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go;
    [output](../../cmd/yoloctl/install_output.go#L1-L133), `installOut`, `installColor`, `installCommand`.
 8. <a id="source-8"></a> [Publication engine](../../internal/installer/engine.go#L1-L476), `Inspect`, `Publish`, `publishDirectory`
    (platform `renameNoReplace`/`noReplaceUnsupported` in rename_linux.go and rename_darwin.go);
@@ -126,3 +127,4 @@ show only recovery guidance. [9](#source-9)
 9. <a id="source-9"></a> [Space advice](../../cmd/yoloctl/install_migration.go#L1-L292), `installSpaceAdvice`, `printSpaceAdvice`, `installLimaAdvice`;
    [inventory](../../cmd/yoloctl/install_inventory.go#L1-L48), `consentSnapshot`, `readInstallConsent`;
    [default metadata](../../internal/firecracker/recipe_linux.go#L60-L88), `ReadDefaultImage`.
+10. <a id="source-10"></a> [Install shell setup](install-shell-setup.md).

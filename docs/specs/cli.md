@@ -151,7 +151,9 @@ or tracked image job when known; stale owners fall back to a generic notice.
 [FACT] Hidden host-only `install` verifies complete releases and asks before
 upgrades; `--yes` accepts a managed upgrade and never resolves unknown
 conflicts. It never runs a space command: it prints each space's update or
-optional recreate command for the user to run. [18](#source-18)
+optional recreate command for the user to run. At a terminal (or with
+`--add-to-path`/`--completion`) it can append a marked PATH or completion block
+to the shell's startup file. [18](#source-18)
 
 [FACT] Read-only `version` and `version --json` report the build channel and
 resolved config/cache roots without creating the Lima home. The external Lima

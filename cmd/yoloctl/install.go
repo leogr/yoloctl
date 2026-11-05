@@ -21,7 +21,7 @@ import (
 
 func newInstallCmd() *cobra.Command {
 	var bin string
-	var dry, yes bool
+	var dry, yes, addToPath, completion bool
 	cmd := &cobra.Command{Use: "install", Short: "Install this verified release bundle", Hidden: true, Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		if buildinfo.Channel() != "release" {
 			return asUserError(errors.New("install requires a release build"))
@@ -139,8 +139,11 @@ func newInstallCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		shell := shellRequest{addPath: addToPath, completion: completion, interactive: interactive, in: cmd.InOrStdin(), prompt: cmd.ErrOrStderr()}
 		if printOnly {
 			printSpaceAdvice(o, installSpaceAdvice(cmd.Context(), manifest.Bundle), link, false)
+			// Nothing is written: requested shell setup is only described.
+			_ = installShellSteps(o, bin, link, shell)
 			o.line()
 			if dry {
 				o.line(o.paint(roleDim, "Dry run: nothing was installed or changed."))
@@ -182,23 +185,24 @@ func newInstallCmd() *cobra.Command {
 			o.line("  ", o.paint(roleDim, "Install ran no space command."))
 		}
 		printSpaceAdvice(o, advice, result.Link, true)
-		home, _ := os.UserHomeDir()
-		if text, command := installPathHint(bin, os.Getenv("PATH"), os.Getenv("SHELL"), home); text != "" {
-			o.line()
-			o.warn(text)
-			if command != "" {
-				o.line("    ", o.paint(roleBold, command))
-			}
-		}
-		return nil
+		shell.apply = true
+		return installShellSteps(o, bin, result.Link, shell)
 	}}
-	cmd.Long = "Install this verified release bundle as <bin-dir>/yoloctl (default ~/.local/bin).\n\n" +
-		"When <bin-dir> is not on PATH, install prints the line that adds it for your shell\n" +
-		"(bash, zsh or fish, from $SHELL), for example:\n" +
-		"  echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.zshrc"
+	cmd.Long = "Install this verified release bundle as <bin-dir>/yoloctl (default ~/.local/bin).\n" +
+		"Install never runs a space command; it prints what each space needs.\n\n" +
+		"For bash, zsh or fish (from $SHELL), install can add one marked block to your\n" +
+		"shell's startup file: <bin-dir> on PATH when it is missing, and yoloctl\n" +
+		"completion when it is not set up. At a terminal it asks (default No);\n" +
+		"--add-to-path and --completion answer yes. Files: ~/.zshrc (or $ZDOTDIR),\n" +
+		"~/.bashrc, and fish's config.fish and completions/yoloctl.fish. A symlinked,\n" +
+		"hard-linked or foreign-owned file is never edited; the block is printed instead.\n" +
+		"To undo, delete the lines between \"# >>> yoloctl\" and \"# <<< yoloctl\".\n" +
+		"zsh completion loads only where compinit has run."
 	cmd.Flags().StringVar(&bin, "bin-dir", "", "User binary directory (default ~/.local/bin)")
-	cmd.Flags().BoolVar(&dry, "dry-run", false, "Verify and print without writing or executing migrations")
-	cmd.Flags().BoolVar(&yes, "yes", false, "Accept a managed upgrade only; never resolve a conflict or execute migrations")
+	cmd.Flags().BoolVar(&dry, "dry-run", false, "Verify and print without writing anything")
+	cmd.Flags().BoolVar(&yes, "yes", false, "Accept a managed upgrade only; never resolve a conflict or change shell files")
+	cmd.Flags().BoolVar(&addToPath, "add-to-path", false, "Add <bin-dir> to PATH in your shell's startup file without asking (when missing)")
+	cmd.Flags().BoolVar(&completion, "completion", false, "Set up yoloctl shell completion without asking (when not set up)")
 	return cmd
 }
 
@@ -242,14 +246,9 @@ func installPathHint(bin, pathEnv, shell, home string) (text, command string) {
 		}
 	}
 	generic := bin + " is not on your PATH; add it in your shell's startup file to run yoloctl from anywhere."
-	for _, r := range bin {
-		if !plainPathRune(r) {
-			return generic, ""
-		}
-	}
-	display := bin
-	if rest, ok := strings.CutPrefix(bin, home+string(filepath.Separator)); ok && home != "" {
-		display = "$HOME/" + rest
+	display, plain := pathDisplay(bin, home)
+	if !plain {
+		return generic, ""
 	}
 	switch filepath.Base(shell) {
 	case "zsh":

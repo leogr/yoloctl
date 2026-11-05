@@ -22,9 +22,21 @@ anything and refuses extra, missing or symlinked files. It also refuses to run
 from a development build, inside a box or VM, or as a space operator. It then
 copies the bundle into `~/.local/share/yoloctl/bundles/<version>-<os>-<arch>-<bundle>`,
 an immutable directory that is never replaced or pruned, and atomically points
-`~/.local/bin/yoloctl` (or `--bin-dir DIR`) at it. It never edits shell rc
-files: when the bin directory is not on your PATH, it prints the one line
-that adds it for your shell, for you to run.
+`~/.local/bin/yoloctl` (or `--bin-dir DIR`) at it.
+
+For bash, zsh or fish (from `$SHELL`), `install` can add one marked block to
+your shell's startup file: the bin directory on PATH when it is missing, and
+yoloctl shell completion when it is not set up yet. At a terminal it asks
+(default No); `--add-to-path` and `--completion` answer yes, also for scripts
+(with `--yes` when there is no terminal). The files are `~/.zshrc` (or
+`$ZDOTDIR/.zshrc`), `~/.bashrc`, and fish's `config.fish` and
+`completions/yoloctl.fish` under `$XDG_CONFIG_HOME` or `~/.config`. zsh
+completion loads only where `compinit` has already run. A symlinked,
+hard-linked, foreign-owned or oversized file is never edited: the block is
+printed for you to add. An existing block for another install is left alone.
+The file is replaced atomically with its mode kept; ACLs and extended
+attributes are not copied. To undo, delete the lines from `# >>> yoloctl` to
+`# <<< yoloctl`. Without a supported shell, install prints the PATH line to run.
 
 `install --dry-run` verifies and prints what would happen without writing.
 Without a terminal and without `--yes`, it only prints. An existing `yoloctl`
