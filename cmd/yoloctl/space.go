@@ -65,6 +65,9 @@ open as new lines arrive.
   yoloctl space logs default --follow
   yoloctl space logs prod-untrusted -n 500
 
+Host-side Lima and interactive bridge diagnostics are captured separately in
+logs/host.log under yoloctl's config root; they are not printed over live views.
+
 For guest service diagnostics, use 'space ssh --root'. Lima guests use
 journalctl; Firecracker guests keep managed service logs under
 /var/log/yoloctl-units and controller/runtime output in the VM log.`,

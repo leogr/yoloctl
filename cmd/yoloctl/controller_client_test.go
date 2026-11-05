@@ -109,6 +109,13 @@ func TestControllerHostPathsRejectBeforeDispatch(t *testing.T) {
 	if err := boot.Save(); err != nil {
 		t.Fatal(err)
 	}
+	limaHome, err := layout.LimaHome()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(limaHome, "yolo-fixture"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	root, _ := layout.AccountStateRoot()
 	for _, source := range []string{root, layout.AccountDiskMount(boot.DiskID)} {
 		for _, argv := range [][]string{

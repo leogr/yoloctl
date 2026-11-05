@@ -205,6 +205,10 @@ func FeaturesDir() (string, error) { return underConfig("features") }
 // agent-profile registries.
 func CapabilitiesDir() (string, error) { return underConfig("capabilities") }
 
+// HostDiagnosticsLogPath holds captured launcher/interactive host diagnostics.
+// It is separate from a VM's own boot log because inventory spans Lima homes.
+func HostDiagnosticsLogPath() (string, error) { return underConfig("logs", "host.log") }
+
 // --- Lima (external-tool storage) --------------------------
 
 // LimaHome returns the legacy Lima home. An absent bootstrap lima_home

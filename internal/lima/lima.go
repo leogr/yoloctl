@@ -22,16 +22,14 @@ const DefaultBinary = "limactl"
 type Client struct {
 	binary string
 	stdout io.Writer
-	stderr io.Writer
 }
 
-// New returns a Client that shells out to limactl on PATH and writes
-// command output to os.Stdout / os.Stderr.
+// New returns a Client that preserves command stdout. Launcher stderr is
+// captured to the private host log and returned with failures, never printed.
 func New() *Client {
 	return &Client{
 		binary: DefaultBinary,
 		stdout: os.Stdout,
-		stderr: os.Stderr,
 	}
 }
 
@@ -54,7 +52,7 @@ func (c *Client) Create(ctx context.Context, name string, template []byte) error
 	cmd := c.spaceCommand(ctx, name, "create", "--name="+InstanceName(name), "--tty=false", "-")
 	cmd.Stdin = bytes.NewReader(template)
 	cmd.Stdout = c.stdout
-	return RunWithFilteredStderr(cmd, c.stderr)
+	return runWithDiagnostics(cmd)
 }
 
 // Start boots a previously-created instance and blocks until it is Running.
@@ -112,13 +110,13 @@ func (c *Client) CopyTo(ctx context.Context, space, localPath, remotePath string
 func (c *Client) runSpace(ctx context.Context, space string, args ...string) error {
 	cmd := c.spaceCommand(ctx, space, args...)
 	cmd.Stdout = c.stdout
-	return RunWithFilteredStderr(cmd, c.stderr)
+	return runWithDiagnostics(cmd)
 }
 
 func (c *Client) runDisk(ctx context.Context, id string, args ...string) error {
 	cmd := c.diskCommand(ctx, id, args...)
 	cmd.Stdout = c.stdout
-	return RunWithFilteredStderr(cmd, c.stderr)
+	return runWithDiagnostics(cmd)
 }
 
 // InstanceConfigPath returns the path of the active lima.yaml for the

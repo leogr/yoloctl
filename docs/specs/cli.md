@@ -58,6 +58,13 @@ saving rechecks the original bootstrap and stopped state. Neither command boots
 or restarts a VM. Desired settings survive backend-application errors; the next
 explicit start synchronizes them before booting. [10](#source-10)
 
+[FACT] Lima launcher diagnostics are captured in the private host log
+`<config-root>/logs/host.log`, including successful warnings. Native chat
+and telemetry callbacks retain private stderr captures and return failure
+context to the view. Empty/absent Lima homes are skipped before listing;
+foreground application streams retain their explicit destinations.
+[21](#source-21)
+
 [FACT] Box/account/runtime commands require a running matching controller.
 Offline `space list/show` provide boot/VM metadata, with unavailable declarations
 identified explicitly. Aggregation reports unavailable spaces and returns a
@@ -196,3 +203,5 @@ version probe is bounded. Ordinary commands retain startup setup. [18](#source-1
 19. <a id="source-19"></a> [VM adapters and Lima socket bounds](../digests/vm-adapters.md).
 
 20. <a id="source-20"></a> [Lima storage and names](../digests/lima-storage.md).
+
+21. <a id="source-21"></a> [Host and Lima diagnostics](../digests/host-diagnostics.md).

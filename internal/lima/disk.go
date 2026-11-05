@@ -20,7 +20,10 @@ type DiskInfo = vmapi.DiskInfo
 func (c *Client) AccountDisk(ctx context.Context, id string) (*DiskInfo, error) {
 	name := layout.AccountDiskName(id)
 	cmd := c.diskCommand(ctx, id, "disk", "list", "--json", name)
-	raw, err := cmd.Output()
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	err := runWithDiagnostics(cmd)
+	raw := stdout.Bytes()
 	if err != nil {
 		return nil, fmt.Errorf("inspect account disk: %w", err)
 	}

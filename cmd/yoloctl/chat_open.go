@@ -45,7 +45,8 @@ func openChatHeader(cmd *cobra.Command) (chatstream.Header, error) {
 				return managedchat.Status{}, err
 			}
 		}
-		status, err := callChatController(ctx, cmd, method, input)
+		var status managedchat.Status
+		err := callChatViewControllerInto(ctx, cmd, method, input, &status)
 		if method == "chat.status" {
 			last = status
 		}

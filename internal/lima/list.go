@@ -45,12 +45,18 @@ func (c *Client) List(ctx context.Context) ([]Instance, error) {
 		if visited[canonical] {
 			continue
 		}
+		populated, err := homeHasInstances(home)
+		if err != nil {
+			return nil, fmt.Errorf("inspect Lima home %q: %w", home, err)
+		}
+		if !populated {
+			continue
+		}
 		visited[canonical] = true
-		var stdout, stderr bytes.Buffer
+		var stdout bytes.Buffer
 		cmd := c.commandAtHome(ctx, home, "list", "--format", "json")
-		cmd.Stdout, cmd.Stderr = &stdout, &stderr
-		err = cmd.Run()
-		WriteFilteredStderr(c.stderr, stderr.String())
+		cmd.Stdout = &stdout
+		err = runWithDiagnostics(cmd)
 		if err != nil {
 			return nil, err
 		}
@@ -103,6 +109,34 @@ func (c *Client) List(ctx context.Context) ([]Instance, error) {
 		}
 	}
 	return out, nil
+}
+
+// Match stock Lima's instance enumeration: dot/underscore infrastructure is
+// not an instance. Only proved absence/emptiness skips a home; errors propagate.
+func homeHasInstances(home string) (bool, error) {
+	entries, err := os.ReadDir(home)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".") || strings.HasPrefix(entry.Name(), "_") {
+			continue
+		}
+		info, err := entry.Info()
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if info.IsDir() {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func parseInstances(r io.Reader) ([]Instance, error) {

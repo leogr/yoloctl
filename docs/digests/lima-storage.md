@@ -1,6 +1,6 @@
 # Lima storage and space names
 
-Verification: `3736b1cf9ac349827782dcbe01070d3e5d922a15` and accompanying changes;
+Verification: `8931e8df3abebc5c0fdd6f77bd473110a2e7d23b` and accompanying changes;
 re-read cited sources when changing behavior.
 
 [FACT] New spaces, including imports, use 1–16 ASCII characters: an
@@ -27,7 +27,9 @@ inspection/allocation/blankness/deletion share that selection. Disk selection
 uses the unique bootstrap declaring its full disk ID; conflicting declarations
 fail. Listing inventories legacy/new/recorded roots, de-duplicates canonical
 home aliases and rejects duplicate space instances or placement mismatches.
-Missing recorded storage never triggers a fallback to a different home.
+Homes proved absent or without instance directories are skipped before invoking
+limactl; other inspection errors propagate. Missing recorded storage never
+triggers a fallback to a different home.
 [2](#source-2) [5](#source-5) [6](#source-6)
 [15](#source-15) [16](#source-16) [17](#source-17) [18](#source-18)
 

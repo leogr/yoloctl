@@ -40,7 +40,7 @@ func resourceClient(t *testing.T, status, vmType string) (*Client, string, strin
 	if err := os.WriteFile(path, TemplateWithBootSettings([]Mount{{Location: "/work", Writable: true}}, "disk-id", false, 4, "4GiB", "30GiB"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return &Client{binary: filepath.Join(bin, "limactl"), stdout: io.Discard, stderr: io.Discard}, path, calls
+	return &Client{binary: filepath.Join(bin, "limactl"), stdout: io.Discard}, path, calls
 }
 
 func TestSetInstanceResourcesRewritesOnlyStoppedCPUsAndMemory(t *testing.T) {

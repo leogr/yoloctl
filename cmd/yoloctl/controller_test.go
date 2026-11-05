@@ -55,6 +55,13 @@ func TestControllerClientRefusesOfflineDeclarationsWithoutBooting(t *testing.T) 
 	if err := boot.Save(); err != nil {
 		t.Fatal(err)
 	}
+	limaHome, err := layout.LimaHome()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(limaHome, "yolo-work"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	for _, argv := range [][]string{
 		{"box", "list"}, {"box", "show", "worker"},
 		{"box", "create", "worker", "--agent", "none", "--manifest-only"},

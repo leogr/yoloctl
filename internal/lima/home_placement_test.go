@@ -42,7 +42,7 @@ fi
 	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	c := &Client{binary: binary, stdout: io.Discard, stderr: io.Discard}
+	c := &Client{binary: binary, stdout: io.Discard}
 	t.Setenv("PATH", base+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("LIMA_HOME", "/must-not-be-used")
 	for i, b := range []*spaceconfig.Bootstrap{old, fresh} {
@@ -137,6 +137,9 @@ func TestLimaOrphanOutsideLegacyHomeRequiresBootstrapRecovery(t *testing.T) {
 	t.Setenv("YOLOCTL_HOME", base)
 	next := filepath.Join(base, "recorded")
 	placementBootstrap(t, "owner", next, "4")
+	if err := os.MkdirAll(filepath.Join(next, "yolo-orphan"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	script := filepath.Join(base, "limactl")
 	if err := os.WriteFile(script, []byte(`#!/bin/sh
 [ "$LIMA_HOME" = "$ORPHAN_HOME" ] || exit 0
@@ -145,7 +148,7 @@ printf '%s\n' '{"name":"yolo-orphan","status":"Stopped"}'
 		t.Fatal(err)
 	}
 	t.Setenv("ORPHAN_HOME", next)
-	c := &Client{binary: script, stdout: io.Discard, stderr: io.Discard}
+	c := &Client{binary: script, stdout: io.Discard}
 	if _, err := c.List(t.Context()); err == nil || !strings.Contains(err.Error(), "restore its bootstrap") {
 		t.Fatalf("unsafe orphan routing: %v", err)
 	}

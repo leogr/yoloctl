@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/leogr/yoloctl/internal/chatstream"
 	"github.com/leogr/yoloctl/internal/controller"
+	vmhost "github.com/leogr/yoloctl/internal/vm"
+	"github.com/spf13/cobra"
 )
 
 // chatStreamStderrLimit bounds the controller stderr a chat view keeps to
@@ -29,7 +32,7 @@ func callChatStream(ctx context.Context, target controllerTarget, takeOver bool,
 		req.Flags = map[string][]string{chatstream.TakeOverFlag: {"true"}}
 	}
 	err := target.Call(ctx, req, controller.ClientIO{In: in, Out: out, Err: tail})
-	return tail.annotate(err)
+	return tail.finish("chat stream", err)
 }
 
 // stderrTail keeps the last chatStreamStderrLimit bytes written to it, in a
@@ -78,4 +81,34 @@ func (t *stderrTail) annotate(err error) error {
 		return err
 	}
 	return fmt.Errorf("%w: %s", err, text)
+}
+
+// Interactive calls never forward launcher/worker stderr to the terminal.
+// Finite CLI helpers retain their explicit output writer.
+func callChatViewControllerInto(ctx context.Context, cmd *cobra.Command, method string, input, result any) error {
+	target, err := selectControllerTarget(ctx, cmd)
+	if err != nil {
+		return err
+	}
+	return callChatViewTargetInto(ctx, target, method, input, result)
+}
+
+func callChatViewTargetInto(ctx context.Context, target controllerTarget, method string, input, result any) error {
+	tail := &stderrTail{}
+	err := callChatTargetInto(ctx, target, method, input, result, tail)
+	return tail.finish("chat "+method, err)
+}
+
+func (t *stderrTail) finish(operation string, err error) error {
+	t.mu.Lock()
+	raw := append([]byte(nil), t.buf...)
+	t.mu.Unlock()
+	if logErr := vmhost.LogDiagnostics(operation, raw); logErr != nil {
+		if err == nil {
+			err = fmt.Errorf("operation completed but recording diagnostics failed: %w", logErr)
+		} else {
+			err = errors.Join(err, logErr)
+		}
+	}
+	return t.annotate(err)
 }

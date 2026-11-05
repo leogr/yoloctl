@@ -17,6 +17,7 @@ import (
 
 func catalogDiagnosticTarget(t *testing.T, noise string, status int) controllerTarget {
 	t.Helper()
+	t.Setenv("YOLOCTL_HOME", t.TempDir())
 	hello := controller.Hello{Protocol: controller.ProtocolVersion, Bundle: "fixture", Space: "work", Generation: "generation"}
 	server := &controller.Server{Hello: hello, Receipts: controller.Receipts{Dir: t.TempDir()}, Operations: map[string]controller.Operation{"chat.channel.list": controllerOperations["chat.channel.list"]}}
 	server.Execute = func(_ context.Context, _ controller.Principal, _ controller.Request, streams controller.Streams) (int, error) {

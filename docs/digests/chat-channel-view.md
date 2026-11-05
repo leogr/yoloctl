@@ -1,6 +1,6 @@
 # Native chat channels and live identities
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `8931e8df3abebc5c0fdd6f77bd473110a2e7d23b` and accompanying changes.
 
 [FACT] The chat view keeps one view per channel, embedded as the visible one:
 draft/reply, messages/caches, reading position, selection,
@@ -67,8 +67,9 @@ reopening and revoked ones stop being trusted or attachable. [1](#source-1)
 [6](#source-6)
 
 [FACT] Interactive reads (including JOIN preparation) capture a private 2 KiB
-stderr tail, sanitize failure reasons and discard success diagnostics; finite CLI
-stderr stays unchanged. [11](#source-11) [12](#source-12)
+stderr tail, sanitize failure reasons and log diagnostics privately on success
+and failure; finite CLI stderr stays unchanged. See
+[host diagnostics](host-diagnostics.md) for the log path and Lima capture. [11](#source-11) [12](#source-12)
 Read failures and driver refusals each appear once per failure run. Only driver acceptance,
 after the view's generation check, recovers that refresh's notice; enqueueing
 alone does not. Local read/link identities order equal-generation outcomes and

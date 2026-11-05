@@ -129,7 +129,7 @@ func TestLimaBootPreflightLeavesCleanupAndReadsAvailable(t *testing.T) {
 	if err := os.WriteFile(binary, []byte("#!/bin/sh\nprintf '%s\\n' \"$1\" >> \"$LIMA_TEST_CALLS\"\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	c := &Client{binary: binary, stdout: io.Discard, stderr: io.Discard}
+	c := &Client{binary: binary, stdout: io.Discard}
 	t.Setenv("YOLOCTL_HOME", filepath.Join(base, strings.Repeat("x", 100)))
 	for _, err := range []error{c.Create(t.Context(), "a", nil), c.Start(t.Context(), "a")} {
 		if err == nil || !strings.Contains(err.Error(), "Lima socket path") {
@@ -159,7 +159,7 @@ func TestLimaBootPreflightLeavesCleanupAndReadsAvailable(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(calls)
-	if err != nil || string(data) != "stop\ndelete\nlist\ncreate\nstart\n" {
+	if err != nil || string(data) != "stop\ndelete\ncreate\nstart\n" {
 		t.Fatalf("unexpected backend calls %q: %v", data, err)
 	}
 }
