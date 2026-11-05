@@ -65,7 +65,8 @@ func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind
 		return nil
 	}
 	strategy := report.Drift.Strategy
-	if strategy != "recreate" && !(kind == offerChatServer && strategy == "restart") {
+	affirmative := strategy == "recreate" || (kind == offerChatServer && strategy == "restart")
+	if !affirmative {
 		return nil
 	}
 	extra := ""
