@@ -1,6 +1,6 @@
 # Lima storage and space names
 
-Verification: `e22bf914078ecfbf61fd846fbe812c434f3154a0` and accompanying changes;
+Verification: `da2a42fa3efae62ec43c0a40ac2126e5e8208a9f` and accompanying changes;
 re-read cited sources when changing behavior.
 
 [FACT] New spaces, including imports, use 1–16 ASCII characters: an
@@ -37,7 +37,11 @@ Those checks exclude new grant requests; placement also checks previously
 saved grants of every existing space before create/import publication and
 allocation. Ancestor, exact and descendant overlaps refuse, including read-only
 grants and stopped spaces. Existing ancestors/symlinks are resolved without
-creating missing storage; unreadable inventories refuse. Valid historical
+creating missing storage. A dedicated bundle inventory propagates metadata
+and permission errors, including inaccessible bundles, before reading grants.
+Absent bundles/manifests and readable incomplete bundles are skipped; unknown
+inventories refuse placement. Display-oriented space listing is unchanged.
+[22](#source-22) Valid historical
 schema-2 records contribute grants to this exclusion inventory only; ordinary
 schema-2 boot/declaration support remains removed. The error names the
 space and grant and suggests a non-overlapping installation home. No other
@@ -93,5 +97,7 @@ preflight. These tests do not establish native macOS VM lifecycle parity.
 18. <a id="source-18"></a> [Adapter](../../internal/vm/lima.go#L21).
 19. <a id="source-19"></a> [Socket regressions](../../internal/lima/socket_paths_test.go#L1).
 
-20. <a id="source-20"></a> [Placement exclusion](../../internal/spaceconfig/lima_placement.go#L18) — existing grants and canonical path intersection.
+20. <a id="source-20"></a> [Placement exclusion](../../internal/spaceconfig/lima_placement.go#L19) — existing grants and canonical path intersection.
 21. <a id="source-21"></a> [Placement regressions](../../cmd/yoloctl/lima_placement_grant_test.go#L1) — allocation, admission and pending recovery refusals, unrelated allocation control.
+
+22. <a id="source-22"></a> [Strict inventory regressions](../../internal/spaceconfig/lima_placement_inventory_test.go#L1) — unprivileged access errors, absence/incomplete controls and no-follow refusal.

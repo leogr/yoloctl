@@ -25,12 +25,15 @@ func ValidateLimaPlacement(home string) error {
 	if err != nil {
 		return fmt.Errorf("resolve Lima storage %q: %w", home, err)
 	}
-	names, err := List()
+	names, err := placementSpaceNames()
 	if err != nil {
 		return fmt.Errorf("inspect existing space grants before placing Lima storage: %w", err)
 	}
 	for _, name := range names {
 		grants, err := placementGrants(name)
+		if errors.Is(err, os.ErrNotExist) {
+			continue // An absent manifest is an incomplete/disappeared bundle.
+		}
 		if err != nil {
 			return fmt.Errorf("inspect host grants of space %q before placing Lima storage: %w", name, err)
 		}
@@ -45,6 +48,44 @@ func ValidateLimaPlacement(home string) error {
 		}
 	}
 	return nil
+}
+
+// Placement needs an authoritative inventory, unlike display-oriented List.
+// Include every valid bundle directory and let the no-follow manifest reader
+// establish presence. Never hide permission/metadata errors behind Stat.
+func placementSpaceNames() ([]string, error) {
+	dir, err := layout.SpacesDir()
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read space bundle directory %q: %w", dir, err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		if layout.ValidateExistingSpaceName(name) != nil {
+			continue
+		}
+		info, err := entry.Info()
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("inspect space bundle %q: %w", name, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("space bundle %q is a symbolic link; cannot verify its grants", name)
+		}
+		if info.IsDir() {
+			names = append(names, name)
+		}
+	}
+	return names, nil
 }
 
 // Historical schema-2 records can still describe granted shares. Read their
