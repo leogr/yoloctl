@@ -9,8 +9,8 @@ Verification: `3736b1cf9ac349827782dcbe01070d3e5d922a15` and accompanying change
   any other command (`box logs -f`, `box exec`, lifecycle auto-attach after
   `box start`/`recreate`), and a standalone attach outside the TUI.
 
-Every pane keeps a private copy of its launch argv (`Pane.Args`). The display
-string `Pane.Command` is never re-split. [1](#source-1) [2](#source-2)
+Every pane keeps a private copy of its launch argv (`Pane.Args`); re-attach
+reads that copy and never re-splits the display string `Pane.Command`. [1](#source-1) [2](#source-2)
 
 [FACT] Re-attach runs that argv again with every `--new-session` spelling
 removed, so the box's own conversation resumes. Every other argument is kept
@@ -19,15 +19,16 @@ verbatim: `--space`, `--passthrough` and the chat guards, including
 [1](#source-1)
 
 [FACT] Two actions run the same function (`reattachPane`):
-- **`r`:** on the focused ended pane. Enter and Ctrl+W still close it, and
-  every other key stays inert.
+- **`r`:** on the focused ended pane. Enter and Ctrl+W still close it, the
+  scroll and tab-navigation keys still work, and every other key stays inert.
 - **Button:** a left press on the yoloctl-drawn `[ Re-attach ]` button, in
   reverse video at the first cells of the ended view's last row. It works on
   an unfocused pane too, and it is consumed through its release. A press
   beside it takes its normal route.
 
-The button is drawn only when that row is on screen (an open palette hides
-it) and the pane is wide enough. Popups stay on top. [1](#source-1)
+The button is drawn only when that row is on screen and the pane is wide
+enough. An open palette clips the tab area's bottom rows, which can hide a
+bottom pane's button but not an upper split pane's. Popups stay on top. [1](#source-1)
 [3](#source-3) [4](#source-4)
 
 [FACT] In place: the new view starts with the ended view's rectangle and
