@@ -451,7 +451,7 @@ func validateImportedGrants(cfg *agentbox.Config, space *spaceconfig.Config) err
 		}
 	}
 	for _, m := range cfg.Mounts {
-		if dest := managedStateDest(cfg); dest != "" && m.Target == dest {
+		if isManagedStateDest(cfg, m.Target) {
 			continue
 		}
 		if err := check(m.Source, !m.ReadOnly); err != nil {

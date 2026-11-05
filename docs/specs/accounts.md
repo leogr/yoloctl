@@ -16,6 +16,14 @@ status reports presence/unavailability rather than provider validity. Codex's
 builtin uses native auth; Claude, Gemini, agy, Pi and OpenCode additionally declare API-key injection.
 [2](#source-2)
 
+[FACT] Claude persists both its legacy directory and the standard Anthropic
+profile tree in the same selected native leaf. Preserve an existing disposable
+profile privately before recreation; selected-profile import retains its config,
+credential and active selection. Claude/Codex status reports bounded local
+material classifications, never provider validity. Codex keeps its existing
+mount; file-store guidance is explicit and no store override is forced.
+[9](#source-9)
+
 [FACT] Account content is not reconcile drift. Changed environment secrets need
 explicit recreation; changing the selected identity is itself a recreate reason.
 Forced account destruction stops users and removes native state before its
@@ -70,3 +78,5 @@ the headless ChatGPT device method is available for remote login. [6](#source-6)
 6. <a id="source-6"></a> [OpenCode adapter](../digests/opencode.md) — native runtime, account and validation contracts.
 7. <a id="source-7"></a> [Data disk size and offline grow](../digests/data-disk-grow.md).
 8. <a id="source-8"></a> [Antigravity status line reporter](../digests/agy-observation.md) — routes A and B.
+
+9. <a id="source-9"></a> [Claude/Codex native credential handling](../digests/claude-auth.md).

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -47,8 +46,13 @@ any box selecting the account with that agent.
   yoloctl account auth status default codex    # is a login present?
 
 Interactive first-run login happens inside the box (run the agent and follow
-its own login flow); the captured file persists in the account and remains
-agent-owned.
+its own login flow); native state remains agent-owned. Claude persists both its
+legacy directory and the standard Anthropic profile directory. Before recreating
+an older box with a login in disposable Anthropic storage, preserve that state
+privately first; stop all account consumers, import it, then recreate explicitly.
+For Codex, keep cli_auth_credentials_store="file" for file-backed persistence;
+yoloctl does not override the user's selected store or import a host keyring.
+Status reports local material, not provider acceptance or external auth.
 
 For Claude API-key auth, store ANTHROPIC_API_KEY with
 ` + "`yoloctl account secret set NAME ANTHROPIC_API_KEY`" + `; Claude reads it
@@ -196,9 +200,9 @@ func firstExistingFile(paths []string) string {
 }
 
 func newAccountAuthImportCmd() *cobra.Command {
-	var file string
+	var file, anthropicDir string
 	cmd := &cobra.Command{
-		Use:   "import NAME AGENT [--file PATH]",
+		Use:   "import NAME AGENT [--file PATH | --anthropic-dir DIR]",
 		Short: "Copy an existing host login file into the account's state leaf",
 		Long: `Copies the agent's existing host login file into the account's per-agent
 state leaf at the agent's auth.credential_file. With no --file, tries the
@@ -208,97 +212,67 @@ gemini: ~/.gemini/oauth_creds.json; pi: ~/.pi/agent/auth.json;
 opencode: ~/.local/share/opencode/auth.json);
 override with --file.
 
-The file is COPIED (mode 0600), never bind-mounted from your host login dir:
+For Claude Anthropic profiles, --anthropic-dir DIR imports the selected profile's
+config, credential and active selection into the Claude leaf's anthropic subtree.
+It does not import inactive profiles or external identity files. If both legacy
+and Anthropic sources exist, select --file or --anthropic-dir explicitly. A new
+profile credential/config file alone cannot be imported as a legacy login.
+
+The files are COPIED (mode 0600), never bind-mounted from your host login dir:
 the box only ever sees the copy in the account's leaf. Its contents are never
 printed. The account and a running space controller are required. Native import
 refuses to overwrite state used by a running box.
 
   yoloctl account auth import default codex
-  yoloctl account auth import personal codex --file ~/.codex/auth.json`,
+  yoloctl account auth import personal codex --file ~/.codex/auth.json
+  yoloctl account auth import personal claude --anthropic-dir ~/.config/anthropic`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			space, err := resolveAccountSpace(cmd)
 			if err != nil {
 				return err
 			}
-			t, err := resolveAccountAuthTarget(space, args)
+			target, err := resolveAccountAuthTarget(space, args)
 			if err != nil {
 				return err
 			}
-			src := file
-			if src != "" {
-				src, err = expandUserPath(src)
-				if err != nil {
-					return asUserError(err)
-				}
-			}
-			if src == "" {
-				candidates, err := defaultHostAuthPaths(t.profile)
-				if err != nil {
-					return err
-				}
-				src = firstExistingFile(candidates)
-			}
-			if src == "" {
-				// No native credential file to copy. Fall back to extracting an
-				// API key from a host config into an account secret, when the agent
-				// declares one (claude: ~/.claude.json primaryApiKey → the
-				// ANTHROPIC_API_KEY secret, delivered to the box via env injection).
-				if is := t.profile.Auth.ImportSecret; is != nil {
-					return importSecretIntoAccount(t, *is, cmd.OutOrStdout(), cmd.ErrOrStderr())
-				}
-				candidates, _ := defaultHostAuthPaths(t.profile)
-				return asUserError(fmt.Errorf(
-					"no login file found (tried %s)\n  pass --file PATH, set an API key with `yoloctl account secret set %s KEY`, or log in from inside the box on first run",
-					strings.Join(candidates, ", "), t.name))
-			}
-			blob, err := os.ReadFile(src)
+			doc, err := prepareAuthImport(args, file, anthropicDir, space)
 			if err != nil {
-				if errors.Is(err, fs.ErrNotExist) {
-					return asUserError(fmt.Errorf("no login file at %s", src))
-				}
-				return fmt.Errorf("read %s: %w", src, err)
+				return err
 			}
-			if len(bytes.TrimSpace(blob)) == 0 {
-				return asUserError(fmt.Errorf("login file %s is empty", src))
+			if doc.SecretValue != "" {
+				return importSecretIntoAccount(target, *target.profile.Auth.ImportSecret, cmd.OutOrStdout(), cmd.ErrOrStderr())
 			}
-			// Everything about the request is validated; NOW take the account
-			// lock and hold it across the selectability guard AND the native-state
-			// write. One continuous acquisition means a concurrent
-			// `account destroy` orders entirely before this (the guard then
-			// fails with the create hint and nothing is written) or entirely
-			// after it — never interleaved, so an import can't resurrect a
-			// state leaf for a half-destroyed identity.
-			release, err := lockBoxAccount(t.space, t.name)
+			writes, err := nativeAuthWrites(target, doc)
+			if err != nil {
+				return err
+			}
+			release, err := lockBoxAccount(target.space, target.name)
 			if err != nil {
 				return err
 			}
 			defer release()
-			if err := ensureAccountSelectableLocked(t.space, t.name); err != nil {
+			if err := ensureAccountSelectableLocked(target.space, target.name); err != nil {
 				return err
 			}
-			// Source path is logged (it's a host path the user gave us); the
-			// CONTENTS are never logged.
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "importing %s\n", src)
-			// Copy once into the state leaf at the agent's credential_file (its
-			// documented native auth path — claude .credentials.json, codex
-			// auth.json). From here on the file belongs to the agent.
-			dest := t.authFilePath()
-			if err := accountEnsureSpace(cmd.Context(), t.space); err != nil {
+			if err := accountEnsureSpace(cmd.Context(), target.space); err != nil {
 				return err
 			}
-			if err := accountStopUsers(cmd.Context(), t.space, t.name, false, cmd.ErrOrStderr()); err != nil {
+			if err := accountStopUsers(cmd.Context(), target.space, target.name, false, cmd.ErrOrStderr()); err != nil {
 				return err
 			}
-			if _, err := accountStateOperation(cmd.Context(), t.space, accountstate.Request{Action: "write", Account: t.name, Agent: t.profile.Name, Path: t.profile.Auth.CredentialFile, Data: blob}); err != nil {
-				return err
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "importing %s\n", doc.Source)
+			for _, write := range writes {
+				if _, err := accountStateOperation(cmd.Context(), target.space, accountstate.Request{Action: "write", Account: target.name, Agent: target.profile.Name, Path: write.Path, Data: write.Data}); err != nil {
+					return err
+				}
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "imported %s login into account %s (%s)\n", t.profile.Name, t.name, dest)
-
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "imported %s login into account %s (%s)\n", target.profile.Name, target.name, target.stateDir)
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&file, "file", "", "Host login file to import (defaults to the agent's conventional path)")
+	cmd.Flags().StringVar(&file, "file", "", "Host legacy/native login file to import")
+	cmd.Flags().StringVar(&anthropicDir, "anthropic-dir", "", "Claude Anthropic directory containing active_config, configs and credentials")
 	return cmd
 }
 
@@ -368,9 +342,12 @@ func importSecretIntoAccount(t accountAuthTarget, rule agentprofile.ImportSecret
 func newAccountAuthStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status NAME AGENT",
-		Short: "Show whether a native login file is present in the account's state leaf",
-		Long: `Reports whether the agent's native auth file (auth.credential_file) exists
-in the account's per-agent state leaf. Its contents are never read or printed.
+		Short: "Show local native credential material without checking provider validity",
+		Long: `Reports local native credential material, not provider authentication.
+Claude and Codex formats are inspected with bounded VM-native reads; only
+classifications and source names leave the native helper, never values.
+Other profiles retain file-presence status. Environment and external credential
+stores are not inspected. Inaccessible native storage is reported unavailable.
 
   yoloctl account auth status default codex`,
 		Args: cobra.ExactArgs(2),
@@ -387,37 +364,55 @@ in the account's per-agent state leaf. Its contents are never read or printed.
 				return err
 			}
 			out := cmd.OutOrStdout()
-			present, err := accountAuthFiles(cmd.Context(), t)
+			findings, err := accountAuthStatus(cmd.Context(), t)
 			if err != nil {
 				_, _ = fmt.Fprintf(out, "%s: unavailable (space stopped or native state inaccessible)\n", t.display())
 				return err
 			}
-			if len(present) == 0 {
-				_, _ = fmt.Fprintf(out, "%s: not authenticated (no auth file in %s)\n", t.display(), t.stateDir)
-				return nil
+			labels := map[string]string{"credentials-present": "credentials present", "file-present": "file present (format not inspected)", "missing": "missing", "invalid": "empty or malformed", "unverified": "unrecognized or incomplete credential material", "external": "externally configured (not verified)"}
+			parts := make([]string, 0, len(findings))
+			for _, finding := range findings {
+				label, ok := labels[finding.Outcome]
+				if !ok {
+					return errors.New("unknown native credential classification")
+				}
+				parts = append(parts, finding.Source+": "+label)
 			}
-			// Report presence + the file names only — VALUES are never read or
-			// printed.
-			_, _ = fmt.Fprintf(out, "%s: authenticated (%s)\n", t.display(), strings.Join(present, ", "))
+
+			_, _ = fmt.Fprintf(out, "%s: %s; provider validity not checked; environment/external auth not inspected\n", t.display(), strings.Join(parts, ", "))
 			return nil
 		},
 	}
 	return cmd
 }
 
-// accountAuthFiles returns the RELATIVE name of the agent's native credential
-// file when it exists in the account's state leaf. Pure presence check — never
-// reads file contents.
-func accountAuthFiles(ctx context.Context, t accountAuthTarget) ([]string, error) {
+// accountAuthStatus returns only native classifications; credential bytes never
+// leave the verified VM helper. A missing disk/read failure remains unavailable.
+func accountAuthStatus(ctx context.Context, t accountAuthTarget) ([]accountstate.AuthFinding, error) {
 	ctx, cancel := context.WithTimeout(ctx, vmhost.GuestProbeTimeout)
 	defer cancel()
-	rel := t.profile.Auth.CredentialFile
-	result, err := accountStateOperation(ctx, t.space, accountstate.Request{Action: "exists", Account: t.name, Agent: t.profile.Name, Path: rel})
+	if t.profile.Auth.Format == "" {
+		result, err := accountStateOperation(ctx, t.space, accountstate.Request{Action: "exists", Account: t.name, Agent: t.profile.Name, Path: t.profile.Auth.CredentialFile})
+		if err != nil {
+			return nil, err
+		}
+		outcome := "missing"
+		if result.Present {
+			outcome = "file-present"
+		}
+		return []accountstate.AuthFinding{{Source: t.profile.Auth.CredentialFile, Outcome: outcome}}, nil
+	}
+	spec := accountstate.AuthStatusSpec{Format: t.profile.Auth.Format, ProfilesDir: t.profile.Auth.ProfilesDir}
+	data, err := json.Marshal(spec)
 	if err != nil {
 		return nil, err
 	}
-	if result.Present {
-		return []string{rel}, nil
+	result, err := accountStateOperation(ctx, t.space, accountstate.Request{Action: "auth-status", Account: t.name, Agent: t.profile.Name, Path: t.profile.Auth.CredentialFile, Data: data})
+	if err != nil {
+		return nil, err
 	}
-	return nil, nil
+	if len(result.Auth) == 0 {
+		return nil, errors.New("native credential classification unavailable")
+	}
+	return result.Auth, nil
 }

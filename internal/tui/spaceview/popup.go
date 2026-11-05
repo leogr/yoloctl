@@ -230,15 +230,19 @@ func (m *Model) openAgent(name string) {
 
 func (m *Model) agentLines(name string, raw []byte) ([]line, error) {
 	var a struct {
-		Source             string            `json:"source"`
-		Image              string            `json:"image"`
-		Command            string            `json:"command"`
-		DefaultArgs        []string          `json:"default_args"`
-		NpmPackage         string            `json:"npm_package"`
-		NativeRelease      string            `json:"native_release"`
-		StateContainerPath string            `json:"state_container_path"`
-		RequiresFeatures   []string          `json:"requires_features"`
-		LaunchEnv          map[string]string `json:"launch_env"`
+		Source             string   `json:"source"`
+		Image              string   `json:"image"`
+		Command            string   `json:"command"`
+		DefaultArgs        []string `json:"default_args"`
+		NpmPackage         string   `json:"npm_package"`
+		NativeRelease      string   `json:"native_release"`
+		StateContainerPath string   `json:"state_container_path"`
+		StateMounts        []struct {
+			Source      string `json:"source"`
+			Destination string `json:"destination"`
+		} `json:"state_mounts"`
+		RequiresFeatures []string          `json:"requires_features"`
+		LaunchEnv        map[string]string `json:"launch_env"`
 	}
 	if err := json.Unmarshal(raw, &a); err != nil {
 		return nil, fmt.Errorf("unexpected agent show output: %w", err)
@@ -254,6 +258,9 @@ func (m *Model) agentLines(name string, raw []byte) ([]line, error) {
 	}
 	if a.StateContainerPath != "" {
 		out = append(out, kv(t, "State path", txt(a.StateContainerPath, t.Text), txt("  native state from the box's account", t.Dim)))
+		for _, mount := range a.StateMounts {
+			out = append(out, kv(t, "State view", txt(mount.Source+" -> "+mount.Destination, t.Text)))
+		}
 	}
 	if len(a.RequiresFeatures) > 0 {
 		out = append(out, kv(t, "Features", txt(strings.Join(a.RequiresFeatures, ", "), t.Feature)))

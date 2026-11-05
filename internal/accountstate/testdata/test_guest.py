@@ -71,6 +71,88 @@ class NativeStorage(unittest.TestCase):
         self.assertFalse((self.root / 'personal').exists())
         self.runop('remove')  # retry after a partial destroy
 
+    def auth(self, fmt='claude', profiles='anthropic'):
+        spec = dict(format=fmt, profiles_dir=profiles)
+        path = '.credentials.json' if fmt == 'claude' else 'auth.json'
+        return self.runop('auth-status', path=path,
+                          data=base64.b64encode(json.dumps(spec).encode()).decode())['auth']
+
+    def put(self, path, data):
+        if not isinstance(data, bytes):
+            data = json.dumps(data).encode()
+        self.runop('write', path=path, data=base64.b64encode(data).decode())
+
+    def test_auth_material_is_classified_without_returning_values(self):
+        self.assertEqual([x['outcome'] for x in self.auth()], ['missing', 'missing'])
+        for fmt, filename, good in [
+                ('claude', '.credentials.json', {'claudeAiOauth': {'accessToken': 'synthetic-access'}}),
+                ('codex', 'auth.json', {'tokens': {'access_token': 'synthetic-access'}}),
+                ('codex', 'auth.json', {'OPENAI_API_KEY': 'synthetic-api'})]:
+            for body, expected in [(b'{}', 'invalid'), (b' ', 'invalid'), (b'not-json', 'invalid'),
+                                   (b'[]', 'invalid'), ({'unknown': 'synthetic-access'}, 'unverified'),
+                                   (good, 'credentials-present')]:
+                with self.subTest(fmt=fmt, body_type=type(body).__name__):
+                    self.put(filename, body)
+                    result = self.auth(fmt, '')
+                    self.assertEqual(result[0]['outcome'], expected)
+                    self.assertNotIn('synthetic', json.dumps(result))
+            self.put(filename, b' ' * (guest.SETTINGS_BYTES + 1))
+            self.assertEqual(self.auth(fmt, '')[0]['outcome'], 'invalid')
+        self.put('auth.json', b'{"OPENAI_API_KEY":"synthetic-api","OPENAI_API_KEY":""}')
+        self.assertEqual(self.auth('codex', '')[0]['outcome'], 'invalid')
+
+    def test_anthropic_active_profile_and_config_are_required(self):
+        self.put('.credentials.json', {})
+        self.put('anthropic/active_config', b'work\n')
+        self.put('anthropic/configs/work.json', {'version': '1', 'authentication': {'type': 'user_oauth'}})
+        self.put('anthropic/credentials/work.json', {'version': '1', 'type': 'oauth_token', 'access_token': 'synthetic-access'})
+        self.assertEqual([x['outcome'] for x in self.auth()], ['invalid', 'credentials-present'])
+        self.put('anthropic/configs/work.json', {'authentication': {'type': 'workload_identity'}})
+        self.assertEqual(self.auth()[1]['outcome'], 'external')
+        # External identity configuration is still external without a cached token.
+        cached = self.root / 'personal/codex/anthropic/credentials/work.json'
+        cached.unlink()
+        self.assertEqual(self.auth()[1]['outcome'], 'external')
+        self.put('anthropic/active_config', b'missing\n')
+        self.assertEqual(self.auth()[1]['outcome'], 'missing')
+        self.put('anthropic/active_config', b'../outside')
+        self.assertEqual(self.auth()[1]['outcome'], 'invalid')
+
+    def test_auth_reads_and_state_subdirs_fail_on_links_and_access_errors(self):
+        self.runop('mkdir', path='anthropic/configs')
+        leaf = self.root / 'personal' / 'codex'
+        self.assertEqual((leaf / 'anthropic/configs').stat().st_mode & 0o777, 0o700)
+        outside = self.disk / 'outside'
+        outside.mkdir()
+        (leaf / 'anthropic/credentials').symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(OSError):
+            self.runop('mkdir', path='anthropic/credentials')
+        with self.assertRaises(OSError):
+            self.auth()
+        with patch.object(guest, 'regular', side_effect=PermissionError('native read denied')):
+            with self.assertRaises(PermissionError):
+                self.auth()
+
+    def test_auth_io_errors_do_not_echo_selected_names(self):
+        self.runop('mkdir')
+        original = guest.regular
+        def denied(fd, name):
+            if name == '.credentials.json':
+                raise PermissionError(13, 'denied', 'synthetic-private-material')
+            return original(fd, name)
+        with patch.object(guest, 'regular', side_effect=denied):
+            with self.assertRaises(OSError) as error:
+                self.auth()
+        self.assertNotIn('synthetic-private', str(error.exception))
+
+    def test_new_state_is_removed_with_the_account_leaf(self):
+        self.put('.credentials.json', b'legacy-bytes')
+        self.put('anthropic/credentials/default.json', b'synthetic-new-bytes')
+        leaf = self.root / 'personal' / 'codex'
+        self.assertEqual((leaf / '.credentials.json').read_bytes(), b'legacy-bytes')
+        self.runop('remove')
+        self.assertFalse(leaf.exists())
+
     def test_disk_identity_fails_closed(self):
         for changes in [dict(uuid='wrong'), dict(id='b' * 32)]:
             with self.subTest(changes=changes), self.assertRaises(ValueError):

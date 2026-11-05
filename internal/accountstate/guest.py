@@ -126,6 +126,112 @@ def status_line(fd, name, spec, uid, gid):
     return {'outcome': 'restored' if restored else 'removed'}
 
 
+# Authentication reads remain inside the verified native leaf and never return
+# credential bytes. Unknown provider formats are not evidence of valid login.
+def auth_read(fd, relative, limit=SETTINGS_BYTES):
+    parts = relative.split('/')
+    if not parts or any(p in ('', '.', '..') or '\\' in p or '\0' in p for p in parts):
+        raise ValueError('invalid native auth path')
+    current = os.dup(fd)
+    try:
+        for part in parts[:-1]:
+            child = directory(current, part)
+            os.close(current)
+            current = child
+        f = regular(current, parts[-1])
+        with os.fdopen(f, 'rb') as inp:
+            return b'' if limit is None else inp.read(limit + 1)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        # A selector/filename must never leak as part of a filesystem error.
+        raise OSError('native credential storage unavailable') from None
+    finally:
+        os.close(current)
+
+
+def auth_object(raw):
+    if raw is None:
+        return None, 'missing'
+    if len(raw) > SETTINGS_BYTES:
+        return None, 'invalid'
+    try:
+        def constant(name):
+            raise ValueError('invalid JSON')
+        value = json.loads(raw, object_pairs_hook=strict_object, parse_constant=constant)
+    except (ValueError, UnicodeError, RecursionError):
+        return None, 'invalid'
+    if not isinstance(value, dict) or not value:
+        return None, 'invalid'
+    return value, None
+
+
+def material(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+def auth_spec(req):
+    spec = json.loads(base64.b64decode(req.get('data', ''), validate=True))
+    if spec.get('format', '') not in ('', 'claude', 'codex'):
+        raise ValueError('unsupported native auth format')
+    return spec
+
+
+def auth_status(fd, relative, spec):
+    def finding(source, outcome):
+        return dict(source=source, outcome=outcome)
+    def read(name, limit=SETTINGS_BYTES):
+        return None if fd is None else auth_read(fd, name, limit)
+    fmt = spec.get('format', '')
+    raw = read(relative, SETTINGS_BYTES if fmt else None)
+    if not fmt:
+        results = [finding(relative, 'missing' if raw is None else 'file-present')]
+    else:
+        doc, outcome = auth_object(raw)
+        if doc is not None:
+            if fmt == 'claude':
+                oauth = doc.get('claudeAiOauth')
+                present = isinstance(oauth, dict) and material(oauth.get('accessToken'))
+            else:
+                tokens = doc.get('tokens')
+                present = material(doc.get('OPENAI_API_KEY')) or (isinstance(tokens, dict) and material(tokens.get('access_token')))
+            outcome = 'credentials-present' if present else 'unverified'
+        results = [finding(relative, outcome)]
+    profiles = spec.get('profiles_dir', '')
+    if not profiles:
+        return {'auth': results}
+    # Do not expose selector contents as diagnostics, including malformed input.
+    source = profiles
+    active = read(profiles + '/active_config', 256)
+    if active is None:
+        name = 'default'
+    else:
+        try:
+            name = active.decode('utf-8').strip()
+        except UnicodeError:
+            name = ''
+        if (len(active) > 256 or not name or name in ('.', '..') or len(name.encode('utf-8')) > 250
+                or any(c in name for c in '/\\\0\r\n\t')):
+            results.append(finding(source, 'invalid'))
+            return {'auth': results}
+    cfg, cfg_outcome = auth_object(read(profiles + '/configs/' + name + '.json'))
+    creds, creds_outcome = auth_object(read(profiles + '/credentials/' + name + '.json'))
+    if cfg is None:
+        outcome = 'invalid' if 'invalid' in (cfg_outcome, creds_outcome) else 'missing'
+    elif not isinstance(cfg.get('authentication'), dict) or not material(cfg['authentication'].get('type')):
+        outcome = 'unverified'
+    elif cfg['authentication']['type'] != 'user_oauth':
+        outcome = 'external'
+    elif creds is None:
+        outcome = creds_outcome
+    elif creds.get('type') != 'oauth_token':
+        outcome = 'unverified'
+    else:
+        outcome = 'credentials-present' if material(creds.get('access_token')) else 'invalid'
+    results.append(finding(source, outcome))
+    return {'auth': results}
+
+
 def run(req):
     mount = req['mount']
     info = json.loads(subprocess.check_output(['findmnt', '-J', '--mountpoint', mount, '-o', 'FSTYPE,UUID']))['filesystems'][0]
@@ -182,6 +288,8 @@ def run(req):
         create = action in ('mkdir', 'write')
         # A missing account, leaf or directory is a missing settings file.
         absent = {'outcome': 'absent'} if action == 'statusline' else {}
+        if action == 'auth-status':
+            absent = auth_status(None, req['path'], auth_spec(req))
         try:
             acct = directory(root, name, create=create)
         except FileNotFoundError:
@@ -200,7 +308,13 @@ def run(req):
         finally:
             os.close(acct)
         try:
+            if action == 'auth-status':
+                return auth_status(leaf, req['path'], auth_spec(req))
             if action == 'mkdir':
+                for part in req.get('path', '').split('/') if req.get('path') else []:
+                    nextfd = directory(leaf, part, create=True, uid=req['uid'], gid=req['gid'])
+                    os.close(leaf)
+                    leaf = nextfd
                 return {}
             parts = req['path'].split('/')
             if not parts or any(p in ('', '.', '..') for p in parts):

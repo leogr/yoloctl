@@ -61,21 +61,26 @@ func (p *nativeExportPolicy) relativeLink(dir, rel, target string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	roots := []string{filepath.Join(dir, parts[0], parts[1]), alias}
+	type stateAlias struct{ root, prefix string }
+	roots := []stateAlias{{root: filepath.Join(dir, parts[0], parts[1])}, {root: alias}}
 	if profile := p.profile(parts[1]); profile != nil && profile.StateContainerPath != "" {
-		roots = append(roots, path.Clean(profile.StateContainerPath))
+		roots = append(roots, stateAlias{root: path.Clean(profile.StateContainerPath)})
+		for _, mount := range profile.StateMounts {
+			roots = append(roots, stateAlias{root: mount.Destination, prefix: mount.Source})
+		}
 	}
 	for _, root := range roots {
 		var suffix string
-		if target != root {
+		if target != root.root {
 			var ok bool
-			suffix, ok = strings.CutPrefix(target, strings.TrimSuffix(root, "/")+"/")
+			suffix, ok = strings.CutPrefix(target, strings.TrimSuffix(root.root, "/")+"/")
 			if !ok {
 				continue
 			}
 		}
 		// Work relative to the leaf, not a host/VM/container absolute path. A
 		// dangling in-leaf target is safe to preserve; never read its contents.
+		suffix = path.Join(root.prefix, suffix)
 		if suffix == "" {
 			suffix = "."
 		}

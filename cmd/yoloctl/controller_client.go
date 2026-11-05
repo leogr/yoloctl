@@ -140,7 +140,8 @@ func routeControllerCommands(root *cobra.Command) {
 		}
 		if method == "account.auth.import" {
 			file, _ := cmd.Flags().GetString("file")
-			doc, err := prepareAuthImport(args, file, target.Space)
+			dir, _ := cmd.Flags().GetString("anthropic-dir")
+			doc, err := prepareAuthImport(args, file, dir, target.Space)
 			if err != nil {
 				return err
 			}
@@ -149,6 +150,7 @@ func routeControllerCommands(root *cobra.Command) {
 				return err
 			}
 			delete(req.Flags, "file")
+			delete(req.Flags, "anthropic-dir")
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "importing %s\n", doc.Source)
 		}
 		if method == "account.secret.set" {

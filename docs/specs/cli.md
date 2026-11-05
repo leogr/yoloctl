@@ -67,6 +67,11 @@ The log is bounded (1 MiB plus one previous generation), and a failure to
 write it never fails an operation that succeeded.
 [21](#source-21)
 
+[FACT] Account auth status distinguishes local material from provider validity.
+Claude profile import uses --anthropic-dir for its selected config/credential/
+selection; legacy --file remains separate. Preserve a disposable login before
+recreating a box to apply the additional native view. [22](#source-22)
+
 [FACT] Box/account/runtime commands require a running matching controller.
 Offline `space list/show` provide boot/VM metadata, with unavailable declarations
 identified explicitly. Aggregation reports unavailable spaces and returns a
@@ -207,3 +212,5 @@ version probe is bounded. Ordinary commands retain startup setup. [18](#source-1
 20. <a id="source-20"></a> [Lima storage and names](../digests/lima-storage.md).
 
 21. <a id="source-21"></a> [Host and Lima diagnostics](../digests/host-diagnostics.md).
+
+22. <a id="source-22"></a> [Native credential formats and import](../digests/claude-auth.md).

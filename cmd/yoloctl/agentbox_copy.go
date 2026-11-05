@@ -367,22 +367,20 @@ func copyOptionsFromSource(changed func(string) bool, flags agentboxCreateOption
 }
 
 // stripManagedStateMounts returns src's extra mounts without the managed
-// account-state slot: primarily any entry at the source agent profile's
-// StateContainerPath (the slot applyAgentStateMount owns), plus — as a
+// account-state slots: every destination owned by the source profile, plus — as a
 // fallback for an un-lookupable source profile — any entry whose source
 // rides the account-state root (which only the managed slot may do in a
 // yoloctl-validated manifest). The pipeline re-derives the slot for the
 // copy's effective account/agent; an inherited stale slot would otherwise
 // survive as an ordinary bind and be rejected by rejectAccountRootBinds.
 func stripManagedStateMounts(src *agentbox.Config) []agentbox.Mount {
-	managedDest := managedStateDest(src)
 	root, err := layout.AccountStateRoot()
 	if err != nil {
 		root = ""
 	}
 	kept := make([]agentbox.Mount, 0, len(src.Mounts))
 	for _, m := range src.Mounts {
-		if managedDest != "" && m.Target == managedDest {
+		if isManagedStateDest(src, m.Target) {
 			continue
 		}
 		if root != "" && pathsIntersect(m.Source, root) {

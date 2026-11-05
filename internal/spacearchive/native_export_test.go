@@ -245,3 +245,68 @@ func TestExportRuntimeNamesDoNotExcludeUnrelatedAgents(t *testing.T) {
 		}
 	}
 }
+
+func TestAdditionalAccountStateViewLinksRemainWithinTheSameLeaf(t *testing.T) {
+	p := nativeExportPolicy{}
+	for _, tc := range []struct{ entry, target, want string }{
+		{"trial/claude/current-profile", "/home/sandbox/.config/anthropic/credentials/default.json", "anthropic/credentials/default.json"},
+		{"trial/claude/anthropic/current", "/home/sandbox/.config/anthropic/credentials/default.json", "credentials/default.json"},
+		{"trial/claude/anthropic/primary-alias", "/home/sandbox/.claude/anthropic/credentials/default.json", "credentials/default.json"},
+		{"trial/claude/root-alias", "/home/sandbox/.config/anthropic", "anthropic"},
+		{"trial/codex/no-cross-agent-alias", "/home/sandbox/.config/anthropic/credentials/default.json", "/home/sandbox/.config/anthropic/credentials/default.json"},
+	} {
+		got, err := p.relativeLink("/native/account-state", tc.entry, tc.target)
+		if err != nil || got != tc.want {
+			t.Fatalf("relative link=%q want=%q error=%v", got, tc.want, err)
+		}
+	}
+}
+
+func TestClaudeProfileTreeSurvivesWholeSpaceArchive(t *testing.T) {
+	source, boot := fixture(t)
+	leaf := filepath.Join(source, "account-state/trial/claude")
+	files := map[string]string{
+		".credentials.json":               `{"claudeAiOauth":{"accessToken":"synthetic-legacy"}}`,
+		"anthropic/active_config":         "work\n",
+		"anthropic/configs/work.json":     `{"authentication":{"type":"user_oauth"}}`,
+		"anthropic/credentials/work.json": `{"type":"oauth_token","access_token":"synthetic-private"}`,
+	}
+	for name, body := range files {
+		nativeTestFile(t, leaf, name, body)
+	}
+	nativeTestLink(t, leaf, "active-credential", "/home/sandbox/.config/anthropic/credentials/work.json")
+	state := stateFile(t)
+	if err := WriteState(t.Context(), state, source, boot); err != nil {
+		t.Fatal(err)
+	}
+	var archive bytes.Buffer
+	if err := Write(t.Context(), &archive, *boot, state); err != nil {
+		t.Fatal(err)
+	}
+	restored := stateFile(t)
+	manifest, _, err := Read(t.Context(), &archive, restored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dest, "account-state"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	boot.UID, boot.GID = os.Getuid(), os.Getgid()
+	if _, err := restored.Seek(0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := RestoreState(t.Context(), restored, dest, boot, manifest.StateSHA256, manifest.StateSize); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dest, "account-state/trial/claude")
+	for name, want := range files {
+		got, err := os.ReadFile(filepath.Join(target, name))
+		if err != nil || string(got) != want {
+			t.Fatalf("archive changed %s", name)
+		}
+	}
+	if got, err := os.ReadFile(filepath.Join(target, "active-credential")); err != nil || string(got) != files["anthropic/credentials/work.json"] {
+		t.Fatal("restored additional-view alias is wrong", err)
+	}
+}
