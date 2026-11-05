@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `79f0d7e323a5c38db5d3e5ba7b19f7fcf748eedf` and accompanying changes.
+Verification: `9f21466f639bdda1c4edde353998991781df22e7` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
@@ -34,7 +34,12 @@ The controller applies certain enabled desired state after verified startup;
 a reserved/uncertain audit operation prevents that reconciliation. Disable
 requires acknowledged service stop and retains logs/tools. Falco failure does
 not stop workloads; control uncertainty uses a separate audit receipt domain.
-The controller's ordinary global storage-uncertainty rules still apply.
+The controller's ordinary global storage-uncertainty rules still apply. The
+collector captures the first eight stderr lines/up to 4 KiB while draining the
+rest; failed health retains the phase/exit or timeout. Host status escapes controls and
+caps the final diagnostic at 1024 bytes. Event stdout never enters this
+diagnostic; it is absent from log/export records. Non-Falco failures retain
+their own cause instead of a blanket kernel explanation.
 [2](#source-2) [9](#source-9) [10](#source-10) [11](#source-11) [19](#source-19)
 
 [FACT] Firecracker audit first makes a bounded read-only PID-1 support query;

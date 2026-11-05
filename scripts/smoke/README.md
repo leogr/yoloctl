@@ -698,7 +698,10 @@ SMOKE_ROOT is the owned test fixture before using these examples.
 For Lima, start the disposable space with this controller build, then run
 `yoloctl audit enable --space NAME`. Check `audit status --space NAME --json`
 for enabled desired state, active service, pinned tool version and a loaded
-modern-eBPF driver. In the VM, run an owned executable named
+modern-eBPF driver. Failed status includes the phase, process/timeout error and
+a bounded escaped stderr prefix; it does not infer a kernel problem from every
+Falco failure. Validation with `-V` alone does not open the capture engine or
+prove event-schema compatibility. In the VM, run an owned executable named
 `yolo-audit-test` to exercise the controlled rule. Read `audit logs --space
 NAME --json`, then `audit export --space NAME --output NEW.jsonl`; check the
 finite interval/count and explicit drops/metadata/retention gaps. Confirm a

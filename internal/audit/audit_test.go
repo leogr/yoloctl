@@ -2,6 +2,7 @@ package audit
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -227,6 +228,16 @@ func TestPinnedArchivesInstallVerifyAndRuleSyntax(t *testing.T) {
 				t.Fatal(err)
 			}
 			if arch == runtime.GOARCH && runtime.GOOS == "linux" {
+				version, err := exec.CommandContext(t.Context(), filepath.Join(tools, "bin", "falco"), "--version").CombinedOutput()
+				if err != nil {
+					t.Fatal("pinned Falco version failed", err, string(version))
+				}
+				normalized := strings.Join(strings.Fields(string(version)), " ")
+				for _, expected := range []string{"Falco version: " + Version, "Libs version: 0.26.1", "Plugin API: 3.12.0"} {
+					if !strings.Contains(normalized, expected) {
+						t.Fatal("pinned runtime differs from plugin headers/manifest", string(version))
+					}
+				}
 				config, err := Configuration(root, tools, filepath.Join(root, "metadata.tsv"))
 				if err != nil {
 					t.Fatal(err)
@@ -241,6 +252,24 @@ func TestPinnedArchivesInstallVerifyAndRuleSyntax(t *testing.T) {
 				if output, err := cmd.CombinedOutput(); err != nil || bytes.Contains(output, []byte("schema validation: failed")) {
 					t.Fatalf("pinned-engine validation failed: %s %v", output, err)
 				}
+				// -V does not open an engine, so it misses event-schema checks.
+				// Default no-driver opens the plugin path without BPF grants. The
+				// explicit modern_ebpf qualification requires a real successful load;
+				// it must not downgrade EPERM/schema failures to a pass or skip.
+				engine := os.Getenv("FALCO_TEST_ENGINE")
+				if engine == "" {
+					engine = "nodriver"
+				}
+				if engine != "nodriver" && engine != "modern_ebpf" {
+					t.Fatal("unsupported qualification engine", engine)
+				}
+				capture, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+				defer cancel()
+				cmd = exec.CommandContext(capture, filepath.Join(tools, "bin", "falco"), "-c", filepath.Join(root, "falco.json"), "-o", "engine.kind="+engine, "-M", "1")
+				if output, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("pinned-engine open with embedded plugins failed: %s %v", output, err)
+				}
+				t.Log("pinned Falco engine open passed:", engine)
 			}
 			binary := filepath.Join(tools, "bin", "falco")
 			if err := os.Chmod(binary, 0600); err != nil {

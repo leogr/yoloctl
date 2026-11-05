@@ -30,7 +30,7 @@ import (
 func TestAuditNativeToggleGateAndStopFailure(t *testing.T) {
 	scenario := os.Getenv("YOLOCTL_TEST_AUDIT_TOGGLE")
 	if scenario == "" {
-		scenarios := []string{"gate-denied", "stop-failed", "disabled", "microvm-disabled"}
+		scenarios := []string{"gate-denied", "stop-failed", "disabled", "microvm-disabled", "status-failure"}
 		if os.Getenv("FALCO_TEST_ARCHIVES") != "" {
 			scenarios = append(scenarios, "enabled", "start-failed", "microvm-enabled")
 		}
@@ -86,6 +86,27 @@ func TestAuditNativeToggleGateAndStopFailure(t *testing.T) {
 
 	sentinel := errors.New("unacknowledged service action")
 	const requestID = "audit-test-0123456789abcdef"
+	if scenario == "status-failure" {
+		running = false
+		root, err := layout.AuditDir()
+		if err != nil {
+			t.Fatal(err)
+		}
+		detail := "Falco modern eBPF preflight failed: exit status 1; stderr prefix: plugin schema mismatch\x1b[31m"
+		service, _ := json.Marshal(audit.ServiceConfig{Epoch: requestID, Version: audit.Version, RulesSHA256: audit.RulesDigest()})
+		health, _ := json.Marshal(audit.Health{Epoch: requestID, State: "failed", Error: detail})
+		if err := safepath.WriteFile(root, "service.json", service, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := safepath.WriteFile(auditRuntimeDir(), "health.json", health, 0600); err != nil {
+			t.Fatal(err)
+		}
+		status, err := nativeAuditStatus(t.Context())
+		if err != nil || status.State != "failed" || status.Driver != "unloaded" || status.Error != audit.Clean(detail) || !status.Desired.Enabled {
+			t.Fatal(status, err)
+		}
+		return
+	}
 	auditServiceStart = func(_ context.Context, _ *container.Client, unit vmservice.Unit) error {
 		if !enabling || !held || !slices.Contains(events, "gate") {
 			t.Fatal("start preceded permission", events)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -24,6 +25,8 @@ func ProbeSupport() error {
 	return nil
 }
 
+var collectProbeSupport = ProbeSupport
+
 // Collect runs only as fixed VM-root infrastructure, outside box namespaces.
 // The short real capture must exit successfully before a loaded health result.
 func Collect(parent context.Context, root, run, tools string, service ServiceConfig) (result error) {
@@ -38,10 +41,11 @@ func Collect(parent context.Context, root, run, tools string, service ServiceCon
 		return safepath.WriteFile(run, "health.json", raw, 0600)
 	}
 	defer func() {
+		health.Loaded = false
 		if result != nil && ctx.Err() == nil {
-			health.State, health.Error = "failed", "Falco validation, modern eBPF load or collection failed; a compatible VM kernel is required"
+			health.State, health.Error = "failed", Clean(result.Error())
 		} else {
-			health.State = "inactive"
+			health.State, health.Error = "inactive", ""
 		}
 		if err := save(); result == nil {
 			result = err
@@ -53,19 +57,19 @@ func Collect(parent context.Context, root, run, tools string, service ServiceCon
 	if service.Version != Version || service.RulesSHA256 != RulesDigest() {
 		return errors.New("audit service pins differ from this controller build; explicitly enable to update")
 	}
-	if err := ProbeSupport(); err != nil {
+	if err := collectProbeSupport(); err != nil {
 		return err
 	}
 	binary := filepath.Join(tools, "bin", "falco")
 	args := []string{"-c", filepath.Join(root, "falco.json")}
 	validate, cancelValidate := context.WithTimeout(ctx, 15*time.Second)
-	err := falcoCommand(validate, binary, append(append([]string{}, args...), "-V", filepath.Join(root, "rules.yaml"))...).Run()
+	err := runFalcoPhase(validate, "rules validation", binary, append(append([]string{}, args...), "-V", filepath.Join(root, "rules.yaml"))...)
 	cancelValidate()
 	if err != nil {
 		return err
 	}
 	probe, cancelProbe := context.WithTimeout(ctx, 15*time.Second)
-	err = falcoCommand(probe, binary, append(append([]string{}, args...), "-M", "2")...).Run()
+	err = runFalcoPhase(probe, "modern eBPF preflight", binary, append(append([]string{}, args...), "-M", "2")...)
 	cancelProbe()
 	if err != nil {
 		return err
@@ -85,7 +89,7 @@ func Collect(parent context.Context, root, run, tools string, service ServiceCon
 		return err
 	}
 	if err := cmd.Start(); err != nil {
-		return err
+		return falcoFailure(ctx, "collection start", cmd, err)
 	}
 	health.State, health.Loaded = "running", true
 	if err := save(); err != nil {
@@ -125,12 +129,12 @@ func Collect(parent context.Context, root, run, tools string, service ServiceCon
 		case item := <-input:
 			if item.err != nil {
 				_ = cmd.Process.Kill()
-				_ = cmd.Wait()
+				waitErr := cmd.Wait()
 				waited = true
 				if ctx.Err() != nil {
 					return nil
 				}
-				return errors.New("falco stopped while auditing remained enabled")
+				return falcoFailure(ctx, "collection", cmd, errors.Join(errors.New("process stopped while auditing remained enabled"), waitErr))
 			}
 			if item.bad {
 				if err := writer.Dropped(); err != nil {
@@ -210,9 +214,29 @@ func readCollector(ctx context.Context, output io.Reader, out chan<- collectorIn
 
 func falcoCommand(ctx context.Context, binary string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, binary, args...)
-	cmd.Stderr = io.Discard
+	cmd.Stderr = &stderrPrefix{}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = 2 * time.Second
 	return cmd
+}
+
+func runFalcoPhase(ctx context.Context, phase, binary string, args ...string) error {
+	cmd := falcoCommand(ctx, binary, args...)
+	if err := cmd.Run(); err != nil {
+		return falcoFailure(ctx, phase, cmd, err)
+	}
+	return nil
+}
+
+func falcoFailure(ctx context.Context, phase string, cmd *exec.Cmd, err error) error {
+	if ctx.Err() != nil {
+		err = errors.Join(err, ctx.Err())
+	}
+	prefix, _ := cmd.Stderr.(*stderrPrefix)
+	detail := ""
+	if prefix != nil {
+		detail = prefix.summary()
+	}
+	return fmt.Errorf("falco %s failed: %w%s", phase, err, detail)
 }

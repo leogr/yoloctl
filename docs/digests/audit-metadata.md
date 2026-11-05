@@ -1,15 +1,18 @@
 # Audit metadata extraction
 
-Verification: `79f0d7e323a5c38db5d3e5ba7b19f7fcf748eedf` and accompanying changes.
+Verification: `9f21466f639bdda1c4edde353998991781df22e7` and accompanying changes.
 
 [FACT] The yolo C++ extraction plugin uses Falco's pinned C ABI 3.12.0
-(`falcosecurity/libs` 0.26.1). The container plugin loads first and supplies
+(`falcosecurity/libs` 0.26.1, matching pinned Falco 0.45.2). Its separate required
+event schema is explicitly 4.0.0: extraction uses the common event TID and
+state tables, not minor-version-specific event parameters. Omitting this export
+would make the framework assume schema 3.0.0. The container plugin supplies
 `threads.container_id`; extraction reads/releases the triggering thread's table
 entry. The plugin exposes only `yolo.box`, `yolo.space`, `yolo.account`,
 `yolo.agent`, `yolo.runtime_mode`, `yolo.network_unconfined` and
 `yolo.metadata_available`. These are recorded launch context, not per-process
 confinement or authority. No per-event RPC, secret lookup or mutation occurs.
-[1](#source-1) [2](#source-2)
+[1](#source-1) [2](#source-2) [16](#source-16)
 
 [FACT] After the audit startup attempt, the controller refreshes an observation
 on a five-second ticker under native locking and receipt-hold checks.
@@ -51,9 +54,12 @@ Immutable tool directories include the plugin digest; the audit rules pin also
 binds its qualification manifest, so updates need explicit enablement.
 [8](#source-8) [9](#source-9) [10](#source-10) [13](#source-13)
 
-[FACT] C++ fixtures use synthetic events and thread tables. The opt-in Go test
-loads plugins and validates rules with native Falco `-V`; it does not capture
-BPF events. [11](#source-11) [14](#source-14)
+[FACT] C++ fixtures use synthetic events/tables and load the native DSO to check
+API/schema/version exports. The opt-in Go archive test runs native Falco `-V`
+and opens a no-driver engine with `-M 1`. This mode alone does not prove schema
+admission or BPF capture. `FALCO_TEST_ENGINE=modern_ebpf` instead requires a
+successful real modern-engine open; schema/permission/load failures fail that
+qualification. [11](#source-11) [14](#source-14)
 
 ## Sources
 
@@ -74,3 +80,5 @@ BPF events. [11](#source-11) [14](#source-14)
 14. <a id="source-14"></a> [Native validation](../../internal/audit/audit_test.go#L1) — `TestPinnedArchivesInstallVerifyAndRuleSyntax`.
 
 15. <a id="source-15"></a> [Audit maintenance](../../cmd/yoloctl/controller_audit_linux.go#L1) — `startAuditRetention`, startup ordering and due-expiry retry.
+
+16. <a id="source-16"></a> [Event schema contract](../../third_party/audit-plugin/include/plugin/plugin_api.h#L1148) — required minimum schema callback; absent/null defaults to 3.0.0, separate from API version.

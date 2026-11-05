@@ -4,6 +4,7 @@
 #include <cassert>
 #include <iostream>
 #include <fstream>
+#include <dlfcn.h>
 
 static std::string cid(64, 'a'), generation(64, 'b');
 static unsigned released = 0;
@@ -29,7 +30,17 @@ static ss_plugin_rc read_field(ss_plugin_table_t *, ss_plugin_table_entry_t *, c
 }
 static void release_entry(ss_plugin_table_t *, ss_plugin_table_entry_t *) { released++; }
 int main(int argc, char **argv) {
-    assert(argc == 2);
+    assert(argc == 3);
+    assert(std::string(plugin_get_required_api_version()) == "3.12.0");
+    assert(std::string(plugin_get_required_event_schema_version(nullptr)) == "4.0.0");
+    void *library = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
+    assert(library);
+    auto schema = reinterpret_cast<const char *(*)(ss_plugin_t *)>(dlsym(library, "plugin_get_required_event_schema_version"));
+    auto api = reinterpret_cast<const char *(*)()>(dlsym(library, "plugin_get_required_api_version"));
+    auto version = reinterpret_cast<const char *(*)()>(dlsym(library, "plugin_get_version"));
+    assert(schema && api && version);
+    assert(std::string(schema(nullptr)) == "4.0.0" && std::string(api()) == "3.12.0" && std::string(version()) == "1.0.1");
+    assert(dlclose(library) == 0);
     std::ifstream fixture(argv[1]);
     std::string golden((std::istreambuf_iterator<char>(fixture)),std::istreambuf_iterator<char>());
     auto protocol = yolo::Snapshot::parse(golden,100);
