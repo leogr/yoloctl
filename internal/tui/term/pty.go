@@ -17,22 +17,25 @@ import (
 // during setup, which leaves its original os.File in blocking mode. Duplicate
 // the descriptor and construct a fresh File from an explicitly nonblocking fd;
 // this gives it an independent lifetime without retaining the original wrapper.
-func startPTYGeometry(cmd *exec.Cmd, g terminal.Geometry) (*os.File, error) {
+//
+// Base-proof shim: the same signature as the fix, with today's behaviour
+// (the parent's slave is closed at start; release does nothing).
+func startPTYGeometry(cmd *exec.Cmd, g terminal.Geometry) (*os.File, func(time.Time), error) {
 	if !g.Valid() {
-		return nil, errors.New("invalid PTY geometry")
+		return nil, nil, errors.New("invalid PTY geometry")
 	}
 	x, y := ptyPixels(g)
 	master, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: uint16(g.Rows), Cols: uint16(g.Cols), X: x, Y: y})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	pollable, err := pollablePTY(master)
 	if err != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return nil, fmt.Errorf("prepare interruptible PTY: %w", err)
+		return nil, nil, fmt.Errorf("prepare interruptible PTY: %w", err)
 	}
-	return pollable, nil
+	return pollable, func(time.Time) {}, nil
 }
 
 // pollablePTY consumes master on both success and error.

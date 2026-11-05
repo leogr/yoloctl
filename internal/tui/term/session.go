@@ -122,7 +122,7 @@ func Start(opts Options) (*Session, error) {
 		cmd.ExtraFiles = append(cmd.ExtraFiles, requestChild)
 		cmd.Env = forceEnv(cmd.Env, fmt.Sprintf("%s=%d", termio.TabRequestFDEnv, 2+len(cmd.ExtraFiles)))
 	}
-	ptmx, err := startPTYGeometry(cmd, size)
+	ptmx, _, err := startPTYGeometry(cmd, size)
 	if viewChild != nil {
 		_ = viewChild.Close()
 	}
