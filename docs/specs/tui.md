@@ -51,9 +51,9 @@ re-attaches on its own, and other ended views are unchanged. [41](#source-41)
 
 [FACT] Private attachment failures use the palette's wrapped result area,
 deferred while a palette command runs. Background failures leave another live
-tab's input focus intact. A stream that ended without an exit status (a stopped
-box's holder) is shown in the status line instead, keeping the ended view and
-its re-attach button visible. [1](#source-1)
+tab's input focus intact. A stream that ended without an exit status (for
+example, the holder of a stopped box) is shown in the status line instead,
+without opening the palette over the ended view. [1](#source-1)
 
 [FACT] `space view` opens in a tab unless help is requested. Only that tab
 and native `chat` tabs get a private request channel. Through it, the view can

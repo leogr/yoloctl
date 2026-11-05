@@ -123,7 +123,8 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 14. <a id="source-14"></a> [Display snapshots, history and focus](terminal-display.md) — focus state, mode gating and input-delivery regressions.
 15. <a id="source-15"></a> [Native selection and explicit copy](terminal-selection.md) — local selection and conditional copy-key ownership.
 16. <a id="source-16"></a> [box-attach.sh](../../scripts/smoke/box-attach.sh#L15) — scripted Enter bytes in `pty_run` and shared detach/reattach input fixtures.
-17. <a id="source-17"></a> [view_errors_test.go](../../internal/tui/view_errors_test.go#L93) — inherited-channel rejection, palette wrapping/defer, background focus and standalone diagnostics; holder_closed_test.go covers the status-line report and a real failure still in the palette.
+17. <a id="source-17"></a> [view_errors_test.go](../../internal/tui/view_errors_test.go#L93) — inherited-channel rejection, palette wrapping/defer, background focus and standalone diagnostics;
+    [holder_closed_test.go](../../internal/tui/holder_closed_test.go#L1-L71) — the status-line report of an exitless holder close and a real failure still in the palette.
 18. <a id="source-18"></a> [Compatibility evidence](terminal-compatibility.md) — legacy input, committed text, focus/cursor coverage and limits.
 19. <a id="source-19"></a> [Host integrations](host-integrations.md) — explicit PNG paste ownership and live browser approval.
 20. <a id="source-20"></a> [palette_paste_test.go](../../internal/tui/palette_paste_test.go#L13) — host-reader paste/focus and cursor alignment regression.
