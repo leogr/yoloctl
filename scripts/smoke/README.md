@@ -4,6 +4,25 @@ the same home. Never reuse a real space's home as a smoke fixture.
 
 # Live-VM smoke tests
 
+## macOS vmshare unit verification
+
+From a host-owned checkout/worktree of the candidate on macOS, run:
+
+```sh
+bash scripts/check-vmshare-macos.sh
+```
+
+This runs the complete vmshare package three times under each umask (022 and
+077), then its race tests under each mask. It records the commit, dirty status,
+macOS/Go versions, inherited mask and actual Go/host architectures, including
+an amd64 Go toolchain running under Rosetta. It retains logs in a new temporary
+directory and returns nonzero if any run fails. Go's race detector needs a
+working C toolchain. The mask changes are confined to child processes. No
+yoloctl binary, VM, space, mount or credentials are used; these are local SFTP
+and filesystem tests, not mounted SSHFS/Firecracker qualification.
+
+## Linux runtime closeout
+
 For a short Linux amd64 check of the bundled Linux 7 kernel and Firecracker
 TCP/UDP forwarding (including both TCP half-close directions), OCI Feature
 declaration/copy, typed options and completion, run
