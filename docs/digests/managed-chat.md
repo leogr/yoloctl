@@ -65,8 +65,9 @@ A revocation that is saved but not applied by the server warns and names
 replay the reload. Release-time role publication is unchanged, so an unreadable
 chat store or inventory still fails the command there, as for every box
 lifecycle command. [19](#source-19) [20](#source-20)
-A membership left active this way is never revoked implicitly: its `chat status`
-line and the reused-name enroll refusal name `chat revoke <member-id> --space S`.
+An active membership whose declaration is missing or whose name was reused is
+never revoked implicitly: its `chat status` line (in a readable, prepared room)
+and the reused-name enroll refusal name `chat revoke <member-id> --space S`.
 [21](#source-21)
 
 [FACT] Archives include the room declaration and server data, after the existing
