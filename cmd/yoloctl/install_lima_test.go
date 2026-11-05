@@ -71,17 +71,17 @@ func TestInstallerLimaAdviceRequiresProvedEffectivePins(t *testing.T) {
 			}
 			command, note := installLimaAdvice(boot.Name)
 			if scenario == "different" || scenario == "missing" {
-				if command == nil || !command.Recreate || command.Args[1] != "recreate" || !strings.Contains(command.Warning, "BOOTS") {
+				if command == nil || command.Label != "optional" || command.Args[1] != "recreate" || !strings.Contains(command.Note, "starts the VM") {
 					t.Fatal(command, note)
 				}
-				if scenario == "missing" && (!strings.Contains(command.Warning, "Unpinned") || !strings.Contains(command.Warning, "host's Lima default")) {
-					t.Fatal("missing unpinned-stack warning", command.Warning)
+				if scenario == "missing" && (!strings.Contains(command.Note, "unpinned") || !strings.Contains(command.Note, "host's Lima default")) {
+					t.Fatal("missing unpinned-stack note", command.Note)
 				}
 			} else if command != nil {
 				t.Fatal("unproved recreation", scenario, command, note)
 			}
 			if scenario == "inherited" || scenario == "global-override" || scenario == "global-default" || scenario == "unreadable" || scenario == "unparsable" || scenario == "invalid-containerd" || scenario == "invalid-archives" {
-				if !strings.Contains(note, "UNKNOWN") {
+				if !strings.Contains(note, "could not") {
 					t.Fatal(note)
 				}
 			}

@@ -1,6 +1,6 @@
 # Installation, releases and host homes
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; review fixes on `1d265df3` (option B home, test isolation, symlinked prefixes, interruption, too-old Lima template) and accompanying changes.
+Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); other sections at `1d265df3`.
 
 [FACT] Coordinated builds stamp hosts and Linux companions with one version and
 random bundle. Only strict `vMAJOR.MINOR.PATCH[-PRERELEASE]` selects release;
@@ -16,8 +16,7 @@ init), so XDG-isolated fixtures and subprocesses never write a live home.
 [2](#source-2)
 
 [FACT] `version` reports channel/config/cache roots without creating directories;
-its Lima probe is bounded. `install` and guarded installer lifecycle starts also
-skip directory setup. Other commands retain normal setup. Infrastructure/native
+its Lima probe is bounded. `install` also skips directory setup. Other commands retain normal setup. Infrastructure/native
 dispatch and operator checks remain first; the palette adds no marker/version.
 [3](#source-3)
 
@@ -50,17 +49,19 @@ hash; qualify still runs); `dist` always builds OpenShell from source. [6](#sour
 native execution and manifest equality. Intel execution, Gatekeeper and
 notarization are outside this flow. [6](#source-6)
 
-## Installer and migrations
+## Installer and space advice
 
 [FACT] Hidden `install` refuses dev builds, native/controller context, operator
 clients, `OPENSHELL_SANDBOX`, Linux container markers and invalid bundles before
-writing. Absence of signals cannot prove host execution. Prerequisites and PATH
-shadowing are reported read-only; after installing, a bin directory missing
-from PATH gets one line to add it for `$SHELL` (bash/zsh rc `export`, fish
-`fish_add_path`, else generic; `installPathHint`). Unknown executables are
-fingerprinted, never executed. Non-TTY without `--yes` prints only; unknown conflicts require terminal
-confirmation. `--yes` accepts managed upgrades only, never migrations.
-[7](#source-7)
+writing. Absence of signals cannot prove host execution. Unknown executables are
+fingerprinted, never executed. Non-TTY without `--yes` prints only; unknown
+conflicts require terminal confirmation; `--yes` accepts managed upgrades only.
+Output: one `✓ Installed yoloctl V → LINK (was OLD)` line, `!` warnings
+(PATH shadowing, unknown build, downgrade), `✗` failures (a prerequisite only
+when it fails); TUI dark-theme colors only on a terminal without `NO_COLOR` or
+`TERM=dumb`. A bin directory missing from PATH
+gets one line for `$SHELL` (bash/zsh rc `export`, fish `fish_add_path`, else
+generic; `installPathHint`). [7](#source-7)
 
 [FACT] Publication rejects bin-directory overlap with source/store trees, including
 aliases and missing descendants, before mutation. A symlinked prefix (a home or
@@ -68,11 +69,10 @@ aliases and missing descendants, before mutation. A symlinked prefix (a home or
 bin directory that is itself a symlink is still refused, never written through. It locks
 `~/.local/share/yoloctl/install.lock`, stages a complete
 bundle through no-follow descriptor writes/fsync, publishes its immutable
-`bundles/<version>-<os>-<arch>-<bundle>` key without replacement (a filesystem
-without the no-replace rename flag, e.g. a FUSE mount replying EINVAL, gets an
-absence check plus a plain rename under the lock; unlike the flag, that would
-replace an empty directory a foreign process creates in between;
-`publishDirectory`), then atomically
+`bundles/<version>-<os>-<arch>-<bundle>` key without replacement (without the
+no-replace rename flag, e.g. FUSE replying EINVAL: an absence check and plain
+rename under the lock, which could replace an empty directory created in
+between; `publishDirectory`), then atomically
 swaps `<bin-dir>/yoloctl` (default `~/.local/bin`). A bin directory whose
 filesystem refuses symbolic links (EPERM/ENOTSUP) fails with an error naming it
 and asking for a local-disk `--bin-dir`; the published bundle stays. Corrupt/different existing keys
@@ -80,26 +80,18 @@ fail; identical bytes are a no-op. Old bundles, failed stages and explicitly
 replaced unknown regular executables are retained. Nothing is pruned or called
 safe to delete; rc files are not edited. [8](#source-8)
 
-[FACT] Read-only proposals print absolute link/home commands; in print-only or
-`--dry-run` mode they say nothing is installed yet, since the link still selects
-the old build. A Lima VM whose template predates this build's OpenShell
-provisioning (read-only `lima.CheckOpenShellVM`) gets one `space recreate S`
-proposal instead of a controller update known to fail. Bundle mismatch
-requires `space start S --update-controller`; stopped starts explicitly boot.
-Proved Lima pin differences (or an unpinned stack) can offer recreation after
-the update; inherited, global or unreadable configuration and other missing
-evidence stay UNKNOWN. Firecracker image origin is unrecorded: only equality
-with this build's default needs no action, anything else is UNKNOWN with a
-manual `space recreate S --update-vm-image` hint. Pending checkpoints show only
-recovery guidance. [9](#source-9)
-
-[FACT] Terminal execution asks per command, then compares bundle, state, disk
-identity, generation and bootstrap digest under the existing lifecycle lock;
-missing evidence exits 76 without mutation. Running consent forbids the boot
-fallback. Only the private pipe receipt advances consent; stdout cannot. An
-approved recreate runs with `--force`. An interruption is never a skip: the
-child gets SIGINT (bounded wait), guarded checks return the cancellation and
-prompting stops. Skips continue; failures stop without replay. [10](#source-10)
+[FACT] Install never runs a space command. A read-only inventory (no boot,
+lock or write) prints a block per space needing something; commands use the
+install link and an explicit `YOLOCTL_HOME`; print-only and `--dry-run` say the
+link still selects the old build. Bundle mismatch advises
+`space start S --update-controller` (stopped: it starts the VM). A Lima VM
+predating this build's OpenShell provisioning (`lima.CheckOpenShellVM`) gets
+`space recreate S` instead. Proved Lima pin differences or an unpinned stack add
+an optional recreate; unprovable configuration is `✗`. A Firecracker image
+equal to this build's default needs nothing; an absent or known different
+default adds an optional `space recreate S --update-vm-image`, never calling
+the image current or obsolete; other read errors are `✗`. Pending checkpoints
+show only recovery guidance. [9](#source-9)
 
 ## Sources
 
@@ -108,7 +100,7 @@ prompting stops. Skips continue; failures stop without replay. [10](#source-10)
 2. <a id="source-2"></a> [Roots](../../internal/layout/layout.go#L96-L151), `ConfigRoot`, `CacheRoot`, `selectedHome`;
    [matrix](../../internal/layout/homes_test.go#L1-L91); test-binary isolation in [testhome.go](../../internal/layout/testhome.go#L1), sentinel regression in [home_isolation_test.go](../../internal/layout/home_isolation_test.go#L1).
 3. <a id="source-3"></a> [Startup](../../cmd/yoloctl/main.go#L69-L110), `main`;
-   [routing](../../cmd/yoloctl/main.go#L226-L244), `readOnlyStartup`;
+   [routing](../../cmd/yoloctl/main.go#L225-L230), `readOnlyStartup`;
    [bounded probe](../../cmd/yoloctl/version.go#L88-L107).
 4. <a id="source-4"></a> [Smoke roots](../../scripts/smoke/common.sh#L111-L136), `smoke_init`;
    [sentinel regression](../../scripts/test_vm_smoke.py#L61-L90);
@@ -123,16 +115,14 @@ prompting stops. Skips continue; failures stop without replay. [10](#source-10)
    [CI](../../.github/workflows/ci.yml#L38-L52), OpenShell cache in `build`;
    [publication](../../scripts/publish-release.py#L1-L199), `identity`, `verify_artifact`, `main`;
    [archive checks](../../scripts/check-dist.go#L1-L172), `run`, `extract`.
-7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L256), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go.
+7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L274), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go;
+   [output](../../cmd/yoloctl/install_output.go#L1-L133), `installOut`, `installColor`, `installCommand`.
 8. <a id="source-8"></a> [Publication engine](../../internal/installer/engine.go#L1-L476), `Inspect`, `Publish`, `publishDirectory`
    (platform `renameNoReplace`/`noReplaceUnsupported` in rename_linux.go and rename_darwin.go);
    [no-replace fallback regressions](../../internal/installer/publish_fallback_test.go#L1);
    [destination boundary](../../internal/installer/paths.go#L1-L87), `ValidatePaths`;
    [fault/concurrency regressions](../../internal/installer/engine_test.go#L1-L278);
    [overlap regressions](../../internal/installer/paths_test.go#L1-L193).
-9. <a id="source-9"></a> [Proposals](../../cmd/yoloctl/install_migration.go#L1-L318), `installProposals`, `installImageNote`, `installLimaAdvice`;
+9. <a id="source-9"></a> [Space advice](../../cmd/yoloctl/install_migration.go#L1-L292), `installSpaceAdvice`, `printSpaceAdvice`, `installLimaAdvice`;
+   [inventory](../../cmd/yoloctl/install_inventory.go#L1-L48), `consentSnapshot`, `readInstallConsent`;
    [default metadata](../../internal/firecracker/recipe_linux.go#L60-L88), `ReadDefaultImage`.
-10. <a id="source-10"></a> [Guard](../../cmd/yoloctl/install_precondition.go#L1-L140), `checkInstallPrecondition`, `writeInstallReceipt`;
-   [deployment](../../cmd/yoloctl/controller_deploy.go#L170-L280), `startControllerSpaceImpl`;
-   [execution](../../internal/installmigration/migration.go#L1-L132), `Execute`;
-   [compatibility offer](../../cmd/yoloctl/space_vm_compatibility.go#L87), `offerSpaceVMRecreate`.

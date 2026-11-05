@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/leogr/yoloctl/internal/boxendpoint"
 	"github.com/leogr/yoloctl/internal/buildinfo"
@@ -227,18 +226,5 @@ func readOnlyStartup(args []string) bool {
 	if len(args) == 0 {
 		return false
 	}
-	if args[0] == "version" || args[0] == "install" {
-		return true
-	}
-	if len(args) > 1 && args[0] == "space" && (args[1] == "start" || args[1] == "recreate") {
-		for _, arg := range args[2:] {
-			if arg == "--" {
-				break
-			}
-			if arg == "--"+installPreconditionFlag || strings.HasPrefix(arg, "--"+installPreconditionFlag+"=") {
-				return true
-			}
-		}
-	}
-	return false
+	return args[0] == "version" || args[0] == "install"
 }

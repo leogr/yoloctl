@@ -20,7 +20,7 @@ length below 104 on Darwin or 108 on Linux, matching Lima's OpenSSH temporary
 socket allowance. [35](#source-35) [36](#source-36) [37](#source-37)
 Create/import reject before destination publication or VM/disk
 effects; start checks before the compatibility offer and again under the
-lifecycle lock, after installer consent. Recreate checks before teardown;
+lifecycle lock. Recreate checks before teardown;
 deployment and low-level Lima create/start also check. Errors identify the
 path, byte count and limit. [38](#source-38) [39](#source-39)
 [40](#source-40) [42](#source-42)

@@ -10,10 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/leogr/yoloctl/internal/installmigration"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
-	"github.com/leogr/yoloctl/internal/spacelock"
 )
 
 func socketPathCLIHome(t *testing.T) string {
@@ -80,12 +78,8 @@ func TestSpaceSocketPathRefusalPrecedesCreateAndImportEffects(t *testing.T) {
 
 func TestSpaceSocketPathRefusalPrecedesCompatibilityAndRecreate(t *testing.T) {
 	for _, action := range []string{"start", "recreate"} {
-		for _, guarded := range []bool{false, true} {
-			label := action
-			if guarded {
-				label += "-installer"
-			}
-			t.Run(label, func(t *testing.T) {
+		{
+			t.Run(action, func(t *testing.T) {
 				calls := socketPathCLIHome(t)
 				boot := imageUpdateFixture(t)
 				boot.VM.Backend, boot.VM.Image = "", "" // Legacy selection must still validate Lima.
@@ -106,30 +100,7 @@ func TestSpaceSocketPathRefusalPrecedesCompatibilityAndRecreate(t *testing.T) {
 				if action == "recreate" {
 					args = append(args, "--force")
 				}
-				observed := false
-				if guarded {
-					unlock, err := spacelock.Acquire(t.Context(), boot.Name, true)
-					if err != nil {
-						t.Fatal(err)
-					}
-					unlock()
-					expected, err := consentSnapshot(boot, "Stopped")
-					if err != nil {
-						t.Fatal(err)
-					}
-					oldObserve, oldPipe := observeInstallConsent, validateInstallResultPipe
-					t.Cleanup(func() { observeInstallConsent, validateInstallResultPipe = oldObserve, oldPipe })
-					observeInstallConsent = func(context.Context, string) (installmigration.Snapshot, error) {
-						observed = true
-						return expected, nil
-					}
-					validateInstallResultPipe = func(int) error { return nil }
-					args = append(args, "--"+installPreconditionFlag, expected.Encode(), "--"+installReceiptFlag, "3")
-				}
 				requireSocketPathRefusal(t, resourceCommand(t, args...), calls)
-				if observed != guarded {
-					t.Fatal("path validation bypassed locked installer consent", observed, guarded)
-				}
 				after, err := os.ReadFile(mustBootstrapPath(t, boot.Name))
 				if err != nil || !bytes.Equal(before, after) {
 					t.Fatal("refusal changed bootstrap", err)

@@ -153,12 +153,9 @@ backoff/cleanup is `activating`; neither proves readiness. Existing spaces need
 sessions/ephemeral workdirs. Controller-only updates cannot replace PID 1.
 [19](#source-19)
 
-[FACT] Installer-authorized start/recreate compares the full consent snapshot
-under the existing host lifecycle lock before effects. Consent to update a
-running VM forbids a later boot fallback even if it disappears. Only confirmed
-private results advance the next command's snapshot; skips and failures never
-replay the command. Ordinary lifecycle commands keep their existing semantics.
-[20](#source-20)
+[FACT] Install never runs a space lifecycle command: it prints each space's
+commands for the user to run, and `space start`/`recreate` take no installer
+consent input. [20](#source-20)
 
 ## Sources
 
@@ -184,4 +181,4 @@ replay the command. Ordinary lifecycle commands keep their existing semantics.
 18. <a id="source-18"></a> [Controller image preparation](../digests/image-preparation.md).
 19. <a id="source-19"></a> [Controller supervision](../digests/controller-supervision.md) — failure episodes, stop and image rollout.
 
-20. <a id="source-20"></a> [Installer consent and deployment](../digests/installation.md).
+20. <a id="source-20"></a> [Installation and space advice](../digests/installation.md).

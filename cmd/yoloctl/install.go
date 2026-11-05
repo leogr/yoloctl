@@ -104,31 +104,34 @@ func newInstallCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		out := cmd.OutOrStdout()
-		_, _ = fmt.Fprintln(out, installPrerequisite(cmd.Context()))
-		_, _ = fmt.Fprintf(out, "Release %s (%s)\nInstall link: %s\n", manifest.Version, manifest.Bundle, filepath.Join(bin, "yoloctl"))
+		o := newInstallOut(cmd.OutOrStdout())
+		link := filepath.Join(bin, "yoloctl")
+		if failed := installPrerequisite(cmd.Context()); failed != "" {
+			o.bad(failed)
+		}
 		if path, err := exec.LookPath("yoloctl"); err == nil {
 			path, _ = filepath.Abs(path)
 			// Compare resolved directories: a PATH entry may reach the bin
 			// directory through a symlink (and vice versa).
-			dir, link := filepath.Dir(path), bin
+			dir, resolvedLink := filepath.Dir(path), bin
 			if resolved, err := filepath.EvalSymlinks(dir); err == nil {
 				dir = resolved
 			}
-			if resolved, err := filepath.EvalSymlinks(link); err == nil {
-				link = resolved
+			if resolved, err := filepath.EvalSymlinks(resolvedLink); err == nil {
+				resolvedLink = resolved
 			}
-			if filepath.Join(dir, filepath.Base(path)) != filepath.Join(link, "yoloctl") {
-				_, _ = fmt.Fprintf(out, "Warning: another yoloctl is first on PATH: %s\n", path)
+			if filepath.Join(dir, filepath.Base(path)) != filepath.Join(resolvedLink, "yoloctl") {
+				o.warn("another yoloctl is first on PATH: ", o.paint(roleLabel, path))
 			}
 		}
 		if existing.Unknown {
-			_, _ = fmt.Fprintf(out, "Existing %s: unknown build, SHA256 %s (never executed)\n", existing.Path, existing.Fingerprint)
+			o.warn(o.paint(roleLabel, existing.Path), " is an unknown build (SHA256 ", existing.Fingerprint, "; never executed)")
 		}
+		was := ""
 		if existing.Manifest != nil {
-			_, _ = fmt.Fprintf(out, "Existing release: %s (%s)\n", existing.Manifest.Version, existing.Manifest.Bundle)
-			if buildinfo.CompareRelease(manifest.Version, existing.Manifest.Version) < 0 {
-				_, _ = fmt.Fprintln(out, "Warning: this is a downgrade; older builds may not understand newer state.")
+			was = existing.Manifest.Version
+			if buildinfo.CompareRelease(manifest.Version, was) < 0 {
+				o.warn("this is a downgrade from ", was, "; older builds may not understand newer state")
 			}
 		}
 		interactive := isInteractive(cmd.InOrStdin())
@@ -136,22 +139,27 @@ func newInstallCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		proposals := installProposals(cmd.Context(), manifest.Bundle, filepath.Join(bin, "yoloctl"), !printOnly, out)
 		if printOnly {
-			_, _ = fmt.Fprintln(out, "Print only; nothing installed or migrated. Use --yes to accept an upgrade without migration execution.")
+			printSpaceAdvice(o, installSpaceAdvice(cmd.Context(), manifest.Bundle), link, false)
+			o.line()
+			if dry {
+				o.line(o.paint(roleDim, "Dry run: nothing was installed or changed."))
+			} else {
+				o.line(o.paint(roleDim, "Print only: nothing was installed. Run it at a terminal, or add --yes to accept an upgrade."))
+			}
 			return nil
 		}
 		if confirm {
 			prompt := "Replace the unknown build with this release? [y/N]: "
 			if !existing.Unknown {
-				prompt = fmt.Sprintf("Upgrade %s → %s? [y/N]: ", existing.Manifest.Version, manifest.Version)
+				prompt = fmt.Sprintf("Upgrade %s → %s? [y/N]: ", was, manifest.Version)
 			}
-			ok, err := confirmInstall(prompt, cmd.InOrStdin(), cmd.ErrOrStderr())
+			ok, err := confirmInstall(newInstallOut(cmd.ErrOrStderr()).paint(roleDim, prompt), cmd.InOrStdin(), cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
 			if !ok {
-				_, _ = fmt.Fprintln(out, "Installation declined.")
+				o.line(o.paint(roleDim, "Installation declined; nothing was changed."))
 				return nil
 			}
 		}
@@ -159,19 +167,30 @@ func newInstallCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		version := o.paint(roleBold, manifest.Version)
 		if result.Already {
-			_, _ = fmt.Fprintln(out, "Already installed (verified bundle).")
+			o.ok("yoloctl ", version, " is already installed → ", o.paint(roleLabel, result.Link))
 		} else {
-			_, _ = fmt.Fprintln(out, "Installed:", result.Link)
+			wasNote := ""
+			if was != "" && was != manifest.Version {
+				wasNote = o.paint(roleDim, "  (was "+was+")")
+			}
+			o.ok("Installed yoloctl ", version, " → ", o.paint(roleLabel, result.Link), wasNote)
 		}
-		for _, path := range result.Retained {
-			_, _ = fmt.Fprintln(out, "Retained bundle:", path)
+		advice := installSpaceAdvice(cmd.Context(), manifest.Bundle)
+		if len(advice) > 0 {
+			o.line("  ", o.paint(roleDim, "Install ran no space command."))
 		}
+		printSpaceAdvice(o, advice, result.Link, true)
 		home, _ := os.UserHomeDir()
-		if hint := installPathHint(bin, os.Getenv("PATH"), os.Getenv("SHELL"), home); hint != "" {
-			_, _ = fmt.Fprint(out, hint)
+		if text, command := installPathHint(bin, os.Getenv("PATH"), os.Getenv("SHELL"), home); text != "" {
+			o.line()
+			o.warn(text)
+			if command != "" {
+				o.line("    ", o.paint(roleBold, command))
+			}
 		}
-		return executeInstallProposals(cmd, proposals, result.Executable, manifest.Bundle, yes)
+		return nil
 	}}
 	cmd.Long = "Install this verified release bundle as <bin-dir>/yoloctl (default ~/.local/bin).\n\n" +
 		"When <bin-dir> is not on PATH, install prints the line that adds it for your shell\n" +
@@ -209,7 +228,7 @@ func shellWord(value string) string { return "'" + strings.ReplaceAll(value, "'"
 // $HOME/...; only that inserted prefix may expand, so a path with a literal $
 // or any character that would need shell quoting gets the generic
 // instruction. Nothing is printed when bin is already on PATH.
-func installPathHint(bin, pathEnv, shell, home string) string {
+func installPathHint(bin, pathEnv, shell, home string) (text, command string) {
 	resolve := func(dir string) string {
 		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
 			return resolved
@@ -219,20 +238,19 @@ func installPathHint(bin, pathEnv, shell, home string) string {
 	want := resolve(bin)
 	for _, entry := range filepath.SplitList(pathEnv) {
 		if entry != "" && filepath.IsAbs(entry) && resolve(entry) == want {
-			return ""
+			return "", ""
 		}
 	}
-	generic := fmt.Sprintf("%s is not on PATH; add it to PATH in your shell's startup file to run yoloctl from anywhere.\n", bin)
+	generic := bin + " is not on your PATH; add it in your shell's startup file to run yoloctl from anywhere."
 	for _, r := range bin {
 		if !plainPathRune(r) {
-			return generic
+			return generic, ""
 		}
 	}
 	display := bin
 	if rest, ok := strings.CutPrefix(bin, home+string(filepath.Separator)); ok && home != "" {
 		display = "$HOME/" + rest
 	}
-	var command string
 	switch filepath.Base(shell) {
 	case "zsh":
 		command = fmt.Sprintf("echo 'export PATH=\"%s:$PATH\"' >> ~/.zshrc", display)
@@ -241,9 +259,9 @@ func installPathHint(bin, pathEnv, shell, home string) string {
 	case "fish":
 		command = fmt.Sprintf("fish_add_path \"%s\"", display)
 	default:
-		return generic
+		return generic, ""
 	}
-	return fmt.Sprintf("%s is not on PATH; to run yoloctl from anywhere, run this once and open a new terminal:\n  %s\n", bin, command)
+	return bin + " is not on your PATH. Run this once, then open a new terminal:", command
 }
 
 // plainPathRune reports a character that needs no shell quoting in the hint.

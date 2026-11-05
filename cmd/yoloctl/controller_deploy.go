@@ -210,9 +210,6 @@ func startControllerSpaceImpl(ctx context.Context, boot *spaceconfig.Bootstrap, 
 		return asUserError(errors.New(inst.StatusDetail))
 	}
 	running := found && inst.Status == "Running"
-	if installBootForbidden(ctx) && !running {
-		return skipped(errors.New("the consented running VM is no longer running; boot is forbidden"))
-	}
 	if running {
 		if err := checkSpaceOpenShellImage(ctx, boot); err != nil {
 			return err

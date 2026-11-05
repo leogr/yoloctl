@@ -85,11 +85,6 @@ command. [28](#source-28) Unit/publication and isolated archive tests cover reco
 export/import/recreate, not physical power-loss behavior.
 [7](#source-7) [12](#source-12) [13](#source-13)
 
-[FACT] Installer-guarded start/recreate compares consent under an existing
-host lock; unavailable or changed evidence skips. Updating a consented running
-VM cannot fall back to booting it. Ordinary commands are unchanged.
-[29](#source-29)
-
 ## Sources
 
 1. <a id="source-1"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L163) — Diff and recreateReason.
@@ -122,7 +117,3 @@ VM cannot fall back to booting it. Ordinary commands are unchanged.
 27. <a id="source-27"></a> [Command regressions](../../cmd/yoloctl/agentbox_start_test.go#L24) — early/late drift refusal and teardown ordering.
 
 28. <a id="source-28"></a> [Interrupted-outcome recovery](controller-recovery.md) — durable proofs, dependency holds and storage reconciliation.
-
-29. <a id="source-29"></a> [Guard after the host lock](../../cmd/yoloctl/controller_lifecycle.go#L91-L108) — `hostControllerLifecycle`.
-    [Consent snapshot and receipt](../../cmd/yoloctl/install_precondition.go#L39-L121) — `consentSnapshot`, `checkInstallPrecondition`, `writeInstallReceipt`.
-    [Deployment boot prohibition](../../cmd/yoloctl/controller_deploy.go#L199-L221) — `startControllerSpaceImpl`, after `lookupDeploymentVM`.

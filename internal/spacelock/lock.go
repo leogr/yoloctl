@@ -23,8 +23,8 @@ func AcquireWithWait(ctx context.Context, space string, exclusive bool, waiting 
 	return acquire(ctx, space, exclusive, waiting, true)
 }
 
-// AcquireExistingWithWait never creates storage. Installer consent guards use
-// the original stable lock or skip when that evidence is unavailable.
+// AcquireExistingWithWait never creates storage: it uses the original stable
+// lock and fails when it is absent.
 func AcquireExistingWithWait(ctx context.Context, space string, exclusive bool, waiting func()) (func(), error) {
 	return acquire(ctx, space, exclusive, waiting, false)
 }

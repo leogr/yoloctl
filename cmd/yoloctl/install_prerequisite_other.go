@@ -4,9 +4,10 @@ package main
 
 import "context"
 
+// installPrerequisite is the failed host prerequisite, or "" when it holds.
 func installPrerequisite(ctx context.Context) string {
-	if version, ok := limactlVersion(ctx); ok {
-		return "Prerequisite: limactl " + version
+	if _, ok := limactlVersion(ctx); ok {
+		return ""
 	}
-	return "Prerequisite unavailable: install Lima and put limactl on PATH."
+	return "Lima is needed: install it and put limactl on PATH"
 }

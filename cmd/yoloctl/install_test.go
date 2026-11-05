@@ -3,13 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/installer"
 	"github.com/leogr/yoloctl/internal/installmigration"
@@ -83,7 +82,11 @@ func TestInstallProposalsAreReadOnlyAndImageOriginIsNeverInvented(t *testing.T) 
 				if which == "unavailable" {
 					return installmigration.Snapshot{}, errors.New("backend unavailable")
 				}
-				return consentSnapshot(b, "Running")
+				saved, err := spaceconfig.LoadBootstrap(b.Name)
+				if err != nil {
+					return installmigration.Snapshot{}, err
+				}
+				return consentSnapshot(saved, "Running")
 			}
 			defaultInstallImage = func() (string, error) {
 				switch which {
@@ -109,16 +112,41 @@ func TestInstallProposalsAreReadOnlyAndImageOriginIsNeverInvented(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			var out bytes.Buffer
-			p := installProposals(t.Context(), "new", "/absolute/install/link", true, &out)
-			if len(p) != 0 {
-				t.Fatalf("invented migration: %+v", p)
+			advice := installSpaceAdvice(t.Context(), "new")
+			var got spaceAdvice
+			if len(advice) == 1 {
+				got = advice[0]
 			}
-			if which != "matching" && which != "pending" && !strings.Contains(out.String(), "UNKNOWN") {
-				t.Fatal(out.String())
+			for _, item := range got.Items {
+				if item.Label != "optional" || !slices.Equal(item.Args, []string{"space", "recreate", b.Name, "--update-vm-image"}) {
+					t.Fatalf("invented a command: %+v", item)
+				}
 			}
-			if which == "pending" && !strings.Contains(out.String(), "pending VM image update") {
-				t.Fatal(out.String())
+			switch which {
+			case "matching":
+				if len(advice) != 0 {
+					t.Fatalf("a current space needs nothing: %+v", advice)
+				}
+			case "pending":
+				if !strings.Contains(got.Notice, "pending VM image update") || len(got.Items) != 0 {
+					t.Fatalf("%+v", advice)
+				}
+			case "missing":
+				if len(got.Items) != 1 || !strings.Contains(got.Items[0].Note, "install did not change this space's VM image") {
+					t.Fatalf("an absent default only says install did not change it: %+v", advice)
+				}
+			case "different", "old-default-override":
+				if len(got.Items) != 1 || !strings.Contains(got.Items[0].Note, "is not this release's default") {
+					t.Fatalf("%+v", advice)
+				}
+			case "corrupt":
+				if !strings.Contains(got.Problem, "could not check this space's VM image") || len(got.Items) != 0 {
+					t.Fatalf("%+v", advice)
+				}
+			default:
+				if !strings.Contains(got.Problem, "could not") || len(got.Items) != 0 {
+					t.Fatalf("%+v", advice)
+				}
 			}
 			after, err := os.ReadFile(path)
 			if err != nil || !bytes.Equal(before, after) {
@@ -137,78 +165,14 @@ func TestInstallProposalsAreReadOnlyAndImageOriginIsNeverInvented(t *testing.T) 
 	}
 }
 
-func TestInstallProposalOrderingAndBootWarnings(t *testing.T) {
-	s := installmigration.Snapshot{Space: "fixture", Bundle: "old", State: "Stopped"}
-	optional := installmigration.Command{Args: []string{"space", "recreate", "fixture"}, Recreate: true}
-	p := proposeInstallMigration(s, "new", &optional, "")
-	if len(p.Commands) != 2 || p.Commands[0].Args[1] != "start" || !p.Commands[1].Recreate || !strings.Contains(p.Commands[0].Warning, "BOOTS") {
-		t.Fatal(p)
-	}
-	s.State = "Running"
-	p = proposeInstallMigration(s, "new", nil, "")
-	if !strings.Contains(p.Commands[0].Warning, "boot is forbidden") {
-		t.Fatal(p)
-	}
-	s.Bundle = "new"
-	p = proposeInstallMigration(s, "new", &optional, "")
-	if len(p.Commands) != 1 || !p.Commands[0].Recreate {
-		t.Fatal(p)
-	}
-}
-
-func TestInstallMigrationUsesPrivateReceiptAndPreservesSkipStatus(t *testing.T) {
-	before := installmigration.Snapshot{Space: "fixture", Bundle: "old", State: "Running", DiskID: "disk", DiskUUID: "uuid", Generation: "gen", Bootstrap: strings.Repeat("a", 64)}
-	after := before
-	after.Bundle = "new"
-	receipt := installmigration.Receipt{Before: before, After: after}
-	raw, err := json.Marshal(receipt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, kind := range []string{"private", "stdout-only", "skip", "fail"} {
-		t.Run(kind, func(t *testing.T) {
-			executable := filepath.Join(t.TempDir(), "runner")
-			script := "#!/bin/sh\nprintf '%s\\n' '" + string(raw) + "'\n"
-			switch kind {
-			case "private":
-				script += "printf '%s\\n' '" + string(raw) + "' >&3\n"
-			case "skip":
-				script += "exit 76\n"
-			case "fail":
-				script += "exit 1\n"
-			}
-			if err := os.WriteFile(executable, []byte(script), 0700); err != nil {
-				t.Fatal(err)
-			}
-			cmd := newRootCmd()
-			cmd.SetIn(strings.NewReader(""))
-			cmd.SetOut(&bytes.Buffer{})
-			cmd.SetErr(&bytes.Buffer{})
-			actual, err := runInstallMigration(t.Context(), cmd, executable, before, installmigration.Command{Args: []string{"space", "start", "fixture"}})
-			if kind == "private" {
-				if err != nil || actual != receipt {
-					t.Fatal(actual, err)
-				}
-			} else if err == nil {
-				t.Fatal("stdout impersonated private receipt")
-			}
-			if kind == "skip" && !errors.Is(err, installmigration.ErrChanged) {
-				t.Fatal(err)
-			}
-		})
-	}
-}
-
 func TestReadOnlyStartupOnlyRecognizesOwnedRoutes(t *testing.T) {
 	for _, tc := range []struct {
 		args []string
 		want bool
 	}{
 		{[]string{"version", "--json"}, true}, {[]string{"install", "--dry-run"}, true},
-		{[]string{"space", "start", "fixture", "--install-precondition=opaque"}, true},
-		{[]string{"space", "recreate", "fixture", "--install-precondition", "opaque"}, true},
-		{[]string{"space", "ssh", "fixture", "--", "--install-precondition"}, false},
-		{[]string{"space", "start", "fixture", "--", "--install-precondition"}, false},
+		{[]string{"space", "start", "fixture", "--install-precondition=opaque"}, false},
+		{[]string{"space", "recreate", "fixture"}, false},
 	} {
 		if got := readOnlyStartup(tc.args); got != tc.want {
 			t.Fatal(tc.args, got)
@@ -216,9 +180,50 @@ func TestReadOnlyStartupOnlyRecognizesOwnedRoutes(t *testing.T) {
 	}
 }
 
-// Print-only/--dry-run proposals say that nothing is installed yet, because
-// the printed commands run the link that still selects the old build.
-func TestInstallProposalsNotInstalledNote(t *testing.T) {
+func TestInstallPathHintNamesTheLineForTheUsersShell(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ shell, path, want string }{
+		{"/bin/zsh", "/usr/bin", `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc`},
+		{"/usr/bin/bash", "/usr/bin", `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc`},
+		{"/usr/local/bin/fish", "/usr/bin", `fish_add_path "$HOME/.local/bin"`},
+		{"/bin/tcsh", "/usr/bin", "add it in your shell's startup file"},
+		{"", "", "add it in your shell's startup file"},
+	} {
+		text, command := installPathHint(bin, c.path, c.shell, home)
+		if hint := text + " " + command; !strings.Contains(hint, c.want) || !strings.HasPrefix(text, bin+" is not on your PATH") {
+			t.Errorf("shell %q: hint %q lacks %q", c.shell, hint, c.want)
+		}
+	}
+	if hint, _ := installPathHint(bin, "/usr/bin"+string(os.PathListSeparator)+bin, "/bin/zsh", home); hint != "" {
+		t.Errorf("bin already on PATH, got hint %q", hint)
+	}
+	link := filepath.Join(t.TempDir(), "bin-link")
+	if err := os.Symlink(bin, link); err != nil {
+		t.Fatal(err)
+	}
+	if hint, _ := installPathHint(bin, link, "/bin/zsh", home); hint != "" {
+		t.Errorf("bin on PATH through a symlink, got hint %q", hint)
+	}
+	for _, odd := range []string{filepath.Join(t.TempDir(), "it's bin"), "/tmp/$TOOLS", filepath.Join(home, "$x", "bin")} {
+		for _, shell := range []string{"/bin/zsh", "/bin/bash", "/usr/bin/fish"} {
+			if text, command := installPathHint(odd, "/usr/bin", shell, home); command != "" || !strings.Contains(text, "is not on your PATH") {
+				t.Errorf("%s with %s got a shell command: %q %q", odd, shell, text, command)
+			}
+		}
+	}
+	if _, command := installPathHint(bin, "/usr/bin", "/bin/tcsh", home); command != "" {
+		t.Errorf("unknown shell got a command: %q", command)
+	}
+}
+
+// installAdviceFixture is a saved Firecracker space whose controller is the
+// "old" build and whose default image matches, observed in state.
+func installAdviceFixture(t *testing.T, state string) *spaceconfig.Bootstrap {
+	t.Helper()
 	t.Setenv("YOLOCTL_HOME", t.TempDir())
 	b := imageUpdateFixture(t)
 	b.Bundle = "old"
@@ -232,87 +237,44 @@ func TestInstallProposalsNotInstalledNote(t *testing.T) {
 		if err != nil {
 			return installmigration.Snapshot{}, err
 		}
-		return consentSnapshot(saved, "Running")
+		return consentSnapshot(saved, state)
 	}
 	defaultInstallImage = func() (string, error) { return b.VM.Image, nil }
-	for _, installing := range []bool{true, false} {
-		var out bytes.Buffer
-		if p := installProposals(t.Context(), "new", "/absolute/install/link", installing, &out); len(p) != 1 {
-			t.Fatalf("proposals = %+v\n%s", p, out.String())
-		}
-		if got := strings.Contains(out.String(), "Not installed yet"); got == installing {
-			t.Fatalf("installing=%v note=%v\n%s", installing, got, out.String())
-		}
-	}
+	return b
 }
 
-// The installer passes --force to a guarded recreate (its consent is bound to
-// the snapshot), never to a start.
-func TestInstallMigrationRecreateRunsWithoutSecondPrompt(t *testing.T) {
-	before := installmigration.Snapshot{Space: "fixture", Bundle: "new", State: "Running", DiskID: "disk", DiskUUID: "uuid", Generation: "gen", Bootstrap: strings.Repeat("a", 64)}
-	for _, recreate := range []bool{true, false} {
-		dir := t.TempDir()
-		executable := filepath.Join(dir, "runner")
-		script := "#!/bin/sh\nprintf '%s\\n' \"$*\" > " + filepath.Join(dir, "args") + "\nexit 76\n"
-		if err := os.WriteFile(executable, []byte(script), 0700); err != nil {
-			t.Fatal(err)
+// A space on another controller build gets one update command: its note
+// says a stopped VM starts, and a running one keeps its agents only for a
+// controller-only update. The command runs the install link with the
+// explicit YOLOCTL_HOME, and print-only output says nothing is installed yet.
+func TestInstallSpaceAdviceUpdate(t *testing.T) {
+	for _, state := range []string{"Stopped", "Running"} {
+		b := installAdviceFixture(t, state)
+		advice := installSpaceAdvice(t.Context(), "new")
+		if len(advice) != 1 || len(advice[0].Items) != 1 || advice[0].Header != "uses another controller build" {
+			t.Fatalf("%s: %+v", state, advice)
 		}
-		cmd := newRootCmd()
-		cmd.SetIn(strings.NewReader(""))
-		cmd.SetOut(&bytes.Buffer{})
-		cmd.SetErr(&bytes.Buffer{})
-		args := []string{"space", "start", "fixture"}
-		if recreate {
-			args = []string{"space", "recreate", "fixture"}
+		item := advice[0].Items[0]
+		want := map[string]string{"Stopped": "this starts the VM", "Running": "a controller-only update keeps agents running"}[state]
+		if item.Label != "update" || !slices.Equal(item.Args, []string{"space", "start", b.Name, "--update-controller"}) || !strings.Contains(item.Note, want) {
+			t.Fatalf("%s: %+v", state, item)
 		}
-		_, _ = runInstallMigration(t.Context(), cmd, executable, before, installmigration.Command{Args: args, Recreate: recreate})
-		raw, err := os.ReadFile(filepath.Join(dir, "args"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.Contains(string(raw), "--force") != recreate {
-			t.Fatalf("recreate=%v args %q", recreate, raw)
-		}
-	}
-}
-
-// archyFable F1: an interrupted migration child gets SIGINT (cooperative
-// cancellation), and its exit is reported as an interruption, not a skip.
-func TestInstallMigrationInterruptIsCooperative(t *testing.T) {
-	before := installmigration.Snapshot{Space: "fixture", Bundle: "old", State: "Running", DiskID: "disk", DiskUUID: "uuid", Generation: "gen", Bootstrap: strings.Repeat("a", 64)}
-	dir := t.TempDir()
-	marker := filepath.Join(dir, "interrupted")
-	executable := filepath.Join(dir, "runner")
-	script := "#!/bin/sh\ntrap 'touch " + marker + "; exit 76' INT\n: > " + filepath.Join(dir, "started") + "\nwhile :; do sleep 0.05; done\n"
-	if err := os.WriteFile(executable, []byte(script), 0700); err != nil {
-		t.Fatal(err)
-	}
-	cmd := newRootCmd()
-	cmd.SetIn(strings.NewReader(""))
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-	ctx, cancel := context.WithCancel(t.Context())
-	go func() {
-		for i := 0; i < 200; i++ {
-			if _, err := os.Stat(filepath.Join(dir, "started")); err == nil {
-				break
+		for _, installed := range []bool{true, false} {
+			var out bytes.Buffer
+			printSpaceAdvice(installOut{w: &out}, advice, "/absolute/install/link", installed)
+			text := out.String()
+			command := "  update    YOLOCTL_HOME=" + shellArg(os.Getenv("YOLOCTL_HOME")) + " /absolute/install/link space start " + b.Name + " --update-controller\n"
+			if !strings.Contains(text, b.Name+" · "+strings.ToLower(state)+" · uses another controller build\n") || !strings.Contains(text, command) ||
+				strings.Contains(text, "\x1b") || strings.Contains(text, "Not installed yet") == installed {
+				t.Fatalf("%s installed=%v:\n%s", state, installed, text)
 			}
-			time.Sleep(10 * time.Millisecond)
 		}
-		cancel()
-	}()
-	_, err := runInstallMigration(ctx, cmd, executable, before, installmigration.Command{Args: []string{"space", "start", "fixture"}})
-	if errors.Is(err, installmigration.ErrChanged) || !errors.Is(err, context.Canceled) {
-		t.Fatal("interrupted child reported as", err)
-	}
-	if _, statErr := os.Stat(marker); statErr != nil {
-		t.Fatal("child was not interrupted cooperatively (no SIGINT)", statErr)
 	}
 }
 
 // archyFable F2: a Lima VM too old for this build gets the recreation that
 // fixes it, never a controller update known to fail.
-func TestInstallProposalsRecreateTooOldLimaVM(t *testing.T) {
+func TestInstallSpaceAdviceRecreateTooOldLimaVM(t *testing.T) {
 	t.Setenv("YOLOCTL_HOME", t.TempDir())
 	boot, _ := resourceSpaceFixture(t)
 	if boot.VM.Backend == "firecracker" {
@@ -328,49 +290,30 @@ func TestInstallProposalsRecreateTooOldLimaVM(t *testing.T) {
 		return consentSnapshot(saved, "Stopped")
 	}
 	limaOpenShellCheck = func(string) error { return lima.ErrOpenShellVMTooOld }
-	var out bytes.Buffer
-	p := installProposals(t.Context(), "new", "/absolute/install/link", true, &out)
-	if len(p) != 1 || len(p[0].Commands) != 1 || !p[0].Commands[0].Recreate || p[0].Commands[0].Args[1] != "recreate" {
-		t.Fatalf("too-old Lima VM proposals = %+v\n%s", p, out.String())
+	advice := installSpaceAdvice(t.Context(), "new")
+	if len(advice) != 1 || len(advice[0].Items) != 1 || advice[0].Items[0].Label != "recreate" || advice[0].Items[0].Args[1] != "recreate" {
+		t.Fatalf("too-old Lima VM advice = %+v", advice)
 	}
 }
 
-func TestInstallPathHintNamesTheLineForTheUsersShell(t *testing.T) {
-	home := t.TempDir()
-	bin := filepath.Join(home, ".local", "bin")
-	if err := os.MkdirAll(bin, 0o700); err != nil {
-		t.Fatal(err)
+// Color only on a terminal; NO_COLOR and TERM=dumb force plain text, and the
+// words never change.
+func TestInstallOutputColor(t *testing.T) {
+	if newInstallOut(&bytes.Buffer{}).color {
+		t.Fatal("a buffer is not a terminal")
 	}
-	for _, c := range []struct{ shell, path, want string }{
-		{"/bin/zsh", "/usr/bin", `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc`},
-		{"/usr/bin/bash", "/usr/bin", `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc`},
-		{"/usr/local/bin/fish", "/usr/bin", `fish_add_path "$HOME/.local/bin"`},
-		{"/bin/tcsh", "/usr/bin", "add it to PATH in your shell's startup file"},
-		{"", "", "add it to PATH in your shell's startup file"},
-	} {
-		hint := installPathHint(bin, c.path, c.shell, home)
-		if !strings.Contains(hint, c.want) || !strings.HasPrefix(hint, bin+" is not on PATH") {
-			t.Errorf("shell %q: hint %q lacks %q", c.shell, hint, c.want)
-		}
+	plain, colored := installOut{}, installOut{color: true}
+	if plain.paint(roleOK, "✓ ") != "✓ " || colored.paint(roleOK, "✓ ") != "\x1b[38;5;108m✓ \x1b[0m" || colored.paint(roleBold, "v1") != "\x1b[1mv1\x1b[0m" {
+		t.Fatal("paint roles")
 	}
-	if hint := installPathHint(bin, "/usr/bin"+string(os.PathListSeparator)+bin, "/bin/zsh", home); hint != "" {
-		t.Errorf("bin already on PATH, got hint %q", hint)
+	t.Setenv("NO_COLOR", "")
+	if installColor(os.Stdout) {
+		t.Fatal("NO_COLOR, even empty, disables color")
 	}
-	link := filepath.Join(t.TempDir(), "bin-link")
-	if err := os.Symlink(bin, link); err != nil {
-		t.Fatal(err)
+	if got := wrapWords("aa bb cc dd", 5); !slices.Equal(got, []string{"aa bb", "cc dd"}) {
+		t.Fatal(got)
 	}
-	if hint := installPathHint(bin, link, "/bin/zsh", home); hint != "" {
-		t.Errorf("bin on PATH through a symlink, got hint %q", hint)
-	}
-	for _, odd := range []string{filepath.Join(t.TempDir(), "it's bin"), "/tmp/$TOOLS", filepath.Join(home, "$x", "bin")} {
-		for _, shell := range []string{"/bin/zsh", "/bin/bash", "/usr/bin/fish"} {
-			if hint := installPathHint(odd, "/usr/bin", shell, home); strings.Contains(hint, "echo") || strings.Contains(hint, "fish_add_path") || !strings.Contains(hint, "is not on PATH") {
-				t.Errorf("%s with %s got a shell command: %q", odd, shell, hint)
-			}
-		}
-	}
-	if hint := installPathHint(bin, "/usr/bin", "/bin/tcsh", home); strings.Contains(hint, "export") {
-		t.Errorf("unknown shell got an export line: %q", hint)
+	if shellArg("/home/u/.local/bin/yoloctl") != "/home/u/.local/bin/yoloctl" || shellArg("/tmp/it's") != `'/tmp/it'\''s'` || shellArg("$x") != "'$x'" {
+		t.Fatal("shellArg")
 	}
 }

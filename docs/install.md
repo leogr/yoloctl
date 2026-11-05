@@ -50,16 +50,18 @@ Run the same install line for a newer release. At a terminal, `install` asks
 before replacing the current build; `--yes` accepts that managed upgrade
 unattended and nothing else.
 
-Spaces keep running their old controller until you update them. `install`
-prints one command per space, normally `yoloctl space start NAME --update-controller`,
-or `yoloctl space recreate NAME` for a Lima VM whose template is older than
-this build, and asks separately before executing each one; `--yes` never
-executes them. Updating a stopped space's controller boots its VM. A recreate
-keeps the data disk, accounts and box declarations but loses running sessions
-and VM-local workdirs. A Firecracker space whose VM image origin cannot be
-proved still gets its controller-update command when the bundle differs,
-but no VM image replacement is proposed automatically: that decision stays
-manual (`space recreate NAME --update-vm-image`).
+Install never changes a space. After installing, it prints one block per
+space that needs something, with the commands to run when convenient:
+`yoloctl space start NAME --update-controller` when the space uses another
+controller build (a stopped space's VM starts; a controller-only update keeps
+running agents and asks separately about any required recreate or session
+restart), or `yoloctl space recreate NAME` for a Lima VM whose template is
+older than this build. An optional `space recreate NAME --update-vm-image`
+appears when this release's Firecracker image is not the one the space uses.
+A recreate keeps the data disk, accounts, box settings and host workdirs but
+loses sessions and VM-local workdirs; start boxes afterwards. The printed
+commands use the installed binary and your explicit `YOLOCTL_HOME`, if any.
+Output is colored on a terminal; set `NO_COLOR` for plain text.
 
 ## Where builds keep their data
 

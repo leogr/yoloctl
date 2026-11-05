@@ -31,12 +31,6 @@ func newClientRootCmd() *cobra.Command {
 	for _, action := range []string{"create", "start", "stop", "recreate", "destroy"} {
 		cmd, _, _ := root.Find([]string{"space", action})
 		cmd.RunE = hostControllerLifecycle(action)
-		if action == "start" || action == "recreate" {
-			cmd.Flags().String(installPreconditionFlag, "", "Installer consent snapshot")
-			cmd.Flags().Int(installReceiptFlag, 0, "Private installer result descriptor")
-			_ = cmd.Flags().MarkHidden(installPreconditionFlag)
-			_ = cmd.Flags().MarkHidden(installReceiptFlag)
-		}
 		if action == "start" {
 			cmd.Flags().Bool("update-controller", false, "Explicitly select this yoloctl build for the space controller and helpers")
 			cmd.Flags().Bool("restart-sessions", false, "With --update-controller, restart without asking the boxes whose agent sessions still run the previous build; each agent must then be resumed explicitly")
@@ -88,7 +82,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				return asUserError(errors.New("--restart-sessions requires --update-controller"))
 			}
 		}
-		if action == "start" && !hasInstallPrecondition(cmd) {
+		if action == "start" {
 			// Compatibility may offer recreation before taking the lifecycle
 			// lock. Refuse an unbootable target before that offer as well.
 			boot, err := spaceconfig.LoadBootstrap(space)
@@ -107,9 +101,6 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 			return err
 		}
 		defer release()
-		if err := checkInstallPrecondition(cmd, space, action); err != nil {
-			return err
-		}
 		if action == "create" {
 			return createControllerSpace(cmd, space)
 		}
@@ -117,8 +108,8 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 		if err != nil {
 			return err
 		}
-		// Recheck the locked snapshot, after installer consent validation and
-		// before either boot or recreate teardown. Cleanup remains available.
+		// Recheck the locked snapshot before either boot or recreate teardown.
+		// Cleanup remains available.
 		if action == "start" || action == "recreate" {
 			if err := vmhost.ValidateInstancePaths(boot.VM.Backend, space); err != nil {
 				return asUserError(err)
@@ -139,9 +130,6 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				return offerSpaceVMRecreate(cmd, boot, err)
 			}
 			if err := retireControllerSeed(space); err != nil || !update {
-				return err
-			}
-			if err := writeInstallReceipt(cmd, space); err != nil {
 				return err
 			}
 			// The prompt and the box restarts run outside the host lifecycle
@@ -176,10 +164,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				updateImage, _ := cmd.Flags().GetBool("update-vm-image")
 				rollbackImage, _ := cmd.Flags().GetBool("rollback-vm-image")
 				if updateImage || rollbackImage || cmd.Flags().Changed("vm-image") {
-					if err := recreateSpaceImage(cmd, boot); err != nil {
-						return err
-					}
-					return writeInstallReceipt(cmd, space)
+					return recreateSpaceImage(cmd, boot)
 				}
 				if boot.ImageUpdate != nil {
 					return pendingImageUpdate(boot)
@@ -223,29 +208,16 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "system disk %d → %d GiB (the saved setting)\n", replaced/spaceconfig.GiB, saved/spaceconfig.GiB)
 			}
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "recreated space %s; start boxes with box start --space %s\n", space, space)
-			return writeInstallReceipt(cmd, space)
+			return nil
 		}
 		return errors.New("unknown space lifecycle action")
 	}
 }
 
 func lockHostLifecycle(cmd *cobra.Command, space string) (func(), error) {
-	acquire := spacelock.AcquireWithWait
-	guarded, _ := cmd.Flags().GetString(installPreconditionFlag)
-	if guarded != "" {
-		acquire = spacelock.AcquireExistingWithWait
-	}
-	release, err := acquire(cmd.Context(), space, true, func() {
+	return spacelock.AcquireWithWait(cmd.Context(), space, true, func() {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Waiting for space %s lifecycle operation; Ctrl-C cancels.\n", space)
 	})
-	if err != nil && guarded != "" {
-		// An interrupted wait is an interruption, never "state changed, skipped".
-		if ctxErr := cmd.Context().Err(); ctxErr != nil {
-			return nil, ctxErr
-		}
-		return nil, skipped(err)
-	}
-	return release, err
 }
 
 func createControllerSpace(cmd *cobra.Command, space string) error {

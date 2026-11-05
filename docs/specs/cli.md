@@ -148,12 +148,10 @@ not started. Wait notices name a verified lock holder
 or tracked image job when known; stale owners fall back to a generic notice.
 [17](#source-17)
 
-[FACT] Hidden host-only `install` verifies complete releases, asks before upgrades,
-prints migration commands and asks separately before executing each. `--yes`
-never executes migrations or resolves unknown conflicts. Guarded lifecycle
-commands carry a hidden `--install-precondition` consent snapshot and a private
-result descriptor; stale/unavailable evidence exits 76 without mutation.
-[18](#source-18)
+[FACT] Hidden host-only `install` verifies complete releases and asks before
+upgrades; `--yes` accepts a managed upgrade and never resolves unknown
+conflicts. It never runs a space command: it prints each space's update or
+optional recreate command for the user to run. [18](#source-18)
 
 [FACT] Read-only `version` and `version --json` report the build channel and
 resolved config/cache roots without creating the Lima home. The external Lima

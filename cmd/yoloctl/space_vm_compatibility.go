@@ -92,11 +92,6 @@ func offerSpaceVMRecreate(cmd *cobra.Command, boot *spaceconfig.Bootstrap, cause
 	if err := cmd.Context().Err(); err != nil {
 		return err
 	}
-	// Installer consent covers its printed command and locked snapshot. A VM
-	// replacement needs a separately selected lifecycle command, not this offer.
-	if hasInstallPrecondition(cmd) {
-		return cause
-	}
 	if !stdinIsTerminalFn(cmd.InOrStdin()) || !writerIsTerminal(cmd.ErrOrStderr()) {
 		return cause
 	}
