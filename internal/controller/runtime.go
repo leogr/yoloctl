@@ -43,7 +43,7 @@ func configureRuntime() error {
 	if err != nil {
 		return err
 	}
-	if err := layout.ValidateName("space", c.Space); err != nil {
+	if err := layout.ValidateExistingSpaceName(c.Space); err != nil {
 		return err
 	}
 	if c.DiskMount != layout.AccountDiskMount(c.DiskID) {

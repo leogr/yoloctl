@@ -81,10 +81,10 @@ func main() {
 		}
 	}
 
-	// Relocate Lima's home off the user's ~/.lima onto yoloctl's own dir
-	// before any limactl invocation: every limactl subprocess inherits
-	// this process environment. Fatal if it can't be set up — silently
-	// falling back to ~/.lima would scatter VMs across two locations.
+	// Set the legacy Lima default before external-tool queries. Targeted
+	// VM/disk commands override their child's LIMA_HOME from the bootstrap,
+	// so old and new macOS homes coexist without changing process state.
+	// Never silently fall back to the user's unrelated ~/.lima.
 	operator, err := loadOperatorClient()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "yoloctl:", err)

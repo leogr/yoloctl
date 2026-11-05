@@ -6,6 +6,13 @@ manifests and secrets on that disk. Host projects remain explicit shares;
 ephemeral workdirs and runtime containers are disposable system-disk data.
 [1](#source-1) [2](#source-2)
 
+[FACT] New spaces have a 16-character name cap across backends; existing
+longer identities remain valid. New macOS Lima spaces record their selected
+`~/.config/yoloctl/lima` home; existing records without that field retain the
+legacy home. VM keys and disks stay in their selected location, independently
+of host bootstrap/catalog storage. Linux placement is unchanged.
+[17](#source-17)
+
 [FACT] New spaces choose VM RAM once from host capacity and available memory,
 within 4–16 GiB, while accounting for other live space allocations. `--memory`
 overrides that choice. The saved allocation survives starts/recreates; this
@@ -113,3 +120,5 @@ independent ownership boundaries. [16](#source-16)
 15. <a id="source-15"></a> [Data disk size and offline grow](../digests/data-disk-grow.md).
 
 16. <a id="source-16"></a> [Build identity and host homes](../digests/installation.md).
+
+17. <a id="source-17"></a> [Lima storage and space names](../digests/lima-storage.md).

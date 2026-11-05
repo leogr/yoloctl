@@ -148,7 +148,7 @@ func List() ([]string, error) {
 			continue
 		}
 		name := e.Name()
-		if layout.ValidateName("space", name) != nil {
+		if layout.ValidateExistingSpaceName(name) != nil {
 			continue
 		}
 		cfgPath, err := layout.SpaceConfigPath(name)
@@ -182,7 +182,7 @@ func (c *Config) Validate() error {
 	if b, err := hex.DecodeString(c.AccountDiskID); err != nil || len(b) != 16 {
 		return errors.New("account_disk_id must be a 32-character hexadecimal identity")
 	}
-	if err := layout.ValidateName("space", c.Name); err != nil {
+	if err := layout.ValidateExistingSpaceName(c.Name); err != nil {
 		return err
 	}
 	if c.DefaultWorkdir == "" {
@@ -336,6 +336,9 @@ func pathWithin(p, base string) bool {
 
 // New declares a new space and allocates its persistent storage identity.
 func New(name, workdir, acct string) (*Config, error) {
+	if err := layout.ValidateName("space", name); err != nil {
+		return nil, err
+	}
 	var id [16]byte
 	if _, err := rand.Read(id[:]); err != nil {
 		return nil, err

@@ -401,7 +401,7 @@ func ListAllAgentboxes() ([]AgentboxRef, error) {
 			continue
 		}
 		space := e.Name()
-		if layout.ValidateName("space", space) != nil {
+		if layout.ValidateExistingSpaceName(space) != nil {
 			continue
 		}
 		names, err := ListNames(space)
@@ -522,7 +522,7 @@ func (c *Config) Validate() error {
 	if c.Space == "" {
 		return errors.New("space is required")
 	}
-	if err := layout.ValidateName("space", c.Space); err != nil {
+	if err := layout.ValidateExistingSpaceName(c.Space); err != nil {
 		return err
 	}
 	if c.Agent != "" {

@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/vmapi"
 )
 
@@ -19,7 +19,7 @@ type DiskInfo = vmapi.DiskInfo
 
 func (c *Client) AccountDisk(ctx context.Context, id string) (*DiskInfo, error) {
 	name := layout.AccountDiskName(id)
-	cmd := exec.CommandContext(ctx, c.binary, "disk", "list", "--json", name)
+	cmd := c.diskCommand(ctx, id, "disk", "list", "--json", name)
 	raw, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("inspect account disk: %w", err)
@@ -55,15 +55,22 @@ func (c *Client) CreateAccountDisk(ctx context.Context, id string, size uint64) 
 	if size == 0 || size%(1<<30) != 0 {
 		return fmt.Errorf("data disk size %d is not whole GiB", size)
 	}
-	return c.run(ctx, "disk", "create", layout.AccountDiskName(id), "--size", fmt.Sprintf("%dGiB", size>>30), "--format", "raw")
+	home, err := spaceconfig.LimaHomeForDisk(id)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(home, 0700); err != nil {
+		return err
+	}
+	return c.runDisk(ctx, id, "disk", "create", layout.AccountDiskName(id), "--size", fmt.Sprintf("%dGiB", size>>30), "--format", "raw")
 }
 func (c *Client) DeleteAccountDisk(ctx context.Context, id string) error {
-	if err := c.run(ctx, "disk", "delete", layout.AccountDiskName(id)); err != nil {
+	if err := c.runDisk(ctx, id, "disk", "delete", layout.AccountDiskName(id)); err != nil {
 		return err
 	}
 	// Lima can log a failed disk inspection and still exit successfully.
 	// Keep the declaration until physical deletion is established.
-	dir, err := layout.AccountDiskDir(id)
+	dir, err := AccountDiskDir(id)
 	if err != nil {
 		return err
 	}

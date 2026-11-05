@@ -151,7 +151,7 @@ func (s *NativeWorkerSource) checkAttachment(ctx context.Context) error {
 	if err := s.contextSnapshot.Validate(); err != nil {
 		return fail(err)
 	}
-	if layout.ValidateName("space", s.contextSnapshot.Space) != nil || s.contextSnapshot.DiskMount != layout.AccountDiskMount(s.contextSnapshot.DiskID) {
+	if layout.ValidateExistingSpaceName(s.contextSnapshot.Space) != nil || s.contextSnapshot.DiskMount != layout.AccountDiskMount(s.contextSnapshot.DiskID) {
 		return fail(errors.New("original worker native disk/layout mismatch"))
 	}
 	control, err := layout.OpenShellControlDir()

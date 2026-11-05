@@ -83,7 +83,7 @@ func ExecuteForDisk(ctx context.Context, space, id, uuid string, uid, gid int, r
 	if _, err := layout.AccountDiskDir(id); err != nil {
 		return result, err
 	}
-	if err := layout.ValidateName("space", space); err != nil {
+	if err := layout.ValidateExistingSpaceName(space); err != nil {
 		return result, err
 	}
 	if req.Account != "" {

@@ -55,7 +55,7 @@ func installProposals(ctx context.Context, target, link string, installing bool,
 		if strings.HasPrefix(name, ".") {
 			continue
 		}
-		if err := layout.ValidateName("space", name); err != nil || !entry.IsDir() {
+		if err := layout.ValidateExistingSpaceName(name); err != nil || !entry.IsDir() {
 			_, _ = fmt.Fprintf(out, "UNKNOWN space entry %q: not a readable space directory\n", name)
 			continue
 		}
@@ -190,7 +190,7 @@ func installLimaAdvice(space string) (*installmigration.Command, string) {
 	if len(desired) == 0 {
 		return nil, ""
 	}
-	home, err := layout.LimaHome()
+	home, err := spaceconfig.LimaHome(space)
 	if err != nil {
 		return nil, "UNKNOWN Lima home: " + err.Error()
 	}

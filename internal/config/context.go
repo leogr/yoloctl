@@ -75,7 +75,7 @@ func (c *Context) Save() error {
 		path = resolved
 	}
 	if c.Space != "" {
-		if err := layout.ValidateName("space", c.Space); err != nil {
+		if err := layout.ValidateExistingSpaceName(c.Space); err != nil {
 			return err
 		}
 	}
@@ -123,7 +123,7 @@ const (
 // VM-path interpolation without a second pass.
 func ResolveSpace(flagValue string, flagChanged bool) (string, ResolutionSource, error) {
 	if flagChanged {
-		if err := layout.ValidateName("space", flagValue); err != nil {
+		if err := layout.ValidateExistingSpaceName(flagValue); err != nil {
 			return "", "", err
 		}
 		return flagValue, SourceFlag, nil

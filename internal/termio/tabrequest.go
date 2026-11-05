@@ -43,7 +43,7 @@ func (r TabRequest) Chat() bool {
 // ValidateChat accepts only a complete guarded chat attach: valid names and
 // all three identities. A partial guard is never downgraded to a plain attach.
 func (r TabRequest) ValidateChat() error {
-	if r.Op != "attach" || layout.ValidateName("space", r.Space) != nil || layout.ValidateName("agentbox", r.Box) != nil {
+	if r.Op != "attach" || layout.ValidateExistingSpaceName(r.Space) != nil || layout.ValidateName("agentbox", r.Box) != nil {
 		return errors.New("invalid chat attach target")
 	}
 	for _, id := range []string{r.ChatRoomID, r.ChatMemberID, r.ChatBoxID} {

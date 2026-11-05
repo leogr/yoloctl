@@ -57,12 +57,12 @@ account disk's preservation contract does not cover it. [9](#source-9)
 
 ## Sources
 
-1. <a id="source-1"></a> [internal/layout/layout.go](../../internal/layout/layout.go#L267-L315) — `AccountStateRoot` through `AccountDiskDir`.
+1. <a id="source-1"></a> [internal/layout/layout.go](../../internal/layout/layout.go#L413-L462) — `AccountStateRoot` through `AccountDiskDir`.
 2. <a id="source-2"></a> [internal/accountstate/guest.py](../../internal/accountstate/guest.py#L1-L240) — `directory`, `regular`, `write`, `run`.
 3. <a id="source-3"></a> [internal/accountstate/state.go](../../internal/accountstate/state.go#L77) — ExecuteForDisk, verified disk-scoped native operations.
 4. <a id="source-4"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L153) — pending identity publication before allocation.
 5. <a id="source-5"></a> [cmd/yoloctl/controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L115) — initialization and preserved disk verification.
-6. <a id="source-6"></a> [internal/lima/disk_blank.go](../../internal/lima/disk_blank.go#L23-L140) — `AccountDiskBlank` through `openAccountQCOW2`.
+6. <a id="source-6"></a> [internal/lima/disk_blank.go](../../internal/lima/disk_blank.go#L23-L139) — `AccountDiskBlank` through `openAccountQCOW2`.
 7. <a id="source-7"></a> [internal/lima/disk_yaml.go](../../internal/lima/disk_yaml.go#L16-L86) — `setInstanceAccountDisk`.
 8. <a id="source-8"></a> [internal/lima/disk_qcow2_test.go](../../internal/lima/disk_qcow2_test.go#L1-L155) — `TestAccountDiskBlankQCOW2`, `TestAccountDiskBlankWithQEMUTools`.
 9. <a id="source-9"></a> [scripts/smoke/agent-state.sh](../../scripts/smoke/agent-state.sh#L1-L154) — `history_probe`, native storage and replacement phases.

@@ -69,7 +69,7 @@ Fakes replace the VM; no real Claude, VM, crash or reboot is exercised.
 2. <a id="source-2"></a> [claude.yaml](../../internal/agentprofile/builtin/claude.yaml#L55-L75) — the Claude block.
 3. <a id="source-3"></a> [policy.go](../../internal/agentsession/policy.go#L12-L147) — `EffectivePolicy`, `ReservedArg`, `Argv`.
 4. <a id="source-4"></a> [agentbox.go](../../internal/agentbox/agentbox.go#L99-L178) — `AgentSession`, `ResumePolicy`; validation at L524-L533; cmd checks in `requireResolvableManifest`.
-5. <a id="source-5"></a> [layout.go](../../internal/layout/layout.go#L278) — `BoxSessionPath`.
+5. <a id="source-5"></a> [layout.go](../../internal/layout/layout.go#L355) — `BoxSessionPath`.
 6. <a id="source-6"></a> [record.go](../../internal/agentsession/record.go#L86) — `Record`, `Validate`, `Load`, `Remove`, `save`, `retire`, `Target`.
 7. <a id="source-7"></a> [launch.go](../../internal/agentsession/launch.go#L15-L105) — `BoxLock`, `LoadLocked`, `Save`; destroy in `removeAgentboxConfig`.
 8. <a id="source-8"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L169) — `plan`, `uncertainError`, `checkOwner`, `namesConversation`.

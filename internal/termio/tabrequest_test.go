@@ -41,3 +41,18 @@ func TestInheritedTabRequestsRejectsBadDescriptor(t *testing.T) {
 		}
 	}
 }
+
+func TestTabRequestKeepsLegacySpaceName(t *testing.T) {
+	var buf bytes.Buffer
+	request := TabRequest{Op: "attach", Space: strings.Repeat("s", 63), Box: "api"}
+	if err := WriteTabRequest(&buf, request); err != nil {
+		t.Fatal(err)
+	}
+	var got TabRequest
+	if err := ReadTabRequests(&buf, func(r TabRequest) { got = r }); err != nil {
+		t.Fatal(err)
+	}
+	if got != request {
+		t.Fatalf("existing space reference lost: %+v", got)
+	}
+}

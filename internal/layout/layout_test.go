@@ -188,7 +188,7 @@ func TestValidateAgentboxNameBoundaries(t *testing.T) {
 }
 
 func TestValidateNonBoxNameBoundaries(t *testing.T) {
-	for _, kind := range []string{"space", "account", "agent", "agent-profile", "template", "feature", "VM backend"} {
+	for _, kind := range []string{"account", "agent", "agent-profile", "template", "feature", "VM backend"} {
 		for _, name := range []string{"a", "7", strings.Repeat("a", 63)} {
 			if err := ValidateName(kind, name); err != nil {
 				t.Errorf("ValidateName(%q, %q) = %v, want nil", kind, name, err)

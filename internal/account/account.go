@@ -228,7 +228,7 @@ func (c *Config) Save() error {
 // SaveRecorded is Save with a callback that receives the exact bytes about to
 // be published, before the write. Its error aborts the write.
 func (c *Config) SaveRecorded(record func([]byte) error) error {
-	if err := layout.ValidateName("space", c.Space); err != nil {
+	if err := layout.ValidateExistingSpaceName(c.Space); err != nil {
 		return err
 	}
 	if c.SchemaVersion == 0 {

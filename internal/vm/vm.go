@@ -11,6 +11,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/lima"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -93,6 +94,22 @@ func ValidateInstancePaths(kind, space string) error {
 	return nil
 }
 
+// ValidateNewInstancePaths checks the destination home before a new bootstrap
+// exists. Existing-space checks always use its recorded/legacy placement.
+func ValidateNewInstancePaths(kind, space string) error {
+	if err := layout.ValidateName("space", space); err != nil {
+		return err
+	}
+	d, err := Driver(kind)
+	if err != nil {
+		return err
+	}
+	if d.Kind() == "lima" {
+		return lima.ValidateNewInstancePaths(space)
+	}
+	return nil
+}
+
 func ForSpace(space string) (vmapi.Driver, error) {
 	if err := spaceenv.RequireSpace(space); spaceenv.Native() && err != nil {
 		return nil, err
@@ -135,25 +152,9 @@ func forDisk(id string) (vmapi.Driver, error) {
 // forDiskBootstrap also returns the bootstrap declaring the disk, or nil for
 // legacy standalone disk tooling.
 func forDiskBootstrap(id string) (vmapi.Driver, *spaceconfig.Bootstrap, error) {
-	names, err := spaceconfig.List()
+	found, err := spaceconfig.BootstrapForDisk(id)
 	if err != nil {
 		return nil, nil, err
-	}
-	var found *spaceconfig.Bootstrap
-	for _, name := range names {
-		b, err := spaceconfig.LoadBootstrap(name)
-		if errors.Is(err, spaceconfig.ErrLegacySchema) {
-			continue
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		if b.DiskID == id {
-			if found != nil {
-				return nil, nil, errors.New("data disk declared by multiple spaces")
-			}
-			found = b
-		}
 	}
 	if found != nil {
 		d, err := Driver(found.VM.Backend)

@@ -136,7 +136,7 @@ func observeNativeOriginCatalogAt(ctx context.Context, rootPath string, selectio
 }
 
 func (s nativeOriginCatalogSelection) validate() error {
-	if layout.ValidateName("space", s.space) != nil {
+	if layout.ValidateExistingSpaceName(s.space) != nil {
 		return errors.New("native origin catalog has invalid selected space")
 	}
 	for _, token := range []string{s.diskID, s.diskUUID} {

@@ -57,7 +57,7 @@ func (c precreateOriginClaim) validate(expected containerOrigin) error {
 			return errors.New("precreate origin requires bounded native disk identity tokens")
 		}
 	}
-	if layout.ValidateName("space", expected.Space) != nil || layout.ValidateName("agentbox", expected.Box) != nil || expected.DiskID == "" || expected.DiskUUID == "" || len(expected.DiskID) > 256 || len(expected.DiskUUID) > 256 || !lowerHex(expected.Incarnation, 16) || !lowerHex(expected.Qualification, 32) || !lowerHex(expected.HelperSHA256, 32) || c.origin != expected {
+	if layout.ValidateExistingSpaceName(expected.Space) != nil || layout.ValidateName("agentbox", expected.Box) != nil || expected.DiskID == "" || expected.DiskUUID == "" || len(expected.DiskID) > 256 || len(expected.DiskUUID) > 256 || !lowerHex(expected.Incarnation, 16) || !lowerHex(expected.Qualification, 32) || !lowerHex(expected.HelperSHA256, 32) || c.origin != expected {
 		return errors.New("precreate origin does not match independently selected native scope")
 	}
 	for _, id := range []pinFileIdentity{c.collection, c.directory, c.file} {

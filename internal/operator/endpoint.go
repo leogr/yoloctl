@@ -210,7 +210,7 @@ func LoadClient() (*Client, error) {
 	if err := json.Unmarshal(raw, &client); err != nil {
 		return nil, err
 	}
-	if err := layout.ValidateName("space", client.Space); err != nil {
+	if err := layout.ValidateExistingSpaceName(client.Space); err != nil {
 		return nil, err
 	}
 	if client.Generation == "" {

@@ -10,7 +10,6 @@ import (
 	"math"
 	"os"
 
-	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/lima-vm/go-qcow2reader/image/qcow2"
 	"golang.org/x/sys/unix"
 )
@@ -34,7 +33,7 @@ func (c *Client) AccountDiskBlank(ctx context.Context, id string) (bool, error) 
 	if disk.Instance != "" {
 		return false, fmt.Errorf("account disk is still attached to %s; stop that VM before retrying", disk.Instance)
 	}
-	dir, err := layout.AccountDiskDir(id)
+	dir, err := AccountDiskDir(id)
 	if err != nil {
 		return false, err
 	}

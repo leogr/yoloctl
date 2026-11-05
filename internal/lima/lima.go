@@ -8,12 +8,11 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 
 	"github.com/leogr/yoloctl/internal/atomicfile"
-	"github.com/leogr/yoloctl/internal/spaceenv"
+	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"gopkg.in/yaml.v3"
 )
 
@@ -42,7 +41,14 @@ func (c *Client) Create(ctx context.Context, name string, template []byte) error
 	if err := ValidateInstancePaths(name); err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, c.binary, "create", "--name="+InstanceName(name), "--tty=false", "-")
+	home, err := spaceconfig.LimaHome(name)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(home, 0700); err != nil {
+		return err
+	}
+	cmd := c.spaceCommand(ctx, name, "create", "--name="+InstanceName(name), "--tty=false", "-")
 	cmd.Stdin = bytes.NewReader(template)
 	cmd.Stdout = c.stdout
 	return RunWithFilteredStderr(cmd, c.stderr)
@@ -53,7 +59,7 @@ func (c *Client) Start(ctx context.Context, name string) error {
 	if err := ValidateInstancePaths(name); err != nil {
 		return err
 	}
-	return c.run(ctx, "start", "--tty=false", InstanceName(name))
+	return c.runSpace(ctx, name, "start", "--tty=false", InstanceName(name))
 }
 
 // Ensure makes the named instance exist and be Running. If missing, creates
@@ -80,7 +86,7 @@ func (c *Client) Ensure(ctx context.Context, name string, template []byte) error
 
 // Stop gracefully stops a running instance.
 func (c *Client) Stop(ctx context.Context, name string) error {
-	return c.run(ctx, "stop", "--tty=false", InstanceName(name))
+	return c.runSpace(ctx, name, "stop", "--tty=false", InstanceName(name))
 }
 
 // Delete removes an instance. force=true also stops it if running.
@@ -90,21 +96,24 @@ func (c *Client) Delete(ctx context.Context, name string, force bool) error {
 		args = append(args, "--force")
 	}
 	args = append(args, InstanceName(name))
-	return c.run(ctx, args...)
+	return c.runSpace(ctx, name, args...)
 }
 
 // CopyTo copies a local file into the named space's VM at remotePath via
 // `limactl copy`. The copy runs as the VM user: a privileged destination
 // needs staging through /tmp plus `sudo install` on the VM side.
 func (c *Client) CopyTo(ctx context.Context, space, localPath, remotePath string) error {
-	return c.run(ctx, "copy", localPath, InstanceName(space)+":"+remotePath)
+	return c.runSpace(ctx, space, "copy", localPath, InstanceName(space)+":"+remotePath)
 }
 
-func (c *Client) run(ctx context.Context, args ...string) error {
-	if spaceenv.Native() {
-		return errors.New("VM controller cannot execute host Lima operations")
-	}
-	cmd := exec.CommandContext(ctx, c.binary, args...)
+func (c *Client) runSpace(ctx context.Context, space string, args ...string) error {
+	cmd := c.spaceCommand(ctx, space, args...)
+	cmd.Stdout = c.stdout
+	return RunWithFilteredStderr(cmd, c.stderr)
+}
+
+func (c *Client) runDisk(ctx context.Context, id string, args ...string) error {
+	cmd := c.diskCommand(ctx, id, args...)
 	cmd.Stdout = c.stdout
 	return RunWithFilteredStderr(cmd, c.stderr)
 }

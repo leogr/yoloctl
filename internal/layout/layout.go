@@ -48,6 +48,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/buildinfo"
@@ -56,11 +57,13 @@ import (
 
 const ext = ".yaml"
 
-// Names use 1-63 ASCII characters, alnum + ._-, starting with alnum.
+// Names use ASCII alnum + ._-, starting with alnum. New spaces use
+// 1–16 characters; other entities and stored space identities retain 63.
 // Excluding shell metacharacters and `/` keeps validated names safe in shell
 // commands and VM paths. Boxes require at least two characters to match
 // nerdctl's Docker-compatible name rule, retaining yoloctl's 63-character cap.
 var namePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$`)
+var spaceNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,15}$`)
 var agentboxNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{1,62}$`)
 
 // reservedAgentboxNames are agentbox names yoloctl claims for its own VM
@@ -79,17 +82,34 @@ var reservedAgentboxNames = map[string]bool{
 // kind (e.g. "agentbox", "space", "account", "agent-profile").
 // Use this at every entry that interpolates a name into a VM path, a shell
 // command, or a label. Boxes share the runtime's two-character minimum;
-// other kinds retain their one-character minimum.
+// other kinds retain their one-character minimum. The space cap applies to new
+// admissions; existing space references use ValidateExistingSpaceName.
 func ValidateName(kind, name string) error {
 	pattern := namePattern
-	if kind == "agentbox" {
+	switch kind {
+	case "agentbox":
 		pattern = agentboxNamePattern
+	case "space":
+		pattern = spaceNamePattern
 	}
 	if !pattern.MatchString(name) {
+		if kind == "space" {
+			return fmt.Errorf("invalid space name %q: new spaces require 1–16 ASCII characters matching %s", name, pattern)
+		}
 		return fmt.Errorf("invalid %s name %q: must match %s", kind, name, pattern)
 	}
 	if kind == "agentbox" && reservedAgentboxNames[name] {
 		return fmt.Errorf("agentbox name %q is reserved for yoloctl session infrastructure", name)
+	}
+	return nil
+}
+
+// ValidateExistingSpaceName accepts the historical 1–63 character identity.
+// Use it for stored records, runtime references and paths, never admission of
+// a new space. ValidateName("space", name) enforces the new 16-character cap.
+func ValidateExistingSpaceName(name string) error {
+	if !namePattern.MatchString(name) {
+		return fmt.Errorf("invalid space name %q: must match %s", name, namePattern)
 	}
 	return nil
 }
@@ -185,11 +205,63 @@ func FeaturesDir() (string, error) { return underConfig("features") }
 // agent-profile registries.
 func CapabilitiesDir() (string, error) { return underConfig("capabilities") }
 
-// --- Lima (external-tool storage; path unchanged) --------------------------
+// --- Lima (external-tool storage) --------------------------
 
-// LimaHome returns yoloctl's LIMA_HOME. The location is intentionally
-// unchanged by the scope-first reorg — Lima runtime storage stays here.
+// LimaHome returns the legacy Lima home. An absent bootstrap lima_home
+// always selects this path, including the old macOS Application Support root.
 func LimaHome() (string, error) { return underConfig("lima") }
+
+// NewLimaHome selects storage for a newly created/imported space. Explicit
+// YOLOCTL_HOME and absolute XDG_CONFIG_HOME remain isolated on every OS.
+// Only the default on macOS changes; config and cache roots do not move.
+func NewLimaHome() (string, error) { return newLimaHome(runtime.GOOS) }
+
+func newLimaHome(goos string) (string, error) {
+	if goos != "darwin" || os.Getenv("YOLOCTL_HOME") != "" || filepath.IsAbs(os.Getenv("XDG_CONFIG_HOME")) {
+		return LimaHome()
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return ResolveLimaHome(filepath.Join(home, ".config", buildinfo.HomeLeaf(), "lima"))
+}
+
+// ResolveLimaHome applies the legacy fallback without probing or relocating VM
+// data. Recorded paths are host authority, never a guest declaration setting.
+func ResolveLimaHome(recorded string) (string, error) {
+	if recorded == "" {
+		return LimaHome()
+	}
+	if !filepath.IsAbs(recorded) || filepath.Clean(recorded) != recorded {
+		return "", fmt.Errorf("lima_home must be an absolute, clean path")
+	}
+	return recorded, nil
+}
+
+func LimaInstanceDir(home, space string) (string, error) {
+	if err := ValidateExistingSpaceName(space); err != nil {
+		return "", err
+	}
+	resolved, err := ResolveLimaHome(home)
+	if err != nil {
+		return "", err
+	}
+	home = resolved
+	return filepath.Join(home, "yolo-"+space), nil
+}
+
+func LimaAccountDiskDir(home, id string) (string, error) {
+	if _, err := AccountDiskDir(id); err != nil {
+		return "", err
+	}
+	resolved, err := ResolveLimaHome(home)
+	if err != nil {
+		return "", err
+	}
+	home = resolved
+	return filepath.Join(home, "_disks", AccountDiskName(id)), nil
+}
 
 // FirecrackerHome contains private per-VM runtime metadata, never declarations.
 func FirecrackerHome() (string, error) { return underConfig("firecracker") }
@@ -212,7 +284,7 @@ func VMImageBuildDir(backend string) (string, error) {
 	return filepath.Join(root, "vm-build", backend), err
 }
 func FirecrackerInstanceDir(space string) (string, error) {
-	if err := ValidateName("space", space); err != nil {
+	if err := ValidateExistingSpaceName(space); err != nil {
 		return "", err
 	}
 	return underConfig("firecracker", "instances", space)
@@ -232,7 +304,7 @@ func SpacesDir() (string, error) { return underConfig("spaces") }
 // SpaceBundleDir returns a space's bundle dir (spaces/<space>), the root
 // of everything scoped to that one space.
 func SpaceBundleDir(space string) (string, error) {
-	if err := ValidateName("space", space); err != nil {
+	if err := ValidateExistingSpaceName(space); err != nil {
 		return "", err
 	}
 	if c := spaceenv.Current(); c != nil {
@@ -358,7 +430,7 @@ func AccountStatePath(name, agent string) (string, error) {
 }
 
 func SpaceLockPath(space string) (string, error) {
-	if err := ValidateName("space", space); err != nil {
+	if err := ValidateExistingSpaceName(space); err != nil {
 		return "", err
 	}
 	if spaceenv.Native() {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -109,5 +110,27 @@ func TestResolveSpace_FlagValidates(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	if _, _, err := ResolveSpace("bad;name", true); err == nil {
 		t.Fatal("expected validation error")
+	}
+}
+
+func TestLegacyLongSpaceContextRemainsUsable(t *testing.T) {
+	t.Setenv("YOLOCTL_HOME", t.TempDir())
+	c, err := LoadContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Space = strings.Repeat("s", 63)
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	for _, explicit := range []bool{false, true} {
+		value := ""
+		if explicit {
+			value = c.Space
+		}
+		got, _, err := ResolveSpace(value, explicit)
+		if err != nil || got != c.Space {
+			t.Fatalf("existing context %q %v", got, err)
+		}
 	}
 }

@@ -121,6 +121,12 @@ for new agent boxes. Import a login or authenticate inside a box afterward.
 Only granted host projects and read-only catalogs are shared. Accounts and
 box declarations stay on the native data disk.
 --no-start initializes storage first, then leaves the VM stopped.
+New space names use 1–16 ASCII characters (alphanumeric first, then ._-).
+Existing longer names remain usable. New macOS Lima spaces use
+~/.config/yoloctl/lima by default; existing spaces retain their saved/legacy
+home. YOLOCTL_HOME and absolute XDG_CONFIG_HOME overrides remain explicit.
+Lima refuses socket paths that exceed the platform limit; the 16-character
+cap does not guarantee that every name fits under an arbitrarily long home.
 
 Linux amd64 defaults to Firecracker with KVM; other platforms default to Lima.
 Use --backend lima to select Lima explicitly. Firecracker prepares and caches
@@ -846,7 +852,7 @@ Use space recreate for a fresh VM that preserves accounts and declarations.
 			}
 			cfg, err := spaceconfig.Load(name)
 			if errors.Is(err, fs.ErrNotExist) {
-				home, homeErr := layout.LimaHome()
+				home, homeErr := spaceconfig.LimaHome(name)
 				if homeErr != nil {
 					return homeErr
 				}
@@ -1017,7 +1023,7 @@ connecting.
 			if err := releaseSpaceOperation(cmd.Context()); err != nil {
 				return err
 			}
-			sh := vmhost.Command(cmd.Context(), spaceShellLimaArgs(name, root, remote)...)
+			sh := vmhost.CommandForSpace(cmd.Context(), name, spaceShellLimaArgs(name, root, remote)...)
 			sh.Stdin = os.Stdin
 			sh.Stdout = os.Stdout
 			return asPassthroughExitError(vmhost.RunWithFilteredStderr(sh, os.Stderr))

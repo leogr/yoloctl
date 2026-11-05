@@ -6,6 +6,14 @@ host context; operator scope is fixed to its own space. `box create NAME` choose
 the space before resolving account defaults. `box run` and root `run`/`ps` are
 unavailable; use named `box create`, `box attach` and `box list`. [1](#source-1) [2](#source-2)
 
+[FACT] New space names, including import destinations, use 1–16 ASCII
+characters: an alphanumeric first, then alphanumeric, dot, underscore or hyphen.
+Existing longer names remain usable. New macOS Lima spaces use
+`~/.config/yoloctl/lima`; each records its home in the bootstrap, while absent
+fields preserve the legacy location. Explicit home overrides remain supported;
+Linux storage selection is unchanged. No automatic migration occurs.
+[20](#source-20)
+
 [FACT] Box names use 2–63 ASCII characters: an alphanumeric first, then
 alphanumerics, `.`, `_` or `-`, excluding reserved infrastructure names.
 Create and copy reject invalid names before controller selection, including
@@ -183,3 +191,5 @@ version probe is bounded. Ordinary commands retain startup setup. [18](#source-1
 18. <a id="source-18"></a> [Installation, build identity and host homes](../digests/installation.md).
 
 19. <a id="source-19"></a> [VM adapters and Lima socket bounds](../digests/vm-adapters.md).
+
+20. <a id="source-20"></a> [Lima storage and names](../digests/lima-storage.md).

@@ -5,11 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"os/exec"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
+	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/vmapi"
 )
@@ -25,27 +29,78 @@ func (c *Client) List(ctx context.Context) ([]Instance, error) {
 	if native := spaceenv.Current(); native != nil {
 		return []Instance{{Name: native.Space, Status: "Running", Arch: runtime.GOARCH}}, nil
 	}
-	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, c.binary, "list", "--format", "json")
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	WriteFilteredStderr(c.stderr, stderr.String())
+	homes, err := spaceconfig.LimaHomes()
 	if err != nil {
 		return nil, err
 	}
-	all, err := parseInstances(&stdout)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]Instance, 0, len(all))
-	for _, inst := range all {
-		space, ok := spaceFromInstance(inst.Name)
-		if !ok {
+	out := make([]Instance, 0)
+	seen, visited := map[string]bool{}, map[string]bool{}
+	for _, home := range homes {
+		canonical, err := filepath.EvalSymlinks(home)
+		if errors.Is(err, os.ErrNotExist) {
+			canonical = home
+		} else if err != nil {
+			return nil, err
+		}
+		if visited[canonical] {
 			continue
 		}
-		inst.Name = space
-		out = append(out, inst)
+		visited[canonical] = true
+		var stdout, stderr bytes.Buffer
+		cmd := c.commandAtHome(ctx, home, "list", "--format", "json")
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		err = cmd.Run()
+		WriteFilteredStderr(c.stderr, stderr.String())
+		if err != nil {
+			return nil, err
+		}
+		all, err := parseInstances(&stdout)
+		if err != nil {
+			return nil, err
+		}
+		for _, inst := range all {
+			space, ok := spaceFromInstance(inst.Name)
+			if !ok {
+				continue
+			}
+			if seen[space] {
+				return nil, fmt.Errorf("space %q has conflicting Lima instances in multiple homes", space)
+			}
+			// Do not report a VM found in a different home as the selected VM.
+			b, err := spaceconfig.LoadBootstrap(space)
+			if err == nil {
+				expected, err := layout.ResolveLimaHome(b.VM.LimaHome)
+				if err != nil {
+					return nil, err
+				}
+				if resolved, err := filepath.EvalSymlinks(expected); err == nil {
+					expected = resolved
+				} else if !errors.Is(err, os.ErrNotExist) {
+					return nil, err
+				}
+				if expected != canonical {
+					return nil, fmt.Errorf("space %q: Lima instance is outside its recorded home", space)
+				}
+			} else if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, spaceconfig.ErrLegacySchema) {
+				return nil, err
+			} else {
+				legacy, err := layout.LimaHome()
+				if err != nil {
+					return nil, err
+				}
+				if resolved, err := filepath.EvalSymlinks(legacy); err == nil {
+					legacy = resolved
+				} else if !errors.Is(err, os.ErrNotExist) {
+					return nil, err
+				}
+				if legacy != canonical {
+					return nil, fmt.Errorf("space %q has an orphan Lima instance in %q; restore its bootstrap before managing it", space, home)
+				}
+			}
+			seen[space] = true
+			inst.Name = space
+			out = append(out, inst)
+		}
 	}
 	return out, nil
 }

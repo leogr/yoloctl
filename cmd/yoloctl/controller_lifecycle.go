@@ -80,6 +80,11 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 		if err != nil {
 			return err
 		}
+		if action == "create" {
+			if err := layout.ValidateName("space", space); err != nil {
+				return asUserError(err)
+			}
+		}
 		update, restartSessions := false, false
 		if action == "start" {
 			update, _ = cmd.Flags().GetBool("update-controller")
@@ -249,6 +254,9 @@ func lockHostLifecycle(cmd *cobra.Command, space string) (func(), error) {
 }
 
 func createControllerSpace(cmd *cobra.Command, space string) error {
+	if err := layout.ValidateName("space", space); err != nil {
+		return asUserError(err)
+	}
 	if exists, err := spaceconfig.Exists(space); err != nil {
 		return err
 	} else if exists {
@@ -276,7 +284,10 @@ func createControllerSpace(cmd *cobra.Command, space string) error {
 		return err
 	}
 	boot.VM.Backend, _ = cmd.Flags().GetString("backend")
-	if err := vmhost.ValidateInstancePaths(boot.VM.Backend, space); err != nil {
+	if err := boot.SelectNewLimaHome(); err != nil {
+		return err
+	}
+	if err := vmhost.ValidateNewInstancePaths(boot.VM.Backend, space); err != nil {
 		return asUserError(err)
 	}
 	boot.VM.Memory, err = selectSpaceMemory(cmd)

@@ -31,7 +31,15 @@ func rejectManagedHostPath(path string) error {
 	if err != nil {
 		return err
 	}
-	for _, protected := range []string{root, buildCache} {
+	protectedPaths := []string{root, buildCache}
+	if !spaceenv.Native() {
+		homes, err := spaceconfig.LimaHomes()
+		if err != nil {
+			return err
+		}
+		protectedPaths = append(protectedPaths, homes...)
+	}
+	for _, protected := range protectedPaths {
 		canonical, _, err := agentbox.CanonicalizeWorkdir(protected)
 		if err != nil {
 			return err

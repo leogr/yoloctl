@@ -18,7 +18,8 @@ lock paths. Global catalogs/context/TUI preferences remain host-owned; only
 three catalog directories are mounted read-only into the VM, then snapshotted
 per operation. The Lima adapter delegates its hypervisor, architecture
 and mount transport to Lima, preserving Linux/macOS/Rosetta selection. The
-bootstrap persists the selected backend. New Linux amd64 spaces default to
+bootstrap persists the selected backend and optional `vm.lima_home`;
+[Lima storage](lima-storage.md) records new macOS placement and legacy fallback. New Linux amd64 spaces default to
 Firecracker; other platforms and empty legacy records select Lima. [2](#source-2)
 [4](#source-4) [5](#source-5) [20](#source-20) [21](#source-21)
 
@@ -60,7 +61,7 @@ host path under `/workdir`. Ephemeral workdirs are disposable VM-local storage
 at `/workdir`. Ordinary binds need a compatible most-specific host grant and a
 live shared directory; box commands never widen grants. Managed account binds
 are derived separately. Host grant/bind checks cover intersections with config, the host VM build cache,
-account disk aliases and controller infrastructure. [9](#source-9)
+Lima homes, account disk aliases and controller infrastructure. [9](#source-9)
 [10](#source-10) [11](#source-11)
 
 [FACT] Host RPC path expansion checks canonical mount/workdir arguments against
@@ -87,7 +88,7 @@ rejected. This does not delete native state or change credential import.
 ## Sources
 
 1. <a id="source-1"></a> [internal/spaceconfig/bootstrap.go](../../internal/spaceconfig/bootstrap.go#L24) — Bootstrap, Settings, strict schema parsing and `LoadBootstrap`.
-2. <a id="source-2"></a> [internal/layout/layout.go](../../internal/layout/layout.go#L95) — native/host path construction.
+2. <a id="source-2"></a> [internal/layout/layout.go](../../internal/layout/layout.go#L118) — native/host path construction.
 3. <a id="source-3"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L173) — initial account and private initialization seed.
 4. <a id="source-4"></a> [cmd/yoloctl/controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L25) — host grants and narrow read-only catalog mounts.
 5. <a id="source-5"></a> [internal/lima/template.go](../../internal/lima/template.go#L31) — template boot settings, Lima-selected backend/architecture.

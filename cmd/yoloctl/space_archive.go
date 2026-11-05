@@ -47,7 +47,8 @@ func newSpaceImportCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "import SPACE ARCHIVE.tar.gz", Short: "Restore a backup into a new space", Long: `Validate a space archive, allocate a fresh native disk and restore declarations
 and account files. Managed chat data and desired membership are retained with
 new room identities and credentials; runtime application remains pending.
-SPACE must not exist. Choose the destination VM backend;
+SPACE must not exist and its name must use 1–16 ASCII characters.
+Choose the destination VM backend and current host's new-space Lima home;
 boxes stay stopped and their images are rebuilt/pulled on explicit box start.
 Host projects and global catalogs must already exist on the destination host.
 Recorded host grants are reused; --workdir remaps the original default workdir,
@@ -169,6 +170,9 @@ func writeExclusiveArchive(path string, write func(io.Writer) error) error {
 
 func importSpace(cmd *cobra.Command, args []string) error {
 	name := args[0]
+	if err := layout.ValidateName("space", name); err != nil {
+		return asUserError(err)
+	}
 	release, err := lockHostLifecycle(cmd, name)
 	if err != nil {
 		return err
@@ -180,7 +184,7 @@ func importSpace(cmd *cobra.Command, args []string) error {
 		return errors.New("import destination space already exists")
 	}
 	backend, _ := cmd.Flags().GetString("backend")
-	if err := vmhost.ValidateInstancePaths(backend, name); err != nil {
+	if err := vmhost.ValidateNewInstancePaths(backend, name); err != nil {
 		return asUserError(err)
 	}
 	if _, found, err := vmhost.New().LookupBackend(cmd.Context(), name, backend); err != nil {
@@ -320,6 +324,9 @@ func prepareImportedSpace(cmd *cobra.Command, name string, m spacearchive.Manife
 	}
 	boot.VM = m.Bootstrap.VM
 	boot.VM.Backend, _ = cmd.Flags().GetString("backend")
+	if err := boot.SelectNewLimaHome(); err != nil {
+		return nil, err
+	}
 	image, _ := cmd.Flags().GetString("vm-image")
 	boot.VM.Image, err = vmhost.ResolveImage(cmd.Context(), boot.VM.Backend, image)
 	if err != nil {

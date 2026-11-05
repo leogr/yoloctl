@@ -10,7 +10,8 @@ existing declaration or runtime rather than rewriting it. [1](#source-1)
 
 [FACT] Box names match `^[a-zA-Z0-9][a-zA-Z0-9._-]{1,62}$`, retaining
 reserved-name exclusions and the 63-character cap. Other entity kinds retain
-their one-character minimum. This matches nerdctl 2.3.5's minimum/characters;
+their one-character minimum. New spaces have a separate 16-character cap;
+[legacy space names and Lima placement](lima-storage.md) retain compatibility. This matches nerdctl 2.3.5's minimum/characters;
 its validator has no maximum. Create/copy's shared Args validate names before
 controller selection; native RunE and manifest validation remain. One-character
 box declarations now fail validation without renaming or deletion.
@@ -124,7 +125,7 @@ adding a new command. [3](#source-3) [11](#source-11)
 22. <a id="source-22"></a> [Chat callbacks](../../cmd/yoloctl/chat_completion.go#L17) — native manifest/declaration completion; registered by `registerCompletions`.
 23. <a id="source-23"></a> [Chat completion regression](../../cmd/yoloctl/chat_completion_test.go#L28) — host/operator routing, identities, prefix, cancellation and offline refusal.
 24. <a id="source-24"></a> [Named resolution](../../internal/boxstate/boxstate.go#L225-L421) — `ResolveOne`, `ResolveNamed`, `resolveSpace`; `TestResolveNamedLimitsPerBoxWorkToTheNamedBoxes` in boxstate_test.go L245.
-25. <a id="source-25"></a> [Name validator](../../internal/layout/layout.go#L59-L98) — `ValidateName`, patterns and reserved names.
+25. <a id="source-25"></a> [Name validator](../../internal/layout/layout.go#L55-L115) — `ValidateName`, patterns and reserved names.
 26. <a id="source-26"></a> [Copy validation](../../cmd/yoloctl/agentbox_copy.go#L69-L88) — shared Args and native RunE validate destination/source.
 27. <a id="source-27"></a> [Manifest validation](../../internal/agentbox/agentbox.go#L519-L520) — `Config.Validate` uses the shared box rule.
 28. <a id="source-28"></a> [nerdctl v2.3.5 validator](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/identifiers/validate.go#L25-L45) — `AllowedIdentifierPattern`, `ValidateDockerCompat`.
