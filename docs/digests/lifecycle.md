@@ -1,6 +1,6 @@
 # Reconcile, native locks and space lifecycle
 
-Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); other facts at `1d265df3`; re-read cited sources when changing behavior.
+Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior.
 
 [FACT] Explicit reconcile selects create, recreate, restart, then live port changes. Account,
 agent, mounts/workdir access, image, literal env and network mode can require
@@ -13,7 +13,10 @@ units converge. Old containers recreate to join the workload memory pool.
 [FACT] Primary workdir inspection uses the recorded sandbox `--workdir` from
 `Path`/`Args`, independent of desired paths and mount order. Other `/workdir`
 binds remain extras; moved paths and access changes still reconcile. Missing
-or ambiguous metadata aborts inspection before mutation.
+or ambiguous metadata aborts inspection before mutation. `nerdctl inspect`
+also returns containers whose ID merely starts with the request, so an inspect
+selects only the entry whose recorded name (or full ID, for fixed-ID callers)
+equals it: none is "no such container", more than one an error.
 [2](#source-2) [22](#source-22) [23](#source-23) [24](#source-24)
 
 [FACT] Start on a running container is a no-op. Other starts/restarts refuse
@@ -110,7 +113,7 @@ export/import/recreate, not physical power-loss behavior.
 20. <a id="source-20"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2134) — `newAgentboxDestroyCmd` requires `RuntimeInventory` before teardown.
 21. <a id="source-21"></a> [cmd/yoloctl/agentbox_test.go](../../cmd/yoloctl/agentbox_test.go#L30) — `TestAgentboxDestroyUncertainRuntimePreservesDeclaration`: inventory failures, force/keep-manifest combinations.
 22. <a id="source-22"></a> [Inspector regressions](../../internal/agentbox/live_inspect_test.go#L20) — convergence, drift and refusal.
-23. <a id="source-23"></a> [parseInspect](../../internal/container/container.go#L568) — runtime argv decoding.
+23. <a id="source-23"></a> [parseInspect](../../internal/container/container.go#L568) — runtime argv decoding; `selectInspectEntry` and `parseContainerIP` select the exact entry (tests in inspect_select_test.go).
 24. <a id="source-24"></a> [nerdctl v2.3.5](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/inspecttypes/dockercompat/dockercompat.go#L339) — `Path`/`Args` from OCI argv.
 25. <a id="source-25"></a> [reconcile.go](../../internal/agentbox/reconcile.go#L91) — `ReconcileForStart`, `CheckStart`, shared planning.
 26. <a id="source-26"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L664) — `startAgentbox`, `preflightAgentboxRestartWithIntent`, `newAgentboxRestartCmd`.

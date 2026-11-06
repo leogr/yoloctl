@@ -9,7 +9,7 @@ import (
 func TestInspectDoesNotInferUnreportedPrivilege(t *testing.T) {
 	for _, hostConfig := range []string{`{}`, `{"Privileged":null}`, `{"Privileged":false}`} {
 		t.Run(hostConfig, func(t *testing.T) {
-			details, err := parseInspect([]byte(fmt.Sprintf(`[{"HostConfig":%s}]`, hostConfig)), "box")
+			details, err := parseInspect([]byte(fmt.Sprintf(`[{"Name":"box","HostConfig":%s}]`, hostConfig)), "box")
 			if err != nil {
 				t.Fatal(err)
 			}

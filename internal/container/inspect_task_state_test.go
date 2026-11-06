@@ -10,7 +10,7 @@ func TestInspectTaskStateRetainsExplicitInactiveEvidenceWithoutInferringHistory(
 	for _, status := range []string{"", "created", "exited", "stopped"} {
 		for _, at := range []string{"", "0001-01-01T00:00:00Z", "2026-10-31T00:00:00Z"} {
 			state, _ := json.Marshal(map[string]any{"Status": status, "Running": false, "Pid": 0, "StartedAt": at, "Paused": false, "Restarting": false, "ExitCode": 0, "Error": "", "FinishedAt": ""})
-			raw := []byte(`[{"Id":"` + strings.Repeat("a", 64) + `","State":` + string(state) + `}]`)
+			raw := []byte(`[{"Id":"` + strings.Repeat("a", 64) + `","Name":"fixture","State":` + string(state) + `}]`)
 			d, err := parseInspect(raw, "fixture")
 			if err != nil || !d.InactiveTaskFieldsObserved || d.AmbiguousTaskStateObserved || d.EmptyTaskStateObserved != (status == "" && (at == "" || at == "0001-01-01T00:00:00Z")) || d.Status != status || d.StartedAt != at {
 				t.Fatal("adapter lost explicit fields or invented history", status, at, d, err)
@@ -33,7 +33,7 @@ func TestInspectTaskStateRefusesMissingNullAmbiguousAndUnknownInactiveShapes(t *
 		`{"Status":"","Running":false,"Pid":0,"StartedAt":"","Restarting":true}`, `{"Status":"","Running":false,"Pid":0,"StartedAt":"","future":true}`,
 		`{"Status":"","Running":false,"Pid":0,"StartedAt":"","Running":false}`,
 	} {
-		raw := []byte(`[{"Id":"` + strings.Repeat("a", 64) + `","State":` + state + `}]`)
+		raw := []byte(`[{"Id":"` + strings.Repeat("a", 64) + `","Name":"fixture","State":` + state + `}]`)
 		d, err := parseInspect(raw, "fixture")
 		if err != nil {
 			continue
@@ -43,8 +43,8 @@ func TestInspectTaskStateRefusesMissingNullAmbiguousAndUnknownInactiveShapes(t *
 		}
 	}
 	for _, raw := range []string{
-		`[{"Id":"a"}]`,
-		`[{"Id":"a","State":{"Status":"","Running":false,"Pid":0,"StartedAt":""},"State":{"Status":"","Running":false,"Pid":0,"StartedAt":""}}]`,
+		`[{"Id":"a","Name":"fixture"}]`,
+		`[{"Id":"a","Name":"fixture","State":{"Status":"","Running":false,"Pid":0,"StartedAt":""},"State":{"Status":"","Running":false,"Pid":0,"StartedAt":""}}]`,
 	} {
 		d, err := parseInspect([]byte(raw), "fixture")
 		if err == nil && (d.InactiveTaskFieldsObserved || d.EmptyTaskStateObserved) {
@@ -65,7 +65,7 @@ func TestInspectTaskStateRefusesCaseFoldedStateAliasesInEitherOrder(t *testing.T
 			`"State":` + inactive + `,"` + alias + `":` + paused,
 			`"` + alias + `":` + inactive,
 		} {
-			d, err := parseInspect([]byte(`[{"Id":"a",`+members+`}]`), "fixture")
+			d, err := parseInspect([]byte(`[{"Id":"a","Name":"fixture",`+members+`}]`), "fixture")
 			if err != nil {
 				t.Fatal("fixture should retain legacy typed decoding", err)
 			}

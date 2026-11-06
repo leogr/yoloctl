@@ -606,14 +606,27 @@ type DetailMount struct {
 func (c *Client) ContainerIP(ctx context.Context, name string) (string, error) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	cmd := c.command(ctx, "sudo", "nerdctl", "inspect", name,
-		"--format", "{{.NetworkSettings.IPAddress}}")
+	cmd := c.command(ctx, "sudo", "nerdctl", "inspect", name)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("inspect %s for IP: %w (%s)", name, err, vmhost.FilterStderrText(stderr.String()))
 	}
-	return strings.TrimSpace(stdout.String()), nil
+	return parseContainerIP(stdout.Bytes(), name)
+}
+
+// parseContainerIP reads the IPv4 address of exactly the requested container
+// (see selectInspectEntry); empty while it is not running.
+func parseContainerIP(raw []byte, name string) (string, error) {
+	var entries []inspectEntry
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return "", fmt.Errorf("parse inspect %s for IP: %w", name, err)
+	}
+	e, err := selectInspectEntry(entries, name)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(e.NetworkSettings.IPAddress), nil
 }
 
 // Inspect returns the parsed Details for one container, or an error if
@@ -670,18 +683,46 @@ type inspectEntry struct {
 	} `json:"NetworkSettings"`
 }
 
-// parseInspect handles the `nerdctl inspect` JSON shape — a top-level
-// array, since you can inspect multiple containers in one call. We
-// asked for one; assume one back.
+// parseInspect handles the `nerdctl inspect` JSON shape — a top-level array
+// — and returns exactly the requested container (see selectInspectEntry).
 func parseInspect(raw []byte, name string) (*Details, error) {
 	var entries []inspectEntry
 	if err := json.Unmarshal(raw, &entries); err != nil {
 		return nil, fmt.Errorf("parse inspect %s: %w", name, err)
 	}
-	if len(entries) == 0 {
-		return nil, fmt.Errorf("inspect %s: empty response", name)
+	e, err := selectInspectEntry(entries, name)
+	if err != nil {
+		return nil, err
 	}
-	return entries[0].details(name)
+	return e.details(name)
+}
+
+// nerdctlNameLabel is the label nerdctl records a container's name in.
+const nerdctlNameLabel = "nerdctl/name"
+
+// selectInspectEntry picks the one entry that is exactly the request. nerdctl
+// resolves an inspect argument by name label OR by ID prefix and returns every
+// match, so `inspect c1` also returns any container whose ID starts with
+// "c1". An entry matches only by its recorded name (the nerdctl/name label,
+// or Name without its leading "/") or by its full ID, for callers that pass a
+// fixed container ID. No match is "no such container"; more than one is an
+// error. Never the first entry, never an ID prefix.
+func selectInspectEntry(entries []inspectEntry, req string) (*inspectEntry, error) {
+	var found *inspectEntry
+	for i := range entries {
+		e := &entries[i]
+		if req == "" || e.ID != req && strings.TrimPrefix(e.Name, "/") != req && e.Config.Labels[nerdctlNameLabel] != req {
+			continue
+		}
+		if found != nil {
+			return nil, fmt.Errorf("inspect %s: more than one container matches exactly", req)
+		}
+		found = e
+	}
+	if found == nil {
+		return nil, fmt.Errorf("inspect %s: no such container", req)
+	}
+	return found, nil
 }
 
 func (e inspectEntry) details(name string) (*Details, error) {

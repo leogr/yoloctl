@@ -58,7 +58,7 @@ func TestInspectMemoryLimitsAndPoolCounters(t *testing.T) {
 	if err != nil || d.Memory != "2147483648" || d.CPUs != "2.5" {
 		t.Fatal(d, err)
 	}
-	d, err = parseInspect([]byte(`[{"HostConfig":{"Memory":0,"CpuQuota":-1}}]`), "box")
+	d, err = parseInspect([]byte(`[{"Name":"box","HostConfig":{"Memory":0,"CpuQuota":-1}}]`), "box")
 	if err != nil || d.Memory != "0" || d.CPUs != "0" {
 		t.Fatal(d, err)
 	}
