@@ -1,6 +1,6 @@
 # Audit metadata extraction
 
-Verification: `3c3fdffd7b50cc818649e21f916df8d35d8ac15b` and accompanying changes.
+Verification: `e078b4ee0cf92e680a4a5ce2f1e52c434e487227` and accompanying changes.
 
 [FACT] The yolo C++ extraction plugin uses Falco's pinned C ABI 3.12.0
 (`falcosecurity/libs` 0.26.1, matching pinned Falco 0.45.2). Its separate required
@@ -24,7 +24,10 @@ The guest CRI service need not be enabled. [17](#source-17)
 on a five-second ticker under native locking and receipt-hold checks.
 The bounded runtime projection requests only full container IDs, selected
 identity/audit labels and the optional reported privilege flag, without Env,
-argv or aggregate labels. Complete schema-1 labels are required; legacy,
+argv or aggregate labels. The inspect template uses the typed Go field `.ID`;
+its JSON tag `Id` is not a template-field alias. Successful transport still
+requires exactly one strictly decoded row per requested ID; malformed or partial
+projection output cannot refresh the snapshot. Complete schema-1 labels are required; legacy,
 invalid, foreign-space or positively mismatched privilege observations are
 omitted. Missing runtime privilege evidence does not turn the recorded label
 into confinement proof. Failed/held observations do not refresh an old file. One audit maintenance

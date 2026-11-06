@@ -1,6 +1,6 @@
 # VM image preparation and replacement
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; OpenShell retirement `1d265df3` and accompanying changes; grow capability `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; audit kernel `3b38b25b02b1179f3c11efb8d6206e125b45ed75` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; OpenShell retirement `1d265df3` and accompanying changes; grow capability `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; audit kernel `b974e57ad7a91b6343d8380f5a25df723b6a31a9` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Firecracker create/import and explicit image updates resolve immutable
 media under config-root `vm-images/firecracker`. Automatic selection hashes the
