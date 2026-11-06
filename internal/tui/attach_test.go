@@ -55,3 +55,54 @@ func TestStandalonePrefixAndOrdinaryKeys(t *testing.T) {
 		t.Fatalf("keys=%q want %q", got, want)
 	}
 }
+
+func TestStandaloneTmuxStyleDetachKeys(t *testing.T) {
+	for name, key := range map[string]tea.Key{
+		"ctrl+w":        {Code: 'w', Mod: tea.ModCtrl},
+		"ctrl+d":        {Code: 'd', Mod: tea.ModCtrl},
+		"d":             {Code: 'd', Text: "d"},
+		"d num lock":    {Code: 'd', Text: "d", Mod: tea.ModNumLock},
+		"legacy ctrl+w": {Code: 0x17},
+		"legacy ctrl+d": {Code: 0x04},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newTestModel(t, 40, 8)
+			m.standalone = true
+			m.focusPalette = false
+			_, capture := mouseCapture(t, m, "")
+			_, _ = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+			_, cmd := m.Update(tea.KeyPressMsg(key))
+			if cmd == nil {
+				t.Fatal("did not detach")
+			}
+			if _, ok := cmd().(tea.QuitMsg); !ok {
+				t.Fatal("detach was not a quit")
+			}
+			if got := capture(); got != "" {
+				t.Fatalf("prefix or key reached the child: %q", got)
+			}
+		})
+	}
+	for name, key := range map[string]tea.Key{
+		"D":     {Code: 'd', ShiftedCode: 'D', Text: "D", Mod: tea.ModShift},
+		"alt+d": {Code: 'd', Mod: tea.ModAlt},
+		"e":     {Code: 'e', Text: "e"},
+	} {
+		t.Run("forwards "+name, func(t *testing.T) {
+			m := newTestModel(t, 40, 8)
+			m.standalone = true
+			m.focusPalette = false
+			_, capture := mouseCapture(t, m, "")
+			_, _ = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+			_, cmd := m.Update(tea.KeyPressMsg(key))
+			if cmd != nil {
+				if _, ok := cmd().(tea.QuitMsg); ok {
+					t.Fatal("detached")
+				}
+			}
+			if got := capture(); !strings.HasPrefix(got, "\x19") || len(got) < 2 {
+				t.Fatalf("prefix and key not forwarded: %q", got)
+			}
+		})
+	}
+}

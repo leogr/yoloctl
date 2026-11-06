@@ -125,9 +125,9 @@ func newAgentboxAttachCmd() *cobra.Command {
 with the shared terminal renderer (recommended): restore the screen,
 history and input modes, then follow live output. Outside the TUI this uses
 one full-screen view without tabs or a palette. The configured palette key
-(default Ctrl+Y), then Ctrl+W detaches; press the palette key twice to send
-it to the application. All attachments remain interactive; the latest resize
-sets the shared session geometry.
+(default Ctrl+Y), then Ctrl+W, Ctrl+D or d (as in tmux) detaches; press the
+palette key twice to send it to the application. All attachments remain
+interactive; the latest resize sets the shared session geometry.
 
 Managed views support explicit host PNG paste with Ctrl+V: reuse a copied PNG
 already readable with matching contents in the box's shared workdir, or transfer
