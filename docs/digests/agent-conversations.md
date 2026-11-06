@@ -1,6 +1,6 @@
 # Agent conversation identity
 
-Verification: `f15ce301325c25538cab3f7acaf88962827c38bc` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; resume carry `ffd5153aed3db8e29d362837407e24bdfacb5f7e` and accompanying changes; resume-file preflight on `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes; re-read cited sources when changing behavior.
 
 Launch locking, tokens and settlement are detailed in
 [tracked agent launches](agent-launches.md).

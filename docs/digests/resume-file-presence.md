@@ -1,6 +1,6 @@
 # Saved conversation presence before resume
 
-Verification: `f15ce301325c25538cab3f7acaf88962827c38bc` and accompanying changes;
+Verification: `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes;
 upstream documentation checked 2026-11-06. Re-read cited symbols when changing behavior.
 
 [FACT] Claude documents local transcripts under

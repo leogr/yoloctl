@@ -1,6 +1,6 @@
 # Tracked agent launches and settlement
 
-Verification: `f15ce301325c25538cab3f7acaf88962827c38bc` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; resume-file preflight on `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] A tracked start requires the command wrapper's native space-operation
 lock to be still held (a context witness) and takes only the box lock, kept
