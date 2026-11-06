@@ -25,7 +25,7 @@ type AuditLabelObservation struct {
 	Privileged  *bool  `json:"privileged"`
 }
 
-const auditProjection = `{"id":{{json .Id}},"schema":{{json (index .Config.Labels "yoloctl.audit.schema")}},"kind":{{json (index .Config.Labels "yoloctl.kind")}},"box":{{json (index .Config.Labels "yoloctl.agentbox")}},"space":{{json (index .Config.Labels "yoloctl.space")}},"account":{{json (index .Config.Labels "yoloctl.audit.account")}},"agent":{{json (index .Config.Labels "yoloctl.agent")}},"runtime_mode":{{json (index .Config.Labels "yoloctl.audit.runtime_mode")}},"network":{{json (index .Config.Labels "yoloctl.audit.network_unconfined")}},"privileged":{{json .HostConfig.Privileged}}}`
+const auditProjection = `{"id":{{json .ID}},"schema":{{json (index .Config.Labels "yoloctl.audit.schema")}},"kind":{{json (index .Config.Labels "yoloctl.kind")}},"box":{{json (index .Config.Labels "yoloctl.agentbox")}},"space":{{json (index .Config.Labels "yoloctl.space")}},"account":{{json (index .Config.Labels "yoloctl.audit.account")}},"agent":{{json (index .Config.Labels "yoloctl.agent")}},"runtime_mode":{{json (index .Config.Labels "yoloctl.audit.runtime_mode")}},"network":{{json (index .Config.Labels "yoloctl.audit.network_unconfined")}},"privileged":{{json .HostConfig.Privileged}}}`
 
 // AuditLabels bounds both runtime IO and the complete batch. Incomplete reads
 // fail the observation; callers let their old snapshot expire, never mutate or

@@ -1,6 +1,6 @@
 # Audit rule paths and container recognition
 
-Verification: `3c3fdffd7b50cc818649e21f916df8d35d8ac15b` and accompanying changes.
+Verification: `e078b4ee0cf92e680a4a5ce2f1e52c434e487227` and accompanying changes.
 
 [FACT] Filesystem rules distinguish the path changed by a syscall from the
 payload of a new symbolic link. In pinned libs 0.26.1, `fs.path.source` for
