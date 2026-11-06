@@ -676,6 +676,9 @@ Record the Go executable and test binary's Mach-O architecture when comparing
 native Apple Silicon with amd64 under Rosetta. `GOARCH=arm64` alone does not
 prove that the Go tool itself ran natively. The diagnostic uses only fixed,
 small-output disposable commands and records no inherited environment values.
+It drains controlling-PTY output concurrently and closes the pollable master
+before waiting for cancellation cleanup, so an unread terminal cannot stall
+the diagnostic itself. The strict output test keeps its separate byte assertions.
 Darwin's Go fork/exec error pipe merges session, controlling-TTY and exec errors;
 `cmd.Start` EPERM alone leaves the exact child syscall unknown. A successful
 comparison run is a no-reproduction result, not proof that Rosetta caused a
