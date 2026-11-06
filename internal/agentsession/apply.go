@@ -8,8 +8,12 @@ import (
 
 // Observation of the current launch. Every value here is agent-reported:
 // a sandbox process can write any line into its generation directory, so a
-// report decides only display and the resume outcome label, and a hostile
-// writer can at most make the user choose --new-session.
+// report decides only display, the resume outcome label and, for a profile
+// that declares session.resume_carry, the effort (an allowlisted value) and
+// model (a plain id, never an option) appended to the next resume of the
+// conversation that reported them (see Carried). A hostile writer can at most
+// make the user choose --new-session or have that conversation resume with
+// another allowed effort or model.
 
 // ReadCurrentReports reads a box's unread reports of generation gen for
 // read-only views. The controller sets it; elsewhere it is nil and views show
@@ -203,8 +207,12 @@ func (r *Record) applyLine(o *Observed, ob observe.Observation) bool {
 	case observe.Query:
 		source = SourceQuery
 	}
+	session := ""
+	if ValidID(ob.SessionID) {
+		session = ob.SessionID
+	}
 	value := func(v string) *ObservedValue {
-		return &ObservedValue{Value: v, Source: source, At: ob.AgentTS, ReadAt: ob.ReadAt}
+		return &ObservedValue{Value: v, Source: source, At: ob.AgentTS, ReadAt: ob.ReadAt, Session: session}
 	}
 	switch ob.Event {
 	case "SessionStart":

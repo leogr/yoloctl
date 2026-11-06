@@ -45,6 +45,10 @@ func TestAgentProfiles_BuiltIns(t *testing.T) {
 				ResumeArgv:   []string{"{{command}}", "--resume", "{{session_id}}"},
 				ReservedArgs: []string{"--session-id", "--resume", "-r", "--continue", "-c", "--fork-session", "--bg"},
 				Observe:      &agentprofile.ObserveSpec{Push: "yolo.agent.observe", Selection: agentprofile.SelectionReported},
+				ResumeCarry: &agentprofile.ResumeCarry{
+					Effort: &agentprofile.CarryArgs{Args: []string{"--effort", "{{effort}}"}, Values: []string{"low", "medium", "high", "xhigh", "max"}},
+					Model:  &agentprofile.CarryArgs{Args: []string{"--model", "{{model}}"}},
+				},
 			},
 			SecretInjection: []agentprofile.SecretInjection{{Secret: "ANTHROPIC_API_KEY"}, {Secret: "AWS_ACCESS_KEY_ID"}, {Secret: "AWS_SECRET_ACCESS_KEY"}, {Secret: "AWS_SESSION_TOKEN"}, {Secret: "AWS_BEARER_TOKEN_BEDROCK"}},
 		}},

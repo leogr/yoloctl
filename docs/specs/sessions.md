@@ -54,7 +54,9 @@ observed conversation, never a guessed current selection; a resume that exits
 nonzero without a report is retried, never replaced by a fresh one. A verified container
 replacement by recreate, edit, set, reconcile or chat `--recreate` keeps a
 launched conversation resumable; a policy-only restart does not. Resume is reported
-unverified until the agent says otherwise. Records stay on the space's disk
+unverified until the agent says otherwise. A Claude resume keeps the effort and model last
+reported by that same conversation (`--effort`, `--model`, after the box's own
+args), overriding a later box edit until `--new-session`. Records stay on the space's disk
 across space recreate but are not exported; an imported box starts a new
 tracked conversation. `box session NAME` shows a record read-only; an
 undecidable holder probe shows as unknown, never idle. [12](#source-12)

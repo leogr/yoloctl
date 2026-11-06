@@ -210,6 +210,10 @@ type ObservedValue struct {
 	Source string    `yaml:"source,omitempty"`
 	At     time.Time `yaml:"at"`
 	ReadAt time.Time `yaml:"read_at"`
+	// Session is the conversation the report that set the value named, when
+	// it named a valid one: a resume carries only its own conversation's
+	// values (see Carried).
+	Session string `yaml:"session,omitempty"`
 }
 
 // ObservedContext is the agent-reported context window: its size and used
@@ -329,6 +333,9 @@ func (r *Record) Validate() error {
 		for _, v := range []*ObservedValue{o.Model, o.Effort, o.Version} {
 			if v != nil && !validSource(v.Source) {
 				return fmt.Errorf("session record has an invalid observation source %q", v.Source)
+			}
+			if v != nil && v.Session != "" && !ValidID(v.Session) {
+				return errors.New("session record has an invalid observed value session")
 			}
 		}
 		if o.Context != nil && !validSource(o.Context.Source) {

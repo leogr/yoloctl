@@ -830,3 +830,74 @@ func TestTrackedEnsureRefusesUndecidableProbes(t *testing.T) {
 		}
 	}
 }
+
+// observeLast records, between launches, the last observation as the
+// reporter would: conversation id started at start, and effort and model
+// reported by id itself at effortAt (none when empty).
+func (f *identityFixture) observeLast(cfg *agentbox.Config, id string, start, effortAt time.Time, effort, model string) {
+	f.t.Helper()
+	l := f.begin(cfg)
+	defer l.Release()
+	o := &agentsession.Observed{ID: id, At: start, Generation: l.rec.Launch.Generation}
+	if effort != "" {
+		o.Effort = &agentsession.ObservedValue{Value: effort, At: effortAt, Session: id}
+	}
+	if model != "" {
+		o.Model = &agentsession.ObservedValue{Value: model, At: effortAt, Session: id}
+	}
+	l.rec.Observed = o
+	if err := l.save(); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// A resume carries the effort and model its own conversation last reported,
+// after the box's own args, so they win over the box's --effort/--model;
+// anything else (no report, an unlisted effort, a model that is not a plain
+// id, another conversation's reports, a new conversation) leaves the argv as
+// today.
+func TestResumeCarriesTheConversationsLastEffortAndModel(t *testing.T) {
+	start := time.Unix(150, 0)
+	box := []string{"--effort", "high", "--model", "opus"}
+	for _, c := range []struct {
+		name, effort, model string
+		other               bool
+		want                []string // tail after the resume's default args
+	}{
+		{name: "observed xhigh and fable", effort: "xhigh", model: "claude-fable-5-1", want: append(slices.Clone(box), "--effort", "xhigh", "--model", "claude-fable-5-1")},
+		{name: "effort only", effort: "max", want: append(slices.Clone(box), "--effort", "max")},
+		{name: "no report", want: box},
+		{name: "unlisted effort, option-like model", effort: "ultra", model: "--append-system-prompt=x", want: box},
+		{name: "another conversation", effort: "xhigh", model: "claude-fable-5-1", other: true, want: box},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newIdentityFixture(t)
+			cfg := claudeBox(box...)
+			rec, err := f.launchOnce(cfg, sessionStartOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if first := f.starts[0]; !slices.Equal(first[len(first)-len(box):], box) {
+				t.Fatalf("a new conversation changed: %v", first)
+			}
+			id := rec.Assigned.ID
+			f.exit("coder", 0)
+			f.noteExit(cfg)
+			observed := id
+			if c.other {
+				observed = "0f3c2a4e-9b1d-4c8e-a7f6-1234567890ab"
+			}
+			f.observeLast(cfg, observed, start, start.Add(time.Second), c.effort, c.model)
+			if _, err := f.launchOnce(cfg, sessionStartOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			argv := f.starts[1]
+			if i := slices.Index(argv, "--resume"); i < 0 || argv[i+1] != id {
+				t.Fatalf("not a resume of %s: %v", id, argv)
+			}
+			if !slices.Equal(argv[len(argv)-len(c.want):], c.want) || slices.Contains(argv, "--append-system-prompt=x") {
+				t.Fatalf("argv %v, want it to end with %v", argv, c.want)
+			}
+		})
+	}
+}

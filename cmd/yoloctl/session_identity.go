@@ -284,11 +284,14 @@ var listBoxNamesFn = agentbox.ListNames
 func (l *trackedLaunch) launch(ctx context.Context, c *container.Client, cfg *agentbox.Config, kind string, start func(argv []string, token string) error) error {
 	now := sessionNow()
 	rec := l.rec
+	var carried agentsession.Carried
 	if kind == agentsession.KindResume {
 		// The target, which Allocate adopts below.
 		if err := l.checkOwner(ctx, c, rec.Target()); err != nil {
 			return err
 		}
+		// Read before the new launch's observation replaces the last one.
+		carried = rec.Carried(rec.Target())
 	}
 	// Only a closed previous launch proves its holder gone (same-token
 	// tombstone or the fresh-sandbox proof); missing markers never do.
@@ -322,6 +325,7 @@ func (l *trackedLaunch) launch(ctx context.Context, c *container.Client, cfg *ag
 	if err != nil {
 		return err
 	}
+	argv = append(argv, agentsession.CarryArgs(l.profile, carried)...)
 	argv = applyLaunchEnv(l.profile, argv)
 	if len(env) > 0 {
 		argv = append(append([]string{"env"}, env...), argv...)

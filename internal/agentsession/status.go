@@ -227,9 +227,9 @@ func observedView(o *Observed) *ObservedView {
 		if v == nil {
 			return nil
 		}
-		// A conversion, so a field added to ObservedValue fails to compile
-		// here until the view decides whether to show it.
-		view := ObservedValueView(*v)
+		// Every field but Session, which only scopes a resume's carry (see
+		// Carried) and is not part of the view's output.
+		view := ObservedValueView{Value: v.Value, Source: v.Source, At: v.At, ReadAt: v.ReadAt}
 		return &view
 	}
 	view := &ObservedView{ID: o.ID, At: o.At, ReadAt: o.ReadAt, Source: o.Source, Generation: o.Generation,

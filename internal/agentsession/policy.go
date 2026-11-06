@@ -2,6 +2,7 @@ package agentsession
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
@@ -144,4 +145,64 @@ func Argv(profile *agentprofile.Profile, kind, id string, extra []string) ([]str
 		return nil, fmt.Errorf("unknown launch kind %q", kind)
 	}
 	return append(argv, extra...), nil
+}
+
+// Carried is what a resume of one conversation may carry from its last
+// observation.
+type Carried struct{ Effort, Model string }
+
+// Carried returns the effort and model last reported by conversation id
+// itself: a value set by a report naming another conversation, or none, is
+// never carried, whatever its time.
+func (r *Record) Carried(id string) Carried {
+	if r == nil || r.Observed == nil || id == "" {
+		return Carried{}
+	}
+	own := func(v *ObservedValue) string {
+		if v == nil || v.Session != id {
+			return ""
+		}
+		return v.Value
+	}
+	return Carried{Effort: own(r.Observed.Effort), Model: own(r.Observed.Model)}
+}
+
+// CarryArgs are the profile's resume_carry arguments for carried values:
+// the effort only when the profile lists it, the model only when it is a
+// plain model id (letters, digits, '.', '_', ':', '/', '@', '[', ']' and
+// inner '-'), so no reported text can become another option. Effort comes
+// first. Nil when the profile carries nothing that applies.
+func CarryArgs(profile *agentprofile.Profile, carried Carried) []string {
+	if profile == nil || profile.Session == nil || profile.Session.ResumeCarry == nil {
+		return nil
+	}
+	c := profile.Session.ResumeCarry
+	var out []string
+	expand := func(args []string, placeholder, value string) {
+		for _, a := range args {
+			out = append(out, strings.ReplaceAll(a, placeholder, value))
+		}
+	}
+	if e := c.Effort; e != nil && carried.Effort != "" && slices.Contains(e.Values, carried.Effort) {
+		expand(e.Args, "{{effort}}", carried.Effort)
+	}
+	if mdl := c.Model; mdl != nil && plainModelID(carried.Model) {
+		expand(mdl.Args, "{{model}}", carried.Model)
+	}
+	return out
+}
+
+func plainModelID(s string) bool {
+	if s == "" || len(s) > 128 || s[0] == '-' {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case strings.ContainsRune("._:/@[]-", r):
+		default:
+			return false
+		}
+	}
+	return true
 }

@@ -164,6 +164,9 @@ type SessionSpec struct {
 	ReservedArgs []string `yaml:"reserved_args,omitempty"`
 	// Observe declares how this agent reports its runtime values.
 	Observe *ObserveSpec `yaml:"observe,omitempty"`
+	// ResumeCarry declares values a resume carries over from the last
+	// observation of the same conversation (opt-in; see ResumeCarry).
+	ResumeCarry *ResumeCarry `yaml:"resume_carry,omitempty"`
 	// Daemons are the agent's own background servers that outlive its
 	// exit, each an argv prefix ("codex app-server") whose first word is
 	// the executable's base name. A managed launch is their lifetime: the
@@ -174,6 +177,24 @@ type SessionSpec struct {
 	// so a profile still carrying it fails with the rename instead of an
 	// unknown-field error.
 	LegacyObserveFeature string `yaml:"observe_feature,omitempty"`
+}
+
+// ResumeCarry is the optional `session.resume_carry:` block. On a resume,
+// each declared value last observed for the same conversation is appended
+// after agent_extra_args, so it wins over the box's own flag: Effort (only a
+// value listed in its Values) and Model (only a plain model id). Nothing is
+// carried to a new conversation.
+type ResumeCarry struct {
+	Effort *CarryArgs `yaml:"effort,omitempty"`
+	Model  *CarryArgs `yaml:"model,omitempty"`
+}
+
+// CarryArgs are the arguments that carry one observed value: Args with
+// {{effort}} or {{model}} replaced. Effort requires Values (the only values
+// carried); Model takes none.
+type CarryArgs struct {
+	Args   []string `yaml:"args"`
+	Values []string `yaml:"values,omitempty"`
 }
 
 // ObserveSpec is the optional `session.observe:` block.
@@ -553,6 +574,41 @@ func (p *Profile) validateSession() error {
 	for _, d := range s.Daemons {
 		if _, err := DaemonArgv(d); err != nil {
 			return fmt.Errorf("agent-profile %q: session.daemons: %w", p.Name, err)
+		}
+	}
+	if c := s.ResumeCarry; c != nil {
+		if c.Effort == nil && c.Model == nil {
+			return fmt.Errorf("agent-profile %q: session.resume_carry declares nothing to carry", p.Name)
+		}
+		for _, carry := range []struct {
+			name, placeholder string
+			args              *CarryArgs
+		}{{"effort", "{{effort}}", c.Effort}, {"model", "{{model}}", c.Model}} {
+			e := carry.args
+			if e == nil {
+				continue
+			}
+			uses := false
+			for _, a := range e.Args {
+				if strings.TrimSpace(a) == "" || strings.Contains(strings.ReplaceAll(a, carry.placeholder, ""), "{{") {
+					return fmt.Errorf("agent-profile %q: session.resume_carry.%s.args entry %q may only use %s", p.Name, carry.name, a, carry.placeholder)
+				}
+				uses = uses || strings.Contains(a, carry.placeholder)
+			}
+			if !uses {
+				return fmt.Errorf("agent-profile %q: session.resume_carry.%s needs args with %s", p.Name, carry.name, carry.placeholder)
+			}
+			if carry.name == "effort" && len(e.Values) == 0 {
+				return fmt.Errorf("agent-profile %q: session.resume_carry.effort needs args with {{effort}} and its values", p.Name)
+			}
+			if carry.name == "model" && len(e.Values) > 0 {
+				return fmt.Errorf("agent-profile %q: session.resume_carry.model takes no values", p.Name)
+			}
+			for _, v := range e.Values {
+				if v == "" || strings.Trim(v, "abcdefghijklmnopqrstuvwxyz") != "" {
+					return fmt.Errorf("agent-profile %q: session.resume_carry.effort value %q must be a lowercase word", p.Name, v)
+				}
+			}
 		}
 	}
 	if s.LegacyObserveFeature != "" {

@@ -1,6 +1,6 @@
 # Agent conversation identity
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; resume carry `ffd5153aed3db8e29d362837407e24bdfacb5f7e` and accompanying changes; re-read cited sources when changing behavior.
 
 Launch locking, tokens and settlement are detailed in
 [tracked agent launches](agent-launches.md).
@@ -16,6 +16,17 @@ observe-only (a reporter, no `resume_argv` or `assign_args`): unset means
 `never`, `last` is refused, and every start learns a new conversation
 ([agy reporter](agy-observation.md)). Other built-ins stay unsupported until
 proven. [1](#source-1) [2](#source-2) [3](#source-3) [19](#source-19)
+
+[FACT] Claude's opt-in `resume_carry` makes a resume append `--effort <value>`
+and `--model <id>` after `agent_extra_args`, so they win over the box's own
+flags (Claude takes the last). Each folded value records the conversation its
+report named; only values reported by the resumed conversation itself are
+carried: an effort in `low|medium|high|xhigh|max`, a model that is a plain id
+(no whitespace, no leading `-`). They are read before the new launch's
+observation begins. A new conversation, another conversation's or an
+unattributed report carry nothing; Codex declares no carry. A later box
+`--effort`/`--model` edit is overridden on resume until `--new-session`.
+[1](#source-1) [20](#source-20)
 
 [FACT] A manifest's `agent_session.resume` is `last`, `never` or `manual`.
 Unset means `manual` when `agent_extra_args` carry a reserved argument, else
@@ -84,3 +95,4 @@ Fakes replace the VM; no real Claude, VM, crash or reboot is exercised.
 17. <a id="source-17"></a> [session_records_test.go](../../internal/spacearchive/session_records_test.go#L1) — export omission; readDeclarations in state.go L30-L74.
 18. <a id="source-18"></a> [box_session.go](../../cmd/yoloctl/box_session.go#L1) — view, probes and output; tests in box_session_test.go.
 19. <a id="source-19"></a> [codex.yaml](../../internal/agentprofile/builtin/codex.yaml#L83-L97) — the Codex block; `TestCodexLearnsAndResumesByThread` in internal/agentsession/agentsession_test.go.
+20. <a id="source-20"></a> [Resume carry](../../internal/agentsession/policy.go#L1-L208) — `Carried`, `CarryArgs`, `plainModelID`; `ObservedValue.Session` set in apply.go `applyLine`; `trackedLaunch.launch` in cmd/yoloctl/session_identity.go; tests carry_test.go and `TestResumeCarriesTheConversationsLastEffortAndModel`.

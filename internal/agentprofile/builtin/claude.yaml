@@ -72,6 +72,17 @@ session:
   observe:
     push: yolo.agent.observe
     selection: reported
+  # A resume keeps the effort and model last reported for the same
+  # conversation (a /model change), after the box's own args so they win over
+  # the box's --effort/--model (Claude takes the last). A new conversation,
+  # another conversation's report, an unlisted effort or a model that is not
+  # a plain id carry nothing.
+  resume_carry:
+    effort:
+      args: ["--effort", "{{effort}}"]
+      values: [low, medium, high, xhigh, max]
+    model:
+      args: ["--model", "{{model}}"]
 
 # Relocate claude's whole config footprint into the persisted agent-state
 # mount. Claude Code splits its logged-in state across ~/.claude/ (which IS
