@@ -123,7 +123,7 @@ func privateSolveOptions(p ImagePhase, dir string, r ImageRecipe) (bk.SolveOpt, 
 	}
 	opt := bk.SolveOpt{Ref: p.SolveRef, Frontend: "dockerfile.v0", FrontendAttrs: attrs,
 		LocalMounts:  map[string]fsutil.FS{"context": mount, "dockerfile": mount},
-		Exports:      []bk.ExportEntry{{Type: bk.ExporterImage, Attrs: map[string]string{"name": outputName, "push": "false", "name-canonical": "false", "store": "true", "unpack": "true"}}},
+		Exports:      []bk.ExportEntry{{Type: bk.ExporterImage, Attrs: privateExporterAttrs(outputName)}},
 		CacheExports: []bk.CacheOptionsEntry{{Type: "inline"}}}
 	policy, err := imageSourcePolicy(r)
 	if err != nil {
@@ -161,6 +161,16 @@ func privateSolveOptions(p ImagePhase, dir string, r ImageRecipe) (bk.SolveOpt, 
 	}
 	return opt, validatePrivateExport(opt, p)
 }
+
+// privateExporterAttrs is the complete, closed exporter option set for a
+// private image: stored and unpacked in this VM's containerd, never pushed.
+// Its newly built layers are written uncompressed, because they are unpacked
+// in the same VM right away and never leave it; gzip only cost CPU on both
+// ends. Already cached layers keep their recorded compression.
+func privateExporterAttrs(outputName string) map[string]string {
+	return map[string]string{"name": outputName, "push": "false", "name-canonical": "false", "store": "true", "unpack": "true", "compression": "uncompressed"}
+}
+
 func validatePrivateExport(o bk.SolveOpt, p ImagePhase) error {
 	if len(o.Exports) != 1 || o.Exports[0].Type != bk.ExporterImage || o.Exports[0].Output != nil || o.Exports[0].OutputDir != "" || o.Exports[0].OutputStore != nil || len(o.CacheExports) != 1 || o.CacheExports[0].Type != "inline" || len(o.CacheExports[0].Attrs) != 0 || len(o.CacheImports) != 0 {
 		return errors.New("unsupported image export")
@@ -169,7 +179,7 @@ func validatePrivateExport(o bk.SolveOpt, p ImagePhase) error {
 	if err != nil {
 		return err
 	}
-	expected := map[string]string{"name": outputName, "push": "false", "name-canonical": "false", "store": "true", "unpack": "true"}
+	expected := privateExporterAttrs(outputName)
 	if len(o.Exports[0].Attrs) != len(expected) {
 		return errors.New("unsupported private exporter option")
 	}

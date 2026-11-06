@@ -19,7 +19,7 @@ func TestPrivateExporterRejectsAliasesAndUnsupportedOptionsBeforeSubmission(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"name", "name-canonical", "push", "push-by-digest", "dangling-name-prefix", "store", "unpack", "unknown"} {
+	for _, key := range []string{"name", "name-canonical", "push", "push-by-digest", "dangling-name-prefix", "store", "unpack", "compression", "force-compression", "compression-level", "unknown"} {
 		t.Run(key, func(t *testing.T) {
 			bad, err := privateSolveOptions(phase, t.TempDir(), recipe)
 			if err != nil {
@@ -30,6 +30,9 @@ func TestPrivateExporterRejectsAliasesAndUnsupportedOptionsBeforeSubmission(t *t
 				t.Fatal("accepted unsafe exporter", key)
 			}
 		})
+	}
+	if got := good.Exports[0].Attrs["compression"]; got != "uncompressed" {
+		t.Fatal("private layers are compressed although they never leave the VM", got)
 	}
 	if got := good.Exports[0].Attrs["name"]; got != "docker.io/"+phase.PreparedRef+":latest" {
 		t.Fatal("exporter name differs from containerd pin lookup", got)

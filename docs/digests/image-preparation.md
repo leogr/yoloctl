@@ -28,7 +28,7 @@ closes it on return; individual passes preserve queued input and the eventual
 session attachment. [3](#source-3)
 
 [FACT] Every solve receives a never-reused private output name. The closed exporter permits one private image, no push/canonical aliases, and
-only inline cache. It checks the returned
+only inline cache. Newly built layers are written uncompressed, because they are unpacked in the same VM and never pushed; already cached layers keep their compression (`privateExporterAttrs`). It checks the returned
 name and OCI descriptor against containerd, leases the retained content graph,
 and records completion before consumers proceed. Local inputs have an independent
 private alias/lease. BuildKit-parsed syntax frontend and FROM/COPY/RUN-mount inputs enter
