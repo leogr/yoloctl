@@ -71,5 +71,12 @@ func (c Context) Validate() error {
 			return errors.New("invalid VM mount grant")
 		}
 	}
+	if c.ImageLayerCompression != "" && c.ImageLayerCompression != ImageLayerGzip {
+		return errors.New("invalid image layer compression")
+	}
 	return nil
 }
+
+// ImageLayerGzip selects gzip for newly written private image layers; the
+// default (empty) writes them uncompressed.
+const ImageLayerGzip = "gzip"

@@ -96,6 +96,54 @@ func TestSpaceSetResourcesPreservesIdentityAndRepairsBackend(t *testing.T) {
 	}
 }
 
+func TestSpaceSetImageLayerCompressionChangesOnlyThatSetting(t *testing.T) {
+	before, applied := resourceSpaceFixture(t)
+	if err := resourceCommand(t, "space", "set", "dev", "--image-layer-compression", "gzip"); err != nil {
+		t.Fatal(err)
+	}
+	after, err := spaceconfig.LoadBootstrap("dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := *before
+	want.ImageLayerCompression = "gzip"
+	if !reflect.DeepEqual(&want, after) {
+		t.Fatalf("changed more than layer compression: want %+v, got %+v", want, after)
+	}
+	if got := after.Context("/host").ImageLayerCompression; got != "gzip" {
+		t.Fatal("controller context does not carry the setting", got)
+	}
+	// Other settings keep it; none restores the default (an omitted field).
+	if err := resourceCommand(t, "space", "set", "dev", "--cpus", "8"); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ = spaceconfig.LoadBootstrap("dev"); after.ImageLayerCompression != "gzip" {
+		t.Fatal("omitted flag dropped the setting")
+	}
+	if err := resourceCommand(t, "space", "set", "dev", "--image-layer-compression", "none"); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := safepath.ReadFile(mustSpaceBundleDir(t, "dev"), "space.yaml", 1<<20)
+	if err != nil || strings.Contains(string(raw), "image_layer_compression") {
+		t.Fatalf("default is not stored as an omitted field: %v\n%s", err, raw)
+	}
+	if err := resourceCommand(t, "space", "set", "dev", "--image-layer-compression", "zstd"); err == nil {
+		t.Fatal("accepted an unsupported compression")
+	}
+	if len(*applied) != 3 {
+		t.Fatal(*applied)
+	}
+}
+
+func mustSpaceBundleDir(t *testing.T, name string) string {
+	t.Helper()
+	dir, err := layout.SpaceBundleDir(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
 func TestSpaceSetResourcesRefusesInvalidOrLiveState(t *testing.T) {
 	for _, scenario := range []string{"Running", "Paused", "Starting", "unknown", "missing", "lookup-error", "invalid-cpu", "auto-cpu", "invalid-memory", "empty", "pending-import", "pending-init"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -264,6 +312,11 @@ func TestSpaceResourceCommandsAreHostOnlyAndComplete(t *testing.T) {
 			}
 			if _, ok := cmd.GetFlagCompletionFunc("cpus"); !ok {
 				t.Fatal("missing CPU autocomplete")
+			}
+			if fn, ok := cmd.GetFlagCompletionFunc("image-layer-compression"); !ok {
+				t.Fatal("missing layer compression autocomplete")
+			} else if choices, _ := fn(cmd, nil, ""); strings.Join(choices, " ") != "none gzip" {
+				t.Fatal(choices)
 			}
 		}
 	}

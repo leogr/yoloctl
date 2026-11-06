@@ -18,6 +18,7 @@ import (
 	"github.com/leogr/yoloctl/internal/features"
 	"github.com/leogr/yoloctl/internal/ocifeature"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
+	"github.com/leogr/yoloctl/internal/spaceenv"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
 )
@@ -211,6 +212,7 @@ func registerFlagCompleters(root *cobra.Command) {
 		{[]string{"space", "create"}, "cpus", completeNewVMCPUs},
 		{[]string{"space", "set"}, "memory", completeVMMemory},
 		{[]string{"space", "set"}, "cpus", completeVMCPUs},
+		{[]string{"space", "set"}, "image-layer-compression", cobra.FixedCompletions([]string{"none", spaceenv.ImageLayerGzip}, cobra.ShellCompDirectiveNoFileComp)},
 		{[]string{"box", "create"}, "memory", completeBoxMemory},
 		{[]string{"box", "copy"}, "memory", completeBoxMemory},
 		{[]string{"box", "set"}, "memory", completeBoxMemory},

@@ -38,6 +38,9 @@ type Bootstrap struct {
 	Import        *ImportState   `yaml:"import,omitempty" json:"import,omitempty"`
 	ImageUpdate   *VMImageUpdate `yaml:"image_update,omitempty" json:"image_update,omitempty"`
 	DataDiskGrow  *DataDiskGrow  `yaml:"data_disk_grow,omitempty" json:"data_disk_grow,omitempty"`
+	// ImageLayerCompression is empty (new private image layers are written
+	// uncompressed) or "gzip"; the controller receives it at the next start.
+	ImageLayerCompression string `yaml:"image_layer_compression,omitempty" json:"image_layer_compression,omitempty"`
 }
 
 // VMImageUpdate checkpoints an explicitly requested system-image replacement.
@@ -95,6 +98,9 @@ func (b *Bootstrap) Validate() error {
 	}
 	if b.Generation == "" {
 		return errors.New("bootstrap generation is required")
+	}
+	if b.ImageLayerCompression != "" && b.ImageLayerCompression != spaceenv.ImageLayerGzip {
+		return fmt.Errorf("unsupported image layer compression %q", b.ImageLayerCompression)
 	}
 	if b.VM.Backend != "" && b.VM.Backend != "lima" && b.VM.Backend != "firecracker" {
 		return fmt.Errorf("unsupported VM backend %q", b.VM.Backend)
@@ -264,6 +270,7 @@ func (b *Bootstrap) Context(hostRoot string) spaceenv.Context {
 		Schema: 1, Space: b.Name, DiskID: b.DiskID, DiskUUID: b.DiskUUID,
 		DiskMount: disk, ConfigDir: filepath.Join(disk, "config"), CatalogDir: spaceenv.CatalogRoot,
 		HostConfigRoot: hostRoot, UID: b.UID, GID: b.GID, Bundle: b.Bundle, Generation: b.Generation,
+		ImageLayerCompression: b.ImageLayerCompression,
 	}
 	if b.VM.Backend == "firecracker" {
 		c.ServiceManager = "microvm"

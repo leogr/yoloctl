@@ -39,6 +39,9 @@ type Context struct {
 	Mounts         []Mount `json:"mounts"`
 	Bundle         string  `json:"bundle"`
 	Generation     string  `json:"generation"`
+	// ImageLayerCompression is the host-chosen compression of newly written
+	// private image layers: empty (uncompressed) or "gzip".
+	ImageLayerCompression string `json:"image_layer_compression,omitempty"`
 }
 
 var current atomic.Pointer[Context]

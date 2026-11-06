@@ -12,6 +12,7 @@ import (
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
+	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/strictyaml"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/leogr/yoloctl/internal/vmapi"
@@ -36,6 +37,8 @@ type spaceResourceDocument struct {
 	// DataDisk grows the data disk; NoBackup (set only) skips the copy.
 	DataDisk string `yaml:"data_disk"`
 	NoBackup bool   `yaml:"-"`
+	// LayerCompression (set only) is the bootstrap value: "" or "gzip".
+	LayerCompression string `yaml:"-"`
 }
 
 type spaceResourceSnapshot struct {
@@ -47,13 +50,16 @@ type spaceResourceSnapshot struct {
 func newSpaceSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set [SPACE]",
-		Short: "Change a stopped space's CPU, memory and system disk allocation",
+		Short: "Change a stopped space's CPU, memory, disks or image layer compression",
 		Long: `Change VM boot resources without replacing its disks or containers.
 The space must already be stopped. Start it explicitly after the change.
 --memory auto recalculates RAM from current host headroom and saves a concrete
 allocation. --disk only grows the VM system disk and is saved now; it applies
 at the next space recreate, which replaces that disk (images, containers and
-box files) anyway. An omitted flag preserves its current value.
+box files) anyway. --image-layer-compression chooses how newly built image
+layers are stored inside the VM: none (default; faster builds and refreshes,
+more disk) or gzip (less disk); it applies from the next space start and does
+not recompress existing layers. An omitted flag preserves its current value.
 
   yoloctl space set default --memory auto --cpus 8
   yoloctl space start default
@@ -61,8 +67,12 @@ box files) anyway. An omitted flag preserves its current value.
   yoloctl space recreate default`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !cmd.Flags().Changed("cpus") && !cmd.Flags().Changed("memory") && !cmd.Flags().Changed("disk") && !cmd.Flags().Changed("data-disk") {
-				return asUserError(errors.New("specify --cpus, --memory, --disk or --data-disk"))
+			if !cmd.Flags().Changed("cpus") && !cmd.Flags().Changed("memory") && !cmd.Flags().Changed("disk") && !cmd.Flags().Changed("data-disk") && !cmd.Flags().Changed("image-layer-compression") {
+				return asUserError(errors.New("specify --cpus, --memory, --disk, --data-disk or --image-layer-compression"))
+			}
+			compression, _ := cmd.Flags().GetString("image-layer-compression")
+			if cmd.Flags().Changed("image-layer-compression") && compression != "none" && compression != spaceenv.ImageLayerGzip {
+				return asUserError(fmt.Errorf("--image-layer-compression must be none or gzip, not %q", compression))
 			}
 			name, err := resolveSpacePositional(args)
 			if err != nil {
@@ -82,6 +92,12 @@ box files) anyway. An omitted flag preserves its current value.
 					d.DataDisk, _ = cmd.Flags().GetString("data-disk")
 				}
 				d.NoBackup, _ = cmd.Flags().GetBool("no-backup")
+				if cmd.Flags().Changed("image-layer-compression") {
+					d.LayerCompression = ""
+					if compression == spaceenv.ImageLayerGzip {
+						d.LayerCompression = spaceenv.ImageLayerGzip
+					}
+				}
 			})
 		},
 	}
@@ -90,7 +106,15 @@ box files) anyway. An omitted flag preserves its current value.
 	cmd.Flags().String("disk", "", "VM system disk size in whole GiB, such as 50GiB; only grows, applies at the next space recreate")
 	cmd.Flags().String("data-disk", "", "Data disk size in whole GiB, such as 20GiB; only grows, offline at the next space start, after a cheap copy of the disk (Firecracker)")
 	cmd.Flags().Bool("no-backup", false, "With --data-disk, grow without the pre-grow copy when the host filesystem cannot make one; export the space first")
+	cmd.Flags().String("image-layer-compression", "", "Newly built image layers inside the VM: none (default; faster, more disk) or gzip (less disk); applies from the next space start")
 	return cmd
+}
+
+func layerCompressionLabel(value string) string {
+	if value == "" {
+		return "none"
+	}
+	return value
 }
 
 func newSpaceEditCmd() *cobra.Command {
@@ -167,7 +191,7 @@ func changeSpaceResources(cmd *cobra.Command, name string, expected *spaceResour
 	if err := settleDataDiskGrow(current.boot, cmd.OutOrStdout()); err != nil {
 		return err
 	}
-	doc := spaceResourceDocument{CPUs: current.boot.VM.CPUs, Memory: current.boot.VM.Memory, Disk: current.boot.VM.Disk, DataDisk: dataDiskSetting(current.boot)}
+	doc := spaceResourceDocument{CPUs: current.boot.VM.CPUs, Memory: current.boot.VM.Memory, Disk: current.boot.VM.Disk, DataDisk: dataDiskSetting(current.boot), LayerCompression: current.boot.ImageLayerCompression}
 	edit(&doc)
 	disk, err := growSpaceDisk(current.boot, doc.Disk, cmd.ErrOrStderr())
 	if err != nil {
@@ -182,8 +206,10 @@ func changeSpaceResources(cmd *cobra.Command, name string, expected *spaceResour
 		return asUserError(err)
 	}
 	diskChanged := disk != current.boot.VM.Disk
-	if current.boot.VM.CPUs != r.CPUs || current.boot.VM.Memory != r.Memory || diskChanged {
+	compressionChanged := doc.LayerCompression != current.boot.ImageLayerCompression
+	if current.boot.VM.CPUs != r.CPUs || current.boot.VM.Memory != r.Memory || diskChanged || compressionChanged {
 		current.boot.VM.CPUs, current.boot.VM.Memory, current.boot.VM.Disk = r.CPUs, r.Memory, disk
+		current.boot.ImageLayerCompression = doc.LayerCompression
 		// Desired settings are durable before the adapter is updated. Explicit
 		// start reapplies them before boot after an interrupted/failed update.
 		if err := current.boot.Save(); err != nil {
@@ -194,6 +220,9 @@ func changeSpaceResources(cmd *cobra.Command, name string, expected *spaceResour
 		return fmt.Errorf("VM resources saved but not applied; inspect the error, then retry space set or run space start %s: %w", name, err)
 	}
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "space %s: %d CPUs, %s RAM; remains stopped (start with yoloctl space start %s)\n", name, r.CPUs, r.Memory, name)
+	if err == nil && compressionChanged {
+		_, err = fmt.Fprintf(cmd.OutOrStdout(), "space %s: image layer compression %s saved; it applies to images built after the next yoloctl space start %s\n", name, layerCompressionLabel(doc.LayerCompression), name)
+	}
 	if err == nil && diskChanged {
 		_, err = fmt.Fprintf(cmd.OutOrStdout(), "space %s: disk %s saved; it applies at the next yoloctl space recreate %s (the VM keeps its current disk until then)\n", name, disk, name)
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
 	"github.com/leogr/yoloctl/internal/imagejob"
+	"github.com/leogr/yoloctl/internal/spaceenv"
 	bk "github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
@@ -164,12 +165,27 @@ func privateSolveOptions(p ImagePhase, dir string, r ImageRecipe) (bk.SolveOpt, 
 
 // privateExporterAttrs is the complete, closed exporter option set for a
 // private image: stored and unpacked in this VM's containerd, never pushed.
-// Newly created layers are written uncompressed: they are unpacked in the same
-// VM right away and never leave it, which trades gzip CPU on both ends for
-// more bytes written and read (the trade-off being measured). Existing layer
-// blobs are left as they are, since force-compression is not set.
+// By default newly created layers are written uncompressed: they are unpacked
+// in the same VM right away and never leave it, which trades gzip CPU on both
+// ends for more bytes on disk. A space set to gzip (`space set
+// --image-layer-compression gzip`, carried in the controller context) keeps
+// BuildKit's default gzip by omitting the attribute. Existing layer blobs are
+// left as they are, since force-compression is not set.
 func privateExporterAttrs(outputName string) map[string]string {
-	return map[string]string{"name": outputName, "push": "false", "name-canonical": "false", "store": "true", "unpack": "true", "compression": "uncompressed"}
+	attrs := map[string]string{"name": outputName, "push": "false", "name-canonical": "false", "store": "true", "unpack": "true"}
+	if privateLayerCompression() != spaceenv.ImageLayerGzip {
+		attrs["compression"] = "uncompressed"
+	}
+	return attrs
+}
+
+// privateLayerCompression reads the space's choice from the trusted controller
+// context; tests replace it.
+var privateLayerCompression = func() string {
+	if c := spaceenv.Current(); c != nil {
+		return c.ImageLayerCompression
+	}
+	return ""
 }
 
 func validatePrivateExport(o bk.SolveOpt, p ImagePhase) error {

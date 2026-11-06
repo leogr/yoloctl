@@ -29,7 +29,9 @@ VM RAM/CPU settings and its saved system disk size. Memory can be explicitly siz
 CPU changes are explicit counts. Changes retain the VM/data/container disks and identities,
 take effect at the next explicit start and do not restart workloads. The disk
 size only grows and applies at the next `space recreate`, which replaces the
-system disk anyway [14](#source-14). Import
+system disk anyway [14](#source-14). `space set` also saves the image layer
+compression the controller receives at the next start
+([image preparation](../digests/image-preparation.md)). Import
 retains archived resources; import with `--no-start`, then set resources before
 starting the restored space. [7](#source-7)
 

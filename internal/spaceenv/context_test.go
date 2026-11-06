@@ -19,6 +19,11 @@ func TestContextRejectsInvalidAuthority(t *testing.T) {
 	if err := validContext().Validate(); err != nil {
 		t.Fatal(err)
 	}
+	gzip := validContext()
+	gzip.ImageLayerCompression = ImageLayerGzip
+	if err := gzip.Validate(); err != nil {
+		t.Fatal("gzip layer compression rejected:", err)
+	}
 	for name, change := range map[string]func(*Context){
 		"schema":             func(c *Context) { c.Schema++ },
 		"space traversal":    func(c *Context) { c.Space = "../other" },
@@ -31,6 +36,7 @@ func TestContextRejectsInvalidAuthority(t *testing.T) {
 		"config escape":      func(c *Context) { c.ConfigDir = "/host/config" },
 		"catalog override":   func(c *Context) { c.CatalogDir = "/tmp/untrusted" },
 		"unclean mount":      func(c *Context) { c.Mounts[0].Source = "/projects/../etc" },
+		"layer compression":  func(c *Context) { c.ImageLayerCompression = "zstd" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := validContext()

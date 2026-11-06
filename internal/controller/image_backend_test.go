@@ -42,6 +42,25 @@ func TestPrivateExporterRejectsAliasesAndUnsupportedOptionsBeforeSubmission(t *t
 		t.Fatal("accepted additional exporter")
 	}
 }
+
+func TestPrivateExportGzipSpaceKeepsBuildKitDefault(t *testing.T) {
+	old := privateLayerCompression
+	t.Cleanup(func() { privateLayerCompression = old })
+	privateLayerCompression = func() string { return "gzip" }
+	id := strings.Repeat("b", 64)
+	phase := ImagePhase{PrivateVersion: 1, JobID: id, PreparedRef: "yoloctl/prepared/" + id, SolveRef: id}
+	opt, err := privateSolveOptions(phase, t.TempDir(), recipe("a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := opt.Exports[0].Attrs["compression"]; ok {
+		t.Fatal("gzip space still selects an exporter compression", opt.Exports[0].Attrs)
+	}
+	opt.Exports[0].Attrs["compression"] = "uncompressed"
+	if err := validatePrivateExport(opt, phase); err == nil {
+		t.Fatal("accepted a compression the space did not choose")
+	}
+}
 func TestDockerfileBindingPreservesInternalAndExternalStages(t *testing.T) {
 	r := recipe("a")
 	r.BaseReference = "mutable:latest"
