@@ -135,6 +135,34 @@ func TestSpaceSetImageLayerCompressionChangesOnlyThatSetting(t *testing.T) {
 	}
 }
 
+func TestSpaceEditKeepsImageLayerCompression(t *testing.T) {
+	resourceSpaceFixture(t)
+	if err := resourceCommand(t, "space", "set", "dev", "--image-layer-compression", "gzip"); err != nil {
+		t.Fatal(err)
+	}
+	cmd := &cobra.Command{}
+	cmd.SetContext(t.Context())
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	err := editSpaceResources(cmd, "dev", func(_ context.Context, path string) error {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(raw), "compression") {
+			t.Fatalf("editor document exposes layer compression:\n%s", raw)
+		}
+		return os.WriteFile(path, []byte(strings.Replace(string(raw), "cpus: 4", "cpus: 6", 1)), 0o600)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := spaceconfig.LoadBootstrap("dev")
+	if err != nil || b.VM.CPUs != 6 || b.ImageLayerCompression != "gzip" {
+		t.Fatalf("space edit lost the layer compression or the CPU edit: %+v, %v", b, err)
+	}
+}
+
 func mustSpaceBundleDir(t *testing.T, name string) string {
 	t.Helper()
 	dir, err := layout.SpaceBundleDir(name)

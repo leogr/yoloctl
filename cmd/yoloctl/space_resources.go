@@ -291,7 +291,12 @@ func editSpaceResources(cmd *cobra.Command, name string, editor func(context.Con
 		retain = true
 		return fmt.Errorf("edits kept at %s: %w", path, err)
 	}
-	if err := changeSpaceResources(cmd, name, &before, func(d *spaceResourceDocument) { *d = doc }); err != nil {
+	// The editor document has only resource fields; keep the saved compression.
+	if err := changeSpaceResources(cmd, name, &before, func(d *spaceResourceDocument) {
+		compression := d.LayerCompression
+		*d = doc
+		d.LayerCompression = compression
+	}); err != nil {
 		retain = true
 		return fmt.Errorf("edits kept at %s: %w", path, err)
 	}
