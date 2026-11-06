@@ -164,9 +164,10 @@ func privateSolveOptions(p ImagePhase, dir string, r ImageRecipe) (bk.SolveOpt, 
 
 // privateExporterAttrs is the complete, closed exporter option set for a
 // private image: stored and unpacked in this VM's containerd, never pushed.
-// Its newly built layers are written uncompressed, because they are unpacked
-// in the same VM right away and never leave it; gzip only cost CPU on both
-// ends. Already cached layers keep their recorded compression.
+// Newly created layers are written uncompressed: they are unpacked in the same
+// VM right away and never leave it, which trades gzip CPU on both ends for
+// more bytes written and read (the trade-off being measured). Existing layer
+// blobs are left as they are, since force-compression is not set.
 func privateExporterAttrs(outputName string) map[string]string {
 	return map[string]string{"name": outputName, "push": "false", "name-canonical": "false", "store": "true", "unpack": "true", "compression": "uncompressed"}
 }

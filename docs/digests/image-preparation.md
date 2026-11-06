@@ -1,6 +1,6 @@
 # Controller-owned image preparation
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Private exporter compression verified on `31721e5bba27fc71977f3de87e6c665c667591ba` and accompanying changes.
 
 [FACT] The VM controller owns jobs capped at
 `max(runtime.NumCPU()-1, 1)` tracked attempts. Copied Dockerfile/context bytes, modes, image digests, platforms and arguments
@@ -28,7 +28,7 @@ closes it on return; individual passes preserve queued input and the eventual
 session attachment. [3](#source-3)
 
 [FACT] Every solve receives a never-reused private output name. The closed exporter permits one private image, no push/canonical aliases, and
-only inline cache. Newly built layers are written uncompressed, because they are unpacked in the same VM and never pushed; already cached layers keep their compression (`privateExporterAttrs`). It checks the returned
+only inline cache. Newly created layers are written uncompressed, because they are unpacked in the same VM and never pushed; existing layer blobs are untouched because `force-compression` is not set (`privateExporterAttrs`; [BuildKit v0.31.2 image exporter options](https://github.com/moby/buildkit/blob/v0.31.2/README.md#L292-L296)). It checks the returned
 name and OCI descriptor against containerd, leases the retained content graph,
 and records completion before consumers proceed. Local inputs have an independent
 private alias/lease. BuildKit-parsed syntax frontend and FROM/COPY/RUN-mount inputs enter
