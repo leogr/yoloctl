@@ -207,24 +207,22 @@ type inspectManifest struct {
 // by the account and derived (account.StatePath) — never a box field, never
 // user-overridable.
 type inspectAgentState struct {
-	Additional  []inspectAgentState `json:"additional,omitempty"`
-	Source      string              `json:"source"`
-	Destination string              `json:"destination"`
+	Source      string `json:"source"`
+	Destination string `json:"destination"`
 }
 
 type inspectProfile struct {
-	Name                 string                    `json:"name"`
-	Image                string                    `json:"image,omitempty"`
-	Command              string                    `json:"command,omitempty"`
-	DefaultArgs          []string                  `json:"default_args,omitempty"`
-	NpmPackage           string                    `json:"npm_package,omitempty"`
-	NativeRelease        string                    `json:"native_release,omitempty"`
-	StateContainerPath   string                    `json:"state_container_path,omitempty"`
-	StateMounts          []agentprofile.StateMount `json:"state_mounts,omitempty"`
-	StateArchiveExcludes []string                  `json:"state_archive_excludes,omitempty"`
-	LaunchEnv            map[string]string         `json:"launch_env,omitempty"`
-	RequiresFeatures     []string                  `json:"requires_features,omitempty"`
-	AuthConfigured       bool                      `json:"auth_configured"`
+	Name                 string            `json:"name"`
+	Image                string            `json:"image,omitempty"`
+	Command              string            `json:"command,omitempty"`
+	DefaultArgs          []string          `json:"default_args,omitempty"`
+	NpmPackage           string            `json:"npm_package,omitempty"`
+	NativeRelease        string            `json:"native_release,omitempty"`
+	StateContainerPath   string            `json:"state_container_path,omitempty"`
+	StateArchiveExcludes []string          `json:"state_archive_excludes,omitempty"`
+	LaunchEnv            map[string]string `json:"launch_env,omitempty"`
+	RequiresFeatures     []string          `json:"requires_features,omitempty"`
+	AuthConfigured       bool              `json:"auth_configured"`
 }
 
 type inspectPolicy struct {
@@ -377,9 +375,6 @@ func buildInspectManifest(cfg *agentbox.Config) *inspectManifest {
 					Source:      st.Source,
 					Destination: st.Destination,
 				}
-				for _, extra := range st.Additional {
-					m.AgentState.Additional = append(m.AgentState.Additional, inspectAgentState{Source: extra.Source, Destination: extra.Destination})
-				}
 			}
 		}
 	}
@@ -416,7 +411,6 @@ func buildInspectProfile(cfg *agentbox.Config) (*inspectProfile, string) {
 		NpmPackage:           p.NpmPackage,
 		NativeRelease:        p.NativeRelease,
 		StateContainerPath:   p.StateContainerPath,
-		StateMounts:          p.StateMounts,
 		StateArchiveExcludes: p.StateArchiveExcludes,
 		LaunchEnv:            p.LaunchEnv,
 		RequiresFeatures:     p.RequiresFeatures,
@@ -664,9 +658,6 @@ func writeInspectManifest(w io.Writer, m *inspectManifest) {
 	if m.AgentState != nil {
 		_, _ = fmt.Fprintf(w, "  Account state: %s -> %s\n",
 			m.AgentState.Source, m.AgentState.Destination)
-		for _, extra := range m.AgentState.Additional {
-			_, _ = fmt.Fprintf(w, "  Account state: %s -> %s\n", extra.Source, extra.Destination)
-		}
 	}
 	if len(m.SessionCommand) > 0 {
 		_, _ = fmt.Fprintf(w, "  Session command: %q\n", m.SessionCommand)
@@ -721,9 +712,6 @@ func writeInspectProfile(w io.Writer, p *inspectProfile) {
 	}
 	if p.StateContainerPath != "" {
 		_, _ = fmt.Fprintf(w, "  State path:   %s\n", p.StateContainerPath)
-		for _, mount := range p.StateMounts {
-			_, _ = fmt.Fprintf(w, "  State view:   %s -> %s\n", mount.Source, mount.Destination)
-		}
 	}
 	for _, k := range sortedStringKeys(p.LaunchEnv) {
 		_, _ = fmt.Fprintf(w, "  Launch env:   %s=%s\n", k, p.LaunchEnv[k])

@@ -17,11 +17,12 @@ file descriptors and no-follow opens. Writes create an exclusive temporary
 0600 file, set its owner, fsync, rename and fsync the directory. Native removal
 uses symlink-resistant directory-relative traversal. [2](#source-2) [3](#source-3)
 
-[FACT] Claude exposes its existing native leaf through the primary legacy bind
-and an additional view of its anthropic subtree. Both remain selected-account
-state; no host share is added. Native directory preparation and auth reads use
-the same verified helper. Whole-space archives preserve the subtree and map
-additional-view symlinks back into that leaf. [15](#source-15)
+[FACT] Managed Claude sessions relocate their Anthropic profile tree into the
+ordinary anthropic subtree of the existing selected native leaf. There is no
+second bind or host share. Native import creates subdirectories for the account
+UID/GID using the same verified helper; archives preserve the subtree. Bare
+manual invocations require explicit config-path environment prefixes.
+[15](#source-15)
 
 [FACT] New space creation durably publishes its boot identity and initialization
 seed before allocating the disk. Interrupted allocation can create only that
@@ -80,4 +81,4 @@ account disk's preservation contract does not cover it. [9](#source-9)
 
 14. <a id="source-14"></a> [internal/controller/runtime.go](../../internal/controller/runtime.go#L19) — `LoadRuntime`, `VerifyRuntimeStorage`, `PrepareRuntimeForLifecycle`; deployController and restoreNativeSpace select preparation explicitly.
 
-15. <a id="source-15"></a> [Claude native views](claude-auth.md) — mapping, helper, import and archive evidence.
+15. <a id="source-15"></a> [Claude profile relocation](claude-auth.md) — launch paths, native helper, import and manual-exec boundary.

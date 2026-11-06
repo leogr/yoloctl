@@ -70,7 +70,8 @@ write it never fails an operation that succeeded.
 [FACT] Account auth status distinguishes local material from provider validity.
 Claude profile import uses --anthropic-dir for its selected config/credential/
 selection; legacy --file remains separate. Preserve a disposable login before
-recreating a box to apply the additional native view. [22](#source-22)
+redirecting a managed launch or recreating a box; bare direct exec needs the
+explicit config-path environment prefix. [22](#source-22)
 
 [FACT] Box/account/runtime commands require a running matching controller.
 Offline `space list/show` provide boot/VM metadata, with unavailable declarations

@@ -81,8 +81,6 @@ type Profile struct {
 	// chain in cmd/yoloctl/agentstate.go. Empty means the profile
 	// has no managed state (no bind mount added).
 	StateContainerPath string `yaml:"state_container_path,omitempty"`
-	// StateMounts exposes additional directories from the same selected native leaf.
-	StateMounts []StateMount `yaml:"state_mounts,omitempty"`
 	// StateArchiveExcludes lists literal paths relative to the native agent
 	// leaf that space export omits as disposable process state. Directories
 	// exclude their subtree. No globs, parent traversal or leaf-root exclusion.
@@ -233,13 +231,6 @@ func (p *Profile) PushFeature() string {
 
 // SessionIDFormatUUID is the only supported SessionSpec.IDFormat.
 const SessionIDFormatUUID = "uuid"
-
-// StateMount is an additional view of a directory below the selected agent leaf.
-// Source never names an arbitrary VM/host path; Destination is sandbox-home local.
-type StateMount struct {
-	Source      string `yaml:"source" json:"source"`
-	Destination string `yaml:"destination" json:"destination"`
-}
 
 // Auth formats select credential schemas, independently of profile/agent names.
 const AuthFormatClaude = "claude"
@@ -485,9 +476,6 @@ func (p *Profile) Validate() error {
 	}
 	if p.StateContainerPath != "" && !filepath.IsAbs(p.StateContainerPath) {
 		return fmt.Errorf("agent-profile %q: state_container_path %q must be absolute", p.Name, p.StateContainerPath)
-	}
-	if err := p.validateStateMounts(); err != nil {
-		return err
 	}
 	if len(p.StateArchiveExcludes) > 0 && p.StateContainerPath == "" {
 		return fmt.Errorf("agent-profile %q: state_archive_excludes requires state_container_path", p.Name)
@@ -744,15 +732,6 @@ func (p *Profile) validateAuth() error {
 		}
 		if err := validateRelativeAuthFile(p.Name, "auth.profiles_dir", a.ProfilesDir); err != nil {
 			return err
-		}
-		declared := false
-		for _, mount := range p.StateMounts {
-			if mount.Source == a.ProfilesDir {
-				declared = true
-			}
-		}
-		if !declared {
-			return fmt.Errorf("agent-profile %q: auth.profiles_dir requires its state_mounts declaration", p.Name)
 		}
 	}
 	if a.ImportHomeDir != "" {

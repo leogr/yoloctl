@@ -119,14 +119,14 @@ class NativeStorage(unittest.TestCase):
         self.assertEqual(self.auth()[1]['outcome'], 'invalid')
 
     def test_auth_reads_and_state_subdirs_fail_on_links_and_access_errors(self):
-        self.runop('mkdir', path='anthropic/configs')
+        self.put('anthropic/configs/default.json', {})
         leaf = self.root / 'personal' / 'codex'
         self.assertEqual((leaf / 'anthropic/configs').stat().st_mode & 0o777, 0o700)
         outside = self.disk / 'outside'
         outside.mkdir()
         (leaf / 'anthropic/credentials').symlink_to(outside, target_is_directory=True)
         with self.assertRaises(OSError):
-            self.runop('mkdir', path='anthropic/credentials')
+            self.put('anthropic/credentials/default.json', {})
         with self.assertRaises(OSError):
             self.auth()
         with patch.object(guest, 'regular', side_effect=PermissionError('native read denied')):
@@ -152,6 +152,14 @@ class NativeStorage(unittest.TestCase):
         self.assertEqual((leaf / '.credentials.json').read_bytes(), b'legacy-bytes')
         self.runop('remove')
         self.assertFalse(leaf.exists())
+
+    def test_imported_profile_directories_belong_to_the_account_user(self):
+        with patch.object(guest.os, 'chown', wraps=guest.os.chown) as chown:
+            self.put('anthropic/configs/default.json', {'authentication': {'type': 'user_oauth'}})
+            self.put('anthropic/credentials/default.json', {'type': 'oauth_token', 'access_token': 'synthetic-access'})
+        created = {call.args[0]: call.args[1:3] for call in chown.call_args_list}
+        for name in ('anthropic', 'configs', 'credentials'):
+            self.assertEqual(created[name], (self.req['uid'], self.req['gid']))
 
     def test_disk_identity_fails_closed(self):
         for changes in [dict(uuid='wrong'), dict(id='b' * 32)]:

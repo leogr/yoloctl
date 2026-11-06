@@ -46,10 +46,12 @@ any box selecting the account with that agent.
   yoloctl account auth status default codex    # is a login present?
 
 Interactive first-run login happens inside the box (run the agent and follow
-its own login flow); native state remains agent-owned. Claude persists both its
-legacy directory and the standard Anthropic profile directory. Before recreating
-an older box with a login in disposable Anthropic storage, preserve that state
-privately first; stop all account consumers, import it, then recreate explicitly.
+its own login flow); native state remains agent-owned. Managed Claude sessions
+relocate Anthropic profiles to /home/sandbox/.claude/anthropic inside the existing
+leaf. Before redirecting/recreating an older disposable login, preserve it
+privately first; stop account consumers, import it, then launch/recreate explicitly.
+Bare direct invocations need the same config-path prefix, for example:
+  yoloctl box exec BOX -- env CLAUDE_CONFIG_DIR=/home/sandbox/.claude ANTHROPIC_CONFIG_DIR=/home/sandbox/.claude/anthropic claude auth status
 For Codex, keep cli_auth_credentials_store="file" for file-backed persistence;
 yoloctl does not override the user's selected store or import a host keyring.
 Status reports local material, not provider acceptance or external auth.

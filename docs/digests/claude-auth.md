@@ -1,75 +1,73 @@
 # Claude profile storage and local credential status
 
-Verification: `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes.
+Verification: `05865b85c7daae8778e234cd0d0693971c64e6d2` and accompanying corrections.
 
-[FACT] Claude keeps its primary native leaf bound at `/home/sandbox/.claude`.
-The profile additionally binds its `anthropic` subdirectory at
-`/home/sandbox/.config/anthropic`. Both sources belong to the selected
-account/agent leaf on the existing native disk; no host login directory or
-whole `.config` directory is shared. The second view applies to managed launches
-and ordinary commands in the same container. `CLAUDE_CONFIG_DIR` still controls
-related legacy configuration; it does not replace the Anthropic bind.
-[1](#source-1) [2](#source-2)
+[FACT] Claude keeps its original native leaf bound at `/home/sandbox/.claude`.
+Managed sessions prefix both `CLAUDE_CONFIG_DIR=/home/sandbox/.claude` and
+`ANTHROPIC_CONFIG_DIR=/home/sandbox/.claude/anthropic`. The latter relocates the
+Anthropic profile tree into the ordinary `anthropic` subtree of that leaf.
+There is no second VM bind, entrypoint alias or host config share. A workload
+can replace its own child entries, but none of those child paths is handed to
+the VM container runtime as a source bind. Native state remains selected by
+account/agent through the original resolver. [1](#source-1) [2](#source-2)
+[3](#source-3)
 
-[FACT] Profiles declare additional views with `state_mounts` entries containing
-`source` and `destination`. Sources are clean relative directories beneath the
-primary leaf. Additional destinations are clean sandbox-home paths, and managed
-destinations cannot overlap. Normalization replaces every managed slot from the
-current account; account-none removes both stale Claude views. Host grant
-checks and copying exclude these slots; runtime preparation creates their
-native directories through the verified no-follow helper. Show/inspect include
-the views. Other builtin agents retain one primary view. [2](#source-2)
-[3](#source-3) [4](#source-4)
+[FACT] `launch_env` is a nonsecret managed-command prefix. It does not change
+arbitrary shell or `box exec` environments. Direct login/auth invocations use
+an explicit prefix, following the legacy config convention:
+
+```sh
+yoloctl box exec BOX -- env CLAUDE_CONFIG_DIR=/home/sandbox/.claude ANTHROPIC_CONFIG_DIR=/home/sandbox/.claude/anthropic claude auth status
+```
+
+The same prefix applies to manual login commands. Bare direct invocations can
+still write disposable default locations. No container-env propagation, forced
+external-profile selection or new drift rule is added. [4](#source-4)
+[5](#source-5)
 
 [FACT] `auth.format` selects bounded native recognition (`claude` or `codex`);
 blank retains ordinary file-presence status. Claude declares
-`auth.profiles_dir: anthropic`, backed by its additional view. The helper reads
-at most 1 MiB per credential/config and 256 bytes for the active selector,
-without following links. Claude legacy recognition requires a nonempty
+`auth.profiles_dir: anthropic` relative to the native leaf. The helper reads at
+most 1 MiB per credential/config and 256 bytes for the active selector without
+following links. Legacy recognition requires nonempty
 `claudeAiOauth.accessToken`. Anthropic recognition uses `active_config` (or
-`default` when absent), its matching `configs/<name>.json` with
+`default` when absent), matching `configs/<name>.json` with
 `authentication.type=user_oauth`, and `credentials/<name>.json` with
 `type=oauth_token` and nonempty `access_token`. Configuration alone is not
-credential material; external/unknown formats remain explicitly unverified.
-Empty/malformed JSON and missing values cannot establish credentials.
-Only source names/classifications leave the helper; access/storage errors remain
-unavailable. Neither expiry nor provider acceptance is checked.
-[1](#source-1) [5](#source-5) [6](#source-6)
+credential material; external/unknown formats remain unverified. Only source
+labels/classifications leave the helper; storage errors remain unavailable.
+Neither expiry nor provider acceptance is checked. [1](#source-1)
+[6](#source-6) [7](#source-7)
 
 [FACT] `account auth import ACCOUNT claude --anthropic-dir DIR` copies only the
 selected profile's config, credential and active selection into native state.
 The caller reads bounded files; the worker rechecks the profile digest,
-relationship and fixed destination paths before effects. Both source layouts
-present require explicit `--file` or `--anthropic-dir`; new-format files cannot
-be mistaken for legacy credentials. Legacy `--file` and API-key extraction
-remain supported. Import refuses active consumers and uses the existing account
-lock and native atomic-file writes. The selector is written last, without
-claiming a cross-file transaction. Existing native legacy bytes are not changed
-by a new-profile import. Inactive profiles/external identity files are not
-imported. Whole-space archives retain the native subtree and translate links
-through the additional view back into the same leaf. Account deletion removes
-the whole leaf after stopping consumers. [7](#source-7) [8](#source-8)
-[9](#source-9)
+relationship and fixed destinations before effects. Both source layouts present
+require explicit `--file` or `--anthropic-dir`. Legacy file/API-key import remains
+supported. Import refuses active consumers and uses the existing account lock
+and native atomic-file writes, creating profile directories for the account
+UID/GID. The selector is written last, without a cross-file transaction.
+Inactive profiles/external identity files are not imported. Whole-space archives
+retain the ordinary subtree; deletion removes the complete account leaf.
+[6](#source-6) [8](#source-8) [9](#source-9)
 
-[FACT] Applying the additional binding to an existing container requires normal
-explicit recreation. Before any box/space recreation, the human/operator must
-privately preserve a disposable Anthropic login first. Stop every consumer of
-the selected account, import the saved profile with the updated controller, then
-recreate the box. Preserve inactive profiles separately. Mounting new native
-state does not recover already-lost container files; a new login may be needed.
-Source regressions establish storage/classification/orchestration behavior,
-not a live provider login surviving recreation. [7](#source-7) [8](#source-8) [10](#source-10)
+[FACT] Before redirecting an existing login or recreating its box/space, the
+human/operator must privately preserve disposable Anthropic state first. Stop
+every consumer of the account, import the saved selected profile using the
+updated controller, then use the managed launch (or explicit direct prefix).
+Recreate explicitly when required by the normal lifecycle. Preserve inactive
+profiles separately. Already-lost files cannot be recovered by relocation;
+a new login may be needed. Source regressions are not proof of a provider login
+surviving recreation. [4](#source-4) [8](#source-8) [9](#source-9)
 
 ## Sources
 
-1. <a id="source-1"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L1) — state views, launch environment, auth conventions and existing API-key injection.
-2. <a id="source-2"></a> [Resolver](../../cmd/yoloctl/agentstate.go#L1) — view derivation, replacement, show and host-source exclusion.
-3. <a id="source-3"></a> [Profile validation](../../internal/agentprofile/state_mounts.go#L1) — source/destination constraints; `Profile.validateAuth` links profile storage to a declared view.
-4. <a id="source-4"></a> [Runtime preparation](../../cmd/yoloctl/agentbox.go#L1955) — `finishAgentboxRuntimePreparation`, directories before launch.
-5. <a id="source-5"></a> [Native recognition](../../internal/accountstate/guest.py#L131) — `auth_read`, `auth_status`; existing verified disk/leaf path.
-6. <a id="source-6"></a> [Native regressions](../../internal/accountstate/testdata/test_guest.py#L1) — format, selection, bounded input, links and errors.
-7. <a id="source-7"></a> [Import shape](../../cmd/yoloctl/account_auth_anthropic.go#L1) — bounded source reads, selection and destination validation.
-8. <a id="source-8"></a> [Controller import](../../cmd/yoloctl/controller_documents.go#L275) — `applyControllerAuthImport`, profile digest, native-write scope and consumers; CLI help in `account_auth.go` states upgrade order.
-9. <a id="source-9"></a> [Archive views](../../internal/spacearchive/native_export.go#L50) — `relativeLink` keeps additional view aliases in the same leaf.
-
-10. <a id="source-10"></a> [Start preserves containers](../../internal/agentbox/reconcile.go#L90) — ReconcileForStart and CheckStart refuse recreation-only drift.
+1. <a id="source-1"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L1) — original state bind, nonsecret launch paths and native auth conventions.
+2. <a id="source-2"></a> [Resolver](../../cmd/yoloctl/agentstate.go#L1) — original whole-leaf account selection and normalization.
+3. <a id="source-3"></a> [Source-swap regression](../../internal/agentbox/account_state_source_test.go#L1) — runtime mount source remains the whole leaf after its child is replaced; CLI normalization control in `account_auth_profiles_test.go`.
+4. <a id="source-4"></a> [Launch prefix](../../cmd/yoloctl/launchenv.go#L1) — applyLaunchEnv; ordinary session path in `session_client.go` and tracked initial/resumed path in `session_identity.go`.
+5. <a id="source-5"></a> [Launch regressions](../../cmd/yoloctl/launchenv_test.go#L1) — managed/explicit selection fixture and bare-exec limit; tracked resume coverage in `session_identity_test.go`.
+6. <a id="source-6"></a> [Native helper](../../internal/accountstate/guest.py#L1) — auth_read/auth_status, account ownership and atomic no-follow writes.
+7. <a id="source-7"></a> [Native regressions](../../internal/accountstate/testdata/test_guest.py#L1) — formats, bounds, links, private classifications and imported-directory ownership.
+8. <a id="source-8"></a> [Import shape](../../cmd/yoloctl/account_auth_anthropic.go#L1) — bounded source reads, selection and destination validation.
+9. <a id="source-9"></a> [Controller import](../../cmd/yoloctl/controller_documents.go#L275) — applyControllerAuthImport, digest, scope and consumers; CLI help in `account_auth.go` states preservation order.

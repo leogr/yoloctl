@@ -246,22 +246,6 @@ func TestExportRuntimeNamesDoNotExcludeUnrelatedAgents(t *testing.T) {
 	}
 }
 
-func TestAdditionalAccountStateViewLinksRemainWithinTheSameLeaf(t *testing.T) {
-	p := nativeExportPolicy{}
-	for _, tc := range []struct{ entry, target, want string }{
-		{"trial/claude/current-profile", "/home/sandbox/.config/anthropic/credentials/default.json", "anthropic/credentials/default.json"},
-		{"trial/claude/anthropic/current", "/home/sandbox/.config/anthropic/credentials/default.json", "credentials/default.json"},
-		{"trial/claude/anthropic/primary-alias", "/home/sandbox/.claude/anthropic/credentials/default.json", "credentials/default.json"},
-		{"trial/claude/root-alias", "/home/sandbox/.config/anthropic", "anthropic"},
-		{"trial/codex/no-cross-agent-alias", "/home/sandbox/.config/anthropic/credentials/default.json", "/home/sandbox/.config/anthropic/credentials/default.json"},
-	} {
-		got, err := p.relativeLink("/native/account-state", tc.entry, tc.target)
-		if err != nil || got != tc.want {
-			t.Fatalf("relative link=%q want=%q error=%v", got, tc.want, err)
-		}
-	}
-}
-
 func TestClaudeProfileTreeSurvivesWholeSpaceArchive(t *testing.T) {
 	source, boot := fixture(t)
 	leaf := filepath.Join(source, "account-state/trial/claude")
@@ -274,7 +258,7 @@ func TestClaudeProfileTreeSurvivesWholeSpaceArchive(t *testing.T) {
 	for name, body := range files {
 		nativeTestFile(t, leaf, name, body)
 	}
-	nativeTestLink(t, leaf, "active-credential", "/home/sandbox/.config/anthropic/credentials/work.json")
+	nativeTestLink(t, leaf, "active-credential", "/home/sandbox/.claude/anthropic/credentials/work.json")
 	state := stateFile(t)
 	if err := WriteState(t.Context(), state, source, boot); err != nil {
 		t.Fatal(err)
@@ -307,6 +291,6 @@ func TestClaudeProfileTreeSurvivesWholeSpaceArchive(t *testing.T) {
 		}
 	}
 	if got, err := os.ReadFile(filepath.Join(target, "active-credential")); err != nil || string(got) != files["anthropic/credentials/work.json"] {
-		t.Fatal("restored additional-view alias is wrong", err)
+		t.Fatal("restored in-leaf alias is wrong", err)
 	}
 }

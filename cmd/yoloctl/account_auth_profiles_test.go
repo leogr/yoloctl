@@ -13,9 +13,31 @@ import (
 	"github.com/leogr/yoloctl/internal/account"
 	"github.com/leogr/yoloctl/internal/accountstate"
 	"github.com/leogr/yoloctl/internal/agentbox"
-	"github.com/leogr/yoloctl/internal/agentprofile"
-	"github.com/leogr/yoloctl/internal/container"
 )
+
+func TestClaudeProfileRelocationKeepsOnlyTheOriginalLeafBind(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &agentbox.Config{Agent: "claude", Account: "first"}
+	first, _, err := applyAgentStateMount(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Mounts) != 1 || cfg.Mounts[0].Source != first.Source || cfg.Mounts[0].Target != "/home/sandbox/.claude" {
+		t.Fatal("Claude acquired a replaceable child bind", cfg.Mounts)
+	}
+	cfg.Account = "second"
+	second, _, err := applyAgentStateMount(cfg)
+	if err != nil || len(cfg.Mounts) != 1 || cfg.Mounts[0].Source != second.Source || second.Source == first.Source {
+		t.Fatal("selected native leaf was not replaced", err, cfg.Mounts)
+	}
+	if got := agentboxHostMounts(cfg); len(got) != 0 {
+		t.Fatal("native state became a host share", got)
+	}
+	cfg.Account = account.None
+	if state, _, err := applyAgentStateMount(cfg); err != nil || state.Enabled || len(cfg.Mounts) != 0 {
+		t.Fatal("account-none retained native state", err, cfg.Mounts)
+	}
+}
 
 func anthropicHostFixture(t *testing.T) string {
 	t.Helper()
@@ -35,88 +57,6 @@ func anthropicHostFixture(t *testing.T) string {
 		}
 	}
 	return dir
-}
-
-func TestClaudeStateViewsFollowAccountAndLeaveUserBinds(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	cfg := &agentbox.Config{Agent: "claude", Account: "first", Mounts: []agentbox.Mount{{Source: "/project", Target: "/project"}}}
-	first, _, err := applyAgentStateMount(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(cfg.Mounts) != 3 || len(first.Additional) != 1 {
-		t.Fatal("missing native state views")
-	}
-	if first.Additional[0].Source != filepath.Join(first.Source, "anthropic") || first.Additional[0].Destination != "/home/sandbox/.config/anthropic" {
-		t.Fatalf("wrong second view: %+v", first.Additional)
-	}
-	cfg.Account = "second"
-	second, _, err := applyAgentStateMount(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, m := range cfg.Mounts {
-		if strings.HasPrefix(m.Source, first.Source) {
-			t.Fatal("old account state leaked")
-		}
-	}
-	if second.Additional[0].Source != filepath.Join(second.Source, "anthropic") {
-		t.Fatal("wrong selected leaf")
-	}
-	if _, err := canonicalizeUserMountSources(cfg); err != nil {
-		t.Fatal(err)
-	}
-	if got := agentboxHostMounts(cfg); len(got) != 1 || got[0].Path != "/project" {
-		t.Fatalf("native state became a host grant: %+v", got)
-	}
-	if got := stripManagedStateMounts(cfg); len(got) != 1 || got[0].Target != "/project" {
-		t.Fatalf("copy retained a native view: %+v", got)
-	}
-	cfg.Account = account.None
-	disabled, _, err := applyAgentStateMount(cfg)
-	if err != nil || disabled.Enabled || len(cfg.Mounts) != 1 {
-		t.Fatalf("stale views with account none: %+v %v", cfg.Mounts, err)
-	}
-	cfg.Agent = "none"
-	if state, _, err := applyAgentStateMount(cfg); err != nil || state.Enabled {
-		t.Fatal("agentless acquired state", err)
-	}
-}
-
-func TestClaudeRuntimePreparesAdditionalNativeDirectory(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	profile, err := agentprofile.Lookup("claude")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg := &agentbox.Config{Agent: "claude", Account: "personal", Space: "default"}
-	state, err := resolveAgentStateMount(profile, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	previous := accountStateOperation
-	t.Cleanup(func() { accountStateOperation = previous })
-	var paths []string
-	accountStateOperation = func(_ context.Context, _ string, req accountstate.Request) (accountstate.Result, error) {
-		if req.Action != "mkdir" || req.Account != "personal" || req.Agent != "claude" {
-			t.Fatal("wrong native preparation request")
-		}
-		paths = append(paths, req.Path)
-		return accountstate.Result{}, nil
-	}
-	qualify := func(context.Context, *agentbox.Config) (bool, error) { return true, nil }
-	if err := finishAgentboxRuntimePreparation(t.Context(), (*container.Client)(nil), cfg, runtimePreparation{stateMount: state}, qualify); err != nil {
-		t.Fatal(err)
-	}
-	if len(paths) != 2 || paths[0] != "" || paths[1] != "anthropic" {
-		t.Fatalf("wrong preparation paths: %v", paths)
-	}
-	accountStateOperation = func(context.Context, string, accountstate.Request) (accountstate.Result, error) {
-		return accountstate.Result{}, errors.New("native directory is a link")
-	}
-	if err := finishAgentboxRuntimePreparation(t.Context(), nil, cfg, runtimePreparation{stateMount: state}, qualify); err == nil {
-		t.Fatal("ignored native preparation error")
-	}
 }
 
 func TestAnthropicImportPreservesSelectionLegacyAndRemoval(t *testing.T) {

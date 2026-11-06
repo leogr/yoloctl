@@ -27,11 +27,6 @@ default_args:
 
 npm_package: "@anthropic-ai/claude-code"
 state_container_path: /home/sandbox/.claude
-# Claude's Anthropic Console profile store is independent of CLAUDE_CONFIG_DIR.
-# Bind the complete tree from this account's existing Claude leaf.
-state_mounts:
-  - source: anthropic
-    destination: /home/sandbox/.config/anthropic
 
 # Required features (manifest/runtime model). The boundary in force is:
 #   agent (this profile) → requires features → features → require capabilities → policy
@@ -90,6 +85,8 @@ session:
 # `nerdctl -e` env); non-secret path only (applyLaunchEnv).
 launch_env:
   CLAUDE_CONFIG_DIR: "{{state_dir}}"
+  # Keep the complete Anthropic SDK profile tree inside the existing leaf.
+  ANTHROPIC_CONFIG_DIR: "{{state_dir}}/anthropic"
   # Claude Code's built-in self-updater is disabled on purpose: inside an
   # agentbox it can never succeed, and every session retries and warns
   # (`claude doctor`: "Can't auto-update: npm global folder isn't writable").
