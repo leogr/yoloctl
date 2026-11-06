@@ -57,13 +57,16 @@ requires_features:
 # conversation starts with `--session-id <fresh uuid>`, and a later start of
 # the same box resumes it with `--resume <uuid>` instead of opening whatever
 # the shared account leaf saw last. Claude refuses `--session-id` for an ID
-# whose transcript already exists, so a recorded ID is only ever resumed.
+# whose transcript already exists, so an existing ID is only ever resumed.
+# If no saved file exists, retire that ID and assign a different fresh UUID.
+# File presence is not a guarantee that Claude can resume it.
 # reserved_args are the arguments that take identity over: a box whose
 # agent_extra_args carry one is manual and yoloctl assigns nothing.
 session:
   id_format: uuid
   assign_args: ["--session-id", "{{session_id}}"]
   resume_argv: ["{{command}}", "--resume", "{{session_id}}"]
+  resume_file: "projects/*/{{session_id}}.jsonl"
   reserved_args: ["--session-id", "--resume", "-r", "--continue", "-c", "--fork-session", "--bg"]
   # The record-only reporter, also listed in requires_features above.
   # selection: reported — Claude reports a SessionStart for every in-app

@@ -2,6 +2,7 @@
 import base64
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -232,6 +233,61 @@ def auth_status(fd, relative, spec):
     return {'auth': results}
 
 
+RESUME_SCAN_ENTRIES = 10000
+
+
+def resume_file_present(leaf, pattern, raw_id):
+    """Inspect metadata only; a file is not proof that Claude can resume it."""
+    parts = pattern.split('/')
+    literal = r'[A-Za-z0-9_.-]+'
+    if (len(parts) < 3 or parts[-2] != '*' or pattern.count('*') != 1
+            or pattern.count('{{session_id}}') != 1
+            or any(p in ('.', '..') or not re.fullmatch(literal, p) for p in parts[:-2])):
+        raise ValueError('invalid native resume file pattern')
+    filename = parts[-1]
+    if ('{{session_id}}' not in filename or not filename.split('{{session_id}}', 1)[1]
+            or not re.fullmatch(literal, filename.replace('{{session_id}}', '', 1))):
+        raise ValueError('invalid native resume filename')
+    session_id = raw_id.decode('ascii')
+    if str(uuid.UUID(session_id)) != session_id:
+        raise ValueError('invalid native conversation ID')
+    filename = filename.replace('{{session_id}}', session_id)
+    current = os.dup(leaf)
+    try:
+        for part in parts[:-2]:
+            try:
+                child = directory(current, part)
+            except FileNotFoundError:
+                return False
+            os.close(current)
+            current = child
+        with os.scandir(current) as entries:
+            for count, entry in enumerate(entries, 1):
+                if count > RESUME_SCAN_ENTRIES:
+                    raise ValueError('native conversation search limit exceeded')
+                mode = entry.stat(follow_symlinks=False).st_mode
+                if stat.S_ISLNK(mode):
+                    raise ValueError('native conversation search contains a linked entry')
+                if not stat.S_ISDIR(mode):
+                    continue
+                project = directory(current, entry.name)
+                try:
+                    try:
+                        f = regular(project, filename)
+                    except FileNotFoundError:
+                        continue
+                    os.close(f)
+                    return True
+                finally:
+                    os.close(project)
+        return False
+    except OSError:
+        # Project names and file contents never leave the helper.
+        raise OSError('native conversation storage unavailable') from None
+    finally:
+        os.close(current)
+
+
 def run(req):
     mount = req['mount']
     info = json.loads(subprocess.check_output(['findmnt', '-J', '--mountpoint', mount, '-o', 'FSTYPE,UUID']))['filesystems'][0]
@@ -293,6 +349,8 @@ def run(req):
         try:
             acct = directory(root, name, create=create)
         except FileNotFoundError:
+            if action == 'resume-file':
+                raise ValueError('native conversation account leaf unavailable') from None
             return {'present': False, 'leaves': [], **absent}
         try:
             if action == 'list':
@@ -300,14 +358,21 @@ def run(req):
                 return {'leaves': sorted(leaves)}
             agent = req.get('agent')
             if not agent:
+                if action == 'resume-file':
+                    raise ValueError('native conversation agent leaf unavailable')
                 return {}
             try:
                 leaf = directory(acct, agent, create=create, uid=req['uid'], gid=req['gid'])
             except FileNotFoundError:
+                if action == 'resume-file':
+                    raise ValueError('native conversation agent leaf unavailable') from None
                 return {'present': False, **absent}
         finally:
             os.close(acct)
         try:
+            if action == 'resume-file':
+                present = resume_file_present(leaf, req['path'], base64.b64decode(req['data'], validate=True))
+                return {'outcome': 'present' if present else 'absent'}
             if action == 'auth-status':
                 return auth_status(leaf, req['path'], auth_spec(req))
             if action == 'mkdir':

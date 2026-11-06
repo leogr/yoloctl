@@ -158,6 +158,10 @@ type SessionSpec struct {
 	// DefaultArgs and the box's AgentExtraArgs follow. Without it the block
 	// is observe-only (see Resumes).
 	ResumeArgv []string `yaml:"resume_argv,omitempty"`
+	// ResumeFile is an optional native-leaf presence preflight before a new
+	// resume allocation: fixed directories, one single-directory wildcard and
+	// a filename containing {{session_id}} followed by a literal suffix.
+	ResumeFile string `yaml:"resume_file,omitempty"`
 	// ReservedArgs are agent arguments that take over conversation identity
 	// (resume, continue, fork, a chosen ID). A box whose agent_extra_args
 	// carry one is manual: yoloctl then assigns and resumes nothing.
@@ -565,6 +569,14 @@ func (p *Profile) validateSession() error {
 	}
 	if err := check("assign_args", s.AssignArgs, false); err != nil {
 		return err
+	}
+	if s.ResumeFile != "" {
+		if p.StateContainerPath == "" || len(s.AssignArgs) == 0 || !s.Resumes() {
+			return fmt.Errorf("agent-profile %q: session.resume_file requires native state, assign_args and resume_argv", p.Name)
+		}
+		if err := validateResumeFile(s.ResumeFile); err != nil {
+			return fmt.Errorf("agent-profile %q: session.resume_file: %w", p.Name, err)
+		}
 	}
 	for _, a := range s.ReservedArgs {
 		if strings.TrimSpace(a) == "" || strings.Contains(a, "{{") {

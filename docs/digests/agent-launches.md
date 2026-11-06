@@ -1,6 +1,6 @@
 # Tracked agent launches and settlement
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `f15ce301325c25538cab3f7acaf88962827c38bc` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] A tracked start requires the command wrapper's native space-operation
 lock to be still held (a context witness) and takes only the box lock, kept
@@ -26,6 +26,14 @@ an undecidable probe refuses before any change. [1](#source-1) [2](#source-2)
 Closing ends a launch, not its conversation. [4](#source-4) [5](#source-5)
 [6](#source-6) [7](#source-7)
 
+[FACT] Before a new resume allocation, after the Target ownership check, a
+profile may check its saved file. Confirmed absence retires the prior IDs and
+allocates one fresh assignment through the ordinary record writes. Unknown
+storage or a failed save dispatches nothing. Allocated replay preserves its
+kind, ID and token and skips the probe; no retry occurs after dispatch.
+Original closed-launch proof is retained for observation preparation.
+[5](#source-5) See [probe limits](resume-file-presence.md).
+
 [FACT] Proof that no holder or agent survived is a positively stopped or
 missing runtime followed by a successful start or reconcile, or a managed
 restart or recreate whose session cleanup positively stopped the holder and
@@ -49,10 +57,10 @@ afterwards. An unproved cleanup or in-sync reconcile records nothing.
 2. <a id="source-2"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L54) — `sessionTrackingFor`, `beginTrackedSession`.
 3. <a id="source-3"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L326-L520) — `ensureAgentSession`.
 4. <a id="source-4"></a> [launch.go](../../internal/agentsession/launch.go#L116) — `Allocate`, `Dispatch`, `Bind`, `CloseExit`, `SettleResume`, `Close`, `SandboxReplaced`, `Uncertain`.
-5. <a id="source-5"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L284) — `launch`, `settle`.
+5. <a id="source-5"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L283) — `launch`, `settle`.
 6. <a id="source-6"></a> [tombstone.go](../../internal/session/tombstone.go#L13-L60) — `LaunchToken`, `ValidLaunchToken`; holder writes at holder.go L220, L364.
 7. <a id="source-7"></a> [unit.go](../../internal/session/unit.go#L33-L150) — `UnitSpec.LaunchToken`, `--launch-token`, `HolderUnitState`, `ProbeVMMarker`; parsed in session_hold.go L47.
-8. <a id="source-8"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L384) — `applySessionStart`, `recordSessionEnded`.
+8. <a id="source-8"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L412) — `applySessionStart`, `recordSessionEnded`.
 9. <a id="source-9"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L725) — `startAgentbox`; `recreateAgentbox` at L2572; `removeAgentboxConfig` at L2467.
 10. <a id="source-10"></a> [agentbox_reconcile.go](../../cmd/yoloctl/agentbox_reconcile.go#L771) — `reconcileManaged`, its callers and `onSessionEnded` wiring; operator apply in `runControllerDocument`, controller_documents.go L97.
 11. <a id="source-11"></a> [replacement_settlement_test.go](../../cmd/yoloctl/replacement_settlement_test.go#L124-L331) — seam regressions, the policy restart, failures after a proved cleanup, an unproved cleanup, missing-member creation and negatives; `recreateChatMember` in chat_runtime.go L417-L440.

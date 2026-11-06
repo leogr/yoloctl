@@ -50,8 +50,8 @@ type Result struct {
 	UUID    string        `json:"uuid"`
 	Present bool          `json:"present"`
 	Leaves  []string      `json:"leaves"`
-	// Outcome of a statusline action: enabled, restored, removed, unchanged
-	// or absent.
+	// Outcome of statusline (enabled/restored/removed/unchanged/absent), or
+	// resume-file (present/absent). An empty resume-file result is not absence.
 	Outcome string `json:"outcome,omitempty"`
 }
 

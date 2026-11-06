@@ -65,16 +65,18 @@ const (
 	OutcomeResumed    = "resumed"
 	OutcomeMismatch   = "mismatch"
 	// OutcomeFailed: the resume launch exited nonzero without any report of
-	// a main-session start. The next start requests the same ID again.
+	// a main-session start. Failure alone does not select a fresh ID; the
+	// next start retains its ordinary pre-dispatch presence check.
 	OutcomeFailed = "failed"
 )
 
 // Reasons a conversation was replaced.
 const (
-	WhyNewSession      = "new-session"
-	WhyNever           = "never"
-	WhyLaunchUncertain = "launch-uncertain"
-	WhyAccountChanged  = "account-changed"
+	WhyNewSession               = "new-session"
+	WhyNever                    = "never"
+	WhyLaunchUncertain          = "launch-uncertain"
+	WhyAccountChanged           = "account-changed"
+	WhySavedConversationMissing = "saved-conversation-missing"
 	// WhySwitched: the agent last reported another conversation, which the
 	// next resume adopted.
 	WhySwitched = "switched"
@@ -356,7 +358,7 @@ func (r *Record) Validate() error {
 			return errors.New("session record has an invalid previous conversation id")
 		}
 		switch p.Why {
-		case WhyNewSession, WhyNever, WhyLaunchUncertain, WhyAccountChanged, WhySwitched:
+		case WhyNewSession, WhyNever, WhyLaunchUncertain, WhyAccountChanged, WhySwitched, WhySavedConversationMissing:
 		default:
 			return fmt.Errorf("session record has an invalid replacement reason %q", p.Why)
 		}

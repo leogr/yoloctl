@@ -43,6 +43,7 @@ func TestAgentProfiles_BuiltIns(t *testing.T) {
 				IDFormat:     agentprofile.SessionIDFormatUUID,
 				AssignArgs:   []string{"--session-id", "{{session_id}}"},
 				ResumeArgv:   []string{"{{command}}", "--resume", "{{session_id}}"},
+				ResumeFile:   "projects/*/{{session_id}}.jsonl",
 				ReservedArgs: []string{"--session-id", "--resume", "-r", "--continue", "-c", "--fork-session", "--bg"},
 				Observe:      &agentprofile.ObserveSpec{Push: "yolo.agent.observe", Selection: agentprofile.SelectionReported},
 				ResumeCarry: &agentprofile.ResumeCarry{

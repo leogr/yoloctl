@@ -19,6 +19,101 @@ spec.loader.exec_module(guest)
 
 
 class NativeStorage(unittest.TestCase):
+    SESSION_ID = '7c9e6679-7425-40de-944b-e07fc1f90ae7'
+
+    def resume_file(self, **changes):
+        request = dict(path='projects/*/{{session_id}}.jsonl',
+                       data=base64.b64encode(self.SESSION_ID.encode()).decode())
+        request.update(changes)
+        return self.runop('resume-file', **request)
+
+    def put_resume_file(self, relative, content=b'private-transcript-canary'):
+        self.runop('write', path=relative, data=base64.b64encode(content).decode())
+
+    def test_resume_file_missing_leaf_is_unavailable_not_absent(self):
+        with self.assertRaises(ValueError):
+            self.resume_file()
+        self.assertFalse((self.root / 'personal').exists())
+        self.runop('mkdir')
+        with self.assertRaises(ValueError):
+            self.resume_file(agent='missing-agent')
+
+    def test_resume_file_absence_is_read_only_and_search_is_one_level(self):
+        self.runop('mkdir')
+        leaf = self.root / 'personal/codex'
+        self.assertEqual(self.resume_file(), {'outcome': 'absent'})
+        self.assertEqual(list(leaf.iterdir()), [])
+        self.put_resume_file('projects/other/other-id.jsonl')
+        self.put_resume_file('projects/nested/subagents/' + self.SESSION_ID + '.jsonl')
+        self.assertEqual(self.resume_file(), {'outcome': 'absent'})
+        self.put_resume_file('projects/saved/' + self.SESSION_ID + '.jsonl')
+        result = self.resume_file()
+        self.assertEqual(result, {'outcome': 'present'})
+        self.assertNotIn('private-transcript', json.dumps(result))
+        # Presence is metadata, not validation of content or uniqueness.
+        (leaf / ('projects/saved/' + self.SESSION_ID + '.jsonl')).unlink()
+        self.put_resume_file('projects/empty/' + self.SESSION_ID + '.jsonl', b'')
+        self.assertEqual(self.resume_file(), {'outcome': 'present'})
+        self.put_resume_file('projects/duplicate/' + self.SESSION_ID + '.jsonl')
+        self.assertEqual(self.resume_file(), {'outcome': 'present'})
+
+    def test_resume_file_symlinks_and_nonregular_candidates_refuse(self):
+        self.runop('mkdir')
+        leaf = self.root / 'personal/codex'
+        outside = self.disk / 'outside'
+        outside.mkdir()
+        projects = leaf / 'projects'
+        projects.symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(OSError):
+            self.resume_file()
+        projects.unlink()
+        projects.mkdir()
+        linked = projects / 'linked'
+        linked.symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            self.resume_file()
+        linked.unlink()
+        project = projects / 'real'
+        project.mkdir()
+        candidate = project / (self.SESSION_ID + '.jsonl')
+        candidate.symlink_to(outside / 'file')
+        with self.assertRaises(OSError):
+            self.resume_file()
+        candidate.unlink()
+        os.mkfifo(candidate)
+        with self.assertRaises(ValueError):
+            self.resume_file()
+
+    @unittest.skipIf(os.geteuid() == 0, 'permission fixture requires unprivileged execution')
+    def test_resume_file_permission_errors_refuse(self):
+        self.put_resume_file('projects/private/' + self.SESSION_ID + '.jsonl')
+        leaf = self.root / 'personal/codex'
+        for relative, mode in [('projects/private', 0o700),
+                               ('projects/private/' + self.SESSION_ID + '.jsonl', 0o600)]:
+            path = leaf / relative
+            path.chmod(0)
+            try:
+                with self.assertRaises(OSError):
+                    self.resume_file()
+            finally:
+                path.chmod(mode)
+
+    def test_resume_file_incomplete_inventory_and_bad_requests_refuse(self):
+        self.put_resume_file('projects/a/other.jsonl')
+        self.put_resume_file('projects/b/other.jsonl')
+        with patch.object(guest, 'RESUME_SCAN_ENTRIES', 1):
+            with self.assertRaises(ValueError):
+                self.resume_file()
+        with patch.object(guest.os, 'scandir', side_effect=OSError('injected I/O')):
+            with self.assertRaises(OSError):
+                self.resume_file()
+        for pattern in ('../*/{{session_id}}.jsonl', '/projects/*/{{session_id}}.jsonl',
+                        'projects/**/{{session_id}}.jsonl', 'projects/*/bad.jsonl'):
+            with self.subTest(pattern=pattern), self.assertRaises(ValueError):
+                self.resume_file(path=pattern)
+        with self.assertRaises(ValueError):
+            self.resume_file(data=base64.b64encode(b'not-a-uuid').decode())
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

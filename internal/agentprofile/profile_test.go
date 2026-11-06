@@ -126,6 +126,7 @@ func TestBuiltinShape(t *testing.T) {
 		IDFormat:     SessionIDFormatUUID,
 		AssignArgs:   []string{"--session-id", "{{session_id}}"},
 		ResumeArgv:   []string{"{{command}}", "--resume", "{{session_id}}"},
+		ResumeFile:   "projects/*/{{session_id}}.jsonl",
 		ReservedArgs: []string{"--session-id", "--resume", "-r", "--continue", "-c", "--fork-session", "--bg"},
 		Observe:      &ObserveSpec{Push: "yolo.agent.observe", Selection: SelectionReported},
 		ResumeCarry: &ResumeCarry{
