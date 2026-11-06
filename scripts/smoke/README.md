@@ -660,3 +660,24 @@ YOLOCTL_HOME="$SMOKE_ROOT/home" \
 Remove that temporary directory only after space destruction succeeds. Keep the
 build used for that fixture; a rebuilt CLI may select a different controller
 bundle and requires the explicit update workflow.
+
+### macOS test launch diagnostics
+
+`internal/tui/term/pty_output_test.go` keeps all three fast-exit output cases
+strict. A launch failure logs its unwrapped errno and operation; it is not
+retried or skipped. For a bounded comparison of ordinary exec, a new session
+and a controlling PTY, run the opt-in test with the actual selected Go toolchain:
+
+```sh
+YOLOCTL_TEST_PTY_DIAGNOSTICS=1 go test -v -count=1 -run '^TestPTYStartDiagnostics$' ./internal/tui/term
+```
+
+Record the Go executable and test binary's Mach-O architecture when comparing
+native Apple Silicon with amd64 under Rosetta. `GOARCH=arm64` alone does not
+prove that the Go tool itself ran natively. The diagnostic uses only fixed,
+small-output disposable commands and records no inherited environment values.
+Darwin's Go fork/exec error pipe merges session, controlling-TTY and exec errors;
+`cmd.Start` EPERM alone leaves the exact child syscall unknown. A successful
+comparison run is a no-reproduction result, not proof that Rosetta caused a
+previous failure. Preserve the first failure and run the ordinary parallel full
+Go suite as well as isolated repetitions; do not substitute `-p1` for that gate.

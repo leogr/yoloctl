@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/resources"
 )
@@ -48,7 +49,11 @@ exit 1
 					return guardError
 				})
 			}
-			_, err := New("fixture").Create(ctx, RunOptions{Name: "fixture", Image: "unit-image", WorkloadPool: true})
+			client := New("fixture")
+			if !buildGuard {
+				fixtureCommandWatchdog(t, client, 3*time.Second)
+			}
+			_, err := client.Create(ctx, RunOptions{Name: "fixture", Image: "unit-image", WorkloadPool: true})
 			if err == nil || buildGuard && !errors.Is(err, guardError) {
 				t.Fatal("create bypassed existing guard", err)
 			}
@@ -89,6 +94,7 @@ esac
 					t.Fatal(err)
 				}
 				client := New("fixture")
+				fixtureCommandWatchdog(t, client, 3*time.Second)
 				var stdout bytes.Buffer
 				client.stdout, client.stderr = &stdout, io.Discard
 				options := RunOptions{Name: "fixture", Image: "unit-image", WorkloadPool: true, Detach: true, User: "0", CPUs: "2", Memory: "2g",

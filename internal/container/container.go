@@ -26,6 +26,8 @@ type Client struct {
 	env    string
 	stdout io.Writer
 	stderr io.Writer
+	// Nil preserves runtime budgets; semantic command fixtures may supply a watchdog.
+	newTimeout func(context.Context, time.Duration) (context.Context, context.CancelFunc)
 }
 
 // New returns a Client targeting the given env VM.
@@ -423,7 +425,7 @@ func (c *Client) workloadPool(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	probeCtx, cancel := c.withTimeout(ctx, 3*time.Second)
 	defer cancel()
 	raw, err := c.ShellOutputQuiet(probeCtx, append([]string{"cat"}, resources.PoolFiles(systemd)...)...)
 	if err == nil {
@@ -876,4 +878,13 @@ func (c *Client) nerdctl(ctx context.Context, args ...string) error {
 
 func (c *Client) command(ctx context.Context, args ...string) *exec.Cmd {
 	return vmhost.ShellCommand(ctx, c.env, args...)
+}
+
+// withTimeout keeps timeout construction local to this client; no runtime
+// configuration changes the production budgets at its call sites.
+func (c *Client) withTimeout(ctx context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
+	if c.newTimeout != nil {
+		return c.newTimeout(ctx, budget)
+	}
+	return context.WithTimeout(ctx, budget)
 }
