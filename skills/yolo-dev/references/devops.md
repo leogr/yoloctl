@@ -77,6 +77,13 @@ refactor, perf, test, build, ci or chore). There is no mandatory one-ticket/
 one-commit mapping. Integrate with `git merge --ff-only` into the agreed branch
 (default `main`); record prior/new heads and resulting candidate identity.
 No implicit public push, tag, activation or session restart.
+The user publishes main with `bash scripts/push-main-checked.sh` instead of
+`git push origin main`. It fast-forwards the remote main only after the CI
+run of a draft `pre-main` pull request passes on Linux and macOS for that
+exact commit; on a red run it lists the failing jobs and leaves main
+untouched (pre-main and the draft pull request may have changed). If the
+final push reports a failure, it reads main back and says what it found,
+without retrying.
 
 Give the user concrete rebuild instructions for the accepted source and actual
 host platform, naming any companion/media prerequisites and deferred coverage.

@@ -137,7 +137,9 @@ new listeners use it"; keep the actual choice with the user.
    decision before bypassing an agreed QA requirement.
    After a feature merge, ping the user with the exact main commit and concrete
    host rebuild/activation instructions, stating what has actually been pushed
-   and activated (normally neither). If the user requested a rebuild batch,
+   and activated (normally neither). The publish command is
+   `bash scripts/push-main-checked.sh` (CI on Linux and macOS first), not a
+   plain push. If the user requested a rebuild batch,
    respect that timing and report what is queued; do not activate it yourself.
 
 Serialize genuinely competing build/runtime resources: name slot owner,
