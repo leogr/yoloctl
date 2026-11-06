@@ -48,6 +48,55 @@ For authorized helpers, include the shared
 [delegation and cleanup boundary](../SKILL.md#delegated-helpers-and-cleanup)
 in each brief; perform any authorized deletion yourself after checking it.
 
+## macOS review checklist
+
+Linux is the reference host; macOS (Lima) differs in details Linux hides.
+Before accepting a change that touches files, processes, shells, sockets, PTYs
+or test fixtures, go through these prompts. A Linux run is not Mac evidence; a
+CI run on the exact commit (a candidate pull request or the publish check) is.
+
+- **Group inheritance (BSD):** a new file or directory takes its parent's
+  group, not the creator's (`/tmp` gives `wheel`), and a concurrent reader can
+  see it before the creator changes it. Check that window and preserve each
+  subsystem's UID/GID/mode contract, serializing creation where its helper
+  requires it; only the reviewed host-diagnostics rule accepts a different
+  group (owner and `0700`).
+- **`/tmp` is `/private/tmp`:** account for that trusted normalization in path
+  comparisons and socket-length limits; keep refusing untrusted symlinked
+  components and leaves, and never weaken a link check to make a fixture pass.
+  Temporary roots depend on `TMPDIR`.
+- **Socket paths:** `sun_path` holds 104 bytes; keep Unix socket paths short
+  (short test roots such as `/tmp/yl-…`) and fail clearly when a home-relative
+  path would exceed it.
+- **Creation races:** a create racing a concurrent rotation or rename returned
+  `ENOENT` on macOS CI (cause inferred). Inspect the errno and the concurrency,
+  use only the reviewed bounded retry for that operation and return other
+  errors unchanged; retrying arbitrary creation failures is not a rule.
+- **umask:** creation modes are masked; verify the resulting mode instead of
+  assuming `0700`/`0600`.
+- **bash 3.2:** the system bash lacks bash-4 features (associative arrays,
+  `${var,,}`, `mapfile`); anything leogr runs on the Mac must be 3.2-safe or
+  plain `sh`, with no `set -e` surprises in pasted snippets. Exercise shell
+  setup and completion sourcing on the system bash: the earlier
+  process-substitution failure on CI was not isolated to a general limitation.
+- **BSD userland:** `sha256sum`, `readlink -f`, `date -d`, `sed -i`, `timeout`
+  and `stat -c` differ or are missing; `/bin/true` does not exist
+  (`/usr/bin/true`), nor `/proc` (`/dev/fd`), `SO_PEERCRED` or `O_TMPFILE`.
+  Fixtures resolve tools through `PATH` and `t.Skip` Linux-only devices.
+- **Rosetta vs native:** `uname -m` reports the translated architecture under
+  Rosetta, and `sysctl sysctl.proc_translated` says only whether the process
+  is translated. Record native versus translated execution and test the modes
+  whose support the change claims.
+- **PTYs and readiness:** teardown ordering and kqueue readiness differ; drain
+  output before closing and never infer macOS ordering from a Linux-only run.
+- **Go build constraints:** Linux-only syscalls, constants and paths live in
+  `_linux.go` files or behind `//go:build linux`; the darwin cross-vet must
+  pass and fixtures stay portable.
+- **Evidence:** a passing run supports the tested behaviour; it proves neither
+  an inferred mechanism nor untested configurations. Name the run, the macOS
+  version, shell and toolchain, and the untested limits; when a BSD-only
+  mechanism cannot be reproduced on Linux, say so.
+
 ## Workflow alternatives and user choices
 
 When a new mechanism serves an existing workflow, plan it as an opt-in
