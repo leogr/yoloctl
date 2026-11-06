@@ -78,6 +78,8 @@ func WriteState(ctx context.Context, w io.Writer, disk string, boot *spaceconfig
 	if err != nil {
 		return err
 	}
+	// Audit tools/logs are infrastructure, and restored spaces start disabled.
+	b.Settings.Audit = nil
 	raw, err := json.Marshal(b)
 	if err != nil {
 		return err

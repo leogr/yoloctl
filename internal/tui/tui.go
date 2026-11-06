@@ -495,6 +495,8 @@ func opensLiveSurface(args []string) bool {
 	switch args[0] {
 	case "chat":
 		return chatOpensLiveSurface(args[1:])
+	case "audit":
+		return auditOpensLiveSurface(args[1:])
 	case "attach": // root alias for `box attach` — joins a live agent session
 		return true
 	case "box":
@@ -2545,4 +2547,34 @@ func (m *model) tabAt(x int) int {
 		col += s.width
 	}
 	return -1
+}
+
+func auditOpensLiveSurface(args []string) bool {
+	follow := false
+	command := ""
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "help" || a == "--help" || a == "-h" {
+			return false
+		}
+		if a == "--space" || a == "--box" || a == "--since" || a == "--until" || a == "--limit" || a == "--output" {
+			i++
+			continue
+		}
+		if a == "--follow=false" {
+			follow = false
+			continue
+		}
+		if a == "--follow" || a == "--follow=true" {
+			follow = true
+			continue
+		}
+		if strings.HasPrefix(a, "-") {
+			continue
+		}
+		if command == "" {
+			command = a
+		}
+	}
+	return command == "" || command == "logs" && follow
 }

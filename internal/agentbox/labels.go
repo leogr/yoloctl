@@ -2,6 +2,7 @@ package agentbox
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/account"
@@ -24,6 +25,13 @@ const (
 	// live loader distinguish agentboxes from any other container without
 	// inferring from the image or name.
 	LabelKind = "yoloctl.kind"
+
+	// Audit labels make omitted legacy defaults explicit for observation only.
+	// They never participate in reconciliation or grant process authority.
+	LabelAuditSchema            = "yoloctl.audit.schema"
+	LabelAuditAccount           = "yoloctl.audit.account"
+	LabelAuditRuntimeMode       = "yoloctl.audit.runtime_mode"
+	LabelAuditNetworkUnconfined = "yoloctl.audit.network_unconfined"
 	// KindAgentbox is the LabelKind value for agentbox containers.
 	KindAgentbox = "agentbox"
 
@@ -136,6 +144,18 @@ func EncodeLabels(ls LabelSet) (map[string]string, error) {
 	}
 	if ls.Privileged {
 		m[LabelRuntimeMode] = string(RuntimeModePrivileged)
+	}
+	if ls.Space != "" && ls.Agentbox != "" && ls.Agent != "" {
+		m[LabelAuditSchema] = "1"
+		m[LabelAuditAccount] = ls.Account
+		if ls.Account == "" {
+			m[LabelAuditAccount] = account.None
+		}
+		m[LabelAuditRuntimeMode] = string(RuntimeModeConfined)
+		if ls.Privileged {
+			m[LabelAuditRuntimeMode] = string(RuntimeModePrivileged)
+		}
+		m[LabelAuditNetworkUnconfined] = strconv.FormatBool(ls.UnconfinedNetwork)
 	}
 	put(LabelLauncher, ls.Launcher)
 	put(LabelLauncherSHA256, ls.LauncherSHA256)

@@ -36,6 +36,7 @@ const (
 	ResourceChat    = "chat"
 	ResourceImages  = "images"
 	ResourcePorts   = "ports"
+	ResourceAudit   = "audit"
 )
 
 // Resource is one typed member of an operation's footprint.
@@ -68,7 +69,7 @@ func (r Resource) validate() error {
 			return errors.New("invalid image resource reference")
 		}
 		return nil
-	case ResourceChat, ResourcePorts:
+	case ResourceChat, ResourcePorts, ResourceAudit:
 		if r.Name != "" {
 			return errors.New("shared resource domains have no name")
 		}

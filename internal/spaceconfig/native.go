@@ -53,7 +53,7 @@ func saveNative(c *Config) error {
 		c.AccountDiskInitializing || !reflect.DeepEqual(c.Mounts, boot.Mounts) {
 		return errors.New("controller cannot change host-owned disk or mount authority")
 	}
-	s := Settings{SchemaVersion: 1, Name: c.Name, DefaultAccount: c.DefaultAccount, DefaultWorkdir: c.DefaultWorkdir}
+	s := Settings{SchemaVersion: 1, Name: c.Name, DefaultAccount: c.DefaultAccount, DefaultWorkdir: c.DefaultWorkdir, Audit: c.Audit}
 	raw, err := yaml.Marshal(s)
 	if err != nil {
 		return err

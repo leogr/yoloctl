@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
@@ -71,6 +72,9 @@ func Start(ctx context.Context, c *container.Client, u Unit) error {
 	// Keep a failed new forward addressable until its acknowledged stop;
 	// automatic failed-unit collection would discard that ownership first.
 	args = append(args, "--quiet")
+	if u.Name == vmwire.AuditUnitName {
+		args = append(args, "-p", "KillMode=control-group", "-p", "TimeoutStopSec=10", "-p", "UMask=0077")
+	}
 	if u.Restart {
 		args = append(args, "-p", "Restart=on-failure")
 	}
@@ -158,4 +162,28 @@ func List(ctx context.Context, c *container.Client, prefix string) (string, erro
 		return InventoryPorts(ctx, c)
 	}
 	return c.ShellOutput(ctx, "sudo", "systemctl", "list-units", "--no-legend", "--plain", "--type=service", "--state=running", prefix+"*")
+}
+
+var auditCapabilityRequest = request
+
+// AuditSupported is a read-only compatibility query. Older init images reject
+// the unknown action before any service effect; ordinary units are unchanged.
+func AuditSupported(ctx context.Context, c *container.Client) error {
+	native, err := microvm(c)
+	if err != nil {
+		return err
+	}
+	if !native {
+		return nil
+	}
+	bounded, stop := context.WithTimeout(ctx, 5*time.Second)
+	defer stop()
+	answer, err := auditCapabilityRequest(bounded, c, vmwire.UnitRequest{Action: vmwire.AuditCapabilityAction, Unit: Unit{Name: vmwire.AuditUnitName}})
+	if err != nil {
+		return fmt.Errorf("cannot confirm Firecracker audit service support (older images need explicit recreation with --update-vm-image): %w", err)
+	}
+	if answer != vmwire.AuditCapability {
+		return errors.New("the running Firecracker image lacks audit service support; explicitly recreate the space with --update-vm-image")
+	}
+	return nil
 }

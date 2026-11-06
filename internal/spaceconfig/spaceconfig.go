@@ -40,12 +40,39 @@ type Mount struct {
 }
 
 // Config is a space's persistent declaration.
+// AuditSettings is native desired state, not boot authority or a box setting.
+type AuditSettings struct {
+	Enabled     bool   `yaml:"enabled" json:"enabled"`
+	Version     string `yaml:"version,omitempty" json:"version,omitempty"`
+	RulesSHA256 string `yaml:"rules_sha256,omitempty" json:"rules_sha256,omitempty"`
+}
+
+func (a *AuditSettings) Validate() error {
+	if a == nil {
+		return nil
+	}
+	if len(a.Version) > 32 {
+		return errors.New("invalid audit version")
+	}
+	if a.RulesSHA256 != "" {
+		raw, err := hex.DecodeString(a.RulesSHA256)
+		if err != nil || len(raw) != 32 {
+			return errors.New("invalid audit rules digest")
+		}
+	}
+	if a.Enabled && (a.Version == "" || a.RulesSHA256 == "") {
+		return errors.New("enabled audit settings need version and rules digest")
+	}
+	return nil
+}
+
 type Config struct {
-	SchemaVersion   int    `yaml:"schema_version"`
-	Name            string `yaml:"name"`
-	DefaultAccount  string `yaml:"default_account"`
-	AccountDiskID   string `yaml:"account_disk_id"`
-	AccountDiskUUID string `yaml:"account_disk_uuid,omitempty"`
+	Audit           *AuditSettings `yaml:"audit,omitempty"`
+	SchemaVersion   int            `yaml:"schema_version"`
+	Name            string         `yaml:"name"`
+	DefaultAccount  string         `yaml:"default_account"`
+	AccountDiskID   string         `yaml:"account_disk_id"`
+	AccountDiskUUID string         `yaml:"account_disk_uuid,omitempty"`
 	// Initialization authority is granted only after allocating a new blank disk.
 	// Retry additionally checks that the disk is unattached and its guest-visible
 	// contents are entirely zero (raw or standalone QCOW2).
@@ -173,6 +200,9 @@ func (c *Config) Path() string { return c.path }
 // and — the key invariant — that default_workdir is covered by a grant, so
 // the default /workdir bind is always mountable.
 func (c *Config) Validate() error {
+	if err := c.Audit.Validate(); err != nil {
+		return err
+	}
 	if c.DefaultAccount == "none" {
 		return errors.New("default_account must name a real account")
 	}

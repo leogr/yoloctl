@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "name": "yolo",
+  "version": "1.0.1",
+  "api": "3.12.0",
+  "sdk": "falcosecurity/libs@0.26.1",
+  "zig": "0.15.2",
+  "required_event_schema": "4.0.0",
+  "falco_version": "0.45.2",
+  "falco_libs": "0.26.1",
+  "source_sha256": "a48d90a649cdfea57e067e77f3867d506064288416ca78911b3b330c0832591c",
+  "notices_sha256": "2c1360fda02599dcda48f5601b955d94f76ff8f2d35c095ab427e734856f816d",
+  "artifacts": {
+    "amd64": {
+      "file": "libyolo-linux-amd64.so",
+      "sha256": "36a7facd19b1195f6b6d09a8bed500b1023f5e21a8601679aad8990ef43c24bf",
+      "bytes": 265064
+    },
+    "arm64": {
+      "file": "libyolo-linux-arm64.so",
+      "sha256": "5bcf617839cf2a3557f253b247bbc92133a96167b933be54ddb9e823f29aa61d",
+      "bytes": 259472
+    }
+  }
+}

@@ -189,6 +189,18 @@ to the shell's startup file. [18](#source-18)
 resolved config/cache roots without creating the Lima home. The external Lima
 version probe is bounded. Ordinary commands retain startup setup. [18](#source-18)
 
+[FACT] Host-only `audit` opens the read-only Falco view; `audit status`,
+`enable`, `disable`, `logs --follow --json` and finite JSONL `export --output`
+use the running controller. Audit never starts a stopped space. Enable is
+explicit; viewing never installs tools. Old Firecracker images require explicit
+`space recreate NAME --update-vm-image`; audit never replaces media. Exports refuse overwrite and publish
+only completed privacy-filtered output. Pretty logs show the wrapped rule message;
+`--verbose` adds raw fields and JSON always retains them. The origin distinguishes
+Falco-reported VM processes, unlabelled containers and missing IDs without
+inventing box metadata. Unavailable assignments stay hidden in pretty text. Follow
+summaries appear initially and when loss/gap state changes. Terminal colour
+respects `NO_COLOR` and redirection. [24](#source-24)
+
 ## Sources
 
 1. <a id="source-1"></a> [CLI, output and completion evidence](../digests/cli-state.md).
@@ -221,3 +233,5 @@ version probe is bounded. Ordinary commands retain startup setup. [18](#source-1
 22. <a id="source-22"></a> [Native credential formats and import](../digests/claude-auth.md).
 
 23. <a id="source-23"></a> [AWS CLI and Bedrock configuration](../digests/bedrock.md).
+
+24. <a id="source-24"></a> [VM-native audit contracts](../digests/audit.md).
