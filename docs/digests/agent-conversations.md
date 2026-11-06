@@ -24,9 +24,15 @@ report named; only values reported by the resumed conversation itself are
 carried: an effort in `low|medium|high|xhigh|max`, a model that is a plain id
 (no whitespace, no leading `-`). They are read before the new launch's
 observation begins. A new conversation, another conversation's or an
-unattributed report carry nothing; Codex declares no carry. A later box
-`--effort`/`--model` edit is overridden on resume until `--new-session`.
-[1](#source-1) [20](#source-20)
+unattributed report carry nothing. Codex declares no carry: its resume passes
+`codex resume <id>` and the box's `agent_extra_args`, nothing more, and what
+the resumed thread applies is Codex's own. `Argv` passes `agent_extra_args`
+on every launch, new or resumed; the carry overrides only the model and
+effort flags, and only while a carried value is available, so a later box
+`--effort`/`--model` edit is overridden on a Claude resume until
+`--new-session` (`box start`, `restart` or `attach`), and without an eligible
+report the box flags apply. agy starts a new conversation at every start.
+[1](#source-1) [3](#source-3) [20](#source-20)
 
 [FACT] A manifest's `agent_session.resume` is `last`, `never` or `manual`.
 Unset means `manual` when `agent_extra_args` carry a reserved argument, else

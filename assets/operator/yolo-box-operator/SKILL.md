@@ -35,8 +35,9 @@ the user's task. It does not grant space, account, catalog, or host management.
   never assume rollback. Image, mount, workdir, account, resource, network and
   operator changes recreate the container, as does flipping `fs.workdir.write`;
   other policy-only changes restart a confined box, not a proved privileged
-  one; agent extra args apply at the next managed session start. Declare everything before
-  the first launch. `--agent-extra-args` is CSV: quote a value containing quotes
+  one; agent extra args apply at the next managed session start, and the
+  model and effort among them are only the defaults of a new conversation
+  (see Model and effort below). Declare everything before the first launch. `--agent-extra-args` is CSV: quote a value containing quotes
   or commas, for example `'--settings,"{""env"":{""K"":""v""}}"'`.
 - A lost connection may leave an operation applied. Keep its reported request
   ID, inspect the target before retrying, and ask a host operator to query
@@ -52,6 +53,32 @@ the user's task. It does not grant space, account, catalog, or host management.
 If the controller reports a version mismatch or an unavailable space, report
 its suggested host action. Do not modify infrastructure, disk files, or
 account storage to work around it.
+
+## Model and effort
+
+- The model and effort in the box's `--agent-extra-args` (`--model`/`--effort`
+  for Claude, `-m` for Codex, `--model` for agy) are the defaults of a **new**
+  conversation; the other extra args apply at every start as before. Set the
+  model or effort of the running conversation with the agent's own `/model`
+  command in its session. A resumed conversation keeps that choice across
+  `box restart` and `box recreate`: Codex keeps it itself; Claude appends the
+  values its reporter recorded for that conversation after the box args, and
+  when no such report exists (an older record, a missing or unsupported
+  value) the box args apply as before. agy does not resume conversations
+  yet: every start is a new one from the box args.
+- After every restart or recreate, read `yoloctl box show BOX`: once the agent
+  has reported, its `Conversation:` line shows `agent-reported model …,
+  effort …`. Compare with what the user expects and report a mismatch; do not
+  repair it with `box set … --agent-extra-args`, which changes only the
+  defaults of a new conversation.
+- When the user wants a new, clean session, start it with `--new-session`:
+  `yoloctl box start BOX --new-session`, `box restart BOX --new-session` or
+  `box attach BOX --new-session` (`start` and `attach` are refused while a
+  session runs; `restart` applies it after the stop). That drops the resumed
+  conversation, and the next one starts from the box declaration's model and
+  effort (Codex: its `-m` model and the account's default effort). Until then
+  a resumed conversation with a recorded model and effort keeps them, even
+  after a later `box set … --agent-extra-args`.
 
 ## Administer managed chat
 

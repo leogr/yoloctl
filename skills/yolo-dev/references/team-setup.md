@@ -12,7 +12,13 @@ Use this roster as the default when setting up this team; a different team or
 model assignment overrides it explicitly. It defines roles and intended model/
 effort, not runtime proof or authority. Verify the current CLI's model support
 and observe the launched session; never copy shared account settings to force
-these choices. Keep current membership and quota in team tracking, not here.
+these choices. The box's model/effort args only seed a new conversation: a
+resumed conversation keeps the model/effort last set in it with `/model`
+(Codex; Claude when its reporter recorded them, else the box args apply; agy
+starts a new conversation every time), so set or change them in the session,
+verify `box show` after every restart/recreate, and use `--new-session`
+(`box start`, `restart` or `attach`) for a clean start from the box args. Keep current
+membership and quota in team tracking, not here.
 
 Ask the user for box names; if none are supplied, use `model-role`, adding a
 numeric suffix for multiple boxes with the same model and role. The bracketed
@@ -75,7 +81,7 @@ Enrollment and peer lifecycle are ordinary operator operations; see the
 | Complete declaration | Choose the account/auth route and required tools; include `--unconfined-network` for team chat boxes and `fs.pty.allocate` for dev/architect boxes (also for other roles when needed). Put mounts, features and args in the first declaration or one `box set`. | Desired settings saved; credential presence is not login success. |
 | Editor helper, if any | Verify the binary exists. `EDITOR` is one executable path and cannot carry arguments. | A concrete executable handoff; no regex YAML edits. |
 | Enroll and connect | Use the shortest state-appropriate command below. Inspect a partial or uncertain outcome before another effect. | Saved membership, applied binds and named connection, separately. |
-| Agent and listener | Observe the actual model/effort and tool versions. Follow only the applicable installed harness recipe. | Session observed; listener armed; wake observed or unqualified. |
+| Agent and listener | Observe the actual model/effort (the `Conversation:` line of `box show`) and tool versions; set them with `/model` in the session when they differ, and re-check after every restart/recreate. Follow only the applicable installed harness recipe. | Session observed; listener armed; wake observed or unqualified. |
 
 Not every later change forces replacement. Image/feature, mount, workdir,
 account, resource, network and operator changes recreate the container, and so
@@ -126,7 +132,13 @@ yoloctl chat enroll worker --connect --client space --recreate --json
 ```
 
 Add the mount only when the task needs it and its grant exists. Add the assigned
-model/effort args and explicit capabilities. Materializing a never-started
+model/effort args (Claude `--model`/`--effort`, Codex `-m`, agy `--model`); they
+seed the first conversation only, see
+[conversation identity](../../../docs/digests/agent-conversations.md). Do
+not set a Codex effort with `-c model_reasoning_effort=…`: that override runs
+Codex without its daemon, so chat shows no effort
+([Codex reporter](../../../docs/digests/codex-observation.md)). Add explicit
+capabilities. Materializing a never-started
 declaration through `--recreate` is derived from source and still awaits live
 acceptance. Then run `box use worker screen`; at an idle prompt, send **one**
 onboarding instruction through one `box use worker batch --stdin` text+Enter or a

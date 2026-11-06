@@ -56,7 +56,9 @@ replacement by recreate, edit, set, reconcile or chat `--recreate` keeps a
 launched conversation resumable; a policy-only restart does not. Resume is reported
 unverified until the agent says otherwise. A Claude resume keeps the effort and model last
 reported by that same conversation (`--effort`, `--model`, after the box's own
-args), overriding a later box edit until `--new-session`. Records stay on the space's disk
+args) while a carried value is available, overriding a later box edit until
+`--new-session`; without one the box arguments apply, and for every agent the
+box model/effort arguments seed a new conversation. Records stay on the space's disk
 across space recreate but are not exported; an imported box starts a new
 tracked conversation. `box session NAME` shows a record read-only; an
 undecidable holder probe shows as unknown, never idle. [12](#source-12)
