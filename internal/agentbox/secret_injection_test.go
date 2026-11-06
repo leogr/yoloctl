@@ -96,8 +96,8 @@ func TestUserEnvironmentJSON_FailsClosed(t *testing.T) {
 	if got, err := userEnvironmentJSON(cfg); err == nil {
 		t.Errorf("missing account: got (%q, nil), want error", got)
 	}
-	// Codex has no secret_injection rules, but its native auth/state still
-	// belongs to the selected account. The final account read must therefore
+	// Codex native state and optional AWS injection both belong to the
+	// selected account. The final account read must therefore
 	// fail closed for it too.
 	codex := &Config{
 		SchemaVersion: 1, Name: "codex-box", Space: "default",

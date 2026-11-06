@@ -56,6 +56,13 @@ For Codex, keep cli_auth_credentials_store="file" for file-backed persistence;
 yoloctl does not override the user's selected store or import a host keyring.
 Status reports local material, not provider acceptance or external auth.
 
+For AWS/Bedrock, Claude and Codex inject declared AWS_ACCESS_KEY_ID,
+AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN and AWS_BEARER_TOKEN_BEDROCK account
+secrets when present. Use private account secret input; configure provider,
+region and a custom egress capability explicitly. Status checks stored presence
+only. Secret changes require box recreation; ~/.aws and SSO are not imported.
+The optional aws feature installs the CLI without granting egress or credentials.
+
 For Claude API-key auth, store ANTHROPIC_API_KEY with
 ` + "`yoloctl account secret set NAME ANTHROPIC_API_KEY`" + `; Claude reads it
 from its environment. Codex API-key auth is native state: run
@@ -151,13 +158,6 @@ func resolveAccountAuthTarget(space string, args []string) (accountAuthTarget, e
 		return accountAuthTarget{}, err
 	}
 	return accountAuthTarget{space: space, name: name, profile: profile, stateDir: stateDir}, nil
-}
-
-// requireAuthAccount enforces account existence for the read-side auth verb
-// (status): a missing account is a create hint, never an auto-create.
-func requireAuthAccount(t accountAuthTarget) error {
-	_, err := loadAccountOrHint(t.space, t.name)
-	return err
 }
 
 // defaultHostAuthPaths returns the candidate host login files `account auth
@@ -348,8 +348,10 @@ func newAccountAuthStatusCmd() *cobra.Command {
 		Long: `Reports local native credential material, not provider authentication.
 Claude and Codex formats are inspected with bounded VM-native reads; only
 classifications and source names leave the native helper, never values.
-Other profiles retain file-presence status. Environment and external credential
-stores are not inspected. Inaccessible native storage is reported unavailable.
+Other profiles retain file-presence status. Declared AWS account secrets receive
+a presence-only check; completeness, provider selection and current-box delivery
+are not checked. Process environment and external stores are not inspected.
+Inaccessible native storage is reported unavailable.
 
   yoloctl account auth status default codex`,
 		Args: cobra.ExactArgs(2),
@@ -362,13 +364,19 @@ stores are not inspected. Inaccessible native storage is reported unavailable.
 			if err != nil {
 				return err
 			}
-			if err := requireAuthAccount(t); err != nil {
+			acct, err := loadAccountOrHint(t.space, t.name)
+			if err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
+			aws := awsSecretsPresent(t.profile, acct)
 			findings, err := accountAuthStatus(cmd.Context(), t)
 			if err != nil {
-				_, _ = fmt.Fprintf(out, "%s: unavailable (space stopped or native state inaccessible)\n", t.display())
+				_, _ = fmt.Fprintf(out, "%s: unavailable (space stopped or native state inaccessible)", t.display())
+				if aws {
+					_, _ = fmt.Fprint(out, "; AWS secrets present (not verified)")
+				}
+				_, _ = fmt.Fprintln(out)
 				return err
 			}
 			labels := map[string]string{"credentials-present": "credentials present", "file-present": "file present (format not inspected)", "missing": "missing", "invalid": "empty or malformed", "unverified": "unrecognized or incomplete credential material", "external": "externally configured (not verified)"}
@@ -381,7 +389,10 @@ stores are not inspected. Inaccessible native storage is reported unavailable.
 				parts = append(parts, finding.Source+": "+label)
 			}
 
-			_, _ = fmt.Fprintf(out, "%s: %s; provider validity not checked; environment/external auth not inspected\n", t.display(), strings.Join(parts, ", "))
+			if aws {
+				parts = append(parts, "AWS secrets present (not verified)")
+			}
+			_, _ = fmt.Fprintf(out, "%s: %s; provider validity not checked; process environment/external auth not inspected\n", t.display(), strings.Join(parts, ", "))
 			return nil
 		},
 	}

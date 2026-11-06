@@ -120,6 +120,10 @@ under `app-server-daemon/releases`, ending in `bin/codex`; updates need no
 version pin. OpenAI/ChatGPT hosts remain scoped to port 443. Unrelated binaries with no allowed ancestor, spoofed argv and unrelated
 hosts gain no grant. Existing ancestor matching remains unchanged. [37](#source-37) [38](#source-38)
 
+[FACT] The optional aws feature installs a verified official CLI archive with no
+required capabilities. It uses the ordinary recipe hash and refresh/cache rules;
+AWS credential and custom-egress setup remain explicit. [44](#source-44)
+
 ## Sources
 
 1. <a id="source-1"></a> [internal/agentbox/compose.go](../../internal/agentbox/compose.go#L40-L226) — `ComposePolicy` through `compilePolicy`.
@@ -171,3 +175,5 @@ hosts gain no grant. Existing ancestor matching remains unchanged. [37](#source-
 41. <a id="source-41"></a> [Apt installers](../../internal/features/apt.go#L3-L14) — shared locked metadata/archive mounts and strict refresh/install recipe; callers in codex.go, pi.go, opencode.go and features.go; conditional Python fallback in agent_observe.go.
 42. <a id="source-42"></a> [Apt regressions](../../internal/features/apt_test.go#L11-L69) — builtin cache coverage and unavailable-index failure before installation.
 43. <a id="source-43"></a> [Cache probe regression](../../scripts/test_image_cache_probe.py#L1-L97) — exact smoke shell probe, real isolated APT update with default cleanup, unchanged indexes and reset-cache rejection.
+
+44. <a id="source-44"></a> [AWS feature](../../internal/features/aws.go#L1) — embedded installer/key recipe; configuration is described in `bedrock.md`.

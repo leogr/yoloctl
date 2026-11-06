@@ -1,6 +1,6 @@
 # Account authentication and mutation safety
 
-Verification: `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `75e0e9bc1ebf88c5293a59623be594388d737ea0` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Account secrets and native state are separate delivery paths. At container
 creation, `userEnvironmentJSON` reloads the selected account and projects only
@@ -11,7 +11,8 @@ missing secret value is nonfatal. [1](#source-1)
 
 [FACT] The built-in Claude adapter declares `ANTHROPIC_API_KEY`, a native
 `.credentials.json`, and `CLAUDE_CONFIG_DIR` pointing into its mounted leaf.
-The Codex adapter declares native `auth.json` and no secret-injection rules.
+The Codex adapter declares native `auth.json` for OpenAI credentials and only
+the four optional AWS secret-injection rules described in [Bedrock setup](bedrock.md).
 Storing `OPENAI_API_KEY` in an account alone therefore does not configure the
 shipped Codex adapter. Native credentials are written by the agent or imported
 once. [2](#source-2) [3](#source-3)
@@ -51,9 +52,11 @@ cleanup fails. [6](#source-6) [7](#source-7)
 [FACT] Auth status recognizes local Claude/Codex credential material with bounded
 VM-native reads. Empty/malformed or tokenless objects do not count as credentials;
 unknown formats remain unverified. Codex recognizes a nonempty API key or access
-token; other adapters retain file-presence status. The output explicitly leaves
-provider validity and environment/external auth unverified. Storage/access errors
-remain unavailable. Codex file-store guidance does not force a store/provider
+token; other adapters retain file-presence status. Stored declared AWS keys
+receive only a presence summary. The output leaves
+provider validity, process environment and external auth unverified. Storage/access errors
+remain unavailable. AWS setup and the optional CLI feature are documented in
+[Bedrock setup](bedrock.md). Codex file-store guidance does not force a store/provider
 or add a mount; use --file for a host CODEX_HOME override. Claude's managed in-leaf
 relocation and selected-profile import are detailed separately. List/show never reveal
 secret values. [5](#source-5) [7](#source-7) [15](#source-15) [16](#source-16)
@@ -98,4 +101,4 @@ selects a home-relative host import directory; custom XDG roots use --file. [14]
 14. <a id="source-14"></a> [OpenCode adapter](opencode.md) — native runtime, account and validation contracts.
 
 15. <a id="source-15"></a> [Claude profile storage](claude-auth.md) — managed relocation, supported local formats, import and preservation order.
-16. <a id="source-16"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1) — same primary state path, native status format and unchanged secret delivery.
+16. <a id="source-16"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1) — same primary state path, native status format and explicit optional AWS injection.
