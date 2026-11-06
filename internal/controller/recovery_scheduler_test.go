@@ -382,28 +382,57 @@ func TestDegradedStartupServesReadsAndRepairsItself(t *testing.T) {
 func TestDrainCancelsAndWaitsForTheRecoveryCheck(t *testing.T) {
 	s := storeServer(t)
 	provenReceipt(t, s, "secret: new")
-	started := make(chan struct{})
+	started, cancelled, exited := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	s.Verify = func(ctx context.Context, _ Receipt) ([]DocumentIntent, error) {
 		close(started)
+		defer close(exited)
 		<-ctx.Done()
+		close(cancelled)
 		return nil, ctx.Err()
 	}
-	done := make(chan bool)
-	go func() { done <- s.recoveryPass(context.Background()) }()
-	<-started
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	// The wrapper is deliberately held after recoveryPass returns. Drain owns
+	// recoveryIdle and verifier completion, not the wrapper's later scheduling.
+	releaseWrapper, done := make(chan struct{}), make(chan struct{})
+	checkCtx, stopCheck := context.WithCancel(t.Context())
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
+	go func() {
+		defer close(done)
+		s.recoveryPass(checkCtx)
+		<-releaseWrapper
+	}()
+	t.Cleanup(func() {
+		stopCheck()
+		close(releaseWrapper)
+		select {
+		case <-done:
+		case <-time.After(30 * time.Second):
+			t.Error("recovery wrapper did not settle during cleanup")
+		}
+	})
+	select {
+	case <-started:
+	case <-ctx.Done():
+		t.Fatal("verifier did not enter", ctx.Err())
+	}
+	s.mu.Lock()
+	idle := s.recoveryIdle
+	s.mu.Unlock()
 	if err := s.Drain(ctx); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-done:
-	default:
-		t.Fatal("drain returned before the recovery check ended")
+	for name, signal := range map[string]<-chan struct{}{"cancellation": cancelled, "verifier exit": exited, "recovery idle": idle} {
+		select {
+		case <-signal:
+		default:
+			t.Fatal("drain returned before", name)
+		}
 	}
 	if s.recoveryPass(context.Background()) {
 		t.Fatal("a recovery pass ran while draining")
 	}
+	// Cleanup releases and waits for the wrapper with a hang watchdog. Its
+	// completion is intentionally not required before Drain acknowledges.
 }
 
 func TestRecoverySchedulerBacksOffWithoutSpinning(t *testing.T) {

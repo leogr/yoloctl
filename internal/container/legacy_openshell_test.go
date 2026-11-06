@@ -103,6 +103,7 @@ func TestRetainedLegacyOpenShellChecksActualBytesAndGuestArchitecture(t *testing
 				data = []byte("substituted native 0.1.6 fixture")
 			}
 			c, log := retainedLegacyFixture(t, tc.arch, data, tc.kind)
+			fixtureCommandWatchdog(t, c, 5*time.Second)
 			err := c.CheckRetainedLegacyOpenShell(t.Context())
 			if (err == nil) != tc.good {
 				t.Fatal("runtime availability changed", err)

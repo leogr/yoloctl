@@ -34,7 +34,7 @@ func (c *Client) CheckRetainedLegacyOpenShell(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	read, cancel := context.WithTimeout(ctx, 5*time.Second)
+	read, cancel := c.withTimeout(ctx, 5*time.Second)
 	defer cancel()
 	cmd := c.command(read, "sudo", "sh", "-c", retainedLegacyOpenShellCheck)
 	// Discard all output instead of capturing guest/environment data. Pipe wait

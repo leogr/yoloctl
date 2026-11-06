@@ -40,6 +40,7 @@ func TestPTYKeepsOutputOfChildThatExitsBeforeRead(t *testing.T) {
 			cmd.Env = tc.env
 			master, release, err := startPTYGeometry(cmd, terminal.Geometry{Rows: 24, Cols: 80})
 			if err != nil {
+				logPTYStartFailure(t, "startPTYGeometry (setup or combined child launch)", err)
 				t.Fatalf("start: %v", err)
 			}
 			defer func() { _ = master.Close() }()
