@@ -1,6 +1,6 @@
 # Native chat input and message actions
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; code-block copy buttons `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; drag pick `9cb4a0f7fca3cd6090c23db9de447b858b68c38a` and accompanying changes; code-block copy buttons `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
 
 See [reading and selection](chat-reading.md) for drag copy and scrolling, and
 [participants, settings and attachment](chat-participants.md) for people and
@@ -28,8 +28,11 @@ first while a highlight lies in it, reply, copy, copy reference, copy code, open
 pick, despite focus, typing, notices or arrivals; a pick clears info notices,
 eviction ends it. Message focus gives arrows and Enter (from the first action) to them; typing returns
 to the composer. Ctrl+R, Alt+Y, Alt+C and Ctrl+O act on
-the selected (default latest) message or explain why not. [1](#source-1)
-[3](#source-3) [9](#source-9) A click on a code block's `copy` button copies
+the selected (default latest) message or explain why not. A drag picks the
+message where it starts, at its first motion (a header, gutter or separator
+press snaps to it; a room notice row picks none), so Enter quotes a highlight
+made in it at once. [1](#source-1)
+[3](#source-3) [9](#source-9) [13](#source-13) A click on a code block's `copy` button copies
 that block under the same `seams.clipboard` check: off copies nothing and
 says why, as its hover hint does. [12](#source-12)
 
@@ -59,3 +62,4 @@ the jump, padding and TUI guards. [5](#source-5) [4](#source-4)
 10. <a id="source-10"></a> [Lookup regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L173) — bound and recheck.
 11. <a id="source-11"></a> [First-row regression](../../internal/chatui/first_row_test.go#L82) — `TestChatFirstRowIsBlackInEveryState`; `topBar`, `View`, `linkPromptView` (link_prompt.go L43) and spaceview `FirstRow` (theme.go L79-L93).
 12. <a id="source-12"></a> [Copy button](../../internal/chatui/model.go#L1060) — `copyCode`, `activate` (`actCopyCode`) in mouse.go, the `hoverHint` case in hover.go; `codeblock_test.go`.
+13. <a id="source-13"></a> [Drag pick](../../internal/chatui/selection_focus_test.go#L1-L168) — `mouseDown` sets `dragState.pick`, `mouseMove` picks at the first motion (mouse.go); six regressions.

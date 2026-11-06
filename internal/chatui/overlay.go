@@ -117,7 +117,7 @@ var helpSections = []struct {
 		{"Copy reference  m:…", "Copies the selected message's shared reference, the same in every client; pasted into a message, a click on it shows that message if it is loaded in the same channel (Page Up loads older ones). msgid: and the full ID works the same. A loaded message a reference names shows in its place as ↗ author: text…; click it to show the message. Copy and Quote keep the reference."},
 	}},
 	{"Selecting text", [][2]string{
-		{"Drag", "Select message text; releasing copies it. Names, times, gutters and the participants panel are never copied. Wrapped lines rejoin and messages are separated by a blank line."},
+		{"Drag", "Select message text; it also selects the message where it starts, so Enter quotes it. Releasing copies it. Names, times, gutters and the participants panel are never copied. Wrapped lines rejoin and messages are separated by a blank line."},
 		{"", "Copy uses what is displayed: rendered Markdown, tabs as spaces. Use Alt+Y for the exact original, or Ctrl+S to select source."},
 		{"Alt+Q  ❝ Quote", "Quote the highlight in the draft and reply to its message (see Messages); with that message selected, Enter quotes too"},
 		{"Esc", "Clear the highlight"},

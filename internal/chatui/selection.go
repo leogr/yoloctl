@@ -35,6 +35,7 @@ type dragState struct {
 	ticking      bool
 	act          action // click target under the press
 	key          string // message under the press
+	pick         string // message a moving drag selects (none from a room notice)
 	area         hitArea
 	areaItem     int
 	id           string

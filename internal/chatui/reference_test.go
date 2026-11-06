@@ -247,9 +247,11 @@ func TestMessageReferencesNavigateToLoadedMessages(t *testing.T) {
 		t.Fatalf("a number acted: overlay=%v notice=%q", m.overlay, m.notice)
 	}
 	m.picked, m.selected, m.follow, m.anchor = false, 0, true, nil
-	// A drag from a reference selects text and never jumps.
+	// A drag from a reference selects text and never jumps: it selects the
+	// message it starts in (as any drag does), never the referenced target.
 	drag(m, refs[0][0], refs[0][1], refs[0][0]+4, refs[0][1])
-	if m.picked || !m.follow {
+	target := m.indexOf("server:" + refTarget)
+	if m.selected == target || !m.follow || m.anchor != nil && m.anchor.key == "server:"+refTarget {
 		t.Fatal("a drag from a reference navigated")
 	}
 	// Every row of each wrapped reference jumps to the target.
