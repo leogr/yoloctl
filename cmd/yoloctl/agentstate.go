@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"slices"
 	"sort"
 
@@ -11,12 +10,16 @@ import (
 	"github.com/leogr/yoloctl/internal/agentprofile"
 )
 
-// agentStateMount is the primary selected account/agent leaf view and any
-// additional views of subdirectories in that same leaf. Sources are derived,
-// never supplied by the box manifest. Agentless/account-none boxes get no views.
+// agentStateMount is the resolved source/destination for an agent-state bind
+// mount, plus a flag for the "no mount at all" case (a generic-shell box, or an
+// agent profile without StateContainerPath).
+//
+// The state dir is OWNED by the box's account and lives at a DERIVED path —
+// the account's per-agent leaf, account-state/<account>/<box-agent>/
+// (account.StatePath) — it is never a box field and never user-overridable.
+// The account belongs to the box's space; the box grafts in exactly its own
+// agent's leaf.
 type agentStateMount struct {
-	Additional []agentStateMount
-	Relative   string
 	// Source is the VM-native leaf on the space's persistent account disk.
 	// Only this account/agent leaf is bound into the box.
 	Source string
@@ -51,11 +54,11 @@ func resolveAgentStateMount(profile *agentprofile.Profile, cfg *agentbox.Config)
 	if err != nil {
 		return agentStateMount{}, err
 	}
-	state := agentStateMount{Source: src, Destination: profile.StateContainerPath, Enabled: true}
-	for _, extra := range profile.StateMounts {
-		state.Additional = append(state.Additional, agentStateMount{Source: filepath.Join(src, extra.Source), Destination: extra.Destination, Relative: extra.Source, Enabled: true})
-	}
-	return state, nil
+	return agentStateMount{
+		Source:      src,
+		Destination: profile.StateContainerPath,
+		Enabled:     true,
+	}, nil
 }
 
 // writeAgentStateBlock renders the dedicated "Account state:" section of
@@ -72,9 +75,6 @@ func writeAgentStateBlock(w interface {
 	_, _ = fmt.Fprintln(w, "Account state:")
 	_, _ = fmt.Fprintf(w, "  Source:  %s\n", state.Source)
 	_, _ = fmt.Fprintf(w, "  Mounted: %s\n", state.Destination)
-	for _, extra := range state.Additional {
-		_, _ = fmt.Fprintf(w, "  Source:  %s\n  Mounted: %s\n", extra.Source, extra.Destination)
-	}
 }
 
 // resolveAgentStateForShow is the best-effort wrapper used by `box show`
@@ -98,10 +98,21 @@ func resolveAgentStateForShow(spaceName, name string) agentStateMount {
 	return mount
 }
 
-// applyAgentStateMount replaces all profile-owned mount destinations with
-// sources derived from the current account, removing stale account views.
-// Unrelated user mounts remain intact. Native preparation happens later under
-// the operation lock; this normalization has no filesystem side effects.
+// applyAgentStateMount normalizes cfg.Mounts so it carries EXACTLY the
+// managed account-state mount currently resolved from cfg.Account (or none —
+// for account none, or an agent with no managed state). It removes any existing
+// mount at the profile's StateContainerPath (the managed slot) and appends the
+// freshly-resolved one when enabled, leaving unrelated user mounts
+// untouched.
+//
+// Pure normalization: runtime preflight prepares the native directory while
+// holding the space operation lock. Manifest-only creation never starts a VM.
+//
+// This keeps the container binding the path the box's account points at — never
+// a stale one left by an account hand-edit. Idempotent: a second call with the
+// same account is a no-op. Returns the resolved mount (for notices / auth
+// bridging) and whether Mounts changed (so callers can decide to persist).
+// No-op (zero mount, changed=false) when the agentbox hosts no agent.
 func applyAgentStateMount(cfg *agentbox.Config) (agentStateMount, bool, error) {
 	if !cfg.HasAgent() {
 		return agentStateMount{}, false, nil
@@ -115,12 +126,11 @@ func applyAgentStateMount(cfg *agentbox.Config) (agentStateMount, bool, error) {
 		return agentStateMount{}, false, err
 	}
 	before := append([]agentbox.Mount(nil), cfg.Mounts...)
-	// Replace every managed destination, including stale views from an old account.
-	destinations := profileStateDestinations(profile)
-	if profile.StateContainerPath != "" {
+	// Drop the managed slot (any mount at StateContainerPath); keep the rest.
+	if sc := profile.StateContainerPath; sc != "" {
 		kept := make([]agentbox.Mount, 0, len(cfg.Mounts))
 		for _, m := range cfg.Mounts {
-			if slices.Contains(destinations, m.Target) {
+			if m.Target == sc {
 				continue
 			}
 			kept = append(kept, m)
@@ -128,9 +138,10 @@ func applyAgentStateMount(cfg *agentbox.Config) (agentStateMount, bool, error) {
 		cfg.Mounts = kept
 	}
 	if mount.Enabled {
-		for _, state := range append([]agentStateMount{mount}, mount.Additional...) {
-			cfg.Mounts = append(cfg.Mounts, agentbox.Mount{Source: state.Source, Target: state.Destination})
-		}
+		cfg.Mounts = append(cfg.Mounts, agentbox.Mount{
+			Source: mount.Source,
+			Target: mount.Destination,
+		})
 	}
 	return mount, !slices.Equal(before, cfg.Mounts), nil
 }
@@ -146,10 +157,11 @@ func applyAgentStateMount(cfg *agentbox.Config) (agentStateMount, bool, error) {
 // a hand-edited manifest. Persisting the resolved path also prevents a later
 // symlink retarget from changing what an already-declared box mounts.
 func canonicalizeUserMountSources(cfg *agentbox.Config) (bool, error) {
+	managedDest := managedStateDest(cfg)
 	changed := false
 	for i := range cfg.Mounts {
 		m := &cfg.Mounts[i]
-		if isManagedStateDest(cfg, m.Target) {
+		if managedDest != "" && m.Target == managedDest {
 			continue
 		}
 		canonical, _, err := agentbox.CanonicalizeWorkdir(m.Source)
@@ -179,38 +191,43 @@ type hostMount struct {
 	Writable bool
 }
 
-// managedStateDestinations identifies every profile-owned slot independently of
-// the selected account, so account-none also removes stale views. Unknown
-// profiles have no exemptions; ordinary native-root validation still applies.
-func managedStateDestinations(cfg *agentbox.Config) []string {
+// managedStateDest returns the in-container destination of cfg's managed
+// account-state bind mount (the agent profile's StateContainerPath), or "" when
+// the agentbox hosts no agent / the profile declares no managed state. This is
+// the "managed slot" in cfg.Mounts that applyAgentStateMount owns. Mount
+// derivation skips any Mounts entry at this target and instead takes
+// the source freshly resolved from the CURRENT account, so a stale slot — left
+// by an account hand-edit not yet reconciled — never leaks its old state dir
+// alongside the new one. Independent of the account (uses StateContainerPath,
+// not the resolved mount's destination) so it also catches a stale slot when
+// the account is now none. Best-effort: any lookup failure yields "" (no slot
+// skipped).
+func managedStateDest(cfg *agentbox.Config) string {
 	if !cfg.HasAgent() {
-		return nil
+		return ""
 	}
 	profile, err := agentprofile.Lookup(cfg.Agent)
-	if err != nil || profile.StateContainerPath == "" {
-		return nil
+	if err != nil {
+		return ""
 	}
-	return profileStateDestinations(profile)
+	return profile.StateContainerPath
 }
 
-func profileStateDestinations(profile *agentprofile.Profile) []string {
-	if profile.StateContainerPath == "" {
-		return nil
-	}
-	out := []string{profile.StateContainerPath}
-	for _, mount := range profile.StateMounts {
-		out = append(out, mount.Destination)
-	}
-	return out
-}
-
-func isManagedStateDest(cfg *agentbox.Config, target string) bool {
-	return slices.Contains(managedStateDestinations(cfg), target)
-}
-
-// agentboxHostMounts returns only host workdir and ordinary extra-mount sources.
-// All native state views are excluded: they are prepared on the independent
-// account disk and never become host shares. Results are deduplicated/sorted.
+// agentboxHostMounts returns the host paths that must be visible as live Lima
+// mounts for cfg, each tagged with the writability yoloctl requires: the host
+// workdir and the resolved account-state leaf (writable), plus every non-managed
+// extra_mount source (writable unless the mount is read_only). Ephemeral
+// workdirs are VM-local and excluded. Deduped (writable wins on a path
+// collision) + sorted by path.
+//
+// The managed account-state mount is taken from the source resolved off the
+// CURRENT account (managedStateMount), NOT from cfg.Mounts: any stale
+// managed slot still sitting in Mounts (see managedStateDest) is skipped,
+// so a since-changed account can't mount both the old and new state dir.
+//
+// Single source of truth for the Lima writable set (spaceWritableMounts shares
+// every path writable) and the preflight mount-live checks
+// (preflightAgentboxRuntime probes each per Writable).
 func agentboxHostMounts(cfg *agentbox.Config) []hostMount {
 	idx := map[string]int{}
 	var out []hostMount
@@ -230,8 +247,9 @@ func agentboxHostMounts(cfg *agentbox.Config) []hostMount {
 	if cfg.Workdir.IsHost() {
 		add(cfg.Workdir.MountSource(), true)
 	}
+	managedDest := managedStateDest(cfg)
 	for _, m := range cfg.Mounts {
-		if isManagedStateDest(cfg, m.Target) {
+		if managedDest != "" && m.Target == managedDest {
 			continue // managed account-state slot — resolved fresh above
 		}
 		add(m.Source, !m.ReadOnly)

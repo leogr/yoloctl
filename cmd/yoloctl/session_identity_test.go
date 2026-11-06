@@ -182,6 +182,9 @@ func TestTrackedLaunchAssignsThenResumes(t *testing.T) {
 	if !strings.Contains(strings.Join(argv, " "), "CLAUDE_CONFIG_DIR=") {
 		t.Fatalf("launch env prefix lost: %v", argv)
 	}
+	if !slices.Contains(argv, "ANTHROPIC_CONFIG_DIR=/home/sandbox/.claude/anthropic") {
+		t.Fatal("initial launch lost native profile relocation", argv)
+	}
 	if rec.Launch.State != agentsession.StateLaunched || rec.Launch.Holder != "7@1970-01-01T00:01:40Z" {
 		t.Fatalf("launch not bound to its holder: %+v", rec.Launch)
 	}
@@ -192,6 +195,9 @@ func TestTrackedLaunchAssignsThenResumes(t *testing.T) {
 		t.Fatal(err)
 	}
 	argv = f.starts[1]
+	if !slices.Contains(argv, "ANTHROPIC_CONFIG_DIR=/home/sandbox/.claude/anthropic") {
+		t.Fatal("resumed launch lost native profile relocation", argv)
+	}
 	if i := slices.Index(argv, "--resume"); i < 0 || argv[i+1] != id || slices.Contains(argv, "--session-id") {
 		t.Fatalf("resume argv = %v", argv)
 	}

@@ -691,7 +691,7 @@ func TestBoxSessionTextNamesALearnedConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	l.Release()
-	if !slices.Equal(f.starts[0], []string{"env", "YOLOCTL_AGENT_GEN=1", "env", "CLAUDE_CONFIG_DIR=/home/sandbox/.claude", "DISABLE_AUTOUPDATER=1", "FORCE_AUTOUPDATE_PLUGINS=1", "claude", "--dangerously-skip-permissions"}) {
+	if !slices.Equal(f.starts[0], []string{"env", "YOLOCTL_AGENT_GEN=1", "env", "ANTHROPIC_CONFIG_DIR=/home/sandbox/.claude/anthropic", "CLAUDE_CONFIG_DIR=/home/sandbox/.claude", "DISABLE_AUTOUPDATER=1", "FORCE_AUTOUPDATE_PLUGINS=1", "claude", "--dangerously-skip-permissions"}) {
 		t.Fatalf("a learn launch is today's argv with the generation: %v", f.starts[0])
 	}
 	const learned = "7c9e6679-7425-40de-944b-e07fc1f90ae7"

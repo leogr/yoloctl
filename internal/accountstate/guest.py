@@ -311,10 +311,6 @@ def run(req):
             if action == 'auth-status':
                 return auth_status(leaf, req['path'], auth_spec(req))
             if action == 'mkdir':
-                for part in req.get('path', '').split('/') if req.get('path') else []:
-                    nextfd = directory(leaf, part, create=True, uid=req['uid'], gid=req['gid'])
-                    os.close(leaf)
-                    leaf = nextfd
                 return {}
             parts = req['path'].split('/')
             if not parts or any(p in ('', '.', '..') for p in parts):

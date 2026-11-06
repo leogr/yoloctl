@@ -16,8 +16,9 @@ status reports presence/unavailability rather than provider validity. Codex's
 builtin uses native auth; Claude, Gemini, agy, Pi and OpenCode additionally declare API-key injection.
 [2](#source-2)
 
-[FACT] Claude persists both its legacy directory and the standard Anthropic
-profile tree in the same selected native leaf. Preserve an existing disposable
+[FACT] Managed Claude sessions relocate the Anthropic profile tree into the
+existing selected native leaf alongside legacy state. Bare direct invocations
+require explicit config-path environment prefixes. Preserve an existing disposable
 profile privately before recreation; selected-profile import retains its config,
 credential and active selection. Claude/Codex status reports bounded local
 material classifications, never provider validity. Codex keeps its existing

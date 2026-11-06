@@ -25,9 +25,9 @@ func TestAgentProfiles_BuiltIns(t *testing.T) {
 			DefaultArgs:        []string{"--dangerously-skip-permissions"},
 			NpmPackage:         "@anthropic-ai/claude-code",
 			StateContainerPath: "/home/sandbox/.claude",
-			StateMounts:        []agentprofile.StateMount{{Source: "anthropic", Destination: "/home/sandbox/.config/anthropic"}},
 			LaunchEnv: map[string]string{
 				"CLAUDE_CONFIG_DIR":        "{{state_dir}}",
+				"ANTHROPIC_CONFIG_DIR":     "{{state_dir}}/anthropic",
 				"DISABLE_AUTOUPDATER":      "1",
 				"FORCE_AUTOUPDATE_PLUGINS": "1",
 			},

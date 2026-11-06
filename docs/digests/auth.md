@@ -54,8 +54,8 @@ unknown formats remain unverified. Codex recognizes a nonempty API key or access
 token; other adapters retain file-presence status. The output explicitly leaves
 provider validity and environment/external auth unverified. Storage/access errors
 remain unavailable. Codex file-store guidance does not force a store/provider
-or add a mount; use --file for a host CODEX_HOME override. Claude's second native
-view and selected-profile import are detailed separately. List/show never reveal
+or add a mount; use --file for a host CODEX_HOME override. Claude's managed in-leaf
+relocation and selected-profile import are detailed separately. List/show never reveal
 secret values. [5](#source-5) [7](#source-7) [15](#source-15) [16](#source-16)
 
 [FACT] Reconcile compares the account reference, not account secret/native
@@ -97,5 +97,5 @@ selects a home-relative host import directory; custom XDG roots use --file. [14]
 
 14. <a id="source-14"></a> [OpenCode adapter](opencode.md) — native runtime, account and validation contracts.
 
-15. <a id="source-15"></a> [Claude profile storage](claude-auth.md) — additional view, supported local formats, import and preservation order.
+15. <a id="source-15"></a> [Claude profile storage](claude-auth.md) — managed relocation, supported local formats, import and preservation order.
 16. <a id="source-16"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1) — same primary state path, native status format and unchanged secret delivery.

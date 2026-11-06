@@ -1,12 +1,48 @@
 package main
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/agentprofile"
 )
+
+func TestClaudeManagedAndExplicitLoginUseTheSameNativeProfileTree(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	profile, err := agentprofile.Lookup("claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf := t.TempDir()
+	profile.StateContainerPath = leaf
+	program := filepath.Join(t.TempDir(), "fake-agent")
+	if err := os.WriteFile(program, []byte("#!/bin/sh\nset -eu\n: \"${ANTHROPIC_CONFIG_DIR:?profile directory required}\"\nmkdir -p \"$ANTHROPIC_CONFIG_DIR\"\nprintf 'synthetic-profile' > \"$ANTHROPIC_CONFIG_DIR/selected\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	managed := applyLaunchEnv(profile, []string{program})
+	direct := []string{"env", "CLAUDE_CONFIG_DIR=" + leaf, "ANTHROPIC_CONFIG_DIR=" + leaf + "/anthropic", program}
+	for _, argv := range [][]string{managed, direct} {
+		cmd := exec.Command(argv[0], argv[1:]...)
+		cmd.Env = []string{"PATH=" + os.Getenv("PATH")}
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("profile selection fixture: %v: %s", err, out)
+		}
+		got, err := os.ReadFile(filepath.Join(leaf, "anthropic/selected"))
+		if err != nil || string(got) != "synthetic-profile" {
+			t.Fatal("managed and explicit invocation selected different storage", err)
+		}
+	}
+	// Bare exec intentionally does not acquire a profile launch prefix.
+	bare := exec.Command(program)
+	bare.Env = []string{"PATH=" + os.Getenv("PATH")}
+	if err := bare.Run(); err == nil {
+		t.Fatal("bare direct exec silently acquired managed profile configuration")
+	}
+}
 
 func TestApplyLaunchEnv(t *testing.T) {
 	claude := &agentprofile.Profile{
@@ -81,6 +117,7 @@ func TestResolveSessionArgv_AppendsAgentExtraArgs(t *testing.T) {
 	}
 	want := []string{
 		"env",
+		"ANTHROPIC_CONFIG_DIR=/home/sandbox/.claude/anthropic",
 		"CLAUDE_CONFIG_DIR=/home/sandbox/.claude",
 		"DISABLE_AUTOUPDATER=1",
 		"FORCE_AUTOUPDATE_PLUGINS=1",

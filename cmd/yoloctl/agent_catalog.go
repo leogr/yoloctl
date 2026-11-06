@@ -115,9 +115,6 @@ func writeAgentShow(w io.Writer, name string) error {
 	}
 	if p.StateContainerPath != "" {
 		_, _ = fmt.Fprintf(w, "State path:  %s\n", p.StateContainerPath)
-		for _, mount := range p.StateMounts {
-			_, _ = fmt.Fprintf(w, "State view:  %s -> %s\n", mount.Source, mount.Destination)
-		}
 	}
 	if len(p.StateArchiveExcludes) > 0 {
 		_, _ = fmt.Fprintf(w, "Archive excludes: %v\n", p.StateArchiveExcludes)
@@ -137,18 +134,17 @@ func writeAgentShow(w io.Writer, name string) error {
 
 func writeAgentShowJSON(w io.Writer, p *agentprofile.Profile, builtin bool) error {
 	type agentJSON struct {
-		Name                 string                    `json:"name"`
-		Source               string                    `json:"source"`
-		Image                string                    `json:"image"`
-		Command              string                    `json:"command"`
-		DefaultArgs          []string                  `json:"default_args,omitempty"`
-		NpmPackage           string                    `json:"npm_package,omitempty"`
-		NativeRelease        string                    `json:"native_release,omitempty"`
-		StateContainerPath   string                    `json:"state_container_path,omitempty"`
-		StateMounts          []agentprofile.StateMount `json:"state_mounts,omitempty"`
-		StateArchiveExcludes []string                  `json:"state_archive_excludes,omitempty"`
-		RequiresFeatures     []string                  `json:"requires_features,omitempty"`
-		LaunchEnv            map[string]string         `json:"launch_env,omitempty"`
+		Name                 string            `json:"name"`
+		Source               string            `json:"source"`
+		Image                string            `json:"image"`
+		Command              string            `json:"command"`
+		DefaultArgs          []string          `json:"default_args,omitempty"`
+		NpmPackage           string            `json:"npm_package,omitempty"`
+		NativeRelease        string            `json:"native_release,omitempty"`
+		StateContainerPath   string            `json:"state_container_path,omitempty"`
+		StateArchiveExcludes []string          `json:"state_archive_excludes,omitempty"`
+		RequiresFeatures     []string          `json:"requires_features,omitempty"`
+		LaunchEnv            map[string]string `json:"launch_env,omitempty"`
 	}
 	source := "custom"
 	if builtin {
@@ -163,7 +159,6 @@ func writeAgentShowJSON(w io.Writer, p *agentprofile.Profile, builtin bool) erro
 		NpmPackage:           p.NpmPackage,
 		NativeRelease:        p.NativeRelease,
 		StateContainerPath:   p.StateContainerPath,
-		StateMounts:          p.StateMounts,
 		StateArchiveExcludes: p.StateArchiveExcludes,
 		RequiresFeatures:     p.RequiresFeatures,
 		LaunchEnv:            p.LaunchEnv,
