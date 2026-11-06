@@ -127,8 +127,19 @@ esac
 	if err := os.WriteFile(filepath.Join(bin, "limactl"), []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := Stop(t.Context(), container.New("trial"), "probe"); err != nil {
+	probes := 0
+	fixtureTimeout := func(ctx context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
+		probes++
+		if budget != 3*time.Second {
+			t.Errorf("production probe budget changed: %v", budget)
+		}
+		return context.WithTimeout(ctx, 30*time.Second)
+	}
+	if err := stopWithProbeTimeout(t.Context(), container.New("trial"), "probe", fixtureTimeout); err != nil {
 		t.Fatal(err)
+	}
+	if probes != 1 {
+		t.Fatalf("expected one bounded endpoint probe, got %d", probes)
 	}
 	raw, err := os.ReadFile(log)
 	if err != nil {
@@ -140,5 +151,32 @@ esac
 	}
 	if err := Stop(t.Context(), container.New("trial"), "../unsafe"); err == nil {
 		t.Fatal("accepted invalid socket identity")
+	}
+}
+
+func TestStopProbeDefaultsAndParentCancellation(t *testing.T) {
+	before := time.Now()
+	ctx, cancel := stopProbeContext(t.Context(), nil)
+	after := time.Now()
+	deadline, ok := ctx.Deadline()
+	if !ok || deadline.Before(before.Add(3*time.Second)) || deadline.After(after.Add(3*time.Second)) {
+		cancel()
+		t.Fatal("default probe budget changed", deadline)
+	}
+	cancel()
+	if ctx.Err() != context.Canceled {
+		t.Fatal("probe cancel did not propagate", ctx.Err())
+	}
+	parentDeadline := time.Now().Add(time.Second)
+	parent, cancelParent := context.WithDeadline(t.Context(), parentDeadline)
+	defer cancelParent()
+	ctx, cancel = stopProbeContext(parent, nil)
+	defer cancel()
+	if deadline, ok := ctx.Deadline(); !ok || !deadline.Equal(parentDeadline) {
+		t.Fatal("earlier parent deadline lost", deadline)
+	}
+	cancelParent()
+	if ctx.Err() != context.Canceled {
+		t.Fatal("parent cancellation lost", ctx.Err())
 	}
 }

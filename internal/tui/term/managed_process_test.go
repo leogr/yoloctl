@@ -144,7 +144,7 @@ func TestManagedExitFitsLocalViewport(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer s.Close()
-			awaitInput(t, "canonical screen", s.managed.active.Load)
+			awaitManagedFixture(t, "canonical screen", s.managed.active.Load)
 			// The local tab was resized, but a different viewer determines the
 			// larger canonical geometry. Live replicas must retain that geometry.
 			if err := s.Resize(5, 52); err != nil {
@@ -185,7 +185,7 @@ func TestManagedPrivateDescriptorRejectsPTYForgery(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	awaitInput(t, "native snapshot", func() bool { return strings.Contains(s.GridText(), "PRIVATE_SCREEN") && s.managed.active.Load() })
+	awaitManagedFixture(t, "native snapshot", func() bool { return strings.Contains(s.GridText(), "PRIVATE_SCREEN") && s.managed.active.Load() })
 	if s.KeyboardFlags() != 3 {
 		t.Fatal("private state did not restore keyboard mode")
 	}
@@ -219,7 +219,7 @@ func TestManagedPublicationPreservesTypeaheadOrder(t *testing.T) {
 	if err := os.WriteFile(gate, nil, 0600); err != nil {
 		t.Fatal(err)
 	}
-	awaitInput(t, "managed publication", s.managed.active.Load)
+	awaitManagedFixture(t, "managed publication", s.managed.active.Load)
 	if err := s.SendInput([]byte("late")); err != nil {
 		t.Fatal(err)
 	}
