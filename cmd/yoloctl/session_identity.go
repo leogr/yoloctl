@@ -83,6 +83,7 @@ type trackedLaunch struct {
 	space, name string
 	lock        *agentsession.BoxLock
 	rec         *agentsession.Record
+	notice      io.Writer
 }
 
 // beginTrackedSession takes the box lock inside the command's space lock and
@@ -163,10 +164,11 @@ func (l *trackedLaunch) noteSandboxReplaced(detail string) error {
 // marker or tombstone. It resumes the last observed conversation (Target),
 // which Allocate adopts when it differs from the assigned one; a profile that
 // cannot assign an ID learns it from the agent's first report instead. It
-// refuses an uncertain launch until --new-session, and it never starts a new
-// conversation in place of a failed resume: it requests the same one again
-// and says so on errw.
+// refuses an uncertain launch until --new-session. A failed resume alone
+// does not select a fresh conversation; launch may do so only after the
+// profile's saved-file preflight confirms absence, before allocating.
 func (l *trackedLaunch) plan(opts sessionStartOptions, errw io.Writer) (string, error) {
+	l.notice = errw
 	now := sessionNow()
 	if l.rec == nil {
 		l.rec = agentsession.NewRecord(l.scope)
@@ -209,9 +211,6 @@ func (l *trackedLaunch) plan(opts sessionStartOptions, errw io.Writer) (string, 
 		kind = agentsession.KindLearn
 	case rec.Assigned == nil:
 		kind = agentsession.KindAssign
-	}
-	if r := rec.Resume; !allocated && kind == agentsession.KindResume && r != nil && r.Outcome == agentsession.OutcomeFailed && rec.Launch != nil && r.Generation == rec.Launch.Generation {
-		_, _ = fmt.Fprintf(errw, "warning: the previous resume of %s failed (%s); retrying — yoloctl box restart %s --new-session starts a new conversation\n", r.Requested, r.Detail, l.name)
 	}
 	return kind, nil
 }
@@ -284,21 +283,43 @@ var listBoxNamesFn = agentbox.ListNames
 func (l *trackedLaunch) launch(ctx context.Context, c *container.Client, cfg *agentbox.Config, kind string, start func(argv []string, token string) error) error {
 	now := sessionNow()
 	rec := l.rec
+	// Only a closed previous launch proves its holder gone. Retiring an absent
+	// target must retain this proof for observation generation preparation.
+	previousClosed := rec.Launch != nil && rec.Launch.State == agentsession.StateClosed
+	allocated := rec.Launch != nil && rec.Launch.State == agentsession.StateAllocated
+	if !allocated && rec.Pending() {
+		return errors.New("the previous launch is unresolved")
+	}
+	previousGeneration := uint64(0)
+	if rec.Launch != nil {
+		previousGeneration = rec.Launch.Generation
+	}
+	missing := ""
 	var carried agentsession.Carried
 	if kind == agentsession.KindResume {
 		// The target, which Allocate adopts below.
 		if err := l.checkOwner(ctx, c, rec.Target()); err != nil {
 			return err
 		}
-		// Read before the new launch's observation replaces the last one.
-		carried = rec.Carried(rec.Target())
+		if !allocated && l.profile.Session.ResumeFile != "" {
+			present, err := resumeFilePresentFn(ctx, cfg, l.profile.Session, rec.Target())
+			if err != nil {
+				return err
+			}
+			if !present {
+				missing = rec.Target()
+				rec.Retire(agentsession.WhySavedConversationMissing, now)
+				kind = agentsession.KindAssign
+			}
+		}
+		if kind == agentsession.KindResume {
+			// Read before this resume's new observation. A missing target
+			// starts fresh, retaining only the box's own model/effort args.
+			carried = rec.Carried(rec.Target())
+		}
 	}
-	// Only a closed previous launch proves its holder gone (same-token
-	// tombstone or the fresh-sandbox proof); missing markers never do.
-	previousClosed := rec.Launch != nil && rec.Launch.State == agentsession.StateClosed
-	previousGeneration := uint64(0)
-	if rec.Launch != nil {
-		previousGeneration = rec.Launch.Generation
+	if r := rec.Resume; !allocated && kind == agentsession.KindResume && r != nil && r.Outcome == agentsession.OutcomeFailed && rec.Launch != nil && r.Generation == rec.Launch.Generation && l.notice != nil {
+		_, _ = fmt.Fprintf(l.notice, "warning: the previous resume of %s failed (%s); retrying — yoloctl box restart %s --new-session starts a new conversation\n", r.Requested, r.Detail, l.name)
 	}
 	if err := rec.Allocate(kind, now); err != nil {
 		return err
@@ -329,6 +350,9 @@ func (l *trackedLaunch) launch(ctx context.Context, c *container.Client, cfg *ag
 	argv = applyLaunchEnv(l.profile, argv)
 	if len(env) > 0 {
 		argv = append(append([]string{"env"}, env...), argv...)
+	}
+	if missing != "" && l.notice != nil {
+		_, _ = fmt.Fprintf(l.notice, "no saved conversation found for %s; starting a new conversation %s\n", missing, rec.Assigned.ID)
 	}
 	startErr := start(argv, token)
 	return errors.Join(startErr, l.settle(ctx, c, generation, token, startErr))

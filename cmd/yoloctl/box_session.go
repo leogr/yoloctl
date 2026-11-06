@@ -52,7 +52,7 @@ func newAgentboxSessionCmd() *cobra.Command {
 		Long: `Shows the controller-owned conversation record of a box: its policy, the
 assigned conversation ID and how it was assigned (chosen, learned or
 switched), the conversation the agent last reported when it differs (the next
-start resumes it), whether the agent reports every in-app switch, the latest
+start normally resumes it), whether the agent reports every in-app switch, the latest
 launch and resume request, agent-reported observations and the conversations
 it replaced. It reads only that record, the
 box declaration and the session holder's state. It never reads transcripts or
@@ -61,6 +61,11 @@ account state, and it changes nothing: no resume, launch or record update.
 A holder probe that cannot decide shows the session as unknown, never as not
 running. Untracked, manual, unsupported and stale states are explained by a
 note. A missing declaration or an unreadable record is an error.
+
+For Claude, a later managed start checks for the saved conversation file before
+resuming. Confirmed absence selects a new ID and records the replacement reason;
+unavailable storage refuses the start. This view displays that recorded decision
+without checking or reading the saved files.
 
   yoloctl box session coder
   yoloctl box session coder --json`,

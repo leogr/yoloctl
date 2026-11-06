@@ -48,11 +48,15 @@ conversation by ID instead of the shared account's last one: a new session
 starts with a fresh ID and later sessions resume it, unless
 `agent_session.resume` is `never` or `manual`. Launches bind to their holder
 by a launch token; a launch with no evidence is uncertain and never replayed,
-and only `--new-session` replaces a conversation. When the agent reports an
+and explicit `--new-session` can replace a conversation. Before a new Claude
+resume allocation, confirmed absence of its saved file instead selects one
+fresh ID with a recorded reason and notice; unavailable storage refuses.
+An already allocated launch is reused unchanged. When the agent reports an
 in-app switch (`/clear`, `/resume`, fork), the next start resumes the last
 observed conversation, never a guessed current selection; a resume that exits
-nonzero without a report is retried, never replaced by a fresh one. A verified container
-replacement by recreate, edit, set, reconcile or chat `--recreate` keeps a
+nonzero without a report does not itself select a fresh conversation. There
+is no fallback after dispatch, and a present file is not proof of resumability.
+A verified container replacement by recreate, edit, set, reconcile or chat `--recreate` keeps a
 launched conversation resumable; a policy-only restart does not. Resume is reported
 unverified until the agent says otherwise. A Claude resume keeps the effort and model last
 reported by that same conversation (`--effort`, `--model`, after the box's own
@@ -62,7 +66,7 @@ box model/effort arguments seed a new conversation. Records stay on the space's 
 across space recreate but are not exported; an imported box starts a new
 tracked conversation. `box session NAME` shows a record read-only; an
 undecidable holder probe shows as unknown, never idle. [12](#source-12)
-[17](#source-17) [21](#source-21)
+[17](#source-17) [21](#source-21) [23](#source-23)
 
 [FACT] Default interactive attachment uses the shared renderer, including a
 standalone view without tabs/palette. Full native snapshots preserve screen,
@@ -194,3 +198,4 @@ stop. A declared daemon a user started from `box exec` is stopped too.
 20. <a id="source-20"></a> [Session remedies](../digests/session-remedies.md) — fresh-session image guard.
 21. <a id="source-21"></a> [Tracked agent launches and settlement](../digests/agent-launches.md).
 22. <a id="source-22"></a> [OpenShell compatibility](../digests/openshell-compatibility.md) — mediated signal delivery and listener flags.
+23. <a id="source-23"></a> [Saved conversation presence](../digests/resume-file-presence.md).

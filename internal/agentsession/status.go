@@ -181,6 +181,9 @@ type PreviousView struct {
 // Text is the replacement as text views print it, such as
 // "switched to <id> (clear)".
 func (p PreviousView) Text() string {
+	if p.Why == WhySavedConversationMissing {
+		return "saved resume target missing; new conversation selected"
+	}
 	if p.Why == WhySwitched && p.To != "" {
 		return fmt.Sprintf("switched to %s (%s)", p.To, sourceOr(p.Source))
 	}
@@ -336,6 +339,12 @@ func Describe(cfg *agentbox.Config, profile *agentprofile.Profile, live bool, li
 	st.liveLaunch = live && rec.Launch != nil && liveToken != "" && liveToken == rec.Launch.Token
 	if live && !st.liveLaunch {
 		st.Note = Untracked
+	}
+	if st.Note == "" && rec.Assigned != nil && len(rec.Previous) > 0 {
+		previous := rec.Previous[len(rec.Previous)-1]
+		if previous.Why == WhySavedConversationMissing {
+			st.Note = fmt.Sprintf("no saved conversation found for %s; selected new conversation %s", previous.ID, rec.Assigned.ID)
+		}
 	}
 	return st
 }

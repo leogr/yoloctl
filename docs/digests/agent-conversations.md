@@ -1,14 +1,15 @@
 # Agent conversation identity
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; resume carry `ffd5153aed3db8e29d362837407e24bdfacb5f7e` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `f15ce301325c25538cab3f7acaf88962827c38bc` and accompanying changes; re-read cited sources when changing behavior.
 
 Launch locking, tokens and settlement are detailed in
 [tracked agent launches](agent-launches.md).
 
 [FACT] A profile's optional `session:` block declares conversation identity:
 a `uuid` format, `assign_args` (fresh ID; without them the agent's first
-report names it), `resume_argv`, identity-taking `reserved_args` and
-`observe.selection`. Claude declares it (`--session-id`, `--resume`) and
+report names it), `resume_argv`, optional native `resume_file` presence check,
+identity-taking `reserved_args` and `observe.selection`. Claude declares it
+(`--session-id`, `--resume`) and
 Codex too: no assign arguments, so a launch learns the thread from the first
 main `SessionStart` it reports, `codex resume <id>` ahead of the ordinary
 options, `resume` reserved and selection unknown. agy's block is
@@ -17,26 +18,21 @@ observe-only (a reporter, no `resume_argv` or `assign_args`): unset means
 ([agy reporter](agy-observation.md)). Other built-ins stay unsupported until
 proven. [1](#source-1) [2](#source-2) [3](#source-3) [19](#source-19)
 
-[FACT] Claude's opt-in `resume_carry` makes a resume append `--effort <value>`
-and `--model <id>` after `agent_extra_args`, so they win over the box's own
-flags (Claude takes the last). Each folded value records the conversation its
-report named; only values reported by the resumed conversation itself are
-carried: an effort in `low|medium|high|xhigh|max`, a model that is a plain id
-(no whitespace, no leading `-`). They are read before the new launch's
-observation begins. A new conversation, another conversation's or an
-unattributed report carry nothing. Codex declares no carry: its resume passes
-`codex resume <id>` and the box's `agent_extra_args`, nothing more, and what
-the resumed thread applies is Codex's own. `Argv` passes `agent_extra_args`
-on every launch, new or resumed; the carry overrides only the model and
-effort flags, and only while a carried value is available, so a later box
-`--effort`/`--model` edit is overridden on a Claude resume until
-`--new-session` (`box start`, `restart` or `attach`), and without an eligible
-report the box flags apply. agy starts a new conversation at every start.
-[1](#source-1) [3](#source-3) [20](#source-20)
+[FACT] Claude's opt-in `resume_carry` appends the resumed conversation's
+reported effort/model after box arguments (Claude takes the last). Only values
+attributed to that conversation apply: effort `low|medium|high|xhigh|max`,
+plain model ID (no whitespace or leading `-`). Capture precedes the new
+observation. Fresh assignments and foreign/unattributed reports carry nothing.
+Eligible values override later box model/effort edits; `--new-session` on
+start/restart/attach seeds a fresh conversation with box arguments instead.
+Without eligible values, box arguments apply. Codex declares no carry and
+receives its ordinary resume argv plus box arguments; thread behavior remains
+Codex's own. agy always starts new. [1](#source-1) [3](#source-3)
+[20](#source-20)
 
 [FACT] A manifest's `agent_session.resume` is `last`, `never` or `manual`.
 Unset means `manual` when `agent_extra_args` carry a reserved argument, else
-`last`, so existing launches never change. An explicit
+`last`. An explicit
 `last`/`never` with one is refused at create, set, edit and start. Manual, unsupported and agentless boxes are
 untouched. [3](#source-3) [4](#source-4)
 
@@ -59,7 +55,15 @@ move both IDs to `previous` (at most 8) and assign a fresh one.
 `--new-session` on start or attach refuses a live holder first; restart
 retires after its teardown, and `--no-attach` launches nothing. Exit status
 alone is never a resume verdict; a nonzero resume exit with no reported start
-is `failed` and retried, never replaced. [8](#source-8) [9](#source-9) [10](#source-10)
+is `failed`. Failure itself never selects a fresh conversation. [8](#source-8) [9](#source-9) [10](#source-10)
+
+[FACT] Before allocating a new resume, Claude checks the Target's saved file
+in its native leaf. Confirmed absence retires both IDs as
+`saved-conversation-missing` and selects one fresh UUID; inaccessible or
+incomplete storage refuses. An allocated launch is reused without a new check.
+The notice and shared status explain the replacement. Presence does not prove
+resumability; see [saved-file checks](resume-file-presence.md).
+[8](#source-8) [21](#source-21) [22](#source-22)
 
 [FACT] Views read the record without locks. `box show` prints a
 `Conversation:` line. `box show --json`, `box list --json` and the read-only
@@ -71,26 +75,21 @@ and changes nothing. The restart offer names each box's next conversation,
 never a resume. [11](#source-11) [12](#source-12) [13](#source-13)
 [18](#source-18)
 
-[FACT] Tests cover storage, locks, scope and generations; launch states and
-fresh-sandbox proof; replacement seams with failed and in-sync negatives;
-policies, argv and `--new-session`; one-owner refusal and undecidable probes;
-destroy failure and export omission; the witness, fast path and holder token;
-the JSON shape and `box session`.
-
-Fakes replace the VM; no real Claude, VM, crash or reboot is exercised.
+[FACT] Record, launch, ownership, policy, argv and status regressions use
+fixtures; no real Claude, VM, crash or reboot is exercised.
 [14](#source-14) [15](#source-15) [16](#source-16)
 
 ## Sources
 
-1. <a id="source-1"></a> [profile.go](../../internal/agentprofile/profile.go#L150) — `Profile.Session`, `SessionSpec`, `ObserveSpec`; `validateSession` at L502.
-2. <a id="source-2"></a> [claude.yaml](../../internal/agentprofile/builtin/claude.yaml#L55-L75) — the Claude block.
+1. <a id="source-1"></a> [profile.go](../../internal/agentprofile/profile.go#L150) — `Profile.Session`, `SessionSpec`, `ObserveSpec`; `validateSession`.
+2. <a id="source-2"></a> [claude.yaml](../../internal/agentprofile/builtin/claude.yaml#L56) — the Claude block.
 3. <a id="source-3"></a> [policy.go](../../internal/agentsession/policy.go#L12-L147) — `EffectivePolicy`, `ReservedArg`, `Argv`.
 4. <a id="source-4"></a> [agentbox.go](../../internal/agentbox/agentbox.go#L99-L178) — `AgentSession`, `ResumePolicy`; validation at L524-L533; cmd checks in `requireResolvableManifest`.
 5. <a id="source-5"></a> [layout.go](../../internal/layout/layout.go#L355) — `BoxSessionPath`.
 6. <a id="source-6"></a> [record.go](../../internal/agentsession/record.go#L86) — `Record`, `Validate`, `Load`, `Remove`, `save`, `retire`, `Target`.
 7. <a id="source-7"></a> [launch.go](../../internal/agentsession/launch.go#L15-L105) — `BoxLock`, `LoadLocked`, `Save`; destroy in `removeAgentboxConfig`.
-8. <a id="source-8"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L169) — `plan`, `uncertainError`, `checkOwner`, `namesConversation`.
-9. <a id="source-9"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L362) — `retireForNewSession`, `bindLiveLaunch`, `liveHolderError`.
+8. <a id="source-8"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L170) — `plan`, `launch`, `uncertainError`, `checkOwner`, `namesConversation`.
+9. <a id="source-9"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L390) — `retireForNewSession`, `bindLiveLaunch`, `liveHolderError`.
 10. <a id="source-10"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L121-L160) — `noteExit`, `exitHint`, `noteHolderLost`.
 11. <a id="source-11"></a> [status.go](../../internal/agentsession/status.go#L19) — `Status` and its view types, `Describe`, `Line`.
 12. <a id="source-12"></a> [boxstate.go](../../internal/boxstate/boxstate.go#L144-L200) — `Box.Conversation`, resolver hook; filled at L366-L368.
@@ -102,3 +101,5 @@ Fakes replace the VM; no real Claude, VM, crash or reboot is exercised.
 18. <a id="source-18"></a> [box_session.go](../../cmd/yoloctl/box_session.go#L1) — view, probes and output; tests in box_session_test.go.
 19. <a id="source-19"></a> [codex.yaml](../../internal/agentprofile/builtin/codex.yaml#L83-L97) — the Codex block; `TestCodexLearnsAndResumesByThread` in internal/agentsession/agentsession_test.go.
 20. <a id="source-20"></a> [Resume carry](../../internal/agentsession/policy.go#L1-L208) — `Carried`, `CarryArgs`, `plainModelID`; `ObservedValue.Session` set in apply.go `applyLine`; `trackedLaunch.launch` in cmd/yoloctl/session_identity.go; tests carry_test.go and `TestResumeCarriesTheConversationsLastEffortAndModel`.
+21. <a id="source-21"></a> [session_resume_file.go](../../cmd/yoloctl/session_resume_file.go#L15) — bounded native presence request and explicit outcomes.
+22. <a id="source-22"></a> [session_resume_file_test.go](../../cmd/yoloctl/session_resume_file_test.go#L21) — absent/saved/unknown, Target, replay and persistent status regressions.

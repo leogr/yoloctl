@@ -1,6 +1,6 @@
 # Following agent conversation switches
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `f15ce301325c25538cab3f7acaf88962827c38bc` and accompanying changes; re-read cited symbols when changing behavior.
 
 [FACT] A record keeps two identities. `assigned` (`id`, `at`, `source`) is
 the record's conversation: `chosen` when yoloctl passed it (records without a
@@ -24,8 +24,11 @@ generations' lines are ignored, as for every fold. The same ID again refreshes
 `switched`, so the ownership check, `resume.requested` and argv name one ID.
 `checkOwner` checks that target and matches another box's record by its
 assigned or current ID. Divergence and a `mismatch` outcome no longer refuse;
-`observed.diverged` stays as evidence shown as a switch. The remaining
-refusals are an uncertain launch, another owner and an invalid record.
+`observed.diverged` stays as evidence shown as a switch. A configured
+saved-file check probes this Target before allocation: confirmed absence
+selects a new UUID, unknown storage refuses
+([limits](resume-file-presence.md)). Uncertain launches, other owners and
+invalid records still refuse.
 [2](#source-2) [5](#source-5) [6](#source-6)
 
 [FACT] `--new-session` and the `never` policy retire both identities:
@@ -45,10 +48,11 @@ a report nothing is assigned and the next start learns again. Claude has
 successful read of the generation, `SettleResume` marks a closed resume launch
 `failed` (detail: the exit) when it exited nonzero, its outcome is still
 `unverified` and its health is `ok` or `no-report`. Gaps, unreadable or
-unobservable generations decide nothing. The next start requests the same ID
-again and prints `warning: the previous resume of ID failed (DETAIL);
+unobservable generations decide nothing. Failure alone changes no identity.
+The next start retains the ordinary saved-file check; when it resumes, it
+prints `warning: the previous resume of ID failed (DETAIL);
 retrying — yoloctl box restart BOX --new-session starts a new conversation`;
-it never starts fresh. Views show a read-time failure as `pending_outcome`.
+it never falls back after dispatch. Views show a read-time failure as `pending_outcome`.
 [2](#source-2) [5](#source-5) [8](#source-8)
 
 [FACT] `session.observe.selection` is `reported` or `unknown` (default).
@@ -82,12 +86,12 @@ is exercised here. [7](#source-7) [8](#source-8) [13](#source-13)
 2. <a id="source-2"></a> [Allocation](../../internal/agentsession/launch.go#L108-L219) — `Allocate` (learn, switch adoption), `CloseExit`, `SettleResume`.
 3. <a id="source-3"></a> [Fold](../../internal/agentsession/apply.go#L86-L263) — `Apply` rules, `applyLine` (learned assignment, `current`).
 4. <a id="source-4"></a> [Fold regressions](../../internal/agentsession/apply_test.go#L307) — `TestApplyCurrentFollowsTheLastMainStart`, `TestApplyLearnsTheFirstReportedConversation`.
-5. <a id="source-5"></a> [Plan](../../cmd/yoloctl/session_identity.go#L162-L277) — `plan`, `uncertainError`, `checkOwner`, `namesConversation`; target check in `launch` L284; `CloseExit` in `noteExit` and `settle`.
+5. <a id="source-5"></a> [Plan](../../cmd/yoloctl/session_identity.go#L170) — `plan`, `uncertainError`, `checkOwner`, `namesConversation`; target check in `launch` L283; `CloseExit` in `noteExit` and `settle`.
 6. <a id="source-6"></a> [Plan regressions](../../cmd/yoloctl/session_observe_test.go#L205) — `TestReportedMismatchResumesTheReportedConversation`, `TestTheNextStartResumesTheLastObservedConversation`; owner by `current` in session_identity_test.go `TestResumeRefusesAConversationOwnedElsewhere`.
 7. <a id="source-7"></a> [Learn regressions](../../cmd/yoloctl/session_observe_test.go#L678) — `TestBoxSessionTextNamesALearnedConversation`; `TestArgvLearnsWithoutAnID` and `Argv` in policy.go L92-L134.
 8. <a id="source-8"></a> [Failed resume](../../cmd/yoloctl/session_observe.go#L174-L195) — `observeCurrentLaunch` settles after a successful read; regressions `TestAFailedResumeIsRetriedNeverReplaced`, `TestSettleResumeDecidesOnlyAReadSilentFailure`.
-9. <a id="source-9"></a> [Selection](../../internal/agentprofile/profile.go#L172-L216) — `ObserveSpec.Selection`, `SelectionReport`; validation in `validateSession`; builtin/claude.yaml and builtin/codex.yaml `session.observe`.
-10. <a id="source-10"></a> [Status](../../internal/agentsession/status.go#L18-L175) — `Status` fields, `CurrentView`, `PreviousView.Text`, `LearnsID`, `Switched`; `Describe` L237.
-11. <a id="source-11"></a> [box session](../../cmd/yoloctl/box_session.go#L157-L235) — `writeBoxSession`; keys in box_session_test.go `checkConversationShape`.
+9. <a id="source-9"></a> [Selection](../../internal/agentprofile/profile.go#L205) — `ObserveSpec.Selection`, `SelectionReport`; validation in `validateSession`; builtin/claude.yaml and builtin/codex.yaml `session.observe`.
+10. <a id="source-10"></a> [Status](../../internal/agentsession/status.go#L181) — `Status` fields, `CurrentView`, `PreviousView.Text`, `LearnsID`, `Switched`; `Describe` L280.
+11. <a id="source-11"></a> [box session](../../cmd/yoloctl/box_session.go#L162) — `writeBoxSession`; keys in box_session_test.go `checkConversationShape`.
 12. <a id="source-12"></a> [Card row](../../cmd/yoloctl/chat_participant_runtime.go#L36-L106) — `participantRuntime`, `participantConversation`, `resumeOutcome`; `AgentRuntime.Conversation` and `runtimeRows` in internal/chatui/runtime.go.
 13. <a id="source-13"></a> [Card regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L75) — `TestParticipantConversationIsCertainOnly`; the card row in internal/chatui/ui_package_test.go `TestParticipantsShowObservedModelAndEffortOnly`.

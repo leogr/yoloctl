@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
+	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/agentsession"
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
@@ -46,6 +47,12 @@ func newIdentityFixture(t *testing.T) *identityFixture {
 	f := &identityFixture{t: t, unit: map[string]bool{}, marker: map[string]session.Marker{}, tombstone: map[string]session.Tombstone{}, names: []string{"coder"}, unitErr: map[string]error{}, markerErr: map[string]error{}}
 	oldActive, oldMarker, oldTomb, oldNames, oldNow := holderUnitActiveFn, readVMMarkerFn, readVMTombstoneFn, listBoxNamesFn, sessionNow
 	oldState, oldProbe := holderUnitStateFn, probeVMMarkerFn
+	oldResumeFile := resumeFilePresentFn
+	// Existing lifecycle fixtures model a saved conversation. Dedicated missing
+	// file tests override this seam; real no-follow storage is tested separately.
+	resumeFilePresentFn = func(context.Context, *agentbox.Config, *agentprofile.SessionSpec, string) (bool, error) {
+		return true, nil
+	}
 	holderUnitStateFn = func(_ context.Context, _ *container.Client, name string) (bool, error) {
 		return f.unit[name], f.unitErr[name]
 	}
@@ -71,6 +78,7 @@ func newIdentityFixture(t *testing.T) *identityFixture {
 	t.Cleanup(func() {
 		holderUnitActiveFn, readVMMarkerFn, readVMTombstoneFn, listBoxNamesFn, sessionNow = oldActive, oldMarker, oldTomb, oldNames, oldNow
 		holderUnitStateFn, probeVMMarkerFn = oldState, oldProbe
+		resumeFilePresentFn = oldResumeFile
 	})
 	return f
 }
