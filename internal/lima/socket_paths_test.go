@@ -63,6 +63,12 @@ func socketTestRoot(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// macOS gives a new directory its parent's group (/tmp is wheel), so
+	// directories created below would not carry the user's group until their
+	// creator changes it. Real config roots under the home already carry it.
+	if err := os.Chown(root, -1, os.Getgid()); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		if err := os.RemoveAll(root); err != nil {
 			t.Error(err)

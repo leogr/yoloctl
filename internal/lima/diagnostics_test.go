@@ -274,10 +274,16 @@ func TestHostDiagnosticsLogRotatesWithinItsBound(t *testing.T) {
 			done <- err
 		}()
 	}
+	// Wait for every writer before failing: a writer left running would
+	// call the next test's replaced openHostLog.
+	var errs []error
 	for range 8 {
 		if err := <-done; err != nil {
-			t.Fatal(err)
+			errs = append(errs, err)
 		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		t.Fatal(err)
 	}
 	total := 0
 	for _, name := range []string{path, path + ".1"} {
@@ -341,5 +347,32 @@ func TestHostDiagnosticsRetryOnlySpuriousENOENT(t *testing.T) {
 				t.Fatal("retried append lost the record")
 			}
 		})
+	}
+}
+
+// The logs directory must be this user's with mode 0700; its group is not
+// checked, because a concurrent creator on macOS can expose it with the
+// parent's group before changing it. Group-readable modes are still refused.
+func TestHostDiagnosticsLogsDirectoryRequiresOwnerAndPrivateMode(t *testing.T) {
+	base := socketTestRoot(t)
+	t.Setenv("YOLOCTL_HOME", base)
+	path, err := layout.HostDiagnosticsLogPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := LogDiagnostics("mode", []byte("x")); err == nil || !strings.Contains(err.Error(), "mode 0700") {
+		t.Fatalf("group-readable logs directory accepted: %v", err)
+	}
+	if err := os.Chmod(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := LogDiagnostics("mode", []byte("x")); err != nil {
+		t.Fatal(err)
 	}
 }

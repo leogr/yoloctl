@@ -14,7 +14,6 @@ import (
 	"unicode"
 
 	"github.com/leogr/yoloctl/internal/layout"
-	"github.com/leogr/yoloctl/internal/safepath"
 	"golang.org/x/sys/unix"
 )
 
@@ -45,17 +44,58 @@ func LogDiagnostics(operation string, raw []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := safepath.PrivateDirectory(root, "logs", os.Getuid(), os.Getgid()); err != nil {
-		return fmt.Errorf("open host diagnostics directory %q: %w", filepath.Dir(path), err)
-	}
-	dir, err := unix.Open(filepath.Dir(path), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	dir, err := openLogsDirectory(root)
 	if err != nil {
-		return err
+		return fmt.Errorf("open host diagnostics directory %q: %w", filepath.Dir(path), err)
 	}
 	defer func() { _ = unix.Close(dir) }()
 	// Quote diagnostic bytes: explicitly reading the log cannot replay controls.
 	line := time.Now().UTC().Format(time.RFC3339Nano) + " " + strconv.Quote(operation) + " " + strconv.QuoteToASCII(string(raw)) + "\n"
 	return appendHostLog(dir, filepath.Base(path), path, line)
+}
+
+const logsDirectoryFlags = unix.O_RDONLY | unix.O_DIRECTORY | unix.O_NOFOLLOW | unix.O_CLOEXEC
+
+// openLogsDirectory creates or opens <root>/logs without following links and
+// requires it to be owned by this user with mode 0700. Several yoloctl
+// processes may create it at once, and a new directory first takes its
+// parent's group on macOS (BSD semantics), until its creator changes it. With
+// no group permission bits the group grants nothing, so it is not checked;
+// the creator still sets the user's group.
+func openLogsDirectory(root string) (int, error) {
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return -1, err
+	}
+	parent, err := unix.Open(root, logsDirectoryFlags, 0)
+	if err != nil {
+		return -1, err
+	}
+	defer func() { _ = unix.Close(parent) }()
+	created := false
+	if err := unix.Mkdirat(parent, "logs", 0o700); err == nil {
+		created = true
+	} else if !errors.Is(err, os.ErrExist) {
+		return -1, err
+	}
+	fd, err := unix.Openat(parent, "logs", logsDirectoryFlags, 0)
+	if err != nil {
+		return -1, err
+	}
+	if created {
+		err = errors.Join(unix.Fchown(fd, os.Getuid(), os.Getgid()), unix.Fsync(fd), unix.Fsync(parent))
+	}
+	var st unix.Stat_t
+	if err == nil {
+		err = unix.Fstat(fd, &st)
+	}
+	if err == nil && (st.Uid != uint32(os.Getuid()) || st.Mode&0o777 != 0o700) {
+		err = errors.New("logs directory must be owned by this user with mode 0700")
+	}
+	if err != nil {
+		_ = unix.Close(fd)
+		return -1, err
+	}
+	return fd, nil
 }
 
 // appendHostLog appends one record under an exclusive lock on the current
