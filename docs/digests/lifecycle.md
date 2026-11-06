@@ -13,11 +13,10 @@ units converge. Old containers recreate to join the workload memory pool.
 [FACT] Primary workdir inspection uses the recorded sandbox `--workdir` from
 `Path`/`Args`, independent of desired paths and mount order. Other `/workdir`
 binds remain extras; moved paths and access changes still reconcile. Missing
-or ambiguous metadata aborts inspection before mutation. `nerdctl inspect`
-also returns containers whose ID merely starts with the request, so an inspect
-selects only the entry whose recorded name (or full ID, for fixed-ID callers)
-equals it: none is "no such container", more than one an error.
-[2](#source-2) [22](#source-22) [23](#source-23) [24](#source-24)
+or ambiguous metadata aborts inspection before mutation. Inspect keeps only
+the entry whose recorded name or full ID equals the request (nerdctl also
+returns ID-prefix matches): none is "no such container", several an error.
+[2](#source-2) [22](#source-22) [23](#source-23) [24](#source-24) [29](#source-29)
 
 [FACT] Start on a running container is a no-op. Other starts/restarts refuse
 recreate-only drift with inspect/recreate guidance before runtime changes,
@@ -38,14 +37,14 @@ with a logs hint. Native commands use the local sandbox SSH launch path.
 container or declaration cleanup. An unavailable space or failed container listing
 aborts, including with `--force` or `--keep-manifest`; it cannot become successful
 declaration-only deletion. A confirmed absent container still permits normal
-cleanup. Regression tests inject failed and partial inventories and verify that
-declaration bytes remain unchanged. [20](#source-20) [21](#source-21)
+cleanup; failed and partial inventories are regression-tested to leave
+declaration bytes unchanged. [20](#source-20) [21](#source-21)
 
 [FACT] Graceful stop requests `kill -TERM -1` through private OpenShell SSH as
 the confined user without a PTY, leaving PID 1 to reap and clean up. Its
 three-second budget precedes `nerdctl stop --time 30` and SIGKILL escalation.
-Modern runc's obsolete `--all` cannot broadcast SIGTERM. The isolated smoke
-checks exit 143, repeated stop/start, cached recreate and peer survival.
+Modern runc's obsolete `--all` cannot broadcast SIGTERM. Smoke checks cover
+exit 143, repeated stop/start, cached recreate and peer survival.
 [15](#source-15) [16](#source-16) [17](#source-17)
 [18](#source-18) [19](#source-19)
 
@@ -84,8 +83,8 @@ and leaves boxes stopped. Schema-2 migration is removed.
 [FACT] Controller restart preserves session units. Interrupted mutations may
 resolve from durable evidence or an allowlisted read-only proof; unproved
 outcomes retain dependency holds for host review. Recovery never replays a
-command. [28](#source-28) Unit/publication and isolated archive tests cover recovery,
-export/import/recreate, not physical power-loss behavior.
+command. [28](#source-28) Tests cover recovery and export/import/recreate, not
+physical power loss.
 [7](#source-7) [12](#source-12) [13](#source-13)
 
 ## Sources
@@ -113,10 +112,12 @@ export/import/recreate, not physical power-loss behavior.
 20. <a id="source-20"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2134) — `newAgentboxDestroyCmd` requires `RuntimeInventory` before teardown.
 21. <a id="source-21"></a> [cmd/yoloctl/agentbox_test.go](../../cmd/yoloctl/agentbox_test.go#L30) — `TestAgentboxDestroyUncertainRuntimePreservesDeclaration`: inventory failures, force/keep-manifest combinations.
 22. <a id="source-22"></a> [Inspector regressions](../../internal/agentbox/live_inspect_test.go#L20) — convergence, drift and refusal.
-23. <a id="source-23"></a> [parseInspect](../../internal/container/container.go#L568) — runtime argv decoding; `selectInspectEntry` and `parseContainerIP` select the exact entry (tests in inspect_select_test.go).
+23. <a id="source-23"></a> [Inspect selection](../../internal/container/container.go#L615-L726) — `parseContainerIP`, `parseInspect`, `selectInspectEntry`;
+    [tests](../../internal/container/inspect_select_test.go#L1-L99).
 24. <a id="source-24"></a> [nerdctl v2.3.5](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/inspecttypes/dockercompat/dockercompat.go#L339) — `Path`/`Args` from OCI argv.
 25. <a id="source-25"></a> [reconcile.go](../../internal/agentbox/reconcile.go#L91) — `ReconcileForStart`, `CheckStart`, shared planning.
 26. <a id="source-26"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L664) — `startAgentbox`, `preflightAgentboxRestartWithIntent`, `newAgentboxRestartCmd`.
 27. <a id="source-27"></a> [Command regressions](../../cmd/yoloctl/agentbox_start_test.go#L24) — early/late drift refusal and teardown ordering.
 
 28. <a id="source-28"></a> [Interrupted-outcome recovery](controller-recovery.md) — durable proofs, dependency holds and storage reconciliation.
+29. <a id="source-29"></a> [nerdctl v2.3.5 container walker](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/idutil/containerwalker/containerwalker.go#L47-L74) — `Walk` matches the name label or an ID prefix; `container inspect` returns every match.
