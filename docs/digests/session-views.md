@@ -7,7 +7,8 @@ Inside yoloctl it occupies a tab; standalone attachment uses the same model,
 core, key encoder, mouse/selection, colors and clipboard policy without chrome.
 The configured palette key (default Ctrl+Y), then Ctrl+W, Ctrl+D or plain `d`
 (tmux-style) detaches standalone attachment; doubling the prefix forwards it,
-also when the configured key is one of those. Inside the TUI only the prefix
+also when the configured key is Ctrl+D or `d` (Ctrl+W keeps its old detach
+precedence). Inside the TUI only the prefix
 then Ctrl+W closes a pane; the prefix then Ctrl+D on an empty command line
 quits the TUI. An explicit browser `ask` opens a dialog immediately;
 Ctrl+O/Esc answers without a prefix. Other prefix combinations reach the child.
