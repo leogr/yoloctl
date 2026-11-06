@@ -71,7 +71,9 @@ write it never fails an operation that succeeded.
 Claude profile import uses --anthropic-dir for its selected config/credential/
 selection; legacy --file remains separate. Preserve a disposable login before
 redirecting a managed launch or recreating a box; bare direct exec needs the
-explicit config-path environment prefix. [22](#source-22)
+explicit config-path environment prefix. AWS keys use private account-secret
+input, explicit provider/env/capability settings and recreation after changes;
+the optional aws feature adds only the CLI. [22](#source-22) [23](#source-23)
 
 [FACT] Box/account/runtime commands require a running matching controller.
 Offline `space list/show` provide boot/VM metadata, with unavailable declarations
@@ -215,3 +217,5 @@ version probe is bounded. Ordinary commands retain startup setup. [18](#source-1
 21. <a id="source-21"></a> [Host and Lima diagnostics](../digests/host-diagnostics.md).
 
 22. <a id="source-22"></a> [Native credential formats and import](../digests/claude-auth.md).
+
+23. <a id="source-23"></a> [AWS CLI and Bedrock configuration](../digests/bedrock.md).

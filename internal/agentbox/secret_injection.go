@@ -38,7 +38,7 @@ const openshellUserEnvironment = "OPENSHELL_USER_ENVIRONMENT"
 // failure surfacing here is the narrow check-to-create race (or a corrupt
 // manifest) and fails the create cleanly instead of starting the agent
 // unauthenticated. The account reload is unconditional for every real-agent
-// box, including agents with no injection rules (such as Codex), because
+// box, including custom agents with no injection rules, because
 // their native state still belongs to the selected account. A missing secret
 // VALUE stays non-fatal — the agent falls back to its own auth.
 func userEnvironmentJSON(c *Config) (string, error) {

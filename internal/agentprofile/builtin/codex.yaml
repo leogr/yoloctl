@@ -114,3 +114,10 @@ session:
 auth:
   format: codex
   credential_file: auth.json
+
+# Optional AWS credentials for an explicitly configured Bedrock provider.
+secret_injection:
+  - secret: AWS_ACCESS_KEY_ID
+  - secret: AWS_SECRET_ACCESS_KEY
+  - secret: AWS_SESSION_TOKEN
+  - secret: AWS_BEARER_TOKEN_BEDROCK

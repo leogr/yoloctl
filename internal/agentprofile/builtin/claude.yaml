@@ -148,3 +148,7 @@ auth:
 # once by `account auth import`.
 secret_injection:
   - secret: ANTHROPIC_API_KEY
+  - secret: AWS_ACCESS_KEY_ID
+  - secret: AWS_SECRET_ACCESS_KEY
+  - secret: AWS_SESSION_TOKEN
+  - secret: AWS_BEARER_TOKEN_BEDROCK

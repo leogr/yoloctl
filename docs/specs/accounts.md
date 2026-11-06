@@ -13,7 +13,9 @@ before mounting it, and nothing formats it [7](#source-7). [1](#source-1)
 [FACT] Secrets projected at container creation and agent-owned native files
 are independent auth paths. Import copies once and refuses active consumers;
 status reports presence/unavailability rather than provider validity. Codex's
-builtin uses native auth; Claude, Gemini, agy, Pi and OpenCode additionally declare API-key injection.
+builtin uses native OpenAI auth; both Claude and Codex additionally declare
+optional AWS-key injection. Claude, Gemini, agy, Pi and OpenCode also declare
+their existing API-key injection.
 [2](#source-2)
 
 [FACT] Managed Claude sessions relocate the Anthropic profile tree into the
@@ -23,7 +25,8 @@ profile privately before recreation; selected-profile import retains its config,
 credential and active selection. Claude/Codex status reports bounded local
 material classifications, never provider validity. Codex keeps its existing
 mount; file-store guidance is explicit and no store override is forced.
-[9](#source-9)
+[9](#source-9) AWS status reports stored presence only, not provider validity or
+current-box delivery; provider/egress setup is explicit. [10](#source-10)
 
 [FACT] Account content is not reconcile drift. Changed environment secrets need
 explicit recreation; changing the selected identity is itself a recreate reason.
@@ -81,3 +84,5 @@ the headless ChatGPT device method is available for remote login. [6](#source-6)
 8. <a id="source-8"></a> [Antigravity status line reporter](../digests/agy-observation.md) — routes A and B.
 
 9. <a id="source-9"></a> [Claude/Codex native credential handling](../digests/claude-auth.md).
+
+10. <a id="source-10"></a> [AWS secrets, CLI and user-owned Bedrock setup](../digests/bedrock.md).

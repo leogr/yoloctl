@@ -80,6 +80,11 @@ const NPMGlobalPrefix = "/home/sandbox/.npm-global"
 // module). Policy-only features (`github`, `pypi`) carry no install —
 // their tools live in the base image.
 var registry = map[string]Feature{
+	"aws": {
+		Name:        "aws",
+		Description: "Latest AWS CLI v2 at image build (official signed archive, Linux amd64/arm64 with glibc); requires user-selected network capabilities and credentials",
+		Install:     &Install{Kind: InstallDockerfile, Dockerfile: awsInstallDockerfile()},
+	},
 	"yolo.chat.skill": {
 		Name:        "yolo.chat.skill",
 		Description: "AIRC agent JSONL client, server binary and collaboration skill; endpoint access requires explicit policy",
