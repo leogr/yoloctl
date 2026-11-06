@@ -1,8 +1,8 @@
 # AWS CLI and Bedrock setup
 
-Verification: `75e0e9bc1ebf88c5293a59623be594388d737ea0` and accompanying changes.
+Verification: `cae7f0d106ee85c3193168becc12a3ee8fdc25c6` and accompanying changes.
 
-[FACT] Builtin Claude and Codex profiles project exactly four optional account
+[FACT] Builtin Claude and Codex profiles project exactly four optional AWS account
 secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and
 `AWS_BEARER_TOKEN_BEDROCK`. Delivery uses the existing private child-environment
 channel at container creation; missing keys remain nonfatal. Both agents on the
@@ -82,7 +82,7 @@ yoloctl box create claude-aws --space dev --agent claude --account aws --feature
 yoloctl box create codex-aws --space dev --agent codex --account aws --features aws --capability network.my-bedrock --env AWS_REGION=us-east-1 --no-attach
 ```
 
-[FACT — upstream configuration] Claude uses `CLAUDE_CODE_USE_BEDROCK=1` and a
+[FACT] Per upstream documentation, Claude uses `CLAUDE_CODE_USE_BEDROCK=1` and a
 region. For Codex, edit the account's native `.codex/config.toml` with:
 
 ```toml
@@ -93,21 +93,22 @@ web_search = "disabled"
 Choose a model/inference profile available to the AWS identity and region.
 Codex's `amazon-bedrock` selects Mantle instead and needs its own endpoint grant.
 SSO, global STS, FIPS and private endpoints also require explicit host selection;
-middle-label host wildcards are rejected. Neither provider permissions nor live
+middle-label host wildcards are rejected [12](#source-12). Neither provider permissions nor live
 SigV4/streaming, inference, expiry/refresh or recreate survival follows from source
 fixtures. No AWS account was available for live provider testing.
 [7](#source-7) [8](#source-8) [10](#source-10)
 
 ## Sources
 
-1. <a id="source-1"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L1) — explicit optional AWS and existing Anthropic-key declarations.
-2. <a id="source-2"></a> [Private projection](../../internal/agentbox/secret_injection.go#L1) — profile narrowing and create-time account reload; native/chat regression in `aws_environment_linux_test.go`.
-3. <a id="source-3"></a> [Auth status](../../cmd/yoloctl/account_auth.go#L1) — value-free summary through `awsSecretsPresent` and retained native errors.
-4. <a id="source-4"></a> [Verified installer](../../internal/features/aws-install.sh#L1) — signing-key fingerprint, architecture selection and verification before execution.
-5. <a id="source-5"></a> [AWS invalidation test](../../internal/agentboximage/aws_recipe_test.go#L1) — installer/key bytes in the recipe consumed by `composedImageRef`.
-6. <a id="source-6"></a> [Secret input](../../cmd/yoloctl/account.go#L650) — `newAccountSecretSetCmd`, private stdin/from-env.
-7. <a id="source-7"></a> [Example validation](../../cmd/yoloctl/account_auth_aws_test.go#L1) — actual Cobra flags, strict custom-grant loading and policy composition; implementations in `agentbox.go`, `internal/capabilities/user.go` and `internal/agentbox/compose.go`.
+1. <a id="source-1"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L1-L154) — explicit optional AWS and existing Anthropic-key declarations.
+2. <a id="source-2"></a> [Private projection](../../internal/agentbox/secret_injection.go#L1-L73) — profile narrowing and create-time account reload; native/chat regression in `aws_environment_linux_test.go`.
+3. <a id="source-3"></a> [Auth status](../../cmd/yoloctl/account_auth.go#L1-L431) — value-free summary through `awsSecretsPresent` and retained native errors.
+4. <a id="source-4"></a> [Verified installer](../../internal/features/aws-install.sh#L1-L36) — signing-key fingerprint, architecture selection and verification before execution.
+5. <a id="source-5"></a> [AWS invalidation test](../../internal/agentboximage/aws_recipe_test.go#L1-L56) — installer/key bytes in the recipe consumed by `composedImageRef`.
+6. <a id="source-6"></a> [Secret input](../../cmd/yoloctl/account.go#L673) — `newAccountSecretSetCmd`, private stdin/from-env.
+7. <a id="source-7"></a> [Example validation](../../cmd/yoloctl/account_auth_aws_test.go#L1-L128) — actual Cobra flags, strict custom-grant loading and policy composition; implementations in `agentbox.go`, `internal/capabilities/user.go` and `internal/agentbox/compose.go`.
 8. <a id="source-8"></a> [Official OpenAI Bedrock guidance](https://learn.chatgpt.com/docs/amazon-bedrock) — documented provider/region configuration, checked 2026-11-06; not installed-provider execution proof.
-9. <a id="source-9"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1) — four-key AWS declarations; OpenAI auth remains native.
+9. <a id="source-9"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1-L123) — four-key AWS declarations; OpenAI auth remains native.
 10. <a id="source-10"></a> [Claude Bedrock guidance](https://code.claude.com/docs/en/amazon-bedrock) — documented provider/region configuration, checked 2026-11-06.
 11. <a id="source-11"></a> [AWS installation reference](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) — official architectures, runtime requirements and signing key, checked 2026-11-06.
+12. <a id="source-12"></a> [Host wildcard rule](../../internal/agentbox/compose.go#L300-L331) — `lintHostPattern`.

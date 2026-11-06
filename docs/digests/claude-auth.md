@@ -1,6 +1,6 @@
 # Claude profile storage and local credential status
 
-Verification: `05865b85c7daae8778e234cd0d0693971c64e6d2` and accompanying corrections.
+Verification: `cae7f0d106ee85c3193168becc12a3ee8fdc25c6` and accompanying changes.
 
 [FACT] Claude keeps its original native leaf bound at `/home/sandbox/.claude`.
 Managed sessions prefix both `CLAUDE_CONFIG_DIR=/home/sandbox/.claude` and
@@ -62,12 +62,12 @@ surviving recreation. [4](#source-4) [8](#source-8) [9](#source-9)
 
 ## Sources
 
-1. <a id="source-1"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L1) — original state bind, nonsecret launch paths and native auth conventions.
-2. <a id="source-2"></a> [Resolver](../../cmd/yoloctl/agentstate.go#L1) — original whole-leaf account selection and normalization.
-3. <a id="source-3"></a> [Source-swap regression](../../internal/agentbox/account_state_source_test.go#L1) — runtime mount source remains the whole leaf after its child is replaced; CLI normalization control in `account_auth_profiles_test.go`.
-4. <a id="source-4"></a> [Launch prefix](../../cmd/yoloctl/launchenv.go#L1) — applyLaunchEnv; ordinary session path in `session_client.go` and tracked initial/resumed path in `session_identity.go`.
-5. <a id="source-5"></a> [Launch regressions](../../cmd/yoloctl/launchenv_test.go#L1) — managed/explicit selection fixture and bare-exec limit; tracked resume coverage in `session_identity_test.go`.
-6. <a id="source-6"></a> [Native helper](../../internal/accountstate/guest.py#L1) — auth_read/auth_status, account ownership and atomic no-follow writes.
-7. <a id="source-7"></a> [Native regressions](../../internal/accountstate/testdata/test_guest.py#L1) — formats, bounds, links, private classifications and imported-directory ownership.
-8. <a id="source-8"></a> [Import shape](../../cmd/yoloctl/account_auth_anthropic.go#L1) — bounded source reads, selection and destination validation.
+1. <a id="source-1"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L1-L154) — original state bind, nonsecret launch paths and native auth conventions.
+2. <a id="source-2"></a> [Resolver](../../cmd/yoloctl/agentstate.go#L1-L259) — original whole-leaf account selection and normalization.
+3. <a id="source-3"></a> [Source-swap regression](../../internal/agentbox/account_state_source_test.go#L1-L46) — runtime mount source remains the whole leaf after its child is replaced; CLI normalization control in `account_auth_profiles_test.go`.
+4. <a id="source-4"></a> [Launch prefix](../../cmd/yoloctl/launchenv.go#L1-L42) — applyLaunchEnv; ordinary session path in `session_client.go` and tracked initial/resumed path in `session_identity.go`.
+5. <a id="source-5"></a> [Launch regressions](../../cmd/yoloctl/launchenv_test.go#L1-L132) — managed/explicit selection fixture and bare-exec limit; tracked resume coverage in `session_identity_test.go`.
+6. <a id="source-6"></a> [Native helper](../../internal/accountstate/guest.py#L1-L350) — auth_read/auth_status, account ownership and atomic no-follow writes.
+7. <a id="source-7"></a> [Native regressions](../../internal/accountstate/testdata/test_guest.py#L1-L299) — formats, bounds, links, private classifications and imported-directory ownership.
+8. <a id="source-8"></a> [Import shape](../../cmd/yoloctl/account_auth_anthropic.go#L1-L206) — bounded source reads, selection and destination validation.
 9. <a id="source-9"></a> [Controller import](../../cmd/yoloctl/controller_documents.go#L275) — applyControllerAuthImport, digest, scope and consumers; CLI help in `account_auth.go` states preservation order.

@@ -1,6 +1,6 @@
 # Account authentication and mutation safety
 
-Verification: `75e0e9bc1ebf88c5293a59623be594388d737ea0` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `cae7f0d106ee85c3193168becc12a3ee8fdc25c6` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Account secrets and native state are separate delivery paths. At container
 creation, `userEnvironmentJSON` reloads the selected account and projects only

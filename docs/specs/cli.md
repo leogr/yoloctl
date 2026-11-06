@@ -68,8 +68,8 @@ write it never fails an operation that succeeded.
 [21](#source-21)
 
 [FACT] Account auth status distinguishes local material from provider validity.
-Claude profile import uses --anthropic-dir for its selected config/credential/
-selection; legacy --file remains separate. Preserve a disposable login before
+Claude profile import uses --anthropic-dir for its selected
+config/credential/selection; legacy --file remains separate. Preserve a disposable login before
 redirecting a managed launch or recreating a box; bare direct exec needs the
 explicit config-path environment prefix. AWS keys use private account-secret
 input, explicit provider/env/capability settings and recreation after changes;
