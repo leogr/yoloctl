@@ -70,7 +70,9 @@ func (m *model) attachedKey(k tea.Key) (tea.Model, tea.Cmd) {
 	if m.attachPrefix != nil {
 		previous := *m.attachPrefix
 		m.attachPrefix = nil
-		if isStandaloneDetachKey(k) {
+		// Ctrl+W keeps its old precedence; the tmux-style keys yield to a
+		// doubled configured prefix (e.g. palette_key ctrl+d), which forwards it.
+		if isStandaloneCloseKey(k) || !prefix && isStandaloneDetachKey(k) {
 			return m, tea.Quit
 		}
 		m.sendKey(t.Session, previous, false)
@@ -98,20 +100,27 @@ func (m *model) attachedKey(k tea.Key) (tea.Model, tea.Cmd) {
 // detaches standalone attachment: Ctrl+W, or tmux-style Ctrl+D and plain d.
 // Lock modifiers are ignored; any other key is forwarded with the prefix.
 func isStandaloneDetachKey(k tea.Key) bool {
-	switch tea.KeyPressMsg(k).Keystroke() {
-	case "ctrl+w", "ctrl+d", "d":
+	if isStandaloneCloseKey(k) {
+		return true
+	}
+	if s := tea.KeyPressMsg(k).Keystroke(); s == "ctrl+d" || s == "d" {
 		return true
 	}
 	mod := k.Mod &^ (tea.ModCapsLock | tea.ModNumLock)
 	switch {
-	case mod == 0 && k.Text == "" && (k.Code == 0x17 || k.Code == 0x04):
-		return true // legacy C0 Ctrl+W / Ctrl+D
-	case mod == tea.ModCtrl && (k.Code == 'w' || k.Code == 'd'):
+	case mod == 0 && k.Text == "" && k.Code == 0x04:
+		return true // legacy C0 Ctrl+D
+	case mod == tea.ModCtrl && k.Code == 'd':
 		return true
 	case mod == 0 && k.Code == 'd':
 		return true
 	}
 	return false
+}
+
+// isStandaloneCloseKey is the original Ctrl+W detach check, unchanged.
+func isStandaloneCloseKey(k tea.Key) bool {
+	return tea.KeyPressMsg(k).Keystroke() == "ctrl+w" || k.Code == 0x17 && k.Mod == 0
 }
 
 // A setup failure has no holder snapshot: its diagnostic was drawn only in

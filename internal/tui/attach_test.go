@@ -106,3 +106,33 @@ func TestStandaloneTmuxStyleDetachKeys(t *testing.T) {
 		})
 	}
 }
+
+func TestStandaloneDoubledCustomPrefixStillForwards(t *testing.T) {
+	for _, key := range []string{"ctrl+d", "d"} {
+		t.Run(key, func(t *testing.T) {
+			m := newTestModel(t, 40, 8)
+			m.cfg.PaletteKey = key
+			m.standalone = true
+			m.focusPalette = false
+			_, capture := mouseCapture(t, m, "")
+			press := tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}
+			if key == "d" {
+				press = tea.KeyPressMsg{Code: 'd', Text: "d"}
+			}
+			_, _ = m.Update(press)
+			_, cmd := m.Update(press)
+			if cmd != nil {
+				if _, ok := cmd().(tea.QuitMsg); ok {
+					t.Fatal("doubled prefix detached")
+				}
+			}
+			want := "\x04"
+			if key == "d" {
+				want = "d"
+			}
+			if got := capture(); got != want {
+				t.Fatalf("doubled prefix sent %q, want %q once", got, want)
+			}
+		})
+	}
+}

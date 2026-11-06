@@ -1,13 +1,15 @@
 # Managed attachment frontends and private transport
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; standalone detach keys re-verified on `3f34df63ba6a0965fd1fcba9e13f515021c89e23` plus the tmux-style detach change; re-read cited sources when changing behavior.
 
 [FACT] Interactive managed attachment defaults to the shared TUI renderer.
 Inside yoloctl it occupies a tab; standalone attachment uses the same model,
 core, key encoder, mouse/selection, colors and clipboard policy without chrome.
 The configured palette key (default Ctrl+Y), then Ctrl+W, Ctrl+D or plain `d`
-(tmux-style) detaches standalone attachment; doubling the prefix forwards it.
-Inside the TUI only Ctrl+W closes a pane, because Ctrl+D quits the TUI there. An explicit browser `ask` opens a dialog immediately;
+(tmux-style) detaches standalone attachment; doubling the prefix forwards it,
+also when the configured key is one of those. Inside the TUI only the prefix
+then Ctrl+W closes a pane; the prefix then Ctrl+D on an empty command line
+quits the TUI. An explicit browser `ask` opens a dialog immediately;
 Ctrl+O/Esc answers without a prefix. Other prefix combinations reach the child.
 A notice can overlay the last row until the next non-modifier key. Child exit
 status reaches the invoking shell. [1](#source-1) [2](#source-2) [3](#source-3) [20](#source-20)
@@ -107,8 +109,8 @@ holder view are unaffected. [24](#source-24)
 ## Sources
 
 1. <a id="source-1"></a> [controller_client.go](../../cmd/yoloctl/controller_client.go#L318) — `callControllerTerminal`, recursive frontend guard and request routing.
-2. <a id="source-2"></a> [attach.go](../../internal/tui/attach.go#L18) — `RunAttached`, standalone input/detach (`isStandaloneDetachKey`, `TestStandaloneTmuxStyleDetachKeys`); shared model in `tui.go`.
-3. <a id="source-3"></a> [attach_test.go](../../internal/tui/attach_test.go#L11) — standalone PTY key/mouse and notice regressions.
+2. <a id="source-2"></a> [attach.go](../../internal/tui/attach.go#L18) — `RunAttached`, standalone input; detach in `attachedKey` (L59), `isStandaloneDetachKey`/`isStandaloneCloseKey` (L102–L124); shared model in `tui.go`.
+3. <a id="source-3"></a> [attach_test.go](../../internal/tui/attach_test.go#L11) — standalone PTY key/mouse and notice regressions; `TestStandaloneTmuxStyleDetachKeys` (L59), `TestStandaloneDoubledCustomPrefixStillForwards` (L110).
 4. <a id="source-4"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L116) — shared attach help and `addPassthroughFlag`.
 5. <a id="source-5"></a> [Holder and replay](session-replay.md) — canonical state, mixed viewers and compatibility limitations.
 6. <a id="source-6"></a> [view.go](../../internal/session/view.go#L20) — subscription, `Relay`, snapshot/event validation and clipboard framing.
