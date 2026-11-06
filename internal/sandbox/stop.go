@@ -21,13 +21,19 @@ import (
 // A broken SSH endpoint or a child ignoring SIGTERM still gets the runtime's
 // bounded stop/escalation. Session-aware callers tear down holders first.
 func Stop(ctx context.Context, c *container.Client, name string) error {
+	return stopWithProbeTimeout(ctx, c, name, nil)
+}
+
+// Only semantic command fixtures replace timeout construction; public Stop
+// always uses the same three-second, parent-bounded probe.
+func stopWithProbeTimeout(ctx context.Context, c *container.Client, name string, newTimeout func(context.Context, time.Duration) (context.Context, context.CancelFunc)) error {
 	if err := spaceenv.RequireSpace(c.Env()); err != nil {
 		return err
 	}
 	if err := layout.ValidateName("box", name); err != nil {
 		return err
 	}
-	probe, cancel := context.WithTimeout(ctx, 3*time.Second)
+	probe, cancel := stopProbeContext(ctx, newTimeout)
 	var conn net.Conn
 	var err error
 	if spaceenv.Native() {
@@ -43,6 +49,13 @@ func Stop(ctx context.Context, c *container.Client, name string) error {
 	}
 	cancel()
 	return c.Stop(ctx, name)
+}
+
+func stopProbeContext(ctx context.Context, newTimeout func(context.Context, time.Duration) (context.Context, context.CancelFunc)) (context.Context, context.CancelFunc) {
+	if newTimeout == nil {
+		newTimeout = context.WithTimeout
+	}
+	return newTimeout(ctx, 3*time.Second)
 }
 
 func signalWorkloads(ctx context.Context, conn net.Conn) error {
