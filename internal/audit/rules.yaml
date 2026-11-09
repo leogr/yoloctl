@@ -6,6 +6,18 @@
 - macro: yolo_openshell_setup
   condition: (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and container.label[yoloctl.openshell.protocol] = "2" and proc.exepath in (/opt/yoloctl/openshell-helper/yoloctl-openshell-helper, /.openshell/runtime/openshell-sandbox, /.openshell/runtime/openshell-supervisor))
 
+# Suppress only successful network-argument reads by the fixed broker.
+# Names/paths/labels narrow noise; they are not executable-authenticity proof.
+- macro: yolo_openshell_netproxy_read
+  condition: >-
+    evt.type = process_vm_readv and evt.res = SUCCESS and
+    container.label[yoloctl.audit.schema] = "1" and
+    container.label[yoloctl.audit.runtime_mode] = confined and
+    container.label[yoloctl.audit.network_unconfined] = "false" and
+    container.label[yoloctl.openshell.protocol] = "2" and
+    proc.exepath = /.openshell/runtime/openshell-sandbox and
+    proc.name = openshell-netwo
+
 - macro: yolo_fs_mutation
   condition: (evt.type in (open, openat, openat2, creat, truncate, ftruncate, rename, renameat, renameat2, unlink, unlinkat, mkdir, mkdirat, rmdir, symlink, symlinkat, link, linkat) and (evt.is_open_write = true or not evt.type in (open, openat, openat2)))
 
@@ -56,7 +68,7 @@
 - rule: Yolo process inspection
   desc: Workload cross-process inspection outside known debugger executable paths; names are context rather than authenticity proof
   condition: >-
-    evt.type in (ptrace, process_vm_readv, process_vm_writev) and yolo_workload and not (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and proc.exepath in (/usr/bin/gdb, /usr/bin/lldb, /usr/bin/strace, /usr/local/bin/dlv))
+    evt.type in (ptrace, process_vm_readv, process_vm_writev) and yolo_workload and not (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and proc.exepath in (/usr/bin/gdb, /usr/bin/lldb, /usr/bin/strace, /usr/local/bin/dlv)) and not yolo_openshell_netproxy_read
   output: "Yolo process inspection  executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
   priority: NOTICE
   tags: [yoloctl]

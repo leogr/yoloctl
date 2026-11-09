@@ -1,6 +1,6 @@
 # Audit rule paths and container recognition
 
-Verification: `e078b4ee0cf92e680a4a5ce2f1e52c434e487227` and accompanying changes.
+Verification: `da9b51000877e5178f47774f1a837e66ddcedd42` and accompanying changes.
 
 [FACT] Filesystem rules distinguish the path changed by a syscall from the
 payload of a new symbolic link. In pinned libs 0.26.1, `fs.path.source` for
@@ -20,6 +20,19 @@ infrastructure writes use the same fixed-executable, schema-1 confined-container
 and protocol-2 context as the namespace rule. Missing context does not grant
 that exception. These remain detection heuristics, not authenticity proofs.
 [1](#source-1) [3](#source-3)
+
+[FACT] Process inspection additionally excludes only successful
+`process_vm_readv` events from `/.openshell/runtime/openshell-sandbox` with
+`proc.name=openshell-netwo`, schema 1, protocol 2, confined runtime mode and
+`network_unconfined=false`. Failed reads, ptrace, writes, startup thread names,
+other executable paths, privileged mode and unknown/missing context gain no
+exception. Existing debugger and host-scope rules are unchanged. A renamed
+ordinary executable still remains eligible. The predicate does not verify
+the target PID/address or executable authenticity: a substituted or compromised
+runtime matching this context can hide successful reads. Predicate fixtures
+do not prove live event attribution or noise reduction. Explicit updated
+`audit enable` installs changed pinned rules; there is no automatic reload.
+[1](#source-1) [9](#source-9) [10](#source-10) [11](#source-11)
 
 [FACT] Container plugin 0.7.6 registers nerdctl systemd-scope recognition in its
 CRI matcher; its native-containerd matcher handles namespace/ID layouts.
@@ -48,3 +61,6 @@ cgroup identity or noise rates. [5](#source-5) [6](#source-6) [8](#source-8)
 6. <a id="source-6"></a> [Container 0.7.6 matcher selection](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/src/matchers/matcher.cpp) — engines select matchers; unmatched cgroups become host.
 7. <a id="source-7"></a> [Container 0.7.6 metadata fetcher](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/go-worker/pkg/container/fetcher.go) — enabled-provider lookup and retry bounds.
 8. <a id="source-8"></a> [Metadata extraction](../../third_party/audit-plugin/plugin.cpp#L1) — thread container ID lookup and bounded snapshot extraction.
+9. <a id="source-9"></a> [Broker-read regressions](../../internal/audit/process_inspection_test.go#L1) — `TestOpenShellBrokerReadException`, positive/negative equality fixtures and unchanged inspection scope; not a Falco evaluator.
+10. <a id="source-10"></a> [Native audit handlers](../../cmd/yoloctl/controller_audit_linux.go#L1) — explicit enable installs the pinned `RulesDigest`.
+11. <a id="source-11"></a> [Configuration](../../internal/audit/config.go#L1) — automatic file reloads disabled.
