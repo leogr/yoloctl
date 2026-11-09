@@ -27,8 +27,9 @@ func forwardCommandFixture(t *testing.T, units string, d *container.Details) str
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("YOLOCTL_TEST_FORWARD_DIR", dir)
-	files := map[string][]byte{"units": []byte(units), "containers.json": nil, "inspect.json": []byte("[]")}
+	files := map[string][]byte{"units": []byte(units), "containers.json": nil, "inspect.json": []byte("[]"), "target-id": nil}
 	if d != nil {
+		files["target-id"] = []byte(d.ID)
 		files["containers.json"], err = json.Marshal(container.Container{ID: d.ID, Name: d.Name})
 		if err != nil {
 			t.Fatal(err)
@@ -103,6 +104,9 @@ func TestPortServiceRemovalUsesRetainedTransportAndCurrentLegacyEvidence(t *test
 			}
 			if strings.Contains(commands, "nerdctl exec") != (mode == "legacy") || strings.Contains(commands, "is-active") {
 				t.Fatal("cleanup entered a different runtime or substituted stop state", commands)
+			}
+			if mode == "legacy" && (strings.Count(commands, "nerdctl inspect web\n") != 1 || !strings.Contains(commands, "nerdctl exec "+d.ID+" iptables -t nat -D ")) {
+				t.Fatal("legacy cleanup repeated lookup or lost its inspected target", commands)
 			}
 		})
 	}

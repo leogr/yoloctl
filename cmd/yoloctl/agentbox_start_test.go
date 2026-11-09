@@ -56,12 +56,12 @@ func TestBoxStartAndRestartPreserveExistingContainer(t *testing.T) {
 						t.Fatalf("start replaced or updated container: %s", calls)
 					}
 				}
-				if got, want := strings.Contains(calls, "nerdctl start coder"), drift != "before start"; got != want {
+				if got, want := strings.Contains(calls, "nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), drift != "before start"; got != want {
 					t.Fatalf("started=%v want=%v; calls=%s", got, want, calls)
 				}
-				if strings.Contains(calls, "nerdctl start coder") {
+				if strings.Contains(calls, "nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") {
 					verified := strings.Index(calls, "binary=/opt/openshell/bin/openshell-sandbox")
-					if verified < 0 || verified > strings.Index(calls, "nerdctl start coder") {
+					if verified < 0 || verified > strings.Index(calls, "nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") {
 						t.Fatalf("legacy start skipped retained-byte verification: %s", calls)
 					}
 				}
@@ -99,7 +99,7 @@ func setupExistingStartFixture(t *testing.T, drift string) string {
 	command := sandbox.EntrypointArgs(cfg.Workdir.ContainerPath(), false, "sleep", "infinity")
 	for name, image := range map[string]string{"same.json": cfg.Image, "drift.json": "img:old"} {
 		raw, err := json.Marshal([]any{map[string]any{
-			"Name": cfg.Name, "Path": command[0], "Args": command[1:],
+			"Id": strings.Repeat("f", 64), "Name": cfg.Name, "Path": command[0], "Args": command[1:],
 			"Config": map[string]any{"Image": image, "Labels": map[string]string{agentbox.LabelAgent: "none", resources.WorkloadLabel: resources.WorkloadVersion}},
 			"Mounts": []any{map[string]any{"Source": workdir, "Destination": cfg.Workdir.ContainerPath(), "RW": true}},
 		}})
@@ -130,7 +130,7 @@ case "$*" in
     fi ;;
   *'sudo cat'*) cat "$START_TEST_FIXTURE/policy.yaml" ;;
   *'binary=/opt/openshell/bin/openshell-sandbox'*'sha256sum --check --status'*) exit 0 ;;
-  *'nerdctl start coder'*) touch "$START_TEST_FIXTURE/started" ;;
+  *'nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'*) touch "$START_TEST_FIXTURE/started" ;;
   *' test -w '*|*'sudo mkdir -p '*|*'sudo rm -rf '*|*'sudo python3 -c '*|*'systemctl list-units'*) exit 0 ;;
   *) exit 42 ;;
 esac

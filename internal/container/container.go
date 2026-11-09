@@ -196,7 +196,11 @@ func (c *Client) createOrRun(ctx context.Context, opts RunOptions, start bool, s
 
 // Start re-launches a stopped container.
 func (c *Client) Start(ctx context.Context, name string) error {
-	return c.nerdctl(ctx, "start", name)
+	id, err := c.ResolveContainerID(ctx, name)
+	if err != nil {
+		return err
+	}
+	return c.nerdctl(ctx, "start", id)
 }
 
 // stopGraceSeconds is how long `nerdctl stop` waits after SIGTERM
@@ -211,7 +215,11 @@ const stopGraceSeconds = "30"
 // signal their confined children through sandbox.Stop. ctr tasks kill --all
 // cannot do that: modern runc ignores --all for SIGTERM and signals only PID 1.
 func (c *Client) Stop(ctx context.Context, name string) error {
-	return c.nerdctl(ctx, "stop", "--time", stopGraceSeconds, name)
+	id, err := c.ResolveContainerID(ctx, name)
+	if err != nil {
+		return err
+	}
+	return c.nerdctl(ctx, "stop", "--time", stopGraceSeconds, id)
 }
 
 // Image is a parsed `nerdctl images --format json` entry.
@@ -474,13 +482,21 @@ func (c *Client) Logs(ctx context.Context, name string, follow bool) error {
 // Remove deletes the container. force=true also kills it if running, but
 // short-circuits openshell-sandbox's cleanup pipeline; prefer Stop first.
 func (c *Client) Remove(ctx context.Context, name string, force bool) error {
+	id, err := c.ResolveContainerID(ctx, name)
+	if err != nil {
+		return err
+	}
 	args := []string{"rm"}
 	if force {
 		args = append(args, "-f")
 	}
-	args = append(args, name)
+	args = append(args, id)
 	if err := c.nerdctl(ctx, args...); err != nil {
 		return err
+	}
+	if name == id {
+		// A fixed-ID caller owns its separate named projection cleanup.
+		return nil
 	}
 	return operator.RemoveBox(name, "")
 }
@@ -559,6 +575,8 @@ func parseContainers(r io.Reader) ([]Container, error) {
 // we'll have to fall back to parsing the `nerdctl/host-config` label
 // or shell out to a different tool.
 type Details struct {
+	// Keep bridge metadata internal rather than extending serialized Details.
+	bridgeIP  string
 	ID        string
 	Name      string
 	Image     string
@@ -592,6 +610,10 @@ type Details struct {
 	// which user labels cannot carry (dockercompat.go:665, create.go:670).
 	Privileged *bool
 }
+
+// BridgeIP is the bridge address from this same inspection, without another
+// name lookup. An inactive container may have no address.
+func (d *Details) BridgeIP() string { return d.bridgeIP }
 
 // DetailMount is one bind mount from a Details struct.
 type DetailMount struct {
@@ -746,6 +768,7 @@ func (e inspectEntry) details(name string) (*Details, error) {
 	d := &Details{
 		ID:                         e.ID,
 		Name:                       displayName,
+		bridgeIP:                   strings.TrimSpace(e.NetworkSettings.IPAddress),
 		Image:                      e.Config.Image,
 		ImageID:                    e.ImageID,
 		Status:                     e.State.Status,

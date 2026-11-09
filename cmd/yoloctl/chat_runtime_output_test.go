@@ -92,11 +92,11 @@ func TestChatRuntimeLifecycleKeepsStructuredOutput(t *testing.T) {
 			}
 			want := map[string][]string{
 				"create":          {"nerdctl --cgroup-manager systemd run"},
-				"start":           {"nerdctl start coder"},
-				"recreate-member": {"nerdctl stop --time 30 coder", "nerdctl rm coder", "nerdctl --cgroup-manager systemd run"},
+				"start":           {"nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
+				"recreate-member": {"nerdctl stop --time 30 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "nerdctl rm ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "nerdctl --cgroup-manager systemd run"},
 				"build":           {"nerdctl build -t fixture:1"},
 				"storage-cleanup": {"nerdctl rmi yoloctl/agentbox-composed:obsolete"},
-				"start-failure":   {"nerdctl start coder"},
+				"start-failure":   {"nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
 			}[action]
 			for _, command := range want {
 				if strings.Count(string(calls), command) != 1 {
@@ -144,7 +144,7 @@ func TestChatEnsureLifecycleKeepsStructuredOutput(t *testing.T) {
 			}
 			command := sandbox.EntrypointArgs(cfg.Workdir.ContainerPath(), false, "sleep", "infinity")
 			inspect, err := json.Marshal([]any{map[string]any{
-				"Name": cfg.Name, "Path": command[0], "Args": command[1:], "State": map[string]any{"Running": !stopped},
+				"Id": strings.Repeat("f", 64), "Name": cfg.Name, "Path": command[0], "Args": command[1:], "State": map[string]any{"Running": !stopped},
 				"Config": map[string]any{"Image": image, "Labels": map[string]string{agentbox.LabelAgent: "none", resources.WorkloadLabel: resources.WorkloadVersion}},
 				"Mounts": []any{map[string]any{"Source": cfg.Workdir.Source, "Destination": cfg.Workdir.ContainerPath(), "RW": false}},
 			}})
@@ -193,7 +193,7 @@ func TestChatEnsureLifecycleKeepsStructuredOutput(t *testing.T) {
 			if stopped {
 				assertChatRetainedRuntimeBeforeStart(t, string(calls))
 			}
-			runs, starts := strings.Count(string(calls), "nerdctl --cgroup-manager systemd run"), strings.Count(string(calls), "nerdctl start coder")
+			runs, starts := strings.Count(string(calls), "nerdctl --cgroup-manager systemd run"), strings.Count(string(calls), "nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 			if (!stopped && (runs != 1 || starts != 0)) || (stopped && (runs != 0 || starts != 1)) {
 				t.Errorf("unexpected ensure create/start/replay: runs=%d starts=%d", runs, starts)
 			}
@@ -225,7 +225,7 @@ case "$*" in
   *'cat /sys/fs/cgroup/'*) printf '%d\nmax\n0\nMemTotal: 4194304 kB\nMemAvailable: 100 kB\n' ;;
   *'sudo cat'*) cat "$START_TEST_FIXTURE/policy.yaml" ;;
   *'binary=/opt/openshell/bin/openshell-sandbox'*'sha256sum --check --status'*) exit 0 ;;
-  *'nerdctl --cgroup-manager systemd run'*|*'nerdctl start coder'*|*'nerdctl stop --time 30 coder'*|*'nerdctl rm coder'*|*'nerdctl build -t fixture:1'*' .'|*'nerdctl rmi yoloctl/agentbox-composed:obsolete'*)
+  *'nerdctl --cgroup-manager systemd run'*|*'nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'*|*'nerdctl stop --time 30 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'*|*'nerdctl rm ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'*|*'nerdctl build -t fixture:1'*' .'|*'nerdctl rmi yoloctl/agentbox-composed:obsolete'*)
     printf 'fixture stdout: container ID/name or build progress\n'
     printf 'fixture stderr: progress\n' >&2
     test "$CHAT_TEST_ACTION" != start-failure ;;
@@ -247,7 +247,7 @@ esac
 func assertChatRetainedRuntimeBeforeStart(t *testing.T, calls string) {
 	t.Helper()
 	verified := strings.Index(calls, "binary=/opt/openshell/bin/openshell-sandbox")
-	started := strings.Index(calls, "nerdctl start coder")
+	started := strings.Index(calls, "nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	if verified < 0 || started < 0 || verified > started {
 		t.Fatalf("chat legacy start skipped retained-byte verification: %s", calls)
 	}

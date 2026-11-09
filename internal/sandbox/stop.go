@@ -24,9 +24,22 @@ func Stop(ctx context.Context, c *container.Client, name string) error {
 	return stopWithProbeTimeout(ctx, c, name, nil)
 }
 
+// StopContainerID keeps the named SSH endpoint and an already inspected runtime
+// target separate, so the fallback cannot reselect a same-name replacement.
+func StopContainerID(ctx context.Context, c *container.Client, name, id string) error {
+	if err := container.ValidateContainerID(id); err != nil {
+		return err
+	}
+	return stopWithTarget(ctx, c, name, id, nil)
+}
+
 // Only semantic command fixtures replace timeout construction; public Stop
 // always uses the same three-second, parent-bounded probe.
 func stopWithProbeTimeout(ctx context.Context, c *container.Client, name string, newTimeout func(context.Context, time.Duration) (context.Context, context.CancelFunc)) error {
+	return stopWithTarget(ctx, c, name, name, newTimeout)
+}
+
+func stopWithTarget(ctx context.Context, c *container.Client, name, target string, newTimeout func(context.Context, time.Duration) (context.Context, context.CancelFunc)) error {
 	if err := spaceenv.RequireSpace(c.Env()); err != nil {
 		return err
 	}
@@ -48,7 +61,7 @@ func stopWithProbeTimeout(ctx context.Context, c *container.Client, name string,
 		_ = signalWorkloads(probe, conn)
 	}
 	cancel()
-	return c.Stop(ctx, name)
+	return c.Stop(ctx, target)
 }
 
 func stopProbeContext(ctx context.Context, newTimeout func(context.Context, time.Duration) (context.Context, context.CancelFunc)) (context.Context, context.CancelFunc) {

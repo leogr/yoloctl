@@ -1,6 +1,6 @@
 # Reconcile, native locks and space lifecycle
 
-Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior.
+Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; runtime target selection at `9169119ca6b27e530064dc49b8b7a1d06c17397b` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior.
 
 [FACT] Explicit reconcile selects create, recreate, restart, then live port changes. Account,
 agent, mounts/workdir access, image, literal env and network mode can require
@@ -17,6 +17,13 @@ or ambiguous metadata aborts inspection before mutation. Inspect keeps only
 the entry whose recorded name or full ID equals the request (nerdctl also
 returns ID-prefix matches): none is "no such container", several an error.
 [2](#source-2) [22](#source-22) [23](#source-23) [24](#source-24) [29](#source-29)
+
+[FACT] Ordinary start/stop/remove and maintenance/legacy-DNAT execs use the
+exactly selected full canonical container ID, avoiding hex-name/ID-prefix
+collisions. Already resolved IDs stay fixed; a failed CID command does not fall
+back to name selection. Names still identify sockets and operator cleanup. Scoped native ID/receipt
+paths and confined SSH exec stay unchanged; raw log selectors are not covered.
+[30](#source-30) [31](#source-31) [32](#source-32)
 
 [FACT] Start on a running container is a no-op. Other starts/restarts refuse
 recreate-only drift with inspect/recreate guidance before runtime changes,
@@ -121,3 +128,6 @@ physical power loss.
 
 28. <a id="source-28"></a> [Interrupted-outcome recovery](controller-recovery.md) — durable proofs, dependency holds and storage reconciliation.
 29. <a id="source-29"></a> [nerdctl v2.3.5 container walker](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/idutil/containerwalker/containerwalker.go#L47-L74) — `Walk` matches the name label or an ID prefix; `container inspect` returns every match.
+30. <a id="source-30"></a> [Runtime target](../../internal/container/target.go#L1) — `ValidateContainerID`, `ResolveContainerID`; `Client.Start/Stop/Remove` in container.go; collision/refusal/fixed-ID/error controls in target_test.go; named SSH with retained CID in sandbox/stop.go `StopContainerID`.
+31. <a id="source-31"></a> [Maintenance](../../cmd/yoloctl/autoupdate.go#L90) — npm/version helpers; native install in agent_distribution.go and process probe in agent.go; container_target_test.go covers target argv and refusals.
+32. <a id="source-32"></a> [Legacy forwarding](../../internal/port/port.go#L94) — retained inspected bridge/CID and `legacyDNATTarget`; port/target_test.go covers target argv, mode, refusals and best-effort removal.

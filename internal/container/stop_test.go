@@ -17,11 +17,14 @@ func TestStopBoundsRuntimeGraceAndReportsFailure(t *testing.T) {
 			log := filepath.Join(bin, "calls")
 			t.Setenv("STOP_TEST_CALLS", log)
 			t.Setenv("STOP_TEST_STATUS", status)
+			id := strings.Repeat("d", 64)
+			t.Setenv("STOP_TEST_CID", id)
 			t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 			script := `#!/bin/sh
 printf '%s\n' "$*" >> "$STOP_TEST_CALLS"
 case "$*" in
-  *"nerdctl stop --time 30 probe"*) exit "$STOP_TEST_STATUS" ;;
+  *"nerdctl inspect probe"*) printf '[{"Id":"%s","Name":"probe"}]\n' "$STOP_TEST_CID" ;;
+  *"nerdctl stop --time 30 $STOP_TEST_CID"*) exit "$STOP_TEST_STATUS" ;;
   *) exit 37 ;;
 esac
 `
@@ -38,10 +41,10 @@ esac
 				t.Fatal(err)
 			}
 			calls := string(raw)
-			if !strings.Contains(calls, "nerdctl stop --time 30 probe") {
+			if !strings.Contains(calls, "nerdctl stop --time 30 "+id) {
 				t.Fatal("lost bounded stop fallback", calls)
 			}
-			if strings.Count(calls, "\n") != 1 {
+			if strings.Count(calls, "nerdctl inspect probe\n") != 1 || strings.Count(calls, "\n") != 2 {
 				t.Fatal("runtime stop should not issue obsolete ctr --all signals", calls)
 			}
 		})

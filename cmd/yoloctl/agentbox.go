@@ -2173,10 +2173,13 @@ func startExistingAgentboxContainerPrepared(ctx context.Context, c *container.Cl
 	if native {
 		return prepared.Start(ctx, cfg)
 	}
+	if err := container.ValidateContainerID(details.ID); err != nil {
+		return err
+	}
 	if err := c.Shell(ctx, "sudo", "mkdir", "-p", sandbox.SocketDirHost(name)); err != nil {
 		return fmt.Errorf("recreate sandbox socket dir for %s before start: %w", name, err)
 	}
-	if err := c.Start(ctx, name); err != nil {
+	if err := c.Start(ctx, details.ID); err != nil {
 		return err
 	}
 	return agentbox.WaitForSandboxSocket(ctx, c.Env(), name, agentbox.SandboxSocketTimeout)

@@ -91,12 +91,18 @@ func validPortRange(p int) bool { return p >= 1 && p <= 65535 }
 // forward already binds HostPort (the conflict's owning agentbox is
 // named in the error message).
 func Forward(ctx context.Context, c *container.Client, spec Spec) error {
-	ip, err := c.ContainerIP(ctx, spec.Agentbox)
+	details, err := c.Inspect(ctx, spec.Agentbox)
 	if err != nil {
 		return err
 	}
+	ip := details.BridgeIP()
 	if ip == "" {
 		return fmt.Errorf("agentbox %s has no bridge IP yet — start it first", spec.Agentbox)
+	}
+	if !spec.Direct {
+		if err := container.ValidateContainerID(details.ID); err != nil {
+			return err
+		}
 	}
 	if err := assertNoConflict(ctx, c, spec); err != nil {
 		return err
@@ -111,7 +117,7 @@ func Forward(ctx context.Context, c *container.Client, spec Spec) error {
 	if spec.Direct {
 		return nil
 	}
-	if err := installInnerNetnsDNAT(ctx, c, spec.Agentbox, spec.ContainerPort); err != nil {
+	if err := installInnerNetnsDNAT(ctx, c, details.ID, spec.ContainerPort); err != nil {
 		// Roll back the socat unit so we don't leave a half-configured
 		// forward that listens but never connects.
 		_ = stopUnit(ctx, c, unit)
@@ -147,7 +153,11 @@ func dnatRuleArgs(op string, containerPort int) []string {
 // pair stays balanced. Worst case during pathological churn: a few
 // redundant rules in PREROUTING that all do the same thing.
 func installInnerNetnsDNAT(ctx context.Context, c *container.Client, agentbox string, containerPort int) error {
-	args := append([]string{"sudo", "nerdctl", "exec", agentbox}, dnatRuleArgs("-A", containerPort)...)
+	id, err := c.ResolveContainerID(ctx, agentbox)
+	if err != nil {
+		return err
+	}
+	args := append([]string{"sudo", "nerdctl", "exec", id}, dnatRuleArgs("-A", containerPort)...)
 	return c.Shell(ctx, args...)
 }
 
@@ -156,7 +166,11 @@ func installInnerNetnsDNAT(ctx context.Context, c *container.Client, agentbox st
 // by the runtime and every rule with it, so any non-zero exit from
 // iptables -D is treated as already-gone.
 func removeInnerNetnsDNAT(ctx context.Context, c *container.Client, agentbox string, containerPort int) {
-	args := append([]string{"sudo", "nerdctl", "exec", agentbox}, dnatRuleArgs("-D", containerPort)...)
+	id, err := c.ResolveContainerID(ctx, agentbox)
+	if err != nil {
+		return
+	}
+	args := append([]string{"sudo", "nerdctl", "exec", id}, dnatRuleArgs("-D", containerPort)...)
 	_ = c.Shell(ctx, args...)
 }
 
@@ -220,12 +234,12 @@ func stopForwardService(ctx context.Context, c *container.Client, service Forwar
 		_ = vmservice.Collect(ctx, c, service.Unit)
 		return nil
 	}
-	remove, err := legacyDNATRequired(ctx, c, service.Spec.Agentbox)
+	id, err := legacyDNATTarget(ctx, c, service.Spec.Agentbox)
 	if err != nil {
 		return err
 	}
-	if remove {
-		removeInnerNetnsDNAT(ctx, c, service.Spec.Agentbox, service.Spec.ContainerPort)
+	if id != "" {
+		removeInnerNetnsDNAT(ctx, c, id, service.Spec.ContainerPort)
 	}
 	return stopUnit(ctx, c, service.Unit)
 }
@@ -233,28 +247,35 @@ func stopForwardService(ctx context.Context, c *container.Client, service Forwar
 // A legacy unit identifies its transport, not the current same-name container.
 // Execute DNAT cleanup only in a positively identified, running legacy box.
 // An authoritative absent/stopped container has already lost its old netns.
-func legacyDNATRequired(ctx context.Context, c *container.Client, agentbox string) (bool, error) {
+func legacyDNATTarget(ctx context.Context, c *container.Client, agentbox string) (string, error) {
 	boxes, err := c.List(ctx, "yoloctl.agentbox="+agentbox)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	found := false
 	for _, box := range boxes {
 		if box.Name == agentbox {
 			if found {
-				return false, errors.New("duplicate managed container identity during forward cleanup")
+				return "", errors.New("duplicate managed container identity during forward cleanup")
 			}
 			found = true
 		}
 	}
 	if !found {
-		return false, nil
+		return "", nil
 	}
 	d, err := c.Inspect(ctx, agentbox)
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	return legacyDNATDetails(d, agentbox)
+	required, err := legacyDNATDetails(d, agentbox)
+	if err != nil || !required {
+		return "", err
+	}
+	if err := container.ValidateContainerID(d.ID); err != nil {
+		return "", err
+	}
+	return d.ID, nil
 }
 
 func legacyDNATDetails(d *container.Details, agentbox string) (bool, error) {

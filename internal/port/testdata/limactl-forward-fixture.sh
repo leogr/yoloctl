@@ -11,6 +11,7 @@ shift
 [ "$1" = sudo ] || exit 97
 shift
 case "$1" in
+  systemd-run) exit 0 ;;
   systemctl)
     shift
     case "$1" in
@@ -39,11 +40,11 @@ case "$1" in
     shift
     case "$1" in
       ps) cat "$YOLOCTL_TEST_FORWARD_DIR/containers.json" ;;
-      inspect) cat "$YOLOCTL_TEST_FORWARD_DIR/inspect.json" ;;
+      inspect) cat "$YOLOCTL_TEST_FORWARD_DIR/inspect.json"; exit "${YOLOCTL_TEST_FORWARD_INSPECT_EXIT:-0}" ;;
       exec)
-        [ "$2" = web ] || exit 98
+        [ "$2" = "$(cat "$YOLOCTL_TEST_FORWARD_DIR/target-id")" ] || exit 98
         [ "$3" = iptables ] || exit 98
-        exit 0 ;;
+        exit "${YOLOCTL_TEST_FORWARD_EXEC_EXIT:-0}" ;;
       *) exit 98 ;;
     esac ;;
   *) exit 98 ;;

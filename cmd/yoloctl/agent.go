@@ -138,8 +138,12 @@ openshell-sandbox policy.`,
 			_, _ = fmt.Fprintf(errw, "updating %s in %d box(es) (latest release)\n", pkg, len(targets))
 			for i, name := range targets {
 				_, _ = fmt.Fprintf(errw, "[%d/%d] %s\n", i+1, len(targets), name)
+				id, err := c.ResolveContainerID(cmd.Context(), name)
+				if err != nil {
+					return err
+				}
 				if !force {
-					proceed, err := preflightAgentRunning(cmd, spaceName, name, profile.Command)
+					proceed, err := preflightAgentRunning(cmd, spaceName, name, id, profile.Command)
 					if err != nil {
 						return err
 					}
@@ -149,7 +153,7 @@ openshell-sandbox policy.`,
 					}
 				}
 				_, _ = fmt.Fprintf(errw, "  updating %s...\n", pkg)
-				if err := installAgentLatest(cmd.Context(), c, name, profile); err != nil {
+				if err := installAgentLatest(cmd.Context(), c, id, profile); err != nil {
 					return fmt.Errorf("update %s in %s: %w", pkg, name, err)
 				}
 			}
@@ -232,9 +236,9 @@ func selectAgentUpdateTargets(ctx context.Context, c *container.Client, profileN
 // limactl errors all yield a warning + proceed, on the basis that a
 // noisy half-broken check shouldn't block a maintenance operation
 // the user explicitly asked for.
-func preflightAgentRunning(cmd *cobra.Command, spaceName, agentboxName, agentCommand string) (bool, error) {
+func preflightAgentRunning(cmd *cobra.Command, spaceName, agentboxName, containerID, agentCommand string) (bool, error) {
 	errw := cmd.ErrOrStderr()
-	running, err := agentProcessRunning(cmd.Context(), spaceName, agentboxName, agentCommand)
+	running, err := agentProcessRunning(cmd.Context(), spaceName, containerID, agentCommand)
 	if err != nil {
 		_, _ = fmt.Fprintf(errw, "  warning: pre-flight check could not run (%v); proceeding\n", err)
 		return true, nil
@@ -270,13 +274,17 @@ func preflightAgentRunning(cmd *cobra.Command, spaceName, agentboxName, agentCom
 // False positives (vim editing claude-notes.txt) are possible; that's
 // acceptable for a "skip the prompt" pre-flight.
 func agentProcessRunning(ctx context.Context, spaceName, agentboxName, agentCommand string) (bool, error) {
+	id, err := container.New(spaceName).ResolveContainerID(ctx, agentboxName)
+	if err != nil {
+		return false, err
+	}
 	shCmd := vmhost.ShellCommand(ctx, spaceName,
-		"sudo", "nerdctl", "exec", "--user", "sandbox", agentboxName,
+		"sudo", "nerdctl", "exec", "--user", "sandbox", id,
 		"pgrep", "-f", agentCommand,
 	)
 	shCmd.Stdout = io.Discard
 	shCmd.Stderr = io.Discard
-	err := shCmd.Run()
+	err = shCmd.Run()
 	return interpretPgrepExit(err)
 }
 

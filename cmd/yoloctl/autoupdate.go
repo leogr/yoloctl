@@ -45,7 +45,11 @@ func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentb
 			"notice: autoupdate skipped (release source unreachable: %v)\n", err)
 		return nil
 	}
-	installed, err := fetchInstalledAgentVersion(ctx, c, agentboxName, profile)
+	id, err := c.ResolveContainerID(ctx, agentboxName)
+	var installed string
+	if err == nil {
+		installed, err = fetchInstalledAgentVersion(ctx, c, id, profile)
+	}
 	if err != nil {
 		_, _ = fmt.Fprintf(notice,
 			"notice: autoupdate skipped (read installed %s version: %v)\n",
@@ -60,7 +64,7 @@ func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentb
 	_, _ = fmt.Fprintf(notice,
 		"autoupdate: %s %s → %s\n",
 		profile.Distribution(), installed, latest.Latest)
-	if err := installAgentLatest(ctx, c, agentboxName, profile); err != nil {
+	if err := installAgentLatest(ctx, c, id, profile); err != nil {
 		return fmt.Errorf("autoupdate %s in %s: %w", profile.Distribution(), agentboxName, err)
 	}
 	if updated != nil {
@@ -86,16 +90,20 @@ const sandboxNpmMaintenanceCache = features.NPMGlobalPrefix + "/.cache/npm"
 // update PROFILE` (in-place refresh) so the two paths can never
 // drift on their npm invocation semantics.
 func npmInstallGlobalAtLatest(ctx context.Context, c *container.Client, agentboxName, pkg string) error {
-	return c.Shell(ctx, npmInstallGlobalAtLatestArgs(agentboxName, pkg)...)
+	id, err := c.ResolveContainerID(ctx, agentboxName)
+	if err != nil {
+		return err
+	}
+	return c.Shell(ctx, npmInstallGlobalAtLatestArgs(id, pkg)...)
 }
 
 // npmInstallGlobalAtLatestArgs is kept pure so the ownership-sensitive npm
 // invocation has a focused contract test without requiring a live Lima VM.
-func npmInstallGlobalAtLatestArgs(agentboxName, pkg string) []string {
+func npmInstallGlobalAtLatestArgs(containerID, pkg string) []string {
 	return []string{
 		"sudo", "nerdctl", "exec",
 		"--user", "sandbox",
-		agentboxName,
+		containerID,
 		"npm", "install", "-g",
 		"--prefix=" + features.NPMGlobalPrefix,
 		"--cache=" + sandboxNpmMaintenanceCache,
@@ -121,9 +129,13 @@ func fetchInstalledNpmVersion(ctx context.Context, c *container.Client, agentbox
 
 // Read metadata only: never run an agent outside OpenShell to probe its version.
 func fetchInstalledVersionFile(ctx context.Context, c *container.Client, agentboxName, pkgJSONPath string) (string, error) {
+	id, err := c.ResolveContainerID(ctx, agentboxName)
+	if err != nil {
+		return "", err
+	}
 	cmd := vmhost.ShellCommand(ctx, c.Env(),
 		"sudo", "nerdctl", "exec",
-		"--user", "sandbox", agentboxName,
+		"--user", "sandbox", id,
 		"cat", pkgJSONPath,
 	)
 	var stdout, stderr bytes.Buffer

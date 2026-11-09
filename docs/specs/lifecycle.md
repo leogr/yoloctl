@@ -14,6 +14,11 @@ without replacement; explicit reconcile/recreate applies replacement changes.
 Missing containers can still materialize on start/restart.
 [1](#source-1) [2](#source-2)
 
+[FACT] Ordinary container start/stop/removal and maintenance/legacy-port execs
+use the exact inspected full ID, so a hex-like box name cannot select a peer's
+ID prefix. Names remain cleanup/endpoint keys; scoped native-ID ownership and
+confined SSH commands retain their existing contracts. [1](#source-1)
+
 [FACT] A box's privileged/confined launch mode is create-only drift classified
 from runtime evidence, never a label alone. Only an explicit `box recreate`
 switches it; reconcile, set, edit, rebuild and start refuse. Policy-only changes

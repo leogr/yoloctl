@@ -106,9 +106,13 @@ func installAgentLatest(ctx context.Context, c *container.Client, box string, p 
 	if err != nil {
 		return err
 	}
-	return c.Shell(ctx, nativeInstallArgs(box, r)...)
+	id, err := c.ResolveContainerID(ctx, box)
+	if err != nil {
+		return err
+	}
+	return c.Shell(ctx, nativeInstallArgs(id, r)...)
 }
 
-func nativeInstallArgs(box string, r nativerelease.Release) []string {
-	return append([]string{"sudo", "nerdctl", "exec", "--user", "sandbox", box}, r.InstallArgs()...)
+func nativeInstallArgs(containerID string, r nativerelease.Release) []string {
+	return append([]string{"sudo", "nerdctl", "exec", "--user", "sandbox", containerID}, r.InstallArgs()...)
 }

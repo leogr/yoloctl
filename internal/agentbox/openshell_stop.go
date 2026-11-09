@@ -22,7 +22,7 @@ func (a LiveApplier) Stop(ctx context.Context, name string) error {
 	}
 	return stopInspectedRuntime(ctx, details,
 		func(ctx context.Context) error { return a.stopNativeRuntime(ctx, name, details.ID) },
-		func(ctx context.Context) error { return sandbox.Stop(ctx, a.Client, name) })
+		func(ctx context.Context) error { return sandbox.StopContainerID(ctx, a.Client, name, details.ID) })
 }
 func stopInspectedRuntime(ctx context.Context, details *container.Details, native, legacy func(context.Context) error) error {
 	if details == nil || native == nil || legacy == nil {

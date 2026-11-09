@@ -115,12 +115,15 @@ func TestStopFallsBackWhenSandboxEndpointIsUnavailable(t *testing.T) {
 	bin := t.TempDir()
 	log := filepath.Join(bin, "calls")
 	t.Setenv("STOP_TEST_CALLS", log)
+	id := strings.Repeat("d", 64)
+	t.Setenv("STOP_TEST_CID", id)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	script := `#!/bin/sh
 printf '%s\n' "$*" >> "$STOP_TEST_CALLS"
 case "$*" in
   *"socat STDIO UNIX-CONNECT:/run/yoloctl/probe/ssh.sock"*) exit 1 ;;
-  *"nerdctl stop --time 30 probe"*) exit 0 ;;
+  *"nerdctl inspect probe"*) printf '[{"Id":"%s","Name":"probe"}]\n' "$STOP_TEST_CID" ;;
+  *"nerdctl stop --time 30 $STOP_TEST_CID"*) exit 0 ;;
   *) exit 37 ;;
 esac
 `
@@ -146,8 +149,22 @@ esac
 		t.Fatal(err)
 	}
 	calls := strings.Split(strings.TrimSpace(string(raw)), "\n")
-	if len(calls) != 2 || !strings.Contains(calls[0], "socat STDIO") || !strings.Contains(calls[1], "nerdctl stop --time 30 probe") {
+	if len(calls) != 3 || !strings.Contains(calls[0], "socat STDIO") || !strings.Contains(calls[1], "nerdctl inspect probe") || !strings.Contains(calls[2], "nerdctl stop --time 30 "+id) {
 		t.Fatalf("lost signal/stop ordering and bounded fallback: %q", calls)
+	}
+	if err := os.WriteFile(log, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := StopContainerID(t.Context(), container.New("trial"), "probe", id); err != nil {
+		t.Fatal(err)
+	}
+	raw, err = os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls = strings.Split(strings.TrimSpace(string(raw)), "\n")
+	if len(calls) != 2 || !strings.Contains(calls[0], "UNIX-CONNECT:/run/yoloctl/probe/ssh.sock") || !strings.Contains(calls[1], "nerdctl stop --time 30 "+id) {
+		t.Fatal("known CID repeated lookup or replaced named SSH endpoint", calls)
 	}
 	if err := Stop(t.Context(), container.New("trial"), "../unsafe"); err == nil {
 		t.Fatal("accepted invalid socket identity")
