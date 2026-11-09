@@ -1,6 +1,6 @@
 # Installation, releases and host homes
 
-Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); other sections at `1d265df3`.
+Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes (CI runner/publication selection); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); other sections at `1d265df3`.
 
 [FACT] Coordinated builds stamp hosts and Linux companions with one version and
 random bundle. Only strict `vMAJOR.MINOR.PATCH[-PRERELEASE]` selects release;
@@ -44,6 +44,12 @@ archives/checksums and creates a draft, never overwriting or retrying; the
 human publishes. Attestation failure blocks drafting. CI build and install-smoke
 jobs cache only `bin/openshell/<key>` (exact key plus OS, arch and toolchain-script
 hash; qualify still runs); `dist` always builds OpenShell from source. [6](#source-6)
+
+[FACT] CI build and Linux release install-smoke use Ubuntu 24.04
+until the GNU-timeout test dependency is fixed and Ubuntu 26 is qualified.
+The checked-main script requires passing `build (ubuntu-24.04)` and
+`build (macos-latest)` jobs with matching checkout trees. [6](#source-6)
+[11](#source-11)
 
 [FACT] Darwin bytes ship as linked; macOS CI requires arm64 `codesign -v`,
 native execution and manifest equality. Intel execution, Gatekeeper and
@@ -115,7 +121,7 @@ show only recovery guidance. [9](#source-9)
    [helper inputs](../../helperinputs.go#L27-L33), production closure.
 6. <a id="source-6"></a> [Toolchain setup](../../scripts/ci-openshell-toolchain.sh#L1);
    [Workflow](../../.github/workflows/release.yml#L1-L212), OpenShell cache in `install-smoke`;
-   [CI](../../.github/workflows/ci.yml#L38-L52), OpenShell cache in `build`;
+   [CI](../../.github/workflows/ci.yml#L16-L56), OpenShell cache in `build`;
    [publication](../../scripts/publish-release.py#L1-L199), `identity`, `verify_artifact`, `main`;
    [archive checks](../../scripts/check-dist.go#L1-L172), `run`, `extract`.
 7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L279), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go;
@@ -130,3 +136,5 @@ show only recovery guidance. [9](#source-9)
    [inventory](../../cmd/yoloctl/install_inventory.go#L1-L48), `consentSnapshot`, `readInstallConsent`;
    [default metadata](../../internal/firecracker/recipe_linux.go#L60-L88), `ReadDefaultImage`.
 10. <a id="source-10"></a> [Install shell setup](install-shell-setup.md).
+
+11. <a id="source-11"></a> [Checked main publication](../../scripts/push-main-checked.sh#L157-L181) — required jobs and per-job checkout/tree verification; fixtures in scripts/test_push_main_checked.py.

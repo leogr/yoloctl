@@ -52,7 +52,7 @@ FAKE_GH = textwrap.dedent('''\
                                capture_output=True, text=True, check=True,
                                env=dict(os.environ, GIT_AUTHOR_NAME='CI', GIT_AUTHOR_EMAIL='ci@example.invalid',
                                         GIT_COMMITTER_NAME='CI', GIT_COMMITTER_EMAIL='ci@example.invalid')).stdout.strip()
-        for job in ('build (ubuntu-latest)', 'build (macos-latest)', 'lint'):
+        for job in (os.environ.get('FAKE_GH_LINUX_JOB', 'build (ubuntu-24.04)'), 'build (macos-latest)', 'lint'):
             step = job + '\\tRun actions/checkout@v5\\t2026-11-06T14:00:00.0Z '
             print(step + 'HEAD is now at ' + merge[:7] + ' Merge ' + head + ' into ' + base)
             evidence = os.environ.get('FAKE_GH_EVIDENCE', 'one')
@@ -77,7 +77,7 @@ FAKE_GH = textwrap.dedent('''\
         print(ref('pre-main') + ' pre-main pull_request ' + conclusion)
         sys.exit(0)
     if args[:2] == ['run', 'view'] and 'conclusion == "success"' in joined:
-        print(os.environ.get('FAKE_GH_OK_JOBS', 'build (ubuntu-latest)\\nbuild (macos-latest)\\nlint'))
+        print(os.environ.get('FAKE_GH_OK_JOBS', 'build (ubuntu-24.04)\\nbuild (macos-latest)\\nlint'))
         sys.exit(0)
     if args[:2] == ['run', 'view'] and 'conclusion != "success"' in joined:
         print('  build (macos-latest): failure  https://example.invalid/job/1')
@@ -213,9 +213,16 @@ class PushMainCheckedTests(unittest.TestCase):
 
     def test_green_run_without_the_macos_build_job_is_refused(self):
         self.commit('change')
-        result = self.run_script(FAKE_GH_OK_JOBS='build (ubuntu-latest)\nlint\nmacos-something')
+        result = self.run_script(FAKE_GH_OK_JOBS='build (ubuntu-24.04)\nlint\nmacos-something')
         self.assert_main_untouched(result)
         self.assertIn('no passing job "build (macos-latest)"', result.stderr)
+
+    def test_green_run_with_only_the_previous_linux_job_name_is_refused(self):
+        self.commit('change')
+        result = self.run_script(FAKE_GH_LINUX_JOB='build (ubuntu-latest)',
+                                 FAKE_GH_OK_JOBS='build (ubuntu-latest)\nlint\nbuild (macos-latest)')
+        self.assert_main_untouched(result)
+        self.assertIn('no passing job "build (ubuntu-24.04)"', result.stderr)
 
     def test_stale_run_whose_checkout_has_another_tree_is_refused(self):
         # A run of the same head merged into another base checks out another tree.

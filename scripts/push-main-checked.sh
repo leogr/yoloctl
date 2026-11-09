@@ -160,7 +160,8 @@ log=$(gh run view "$run" --repo "$repo" --log) || fail "cannot read the log of C
 # The checkout step logs `git log -1 --format=%H` and then the full commit it
 # checked out; read it per build job, from that step only.
 want_tree=$(git rev-parse --verify --quiet "$sha^{tree}") || fail "cannot read the tree of $sha"
-for os in ubuntu-latest macos-latest; do
+# Keep these generated job names aligned with ci.yml's build matrix.
+for os in ubuntu-24.04 macos-latest; do
 	job="build ($os)"
 	printf '%s\n' "$passed" | grep -Fxq -- "$job" || fail "CI run $run has no passing job \"$job\""
 	checked=$(printf '%s\n' "$log" | awk -F '\t' -v job="$job" -v q="'" '
