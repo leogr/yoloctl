@@ -50,7 +50,7 @@ func TestCarriedFollowsReportProvenanceThroughApply(t *testing.T) {
 
 	// Started A; a later Stop and status line name B: nothing is A's.
 	r := resuming()
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		line(3, 10, "SessionStart", start(convA, "resume")),
 		line(3, 20, "Stop", inSession(convB, effort("max"))),
 		line(3, 30, observe.StatusLine, inSession(convB, model("claude-opus-5-5")))))
@@ -64,7 +64,7 @@ func TestCarriedFollowsReportProvenanceThroughApply(t *testing.T) {
 	same := func(edit func(*observe.Observation)) func(*observe.Observation) {
 		return func(o *observe.Observation) { edit(o); o.AgentTS = time.Unix(2010, 0).UTC() }
 	}
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		line(3, 10, "SessionStart", start(convA, "resume")),
 		line(3, 20, "Stop", same(inSession(convA, effort("high")))),
 		line(3, 30, "SessionStart", same(start(convB, "clear")))))
@@ -77,7 +77,7 @@ func TestCarriedFollowsReportProvenanceThroughApply(t *testing.T) {
 
 	// A's own Stop and status line carry both.
 	r = resuming()
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		line(3, 10, "SessionStart", start(convA, "resume")),
 		line(3, 20, "Stop", inSession(convA, effort("xhigh"))),
 		line(3, 30, observe.StatusLine, inSession(convA, model("claude-fable-5-1")))))
@@ -87,7 +87,7 @@ func TestCarriedFollowsReportProvenanceThroughApply(t *testing.T) {
 
 	// A report without a conversation is not attributed.
 	r = resuming()
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		line(3, 10, "SessionStart", start(convA, "resume")),
 		line(3, 20, "Stop", effort("max"))))
 	if got := r.Carried(convA); got != (Carried{}) {

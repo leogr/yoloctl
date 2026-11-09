@@ -195,11 +195,21 @@ type ResumeCarry struct {
 
 // CarryArgs are the arguments that carry one observed value: Args with
 // {{effort}} or {{model}} replaced. Effort requires Values (the only values
-// carried); Model takes none.
+// carried); Model takes none. Format applies to Model only: id (the default)
+// carries a plain model id, label also a reported display label with spaces
+// and parentheses, for an agent that reports only that; either way the value
+// is one argument, never split or evaluated.
 type CarryArgs struct {
 	Args   []string `yaml:"args"`
 	Values []string `yaml:"values,omitempty"`
+	Format string   `yaml:"format,omitempty"`
 }
+
+// Model carry formats of CarryArgs.Format.
+const (
+	CarryFormatID    = "id"
+	CarryFormatLabel = "label"
+)
 
 // ObserveSpec is the optional `session.observe:` block.
 type ObserveSpec struct {
@@ -216,6 +226,12 @@ type ObserveSpec struct {
 	// the account's own settings, for an agent with no system settings
 	// layer; `yoloctl account observe` sets and restores it there.
 	AccountStatusLine *AccountStatusLine `yaml:"account_status_line,omitempty"`
+	// Identity declares which main-session reports name the conversation:
+	// start (the default) only a start report, statusline also a status
+	// line, for an agent whose status line is its only report of the
+	// conversation. A status line proves which conversation the agent
+	// shows, never that a resume restored it.
+	Identity string `yaml:"identity,omitempty"`
 }
 
 // AccountStatusLine is a status line reporter set in the account's native
@@ -231,6 +247,18 @@ const (
 	SelectionReported = "reported"
 	SelectionUnknown  = "unknown"
 )
+
+// Identity values of ObserveSpec.
+const (
+	IdentityStart      = "start"
+	IdentityStatusLine = "statusline"
+)
+
+// StatusLineIdentity reports whether the profile's status line reports name
+// the conversation (session.observe.identity: statusline).
+func (s *SessionSpec) StatusLineIdentity() bool {
+	return s != nil && s.Observe != nil && s.Observe.Identity == IdentityStatusLine
+}
 
 // Resumes reports whether the agent can resume a recorded conversation. An
 // observe-only block (an Observe reporter, no resume_argv or assign_args)
@@ -616,6 +644,13 @@ func (p *Profile) validateSession() error {
 			if carry.name == "model" && len(e.Values) > 0 {
 				return fmt.Errorf("agent-profile %q: session.resume_carry.model takes no values", p.Name)
 			}
+			switch {
+			case e.Format == "", carry.name == "model" && (e.Format == CarryFormatID || e.Format == CarryFormatLabel):
+			case carry.name == "model":
+				return fmt.Errorf("agent-profile %q: session.resume_carry.model.format %q must be %s or %s", p.Name, e.Format, CarryFormatID, CarryFormatLabel)
+			default:
+				return fmt.Errorf("agent-profile %q: session.resume_carry.%s takes no format", p.Name, carry.name)
+			}
 			for _, v := range e.Values {
 				if v == "" || strings.Trim(v, "abcdefghijklmnopqrstuvwxyz") != "" {
 					return fmt.Errorf("agent-profile %q: session.resume_carry.effort value %q must be a lowercase word", p.Name, v)
@@ -637,6 +672,11 @@ func (p *Profile) validateSession() error {
 		case "", SelectionReported, SelectionUnknown:
 		default:
 			return fmt.Errorf("agent-profile %q: session.observe.selection %q must be %s or %s", p.Name, o.Selection, SelectionReported, SelectionUnknown)
+		}
+		switch o.Identity {
+		case "", IdentityStart, IdentityStatusLine:
+		default:
+			return fmt.Errorf("agent-profile %q: session.observe.identity %q must be %s or %s", p.Name, o.Identity, IdentityStart, IdentityStatusLine)
 		}
 		if a := o.AccountStatusLine; a != nil {
 			if err := validateRelativeAuthFile(p.Name, "session.observe.account_status_line.settings", a.Settings); err != nil {

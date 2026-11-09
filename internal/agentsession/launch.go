@@ -204,13 +204,15 @@ func (r *Record) CloseExit(token string, code int, exitedAt, now time.Time) erro
 
 // SettleResume decides a failed resume once the generation's reports are
 // read: a closed resume launch that exited nonzero, while its readable
-// reports (health ok or no-report) name no main-session start, is failed.
+// reports (health ok or no-report) name no main-session conversation, is
+// failed. A start report always decides the outcome itself; a status line
+// that named one (see Fold) leaves it unverified, never failed.
 // It reports whether the record changed. The next start requests the same
 // conversation again; nothing here starts a new one.
 func (r *Record) SettleResume() bool {
 	l, s, o := r.Launch, r.Resume, r.Observed
 	if l == nil || s == nil || l.Kind != KindResume || l.State != StateClosed || l.ExitCode == nil || *l.ExitCode == 0 ||
-		s.Generation != l.Generation || s.Outcome != OutcomeUnverified || o == nil || o.Generation != l.Generation ||
+		s.Generation != l.Generation || s.Outcome != OutcomeUnverified || o == nil || o.Generation != l.Generation || o.ID != "" ||
 		(o.Health != string(observe.HealthOK) && o.Health != string(observe.HealthNoReport)) {
 		return false
 	}

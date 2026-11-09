@@ -3,6 +3,7 @@ package agentsession
 import (
 	"fmt"
 
+	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/agentsession/observe"
 )
 
@@ -19,6 +20,26 @@ import (
 // read-only views. The controller sets it; elsewhere it is nil and views show
 // only the persisted evidence.
 var ReadCurrentReports func(box string, gen uint64, cur observe.Cursor) (observe.Result, error)
+
+// Fold is the profile's rule for which reports name the conversation. Every
+// fold of a record (the persisted one before a start, the live one of an
+// attach and a view's read-only one) uses its profile's rule; the zero value
+// is the default: only a main-session start names it.
+type Fold struct {
+	// StatusLineIdentity: a main-session status line naming a valid
+	// conversation also learns and sets it (session.observe.identity:
+	// statusline). It never verifies a resume; another conversation is a
+	// mismatch.
+	StatusLineIdentity bool
+}
+
+// FoldFor is profile's fold rule.
+func FoldFor(profile *agentprofile.Profile) Fold {
+	if profile == nil {
+		return Fold{}
+	}
+	return Fold{StatusLineIdentity: profile.Session.StatusLineIdentity()}
+}
 
 // viewFold is what a read-time fold adds to a view.
 type viewFold struct {
@@ -39,7 +60,7 @@ type viewFold struct {
 // read_at is this read's sampling time. The persisted outcome stands: a
 // report that would change it is returned as pending, and a divergence seen
 // only now is marked pending. The next start's persisted fold decides both.
-func (r *Record) foldForView(box string) viewFold {
+func (r *Record) foldForView(box string, rule Fold) viewFold {
 	if ReadCurrentReports == nil || r.Launch == nil || !r.Observable(r.Launch.Generation) {
 		return viewFold{}
 	}
@@ -54,7 +75,7 @@ func (r *Record) foldForView(box string) viewFold {
 		persisted = &saved
 	}
 	diverged := r.Divergence() != nil
-	r.Apply(res)
+	r.Apply(res, rule)
 	r.SettleResume()
 	fold := viewFold{live: "current", pendingDivergence: !diverged && r.Divergence() != nil}
 	if persisted != nil && r.Resume.Outcome != persisted.Outcome {
@@ -118,10 +139,17 @@ func (r *Record) Observable(gen uint64) bool {
 //     and effort and may carry its version, and context also comes from
 //     query and PostModelRequest lines; a query applies only while its
 //     thread is the conversation. Status lines never change conversation
-//     identity or the resume outcome.
+//     identity or the resume outcome, unless rule.StatusLineIdentity:
+//     then a status line naming a valid conversation names it as a start
+//     would (learned, Current and divergence, with source statusline). It
+//     never verifies a resume: showing the requested conversation does not
+//     prove that its history was restored, so only another conversation
+//     decides the outcome, as a mismatch. The same conversation again in
+//     the same generation changes nothing; in a later one it only refreshes
+//     Current's times and generation.
 //   - Health keeps the worst read of the generation and never changes the
 //     outcome.
-func (r *Record) Apply(res observe.Result) bool {
+func (r *Record) Apply(res observe.Result, rule Fold) bool {
 	if r.Launch == nil || res.Cursor.Generation != r.Launch.Generation {
 		return false
 	}
@@ -150,7 +178,7 @@ func (r *Record) Apply(res observe.Result) bool {
 		if ob.Subagent {
 			continue
 		}
-		changed = r.applyLine(o, ob) || changed
+		changed = r.applyLine(o, ob, rule) || changed
 	}
 	if high != applied {
 		o.Applied, _ = high.MarshalText()
@@ -193,7 +221,7 @@ func after(ob observe.Observation, c observe.Cursor) bool {
 }
 
 // applyLine applies one main-session report of the current generation.
-func (r *Record) applyLine(o *Observed, ob observe.Observation) bool {
+func (r *Record) applyLine(o *Observed, ob observe.Observation, rule Fold) bool {
 	if ob.Event == observe.Query && (ob.SessionID == "" || ob.SessionID != r.currentConversation()) {
 		// A read of another thread (a switch since, or before it was
 		// folded) is not this conversation's evidence.
@@ -263,6 +291,9 @@ func (r *Record) applyLine(o *Observed, ob observe.Observation) bool {
 			o.Version = value(ob.Version)
 		}
 	case observe.StatusLine:
+		if rule.StatusLineIdentity && ValidID(ob.SessionID) {
+			changed = r.statusLineIdentity(o, ob) || changed
+		}
 		if ob.Model != "" {
 			o.Model, changed = value(ob.Model), true
 		}
@@ -300,6 +331,47 @@ func (r *Record) applyLine(o *Observed, ob observe.Observation) bool {
 		// The agent is running again: Claude's status line hides while a
 		// prompt is open and runs on the next assistant message.
 		o.State, changed = &ObservedState{Kind: observe.StateWorking, Source: source, At: ob.AgentTS, ReadAt: ob.ReadAt}, true
+	}
+	return changed
+}
+
+// statusLineIdentity applies a main-session status line naming conversation
+// ob.SessionID, for a profile whose status line names it: as a start report
+// it learns a learn launch's conversation, sets Current and records a
+// divergence, labelled statusline. Unlike a start it never verifies a
+// resume: only another conversation decides it, as a mismatch. A status
+// line runs on every state change, so only a new conversation, or a known
+// one first seen in a later generation, changes anything.
+func (r *Record) statusLineIdentity(o *Observed, ob observe.Observation) bool {
+	id := ob.SessionID
+	changed := false
+	if o.ID != id {
+		o.ID, o.Source, o.At, o.ReadAt = id, SourceStatusLine, ob.AgentTS, ob.ReadAt
+		changed = true
+	}
+	if r.Assigned == nil && r.Launch.Kind == KindLearn {
+		r.Assigned = &Assigned{ID: id, At: ob.AgentTS, Source: AssignedLearned}
+		changed = true
+	}
+	switch c := r.Current; {
+	case c == nil || c.ID != id:
+		r.Current = &Current{ID: id, Source: SourceStatusLine, At: ob.AgentTS, ReadAt: ob.ReadAt, Generation: o.Generation}
+		changed = true
+	case c.Generation != o.Generation:
+		c.At, c.ReadAt, c.Generation = ob.AgentTS, ob.ReadAt, o.Generation
+		changed = true
+	}
+	if r.Assigned != nil && id != r.Assigned.ID && o.Diverged == nil {
+		o.Diverged = &Divergence{ID: id, Source: SourceStatusLine, At: ob.AgentTS, ReadAt: ob.ReadAt}
+		changed = true
+	}
+	// Another conversation is evidence that the requested one is not the
+	// active one (a refused ID or a later switch alike); the requested one
+	// proves only the selection, so it leaves the outcome unverified.
+	if s := r.Resume; s != nil && s.Generation == o.Generation && s.Outcome == OutcomeUnverified && id != s.Requested {
+		s.Outcome = OutcomeMismatch
+		s.Detail = fmt.Sprintf("the agent's status line reported conversation %s active instead of the requested %s", id, s.Requested)
+		changed = true
 	}
 	return changed
 }

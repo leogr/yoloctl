@@ -162,8 +162,9 @@ user's own status line, plus async identity and state hooks. Claude reports
 working/idle, permission/input/dialog waits and API failures through those
 hooks; unknown notifications report nothing. Print-mode Claude sessions
 report no model, effort or context [15](#source-15). agy's reporter is the status line in the
-account's own settings; its profile is observe-only, so every agy start is a
-new conversation tracked only for its reports [18](#source-18).
+account's own settings; its profile learns the conversation from that line and
+resumes it with `--conversation`, carrying the reported model label. A
+reported ID does not verify the resume [17](#source-17) [18](#source-18).
 
 [FACT] A managed launch is the lifetime of the background daemons its agent
 profile declares (`session.daemons`; Codex's app-server): the holder stops

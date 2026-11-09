@@ -121,6 +121,12 @@ func foldLiveLaunch(ctx context.Context, space, name string) {
 	if err != nil || !ok || rec.Launch == nil || rec.Launch.State != agentsession.StateLaunched || !rec.Observable(rec.Launch.Generation) {
 		return
 	}
+	// The record's agent's fold rule: applied lines are never folded again,
+	// so a fold that cannot resolve it waits for one that can.
+	profile, err := lookupAgentProfile(rec.Provider)
+	if err != nil {
+		return
+	}
 	lock, err := lockSessionBoxFn(space, name)
 	if err != nil {
 		return
@@ -137,7 +143,7 @@ func foldLiveLaunch(ctx context.Context, space, name string) {
 		return
 	}
 	res, err := readObservationFn(ctx, dir, gen, current.ObservationCursor(gen), uid, sessionNow())
-	if err != nil || !current.Apply(res) {
+	if err != nil || current.Provider != rec.Provider || !current.Apply(res, agentsession.FoldFor(profile)) {
 		return
 	}
 	_ = agentsession.Save(lock, current)
@@ -192,8 +198,11 @@ func (l *trackedLaunch) observationEnv(ctx context.Context, c *container.Client,
 }
 
 func sourceLabel(source string) string {
-	if source == "" {
+	switch source {
+	case "":
 		return "unlabelled start"
+	case agentsession.SourceStatusLine:
+		return "status line report"
 	}
 	return source
 }
@@ -218,7 +227,7 @@ func (l *trackedLaunch) observeCurrentLaunch(ctx context.Context, cfg *agentbox.
 	}
 	// Apply first: only a read that found no main-session start can settle
 	// a nonzero resume exit as failed.
-	changed := rec.Apply(res)
+	changed := rec.Apply(res, agentsession.FoldFor(l.profile))
 	if !rec.SettleResume() && !changed {
 		return nil
 	}

@@ -1,6 +1,6 @@
 # Agent reports in conversation tracking
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; status line identity on `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Each tracked launch prepares its generation directory after
 allocation and before the dispatching write.
@@ -48,7 +48,10 @@ agent last reported and a silent nonzero resume exit is settled as `failed`
   gives model, effort and state only while its `session_id` names the
   conversation folded so far (current, else assigned), and is dropped
   otherwise or when unlabelled. Context comes from any line carrying it. None
-  touches the ID, outcome or divergence. Each value carries its source
+  touches the ID, outcome or divergence, except a status line's ID under a
+  profile's opt-in `observe.identity: statusline` (agy; see
+  [following switches](conversation-following.md)), which decides only a
+  `mismatch`. Each value carries its source
   (`hook`, `statusline` or `query`), the agent's time and the read time.
   Absent fields keep the last value, unknown ones stay unknown, and a new
   launch starts empty.

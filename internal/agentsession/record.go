@@ -291,7 +291,7 @@ func (r *Record) Validate() error {
 		if !ValidID(c.ID) || c.Generation == 0 || c.Generation > r.LastGeneration {
 			return errors.New("session record has an invalid current conversation")
 		}
-		if !CurrentSource(c.Source) {
+		if !recordedCurrentSource(c.Source) {
 			return fmt.Errorf("session record has an invalid current conversation source %q", c.Source)
 		}
 	}
@@ -362,7 +362,7 @@ func (r *Record) Validate() error {
 		default:
 			return fmt.Errorf("session record has an invalid replacement reason %q", p.Why)
 		}
-		if (p.To != "" && !ValidID(p.To)) || !CurrentSource(p.Source) || (p.Why != WhySwitched && (p.To != "" || p.Source != "")) {
+		if (p.To != "" && !ValidID(p.To)) || !recordedCurrentSource(p.Source) || (p.Why != WhySwitched && (p.To != "" || p.Source != "")) {
 			return errors.New("session record has an invalid switched conversation")
 		}
 	}
@@ -378,6 +378,13 @@ func CurrentSource(source string) bool {
 		return true
 	}
 	return false
+}
+
+// recordedCurrentSource reports whether a recorded current conversation (or
+// the switch to one) may carry source: a start's, or statusline for a
+// conversation a status line named (see Fold).
+func recordedCurrentSource(source string) bool {
+	return CurrentSource(source) || source == SourceStatusLine
 }
 
 // ValidID reports whether id is a canonical lowercase UUID, the only
