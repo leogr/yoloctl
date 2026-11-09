@@ -1,6 +1,6 @@
 # Agent daemon lifetime
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying test-only changes; re-read cited symbols when changing behavior.
 
 [FACT] A profile's `session.daemons` lists the agent's own background servers
 that outlive its exit, each an argv prefix whose first word is compared to the
@@ -20,7 +20,8 @@ daemon has no idle exit. [9](#source-9) [10](#source-10) [11](#source-11)
   the profile's daemons to the holder as repeated `--reap-daemon` arguments;
   the holder refuses an entry that fails the profile rule before it connects.
 - **Before the agent:** the agent's own session command starts with
-  `timeout -s KILL 5 sh -s` reading the reaper from a quoted here-document,
+  GNU coreutils `timeout -s KILL 5 sh -s` reading the reaper from a quoted
+  here-document,
   in a `{ … } 3>&2 2>/dev/null` group, then the agent's exec. The group
   discards both shells' diagnostics, bash's killed-command report included,
   and ends before the exec: nothing is added to the agent's argv, environment
@@ -55,6 +56,13 @@ the agent's terminal, after the exit the holder log. The launch proceeds either 
   A turn still running may not be saved.
 [3](#source-3) [13](#source-13) [14](#source-14)
 
+[FACT] The Linux stalled-scan integration tests select verified GNU
+`timeout` or `gnutimeout` through their private fixture PATH, matching the
+Ubuntu 24.04 managed base. Missing GNU timeout fails explicitly; another
+host implementation is not substituted for its process-group contract.
+The launch-budget, no-survivor and PTY typeahead assertions remain active.
+[7](#source-7) [15](#source-15)
+
 ## Sources
 
 1. <a id="source-1"></a> [Profile](../../internal/agentprofile/profile.go#L167-L172) — `SessionSpec.Daemons`, `DaemonArgv` (L589), `SessionDaemons`, `validateSession` (L545).
@@ -63,7 +71,7 @@ the agent's terminal, after the exit the holder log. The launch proceeds either 
 4. <a id="source-4"></a> [Holder](../../internal/session/holder.go#L108) — `RunHolder`: refusal, the prefixed start (L223), the reap before the tombstone (L363).
 5. <a id="source-5"></a> [Holder unit](../../internal/session/unit.go#L68-L100) — `holderUnitArgs`.
 6. <a id="source-6"></a> [Session client](../../cmd/yoloctl/session_client.go#L529) — `sessionDaemons`.
-7. <a id="source-7"></a> [Reaper regressions](../../internal/session/reap_linux_test.go#L93) — real processes under sh and bash: SIGTERM, second SIGTERM, SIGKILL, near misses, typeahead; a stalled, TERM-ignoring scan bounded and ended under sh and bash (L189) and under a PTY (L223).
+7. <a id="source-7"></a> [Reaper regressions](../../internal/session/reap_linux_test.go#L93) — real processes under sh and bash: SIGTERM, second SIGTERM, SIGKILL, near misses, typeahead; a stalled, TERM-ignoring scan bounded and ended under sh and bash, under a PTY; `findGNUReapTimeout`, `TestFindGNUReapTimeout`, `stallingScan` select the matching GNU dependency (L159–239).
 8. <a id="source-8"></a> [Holder regressions](../../internal/session/reap_test.go#L33) — the prefix and its delimiter (L33), both reap points (L67), no reap on stop or loss.
 9. <a id="source-9"></a> [Codex 0.165 daemon argv](https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/app-server-daemon/src/backend/pid.rs#L391) — server and pid-update-loop command lines.
 10. <a id="source-10"></a> [Codex 0.165 detach](https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/app-server-daemon/src/backend/pid_start.rs#L159) — each in its own session.
@@ -71,3 +79,4 @@ the agent's terminal, after the exit the holder log. The launch proceeds either 
 12. <a id="source-12"></a> [Codex 0.165 disconnect](https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/app-server/src/lib.rs#L1215) — no idle exit.
 13. <a id="source-13"></a> [Codex 0.165 signals](https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/app-server/src/lib.rs#L226) — the first SIGTERM drains, the second forces.
 14. <a id="source-14"></a> [Codex 0.165 forced shutdown](https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/app-server/src/lib.rs#L1393) — returns without waiting for transports.
+15. <a id="source-15"></a> [Managed base](../../assets/containers/agentbox/Dockerfile#L6) — Ubuntu 24.04.

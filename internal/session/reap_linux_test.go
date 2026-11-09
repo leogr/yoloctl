@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -155,6 +156,56 @@ func TestReapBeforeKeepsTypeahead(t *testing.T) {
 	}
 }
 
+// The production reaper runs inside the Ubuntu 24.04 agentbox and relies on
+// GNU timeout killing its whole process group. Host Linux distributions may
+// provide a different timeout (notably uutils on Ubuntu 26.04). Exercise that
+// same GNU contract here, including when it is installed as gnutimeout.
+func findGNUReapTimeout() (string, error) {
+	for _, name := range []string{"timeout", "gnutimeout"} {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		out, err := exec.Command(path, "--version").Output()
+		if err == nil && strings.Contains(string(out), "(GNU coreutils)") {
+			return filepath.Abs(path)
+		}
+	}
+	return "", errors.New("reaper integration tests require GNU coreutils timeout (timeout or gnutimeout)")
+}
+
+func TestFindGNUReapTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		name, timeout, gnutimeout, want string
+	}{
+		{"default GNU", "timeout (GNU coreutils) 9.4", "", "timeout"},
+		{"uutils with GNU fallback", "timeout (uutils coreutils) 0.10.0", "timeout (GNU coreutils) 9.10", "gnutimeout"},
+		{"GNU prefixed only", "", "timeout (GNU coreutils) 9.10", "gnutimeout"},
+		{"no GNU", "timeout (uutils coreutils) 0.10.0", "", ""},
+		{"no timeout", "", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for name, version := range map[string]string{"timeout": tc.timeout, "gnutimeout": tc.gnutimeout} {
+				if version != "" {
+					if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\nprintf '%s\\n' '"+version+"'\n"), 0o755); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			t.Setenv("PATH", dir)
+			got, err := findGNUReapTimeout()
+			if tc.want == "" {
+				if err == nil || got != "" {
+					t.Fatalf("GNU timeout = %q, %v; want an explicit missing-dependency error", got, err)
+				}
+			} else if want := filepath.Join(dir, tc.want); err != nil || got != want {
+				t.Fatalf("GNU timeout = %q, %v; want %q", got, err, want)
+			}
+		})
+	}
+}
+
 // stallingScan shadows tr and sleep with TERM-ignoring stand-ins carrying a
 // marker, so the reaper's scan stalls past any budget. The stand-ins leave
 // the caller's output pipe (and the reaper's fd 3 on it), so a regression
@@ -162,6 +213,13 @@ func TestReapBeforeKeepsTypeahead(t *testing.T) {
 func stallingScan(t *testing.T) (path, marker string) {
 	t.Helper()
 	dir := t.TempDir()
+	timeout, err := findGNUReapTimeout()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(timeout, filepath.Join(dir, "timeout")); err != nil {
+		t.Fatal(err)
+	}
 	marker = "yrt-stall-" + strings.ToLower(rand.Text()[:12])
 	t.Cleanup(func() {
 		for _, pid := range processesWith(t, marker) {
