@@ -19,8 +19,8 @@ type tabRequestMsg struct {
 	from       *term.Session // the requesting pane's session; nil if not yet known
 }
 
-// tabRequestHandler gives only `space view` and native `chat` tabs a request
-// channel. A request names a space and a box; the TUI validates it and opens
+// tabRequestHandler gives only `space view` and native `chat` open-tab
+// callbacks. Lifecycle metadata is handled separately by Session. A request names a space and a box; the TUI validates it and opens
 // the same `box attach` argv a user could type in the palette. Chat tabs may
 // only send guarded participant attaches, space views only plain ones.
 func (m *model) tabRequestHandler(args []string, self *atomic.Pointer[term.Session]) func(termio.TabRequest) {

@@ -243,6 +243,8 @@ const (
 	// focusMessages gives arrows and Enter to the selected message's
 	// actions. Typing returns to the composer, so text is never a command.
 	focusMessages
+	// focusReopen explicitly gives r/Enter to the disconnected action.
+	focusReopen
 )
 
 type noticeLevel int
@@ -304,7 +306,8 @@ type Model struct {
 	reconnecting      bool
 	// rosterScroll is how many participant cards the panel has scrolled
 	// past; each frame clamps it to the cards that do not fit.
-	rosterScroll int
+	rosterScroll    int
+	connectionEnded bool
 	// gesture identifies the current mouse press, so a drag tick scheduled
 	// by an earlier gesture is ignored rather than doubling auto-scroll.
 	gesture uint64
@@ -403,6 +406,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case MembersMsg, IncomingMsg, DeliveryMsg, CatalogMsg, SessionMsg, ConnectionMsg, GapMsg, MembershipMsg:
 		m.reconcile()
+	}
+	if m.focus == focusReopen && !m.reopenOffered() {
+		m.focus = focusComposer
 	}
 	m.settleImages()
 	if next := m.settleMarquee(); next != nil {
@@ -636,6 +642,7 @@ func (m *Model) runPending(cmd tea.Cmd) tea.Cmd {
 func (m *Model) connection(msg ConnectionMsg) {
 	m.captureAnchor()
 	m.connected = msg.Connected
+	m.connectionEnded = !msg.Connected
 	if msg.Connected {
 		m.attachments = msg.Attachments
 	}
@@ -683,6 +690,9 @@ func (m *Model) connection(msg ConnectionMsg) {
 	m.reconnecting = false
 	// Reconnect is explicit: a new view loads history; nothing is resent.
 	notice := "Disconnected; rerun yoloctl chat to reconnect"
+	if m.opts.Reconnect != nil {
+		notice = "Disconnected; choose Reopen to reconnect"
+	}
 	if msg.Err != nil {
 		notice += " (" + msg.Err.Error() + ")"
 	}
@@ -760,6 +770,11 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 			m.edit(e.insert(k.Text))
 		}
 		return nil
+	}
+	// Only the explicitly focused, displayed action owns r. Pasted or
+	// extended committed text above/below always goes to the composer.
+	if cmd, handled := m.reopenKey(k); handled {
+		return cmd
 	}
 	// Text-only/extended events are committed data, including payloads that
 	// spell a command name. Printable text with Shift is data too.

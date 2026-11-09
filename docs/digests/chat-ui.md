@@ -22,8 +22,8 @@ fail atomically. Undo keeps at most 64 snapshots/4 MiB. [1](#source-1)
 [FACT] A draft remains editable while pending. Confirmation clears it only if
 its text and editor/reply revisions still match the submitted snapshot.
 Rejection preserves it; uncertainty or disconnect prevents another send until an
-explicit receipt resolves the outcome. The component never retries or
-reconnects. A correlated full echo must also match the original text. Replay
+explicit receipt resolves the outcome. The component never retries or reconnects automatically. A disconnected view
+can explicitly reopen its stream without replacing the model. [22](#source-22) A correlated full echo must also match the original text. Replay
 overlap is deduplicated by message ID without counting as unread. When
 disconnected, reconnecting, unjoined, deleted or resolving actions, empty draft
 placeholders and the default footer truthfully display blocking status and draft
@@ -105,9 +105,7 @@ after a read gap, paging stays off and late history is discarded.
 [FACT] Logical line/offset anchors preserve reading position across resize, the
 participants panel, arrivals and eviction; in a wrapped table the row holding
 the anchor's cell byte wins, else the row showing the next cell text.
-Disconnects advise rerunning
-`yoloctl chat` and flag an uncertain last send; the only exception is an
-explicit reconnect (interaction digest). [1](#source-1) [10](#source-10)
+Disconnects flag an uncertain last send and offer explicit Reopen when the caller supplies the reconnect callback; otherwise they advise rerunning `yoloctl chat`. [22](#source-22) [1](#source-1) [10](#source-10)
 
 [FACT] Component regressions cover paste, grapheme/kill editing, receipts,
 replay, callbacks, Unicode bounds, Markdown, code cards, source mode, body
@@ -141,3 +139,5 @@ the adapter from `YOLOCTL_TEST_AIRC_BIN_DIR`. [13](#source-13) [14](#source-14)
 20. <a id="source-20"></a> [Code-block regressions](../../internal/chatui/codeblock_test.go#L41) — exact copy, clipboard off, empty and narrow cards; shared markdownview/highlight_test.go tests lexer classes/state/fallback/tiling, chat highlight_test.go keeps the view integration.
 
 21. <a id="source-21"></a> [Shared renderer boundary](markdown-renderer.md).
+
+22. <a id="source-22"></a> [Disconnected reopen](../../internal/chatui/reopen.go#L10) — `reopenOffered`, `reopenKey`, `reopen`, `reopenFooter`; `connection` in model.go marks uncertain delivery before explicit reconnect. `reopen_test.go` covers draft/reply/history retention, input priority, errors, duplicate activation and telemetry/deleted-channel exclusion.

@@ -414,7 +414,7 @@ func TestEmptyPaneTransitions(t *testing.T) {
 	executable = func() (string, error) { return truePath(t), nil }
 	m.focusPalette = true
 	typeLine("box attach web")
-	if tab.Layout.Empty() != nil || tab.Focused().Command != "yoloctl box attach web" || m.focusPalette {
+	if tab.Layout.Empty() != nil || tab.Focused().Command != "yoloctl box attach web --space default" || m.focusPalette {
 		t.Fatalf("a live palette command fills the empty pane: %q", tab.Focused().Command)
 	}
 	open("|")

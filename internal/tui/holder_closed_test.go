@@ -18,7 +18,7 @@ func TestHolderClosedEndsTheViewWithoutOpeningThePalette(t *testing.T) {
 	sock, _, stop := startStoppableHolder(t)
 	m := newTestModel(t, 100, 30)
 	s := managedView(t, sock, m.viewRows(), 100)
-	p := &panes.Pane{Session: s, Command: "yoloctl box attach coder", Args: []string{"box", "attach", "coder"}}
+	p := &panes.Pane{Session: s, Command: "yoloctl box attach coder", Args: []string{"box", "attach", "coder", "--space", "fixture"}}
 	tab := tabs.New(p)
 	m.tabs.Add(tab)
 	m.layoutTab(tab)
@@ -57,7 +57,7 @@ func TestOtherViewFailureStillOpensThePalette(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(s.Close)
-	p := &panes.Pane{Session: s, Command: "yoloctl box attach coder", Args: []string{"box", "attach", "coder"}}
+	p := &panes.Pane{Session: s, Command: "yoloctl box attach coder", Args: []string{"box", "attach", "coder", "--space", "fixture"}}
 	tab := tabs.New(p)
 	m.tabs.Add(tab)
 	m.layoutTab(tab)

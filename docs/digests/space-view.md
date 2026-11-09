@@ -1,6 +1,6 @@
 # Live space view
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `2e70c9288f335135add2780e2607fa818ce8341c` and accompanying changes; `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] `space view [SPACE]` is a host-only command added beside export and
 import; its positional completes running spaces. It refuses box operators and
@@ -80,8 +80,10 @@ session, or an undeclared container first asks for confirmation, because
 plain terminal, the view hands the terminal to `box attach` and resumes after
 detach. [17](#source-17)
 
-[FACT] Inside the TUI, only `space view` (and native `chat`) tabs receive a
-private request channel; space view sends only plain requests.
+[FACT] Inside the TUI, `space view` and native `chat` alone may request new
+attach tabs through the private channel; space view sends plain requests.
+Eligible lifecycle panes use that framing only for retained resume-target
+metadata, which cannot open a tab.
 The view sends `{op, space, box}` lines on it. The TUI accepts only `attach`
 with valid names, then opens or refocuses a `box attach NAME --space SPACE` tab.
 Children of the view never inherit that channel or the session channel.

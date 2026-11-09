@@ -65,6 +65,22 @@ re-attaches on its own. Lifecycle auto-attach panes also offer ordinary
 this does not prove lifecycle success or replay its command. Suppressed and
 noninteractive lifecycle commands are excluded. [41](#source-41)
 
+[FACT] Ended chat, space-view, followed log and interactive VM/box-shell panes
+use `[ Reopen ]`/`r` in the same slot. Arbitrary remote commands, shell scripts,
+editors and secret/input prompts are excluded. Implicit spaces are pinned in
+the initial child argv and reused unchanged; changing palette context cannot
+redirect a reopened view. Running space view keeps its own telemetry reconnect.
+[41](#source-41)
+
+[FACT] A disconnected but still-running chat offers Reopen in its footer:
+click, or Shift+Tab to focus then `r`/Enter; Tab/Esc returns to the draft.
+It uses the existing explicit stream callback, retains draft/reply/history and
+uncertain deliveries, never resends or automatically takes over a nickname,
+and disables duplicate activation while reconnecting. Literal editor text,
+paste and overlays keep priority. A failure remains visible and permits
+explicit retry; telemetry-only loss does not request IRC reconnect.
+[46](#source-46)
+
 [FACT] Private attachment failures use the palette's wrapped result area,
 deferred while a palette command runs. Background failures leave another live
 tab's input focus intact. A stream that ended without an exit status (for
@@ -72,11 +88,13 @@ example, the holder of a stopped box) is shown in the status line instead,
 without opening the palette over the ended view. [1](#source-1)
 
 [FACT] `space view` opens in a tab unless help is requested. Only that tab
-and native `chat` tabs get a private request channel. Through it, the view can
+and native `chat` tabs may request new attach tabs through the private channel. Through it, the view can
 ask for a `box attach NAME --space SPACE` tab with validated names; chat may
 only ask for a participant attach guarded by its room, member and box
 identities. The channel never carries a command line. Outside the TUI, either
-view hands the terminal to `box attach` and resumes after detach.
+view hands the terminal to `box attach` and resumes after detach. Eligible
+lifecycle panes use the same framing only for retained-target metadata, never
+an open-tab action. [41](#source-41)
 [14](#source-14) [39](#source-39)
 
 [FACT] Space view shows the system disk (boxes, images, build caches) beside
@@ -339,7 +357,7 @@ checks transport behavior; it does not measure graphical parity. [4](#source-4)
 38. <a id="source-38"></a> [TUI pane menu](../digests/tui-pane-menu.md).
 39. <a id="source-39"></a> [Chat participants, settings and attachment](../digests/chat-participants.md).
 40. <a id="source-40"></a> [Chat reading and selection](../digests/chat-reading.md).
-41. <a id="source-41"></a> [TUI re-attach of an ended box view](../digests/tui-reattach.md).
+41. <a id="source-41"></a> [TUI re-attach and view reopen](../digests/tui-reattach.md).
 
 42. <a id="source-42"></a> [Host and Lima diagnostics](../digests/host-diagnostics.md).
 
@@ -348,3 +366,5 @@ checks transport behavior; it does not measure graphical parity. [4](#source-4)
 44. <a id="source-44"></a> [Per-TUI space selection](../digests/tui-space-switch.md).
 
 45. <a id="source-45"></a> [Live file view](../digests/follow-view.md).
+
+46. <a id="source-46"></a> [Disconnected chat input and reopen](../digests/chat-interaction.md).

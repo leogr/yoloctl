@@ -660,7 +660,7 @@ const composerPrompt = "❯ "
 func (m *Model) actionsShown() bool { return m.picked && m.selectedMessage() != nil }
 
 // statusRow reports whether a notice needs its own row above the actions.
-func (m *Model) statusRow() bool { return m.notice != "" && m.actionsShown() }
+func (m *Model) statusRow() bool { return m.notice != "" && (m.actionsShown() || m.reopenOffered()) }
 
 // noticeLine draws the current notice with its level's icon.
 func (m *Model) noticeLine(w int) string {
@@ -698,6 +698,9 @@ func (m *Model) footer(w, y int) string {
 	t := m.theme
 	dim := spaceview.Style{FG: t.Dim}
 	key := spaceview.Style{FG: t.Label, Bold: true}
+	if m.reopenOffered() {
+		return m.reopenFooter(w, y)
+	}
 	if m.actionsShown() {
 		msg := m.selectedMessage()
 		who := m.author(msg)

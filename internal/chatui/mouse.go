@@ -265,6 +265,9 @@ func (m *Model) clickHit(h hit, mo tea.Mouse) tea.Cmd {
 	case hitSuggest:
 		m.acceptSuggestion(h.item, true)
 	case hitFooter:
+		if h.id == "reopen" {
+			return m.reopen()
+		}
 		if h.id == "help" {
 			m.openHelp()
 			return nil

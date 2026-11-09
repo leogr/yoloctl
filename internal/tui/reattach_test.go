@@ -47,21 +47,22 @@ func TestReattachArgs(t *testing.T) {
 		})
 	}
 	m := &model{standalone: true}
-	if h := m.reattachHint([]string{"box", "attach", "api"}); h != "" {
+	if h := m.reattachHint([]string{"box", "attach", "api", "--space", "fixture"}); h != "" {
 		t.Fatalf("a standalone attach offers no re-attach: %q", h)
 	}
 	m.standalone = false
-	if h := m.reattachHint([]string{"box", "attach", "api"}); h != "r to re-attach to api" {
+	if h := m.reattachHint([]string{"box", "attach", "api", "--space", "fixture"}); h != "r to re-attach to api" {
 		t.Fatalf("hint %q", h)
 	}
-	if h := m.reattachHint([]string{"box", "logs", "-f", "api"}); h != "" {
-		t.Fatalf("a non-attach view offers no re-attach: %q", h)
+	if h := m.reattachHint([]string{"box", "logs", "-f", "api", "--space", "fixture"}); h != "r to reopen" {
+		t.Fatalf("a followed log offers reopen: %q", h)
 	}
 }
 
 // endedAttach is an exited pane started with args, as startPane records it.
 func endedAttach(t *testing.T, args ...string) *panes.Pane {
 	t.Helper()
+	args = pinReopenArgs(args, func() (string, error) { return "fixture", nil })
 	s := paneSession(t, 10, 40, "true")
 	if err := s.Wait(5 * time.Second); err != nil {
 		t.Fatal(err)
@@ -130,7 +131,7 @@ func TestReattachOnlyEndedAttachViews(t *testing.T) {
 	t.Cleanup(func() { executable = old })
 	executable = func() (string, error) { return truePath(t), nil }
 	m := newTestModel(t, 100, 26)
-	logs := endedAttach(t, "box", "logs", "-f", "api")
+	logs := endedAttach(t, "box", "logs", "api")
 	tab, _ := splitWithEnded(t, m, logs)
 	_, _ = m.Update(key('r', 0, "r"))
 	if tab.Focused() != logs || len(m.reattachSlots()) != 0 {
@@ -182,7 +183,7 @@ func TestReattachButton(t *testing.T) {
 	_, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: r.X + 2, Y: y})
 	_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: r.X + 2, Y: y})
 	p := tab.Layout.Panes()[1]
-	if p == ended || p.Exited || tab.Focused() != p || !slices.Equal(p.Args, []string{"box", "attach", "api"}) {
+	if p == ended || p.Exited || tab.Focused() != p || !slices.Equal(p.Args, []string{"box", "attach", "api", "--space", "fixture"}) {
 		t.Fatal("a press on the button re-attaches that view, focused")
 	}
 	if len(m.reattachSlots()) != 0 {

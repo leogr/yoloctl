@@ -30,6 +30,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/session"
+	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
 	"github.com/leogr/yoloctl/internal/tui/palette"
@@ -803,6 +804,9 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 		m.status = "cannot locate yoloctl binary: " + err.Error()
 		return nil
 	}
+	if !m.standalone {
+		args = pinReopenArgs(args, func() (string, error) { return reopenSpace(spaceenv.Current()) })
+	}
 	// A pane's requests name it, so an empty pane of its tab can take them;
 	// one arriving before Start returns names no pane.
 	var self atomic.Pointer[term.Session]
@@ -1538,7 +1542,7 @@ func (m *model) handleRunningKey(k tea.Key, paletteKey bool) (tea.Model, tea.Cmd
 // exited. The tab keeps showing the command's last screen plus its
 // exit-status + close hint; Enter (the advertised affordance) or Ctrl+W
 // closes it — the child already exited, so this is a plain dismiss, not
-// a session detach. On an ended box attach, r re-attaches in place.
+// a session detach. On eligible ended views, r re-attaches or reopens in place.
 // Scroll and tab-nav chrome stay live (there is no child left to feed);
 // every other key is inert.
 func (m *model) handleExitedTabKey(k tea.Key) tea.Cmd {

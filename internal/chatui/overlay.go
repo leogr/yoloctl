@@ -99,6 +99,7 @@ var helpSections = []struct {
 		{"Ctrl+V", "Paste a PNG from the host clipboard (seams.clipboard) as [Image #n] at the cursor. Enter sends text and images in draft order, each after the previous one is confirmed; Backspace removes an image whole."},
 	}},
 	{"Reading", [][2]string{
+		{"Reopen · Shift+Tab, r/Enter", "When disconnected, click Reopen or focus it with Shift+Tab, then r/Enter. Tab/Esc returns to the draft. Nothing is resent."},
 		{"PgUp  PgDn  wheel", "Scroll; at the top, the page before the oldest message loads"},
 		{"Alt+End  Esc  click ↓", "Jump to the latest messages, keeping the draft, reply and selection. Scrolled back, the view stays put as messages arrive."},
 		{"Ctrl+S", "Show messages as rendered Markdown or as their source"},

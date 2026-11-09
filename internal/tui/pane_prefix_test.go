@@ -489,7 +489,7 @@ func TestPrefixNewTabEntry(t *testing.T) {
 	_, _ = m.Update(key(tea.KeyEnter, 0, ""))
 	// The empty pane was bypassed, not filled, and stays through the switch
 	// to the new tab (K2: it stays untouched).
-	if len(m.tabs.Tabs) != 2 || first.Layout.Empty() == nil || len(first.Layout.Panes()) != 2 || m.tabs.Current().Focused().Command != "yoloctl box attach api" || m.newTab != nil {
+	if len(m.tabs.Tabs) != 2 || first.Layout.Empty() == nil || len(first.Layout.Panes()) != 2 || m.tabs.Current().Focused().Command != "yoloctl box attach api --space default" || m.newTab != nil {
 		t.Fatalf("the live command opened a new tab beside the empty pane: %d tabs", len(m.tabs.Tabs))
 	}
 	if line, _ := m.pal.Line(); line != "box ls --dra" {

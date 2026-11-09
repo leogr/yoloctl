@@ -51,6 +51,17 @@ unjoined (`/join <room> to send`), deleted (`deleted read-only`) or unresolved
 states show their blocking status and draft retention, while empty placeholders
 mirror that condition. Drafts remain editable across every state. [1](#source-1)
 
+[FACT] After IRC disconnection, a supplied reconnect callback enables the footer's
+`[ Reopen ]`: click, or Shift+Tab to focus then `r`/Enter; Tab/Esc returns to
+the draft. Literal `r` in the editor, paste and extended committed text remain
+text. Overlays and browser prompts take priority. Reconnect retains this model's
+drafts, replies, history and uncertain-delivery markers; it sends nothing and
+cannot automatically take over a nickname or revive a deleted channel. Pending
+reconnect disables another activation; a failure shows its error and allows an
+explicit retry. Initially connecting, connected, and telemetry-only loss do not
+offer IRC reopen. The host's ended-pane action separately reopens exited chat
+and followed logs. [15](#source-15) [16](#source-16)
+
 [FACT] Regressions (fake callbacks only; no live terminal or controller)
 cover drag text, clicks, clipboard-off, eviction, suggestions, commands,
 message focus, attach lookups, Save/reconnect, notices, ordering, wheel rows,
@@ -74,3 +85,6 @@ the jump, padding and TUI guards. [5](#source-5) [4](#source-4)
 13. <a id="source-13"></a> [Drag pick](../../internal/chatui/selection_focus_test.go#L1-L168) — `mouseDown` sets `dragState.pick`, `mouseMove` picks at the first motion (mouse.go); six regressions.
 
 14. <a id="source-14"></a> [Human channel selection](../../internal/chatui/channels.go#L218) — `selectChannel` and `cycle`; user routes in model.go, mouse.go and overlay.go; `channel_select_test.go` exercises commands and membership results.
+
+15. <a id="source-15"></a> [Reopen action](../../internal/chatui/reopen.go#L10) — `reopenOffered`, `reopen`, `reopenKey`, `reopenFooter`; `key`/`connection` in model.go, `footer` in view.go and `activate` in mouse.go; focused regressions in `reopen_test.go`.
+16. <a id="source-16"></a> [Existing stream owner](../../cmd/yoloctl/chat_view.go#L374) — `reconnect`.
