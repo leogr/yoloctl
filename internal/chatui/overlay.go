@@ -123,9 +123,9 @@ var helpSections = []struct {
 		{"Esc", "Clear the highlight"},
 	}},
 	{"Channels", [][2]string{
-		{"Ctrl+G  click the channel", "Choose a channel; each keeps its own draft, reply, reading position, selection and unread count"},
+		{"Ctrl+G  click the channel", "Choose a channel; if not joined, join before showing it when permitted. Each keeps its draft, reply, reading position, selection and unread count"},
 		{"Alt+1…9  Alt+← →", "Switch by position, or to the previous/next channel (unread first)"},
-		{"/join NAME  /part [NAME]", "Follow or leave a channel; leaving keeps its draft and history but disables sending"},
+		{"/join NAME  /part [NAME]", "Follow or leave a channel; leaving keeps its draft and history but disables sending until you deliberately select or join it again"},
 		{"/topic  /topic set TEXT  /topic clear", "Show or change this channel's topic, as the room allows"},
 		{"#name", "Suggests channel names as you type; inserting one only adds text"},
 	}},
@@ -265,7 +265,7 @@ func (m *Model) overlayActivate(button int) tea.Cmd {
 	case overlayChannels:
 		m.overlay = nil
 		if o.index < len(m.order) {
-			m.switchTo(m.order[o.index])
+			return m.selectChannel(m.order[o.index])
 		}
 	case overlayFilter:
 		m.overlay = nil

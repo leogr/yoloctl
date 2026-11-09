@@ -356,9 +356,9 @@ func TestJoinWaitsForTheServerAndRecoversFromRefusal(t *testing.T) {
 	}
 
 	// An existing view keeps its draft and history after a refusal.
-	m.Update(MembershipMsg{Channel: "#build", State: "left"})
 	alt(m, '2')
 	paste(m, "keep")
+	m.Update(MembershipMsg{Channel: "#build", State: "left"})
 	alt(m, '1')
 	paste(m, "/join build")
 	press(m, tea.KeyEnter, 0)
@@ -380,6 +380,9 @@ func TestJoinWaitsForTheServerAndRecoversFromRefusal(t *testing.T) {
 	}
 	m.Update(ConnectionMsg{})
 	m.Update(ConnectionMsg{Connected: true})
+	// Reconnect reports a joined navigation target; selecting an unjoined
+	// one would correctly request another JOIN instead of switching.
+	m.Update(MembershipMsg{Channel: "#build", State: "joined"})
 	paste(m, "/join late")
 	press(m, tea.KeyEnter, 0)
 	id = (*actions)[4].ID

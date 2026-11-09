@@ -1,6 +1,6 @@
 # Native chat input and message actions
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; drag pick `9cb4a0f7fca3cd6090c23db9de447b858b68c38a` and accompanying changes; code-block copy buttons `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; drag pick `9cb4a0f7fca3cd6090c23db9de447b858b68c38a` and accompanying changes; code-block copy buttons `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; channel selection verified at `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; re-read cited sources when changing behavior.
 
 See [reading and selection](chat-reading.md) for drag copy and scrolling, and
 [participants, settings and attachment](chat-participants.md) for people and
@@ -36,6 +36,13 @@ made in it at once. [1](#source-1)
 that block under the same `seams.clipboard` check: off copies nothing and
 says why, as its hover hint does. [12](#source-12)
 
+[FACT] Explicit channel selection (picker, rail or Alt navigation) requests JOIN
+when the human is not joined, using the same typed action and server checks as
+`/join`, then shows the channel on stream confirmation. Draft/reply/history stay
+with their views. Joined selection remains local; `/part`, kicks, catalog
+refreshes and internal switches do not themselves rejoin. A later deliberate
+selection can request rejoining. [14](#source-14)
+
 [FACT] The default composer footer offers `Enter send` only when send-ready;
 disconnected (`offline draft kept`), reconnecting (`connecting… draft kept`),
 unjoined (`/join <room> to send`), deleted (`deleted read-only`) or unresolved
@@ -63,3 +70,5 @@ the jump, padding and TUI guards. [5](#source-5) [4](#source-4)
 11. <a id="source-11"></a> [First-row regression](../../internal/chatui/first_row_test.go#L82) — `TestChatFirstRowIsBlackInEveryState`; `topBar`, `View`, `linkPromptView` (link_prompt.go L43) and spaceview `FirstRow` (theme.go L79-L93).
 12. <a id="source-12"></a> [Copy button](../../internal/chatui/model.go#L1060) — `copyCode`, `activate` (`actCopyCode`) in mouse.go, the `hoverHint` case in hover.go; `codeblock_test.go`.
 13. <a id="source-13"></a> [Drag pick](../../internal/chatui/selection_focus_test.go#L1-L168) — `mouseDown` sets `dragState.pick`, `mouseMove` picks at the first motion (mouse.go); six regressions.
+
+14. <a id="source-14"></a> [Human channel selection](../../internal/chatui/channels.go#L218) — `selectChannel` and `cycle`; user routes in model.go, mouse.go and overlay.go; `channel_select_test.go` exercises commands and membership results.

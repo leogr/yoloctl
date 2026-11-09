@@ -101,6 +101,9 @@ per row, without the clipboard [30](#source-30),
 renderer-matched Unicode widths for layout and hits (wcwidth until a supported
 mode-2027 report; grapheme widths thereafter),
 older-history paging, per-channel views with typed join/part/topic actions,
+explicit human channel selection that requests JOIN when needed (with drafts
+kept and fresh catalog/server ACL admission), while background updates and
+explicit part never automatically rejoin [18](#source-18),
 live trusted-identity refresh from one desired controller catalog by default
 (`chat --catalog-read=single`), with captured diagnostics
 and acceptance-owned warning recovery [18](#source-18), receipt-aware

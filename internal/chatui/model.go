@@ -811,14 +811,12 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		}
 		return m.quoteSelection()
 	case "alt+left":
-		m.cycle(-1)
-		return nil
+		return m.cycle(-1)
 	case "alt+right":
-		m.cycle(1)
-		return nil
+		return m.cycle(1)
 	case "alt+1", "alt+2", "alt+3", "alt+4", "alt+5", "alt+6", "alt+7", "alt+8", "alt+9":
 		if i := int(key[len(key)-1] - '1'); i < len(m.order) {
-			m.switchTo(m.order[i])
+			return m.selectChannel(m.order[i])
 		}
 		return nil
 	case "ctrl+s":

@@ -215,6 +215,33 @@ func (m *Model) switchTo(name string) {
 	m.say(levelInfo, "Now in "+v.name+m.membershipNote())
 }
 
+// selectChannel is a deliberate selection in the human host chat view.
+// It uses the ordinary typed join/admission path; catalog events and join
+// completion keep using switchTo, which never starts a channel action.
+func (m *Model) selectChannel(name string) tea.Cmd {
+	key, ok := canonicalChannel(name)
+	if !ok {
+		return nil
+	}
+	v := m.views[key]
+	if v == nil {
+		return nil
+	}
+	if v.deleted || v.membership == "joined" || v.membership == "" && strings.EqualFold(key, m.opts.Channel) {
+		m.switchTo(key)
+		return nil
+	}
+	if m.joinSwitch.id != "" && strings.EqualFold(m.joinSwitch.channel, key) {
+		m.say(levelInfo, "Joining "+key+"…")
+		return nil
+	}
+	cmd, started := m.control("join", key, nil)
+	if started {
+		m.say(levelInfo, "Joining "+key+"…")
+	}
+	return cmd
+}
+
 func (m *Model) membershipNote() string {
 	if m.deleted {
 		return " (deleted: read-only, no restore)"
@@ -234,21 +261,21 @@ func (m *Model) membershipNote() string {
 
 // cycle moves to the next (delta 1) or previous (-1) channel, preferring
 // channels with unread messages.
-func (m *Model) cycle(delta int) {
+func (m *Model) cycle(delta int) tea.Cmd {
 	if len(m.order) < 2 {
 		m.say(levelInfo, "Only "+m.name+" is open; /join NAME adds a channel")
-		return
+		return nil
 	}
 	at, n := slices.Index(m.order, m.name), len(m.order)
 	for _, unreadOnly := range []bool{true, false} {
 		for step := 1; step < n; step++ {
 			name := m.order[((at+delta*step)%n+n)%n]
 			if !unreadOnly || m.views[name].unread > 0 {
-				m.switchTo(name)
-				return
+				return m.selectChannel(name)
 			}
 		}
 	}
+	return nil
 }
 
 // otherUnread counts unread messages and mentions outside the visible view.
@@ -478,7 +505,7 @@ func (m *Model) showJoined(channel string) {
 
 // joinSwitch remembers an explicit join until the server confirms it, so
 // the view follows the confirmation whichever report arrives first.
-type joinSwitch struct{ id, from string }
+type joinSwitch struct{ id, from, channel string }
 
 // controlReady reports whether a channel action may start now. One send
 // or action is outstanding at a time, and an uncertain action blocks the
@@ -512,7 +539,11 @@ func (m *Model) control(kind, channel string, topic *string) (tea.Cmd, bool) {
 	a := Action{ID: rand.Text(), Kind: kind, Channel: channel, Topic: topic}
 	m.pending = &pendingAction{Action: a, created: m.views[strings.ToLower(channel)] == nil}
 	if kind == "join" {
-		m.joinSwitch = joinSwitch{id: a.ID, from: m.name}
+		m.joinSwitch = joinSwitch{id: a.ID, from: m.name, channel: channel}
+	} else if kind == "part" && strings.EqualFold(m.joinSwitch.channel, channel) {
+		// Leaving supersedes an acknowledged join whose membership event has
+		// not arrived yet; it must not keep selection stuck on “Joining…”.
+		m.joinSwitch = joinSwitch{}
 	}
 	return m.opts.Control(a), true
 }

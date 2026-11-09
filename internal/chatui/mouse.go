@@ -238,7 +238,7 @@ func (m *Model) clickHit(h hit, mo tea.Mouse) tea.Cmd {
 		}
 	case hitChannel:
 		if h.item < len(m.order) {
-			m.switchTo(m.order[h.item])
+			return m.selectChannel(m.order[h.item])
 		}
 	case hitPanel:
 		if h.item < len(m.layout.panelMembers) {

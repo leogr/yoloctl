@@ -1,18 +1,24 @@
 # Native chat channels and live identities
 
-Verification: `8931e8df3abebc5c0fdd6f77bd473110a2e7d23b` and accompanying changes.
+Verification: `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes.
 
 [FACT] The chat view keeps one view per channel, embedded as the visible one:
 draft/reply, messages/caches, reading position, selection,
 history cursor, roster, notices, topic, unread/mention counts,
 membership and its [message filter](chat-filter.md). Events for another channel update that view without changing what
-is shown; its notices stay hidden unless they report an error. Switching never
-sends or reconnects. [1](#source-1)
+is shown; its notices stay hidden unless they report an error. Internal switching never sends or reconnects. Deliberate human selection in
+the picker, rail, Alt+number or previous/next navigation switches locally when
+already joined; otherwise it requests the existing typed JOIN and shows
+“Joining…” until the stream reports membership. The old draft/reply/history
+stay intact, and duplicate selection does not queue another join. This includes
+selecting the current unjoined view. [1](#source-1) [23](#source-23)
 
 [FACT] One send or channel action is outstanding at a time across channels. A
 send carries its channel, and a confirmation clears only that channel's
 unchanged draft. A channel whose membership is joining, left, kicked, deleted or
-unknown refuses sending and keeps the draft; nothing is rejoined automatically.
+unknown refuses sending and keeps the draft. Catalogs, kicks, renders and other
+background events never rejoin; a deliberate later selection or `/join` can
+request membership again, through the existing fresh catalog/server ACL checks.
 A deleted view stays read-only until chat closes
 ([deletion](chat-channel-deletion.md)). The legacy single channel counts as
 joined when no membership was reported.
@@ -103,7 +109,7 @@ view confirmation. [2](#source-2) [7](#source-7) [8](#source-8)
 
 ## Sources
 
-1. <a id="source-1"></a> [Channel views](../../internal/chatui/channels.go#L18-L741) — `channelView`, `within`, `switchTo`, `refreshForUnknown`, `catalog`, `membershipChanged`, `showJoined`, `control`, `controlDone`, `unjoined`, `channelCommand`, `trimAggregate`.
+1. <a id="source-1"></a> [Channel views](../../internal/chatui/channels.go#L18) — `channelView`, `within`, `switchTo`, `selectChannel`, `cycle`, `refreshForUnknown`, `catalog`, `membershipChanged`, `showJoined`, `control`, `controlDone`, `unjoined`, `channelCommand`, `trimAggregate`.
 2. <a id="source-2"></a> [Channel regressions](../../internal/chatui/channels_test.go#L26-L273) — drafts, sends, membership, commands, catalog, trimming, identities.
 3. <a id="source-3"></a> [Submit and routing](../../internal/chatui/model.go#L385-L1323) — `Update`, `submit`, `slashCommand`.
 4. <a id="source-4"></a> [Channel rail](../../internal/chatui/roster.go#L63) — `channelRail`.
@@ -128,3 +134,5 @@ view confirmation. [2](#source-2) [7](#source-7) [8](#source-8)
 21. <a id="source-21"></a> [Driver regression](../../internal/chatstream/catalog_unobserved_test.go#L5) — removal of applied/pending claims while preserving local read identity.
 
 22. <a id="source-22"></a> [Startup header projection](../../internal/chatstream/channels_client.go#L112) — initial catalog is unobserved, with no applied/pending claim.
+
+23. <a id="source-23"></a> [Human selection regressions](../../internal/chatui/channel_select_test.go#L1) — picker keyboard/mouse, rail, Alt navigation, propagated commands, current unjoined view, drafts, duplicate activation, refusal/uncertainty, explicit part and background exclusion. Agent AIRC paths are unchanged; these are fake-callback UI checks, not live server qualification.
