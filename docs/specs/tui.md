@@ -60,7 +60,10 @@ other live command asks first in a popup bound to the commands it lists.
 [FACT] An ended `attach`/`box attach` view offers re-attach in place: `r`, or
 a click on its `[ Re-attach ]` button, runs the same attach again (without
 `--new-session`) in the same pane slot; Enter still closes. Nothing
-re-attaches on its own, and other ended views are unchanged. [41](#source-41)
+re-attaches on its own. Lifecycle auto-attach panes also offer ordinary
+`box attach` for their retained resolved target, including after a remote error;
+this does not prove lifecycle success or replay its command. Suppressed and
+noninteractive lifecycle commands are excluded. [41](#source-41)
 
 [FACT] Private attachment failures use the palette's wrapped result area,
 deferred while a palette command runs. Background failures leave another live

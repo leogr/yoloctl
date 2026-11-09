@@ -105,10 +105,7 @@ func runSpaceView(cmd *cobra.Command, args []string, interval time.Duration, mot
 		return err
 	}
 	defer runtime.KeepAlive(view)
-	requests, err := termio.InheritedTabRequests()
-	if err != nil {
-		return err
-	}
+	requests := tabRequests(cmd.Context())
 	opts := spaceview.Options{
 		Space:    space,
 		Interval: interval,

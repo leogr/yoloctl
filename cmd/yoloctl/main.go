@@ -50,6 +50,12 @@ func main() {
 	}
 	ctx, stop := commandSignalContext()
 	defer stop()
+	ctx, closeRequests, err := claimTabRequests(ctx)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "yoloctl: private tab channel:", err)
+		os.Exit(exitRuntime)
+	}
+	defer closeRequests()
 	if len(os.Args) > 1 && os.Args[1] == port.ForwardWorkerCommand {
 		err := runOpenShellForwardInternal(ctx, os.Args[2:])
 		if err != nil {

@@ -1,13 +1,14 @@
 # TUI re-attach of an ended box view
 
-Verification: `3736b1cf9ac349827782dcbe01070d3e5d922a15` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; re-read cited symbols when changing behavior.
 
 [FACT] Which ended views offer re-attach:
 - **Qualifies:** a pane or tab started by `attach …` or `box attach …`, once
-  its child has exited.
+  its child has exited, regardless of exit status; a lifecycle auto-attach
+  pane also qualifies when it retained a validated host request target.
 - **Does not qualify:** a help request, the structured `--box-use` interface,
-  any other command (`box logs -f`, `box exec`, lifecycle auto-attach after
-  `box start`/`recreate`), and a standalone attach outside the TUI.
+  suppressed lifecycle attachment (`--no-attach`, `--manifest-only`), other
+  commands (`box logs -f`, `box exec`), and a standalone attach outside the TUI.
 
 Every pane keeps a private copy of its launch argv (`Pane.Args`); re-attach
 reads that copy and never re-splits the display string `Pane.Command`. [1](#source-1) [2](#source-2)
@@ -17,6 +18,26 @@ removed, so the box's own conversation resumes. Every other argument is kept
 verbatim: `--space`, `--passthrough` and the chat guards, including
 `--chat-allow-start`. The box name, when valid, is shown in the hint.
 [1](#source-1)
+
+[FACT] Lifecycle `box create/copy/start/restart/recreate` panes retain only
+an ordinary attach target, not lifecycle argv. Immediately before host
+controller dispatch, after local preparation/recreate offers, the CLI publishes
+resolved space and validated destination (copy uses NEWNAME), plus
+`--no-autoupdate` and `--passthrough` when applicable. Noninteractive and operator routes publish
+none. This means “try ordinary box attach”, not “setup succeeded”: a remote
+setup failure, failed attachment or uncertain result retains its original
+error and may still offer this explicit action. No lifecycle operation is
+replayed. [7](#source-7)
+
+[FACT] Typed `resume-target` metadata uses the same-binary private request
+socket, separately from open-tab requests. Startup claims it into command
+context, marks it close-on-exec and clears its environment variable before
+external tools run. The Session accepts the first valid target for its original
+command class, retains a copy across fast completion, and joins the bounded
+metadata reader before Done. Ordinary open-tab model callbacks remain
+asynchronous so closing a pane cannot wait on its own UI event loop.
+Metadata never launches anything; a replacement has a
+separate Session. PTY output is not metadata. [8](#source-8) [9](#source-9)
 
 [FACT] Two actions run the same function (`reattachPane`):
 - **`r`:** on the focused ended pane, with Caps Lock and Num Lock ignored as
@@ -52,8 +73,12 @@ attach's setup tail drops the close line by its `ExitCloseHint` prefix.
 ## Sources
 
 1. <a id="source-1"></a> [Re-attach](../../internal/tui/reattach.go#L1-L190) — `reattachArgs`, `reattachHint`, `reattachable`, `reattachPane`, `reattachSlots`, `applyReattachButtons`, `reattachClick`.
-2. <a id="source-2"></a> [Pane start and keys](../../internal/tui/tui.go#L1548-L1570) — `handleExitedTabKey`; `startPane` (L852) sets `Args` and `EndHint`; `Pane.Args` in panes/layout.go.
+2. <a id="source-2"></a> [Pane start and keys](../../internal/tui/tui.go#L1567) — `handleExitedTabKey`; `startPane` (L854) sets `Args` and `EndHint`; `Pane.Args` in panes/layout.go.
 3. <a id="source-3"></a> [Mouse routing](../../internal/tui/mouse.go#L236-L241) — `handleMouse` calls `reattachClick` after popups and before chrome.
-4. <a id="source-4"></a> [Drawing order](../../internal/tui/tui.go#L1787-L1790) — `applyReattachButtons` before `applyOverlay`.
-5. <a id="source-5"></a> [Tests](../../internal/tui/reattach_test.go#L16-L226) — `TestReattachArgs`, `TestEndedAttachReattachesInPlace`, `TestReattachOnlyEndedAttachViews`, `TestReattachButton`, `TestReattachKeyIgnoresLockModifiers`.
-6. <a id="source-6"></a> [End banner](../../internal/tui/term/session.go#L248-L277) — `writeExitBanner`, `ExitCloseHint`; `TestExitBannerEndHint` in term_test.go; `attachedSetupOutput` in attach.go.
+4. <a id="source-4"></a> [Drawing order](../../internal/tui/tui.go#L1801) — `applyReattachButtons` before `applyOverlay`.
+5. <a id="source-5"></a> [Tests](../../internal/tui/reattach_test.go#L17) — `TestReattachArgs`, `TestEndedAttachReattachesInPlace`, `TestReattachOnlyEndedAttachViews`, `TestReattachButton`, `TestReattachKeyIgnoresLockModifiers`.
+6. <a id="source-6"></a> [End banner](../../internal/tui/term/session.go#L322) — `writeExitBanner`, `ExitCloseHint`; `TestExitBannerEndHint` in term_test.go; `attachedSetupOutput` in attach.go.
+
+7. <a id="source-7"></a> [Host publication](../../cmd/yoloctl/resume_target.go#L35) — `publishControllerResumeTarget`, `publishResumeTarget`; `callControllerTerminal` in controller_client.go publishes before dispatch; `TestHostLifecycleResumeTargetThroughClientRoot` in resume_target_test.go.
+8. <a id="source-8"></a> [Typed framing](../../internal/termio/tabrequest.go#L15) — `TabRequest`, `ValidateResumeTarget`, `ReadTabRequests`; `claimTabRequests` in cmd/yoloctl/resume_target.go and startup in main.go; chat_view.go/space_view.go consume that context channel.
+9. <a id="source-9"></a> [Retained target](../../internal/tui/term/session.go#L120) — `Start`, `pump`, `ResumeTarget`; `resumeTargetKind` and `reattachArgsForPane` in internal/tui/resume_target.go; resume_target_test.go in term and tui, and reattach_completion_test.go.

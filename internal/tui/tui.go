@@ -806,24 +806,29 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 	// A pane's requests name it, so an empty pane of its tab can take them;
 	// one arriving before Start returns names no pane.
 	var self atomic.Pointer[term.Session]
+	resumeKind := termio.ResumeTargetNone
+	if !m.standalone {
+		resumeKind = resumeTargetKind(args)
+	}
 	s, err := term.Start(term.Options{
-		TrustedView:     true,
-		Env:             m.childEnv(),
-		Argv:            append([]string{exe}, args...),
-		Rows:            max(rows, 1),
-		Cols:            max(cols, 1),
-		CellWidth:       m.hostGeometry.width,
-		CellHeight:      m.hostGeometry.height,
-		ScrollbackLines: m.cfg.ScrollbackLines,
-		OnData:          m.wake,
-		OnOSC52:         m.handleOSC52Output,
-		OnBell:          m.paneBellHandler(&self),
-		OnBrowser:       m.browserHandler(),
-		OnTabRequest:    m.tabRequestHandler(args, &self),
-		EndHint:         m.reattachHint(args),
-		Foreground:      m.foreground,
-		Background:      m.background,
-		Palette:         m.hostPalette,
+		TrustedView:      true,
+		Env:              m.childEnv(),
+		Argv:             append([]string{exe}, args...),
+		Rows:             max(rows, 1),
+		Cols:             max(cols, 1),
+		CellWidth:        m.hostGeometry.width,
+		CellHeight:       m.hostGeometry.height,
+		ScrollbackLines:  m.cfg.ScrollbackLines,
+		OnData:           m.wake,
+		OnOSC52:          m.handleOSC52Output,
+		OnBell:           m.paneBellHandler(&self),
+		OnBrowser:        m.browserHandler(),
+		OnTabRequest:     m.tabRequestHandler(args, &self),
+		ResumeTargetKind: resumeKind,
+		EndHint:          m.reattachHint(args),
+		Foreground:       m.foreground,
+		Background:       m.background,
+		Palette:          m.hostPalette,
 	})
 	if err != nil {
 		m.status = err.Error()

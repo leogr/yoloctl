@@ -46,3 +46,38 @@ func TestTabRequestReachesTUI(t *testing.T) {
 		t.Fatal("no request from the child")
 	}
 }
+
+// Program.Send can wait for the UI event loop, which can itself be closing
+// this Session. Completion must not join an ordinary open-tab model callback.
+func TestCloseDoesNotWaitForTabRequestCallback(t *testing.T) {
+	entered, release, returned := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	s, err := Start(Options{TrustedView: true,
+		Argv: []string{os.Args[0], "-test.run=^TestTabRequestChild$"},
+		Env:  append(os.Environ(), "YOLOCTL_TEST_TAB_REQUEST=1"), Rows: 8, Cols: 60,
+		OnTabRequest: func(termio.TabRequest) { close(entered); <-release; close(returned) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	defer func() {
+		close(release)
+		select {
+		case <-returned:
+		case <-time.After(time.Second):
+			t.Error("callback did not return after release")
+		}
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no request callback")
+	}
+	closed := make(chan struct{})
+	go func() { s.Close(); close(closed) }()
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("session close waited for the UI callback")
+	}
+}

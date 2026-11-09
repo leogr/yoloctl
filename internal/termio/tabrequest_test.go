@@ -56,3 +56,35 @@ func TestTabRequestKeepsLegacySpaceName(t *testing.T) {
 		t.Fatalf("existing space reference lost: %+v", got)
 	}
 }
+
+func TestResumeTargetValidation(t *testing.T) {
+	good := TabRequest{Op: "resume-target", Space: "original", Box: "copied", NoAutoupdate: true}
+	if err := good.ValidateResumeTarget(ResumeTargetBox); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []TabRequest{
+		{Op: "attach", Space: "original", Box: "copied"},
+		{Op: "resume-target", Space: "../other", Box: "copied"},
+		{Op: "resume-target", Space: "original", Box: "../other"},
+		{Op: "resume-target", Space: "original", Box: "copied", ChatAllowStart: true},
+		{Op: "resume-target", Space: "original"},
+	} {
+		if bad.ValidateResumeTarget(ResumeTargetBox) == nil {
+			t.Errorf("accepted %+v", bad)
+		}
+	}
+	if good.ValidateResumeTarget(ResumeTargetNone) == nil || good.ValidateResumeTarget(ResumeTargetSpace) == nil {
+		t.Fatal("box metadata accepted for a different original command class")
+	}
+	if err := (TabRequest{Op: "resume-target", Space: "original"}).ValidateResumeTarget(ResumeTargetSpace); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{
+		`{"op":"resume-target","space":"original","box":"copied","argv":["destroy"]}`,
+		`{"op":"resume-target","space":"original","box":"copied"} {}`,
+	} {
+		if err := ReadTabRequests(strings.NewReader(raw+"\n"), func(TabRequest) { t.Error("malformed target delivered") }); err == nil {
+			t.Errorf("accepted %s", raw)
+		}
+	}
+}

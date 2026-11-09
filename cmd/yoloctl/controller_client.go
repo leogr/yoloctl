@@ -41,6 +41,9 @@ type controllerTarget struct {
 // Server authorization remains independent of this routing metadata.
 var loadOperatorClient = controller.LoadOperatorClient
 
+// Routing seam; the real selector retains all host/bootstrap/authority checks.
+var controllerTargetForCommand = selectControllerTarget
+
 func selectControllerTarget(ctx context.Context, cmd *cobra.Command) (controllerTarget, error) {
 	var target controllerTarget
 	operator, err := loadOperatorClient()
@@ -111,7 +114,7 @@ func routeControllerCommands(root *cobra.Command) {
 		if f := cmd.Flag("all-spaces"); f != nil && f.Value.String() == "true" {
 			return controllerAllSpaces(cmd, method)
 		}
-		target, err := selectControllerTarget(cmd.Context(), cmd)
+		target, err := controllerTargetForCommand(cmd.Context(), cmd)
 		if err != nil {
 			return err
 		}
@@ -477,6 +480,9 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 		})
 		defer func() { _ = filter.Flush() }()
 		streams.Out = filter
+	}
+	if err := publishControllerResumeTarget(cmd, target, req); err != nil {
+		return err
 	}
 	err = callWithImageRetry(ctx, cmd, req, streams, target.Call)
 	var remote *controller.ExitError

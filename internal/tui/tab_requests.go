@@ -49,7 +49,7 @@ func (m *model) handleTabRequest(r termio.TabRequest, chat bool, from *term.Sess
 			return
 		}
 		args = r.ChatAttachArgs()
-	case r.Chat() || r.Op != "attach" || layout.ValidateExistingSpaceName(r.Space) != nil || layout.ValidateName("agentbox", r.Box) != nil:
+	case r.Chat() || r.NoAutoupdate || r.Passthrough || r.Op != "attach" || layout.ValidateExistingSpaceName(r.Space) != nil || layout.ValidateName("agentbox", r.Box) != nil:
 		m.status = "space view sent an invalid request; nothing was opened"
 		return
 	default:

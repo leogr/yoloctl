@@ -58,10 +58,7 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 	}
 	defer runtime.KeepAlive(view)
 	// Inside the TUI a chat tab may ask for a guarded attach tab.
-	requests, err := termio.InheritedTabRequests()
-	if err != nil {
-		return err
-	}
+	requests := tabRequests(cmd.Context())
 	if requests != nil {
 		defer func() { _ = requests.Close() }()
 	}

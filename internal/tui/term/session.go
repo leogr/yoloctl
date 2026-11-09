@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/leogr/yoloctl/internal/session"
@@ -41,9 +42,13 @@ type Options struct {
 	// a model event; desktop I/O must not run on the session reader.
 	OnBrowser func(*Session, session.BrowserRequest, <-chan struct{})
 	// OnTabRequest gives a trusted child a private channel to ask for new
-	// attach tabs; only `space view` tabs get one. It is called from a reader
+	// attach tabs; `space view` and native `chat` tabs get one. Called from a reader
 	// goroutine and must only queue a model event.
 	OnTabRequest func(termio.TabRequest)
+	// ResumeTargetKind admits only typed metadata for this trusted CLI's
+	// original command class. These classes cannot request new tabs; metadata
+	// never opens a tab or launches an action.
+	ResumeTargetKind termio.ResumeTargetKind
 	// EndHint, when set, extends the end banner's close hint with one more
 	// plain-text action (for example how to re-attach). The TUI sets it
 	// only for panes that offer that action.
@@ -68,6 +73,11 @@ type Session struct {
 	// drainBy bounds the whole post-reap drain (slave release plus reader
 	// join); set before exited closes.
 	drainBy time.Time
+
+	requestFile *os.File
+	requestDone chan struct{}
+	resumeMu    sync.Mutex
+	resume      *termio.TabRequest
 }
 
 // Start launches argv under a PTY of the given size and begins pumping
@@ -112,7 +122,7 @@ func Start(opts Options) (*Session, error) {
 		cmd.Env = forceEnv(cmd.Env, termio.ViewFDEnv+"=3")
 	}
 	var requestParent, requestChild *os.File
-	if opts.OnTabRequest != nil {
+	if opts.OnTabRequest != nil || (opts.TrustedView && opts.ResumeTargetKind != termio.ResumeTargetNone) {
 		var err error
 		requestParent, requestChild, err = termio.TabRequestPair()
 		if err != nil {
@@ -143,12 +153,6 @@ func Start(opts Options) (*Session, error) {
 		_ = emu.Close()
 		return nil, fmt.Errorf("term: start %s: %w", opts.Argv[0], err)
 	}
-	if requestParent != nil {
-		go func() {
-			defer func() { _ = requestParent.Close() }()
-			_ = termio.ReadTabRequests(requestParent, opts.OnTabRequest)
-		}()
-	}
 	writer := newInputQueue(ptmx, opts.OnData)
 	emu.input.setTarget(writer)
 	s := &Session{
@@ -162,6 +166,35 @@ func Start(opts Options) (*Session, error) {
 		release:   releaseSlave,
 		done:      make(chan struct{}),
 		exited:    make(chan struct{}),
+	}
+	if requestParent != nil {
+		s.requestFile = requestParent
+		if opts.ResumeTargetKind != termio.ResumeTargetNone {
+			s.requestDone = make(chan struct{})
+		}
+		go func() {
+			if s.requestDone != nil {
+				defer close(s.requestDone)
+			}
+			defer func() { _ = requestParent.Close() }()
+			_ = termio.ReadTabRequests(requestParent, func(r termio.TabRequest) {
+				if r.Op == "resume-target" {
+					if opts.TrustedView && r.ValidateResumeTarget(opts.ResumeTargetKind) == nil {
+						s.resumeMu.Lock()
+						if s.resume == nil {
+							s.resume = &r // first valid target is immutable for this session
+						}
+						s.resumeMu.Unlock()
+					}
+					return
+				}
+				// Metadata-only command classes cannot request new tabs. Ordinary
+				// view callbacks may block until the UI consumes their model event.
+				if opts.ResumeTargetKind == termio.ResumeTargetNone && opts.OnTabRequest != nil {
+					opts.OnTabRequest(r)
+				}
+			})
+		}()
 	}
 	s.SetOSC52Handler(opts.OnOSC52)
 	s.SetBellHandler(opts.OnBell)
@@ -226,6 +259,22 @@ func (s *Session) pump(onData func()) {
 	s.input.setTarget(nil)
 	s.writer.Close()
 	<-readDone
+	if s.requestDone != nil {
+		// Drain already-written metadata before publishing completion, even if
+		// the child exited before Start returned. A descendant retaining the
+		// socket cannot extend the existing post-reap drain budget.
+		select {
+		case <-s.requestDone:
+		case <-time.After(time.Until(s.drainBy)):
+			_ = s.requestFile.Close()
+			<-s.requestDone
+		}
+	} else if s.requestFile != nil {
+		// A chat/space callback can be waiting in Program.Send while the UI
+		// itself is closing this pane. Close its socket but never join that
+		// model callback from completion (the original asynchronous route).
+		_ = s.requestFile.Close()
+	}
 
 	if s.managed != nil {
 		select {
@@ -243,6 +292,17 @@ func (s *Session) pump(onData func()) {
 		onData()
 	}
 	close(s.done)
+}
+
+// ResumeTarget returns a copy of validated metadata from this session's own
+// private channel, retained after completion. Replacement sessions are separate.
+func (s *Session) ResumeTarget() (termio.TabRequest, bool) {
+	s.resumeMu.Lock()
+	defer s.resumeMu.Unlock()
+	if s.resume == nil {
+		return termio.TabRequest{}, false
+	}
+	return *s.resume, true
 }
 
 // writeExitBanner appends the exit banner once the child is reaped: the

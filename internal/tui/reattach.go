@@ -97,7 +97,7 @@ func (m *model) reattachable(t *tabs.Tab, p *panes.Pane) bool {
 	if m.standalone || t == nil || p == nil || p.Empty() || !p.Exited || !hasPane(t, p) {
 		return false
 	}
-	_, _, ok := reattachArgs(p.Args)
+	_, _, ok := reattachArgsForPane(p)
 	return ok
 }
 
@@ -108,7 +108,7 @@ func (m *model) reattachPane(t *tabs.Tab, old *panes.Pane) {
 	if !m.reattachable(t, old) {
 		return
 	}
-	args, _, _ := reattachArgs(old.Args)
+	args, _, _ := reattachArgsForPane(old)
 	m.laidOut(t)
 	r := old.Rect()
 	p := m.startPane(args, max(r.H, 1), max(r.W, 1))
