@@ -216,6 +216,10 @@ func writeBoxSession(w io.Writer, v *boxSessionView) {
 		if r.Detail != "" {
 			line += " (" + r.Detail + ")"
 		}
+		if o := c.Observed; r.Outcome == agentsession.OutcomeUnverified && o != nil && o.Generation == r.Generation &&
+			o.ID == r.Requested && o.Source == agentsession.SourceStatusLine {
+			line += "; the status line reports it selected, which does not prove its history was restored"
+		}
 		_, _ = fmt.Fprintf(w, "Resume:       %s\n", line)
 	}
 	if o := c.Observed; o != nil && (o.ID != "" || o.Health != "") {

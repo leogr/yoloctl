@@ -1,6 +1,6 @@
 # Antigravity CLI status line reporter
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; live observation and disable outcomes `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; Antigravity CLI status line, settings and hooks documentation read 2026-10-28; shared-code anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9`; test citations re-anchored on `9e0761f5f103449b59a79176c30bc3bcfbab12b0` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; live observation and disable outcomes `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; Antigravity CLI status line, settings and hooks documentation read 2026-10-28; shared-code anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9`; test citations re-anchored on `9e0761f5f103449b59a79176c30bc3bcfbab12b0` and accompanying changes; statusline identity and resume on `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] agy documents no system settings layer: user settings live in
 `~/.gemini/antigravity-cli/settings.json`, and its hooks are synchronous and
@@ -62,19 +62,35 @@ inside the VM; its contents never leave it:
 - writes are atomic with file and directory fsync, mode 0600.
 [10](#source-10) [11](#source-11) [12](#source-12) [13](#source-13)
 
-[FACT] The profile's session block is observe-only: no `resume_argv` or
-`assign_args`. Such a profile defaults to `never`, refuses `last`, and allows
-`manual`, so every start is a new conversation tracked only for its reports.
-[14](#source-14) [15](#source-15)
+[FACT] The profile learns its conversation from this status line
+(`session.observe.identity: statusline`), resumes with `agy --conversation
+<id>`, reserves `--conversation`, `--continue` and `-c`, and defaults to
+`last`. A resume appends `--model` with the label its conversation last
+reported, after the box's arguments, as one argument. The requested ID
+leaves a resume `unverified`; another is a `mismatch`
+([following switches](conversation-following.md)). Carry is launch-scoped:
+a resume that exits before any report is retried with the same ID and box
+arguments.
+Without reports each start learns again, and `box session` names `account
+observe … --enable` and its conditions. Pinning a conversation and model by
+hand is a deliberate `--agent-session-resume manual` with `--conversation`
+and `--model` in `--agent-extra-args`; it deletes nothing. [14](#source-14)
+[15](#source-15) [16](#source-16)
+
+[FACT — attributed] Installed 1.5.3 `--help` lists `--conversation` (no short
+alias), `--continue`/`-c` and `--model`; a live report named a UUID and model
+`Gemini 3.8 Flash (High)`. Conversations live under `antigravity-cli/` in the
+bound leaf. Unverified: that label as `--model`, which repeated `--model`
+wins, and history restored across restart or recreate. [17](#source-17)
 
 [FACT] Observed live 2026-10-28, agy 1.4.9, a pre-release candidate (nested
 Firecracker space): agy rewrites its settings about 1 s after launch, dropping
 `enableTelemetry` and `enableTerminalSandbox`, and keeps the seeded
 `statusLine` through that rewrite, a stop/start and a second session.
 
-[FACT] Not yet observed (D-d, leogr's trial): reported values from a real
-login, whether an empty stacked line costs a row, and whether `current_usage`
-is the basis of `used_percentage`, as it is for Claude. [1](#source-1) [7](#source-7)
+[FACT] Not yet observed (D-d, leogr's trial): whether an empty stacked line
+costs a row, and whether `current_usage` is the basis of `used_percentage`, as
+it is for Claude. [1](#source-1) [7](#source-7)
 
 ## Sources
 
@@ -91,5 +107,7 @@ is the basis of `used_percentage`, as it is for Claude. [1](#source-1) [7](#sour
 11. <a id="source-11"></a> [Guest action](../../internal/accountstate/guest.py#L48-L126) — `strict_object`, `load_json`, `runs_command`, `status_line`; dispatch in `run` at L182-L184 and L218; `StatusLine`, `Result.Outcome` in state.go.
 12. <a id="source-12"></a> [Guest regressions](../../internal/accountstate/testdata/test_guest.py#L115-L191) — set and restore, kept keys, refusals, links.
 13. <a id="source-13"></a> [Command regressions](../../cmd/yoloctl/account_observe_test.go#L1-L121) — request, outcomes, refusals, registry class, launcher match.
-14. <a id="source-14"></a> [Profile](../../internal/agentprofile/profile.go#L182-L207) — `AccountStatusLine`, `Resumes`; validation at L552-L565; builtin/agy.yaml `session`.
-15. <a id="source-15"></a> [Policy](../../internal/agentsession/policy.go#L52-L71) — the observe-only branch of `EffectivePolicy`; cases in agentsession_test.go `TestEffectivePolicyKeepsExistingLaunches`.
+14. <a id="source-14"></a> [Profile](../../internal/agentprofile/builtin/agy.yaml#L24-L57) — `session`; `StatusLineIdentity`, `CarryArgs.Format` in profile.go.
+15. <a id="source-15"></a> [Fold](../../internal/agentsession/apply.go#L345) — `statusLineIdentity`; `modelLabel` in policy.go; `unlearnedNote` in status.go; cmd/yoloctl/agy_session_test.go.
+16. <a id="source-16"></a> [Quoting](../../internal/session/shell_join_test.go#L13) — the label stays one argument.
+17. <a id="source-17"></a> [CLI reference](https://antigravity.google/docs/cli/reference), read 2026-11-09; installed 1.5.3 help, report and layout read by a team researcher, not re-executed.

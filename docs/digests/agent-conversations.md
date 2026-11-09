@@ -1,6 +1,6 @@
 # Agent conversation identity
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; resume carry `ffd5153aed3db8e29d362837407e24bdfacb5f7e` and accompanying changes; resume-file preflight on `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; resume carry `ffd5153aed3db8e29d362837407e24bdfacb5f7e` and accompanying changes; resume-file preflight on `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes; agy resume and label carry on `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; re-read cited sources when changing behavior.
 
 Launch locking, tokens and settlement are detailed in
 [tracked agent launches](agent-launches.md).
@@ -12,22 +12,26 @@ identity-taking `reserved_args` and `observe.selection`. Claude declares it
 (`--session-id`, `--resume`) and
 Codex too: no assign arguments, so a launch learns the thread from the first
 main `SessionStart` it reports, `codex resume <id>` ahead of the ordinary
-options, `resume` reserved and selection unknown. agy's block is
-observe-only (a reporter, no `resume_argv` or `assign_args`): unset means
-`never`, `last` is refused, and every start learns a new conversation
-([agy reporter](agy-observation.md)). Other built-ins stay unsupported until
-proven. [1](#source-1) [2](#source-2) [3](#source-3) [19](#source-19)
+options, `resume` reserved and selection unknown. agy also learns, but from
+its status line (`observe.identity: statusline`), and resumes with
+`agy --conversation <id>` ([agy reporter](agy-observation.md)). A block with
+a reporter but no `resume_argv` is observe-only: unset means `never` and
+`last` is refused. Other built-ins stay unsupported until proven.
+[1](#source-1) [2](#source-2) [3](#source-3) [19](#source-19)
 
 [FACT] Claude's opt-in `resume_carry` appends the resumed conversation's
 reported effort/model after box arguments (Claude takes the last). Only values
 attributed to that conversation apply: effort `low|medium|high|xhigh|max`,
-plain model ID (no whitespace or leading `-`). Capture precedes the new
+plain model ID (no whitespace or leading `-`). agy carries only the model,
+in the opt-in `label` format, which also allows inner single spaces and
+parentheses; it stays one argument. That agy honors the last `--model` is
+unverified. Capture precedes the new
 observation. Fresh assignments and foreign/unattributed reports carry nothing.
 Eligible values override later box model/effort edits; `--new-session` on
 start/restart/attach seeds a fresh conversation with box arguments instead.
 Without eligible values, box arguments apply. Codex declares no carry and
 receives its ordinary resume argv plus box arguments; thread behavior remains
-Codex's own. agy always starts new. [1](#source-1) [3](#source-3)
+Codex's own. [1](#source-1) [3](#source-3)
 [20](#source-20)
 
 [FACT] A manifest's `agent_session.resume` is `last`, `never` or `manual`.
@@ -100,6 +104,6 @@ fixtures; no real Claude, VM, crash or reboot is exercised.
 17. <a id="source-17"></a> [session_records_test.go](../../internal/spacearchive/session_records_test.go#L1) — export omission; readDeclarations in state.go L30-L74.
 18. <a id="source-18"></a> [box_session.go](../../cmd/yoloctl/box_session.go#L1) — view, probes and output; tests in box_session_test.go.
 19. <a id="source-19"></a> [codex.yaml](../../internal/agentprofile/builtin/codex.yaml#L83-L97) — the Codex block; `TestCodexLearnsAndResumesByThread` in internal/agentsession/agentsession_test.go.
-20. <a id="source-20"></a> [Resume carry](../../internal/agentsession/policy.go#L1-L208) — `Carried`, `CarryArgs`, `plainModelID`; `ObservedValue.Session` set in apply.go `applyLine`; `trackedLaunch.launch` in cmd/yoloctl/session_identity.go; tests carry_test.go and `TestResumeCarriesTheConversationsLastEffortAndModel`.
+20. <a id="source-20"></a> [Resume carry](../../internal/agentsession/policy.go#L1-L229) — `Carried`, `CarryArgs`, `plainModelID`, `modelLabel`; `ObservedValue.Session` set in apply.go `applyLine`; `trackedLaunch.launch` in cmd/yoloctl/session_identity.go; tests carry_test.go, statusline_identity_test.go and `TestResumeCarriesTheConversationsLastEffortAndModel`.
 21. <a id="source-21"></a> [session_resume_file.go](../../cmd/yoloctl/session_resume_file.go#L15) — bounded native presence request and explicit outcomes.
 22. <a id="source-22"></a> [session_resume_file_test.go](../../cmd/yoloctl/session_resume_file_test.go#L21) — absent/saved/unknown, Target, replay and persistent status regressions.

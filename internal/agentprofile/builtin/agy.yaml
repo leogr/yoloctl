@@ -22,16 +22,36 @@ auth:
 # in ~/.gemini/antigravity-cli/settings.json; an injected key alone is ignored.
 secret_injection:
   - secret: GEMINI_API_KEY
-# Observe-only: agy reports through the status line in the account's own
-# settings (seeded for a new account; `yoloctl account observe` for an
-# existing one). yoloctl does not resume agy conversations, so every start is
-# a new one, tracked only to read the launch's reports.
+# Conversation identity. yoloctl assigns no ID (no assign_args); it learns
+# the conversation from agy's only report, the status line (identity:
+# statusline): the first main report of a launch names it, a later one names
+# a switch. agy reports through the status line in the
+# account's own settings (seeded for a new account; `yoloctl account observe`
+# for an existing one); without it nothing is learned and every start is a
+# new conversation. A later start resumes the learned one with
+# `agy --conversation <id>` (default_args and agent_extra_args follow). A box
+# whose agent_extra_args carry --conversation or --continue/-c (installed
+# 1.5.3 help: no other alias) stays manual.
+# selection: unknown — whether every in-app switch is reported is unproven.
+# A status line naming the requested conversation is not evidence that its
+# history was restored, so a resume stays unverified.
 session:
   id_format: uuid
+  resume_argv: ["{{command}}", "--conversation", "{{session_id}}"]
+  reserved_args: ["--conversation", "--continue", "-c"]
   observe:
     push: yolo.agent.observe-agy
     selection: unknown
+    identity: statusline
     # Relative to state_container_path: the account's own agy settings.
     account_status_line:
       settings: antigravity-cli/settings.json
       command: /usr/local/libexec/yoloctl/agent-statusline-agy
+  # A resume keeps the model last reported for the same conversation, after
+  # the box's own args. agy's status line reports a display label
+  # ("Gemini 3.8 Flash (High)"), so it is carried as one argument in the
+  # label format. No effort is carried.
+  resume_carry:
+    model:
+      args: ["--model", "{{model}}"]
+      format: label

@@ -170,8 +170,10 @@ func (r *Record) Carried(id string) Carried {
 // CarryArgs are the profile's resume_carry arguments for carried values:
 // the effort only when the profile lists it, the model only when it is a
 // plain model id (letters, digits, '.', '_', ':', '/', '@', '[', ']' and
-// inner '-'), so no reported text can become another option. Effort comes
-// first. Nil when the profile carries nothing that applies.
+// inner '-'), or for the label format a display label (also inner spaces,
+// '(' and ')'), so no reported text can become another option. The model is
+// one argument either way. Effort comes first. Nil when the profile carries
+// nothing that applies.
 func CarryArgs(profile *agentprofile.Profile, carried Carried) []string {
 	if profile == nil || profile.Session == nil || profile.Session.ResumeCarry == nil {
 		return nil
@@ -186,20 +188,39 @@ func CarryArgs(profile *agentprofile.Profile, carried Carried) []string {
 	if e := c.Effort; e != nil && carried.Effort != "" && slices.Contains(e.Values, carried.Effort) {
 		expand(e.Args, "{{effort}}", carried.Effort)
 	}
-	if mdl := c.Model; mdl != nil && plainModelID(carried.Model) {
+	if mdl := c.Model; mdl != nil && carriedModel(mdl.Format, carried.Model) {
 		expand(mdl.Args, "{{model}}", carried.Model)
 	}
 	return out
 }
 
-func plainModelID(s string) bool {
-	if s == "" || len(s) > 128 || s[0] == '-' {
+// carriedModel reports whether model may be carried in format.
+func carriedModel(format, model string) bool {
+	if format == agentprofile.CarryFormatLabel {
+		return modelLabel(model)
+	}
+	return plainModelID(model)
+}
+
+func plainModelID(s string) bool { return modelChars(s, "._:/@[]-") }
+
+// modelLabel is a plain model id that may also hold inner spaces and
+// parentheses ("Gemini 3.8 Flash (High)"): never a leading '-' or space,
+// a trailing space or two spaces in a row.
+func modelLabel(s string) bool {
+	return modelChars(s, "._:/@[]-() ") && !strings.HasSuffix(s, " ") && !strings.Contains(s, "  ")
+}
+
+// modelChars: 1 to 128 letters, digits or extra characters, never starting
+// with '-' or a space.
+func modelChars(s, extra string) bool {
+	if s == "" || len(s) > 128 || s[0] == '-' || s[0] == ' ' {
 		return false
 	}
 	for _, r := range s {
 		switch {
 		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-		case strings.ContainsRune("._:/@[]-", r):
+		case strings.ContainsRune(extra, r):
 		default:
 			return false
 		}

@@ -313,7 +313,7 @@ func Describe(cfg *agentbox.Config, profile *agentprofile.Profile, live bool, li
 		st.Note = fmt.Sprintf("stale record of account %s and agent %s; the next start replaces it", rec.Account, rec.Provider)
 		return st
 	}
-	fold := rec.foldForView(cfg.Name)
+	fold := rec.foldForView(cfg.Name, FoldFor(profile))
 	if rec.Assigned != nil {
 		st.ID = rec.Assigned.ID
 		at := rec.Assigned.At
@@ -346,7 +346,31 @@ func Describe(cfg *agentbox.Config, profile *agentprofile.Profile, live bool, li
 			st.Note = fmt.Sprintf("no saved conversation found for %s; selected new conversation %s", previous.ID, rec.Assigned.ID)
 		}
 	}
+	if st.Note == "" {
+		st.Note = unlearnedNote(cfg, profile, rec)
+	}
 	return st
+}
+
+// unlearnedNote explains a closed learn launch that named no conversation:
+// nothing was learned, so the next start begins a new one. When its reports
+// were readable but empty and the agent reports through the status line of
+// its account's own settings (agy), that reporter may be off: turning it on
+// is the explicit account observe command, with its conditions; nothing is
+// changed here. A gap or unavailable root keeps its own health note.
+func unlearnedNote(cfg *agentbox.Config, profile *agentprofile.Profile, rec *Record) string {
+	l, o := rec.Launch, rec.Observed
+	if rec.Assigned != nil || l == nil || l.Kind != KindLearn || l.State != StateClosed || (o != nil && o.Generation == l.Generation && o.ID != "") {
+		return ""
+	}
+	note := fmt.Sprintf("launch %d reported no conversation, so none was learned; the next start begins a new one", l.Generation)
+	if o != nil && o.Generation == l.Generation && o.Health == string(observe.HealthNoReport) &&
+		profile.Session != nil && profile.Session.Observe != nil && profile.Session.Observe.AccountStatusLine != nil {
+		note += fmt.Sprintf(". The %s status line reporter may be off for account %s: stop every box that uses it, "+
+			"run yoloctl account observe %s %s --enable --space %s (it needs the account's existing settings), then start again",
+			cfg.Agent, cfg.Account, cfg.Account, cfg.Agent, cfg.Space)
+	}
+	return note
 }
 
 // notes are the observation's explanations shared by every text view.

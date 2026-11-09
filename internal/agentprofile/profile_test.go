@@ -160,15 +160,21 @@ func TestBuiltinShape(t *testing.T) {
 	if !reflect.DeepEqual(codex.Session, wantCodex) || !slices.Contains(codex.RequiresFeatures, codex.PushFeature()) {
 		t.Errorf("codex built-in session = %+v (features %v), want %+v", codex.Session, codex.RequiresFeatures, wantCodex)
 	}
-	// agy is observe-only: its status line reports, and yoloctl never
-	// resumes its conversations.
+	// agy learns its conversation from its status line, resumes it with
+	// --conversation and carries the conversation's model label.
 	agy, err := Lookup("agy")
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantAgy := &SessionSpec{IDFormat: "uuid", Observe: &ObserveSpec{Push: "yolo.agent.observe-agy", Selection: SelectionUnknown,
-		AccountStatusLine: &AccountStatusLine{Settings: "antigravity-cli/settings.json", Command: "/usr/local/libexec/yoloctl/agent-statusline-agy"}}}
-	if !reflect.DeepEqual(agy.Session, wantAgy) || agy.Session.Resumes() || !slices.Contains(agy.RequiresFeatures, agy.PushFeature()) {
+	wantAgy := &SessionSpec{IDFormat: "uuid",
+		ResumeArgv:   []string{"{{command}}", "--conversation", "{{session_id}}"},
+		ReservedArgs: []string{"--conversation", "--continue", "-c"},
+		Observe: &ObserveSpec{Push: "yolo.agent.observe-agy", Selection: SelectionUnknown, Identity: IdentityStatusLine,
+			AccountStatusLine: &AccountStatusLine{Settings: "antigravity-cli/settings.json", Command: "/usr/local/libexec/yoloctl/agent-statusline-agy"}},
+		ResumeCarry: &ResumeCarry{Model: &CarryArgs{Args: []string{"--model", "{{model}}"}, Format: CarryFormatLabel}},
+	}
+	if !reflect.DeepEqual(agy.Session, wantAgy) || !agy.Session.Resumes() || !agy.Session.StatusLineIdentity() ||
+		len(agy.Session.AssignArgs) != 0 || !slices.Contains(agy.RequiresFeatures, agy.PushFeature()) {
 		t.Errorf("agy built-in session = %+v (features %v), want %+v", agy.Session, agy.RequiresFeatures, wantAgy)
 	}
 	// Claude's and Codex's identities are verified; every other built-in
@@ -411,6 +417,21 @@ func TestValidate(t *testing.T) {
 		{"session-resume-carry-model-wrong-placeholder", Profile{Name: "claude", Image: "i", Command: "c", Session: &SessionSpec{IDFormat: "uuid",
 			ResumeArgv:  []string{"{{command}}", "--resume", "{{session_id}}"},
 			ResumeCarry: &ResumeCarry{Model: &CarryArgs{Args: []string{"--model", "{{effort}}"}}}}}, "may only use {{model}}"},
+		{"session-resume-carry-model-label-ok", Profile{Name: "agy", Image: "i", Command: "c", Session: &SessionSpec{IDFormat: "uuid",
+			ResumeArgv:  []string{"{{command}}", "--conversation", "{{session_id}}"},
+			ResumeCarry: &ResumeCarry{Model: &CarryArgs{Args: []string{"--model", "{{model}}"}, Format: CarryFormatLabel}}}}, ""},
+		{"session-resume-carry-model-bad-format", Profile{Name: "agy", Image: "i", Command: "c", Session: &SessionSpec{IDFormat: "uuid",
+			ResumeArgv:  []string{"{{command}}", "--conversation", "{{session_id}}"},
+			ResumeCarry: &ResumeCarry{Model: &CarryArgs{Args: []string{"--model", "{{model}}"}, Format: "display"}}}}, "must be id or label"},
+		{"session-resume-carry-effort-format", Profile{Name: "claude", Image: "i", Command: "c", Session: &SessionSpec{IDFormat: "uuid",
+			ResumeArgv:  []string{"{{command}}", "--resume", "{{session_id}}"},
+			ResumeCarry: &ResumeCarry{Effort: &CarryArgs{Args: []string{"--effort", "{{effort}}"}, Values: []string{"high"}, Format: CarryFormatLabel}}}}, "effort takes no format"},
+		{"session-observe-identity-statusline-ok", Profile{Name: "agy", Image: "i", Command: "c", RequiresFeatures: []string{"obs"}, Session: &SessionSpec{IDFormat: "uuid",
+			ResumeArgv: []string{"{{command}}", "--conversation", "{{session_id}}"},
+			Observe:    &ObserveSpec{Push: "obs", Identity: IdentityStatusLine}}}, ""},
+		{"session-observe-identity-bad", Profile{Name: "agy", Image: "i", Command: "c", RequiresFeatures: []string{"obs"}, Session: &SessionSpec{IDFormat: "uuid",
+			ResumeArgv: []string{"{{command}}", "--conversation", "{{session_id}}"},
+			Observe:    &ObserveSpec{Push: "obs", Identity: "hook"}}}, "session.observe.identity \"hook\" must be start or statusline"},
 		{"session-resume-carry-bad-value", Profile{Name: "claude", Image: "i", Command: "c", Session: &SessionSpec{IDFormat: "uuid",
 			ResumeArgv:  []string{"{{command}}", "--resume", "{{session_id}}"},
 			ResumeCarry: &ResumeCarry{Effort: &CarryArgs{Args: []string{"--effort", "{{effort}}"}, Values: []string{"--max"}}}}}, "lowercase word"},

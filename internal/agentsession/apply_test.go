@@ -52,15 +52,15 @@ func start(id, source string) func(*observe.Observation) {
 func TestApplyResumedOnlyFromTheRequestedMainSessionStart(t *testing.T) {
 	r := resuming()
 	sub := line(3, 10, "SessionStart", func(o *observe.Observation) { o.SessionID, o.Source, o.Subagent = convA, "resume", true })
-	if !r.Apply(result(3, observe.HealthOK, sub)) || r.Resume.Outcome != OutcomeUnverified || r.Observed.ID != "" {
+	if !r.applyDefault(result(3, observe.HealthOK, sub)) || r.Resume.Outcome != OutcomeUnverified || r.Observed.ID != "" {
 		t.Fatalf("a subagent report decides nothing: %+v %+v", r.Resume, r.Observed)
 	}
-	if !r.Apply(result(3, observe.HealthOK, line(3, 20, "SessionStart", start(convA, "resume")))) || r.Resume.Outcome != OutcomeResumed {
+	if !r.applyDefault(result(3, observe.HealthOK, line(3, 20, "SessionStart", start(convA, "resume")))) || r.Resume.Outcome != OutcomeResumed {
 		t.Fatalf("the requested resume is reported: %+v", r.Resume)
 	}
 	// A later /clear names another conversation: the outcome stays, the
 	// observed id follows the agent.
-	r.Apply(result(3, observe.HealthOK, line(3, 30, "SessionStart", start(convB, "clear"))))
+	r.applyDefault(result(3, observe.HealthOK, line(3, 30, "SessionStart", start(convB, "clear"))))
 	if r.Resume.Outcome != OutcomeResumed || r.Observed.ID != convB || r.Observed.Source != "clear" {
 		t.Fatalf("a valid outcome is never changed by a later report: %+v %+v", r.Resume, r.Observed)
 	}
@@ -69,11 +69,11 @@ func TestApplyResumedOnlyFromTheRequestedMainSessionStart(t *testing.T) {
 func TestApplyMismatchKeepsBothIDs(t *testing.T) {
 	for _, source := range []string{"startup", "resume", "fork", "clear"} {
 		r := resuming()
-		r.Apply(result(3, observe.HealthOK, line(3, 10, "SessionStart", start(convB, source))))
+		r.applyDefault(result(3, observe.HealthOK, line(3, 10, "SessionStart", start(convB, source))))
 		if r.Resume.Outcome != OutcomeMismatch || r.Resume.Requested != convA || r.Observed.ID != convB {
 			t.Errorf("%s: %+v %+v", source, r.Resume, r.Observed)
 		}
-		r.Apply(result(3, observe.HealthOK, line(3, 20, "SessionStart", start(convA, "resume"))))
+		r.applyDefault(result(3, observe.HealthOK, line(3, 20, "SessionStart", start(convA, "resume"))))
 		if r.Resume.Outcome != OutcomeMismatch {
 			t.Errorf("%s: a mismatch is never downgraded or upgraded later: %+v", source, r.Resume)
 		}
@@ -82,10 +82,10 @@ func TestApplyMismatchKeepsBothIDs(t *testing.T) {
 
 func TestApplyIgnoresOtherGenerationsAndStartsNewOnesEmpty(t *testing.T) {
 	r := resuming()
-	if r.Apply(result(2, observe.HealthOK, line(2, 10, "SessionStart", start(convA, "resume")))) || r.Observed != nil || r.Resume.Outcome != OutcomeUnverified {
+	if r.applyDefault(result(2, observe.HealthOK, line(2, 10, "SessionStart", start(convA, "resume")))) || r.Observed != nil || r.Resume.Outcome != OutcomeUnverified {
 		t.Fatalf("an earlier generation never promotes this launch: %+v", r)
 	}
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		line(3, 10, "SessionStart", func(o *observe.Observation) { o.SessionID, o.Source, o.Model = convA, "resume", "" }),
 		line(3, 20, "Stop", func(o *observe.Observation) { o.Effort = "high" })))
 	if r.Observed.Model != nil || r.Observed.Effort.Value != "high" {
@@ -94,7 +94,7 @@ func TestApplyIgnoresOtherGenerationsAndStartsNewOnesEmpty(t *testing.T) {
 	// The next launch (generation 4) begins without generation 3's values.
 	r.Launch = &Launch{Generation: 4, Kind: KindResume, State: StateLaunched, Token: "u", At: r.Launch.At}
 	r.Resume = &Resume{Requested: convA, Generation: 4, At: r.Launch.At, Outcome: OutcomeUnverified}
-	r.Apply(result(4, observe.HealthNoReport))
+	r.applyDefault(result(4, observe.HealthNoReport))
 	if r.Observed.Generation != 4 || r.Observed.Effort != nil || r.Observed.ID != "" {
 		t.Fatalf("prior-generation values are never carried as newly observed: %+v", r.Observed)
 	}
@@ -105,9 +105,9 @@ func TestApplyRereadsAndReemissionChangeNothing(t *testing.T) {
 	first := result(3, observe.HealthOK,
 		line(3, 10, "SessionStart", func(o *observe.Observation) { o.SessionID, o.Source, o.Model = convA, "resume", "claude-sonnet-5-5" }),
 		line(3, 20, "Stop", func(o *observe.Observation) { o.Effort = "low" }))
-	r.Apply(first)
+	r.applyDefault(first)
 	stamped := *r.Observed.Effort
-	if r.Apply(first) {
+	if r.applyDefault(first) {
 		t.Fatal("the same read applied again changes the record")
 	}
 	// A rewritten file is reread from its start: earlier positions with other
@@ -116,14 +116,14 @@ func TestApplyRereadsAndReemissionChangeNothing(t *testing.T) {
 		line(3, 10, "SessionStart", start(convB, "startup")),
 		line(3, 20, "Stop", func(o *observe.Observation) { o.Effort, o.AgentTS = "max", time.Unix(9999, 0) }),
 		line(3, 30, "PostModelSwitch", func(o *observe.Observation) { o.Model = "claude-opus-5-5" }))
-	r.Apply(rewritten)
+	r.applyDefault(rewritten)
 	if *r.Observed.Effort != stamped || r.Observed.ID != convA || r.Resume.Outcome != OutcomeResumed {
 		t.Fatalf("re-emitted lines were applied again: %+v %+v", r.Observed, r.Resume)
 	}
 	if r.Observed.Model.Value != "claude-opus-5-5" || r.Observed.Health != string(observe.HealthGap) {
 		t.Fatalf("only the new line applies, and the gap is kept: %+v", r.Observed)
 	}
-	r.Apply(result(3, observe.HealthOK))
+	r.applyDefault(result(3, observe.HealthOK))
 	if r.Observed.Health != string(observe.HealthGap) {
 		t.Fatal("a later clean read never erases the generation's gap")
 	}
@@ -131,7 +131,7 @@ func TestApplyRereadsAndReemissionChangeNothing(t *testing.T) {
 
 func TestApplyKeepsSubagentReportsOutOfBoxValues(t *testing.T) {
 	r := resuming()
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		line(3, 10, "Stop", func(o *observe.Observation) { o.Effort = "medium" }),
 		line(3, 20, "SubagentStop", func(o *observe.Observation) { o.Effort, o.SessionID, o.Subagent = "max", convB, true }),
 		line(3, 30, "Stop", func(o *observe.Observation) { o.Effort, o.Subagent = "low", true })))
@@ -153,7 +153,7 @@ func TestObservationPreparationStates(t *testing.T) {
 		t.Fatal("an unsupported launch has nothing to read")
 	}
 	r.BeginObservation(3, observe.HealthNoReport, "")
-	r.Apply(result(3, observe.HealthOK, line(3, 42, "Stop", func(o *observe.Observation) { o.Effort = "low" })))
+	r.applyDefault(result(3, observe.HealthOK, line(3, 42, "Stop", func(o *observe.Observation) { o.Effort = "low" })))
 	if c := r.ObservationCursor(3); c.Offset != 42 || r.ObservationCursor(4) != (observe.Cursor{Generation: 4}) {
 		t.Fatalf("the stored cursor serves only its generation: %+v", c)
 	}
@@ -170,7 +170,7 @@ func TestObservationPreparationStates(t *testing.T) {
 
 func TestStatusLineLabelsObservationOfTheCurrentLaunch(t *testing.T) {
 	r := resuming()
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		line(3, 10, "SessionStart", func(o *observe.Observation) { o.SessionID, o.Source, o.Model = convA, "resume", "claude-opus-5-5" }),
 		line(3, 20, "Stop", func(o *observe.Observation) { o.Effort = "high" })))
 	st := &Status{Provider: "claude", Policy: "last (default)", Launch: launchView(r.Launch), Resume: resumeView(r.Resume), Observed: observedView(r.Observed)}
@@ -190,7 +190,7 @@ func TestStatusLineLabelsObservationOfTheCurrentLaunch(t *testing.T) {
 
 func TestApplyKeepsTheFirstDivergenceForTheLaunch(t *testing.T) {
 	r := resuming()
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		line(3, 10, "SessionStart", start(convA, "resume")),
 		line(3, 20, "SessionStart", func(o *observe.Observation) { o.SessionID, o.Source, o.Subagent = convB, "startup", true })))
 	if r.Divergence() != nil || r.Resume.Outcome != OutcomeResumed {
@@ -198,7 +198,7 @@ func TestApplyKeepsTheFirstDivergenceForTheLaunch(t *testing.T) {
 	}
 	// A→B→A: the return to A never clears the recorded divergence, and the
 	// launch verdict stays separate from it.
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		line(3, 30, "SessionStart", start(convB, "clear")),
 		line(3, 40, "SessionStart", start(convA, "resume"))))
 	d := r.Divergence()
@@ -208,7 +208,7 @@ func TestApplyKeepsTheFirstDivergenceForTheLaunch(t *testing.T) {
 	// An assigned launch diverges the same way, without any resume request.
 	a := resuming()
 	a.Launch.Kind, a.Resume = KindAssign, nil
-	a.Apply(result(3, observe.HealthOK, line(3, 10, "SessionStart", start(convA, "startup")), line(3, 20, "SessionStart", start(convB, "clear"))))
+	a.applyDefault(result(3, observe.HealthOK, line(3, 10, "SessionStart", start(convA, "startup")), line(3, 20, "SessionStart", start(convB, "clear"))))
 	if a.Divergence() == nil || a.Divergence().ID != convB {
 		t.Fatalf("an assigned conversation's /clear diverges: %+v", a.Observed)
 	}
@@ -231,12 +231,12 @@ func statusLine(model, effort string, ctx *observe.Context) func(*observe.Observ
 func TestApplyTakesValuesFromTheStatusLine(t *testing.T) {
 	r := resuming()
 	// A resumed start carries no model: hooks alone leave the box empty.
-	r.Apply(result(3, observe.HealthOK, line(3, 10, "SessionStart", start(convA, "resume"))))
+	r.applyDefault(result(3, observe.HealthOK, line(3, 10, "SessionStart", start(convA, "resume"))))
 	if r.Observed.Model != nil || r.Observed.Effort != nil || r.Resume.Outcome != OutcomeResumed {
 		t.Fatalf("resume: %+v %+v", r.Observed, r.Resume)
 	}
 	ctx := &observe.Context{Size: 200000, Used: 84000, Percent: 42}
-	r.Apply(result(3, observe.HealthOK, line(3, 20, observe.StatusLine, statusLine("claude-opus-5-5", "high", ctx))))
+	r.applyDefault(result(3, observe.HealthOK, line(3, 20, observe.StatusLine, statusLine("claude-opus-5-5", "high", ctx))))
 	o := r.Observed
 	if o.Model.Value != "claude-opus-5-5" || o.Model.Source != SourceStatusLine || o.Effort.Value != "high" ||
 		o.Effort.Source != SourceStatusLine || o.Version.Value != "2.1.311" || o.Context == nil ||
@@ -249,14 +249,14 @@ func TestApplyTakesValuesFromTheStatusLine(t *testing.T) {
 	}
 	// A later hook Stop updates effort only; a status line without context
 	// or version keeps the last ones; unknown used tokens stay unknown.
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		line(3, 30, "Stop", func(o *observe.Observation) { o.Effort = "max" }),
 		line(3, 40, observe.StatusLine, func(o *observe.Observation) { o.Model = "claude-fable-5-1" })))
 	if o.Effort.Value != "max" || o.Effort.Source != SourceHook || o.Model.Value != "claude-fable-5-1" ||
 		o.Version.Value != "2.1.311" || *o.Context.Percent != 42 {
 		t.Fatalf("partial reports: %+v", o)
 	}
-	r.Apply(result(3, observe.HealthOK, line(3, 50, observe.StatusLine, statusLine("", "", &observe.Context{Size: 1000000, Used: -1, Percent: 0}))))
+	r.applyDefault(result(3, observe.HealthOK, line(3, 50, observe.StatusLine, statusLine("", "", &observe.Context{Size: 1000000, Used: -1, Percent: 0}))))
 	if o.Context.Used != nil || o.Context.Size != 1000000 || o.Context.Percent == nil || *o.Context.Percent != 0 {
 		t.Fatalf("a new context replaces the old one whole: %+v", o.Context)
 	}
@@ -315,13 +315,13 @@ func TestValidateBoundsObservedValues(t *testing.T) {
 func TestApplyCurrentFollowsTheLastMainStart(t *testing.T) {
 	for _, source := range []string{"startup", "resume", "clear", "fork", ""} {
 		r := resuming()
-		r.Apply(result(3, observe.HealthOK, line(3, 10, "SessionStart", start(convB, source))))
+		r.applyDefault(result(3, observe.HealthOK, line(3, 10, "SessionStart", start(convB, source))))
 		if c := r.Current; c == nil || c.ID != convB || c.Source != source || c.Generation != 3 || !c.At.Equal(time.Unix(2010, 0)) {
 			t.Errorf("%q: %+v", source, r.Current)
 		}
 	}
 	r := resuming()
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		line(3, 10, "SessionStart", start(convA, "resume")),
 		line(3, 20, "SessionStart", start(convB, "compact")),
 		line(3, 30, "SessionStart", func(o *observe.Observation) { o.SessionID, o.Source, o.Subagent = convB, "startup", true }),
@@ -329,15 +329,15 @@ func TestApplyCurrentFollowsTheLastMainStart(t *testing.T) {
 	if c := r.Current; c == nil || c.ID != convA || c.Source != "resume" || !c.At.Equal(time.Unix(2010, 0)) {
 		t.Fatalf("compact and subagent lines keep the current conversation: %+v", r.Current)
 	}
-	r.Apply(result(4, observe.HealthOK, line(4, 40, "SessionStart", start(convB, "clear"))))
+	r.applyDefault(result(4, observe.HealthOK, line(4, 40, "SessionStart", start(convB, "clear"))))
 	if r.Current.ID != convA {
 		t.Fatalf("another generation's report set the current conversation: %+v", r.Current)
 	}
-	r.Apply(result(3, observe.HealthOK, line(3, 50, "SessionStart", start(convA, "clear"))))
+	r.applyDefault(result(3, observe.HealthOK, line(3, 50, "SessionStart", start(convA, "clear"))))
 	if c := r.Current; c.ID != convA || c.Source != "resume" || !c.At.Equal(time.Unix(2050, 0)) || c.Generation != 3 {
 		t.Fatalf("the same conversation only refreshes its times: %+v", c)
 	}
-	r.Apply(result(3, observe.HealthOK, line(3, 60, "SessionStart", start(convB, "clear"))))
+	r.applyDefault(result(3, observe.HealthOK, line(3, 60, "SessionStart", start(convB, "clear"))))
 	if r.Current.ID != convB || r.Current.Source != "clear" || r.Assigned.ID != convA {
 		t.Fatalf("a switch sets current and leaves the assignment: %+v %+v", r.Current, r.Assigned)
 	}
@@ -355,11 +355,11 @@ func TestApplyLearnsTheFirstReportedConversation(t *testing.T) {
 		return r
 	}
 	r := learning()
-	r.Apply(result(1, observe.HealthNoReport))
+	r.applyDefault(result(1, observe.HealthNoReport))
 	if r.Assigned != nil || r.Current != nil || r.Validate() != nil {
 		t.Fatalf("no report learns nothing: %+v %v", r.Assigned, r.Validate())
 	}
-	r.Apply(result(1, observe.HealthOK,
+	r.applyDefault(result(1, observe.HealthOK,
 		line(1, 10, "SessionStart", func(o *observe.Observation) { o.SessionID, o.Source, o.Subagent = convB, "startup", true }),
 		line(1, 20, "SessionStart", start(convA, "startup")),
 		line(1, 30, "SessionStart", start(convB, "clear")),
@@ -393,7 +393,7 @@ func TestApplyFoldsCodexReports(t *testing.T) {
 			o.Model = m
 		}
 	}
-	r.Apply(result(1, observe.HealthOK,
+	r.applyDefault(result(1, observe.HealthOK,
 		line(1, 10, "SessionStart", model("gpt-5.6-luna", start(convA, "startup"))),
 		line(1, 20, observe.Query, func(o *observe.Observation) { o.SessionID, o.Model, o.Effort = convA, "gpt-5.6-luna", "high" }),
 		line(1, 30, "SubagentStart", func(o *observe.Observation) { o.SessionID, o.Model, o.Subagent = convB, "gpt-5.6-mini", true }),
@@ -432,7 +432,7 @@ func TestApplyAppliesAQueryOnlyToItsThread(t *testing.T) {
 		return line(3, off, observe.Query, func(o *observe.Observation) { o.SessionID, o.Model, o.Effort, o.State = id, model, "high", state })
 	}
 	r := resuming()
-	r.Apply(result(3, observe.HealthOK,
+	r.applyDefault(result(3, observe.HealthOK,
 		query(1, convA, "model-a", observe.StateWorking),
 		line(3, 2, "SessionStart", func(o *observe.Observation) { o.SessionID, o.Source, o.Model = convB, "resume", "model-b" }),
 		query(3, convA, "stale-a", observe.StateIdle),
@@ -449,7 +449,7 @@ func TestApplyAppliesAQueryOnlyToItsThread(t *testing.T) {
 	}
 	// Before any start report, the assigned conversation is the one read.
 	r = resuming()
-	r.Apply(result(3, observe.HealthOK, query(1, convB, "other", ""), query(2, convA, "assigned", "")))
+	r.applyDefault(result(3, observe.HealthOK, query(1, convB, "other", ""), query(2, convA, "assigned", "")))
 	if r.Observed.Model == nil || r.Observed.Model.Value != "assigned" || r.Current != nil || r.Observed.ID != "" {
 		t.Fatalf("a query applied to the wrong thread or set identity: %+v %+v", r.Observed, r.Current)
 	}
@@ -465,7 +465,7 @@ func TestApplyFoldsAQueryVersionOnlyForItsThread(t *testing.T) {
 		})
 	}
 	r := resuming()
-	r.Apply(result(3, observe.HealthOK, query(1, convA, "0.166.0"), query(2, convB, "9.9.9"), query(3, convA, "")))
+	r.applyDefault(result(3, observe.HealthOK, query(1, convA, "0.166.0"), query(2, convB, "9.9.9"), query(3, convA, "")))
 	v := r.Observed.Version
 	if v == nil || v.Value != "0.166.0" || v.Source != SourceQuery {
 		t.Fatalf("the matching read's version, from the query: %+v", v)
@@ -514,7 +514,7 @@ func TestApplyFoldsTheAgentState(t *testing.T) {
 			line(3, 2, "SubagentStop", func(o *observe.Observation) { o.Subagent = true; o.State = observe.StateWorking })}, observe.StateIdle, SourceHook},
 	} {
 		r := resuming()
-		r.Apply(result(3, observe.HealthOK, tc.lines...))
+		r.applyDefault(result(3, observe.HealthOK, tc.lines...))
 		s := r.Observed.State
 		if s == nil || s.Kind != tc.want || s.Source != tc.src {
 			t.Errorf("%s: %+v, want %s from %s", tc.name, s, tc.want, tc.src)
@@ -524,12 +524,12 @@ func TestApplyFoldsTheAgentState(t *testing.T) {
 		}
 	}
 	r := resuming()
-	r.Apply(result(3, observe.HealthOK, line(3, 1, observe.StatusLine, nil)))
+	r.applyDefault(result(3, observe.HealthOK, line(3, 1, observe.StatusLine, nil)))
 	if r.Observed.State != nil {
 		t.Fatalf("no state report leaves the state unknown: %+v", r.Observed.State)
 	}
 	// Used tokens alone are a context of unknown size, from any context line.
-	r.Apply(result(3, observe.HealthOK, line(3, 2, "PostModelRequest", func(o *observe.Observation) {
+	r.applyDefault(result(3, observe.HealthOK, line(3, 2, "PostModelRequest", func(o *observe.Observation) {
 		o.Context = &observe.Context{Used: 172000, Percent: -1}
 	})))
 	c := r.Observed.Context
@@ -541,7 +541,7 @@ func TestApplyFoldsTheAgentState(t *testing.T) {
 		t.Fatalf("line = %q", got)
 	}
 	// Text views name a wait for people, on the line and in the details.
-	r.Apply(result(3, observe.HealthOK, line(3, 3, "PermissionRequest", func(o *observe.Observation) { o.State = observe.StateWaitingPermission })))
+	r.applyDefault(result(3, observe.HealthOK, line(3, 3, "PermissionRequest", func(o *observe.Observation) { o.State = observe.StateWaitingPermission })))
 	st.Observed = observedView(r.Observed)
 	if got := st.Line(); !strings.Contains(got, "state waiting for permission") {
 		t.Fatalf("line = %q", got)
@@ -575,7 +575,7 @@ func TestApplyFoldsCodexStateAndUsedContext(t *testing.T) {
 	var obs []observe.Observation
 	for _, step := range steps {
 		obs = append(obs, step.ob)
-		r.Apply(result(1, observe.HealthOK, obs...))
+		r.applyDefault(result(1, observe.HealthOK, obs...))
 		got := ""
 		if s := r.Observed.State; s != nil {
 			got = s.Kind
@@ -627,7 +627,7 @@ func TestApplyClearsACodexFailureOnlyOnACompletedRequest(t *testing.T) {
 	want := []string{"", observe.StateFailed, observe.StateWorking, observe.StateFailed, observe.StateWorking}
 	r := codex(t)
 	for i := range seq {
-		r.Apply(result(1, observe.HealthOK, seq[:i+1]...))
+		r.applyDefault(result(1, observe.HealthOK, seq[:i+1]...))
 		if got := kind(r); got != want[i] {
 			t.Fatalf("after report %d: %q, want %q", i, got, want[i])
 		}
@@ -635,11 +635,11 @@ func TestApplyClearsACodexFailureOnlyOnACompletedRequest(t *testing.T) {
 	if s := r.Observed.State; s.At != seq[4].AgentTS || s.ReadAt != seq[4].ReadAt || s.Source != SourceHook {
 		t.Fatalf("the recovery is stamped by the completed request: %+v", s)
 	}
-	if r.Apply(result(1, observe.HealthOK, seq...)) {
+	if r.applyDefault(result(1, observe.HealthOK, seq...)) {
 		t.Fatal("the same read applied again changes the record")
 	}
 	batch := codex(t)
-	batch.Apply(result(1, observe.HealthOK, seq...))
+	batch.applyDefault(result(1, observe.HealthOK, seq...))
 	if kind(batch) != observe.StateWorking || *batch.Observed.Context.Used != 50 {
 		t.Fatalf("one batch: %+v", batch.Observed)
 	}
@@ -655,7 +655,7 @@ func TestApplyClearsACodexFailureOnlyOnACompletedRequest(t *testing.T) {
 		"subagent":          line(1, 30, "PostModelRequest", func(o *observe.Observation) { o.SessionID, o.State, o.Subagent = convA, observe.StateWorking, true }),
 	} {
 		r := codex(t)
-		r.Apply(result(1, observe.HealthOK, started, failed, ob))
+		r.applyDefault(result(1, observe.HealthOK, started, failed, ob))
 		if kind(r) != observe.StateFailed {
 			t.Fatalf("%s recovered the failure: %+v", name, r.Observed.State)
 		}
@@ -664,7 +664,7 @@ func TestApplyClearsACodexFailureOnlyOnACompletedRequest(t *testing.T) {
 		}
 	}
 	old := codex(t)
-	old.Apply(result(1, observe.HealthOK, started, failed, line(0, 30, "PostModelRequest", func(o *observe.Observation) { o.SessionID, o.State = convA, observe.StateWorking })))
+	old.applyDefault(result(1, observe.HealthOK, started, failed, line(0, 30, "PostModelRequest", func(o *observe.Observation) { o.SessionID, o.State = convA, observe.StateWorking })))
 	if kind(old) != observe.StateFailed {
 		t.Fatal("a completed request of another generation recovered the failure")
 	}
@@ -676,7 +676,7 @@ func TestApplyClearsACodexFailureOnlyOnACompletedRequest(t *testing.T) {
 		"unknown": {started},
 	} {
 		r := codex(t)
-		r.Apply(result(1, observe.HealthOK, append(before, request(30, convA, observe.StateWorking))...))
+		r.applyDefault(result(1, observe.HealthOK, append(before, request(30, convA, observe.StateWorking))...))
 		wantKind := map[string]string{"idle": observe.StateIdle, "waiting": observe.StateWaitingPermission, "unknown": ""}[name]
 		if kind(r) != wantKind {
 			t.Fatalf("a completed request changed %s into %q", name, kind(r))
@@ -685,7 +685,7 @@ func TestApplyClearsACodexFailureOnlyOnACompletedRequest(t *testing.T) {
 
 	// After a switch to B, a completed request of A cannot recover B.
 	switched := codex(t)
-	switched.Apply(result(1, observe.HealthOK, started, line(1, 15, "SessionStart", start(convB, "startup")), request(20, convB, observe.StateFailed), request(30, convA, observe.StateWorking)))
+	switched.applyDefault(result(1, observe.HealthOK, started, line(1, 15, "SessionStart", start(convB, "startup")), request(20, convB, observe.StateFailed), request(30, convA, observe.StateWorking)))
 	if kind(switched) != observe.StateFailed {
 		t.Fatal("a completed request of the previous conversation recovered the current one")
 	}
@@ -693,13 +693,13 @@ func TestApplyClearsACodexFailureOnlyOnACompletedRequest(t *testing.T) {
 	// With no conversation known at all, nothing recovers and nothing is
 	// learned; an assigned conversation alone is enough.
 	unknown := codex(t)
-	unknown.Apply(result(1, observe.HealthOK, request(20, "", observe.StateFailed), request(30, convA, observe.StateWorking)))
+	unknown.applyDefault(result(1, observe.HealthOK, request(20, "", observe.StateFailed), request(30, convA, observe.StateWorking)))
 	if kind(unknown) != observe.StateFailed || unknown.Current != nil || unknown.Assigned != nil {
 		t.Fatalf("an unknown conversation recovered or was learned: %+v %+v %+v", unknown.Observed.State, unknown.Current, unknown.Assigned)
 	}
 	assigned := resuming()
 	assigned.Provider = "codex"
-	assigned.Apply(result(3, observe.HealthOK,
+	assigned.applyDefault(result(3, observe.HealthOK,
 		line(3, 20, "PostModelRequest", func(o *observe.Observation) { o.SessionID, o.State = convA, observe.StateFailed }),
 		line(3, 30, "PostModelRequest", func(o *observe.Observation) { o.SessionID, o.State = convA, observe.StateWorking })))
 	if kind(assigned) != observe.StateWorking || assigned.Current != nil {
@@ -708,7 +708,7 @@ func TestApplyClearsACodexFailureOnlyOnACompletedRequest(t *testing.T) {
 
 	// B's limit: a Codex Stop still reports idle over an unrecovered failure.
 	stopped := codex(t)
-	stopped.Apply(result(1, observe.HealthOK, started, failed, line(1, 30, "Stop", func(o *observe.Observation) { o.State = observe.StateIdle })))
+	stopped.applyDefault(result(1, observe.HealthOK, started, failed, line(1, 30, "Stop", func(o *observe.Observation) { o.State = observe.StateIdle })))
 	if kind(stopped) != observe.StateIdle {
 		t.Fatalf("Codex failed then Stop: %q", kind(stopped))
 	}
@@ -717,7 +717,7 @@ func TestApplyClearsACodexFailureOnlyOnACompletedRequest(t *testing.T) {
 	// keep it. (Its writer never records a model request; see
 	// test_agent_observe.py.)
 	claude := resuming()
-	claude.Apply(result(3, observe.HealthOK,
+	claude.applyDefault(result(3, observe.HealthOK,
 		line(3, 10, "SessionStart", start(convA, "resume")),
 		line(3, 20, "StopFailure", func(o *observe.Observation) { o.State = observe.StateFailed }),
 		line(3, 30, observe.StatusLine, func(o *observe.Observation) { o.Context = &observe.Context{Size: 200000, Used: 1, Percent: 1} }),

@@ -1,6 +1,6 @@
 # Following agent conversation switches
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; resume-file preflight on `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; resume-file preflight on `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes; status line identity on `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; re-read cited symbols when changing behavior.
 
 [FACT] A record keeps two identities. `assigned` (`id`, `at`, `source`) is
 the record's conversation: `chosen` when yoloctl passed it (records without a
@@ -15,8 +15,14 @@ recorded. [1](#source-1) [2](#source-2)
 that names a conversation sets `current`, with source `startup`, `resume`,
 `clear`, `fork` or none; `compact` never changes it. Subagent lines and other
 generations' lines are ignored, as for every fold. The same ID again refreshes
-`at`, `read_at` and `generation` only. Status lines never set it.
-[3](#source-3) [4](#source-4)
+`at`, `read_at` and `generation` only. Status lines set it only for a
+profile declaring `observe.identity: statusline` (agy, via `FoldFor`, in
+persisted, live and view folds alike): a main line naming a valid UUID learns,
+sets `current` and records a divergence with source `statusline`, refreshing
+only on a new ID or generation. It never verifies a resume: another ID sets
+`mismatch`, the requested one stays `unverified` and is never settled
+`failed`. A closed learn launch that named none says so in views. [3](#source-3) [4](#source-4)
+[14](#source-14)
 
 [FACT] The next resume requests `Target`: `current` when set, else
 `assigned`. When they differ, `Allocate(resume)` first moves `assigned` to
@@ -90,8 +96,9 @@ is exercised here. [7](#source-7) [8](#source-8) [13](#source-13)
 6. <a id="source-6"></a> [Plan regressions](../../cmd/yoloctl/session_observe_test.go#L205) — `TestReportedMismatchResumesTheReportedConversation`, `TestTheNextStartResumesTheLastObservedConversation`; owner by `current` in session_identity_test.go `TestResumeRefusesAConversationOwnedElsewhere`.
 7. <a id="source-7"></a> [Learn regressions](../../cmd/yoloctl/session_observe_test.go#L678) — `TestBoxSessionTextNamesALearnedConversation`; `TestArgvLearnsWithoutAnID` and `Argv` in policy.go L92-L134.
 8. <a id="source-8"></a> [Failed resume](../../cmd/yoloctl/session_observe.go#L174-L195) — `observeCurrentLaunch` settles after a successful read; regressions `TestAFailedResumeIsRetriedNeverReplaced`, `TestSettleResumeDecidesOnlyAReadSilentFailure`.
-9. <a id="source-9"></a> [Selection](../../internal/agentprofile/profile.go#L205) — `ObserveSpec.Selection`, `SelectionReport`; validation in `validateSession`; builtin/claude.yaml and builtin/codex.yaml `session.observe`.
+9. <a id="source-9"></a> [Selection](../../internal/agentprofile/profile.go#L215) — `ObserveSpec.Selection`, `SelectionReport`; validation in `validateSession`; builtin/claude.yaml and builtin/codex.yaml `session.observe`.
 10. <a id="source-10"></a> [Status](../../internal/agentsession/status.go#L181) — `Status` fields, `CurrentView`, `PreviousView.Text`, `LearnsID`, `Switched`; `Describe` L280.
 11. <a id="source-11"></a> [box session](../../cmd/yoloctl/box_session.go#L162) — `writeBoxSession`; keys in box_session_test.go `checkConversationShape`.
 12. <a id="source-12"></a> [Card row](../../cmd/yoloctl/chat_participant_runtime.go#L36-L106) — `participantRuntime`, `participantConversation`, `resumeOutcome`; `AgentRuntime.Conversation` and `runtimeRows` in internal/chatui/runtime.go.
 13. <a id="source-13"></a> [Card regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L75) — `TestParticipantConversationIsCertainOnly`; the card row in internal/chatui/ui_package_test.go `TestParticipantsShowObservedModelAndEffortOnly`.
+14. <a id="source-14"></a> [Status line identity](../../internal/agentsession/apply.go#L24-L42) — `Fold`, `FoldFor`, `statusLineIdentity` at L345; `recordedCurrentSource` in record.go L386; `SettleResume` in launch.go L212; tests statusline_identity_test.go, cmd/yoloctl/agy_session_test.go.
