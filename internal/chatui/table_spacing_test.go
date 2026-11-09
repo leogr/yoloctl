@@ -11,7 +11,7 @@ import (
 )
 
 // spacer reports whether a body row is a table spacer: an empty decor row.
-func spacer(r bodyRow) bool { return r.decor && len(r.runs) == 0 }
+func spacer(r bodyRow) bool { return r.Decor && len(r.Runs) == 0 }
 
 // shown renders text at width as one string per body row, a spacer as "~".
 func shown(text string, source bool, width int) []string {
@@ -23,8 +23,8 @@ func shown(text string, source bool, width int) []string {
 			continue
 		}
 		var b strings.Builder
-		for _, run := range r.runs {
-			b.WriteString(run.text)
+		for _, run := range r.Runs {
+			b.WriteString(run.Text)
 		}
 		out = append(out, strings.TrimRight(b.String(), " "))
 	}
@@ -37,13 +37,13 @@ func unspaced(lines []displayLine) []displayLine {
 	out := make([]displayLine, len(lines))
 	copied := map[*tableInfo]*tableInfo{}
 	for i, dl := range lines {
-		if dl.table != nil {
-			if copied[dl.table] == nil {
-				c := *dl.table
-				c.spaceBefore, c.spaceAfter = false, false
-				copied[dl.table] = &c
+		if dl.Table != nil {
+			if copied[dl.Table] == nil {
+				c := *dl.Table
+				c.SpaceBefore, c.SpaceAfter = false, false
+				copied[dl.Table] = &c
 			}
-			dl.table = copied[dl.table]
+			dl.Table = copied[dl.Table]
 		}
 		out[i] = dl
 	}
@@ -137,7 +137,7 @@ func TestTableSpacingKeepsEveryLayout(t *testing.T) {
 			t.Fatalf("width %d: spacing changed the table's rows", width)
 		}
 		last := len(got) - 1 - len(bodyRows(ansi.WcWidth, lines[4:], width, theme))
-		if len(at) != 2 || got[at[0]-1].line != 0 || got[at[0]+1].line != 1 || at[1] != last || got[at[1]].line != 4 {
+		if len(at) != 2 || got[at[0]-1].Line != 0 || got[at[0]+1].Line != 1 || at[1] != last || got[at[1]].Line != 4 {
 			t.Fatalf("width %d: spacers at %v (outro starts after row %d): %+v", width, at, last, got)
 		}
 	}
@@ -201,7 +201,7 @@ func TestTableSpacersCopyNothing(t *testing.T) {
 
 	q := quoteModel(t, text)
 	lines := q.body(&q.messages[q.indexOf("server:q")], 80).lines
-	highlight(q, "q", 0, 0, 4, len(lines[4].text))
+	highlight(q, "q", 0, 0, 4, len(lines[4].Text))
 	q.quoteSelection()
 	if q.Draft() != "> intro\n> a\tb\n> 1\t2\n> outro\n\n" {
 		t.Fatalf("whole message: %q (%q)", q.Draft(), q.notice)
@@ -278,7 +278,7 @@ func TestTableSpacersKeepTheReadingPosition(t *testing.T) {
 func ansiText(runs []run) string {
 	var b strings.Builder
 	for _, r := range runs {
-		b.WriteString(r.text)
+		b.WriteString(r.Text)
 	}
 	return b.String()
 }
@@ -289,7 +289,7 @@ func ansiText(runs []run) string {
 func TestTableSpacingStaysWithinTheRowLimit(t *testing.T) {
 	theme := New(Options{}).theme
 	notice := func(r bodyRow) bool {
-		return r.decor && len(r.runs) == 1 && strings.HasPrefix(r.runs[0].text, "[display row limit")
+		return r.Decor && len(r.Runs) == 1 && strings.HasPrefix(r.Runs[0].Text, "[display row limit")
 	}
 	prose := func(k int) string { return strings.Repeat("p\n", k) }
 	for _, tc := range []struct {
@@ -301,7 +301,7 @@ func TestTableSpacingStaysWithinTheRowLimit(t *testing.T) {
 		{"spacer after at the limit", prose(maxBodyRows-5) + spacedTable + "\noutro", spacer},
 		{"spacer before at the limit", prose(maxBodyRows-1) + spacedTable + "\noutro", spacer},
 		{"table near the limit", prose(maxBodyRows-3) + spacedTable + "\noutro", nil},
-		{"fence frame at the limit", prose(maxBodyRows-1) + "```\ncode\n```", func(r bodyRow) bool { return r.decor }},
+		{"fence frame at the limit", prose(maxBodyRows-1) + "```\ncode\n```", func(r bodyRow) bool { return r.Decor }},
 		{"repeated tables", strings.Repeat("p\n"+spacedTable+"\n", maxBodyRows/4), nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -321,5 +321,5 @@ func TestTableSpacingStaysWithinTheRowLimit(t *testing.T) {
 func tableCopy(t *testing.T, m *Model, key string) string {
 	t.Helper()
 	lines := m.body(&m.messages[m.indexOf(key)], m.lastTextWidth).lines
-	return lines[1].text + "\n" + lines[3].text
+	return lines[1].Text + "\n" + lines[3].Text
 }

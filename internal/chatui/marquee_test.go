@@ -249,7 +249,7 @@ func TestMarqueeNeverStartsWithoutAClippedCard(t *testing.T) {
 		}
 		var hint strings.Builder
 		for _, r := range m.hoverHint() {
-			hint.WriteString(r.text)
+			hint.WriteString(r.Text)
 		}
 		if !strings.Contains(hint.String(), longModel+" (xhigh)") || !strings.Contains(hint.String(), "click to attach") {
 			t.Fatalf("the footer names the full row: %q", hint.String())
@@ -277,7 +277,7 @@ func TestMarqueeNeverStartsWithoutAClippedCard(t *testing.T) {
 		}
 		var hint strings.Builder
 		for _, r := range m.hoverHint() {
-			hint.WriteString(r.text)
+			hint.WriteString(r.Text)
 		}
 		if name, what := m.participantHint("msol", "sol"); hint.String() != " ▸ "+name+"  "+what {
 			t.Fatalf("the footer names nothing before the hint: %q", hint.String())

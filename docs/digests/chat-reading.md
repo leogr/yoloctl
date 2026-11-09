@@ -1,6 +1,6 @@
 # Native chat reading and selection
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `d9aec4ac854ffd5b4f60a93817b8c5afce10847d` and accompanying changes.
 
 [FACT] Buttonless motion only highlights ([hover](chat-hover-paste.md)); a click
 is press and release on one target. A left drag selects logical points (message,
@@ -37,7 +37,7 @@ returns to the live tail. [1](#source-1)
 2. <a id="source-2"></a> [Keys and actions](../../internal/chatui/model.go#L736) — `key`, `escape`, `runAction`, `append`, `pick`, `jumpToLatest`.
 3. <a id="source-3"></a> [Selection](../../internal/chatui/selection.go#L14) — `selPoint`, `selectedText`, `pointAt`, `copySelection`.
 4. <a id="source-4"></a> [Mouse routing](../../internal/chatui/mouse.go#L15) — `mouseDown`, `mouseMove`, `dragStep`, `mouseUp`.
-5. <a id="source-5"></a> [Copy text](../../internal/chatui/body.go#L66) — `copyText`; `hitRun` in rows.go.
+5. <a id="source-5"></a> [Shared copy text](../../internal/markdownview/body.go#L67) — `DisplayLine.CopyText`; shared rows.go owns `HitRun`; chat selection.go owns message/gesture routing.
 6. <a id="source-6"></a> [TUI wheel](../../internal/tui/mouse.go#L284-L308).
 7. <a id="source-7"></a> [Interaction regressions](../../internal/chatui/polish_test.go#L1) — selection, attach, reconnect, presence, scroll.
 8. <a id="source-8"></a> [Reading regressions](../../internal/chatui/reading_test.go#L25-L79) — jump control.

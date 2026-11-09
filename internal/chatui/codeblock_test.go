@@ -20,10 +20,10 @@ func copyButtons(m *Model, key string) [][2]int {
 		}
 		x := 0
 		for _, r := range row.runs {
-			if r.act.kind == actCopyCode {
+			if r.Act.Kind == actCopyCode {
 				cells = append(cells, [2]int{x, i - m.scroll + m.layout.bodyTop})
 			}
-			x += ansi.StringWidthWc(r.text)
+			x += ansi.StringWidthWc(r.Text)
 		}
 	}
 	return cells
@@ -60,10 +60,10 @@ func TestCopyButtonCopiesExactlyItsOwnBlock(t *testing.T) {
 	// The button is on the label row, right-aligned within the card.
 	body := m.body(&m.messages[0], m.lastTextWidth)
 	for _, r := range body.rows {
-		if dl := body.lines[r.line]; dl.fence == fenceOpen {
-			last := r.runs[len(r.runs)-2]
-			if last.text != copyLabel || last.act.kind != actCopyCode || last.copy {
-				t.Fatalf("label row %q does not end with the button", runsText(r.runs))
+		if dl := body.lines[r.Line]; dl.Fence == fenceOpen {
+			last := r.Runs[len(r.Runs)-2]
+			if last.Text != copyLabel || last.Act.Kind != actCopyCode || last.Copy {
+				t.Fatalf("label row %q does not end with the button", runsText(r.Runs))
 			}
 		}
 	}
@@ -116,10 +116,10 @@ func TestCopyButtonOnNarrowCards(t *testing.T) {
 		rows := bodyRows(wm, lines, width, theme)
 		cards := codeCards(wm, lines, width)
 		label := rows[0]
-		if w := runsWidth(wm, label.runs); w != cards[0] {
+		if w := runsWidth(wm, label.Runs); w != cards[0] {
 			t.Fatalf("width %d: label row is %d cells, card %d", width, w, cards[0])
 		}
-		text := runsText(label.runs)
+		text := runsText(label.Runs)
 		hasButton := strings.HasSuffix(strings.TrimRight(text, " "), copyLabel)
 		inner := cards[0] - 2*cardPad(width)
 		if hasButton != (inner >= len(copyLabel)) {

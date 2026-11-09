@@ -19,11 +19,11 @@ func TestBoldItalicAndStrikethrough(t *testing.T) {
 	}
 	var both, gone bool
 	for _, sp := range spans {
-		switch text[sp.start:sp.end] {
+		switch text[sp.Start:sp.End] {
 		case "both":
-			both = sp.style.Bold && sp.style.Italic
+			both = sp.Style.Bold && sp.Style.Italic
 		case "gone":
-			gone = sp.strike
+			gone = sp.Strike
 		}
 	}
 	if !both || !gone {
@@ -94,23 +94,23 @@ func TestTablesNeedHeaderAndDelimiter(t *testing.T) {
 		"just --- dashes\n---",
 	} {
 		for _, dl := range displayLines(ansi.WcWidth, literal, false, theme, "") {
-			if strings.Contains(dl.text, "│") || strings.Contains(dl.text, "┼") {
-				t.Fatalf("%q must stay literal, got %q", literal, dl.text)
+			if strings.Contains(dl.Text, "│") || strings.Contains(dl.Text, "┼") {
+				t.Fatalf("%q must stay literal, got %q", literal, dl.Text)
 			}
 		}
 	}
 	for _, dl := range displayLines(ansi.WcWidth, "```\n"+sampleTable+"\n```", false, theme, "") {
-		if strings.Contains(dl.text, "┼") {
+		if strings.Contains(dl.Text, "┼") {
 			t.Fatal("a table inside fenced code stays literal")
 		}
 	}
-	if lines := displayLines(ansi.WcWidth, sampleTable, true, theme, ""); lines[1].text != "| :--- | :---: | ---: |" {
-		t.Fatalf("source view keeps the table markup: %q", lines[1].text)
+	if lines := displayLines(ansi.WcWidth, sampleTable, true, theme, ""); lines[1].Text != "| :--- | :---: | ---: |" {
+		t.Fatalf("source view keeps the table markup: %q", lines[1].Text)
 	}
 	// Ragged rows are padded or cut to the header's columns.
 	lines := displayLines(ansi.WcWidth, "| a | b |\n|---|---|\n| 1 |\n| 1 | 2 | 3 |", false, theme, "")
-	if len(lines) != 4 || lines[2].text != "1 │" || lines[3].text != "1 │ 2" {
-		t.Fatalf("ragged rows: %q", []string{lines[2].text, lines[3].text})
+	if len(lines) != 4 || lines[2].Text != "1 │" || lines[3].Text != "1 │ 2" {
+		t.Fatalf("ragged rows: %q", []string{lines[2].Text, lines[3].Text})
 	}
 }
 
@@ -128,8 +128,8 @@ func TestTableCellsKeepTargetsAndWrap(t *testing.T) {
 		}
 		rows++
 		for _, r := range row.runs {
-			link = link || r.act.kind == actLink
-			mention = mention || r.act.kind == actMention && r.act.value == "sol"
+			link = link || r.Act.Kind == actLink
+			mention = mention || r.Act.Kind == actMention && r.Act.Value == "sol"
 		}
 	}
 	if !link || !mention || rows < 3 {
@@ -148,8 +148,8 @@ func TestTablesAreBoundedBeforePadding(t *testing.T) {
 		skewed := "| " + strings.Repeat("x", 64<<10) + " | b |\n|---|---|\n" + strings.Repeat("| a | b |\n", n)
 		var shown int
 		for _, dl := range displayLines(ansi.WcWidth, skewed, false, theme, "") {
-			shown += len(dl.text)
-			if strings.Contains(dl.text, "│") {
+			shown += len(dl.Text)
+			if strings.Contains(dl.Text, "│") {
 				t.Fatalf("an over-budget table of %d rows must stay literal", n)
 			}
 		}
@@ -161,14 +161,14 @@ func TestTablesAreBoundedBeforePadding(t *testing.T) {
 	wide := "|" + strings.Repeat(" c |", maxTableColumns+1) + "\n|" + strings.Repeat("---|", maxTableColumns+1)
 	for name, text := range map[string]string{"rows": tall, "columns": wide} {
 		for _, dl := range displayLines(ansi.WcWidth, text, false, theme, "") {
-			if strings.Contains(dl.text, "│") {
+			if strings.Contains(dl.Text, "│") {
 				t.Fatalf("a table over its %s bound stays literal", name)
 			}
 		}
 	}
 	fits := "| a | b |\n|---|---|\n" + strings.Repeat("| 1 | 2 |\n", maxTableRows)
-	if lines := displayLines(ansi.WcWidth, fits, false, theme, ""); lines[0].text != "a │ b" {
-		t.Fatalf("a table within its bounds still renders: %q", lines[0].text)
+	if lines := displayLines(ansi.WcWidth, fits, false, theme, ""); lines[0].Text != "a │ b" {
+		t.Fatalf("a table within its bounds still renders: %q", lines[0].Text)
 	}
 }
 
@@ -180,7 +180,7 @@ func TestTableBudgetIncludesRuleSeparators(t *testing.T) {
 	theme := New(Options{}).theme
 	shown := 0
 	for _, dl := range displayLines(ansi.WcWidth, text, false, theme, "") {
-		shown += len(dl.text)
+		shown += len(dl.Text)
 	}
 	if shown > 2*len(text)+tableSlack {
 		t.Fatalf("display text %d bytes exceeds the budget for %d source bytes", shown, len(text))
@@ -192,8 +192,8 @@ func TestTableBudgetIncludesRuleSeparators(t *testing.T) {
 func TestTableFencePrecedenceAndEscapedPipes(t *testing.T) {
 	theme := New(Options{}).theme
 	for _, dl := range displayLines(ansi.WcWidth, "``` a | b\n|---|---|\n| x | y |\n```", false, theme, "") {
-		if strings.Contains(dl.text, "┼") || strings.Contains(dl.text, "│") {
-			t.Fatalf("fenced content became a table: %q", dl.text)
+		if strings.Contains(dl.Text, "┼") || strings.Contains(dl.Text, "│") {
+			t.Fatalf("fenced content became a table: %q", dl.Text)
 		}
 	}
 	cells, ok := tableCells(`| a \\| b |`)
@@ -211,8 +211,8 @@ func TestTableFencePrecedenceAndEscapedPipes(t *testing.T) {
 		t.Fatalf("a trailing pipe after an escaped backslash is a real trailing pipe: %q", cells)
 	}
 	lines := displayLines(ansi.WcWidth, "| a \\\\| b |\n|---|---|\n| x \\| y | z |", false, theme, "")
-	if lines[0].text != `a \   │ b` || lines[2].text != "x | y │ z" { // padded to "x | y"
-		t.Fatalf("escapes render once: %q / %q", lines[0].text, lines[2].text)
+	if lines[0].Text != `a \   │ b` || lines[2].Text != "x | y │ z" { // padded to "x | y"
+		t.Fatalf("escapes render once: %q / %q", lines[0].Text, lines[2].Text)
 	}
 }
 
@@ -239,21 +239,21 @@ func TestOverBoundTablesAreScannedOnce(t *testing.T) {
 		t.Fatalf("%.0f allocations for 1024 16-column delimiter rows, %.0f for plain text", a, b)
 	}
 	out := displayLines(ansi.WcWidth, delimiters, false, theme, "")
-	if len(out) != lines+1 || out[0].text != "|-|" || out[lines-1].text != "|-|" {
-		t.Fatalf("the rejected span stays literal: %d lines, first %q", len(out), out[0].text)
+	if len(out) != lines+1 || out[0].Text != "|-|" || out[lines-1].Text != "|-|" {
+		t.Fatalf("the rejected span stays literal: %d lines, first %q", len(out), out[0].Text)
 	}
 	// A table refused by the byte budget is consumed as one span too: its
 	// delimiter-like rows must not become a second table.
 	skewed := "| " + strings.Repeat("x", 64<<10) + " | b |\n|---|---|\n" + strings.Repeat("|-|-|\n", maxTableRows)
 	for _, dl := range displayLines(ansi.WcWidth, skewed, false, theme, "") {
-		if strings.Contains(dl.text, "│") || strings.Contains(dl.text, "┼") {
-			t.Fatalf("rows of a refused table rendered as a table: %q", dl.text)
+		if strings.Contains(dl.Text, "│") || strings.Contains(dl.Text, "┼") {
+			t.Fatalf("rows of a refused table rendered as a table: %q", dl.Text)
 		}
 	}
 	// A valid table right after a rejected span still renders.
 	after := strings.Repeat("|-|\n", maxTableRows+3) + "\nok\n\n| a | b |\n|---|---|\n| 1 | 2 |"
 	shown := displayLines(ansi.WcWidth, after, false, theme, "")
-	if got := shown[len(shown)-1].text; got != "1 │ 2" {
+	if got := shown[len(shown)-1].Text; got != "1 │ 2" {
 		t.Fatalf("a later valid table renders: %q", got)
 	}
 }
@@ -264,7 +264,7 @@ func TestBlocksEndTables(t *testing.T) {
 	theme := New(Options{}).theme
 	for _, next := range []string{"# head | x", "> quote | x", "- item | x", "1. item | x", "```"} {
 		lines := displayLines(ansi.WcWidth, "| a | b |\n|---|---|\n| 1 | 2 |\n"+next, false, theme, "")
-		if last := lines[len(lines)-1].text; strings.Contains(last, "│") {
+		if last := lines[len(lines)-1].Text; strings.Contains(last, "│") {
 			t.Fatalf("%q continued the table: %q", next, last)
 		}
 	}

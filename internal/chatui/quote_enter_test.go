@@ -24,7 +24,7 @@ func dragOver(t *testing.T, m *Model, id string, line int, part string) {
 	t.Helper()
 	key := "server:" + id
 	i := m.indexOf(key)
-	text := m.body(&m.messages[i], 80).lines[line].text
+	text := m.body(&m.messages[i], 80).lines[line].Text
 	at := strings.Index(text, part)
 	if at < 0 {
 		t.Fatalf("line %d of %s is %q, without %q", line, id, text, part)

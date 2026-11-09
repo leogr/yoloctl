@@ -24,10 +24,10 @@ func cellOf(t *testing.T, m *Model, key string, line, offset int) (int, int) {
 		}
 		x := 0
 		for _, r := range row.runs {
-			if r.copy && offset >= r.start && offset <= r.start+len(r.text) {
-				return x + displayWidth(ansi.WcWidth, r.text[:offset-r.start]), i - m.scroll + m.layout.bodyTop
+			if r.Copy && offset >= r.Start && offset <= r.Start+len(r.Text) {
+				return x + displayWidth(ansi.WcWidth, r.Text[:offset-r.Start]), i - m.scroll + m.layout.bodyTop
 			}
-			x += displayWidth(ansi.WcWidth, r.text)
+			x += displayWidth(ansi.WcWidth, r.Text)
 		}
 	}
 	t.Fatalf("no cell for %s line %d offset %d", key, line, offset)

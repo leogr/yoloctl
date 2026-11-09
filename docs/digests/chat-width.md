@@ -1,6 +1,6 @@
 # Native chat width methods
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `d9aec4ac854ffd5b4f60a93817b8c5afce10847d` and accompanying changes.
 
 [FACT] Each chat Model owns one `ansi.Method`, initially its zero value,
 `WcWidth`. A `ModeUnicodeCore` report with Reset, Set or PermanentlySet changes
@@ -62,11 +62,11 @@ plain text-presentation ⏸ remains a separate host-observation boundary.
 
 1. <a id="source-1"></a> [Model method and reports](../../internal/chatui/model.go#L270-L274) — `widthMethod`; `update` mode predicate at L420-L425.
 2. <a id="source-2"></a> [TUI predicate](../../internal/tui/tui.go#L923-L930); pins in `go.mod:L13-L16`.
-3. <a id="source-3"></a> [Row geometry](../../internal/chatui/rows.go#L98-L233) — `paint`, `runsWidth`, `wrapRanges`, `hitRun`, `actionAt`.
-4. <a id="source-4"></a> [Bodies/tables](../../internal/chatui/body.go#L104-L225) — `displayLinesMap`, `tableLines`, `fitTable`; draft and tab mapping in `internal/chatui/render.go:L120-L234`, `editor.vertical` in editor.go.
+3. <a id="source-3"></a> [Row geometry](../../internal/markdownview/rows.go#L36) — `Paint`, `RunsWidth`, `WrapRanges`, `HitRun`, `ActionAt`.
+4. <a id="source-4"></a> [Shared bodies/tables](../../internal/markdownview/body.go#L101) — `parseLines`, `TableLines`, `FitTable`; shared render.go owns tab mapping; chat render.go and editor.go retain draft geometry.
 5. <a id="source-5"></a> [View](../../internal/chatui/view.go#L74) and helpers in roster.go, preview.go, overlay.go, link_prompt.go and marquee.go.
-6. <a id="source-6"></a> [Transition](../../internal/chatui/width.go#L9-L40) — `setWidthMethod`; release in `internal/chatui/mouse.go:L179-L185`.
-7. <a id="source-7"></a> [Quote maps](../../internal/chatui/quote.go#L173-L180) — `quoteSource`, `rendered`; preview.go `previewLabel`, `substitute`.
+6. <a id="source-6"></a> [Transition](../../internal/chatui/width.go#L8) — `setWidthMethod`; mouse.go cancels release of old gestures.
+7. <a id="source-7"></a> [Quote maps](../../internal/chatui/quote.go#L56) — `quoteSource`, `rendered`; preview.go keeps preview eligibility/substitution; markdownview holds pure maps.
 8. <a id="source-8"></a> [Runtime bounds](../../internal/chatui/runtime.go#L97-L102) — `runtimeText`, `runtimeRows` Note; attachments.go `imageUploaded`, staging.go `imageStaged`; boundaries in `internal/chatui/editor.go:L80-L94` — `clusters`.
 9. <a id="source-9"></a> [Width regressions](../../internal/chatui/width_test.go#L15) — renderer cells, reports, symbol matrix, hits, cache transition and copy/Quote.
-10. <a id="source-10"></a> [Clipping](../../internal/chatui/width.go#L42-L107) — `displaySequence`, `truncate`, `truncateLeft`; ultraviolet `styled.go:printString` uses the same method decoder and ASCII correction.
+10. <a id="source-10"></a> [Clipping](../../internal/markdownview/width.go#L11) — `DisplaySequence`, `Truncate`, `TruncateLeft`; ultraviolet styled.go printString uses the same method decoder and ASCII correction.

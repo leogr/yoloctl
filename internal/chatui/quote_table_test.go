@@ -16,9 +16,9 @@ const quoteTableExample = "| Box | Stage | Next |\n|---|---|---|\n| opus2 | Revi
 func highlightSpan(t *testing.T, m *Model, id string, la int, from string, lb int, to string) {
 	t.Helper()
 	lines := m.body(&m.messages[m.indexOf("server:"+id)], max(m.lastTextWidth, 1)).lines
-	a, b := strings.Index(lines[la].text, from), strings.Index(lines[lb].text, to)
+	a, b := strings.Index(lines[la].Text, from), strings.Index(lines[lb].Text, to)
 	if a < 0 || b < 0 {
-		t.Fatalf("%q on line %d (%q) or %q on line %d (%q) is missing", from, la, lines[la].text, to, lb, lines[lb].text)
+		t.Fatalf("%q on line %d (%q) or %q on line %d (%q) is missing", from, la, lines[la].Text, to, lb, lines[lb].Text)
 	}
 	highlight(m, id, la, a, lb, b+len(to))
 }
@@ -36,7 +36,7 @@ func quoted(m *Model) string {
 func TestQuoteTableExamples(t *testing.T) {
 	m := quoteModel(t, quoteTableExample)
 	lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
-	if len(lines) != 4 || !lines[1].decor || lines[2].cells == nil {
+	if len(lines) != 4 || !lines[1].Decor || lines[2].Cells == nil {
 		t.Fatalf("fixture: %+v", lines)
 	}
 	for _, tc := range []struct {
@@ -65,7 +65,7 @@ func TestQuoteTableExamples(t *testing.T) {
 	// around it stay, the prose quotes as its source.
 	w := quoteModel(t, "intro **x**\n\n"+quoteTableExample+"\n\nafter `c`")
 	wl := w.body(&w.messages[w.indexOf("server:q")], 80).lines
-	highlight(w, "q", 0, 0, len(wl)-1, len(wl[len(wl)-1].text))
+	highlight(w, "q", 0, 0, len(wl)-1, len(wl[len(wl)-1].Text))
 	if got := quoted(w); got != "> intro **x**\n>\n> Box\tStage\tNext\n> opus2\tReview\tmerge after gate\n> sol\tBuild\trefresh fix\n>\n> after `c`\n\n" {
 		t.Fatalf("whole message: %q (%q)", got, w.notice)
 	}
@@ -77,8 +77,8 @@ func TestQuoteTableExamples(t *testing.T) {
 func TestQuoteTableKeepsDisplayedText(t *testing.T) {
 	m := quoteModel(t, "| a | b |\n|---|---|\n| **bold** [docs](https://x.y) | `co*de*` \\| x |")
 	lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
-	if !strings.Contains(lines[2].text, "bold docs (https://x.y)") || !strings.Contains(lines[2].text, "co*de* | x") {
-		t.Fatalf("fixture: %q", lines[2].text)
+	if !strings.Contains(lines[2].Text, "bold docs (https://x.y)") || !strings.Contains(lines[2].Text, "co*de* | x") {
+		t.Fatalf("fixture: %q", lines[2].Text)
 	}
 	for _, tc := range []struct{ part, want string }{
 		{"ld docs (htt", "ld docs (htt"},
@@ -113,15 +113,15 @@ func TestQuoteTableCellEdges(t *testing.T) {
 		la, oa, lb, ob int
 		want           string
 	}{
-		{2, 0, 2, len(lines[2].text), "> one\t\tthree\n\n"},
-		{2, 1, 2, strings.Index(lines[2].text, "three") + 3, "> ne\t\tthr\n\n"},
-		{2, strings.Index(lines[2].text, "three"), 4, 1, "> three\n> \t\t\n> x\n\n"},
-		{3, 0, 3, len(lines[3].text), "> \t\t\n\n"},
-		{5, 0, 5, len(lines[5].text), "> \tmid\t\n\n"},
-		{4, 2, 4, strings.Index(lines[4].text, "y") + 1, "> y\n\n"},
-		{4, 0, 4, strings.Index(lines[4].text, "y"), "> x\n\n"},
-		{2, strings.Index(lines[2].text, "three"), 3, 0, "> three\n\n"},
-		{2, strings.Index(lines[2].text, "three"), 4, 0, "> three\n> \t\t\n\n"},
+		{2, 0, 2, len(lines[2].Text), "> one\t\tthree\n\n"},
+		{2, 1, 2, strings.Index(lines[2].Text, "three") + 3, "> ne\t\tthr\n\n"},
+		{2, strings.Index(lines[2].Text, "three"), 4, 1, "> three\n> \t\t\n> x\n\n"},
+		{3, 0, 3, len(lines[3].Text), "> \t\t\n\n"},
+		{5, 0, 5, len(lines[5].Text), "> \tmid\t\n\n"},
+		{4, 2, 4, strings.Index(lines[4].Text, "y") + 1, "> y\n\n"},
+		{4, 0, 4, strings.Index(lines[4].Text, "y"), "> x\n\n"},
+		{2, strings.Index(lines[2].Text, "three"), 3, 0, "> three\n\n"},
+		{2, strings.Index(lines[2].Text, "three"), 4, 0, "> three\n> \t\t\n\n"},
 	} {
 		for _, reverse := range []bool{false, true} {
 			highlight(m, "q", tc.la, tc.oa, tc.lb, tc.ob)
@@ -137,14 +137,14 @@ func TestQuoteTableCellEdges(t *testing.T) {
 	// Only padding and a separator: no quote, nothing changes.
 	m.replyTo = "older"
 	_ = m.SetDraft("keep")
-	sep := strings.Index(lines[4].text, "│")
+	sep := strings.Index(lines[4].Text, "│")
 	highlight(m, "q", 4, 1, 4, sep+len("│ "))
 	m.quoteSelection()
 	if m.Draft() != "keep" || m.replyTo != "older" || m.sel == nil || m.notice != quoteNoHighlight {
 		t.Fatalf("separator only: draft %q reply %q notice %q", m.Draft(), m.replyTo, m.notice)
 	}
 	// A component of only the rule contributes nothing.
-	if rows := tableText(lines, 1, 1, 0, len(lines[1].text)); rows != nil {
+	if rows := tableText(lines, 1, 1, 0, len(lines[1].Text)); rows != nil {
 		t.Fatalf("the rule gave %+v", rows)
 	}
 }
@@ -168,8 +168,8 @@ func TestQuoteTableMixed(t *testing.T) {
 	} {
 		m := quoteModel(t, tc.text)
 		lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
-		la := strings.Index(lines[tc.la].text, tc.from)
-		lb := strings.Index(lines[tc.lb].text, tc.to)
+		la := strings.Index(lines[tc.la].Text, tc.from)
+		lb := strings.Index(lines[tc.lb].Text, tc.to)
 		if la < 0 || lb < 0 {
 			t.Fatalf("%s: fixture lines %+v", tc.note, lines)
 		}
@@ -181,14 +181,14 @@ func TestQuoteTableMixed(t *testing.T) {
 	// The rule as either endpoint: what was passed of the header stays.
 	m := quoteModel(t, "intro\n"+quoteTableExample)
 	lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
-	if !lines[2].decor {
+	if !lines[2].Decor {
 		t.Fatalf("fixture: %+v", lines)
 	}
 	highlight(m, "q", 0, 0, 2, 3)
 	if got := quoted(m); got != "> intro\n> Box\tStage\tNext\n\n" {
 		t.Fatalf("prose to the rule: %q (%q)", got, m.notice)
 	}
-	highlight(m, "q", 2, 0, 3, strings.Index(lines[3].text, "Revi")+4)
+	highlight(m, "q", 2, 0, 3, strings.Index(lines[3].Text, "Revi")+4)
 	if got := quoted(m); got != "> opus2\tRevi\n\n" {
 		t.Fatalf("rule to a row: %q (%q)", got, m.notice)
 	}
@@ -203,7 +203,7 @@ func TestQuoteTableMixed(t *testing.T) {
 	rl := r.body(&r.messages[r.indexOf("server:q")], 80).lines
 	r.replyTo = "older"
 	_ = r.SetDraft("keep")
-	highlight(r, "q", 0, strings.Index(rl[0].text, "https"), 3, 3)
+	highlight(r, "q", 0, strings.Index(rl[0].Text, "https"), 3, 3)
 	r.quoteSelection()
 	if r.Draft() != "keep" || r.replyTo != "older" || r.sel == nil || r.notice != quoteCut {
 		t.Fatalf("unmappable prose: draft %q reply %q notice %q", r.Draft(), r.replyTo, r.notice)
@@ -227,7 +227,7 @@ func TestQuoteTableLayouts(t *testing.T) {
 			{2, "pus2", 2, "Revi", "> pus2\tRevi\n\n"},
 			{2, "Review", 3, "sol", "> Review\tmerge after gate\n> sol\n\n"},
 		} {
-			a, b := strings.Index(lines[tc.la].text, tc.from), strings.Index(lines[tc.lb].text, tc.to)
+			a, b := strings.Index(lines[tc.la].Text, tc.from), strings.Index(lines[tc.lb].Text, tc.to)
 			highlight(m, "t", tc.la, a, tc.lb, b+len(tc.to))
 			if got := quoted(m); got != tc.want {
 				t.Fatalf("width %d: %q, want %q (%q)", width, got, tc.want, m.notice)
@@ -249,7 +249,7 @@ func TestQuoteTableLayouts(t *testing.T) {
 	if wrapped := bodyRows(ansi.WcWidth, lines, m.lastTextWidth, m.theme); len(wrapped) <= len(lines) {
 		t.Fatalf("the table should wrap at 24: %d rows", len(wrapped))
 	}
-	row := lines[2].text
+	row := lines[2].Text
 	x0, y0 := cellOf(t, m, key, 2, strings.Index(row, "Review"))
 	x1, y1 := cellOf(t, m, key, 2, strings.Index(row, "gate")+3)
 	if y1 == y0 {
@@ -269,8 +269,8 @@ func TestQuoteTableLayouts(t *testing.T) {
 func TestQuoteTableCodeSpanPipes(t *testing.T) {
 	m := quoteModel(t, "| A | B | C | D |\n|---|---|---|---|\n| prefix | `left|right` | suffix |\n| p | a \\| b | c | d |")
 	lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
-	if len(lines[2].cells) != 4 {
-		t.Fatalf("the parser should split the code span: %q %v", lines[2].text, lines[2].cells)
+	if len(lines[2].Cells) != 4 {
+		t.Fatalf("the parser should split the code span: %q %v", lines[2].Text, lines[2].Cells)
 	}
 	highlightSpan(t, m, "q", 2, "`left", 2, "right`")
 	if got := quoted(m); got != "> `left\tright`\n\n" {
@@ -344,7 +344,7 @@ func TestQuoteTableKeepsSourceBesideTables(t *testing.T) {
 		m := quoteModel(t, tc.text)
 		lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
 		last := len(lines) - 1
-		highlight(m, "q", 0, 0, last, len(lines[last].text))
+		highlight(m, "q", 0, 0, last, len(lines[last].Text))
 		if got := quoted(m); got != tc.want {
 			t.Fatalf("%s: %q, want %q (%q)", tc.name, got, tc.want, m.notice)
 		}
@@ -353,7 +353,7 @@ func TestQuoteTableKeepsSourceBesideTables(t *testing.T) {
 	// the line after the table, adds no line there.
 	m := quoteModel(t, "intro\n"+quoteTableExample+"\nafter")
 	lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
-	highlight(m, "q", 0, len("intro"), 4, len(lines[4].text))
+	highlight(m, "q", 0, len("intro"), 4, len(lines[4].Text))
 	if got := quoted(m); got != rows+"\n" {
 		t.Fatalf("from the prose line's end: %q (%q)", got, m.notice)
 	}

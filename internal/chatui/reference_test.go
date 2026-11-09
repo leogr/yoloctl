@@ -77,17 +77,17 @@ func targets(m *Model, text string, source bool) [][2]string {
 	var last action
 	for _, dl := range displayLines(ansi.WcWidth, text, source, m.theme, m.opts.Nick) {
 		last = action{}
-		for _, p := range dl.pieces {
-			if p.act.kind == actNone {
+		for _, p := range dl.Pieces {
+			if p.Act.Kind == actNone {
 				last = action{}
 				continue
 			}
-			kind := map[actionKind]string{actLink: "link", actMention: "mention", actRef: "ref"}[p.act.kind] + " " + p.act.value
-			if p.act == last {
-				out[len(out)-1][1] += dl.text[p.start:p.end]
+			kind := map[actionKind]string{actLink: "link", actMention: "mention", actRef: "ref"}[p.Act.Kind] + " " + p.Act.Value
+			if p.Act == last {
+				out[len(out)-1][1] += dl.Text[p.Start:p.End]
 				continue
 			}
-			out, last = append(out, [2]string{kind, dl.text[p.start:p.end]}), p.act
+			out, last = append(out, [2]string{kind, dl.Text[p.Start:p.End]}), p.Act
 		}
 	}
 	return out
@@ -149,15 +149,15 @@ func TestMessageReferenceTokens(t *testing.T) {
 	}
 	// A number is styled as plain text, never as a mention or one of me.
 	for _, dl := range displayLines(ansi.WcWidth, "@289 @human", false, m.theme, "human") {
-		for _, p := range dl.pieces {
-			switch p.act.kind {
+		for _, p := range dl.Pieces {
+			switch p.Act.Kind {
 			case actNone:
-				if p.start < 4 && (p.style.Bold || p.style.Underline || p.style.FG == m.theme.Dim) {
-					t.Errorf("a number is styled: %+v", p.style)
+				if p.Start < 4 && (p.Style.Bold || p.Style.Underline || p.Style.FG == m.theme.Dim) {
+					t.Errorf("a number is styled: %+v", p.Style)
 				}
 			case actMention:
-				if fg, bg := mentionColors(m.theme); p.style.FG != fg || p.style.BG != bg || !p.style.Bold {
-					t.Errorf("self-mention lost its marker: %+v", p.style)
+				if fg, bg := mentionColors(m.theme); p.Style.FG != fg || p.Style.BG != bg || !p.Style.Bold {
+					t.Errorf("self-mention lost its marker: %+v", p.Style)
 				}
 			}
 		}
@@ -184,11 +184,11 @@ func targetCells(m *Model, kind actionKind, value string) [][2]int {
 	for i, row := range m.lastTranscript {
 		x := 0
 		for _, r := range row.runs {
-			if r.act.kind == kind && (value == "" || r.act.value == value) {
+			if r.Act.Kind == kind && (value == "" || r.Act.Value == value) {
 				out = append(out, [2]int{x, i - m.scroll + m.layout.bodyTop})
 				break
 			}
-			x += displayWidth(ansi.WcWidth, r.text)
+			x += displayWidth(ansi.WcWidth, r.Text)
 		}
 	}
 	return out
@@ -225,13 +225,13 @@ func TestMessageReferencesNavigateToLoadedMessages(t *testing.T) {
 	for i, row := range m.lastTranscript {
 		x := 0
 		for _, r := range row.runs {
-			if at := strings.Index(r.text, "@289"); at >= 0 && number[0] < 0 {
-				if r.act.kind != actNone {
-					t.Fatalf("@289 has an action: %+v", r.act)
+			if at := strings.Index(r.Text, "@289"); at >= 0 && number[0] < 0 {
+				if r.Act.Kind != actNone {
+					t.Fatalf("@289 has an action: %+v", r.Act)
 				}
-				number = [2]int{x + displayWidth(ansi.WcWidth, r.text[:at]), i - m.scroll + m.layout.bodyTop}
+				number = [2]int{x + displayWidth(ansi.WcWidth, r.Text[:at]), i - m.scroll + m.layout.bodyTop}
 			}
-			x += displayWidth(ansi.WcWidth, r.text)
+			x += displayWidth(ansi.WcWidth, r.Text)
 		}
 	}
 	if number[0] < 0 {

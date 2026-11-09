@@ -85,8 +85,8 @@ func TestAvailabilityIsExplicitIRCStateOnly(t *testing.T) {
 			if p.Availability != c.want || presenceLabel(p) != c.label {
 				t.Errorf("%s: %s = %+v %q, want %v %q", stage, c.account, p, presenceLabel(p), c.want, c.label)
 			}
-			if d := m.presenceDot(p, active, 0); d.text != c.glyph || d.style.FG != c.color {
-				t.Errorf("%s: %s dot = %q %v, want %q %v", stage, c.account, d.text, d.style.FG, c.glyph, c.color)
+			if d := m.presenceDot(p, active, 0); d.Text != c.glyph || d.Style.FG != c.color {
+				t.Errorf("%s: %s dot = %q %v, want %q %v", stage, c.account, d.Text, d.Style.FG, c.glyph, c.color)
 			}
 		}
 		panel := view(m)
@@ -128,8 +128,8 @@ func TestExplicitAwayAndBack(t *testing.T) {
 	if p.Availability != spacetelemetry.AvailabilityAway || presenceLabel(p) != "standby; awaiting assignment" {
 		t.Fatalf("explicit away = %+v %q", p, presenceLabel(p))
 	}
-	if d := m.presenceDot(p, false, 0); d.text != "●" || d.style.FG != m.theme.Warn {
-		t.Fatalf("away dot = %q %v", d.text, d.style.FG)
+	if d := m.presenceDot(p, false, 0); d.Text != "●" || d.Style.FG != m.theme.Warn {
+		t.Fatalf("away dot = %q %v", d.Text, d.Style.FG)
 	}
 	if out := view(m); !strings.Contains(out, "       standby") || strings.Contains(out, "claude") {
 		t.Fatal("panel lacks the away reason alone in place of an unknown model")
@@ -139,7 +139,7 @@ func TestExplicitAwayAndBack(t *testing.T) {
 	if p.Availability != spacetelemetry.AvailabilityAway || presenceLabel(p) != "" {
 		t.Fatalf("away without a reason = %+v %q", p, presenceLabel(p))
 	}
-	if d := m.presenceDot(p, false, 0); d.style.FG != m.theme.Warn {
+	if d := m.presenceDot(p, false, 0); d.Style.FG != m.theme.Warn {
 		t.Fatal("away without a reason lost the yellow dot")
 	}
 	set(false, "")
@@ -147,8 +147,8 @@ func TestExplicitAwayAndBack(t *testing.T) {
 	if p.Availability != spacetelemetry.AvailabilityConnected || presenceLabel(p) != "" {
 		t.Fatalf("back = %+v %q", p, presenceLabel(p))
 	}
-	if d := m.presenceDot(p, false, 0); d.text != "●" || d.style.FG != m.theme.OK {
-		t.Fatalf("back dot = %q %v", d.text, d.style.FG)
+	if d := m.presenceDot(p, false, 0); d.Text != "●" || d.Style.FG != m.theme.OK {
+		t.Fatalf("back dot = %q %v", d.Text, d.Style.FG)
 	}
 }
 
@@ -239,8 +239,8 @@ func TestParticipantActivityUsesSharedTracker(t *testing.T) {
 	p, _ := presenceOf(m, "msol")
 	for step := range 4 {
 		m.tele.frame = time.Unix(0, 0).Add(time.Duration(step) * 500 * time.Millisecond)
-		if d := m.presenceDot(p, false, 0); d.style.FG != m.theme.OK {
-			t.Fatalf("an idle dot animates: %v", d.style.FG)
+		if d := m.presenceDot(p, false, 0); d.Style.FG != m.theme.OK {
+			t.Fatalf("an idle dot animates: %v", d.Style.FG)
 		}
 	}
 	if cmd := m.pulse(); cmd != nil {
@@ -288,7 +288,7 @@ func TestActiveDotsShareSpaceViewWaveform(t *testing.T) {
 		seen := map[spaceview.Color]bool{}
 		for step := range int(spaceview.PulseCycle / spaceview.PulseFrame) {
 			m.tele.frame = start.Add(time.Duration(step) * spaceview.PulseFrame)
-			got := m.presenceDot(c.p, true, 0).style.FG
+			got := m.presenceDot(c.p, true, 0).Style.FG
 			if want := m.theme.ActiveTone(c.base, true, m.tele.frame); got != want {
 				t.Fatalf("step %d: dot %v, want shared tone %v", step, got, want)
 			}
@@ -304,7 +304,7 @@ func TestActiveDotsShareSpaceViewWaveform(t *testing.T) {
 		steady := m.theme.ActiveTone(c.base, false, start)
 		for _, at := range []time.Time{start, start.Add(time.Second / 3), start.Add(time.Second)} {
 			m.tele.frame = at
-			if got := m.presenceDot(c.p, true, 0).style.FG; got != steady {
+			if got := m.presenceDot(c.p, true, 0).Style.FG; got != steady {
 				t.Fatalf("motion off: dot %v, want steady %v", got, steady)
 			}
 		}
@@ -331,14 +331,14 @@ func TestDotIsSolidAndActivityIsIndependentOfState(t *testing.T) {
 		{spacetelemetry.ClassifyPresence(spacetelemetry.PresenceEvidence{}), m.theme.Dim},
 	} {
 		idle, busy := m.presenceDot(c.p, false, 0), m.presenceDot(c.p, true, 0)
-		if idle.text != "●" || busy.text != "●" {
-			t.Fatalf("%+v: glyphs %q %q, want a solid dot", c.p, idle.text, busy.text)
+		if idle.Text != "●" || busy.Text != "●" {
+			t.Fatalf("%+v: glyphs %q %q, want a solid dot", c.p, idle.Text, busy.Text)
 		}
-		if idle.style.FG != c.base {
-			t.Fatalf("%+v: idle color %v, want %v", c.p, idle.style.FG, c.base)
+		if idle.Style.FG != c.base {
+			t.Fatalf("%+v: idle color %v, want %v", c.p, idle.Style.FG, c.base)
 		}
-		if want := m.theme.ActiveTone(c.base, true, at); busy.style.FG != want || busy.style.FG == c.base {
-			t.Fatalf("%+v: active color %v, want the shared breath %v over %v", c.p, busy.style.FG, want, c.base)
+		if want := m.theme.ActiveTone(c.base, true, at); busy.Style.FG != want || busy.Style.FG == c.base {
+			t.Fatalf("%+v: active color %v, want the shared breath %v over %v", c.p, busy.Style.FG, want, c.base)
 		}
 	}
 	if m.theme.OK == m.theme.Warn || m.theme.Warn == m.theme.Dim || m.theme.OK == m.theme.Dim {

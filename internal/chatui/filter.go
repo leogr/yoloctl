@@ -483,7 +483,7 @@ func rangeIndexes(from, to, step int) []int {
 // underlying message, whether or not it matched.
 func (m *Model) filterScopeRows(shown, width int) []transcriptRow {
 	t := m.theme
-	button := run{text: " ✕ All messages ", style: spaceview.Style{FG: t.Bright, BG: t.Frame, Bold: true}, act: action{kind: actFilter}}
+	button := run{Text: " ✕ All messages ", Style: spaceview.Style{FG: t.Bright, BG: t.Frame, Bold: true}, Act: action{Kind: actFilter}}
 	label := []run{deco("▌ ", spaceview.Style{FG: t.Brand, Bold: true}), deco("Only messages from or mentioning ", spaceview.Style{FG: t.Text}),
 		deco(m.filterName(), spaceview.Style{FG: t.Brand, Bold: true}), deco(", and replies to those", spaceview.Style{FG: t.Text})}
 	open := false

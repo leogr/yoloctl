@@ -1,6 +1,6 @@
 # Native chat UI component
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; table spacing `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Width handling verified at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Nickname display verified at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Code-block copy buttons and highlighting verified at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `d9aec4ac854ffd5b4f60a93817b8c5afce10847d` and accompanying changes.
 
 [FACT] `internal/chatui` is a transport-neutral Bubble Tea model. Its caller
 supplies connection events, logical messages, correlated receipts, roster/topic
@@ -29,6 +29,10 @@ disconnected, reconnecting, unjoined, deleted or resolving actions, empty draft
 placeholders and the default footer truthfully display blocking status and draft
 retention rather than advertising send, while local slash commands remain
 executable. [1](#source-1) [15](#source-15)
+
+[FACT] Chat uses the shared Markdown parser/layout through thin aliases and
+wrappers; identity decoration, loaded previews, caches and host effects remain
+in chat. [21](#source-21)
 
 [FACT] Display text renders headings, quotes, bullets, fenced code and tables,
 plus unpadded accent inline code, strong, italic, bold-italic, strikethrough and
@@ -115,14 +119,14 @@ the adapter from `YOLOCTL_TEST_AIRC_BIN_DIR`. [13](#source-13) [14](#source-14)
 
 1. <a id="source-1"></a> [Model and integration types](../../internal/chatui/model.go#L34) — messages, `Options`, `Update`, `submit`, `delivery`, `incoming`, `append`, `evict`.
 2. <a id="source-2"></a> [Editor](../../internal/chatui/editor.go#L12) — bounds, `cleanInput`, grapheme editing and undo.
-3. <a id="source-3"></a> [Draft layout](../../internal/chatui/render.go#L147) — `draftLayout`, shared by cursor and composer.
-4. <a id="source-4"></a> [Body rendering](../../internal/chatui/body.go#L24-L1021) — `displayLine`, `tableInfo`, `codeCard`, `displayLines`, `decorateTokens`, `bodyRows`, `codeCards`, `tableLines`, `fitTable`, `waterFill` and their helpers.
-5. <a id="source-5"></a> [Inline Markdown](../../internal/chatui/inline.go#L28) — `inlineMarkdown`.
-6. <a id="source-6"></a> [Rows and wrapping](../../internal/chatui/rows.go#L33-L191) — `run`, `transcriptRow`, `holds`, `nextFrag`, `paint` (strikethrough), `wrapRanges`.
+3. <a id="source-3"></a> [Draft layout](../../internal/chatui/render.go#L111) — `draftLayout`, shared by cursor and composer.
+4. <a id="source-4"></a> [Shared body rendering](../../internal/markdownview/body.go#L23) — `DisplayLine`, `parseLines`, `bodyRows`, `CodeCards`, `TableLines`, `FitTable`, `WaterFill`; chat delegates through markdown.go and decorates in body.go.
+5. <a id="source-5"></a> [Inline Markdown](../../internal/markdownview/inline.go#L28) — `InlineMarkdown`, `InlineMarkdownMap`.
+6. <a id="source-6"></a> [Rows and wrapping](../../internal/markdownview/rows.go#L21) — `Run`, `Paint`, `WrapRanges`, `HitRun`; chat transcript rows and anchors stay in chatui/rows.go.
 7. <a id="source-7"></a> [Transcript](../../internal/chatui/transcript.go#L32-L299) — `humanGlyph`, `identify`, `transcript`, `header`; `iconSlot` in hover.go.
 8. <a id="source-8"></a> [Browser confirmation](../../internal/chatui/link_prompt.go#L18) — fixed destination and modal input.
 9. <a id="source-9"></a> [Host browser policy](../../cmd/yoloctl/chat_view.go#L730-L748) — `configureChatBrowser`, validation and cancellation.
-10. <a id="source-10"></a> [Scrolling and anchors](../../internal/chatui/render.go#L299-L316) — `moveScroll`, `captureAnchor`; `place` in view.go.
+10. <a id="source-10"></a> [Scrolling and anchors](../../internal/chatui/render.go#L238) — `moveScroll`, `captureAnchor`; `place` in view.go.
 11. <a id="source-11"></a> [Stream adapter](../../internal/chatstream/client.go#L156) — `Run`, `topicEvent`, `rosterEvent`, `record`, `historyGap`.
 12. <a id="source-12"></a> [Roster, paging and topic regressions](../../internal/chatstream/roster_test.go#L9) — counts, refusals, gaps, `TestTopicEvents`.
 13. <a id="source-13"></a> [Component regressions](../../internal/chatui/model_test.go#L15) — with `render_test.go`, `review_test.go`, `client_ux_test.go`, `link_prompt_test.go`, `markdown_test.go`, `reading_test.go` (code cards), `table_wrap_test.go` (wrapped tables), `table_spacing_test.go` (table spacers), `send_readiness_test.go`.
@@ -131,6 +135,8 @@ the adapter from `YOLOCTL_TEST_AIRC_BIN_DIR`. [13](#source-13) [14](#source-14)
 16. <a id="source-16"></a> [Width methods and invalidation](chat-width.md).
 17. <a id="source-17"></a> [Nickname display regressions](../../internal/chatui/nickname_display_test.go#L40) — `TestParticipantDisplaysUseSavedNicknames`, `TestNicknameCardsKeepSavedNickAndConnectionAlias`, `TestNicknameFallbackAndRawSourceIdentity`; generated labels, aliases, source and untrusted sessions.
 
-18. <a id="source-18"></a> [Table row dividers](../../internal/chatui/table_row_rules.go#L10) — `tableRowRule`; rendering, column gaps, copy and bounds regressions in `table_row_rules_test.go`, verified on `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
-19. <a id="source-19"></a> [Code highlighting](../../internal/chatui/highlight.go#L1) — `syntaxes`, `syntaxFor`, `tokenStyle`, `highlightLine`; `copyButtonRuns`, `copyGap` and the opener's `block` in body.go.
-20. <a id="source-20"></a> [Code-block regressions](../../internal/chatui/codeblock_test.go#L1) — copy buttons (exact block, clipboard off, empty, narrow); `highlight_test.go` (classes, cross-line state, plain fallback, tiling, view).
+18. <a id="source-18"></a> [Table row dividers](../../internal/markdownview/table_row_rules.go#L14) — `TableRowRule`; chat table_row_rules_test.go preserves rendering, gaps, copy and bounds assertions.
+19. <a id="source-19"></a> [Code highlighting](../../internal/markdownview/highlight.go#L182) — `syntaxes`, `syntaxFor`, `tokenStyle`, `highlightLine`; shared body.go owns code-card/copy geometry.
+20. <a id="source-20"></a> [Code-block regressions](../../internal/chatui/codeblock_test.go#L41) — exact copy, clipboard off, empty and narrow cards; shared markdownview/highlight_test.go tests lexer classes/state/fallback/tiling, chat highlight_test.go keeps the view integration.
+
+21. <a id="source-21"></a> [Shared renderer boundary](markdown-renderer.md).

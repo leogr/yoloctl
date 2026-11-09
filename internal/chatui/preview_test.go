@@ -31,13 +31,13 @@ func TestReferencePreviewReplacesTheToken(t *testing.T) {
 	m := previewRoom(t, "see "+sharedTarget+" and msgid:"+refTarget+" now")
 	dl := lineOf(m, "t1", 0)
 	label := "↗ qa: plan ready: tests pass a…"
-	if want := "see " + label + " and " + label + " now"; dl.text != want {
-		t.Fatalf("line %q, want %q", dl.text, want)
+	if want := "see " + label + " and " + label + " now"; dl.Text != want {
+		t.Fatalf("line %q, want %q", dl.Text, want)
 	}
 	if out := view(m); !strings.Contains(out, "see ↗ qa: plan ready") || strings.Contains(out, sharedTarget) {
 		t.Fatalf("frame:\n%s", out)
 	}
-	if got := dl.copyText(0, len(dl.text)); got != "see "+sharedTarget+" and msgid:"+refTarget+" now" {
+	if got := dl.CopyText(0, len(dl.Text)); got != "see "+sharedTarget+" and msgid:"+refTarget+" now" {
 		t.Fatalf("copy keeps the tokens: %q", got)
 	}
 	cells := targetCells(m, actRef, refTarget)
@@ -48,7 +48,7 @@ func TestReferencePreviewReplacesTheToken(t *testing.T) {
 	if msg := m.selectedMessage(); msg == nil || msg.ID != refTarget || !m.picked {
 		t.Fatalf("the span shows its message: %+v", msg)
 	}
-	highlight(m, "t1", 0, 0, 0, len(dl.text))
+	highlight(m, "t1", 0, 0, 0, len(dl.Text))
 	_ = m.SetDraft("")
 	m.quoteSelection()
 	if m.Draft() != "> see "+sharedTarget+" and msgid:"+refTarget+" now\n\n" {
@@ -64,17 +64,17 @@ func TestReferencePreviewOnlyForLoadedTargets(t *testing.T) {
 	arrive(m, "0f8fad5b-d9cb-469f-a165-70867728950e", "mo", "opus", "me "+self+" and "+sharedMissing+" and `"+sharedTarget+"` and [a]("+sharedTarget+")")
 	arrive(m, "tb", "mo", "opus", "| ref |\n|---|\n| "+sharedTarget+" |")
 	m.View()
-	if dl := lineOf(m, "0f8fad5b-d9cb-469f-a165-70867728950e", 0); dl.subs != nil || !strings.Contains(dl.text, self) || !strings.Contains(dl.text, sharedMissing) {
-		t.Fatalf("tokens stay: %q", dl.text)
+	if dl := lineOf(m, "0f8fad5b-d9cb-469f-a165-70867728950e", 0); dl.Subs != nil || !strings.Contains(dl.Text, self) || !strings.Contains(dl.Text, sharedMissing) {
+		t.Fatalf("tokens stay: %q", dl.Text)
 	}
-	if dl := lineOf(m, "tb", 2); dl.subs != nil || !strings.Contains(dl.text, sharedTarget) {
-		t.Fatalf("a table cell keeps its token: %q", dl.text)
+	if dl := lineOf(m, "tb", 2); dl.Subs != nil || !strings.Contains(dl.Text, sharedTarget) {
+		t.Fatalf("a table cell keeps its token: %q", dl.Text)
 	}
 	other := previewRoom(t, "see "+sharedTarget)
 	other.source = true
 	other.View()
-	if dl := lineOf(other, "t1", 0); dl.subs != nil || dl.text != "see "+sharedTarget {
-		t.Fatalf("source view keeps the token: %q", dl.text)
+	if dl := lineOf(other, "t1", 0); dl.Subs != nil || dl.Text != "see "+sharedTarget {
+		t.Fatalf("source view keeps the token: %q", dl.Text)
 	}
 }
 
@@ -85,7 +85,7 @@ func TestReferencePreviewBudget(t *testing.T) {
 	arrive(m, refTarget, "mx", "a-rather-long-nickname-indeed", strings.Repeat("é", 30))
 	arrive(m, "t1", "mo", "opus", sharedTarget)
 	m.View()
-	if got, want := lineOf(m, "t1", 0).text, "↗ a-rather-long-n…: "+strings.Repeat("é", previewSnippet)+"…"; got != want {
+	if got, want := lineOf(m, "t1", 0).Text, "↗ a-rather-long-n…: "+strings.Repeat("é", previewSnippet)+"…"; got != want {
 		t.Fatalf("label %q, want %q", got, want)
 	}
 }
@@ -98,13 +98,13 @@ func TestReferencePreviewFollowsWhatIsLoaded(t *testing.T) {
 	arrive(m, "t1", "mo", "opus", "see "+sharedTarget)
 	m.View()
 	highlight(m, "t1", 0, 0, 0, 3)
-	if lineOf(m, "t1", 0).subs != nil {
+	if lineOf(m, "t1", 0).Subs != nil {
 		t.Fatal("no target yet")
 	}
 	m.Update(IncomingMsg{Message: Message{ID: refTarget, Account: "mq", Nick: "qa", Text: "older plan", Older: true, Time: time.Unix(900, 0)}})
 	m.View()
-	if dl := lineOf(m, "t1", 0); dl.text != "see ↗ qa: older plan" || m.sel != nil {
-		t.Fatalf("an older target: %q, highlight %v", dl.text, m.sel)
+	if dl := lineOf(m, "t1", 0); dl.Text != "see ↗ qa: older plan" || m.sel != nil {
+		t.Fatalf("an older target: %q, highlight %v", dl.Text, m.sel)
 	}
 	ids := m.opts.Identities
 	id := ids["mq"]
@@ -112,8 +112,8 @@ func TestReferencePreviewFollowsWhatIsLoaded(t *testing.T) {
 	ids["mq"] = id
 	m.Update(SessionMsg{Nick: m.opts.Nick, Identities: ids})
 	m.View()
-	if dl := lineOf(m, "t1", 0); dl.text != "see ↗ quality: older plan" {
-		t.Fatalf("a renamed author: %q", dl.text)
+	if dl := lineOf(m, "t1", 0); dl.Text != "see ↗ quality: older plan" {
+		t.Fatalf("a renamed author: %q", dl.Text)
 	}
 }
 
@@ -133,7 +133,7 @@ func TestReferencePreviewWrapsAtomically(t *testing.T) {
 	hovered := 0
 	for _, row := range m.lastTranscript {
 		for _, r := range m.hoverRow(row) {
-			if r.act.kind == actRef && r.style.Underline {
+			if r.Act.Kind == actRef && r.Style.Underline {
 				hovered++
 			}
 		}

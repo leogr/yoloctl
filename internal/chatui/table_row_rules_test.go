@@ -11,7 +11,7 @@ import (
 )
 
 func tableRowRuleDecoration(row bodyRow) bool {
-	return row.decor && len(row.runs) == 1 && strings.Contains(row.runs[0].text, " │ ") && strings.Contains(row.runs[0].text, "─")
+	return row.Decor && len(row.Runs) == 1 && strings.Contains(row.Runs[0].Text, " │ ") && strings.Contains(row.Runs[0].Text, "─")
 }
 
 // Logical rows get one quiet divider between them, never between a cell's
@@ -26,8 +26,8 @@ func TestTableRowSeparatorsRenderInBothThemesAndWidths(t *testing.T) {
 					rows := bodyRows(wm, lines, width, theme)
 					var header string
 					for _, row := range rows {
-						if row.line == 1 && row.decor {
-							header = ansiText(row.runs)
+						if row.Line == 1 && row.Decor {
+							header = ansiText(row.Runs)
 						}
 					}
 					if header == "" {
@@ -39,25 +39,25 @@ func TestTableRowSeparatorsRenderInBothThemesAndWidths(t *testing.T) {
 							continue
 						}
 						count++
-						if row.line != count+2 || i == 0 || i+1 >= len(rows) || rows[i-1].line != row.line-1 || rows[i+1].line != row.line || rows[i+1].decor {
+						if row.Line != count+2 || i == 0 || i+1 >= len(rows) || rows[i-1].Line != row.Line-1 || rows[i+1].Line != row.Line || rows[i+1].Decor {
 							t.Fatalf("rule is not between logical body rows: %+v", row)
 						}
-						text := ansiText(row.runs)
+						text := ansiText(row.Runs)
 						if strings.ContainsAny(text, "┄┼") || !strings.ContainsRune(header, '┼') || strings.ContainsRune(header, '│') || wm.StringWidth(text) != wm.StringWidth(header) || wm.StringWidth(text) > width {
 							t.Fatalf("row style or header changed: %q, header %q", text, header)
 						}
 						// A body column's vertical divider stays in the same cell,
 						// with one blank cell on either side instead of a cross.
-						ruleCells, bodyCells := []rune(text), []rune(ansiText(rows[i+1].runs))
+						ruleCells, bodyCells := []rune(text), []rune(ansiText(rows[i+1].Runs))
 						for column, glyph := range ruleCells {
 							if glyph == '│' && (column == 0 || column+1 >= len(ruleCells) || ruleCells[column-1] != ' ' || ruleCells[column+1] != ' ' || column >= len(bodyCells) || bodyCells[column] != '│') {
 								t.Fatalf("column divider lost its gaps or alignment: %q, body %q", text, string(bodyCells))
 							}
 						}
-						if row.runs[0].style.FG != theme.Dim || row.runs[0].copy || row.runs[0].act.kind != actNone || len(row.frags) != 0 {
+						if row.Runs[0].Style.FG != theme.Dim || row.Runs[0].Copy || row.Runs[0].Act.Kind != actNone || len(row.Frags) != 0 {
 							t.Fatalf("divider has text/action authority: %+v", row)
 						}
-						rendered := paint(wm, row.runs, width, 0, nil, spaceview.Style{})
+						rendered := paint(wm, row.Runs, width, 0, nil, spaceview.Style{})
 						if !strings.Contains(rendered, spaceview.StyleText(text, spaceview.Style{FG: theme.Dim})) {
 							t.Fatalf("theme color missing from rendered divider: %q", rendered)
 						}
@@ -78,9 +78,9 @@ func TestTableRowSeparatorsDoNotEnterCopyQuoteOrSource(t *testing.T) {
 	key := "server:rules"
 	lines := m.body(&m.messages[m.indexOf(key)], m.lastTextWidth).lines
 	x0, y0 := cellOf(t, m, key, 2, 0)
-	x1, y1 := cellOf(t, m, key, 3, len(lines[3].text)-1)
+	x1, y1 := cellOf(t, m, key, 3, len(lines[3].Text)-1)
 	drag(m, x0, y0, x1, y1)
-	if len(*copied) != 1 || (*copied)[0] != lines[2].text+"\n"+lines[3].text {
+	if len(*copied) != 1 || (*copied)[0] != lines[2].Text+"\n"+lines[3].Text {
 		t.Fatalf("copy changed logical table text: %q", *copied)
 	}
 	m.quoteSelection()
@@ -115,7 +115,7 @@ func TestTableRowSeparatorsRespectBodyAndWrappedRowLimits(t *testing.T) {
 	}
 	text := strings.Repeat("p\n", maxBodyRows-6) + sampleTable
 	rows := bodyRows(ansi.WcWidth, displayLines(ansi.WcWidth, text, false, theme, ""), 100, theme)
-	if len(rows) != maxBodyRows+1 || !strings.Contains(ansiText(rows[len(rows)-1].runs), "display row limit") {
+	if len(rows) != maxBodyRows+1 || !strings.Contains(ansiText(rows[len(rows)-1].Runs), "display row limit") {
 		t.Fatalf("row separators escaped body bound: %d rows", len(rows))
 	}
 }

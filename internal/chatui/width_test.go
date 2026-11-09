@@ -170,10 +170,10 @@ func TestWidthClusterInteraction(t *testing.T) {
 				}
 				text := "a" + symbol + "z"
 				w := method.StringWidth(symbol)
-				runs := []run{{text: "a", copy: true}, {text: symbol, copy: true, start: 1, act: action{kind: actLink, value: "https://example.com"}}, {text: "z", copy: true, start: 1 + len(symbol)}}
+				runs := []run{{Text: "a", Copy: true}, {Text: symbol, Copy: true, Start: 1, Act: action{Kind: actLink, Value: "https://example.com"}}, {Text: "z", Copy: true, Start: 1 + len(symbol)}}
 				for x := 1; x < 1+w; x++ {
 					lo, hi := hitRun(method, runs, x, len(text))
-					if lo != 1 || hi != 1+len(symbol) || actionAt(method, runs, x).kind != actLink {
+					if lo != 1 || hi != 1+len(symbol) || actionAt(method, runs, x).Kind != actLink {
 						t.Fatalf("cluster hit %d = [%d,%d)", x, lo, hi)
 					}
 				}
@@ -258,8 +258,8 @@ func TestWidthLateReportInvalidatesEveryChannel(t *testing.T) {
 		body := m.body(&m.messages[0], 70)
 		fresh := displayLines(ansi.GraphemeWidth, text, false, m.theme, m.self)
 		for i := range fresh {
-			if body.lines[i].text != fresh[i].text {
-				t.Fatalf("%s stale line %d: %q != %q", channel, i, body.lines[i].text, fresh[i].text)
+			if body.lines[i].Text != fresh[i].Text {
+				t.Fatalf("%s stale line %d: %q != %q", channel, i, body.lines[i].Text, fresh[i].Text)
 			}
 		}
 		r := m.lastTranscript[m.scroll]
@@ -318,8 +318,8 @@ func TestWidthReferencePreviewCopy(t *testing.T) {
 		m.View()
 		body := m.body(&m.messages[m.indexOf("server:q")], 70)
 		wantName := method.Truncate(id.Nick, previewName, "…")
-		if !strings.Contains(body.lines[0].text, "↗ "+wantName+": a loaded target") {
-			t.Fatalf("preview uses old name width: %q", body.lines[0].text)
+		if !strings.Contains(body.lines[0].Text, "↗ "+wantName+": a loaded target") {
+			t.Fatalf("preview uses old name width: %q", body.lines[0].Text)
 		}
 		// The buffer and click ranges agree even after a width-changing emoji.
 		for y := m.layout.bodyTop; y < m.layout.bodyTop+m.layout.bodyHeight; y++ {
@@ -329,12 +329,12 @@ func TestWidthReferencePreviewCopy(t *testing.T) {
 			}
 			buf := bufferRow(paint(method, row.runs, m.layout.transcriptWidth, row.fill, nil, m.selectionStyle()), m.width, method)
 			for x := 0; x < m.layout.transcriptWidth; x++ {
-				if c := buf.CellAt(x, 0); c != nil && c.Content == "↗" && actionAt(method, row.runs, x).kind != actRef {
+				if c := buf.CellAt(x, 0); c != nil && c.Content == "↗" && actionAt(method, row.runs, x).Kind != actRef {
 					t.Fatal("preview hit shifted")
 				}
 			}
 		}
-		highlight(m, "q", 0, 0, 0, len(body.lines[0].text))
+		highlight(m, "q", 0, 0, 0, len(body.lines[0].Text))
 		m.copySelection()
 		want := "▶️" + strings.Repeat(" ", 4-method.StringWidth("▶️")%4) + "see " + sharedTarget + " end"
 		if len(*copies) != 1 || (*copies)[0] != want {
@@ -359,7 +359,7 @@ func TestWidthTableFloorFallback(t *testing.T) {
 		}
 		text := "| First | Second | Third | Fourth |\n|---|---|---|---|\n| ▶️ Build | 👩‍💻 work | 🇫🇷 flag | ⚠️ notice |"
 		lines := displayLines(method, text, false, m.theme, "")
-		if lines[0].table == nil || fitTable(method, lines, 0, 15, maxBodyRows, m.theme) != nil {
+		if lines[0].Table == nil || fitTable(method, lines, 0, 15, maxBodyRows, m.theme) != nil {
 			t.Fatal("fixture must take the floor fallback")
 		}
 		m.Update(tea.WindowSizeMsg{Width: 20, Height: 40})

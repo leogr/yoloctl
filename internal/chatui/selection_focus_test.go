@@ -14,7 +14,7 @@ func pressAndMove(t *testing.T, m *Model, id string, line int, part string) (int
 	t.Helper()
 	key := "server:" + id
 	i := m.indexOf(key)
-	text := m.body(&m.messages[i], 80).lines[line].text
+	text := m.body(&m.messages[i], 80).lines[line].Text
 	at := -1
 	for j := 0; j+len(part) <= len(text); j++ {
 		if text[j:j+len(part)] == part {

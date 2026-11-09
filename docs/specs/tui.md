@@ -87,6 +87,10 @@ convention rather than non-reclaimable memory, and name the cap, pool or VM
 scale of their bar. Memory comes only from a current sample; a stopped,
 failed or stale reading shows its reason instead. [27](#source-27)
 
+[FACT] Markdown parsing, layout, copy geometry and optional source maps live in
+`internal/markdownview`; chat retains identities, previews, model state and
+effects. The extraction preserves the existing syntax and bounds. [43](#source-43)
+
 [FACT] The native chat component supplies multiline editing, bounded block and
 inline Markdown display, source/code copy, a sorted Participants panel with
 trusted identities, presence and topic notices, live mention and command
@@ -321,3 +325,5 @@ checks transport behavior; it does not measure graphical parity. [4](#source-4)
 41. <a id="source-41"></a> [TUI re-attach of an ended box view](../digests/tui-reattach.md).
 
 42. <a id="source-42"></a> [Host and Lima diagnostics](../digests/host-diagnostics.md).
+
+43. <a id="source-43"></a> [Shared Markdown renderer](../digests/markdown-renderer.md).

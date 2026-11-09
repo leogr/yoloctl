@@ -115,10 +115,10 @@ func (m *Model) selectedParts(s selection) []selectedPart {
 		}
 		var out []string
 		for n := max(first, 0); n <= last && n < len(lines); n++ {
-			if lines[n].decor {
+			if lines[n].Decor {
 				continue
 			}
-			text := lines[n].text
+			text := lines[n].Text
 			lo, hi := 0, len(text)
 			if i == ia && n == la {
 				lo = min(oa, len(text))
@@ -129,7 +129,7 @@ func (m *Model) selectedParts(s selection) []selectedPart {
 			if lo > hi {
 				lo = hi
 			}
-			out = append(out, lines[n].copyText(lo, hi))
+			out = append(out, lines[n].CopyText(lo, hi))
 		}
 		parts = append(parts, selectedPart{i, strings.Join(out, "\n")})
 	}
@@ -209,7 +209,7 @@ func (m *Model) pointAt(x, y int) (selPoint, bool) {
 	last := max(len(lines)-1, 0)
 	end := 0
 	if last < len(lines) {
-		end = len(lines[last].text)
+		end = len(lines[last].Text)
 	}
 	return selPoint{key: row.key, line: last, lo: end, hi: end}, true
 }

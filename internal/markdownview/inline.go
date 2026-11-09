@@ -1,4 +1,4 @@
-package chatui
+package markdownview
 
 import (
 	"strings"
@@ -10,12 +10,12 @@ import (
 
 // span styles plain[start:end] of one rendered line. Code spans are
 // literal; link spans name the URL that both their parts open.
-type span struct {
-	start, end int
-	style      spaceview.Style
-	code       bool
-	link       string
-	strike     bool
+type Span struct {
+	Start, End int
+	Style      spaceview.Style
+	Code       bool
+	Link       string
+	Strike     bool
 }
 
 // inlineMarkdown renders a deliberately small inline subset of one line:
@@ -25,27 +25,27 @@ type span struct {
 // are removed only when they pair up, and a link always keeps its URL visible
 // after the text. Code spans are literal. The original message text is never
 // changed.
-func inlineMarkdown(line string, base spaceview.Style, theme spaceview.Theme) (string, []span) {
-	return inlineMarkdownMap(line, base, theme, nil)
+func InlineMarkdown(line string, base spaceview.Style, theme spaceview.Theme) (string, []Span) {
+	return InlineMarkdownMap(line, base, theme, nil)
 }
 
 // inlineMarkdownMap is inlineMarkdown that, given src, also records where
 // each display byte comes from in line (see srcMap).
-func inlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme, src *srcMap) (string, []span) {
+func InlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme, src *SourceMap) (string, []Span) {
 	var out strings.Builder
-	var spans []span
+	var spans []Span
 	// emitSpan writes text, shown in place of line[from:to].
-	emitSpan := func(text string, sp span, from, to int) {
+	emitSpan := func(text string, sp Span, from, to int) {
 		if text == "" {
 			return
 		}
-		src.add(text, line, from, to)
-		sp.start = out.Len()
+		src.Add(text, line, from, to)
+		sp.Start = out.Len()
 		out.WriteString(text)
-		sp.end = out.Len()
+		sp.End = out.Len()
 		spans = append(spans, sp)
 	}
-	emit := func(from, to int, st spaceview.Style) { emitSpan(line[from:to], span{style: st}, from, to) }
+	emit := func(from, to int, st spaceview.Style) { emitSpan(line[from:to], Span{Style: st}, from, to) }
 	strong, emph, both := base, base, base
 	strong.Bold = true
 	emph.Italic = true
@@ -62,7 +62,7 @@ func inlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme,
 		switch {
 		case c == '\\' && i+1 < len(line) && strings.IndexByte("\\`*_[]()~|", line[i+1]) >= 0:
 			flush(i)
-			emitSpan(line[i+1:i+2], span{style: base}, i, i+2)
+			emitSpan(line[i+1:i+2], Span{Style: base}, i, i+2)
 			i += 2
 			plain = i
 			continue
@@ -70,7 +70,7 @@ func inlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme,
 			run := countRun(line[i:], '`')
 			if end := strings.Index(line[i+run:], strings.Repeat("`", run)); end >= 0 && countRun(line[i+run+end:], '`') == run {
 				flush(i)
-				emitSpan(line[i+run:i+run+end], span{style: code, code: true}, i+run, i+run+end)
+				emitSpan(line[i+run:i+run+end], Span{Style: code, Code: true}, i+run, i+run+end)
 				i += run + end + run
 				plain = i
 				continue
@@ -80,7 +80,7 @@ func inlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme,
 		case c == '~' && countRun(line[i:], '~') == 2 && opens(line, i, 2):
 			if end := closing(line, i+2, "~~"); end >= 0 {
 				flush(i)
-				emitSpan(line[i+2:end], span{style: base, strike: true}, i+2, end)
+				emitSpan(line[i+2:end], Span{Style: base, Strike: true}, i+2, end)
 				i = end + 2
 				plain = i
 				continue
@@ -119,8 +119,8 @@ func inlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme,
 					url := line[textEnd+2 : textEnd+2+urlEnd]
 					if !strings.ContainsAny(url, " \t") {
 						flush(i)
-						emitSpan(line[i+1:textEnd], span{style: link, link: url}, i+1, textEnd)
-						emitSpan(" ("+url+")", span{style: dim, link: url}, textEnd, textEnd+2+urlEnd+1)
+						emitSpan(line[i+1:textEnd], Span{Style: link, Link: url}, i+1, textEnd)
+						emitSpan(" ("+url+")", Span{Style: dim, Link: url}, textEnd, textEnd+2+urlEnd+1)
 						i = textEnd + 2 + urlEnd + 1
 						plain = i
 						continue
@@ -187,13 +187,13 @@ func closing(s string, from int, marker string) int {
 
 // listItem replaces an unordered list marker with a bullet, keeping indent;
 // given src, it records the bullet as shown in place of its marker.
-func listItem(line string, src *srcMap) string {
+func listItem(line string, src *SourceMap) string {
 	trim := strings.TrimLeft(line, " ")
 	if len(trim) >= 2 && strings.IndexByte("-*+", trim[0]) >= 0 && trim[1] == ' ' {
 		lead := len(line) - len(trim)
-		src.add(line[:lead], line, 0, lead)
-		src.add("• ", line, lead, lead+2)
-		src.add(trim[2:], line, lead+2, len(line))
+		src.Add(line[:lead], line, 0, lead)
+		src.Add("• ", line, lead, lead+2)
+		src.Add(trim[2:], line, lead+2, len(line))
 		return line[:lead] + "• " + trim[2:]
 	}
 	return line

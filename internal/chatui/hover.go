@@ -44,7 +44,7 @@ func (m *Model) hoverAt(x, y int) hoverKey {
 		return hoverKey{area: h.area, item: h.item, id: h.id}
 	}
 	if row, ok := m.rowAt(y); ok && m.inTranscript(x, y) {
-		if act := actionAt(m.widthMethod, row.runs, x); act.kind != actNone {
+		if act := actionAt(m.widthMethod, row.runs, x); act.Kind != actNone {
 			return hoverKey{area: hitTranscript, msg: row.key, act: act}
 		}
 	}
@@ -86,7 +86,7 @@ func hoverStyle(st spaceview.Style) spaceview.Style {
 // chip's inner spaces, stays plain so only the label is underlined.
 func (m *Model) hoverRun(r run, on bool) run {
 	if on {
-		r.style = hoverStyle(r.style)
+		r.Style = hoverStyle(r.Style)
 	}
 	return r
 }
@@ -97,19 +97,19 @@ func hoverRuns(runs []run, on bool) []run {
 	}
 	var out []run
 	for _, r := range runs {
-		core := strings.TrimSpace(r.text)
+		core := strings.TrimSpace(r.Text)
 		if core == "" {
 			out = append(out, r)
 			continue
 		}
-		lead := r.text[:strings.Index(r.text, core)]
-		trail := r.text[len(lead)+len(core):]
+		lead := r.Text[:strings.Index(r.Text, core)]
+		trail := r.Text[len(lead)+len(core):]
 		if lead != "" {
-			out = append(out, run{text: lead, style: r.style})
+			out = append(out, run{Text: lead, Style: r.Style})
 		}
-		out = append(out, run{text: core, style: hoverStyle(r.style), act: r.act})
+		out = append(out, run{Text: core, Style: hoverStyle(r.Style), Act: r.Act})
 		if trail != "" {
-			out = append(out, run{text: trail, style: r.style})
+			out = append(out, run{Text: trail, Style: r.Style})
 		}
 	}
 	return out
@@ -124,11 +124,11 @@ func (m *Model) hoverRow(row transcriptRow) []run {
 	}
 	var out []run
 	for i, r := range row.runs {
-		if r.act == h.act {
+		if r.Act == h.act {
 			if out == nil {
 				out = append([]run(nil), row.runs...)
 			}
-			out[i].style = hoverStyle(r.style)
+			out[i].Style = hoverStyle(r.Style)
 		}
 	}
 	if out == nil {
@@ -205,11 +205,11 @@ func (m *Model) hoverHint() []run {
 			}
 		}
 	case hitTranscript:
-		switch h.act.kind {
+		switch h.act.Kind {
 		case actAuthor:
-			name, what = m.participantHint(h.act.value, h.act.extra)
+			name, what = m.participantHint(h.act.Value, h.act.Extra)
 		case actMention:
-			name, what = "@"+h.act.value, "click for details"
+			name, what = "@"+h.act.Value, "click for details"
 		case actReply:
 			name, what = "Reply", "click to show the original message"
 		case actRef:
@@ -222,7 +222,7 @@ func (m *Model) hoverHint() []run {
 				what = "the host clipboard is off (seams.clipboard)"
 			}
 		case actLink:
-			name = h.act.value
+			name = h.act.Value
 			switch {
 			case m.opts.OpenLink == nil:
 				what = "opening links is off (seams.browser)"

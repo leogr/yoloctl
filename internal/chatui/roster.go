@@ -94,7 +94,7 @@ func (m *Model) channelRail(width int) []panelRow {
 		}
 		pad := width - runsWidth(m.widthMethod, runs) - runsWidth(m.widthMethod, badge)
 		if pad < 1 {
-			runs[1].text = truncate(m.widthMethod, runs[1].text, max(m.widthMethod.StringWidth(runs[1].text)+pad-1, 1), "…")
+			runs[1].Text = truncate(m.widthMethod, runs[1].Text, max(m.widthMethod.StringWidth(runs[1].Text)+pad-1, 1), "…")
 			pad = 1
 		}
 		runs = append(runs, deco(strings.Repeat(" ", pad), spaceview.Style{BG: bg}))
@@ -193,7 +193,7 @@ func (m *Model) memberCard(mem Member, width int, bg spaceview.Color) ([]run, []
 		deco(" "+tile+" ", spaceview.Style{FG: w.color, BG: t.Raised, Bold: true}),
 		deco(" ", spaceview.Style{BG: bg}),
 		m.roleMark(mem, bg),
-		m.hoverRun(run{text: w.name, style: nameStyle, act: action{kind: actAuthor, value: mem.Account, extra: mem.Nick}}, m.panelHovered(mem)),
+		m.hoverRun(run{Text: w.name, Style: nameStyle, Act: action{Kind: actAuthor, Value: mem.Account, Extra: mem.Nick}}, m.panelHovered(mem)),
 	}
 	if w.me {
 		name = append(name, deco(" · you", spaceview.Style{FG: t.Dim, BG: bg}))
@@ -202,9 +202,9 @@ func (m *Model) memberCard(mem Member, width int, bg spaceview.Color) ([]run, []
 		name = append(name, m.stateTagRun(tag, bg))
 	}
 	dot := m.presenceDot(presence, active, bg)
-	dot.text += " "
+	dot.Text += " "
 	if room := width - runsWidth(m.widthMethod, name) - runsWidth(m.widthMethod, []run{dot}); room < 0 {
-		name[4].text = truncate(m.widthMethod, name[4].text, max(m.widthMethod.StringWidth(name[4].text)+room, 1), "…")
+		name[4].Text = truncate(m.widthMethod, name[4].Text, max(m.widthMethod.StringWidth(name[4].Text)+room, 1), "…")
 	}
 	name = append(name, deco(strings.Repeat(" ", max(width-runsWidth(m.widthMethod, name)-2, 0)), spaceview.Style{BG: bg}), dot)
 
@@ -218,7 +218,7 @@ func (m *Model) memberRuns(mem Member, width int, bg spaceview.Color) []run {
 	w := m.identify(mem.Nick, mem.Account)
 	presence, active := m.memberPresence(mem)
 	dot := m.presenceDot(presence, active, bg)
-	dot.text = " " + dot.text + " "
+	dot.Text = " " + dot.Text + " "
 	name := spaceview.Style{FG: w.color, BG: bg, Bold: !mem.Away}
 	if mem.Away {
 		name.FG = t.Dim
@@ -227,7 +227,7 @@ func (m *Model) memberRuns(mem Member, width int, bg spaceview.Color) []run {
 		dot,
 		deco(iconSlot(m.widthMethod, w.glyph), spaceview.Style{FG: w.color, BG: bg}),
 		m.roleMark(mem, bg),
-		m.hoverRun(run{text: w.name, style: name, act: action{kind: actAuthor, value: mem.Account, extra: mem.Nick}}, m.panelHovered(mem)),
+		m.hoverRun(run{Text: w.name, Style: name, Act: action{Kind: actAuthor, Value: mem.Account, Extra: mem.Nick}}, m.panelHovered(mem)),
 	}
 	var tags []run
 	if w.me {
@@ -241,7 +241,7 @@ func (m *Model) memberRuns(mem Member, width int, bg spaceview.Color) []run {
 	}
 	room := width - runsWidth(m.widthMethod, runs) - runsWidth(m.widthMethod, tags)
 	if room < 0 {
-		runs[3].text = truncate(m.widthMethod, runs[3].text, max(m.widthMethod.StringWidth(runs[3].text)+room, 1), "…")
+		runs[3].Text = truncate(m.widthMethod, runs[3].Text, max(m.widthMethod.StringWidth(runs[3].Text)+room, 1), "…")
 	}
 	return append(runs, tags...)
 }

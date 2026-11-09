@@ -503,8 +503,8 @@ func TestSelfMentionsFollowTheAccountNotTheAlias(t *testing.T) {
 	marked := map[string]bool{}
 	for _, row := range m.lastTranscript {
 		for _, r := range row.runs {
-			if r.act.kind == actMention && r.style.FG == fg && r.style.BG == bg {
-				marked[r.act.value] = true
+			if r.Act.Kind == actMention && r.Style.FG == fg && r.Style.BG == bg {
+				marked[r.Act.Value] = true
 			}
 		}
 	}
@@ -571,11 +571,11 @@ func selfMarked(m *Model, key string) (bar, run bool) {
 		if row.key != key {
 			continue
 		}
-		if row.kind == rowHeader && len(row.runs) > 0 && row.runs[0].text == "▌" && row.runs[0].style.FG == m.theme.Capability {
+		if row.kind == rowHeader && len(row.runs) > 0 && row.runs[0].Text == "▌" && row.runs[0].Style.FG == m.theme.Capability {
 			bar = true
 		}
 		for _, r := range row.runs {
-			if r.act.kind == actMention && r.style.FG == fg && r.style.BG == bg {
+			if r.Act.Kind == actMention && r.Style.FG == fg && r.Style.BG == bg {
 				run = true
 			}
 		}
@@ -814,7 +814,7 @@ func TestFilterWordingNamesReplies(t *testing.T) {
 	plainRow := func(width int) string {
 		var b strings.Builder
 		for _, r := range m.filterScopeRows(0, width)[0].runs {
-			b.WriteString(r.text)
+			b.WriteString(r.Text)
 		}
 		return b.String()
 	}

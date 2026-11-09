@@ -21,7 +21,7 @@ func highlight(m *Model, id string, la, oa, lb, ob int) {
 func highlightText(t *testing.T, m *Model, id string, line int, part string) {
 	t.Helper()
 	i := m.indexOf("server:" + id)
-	text := m.body(&m.messages[i], 80).lines[line].text
+	text := m.body(&m.messages[i], 80).lines[line].Text
 	at := strings.Index(text, part)
 	if at < 0 {
 		t.Fatalf("line %d of %s is %q, without %q", line, id, text, part)
@@ -95,7 +95,7 @@ func TestQuoteRefusesWhatItCannotQuoteExactly(t *testing.T) {
 func TestQuoteKeepsLineMarkersAndPlacesTheBlock(t *testing.T) {
 	m := quoteModel(t, "- item one\n> quoted\n## Title\n\tindented")
 	_ = m.SetDraft("hello")
-	highlight(m, "q", 0, 0, 3, len(m.body(&m.messages[m.indexOf("server:q")], 80).lines[3].text))
+	highlight(m, "q", 0, 0, 3, len(m.body(&m.messages[m.indexOf("server:q")], 80).lines[3].Text))
 	m.quoteSelection()
 	want := "hello\n> - item one\n> > quoted\n> ## Title\n> \tindented\n\n"
 	if m.Draft() != want {
@@ -120,7 +120,7 @@ func TestQuoteKeepsLineMarkersAndPlacesTheBlock(t *testing.T) {
 func TestQuoteKeepsFencesBalanced(t *testing.T) {
 	m := quoteModel(t, "see:\n```go\nfmt.Println(1)\nx := 2\n```\nafter")
 	lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
-	if !lines[1].decor || !lines[4].decor {
+	if !lines[1].Decor || !lines[4].Decor {
 		t.Fatalf("fixture frames: %+v", lines)
 	}
 	for _, tc := range []struct {
@@ -154,7 +154,7 @@ func TestQuoteKeepsFencesBalanced(t *testing.T) {
 func TestQuoteTables(t *testing.T) {
 	m := quoteModel(t, "| a | b |\n|---|--:|\n| 1 | 22 |\nafter")
 	lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
-	highlight(m, "q", 0, 0, 2, len(lines[2].text))
+	highlight(m, "q", 0, 0, 2, len(lines[2].Text))
 	m.quoteSelection()
 	if m.Draft() != "> a\tb\n> 1\t22\n\n" {
 		t.Fatalf("whole table: %q (%q)", m.Draft(), m.notice)
@@ -304,7 +304,7 @@ func TestQuoteEveryHighlightIsExactOrRefused(t *testing.T) {
 			m.View()
 			i := m.indexOf("server:q")
 			lines := m.body(&m.messages[i], 80).lines
-			if strings.Contains(text, sharedTarget) && !source && (lines[0].subs == nil || lines[1].subs == nil) {
+			if strings.Contains(text, sharedTarget) && !source && (lines[0].Subs == nil || lines[1].Subs == nil) {
 				t.Fatalf("%q: the fixture should show previews", text)
 			}
 			type point struct{ line, at int }
@@ -312,10 +312,10 @@ func TestQuoteEveryHighlightIsExactOrRefused(t *testing.T) {
 			for n, dl := range lines {
 				for at := 0; ; {
 					points = append(points, point{n, at})
-					if at == len(dl.text) {
+					if at == len(dl.Text) {
 						break
 					}
-					g, _ := ansi.FirstGraphemeCluster(dl.text[at:], ansi.WcWidth)
+					g, _ := ansi.FirstGraphemeCluster(dl.Text[at:], ansi.WcWidth)
 					at += len(g)
 				}
 			}
@@ -354,9 +354,9 @@ func TestQuoteEveryHighlightIsExactOrRefused(t *testing.T) {
 			// The whole message always quotes: as its source (an unclosed
 			// fence closed), or with its tables as cell text.
 			last := len(lines) - 1
-			highlight(m, "q", 0, 0, last, len(lines[last].text))
+			highlight(m, "q", 0, 0, last, len(lines[last].Text))
 			got, _, why := m.quoteSource(i)
-			if oracle, ok := tableOracle(lines, 0, 0, last, len(lines[last].text)); ok {
+			if oracle, ok := tableOracle(lines, 0, 0, last, len(lines[last].Text)); ok {
 				if why != "" || joinQuote(got) != oracle {
 					t.Fatalf("%q: whole message quotes %q (%q), want %q", text, joinQuote(got), why, oracle)
 				}
@@ -373,7 +373,7 @@ func TestQuoteEveryHighlightIsExactOrRefused(t *testing.T) {
 func joinQuote(lines []quoteLine) string {
 	texts := make([]string, len(lines))
 	for k, l := range lines {
-		texts[k] = l.text
+		texts[k] = l.Text
 	}
 	return strings.Join(texts, "\n")
 }
@@ -389,19 +389,19 @@ func tableOracle(lines []displayLine, la, oa, lb, ob int) (string, bool) {
 	ok := false
 	for n := la; n <= lb; n++ {
 		dl := lines[n]
-		ok = ok || dl.table != nil
-		if dl.decor {
+		ok = ok || dl.Table != nil
+		if dl.Decor {
 			continue
 		}
-		lo, hi := 0, len(dl.text)
+		lo, hi := 0, len(dl.Text)
 		if n == la {
 			lo = oa
 		}
 		if n == lb {
 			hi = ob
 		}
-		part := dl.text[lo:hi]
-		if dl.table == nil {
+		part := dl.Text[lo:hi]
+		if dl.Table == nil {
 			out = append(out, part)
 			continue
 		}

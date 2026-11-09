@@ -98,26 +98,26 @@ func TestCodeBlocksAreLightCardsThatCopyExactly(t *testing.T) {
 	bg := codeCard(m.theme)
 	blockRows := 0
 	for _, r := range body.rows {
-		dl := body.lines[r.line]
-		if !dl.code && dl.fence == fenceNone {
-			for _, run := range r.runs {
-				if run.style.BG != 0 {
-					t.Fatalf("prose row %q is tinted", dl.text)
+		dl := body.lines[r.Line]
+		if !dl.Code && dl.Fence == fenceNone {
+			for _, run := range r.Runs {
+				if run.Style.BG != 0 {
+					t.Fatalf("prose row %q is tinted", dl.Text)
 				}
 			}
 			continue
 		}
 		blockRows++
-		if w := runsWidth(ansi.WcWidth, r.runs); w != card {
-			t.Fatalf("block row %q is %d cells, want the card's %d", dl.text, w, card)
+		if w := runsWidth(ansi.WcWidth, r.Runs); w != card {
+			t.Fatalf("block row %q is %d cells, want the card's %d", dl.Text, w, card)
 		}
-		for _, run := range r.runs {
-			if run.style.BG != bg {
-				t.Fatalf("block row %q has an untinted run %q", dl.text, run.text)
+		for _, run := range r.Runs {
+			if run.Style.BG != bg {
+				t.Fatalf("block row %q has an untinted run %q", dl.Text, run.Text)
 			}
 		}
-		if dl.fence == fenceOpen && (strings.Join(strings.Fields(runsText(r.runs)), " ") != "bash "+copyLabel || r.runs[1].style.FG != m.theme.Dim) {
-			t.Fatalf("label row: %q", runsText(r.runs))
+		if dl.Fence == fenceOpen && (strings.Join(strings.Fields(runsText(r.Runs)), " ") != "bash "+copyLabel || r.Runs[1].Style.FG != m.theme.Dim) {
+			t.Fatalf("label row: %q", runsText(r.Runs))
 		}
 	}
 	if blockRows != 5 {
@@ -148,11 +148,11 @@ func TestCodeCardsWrapWithinTheView(t *testing.T) {
 		rows := bodyRows(ansi.WcWidth, lines, width, theme)
 		code := 0
 		for _, r := range rows {
-			if w := runsWidth(ansi.WcWidth, r.runs); w != width {
+			if w := runsWidth(ansi.WcWidth, r.Runs); w != width {
 				t.Fatalf("width %d: row is %d cells", width, w)
 			}
-			if !r.decor {
-				code += r.end - r.start
+			if !r.Decor {
+				code += r.End - r.Start
 			}
 		}
 		if code != 50 {
@@ -164,7 +164,7 @@ func TestCodeCardsWrapWithinTheView(t *testing.T) {
 func runsText(runs []run) string {
 	var b strings.Builder
 	for _, r := range runs {
-		b.WriteString(r.text)
+		b.WriteString(r.Text)
 	}
 	return b.String()
 }

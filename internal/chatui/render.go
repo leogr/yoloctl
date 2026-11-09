@@ -3,7 +3,6 @@ package chatui
 import (
 	"fmt"
 	"strings"
-	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/hostintegration"
@@ -101,45 +100,10 @@ func messageKey(msg Message) string {
 	return "server:" + msg.ID
 }
 
-func plain(s string) string {
-	s = strings.ToValidUTF8(s, "�")
-	s = strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
-	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) && r != '\n' && r != '\t' {
-			return -1
-		}
-		return r
-	}, s)
-}
-
 // oneLine neutralizes text for single-row chrome: names, notices, labels.
 func oneLine(s string) string {
 	return strings.NewReplacer("\n", " ", "\t", " ").Replace(plain(s))
 }
-
-func expandTabs(wm ansi.Method, s string) string { return expandTabsMap(wm, s, nil) }
-
-// expandTabsMap is expandTabs that, given src, records each tab's spaces as
-// shown in place of it.
-func expandTabsMap(wm ansi.Method, s string, src *srcMap) string {
-	var b strings.Builder
-	x, at := 0, 0
-	for at < len(s) {
-		g, w := ansi.FirstGraphemeCluster(s[at:], wm)
-		in := g
-		if g == "\t" {
-			w = 4 - x%4
-			g = strings.Repeat(" ", w)
-		}
-		src.add(g, s, at, at+len(in))
-		b.WriteString(g)
-		at += len(in)
-		x += w
-	}
-	return b.String()
-}
-
-func displayWidth(wm ansi.Method, s string) int { return wm.StringWidth(expandTabs(wm, s)) }
 
 // draftLayout wraps the draft into composer rows of width cells. A fold is
 // one unbreakable chip that moves to the next row rather than splitting. It
@@ -237,31 +201,6 @@ func draftLayout(wm ansi.Method, text string, folds []fold, cursor, width int) (
 
 func style(text string, fg spaceview.Color, bold bool) string {
 	return spaceview.StyleText(text, spaceview.Style{FG: fg, Bold: bold})
-}
-
-func fit(wm ansi.Method, s string, width int) string {
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = truncate(wm, s, max(width, 0), "")
-	return s + strings.Repeat(" ", max(width-wm.StringWidth(s), 0))
-}
-
-func fenceMarker(line string) string {
-	if len(line) < 3 || (line[0] != '`' && line[0] != '~') {
-		return ""
-	}
-	i := 0
-	for i < len(line) && line[i] == line[0] {
-		i++
-	}
-	if i < 3 {
-		return ""
-	}
-	return line[:i]
-}
-
-func closesFence(line, fence string) bool {
-	marker := fenceMarker(line)
-	return len(marker) >= len(fence) && marker[0] == fence[0] && strings.TrimSpace(line[len(marker):]) == ""
 }
 
 func firstCode(text string) (string, bool) {

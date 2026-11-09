@@ -223,20 +223,20 @@ func (m *Model) transcript(width int) []transcriptRow {
 		if msg.ReplyTo != "" {
 			label := m.replyLabel(msg.ReplyTo)
 			rows = append(rows, transcriptRow{key: key, line: lineReply, kind: rowDecor, runs: append(slicesCloneRuns(indent),
-				run{text: truncate(m.widthMethod, label, textWidth, "…"), style: spaceview.Style{FG: t.Dim}, act: action{kind: actReply, value: msg.ReplyTo}})})
+				run{Text: truncate(m.widthMethod, label, textWidth, "…"), Style: spaceview.Style{FG: t.Dim}, Act: action{Kind: actReply, Value: msg.ReplyTo}})})
 		}
 		body := m.body(msg, textWidth)
 		for _, br := range body.rows {
-			row := transcriptRow{key: key, line: br.line, offset: br.start, end: br.end, kind: rowBody, frags: br.frags}
-			if br.decor {
+			row := transcriptRow{key: key, line: br.Line, offset: br.Start, end: br.End, kind: rowBody, frags: br.Frags}
+			if br.Decor {
 				row.kind = rowDecor
 			}
-			row.runs = append(slicesCloneRuns(indent), br.runs...)
+			row.runs = append(slicesCloneRuns(indent), br.Runs...)
 			if msg.Artifact != nil {
 				// Even in source view an artifact's announcement URL is inert.
 				for i := range row.runs {
-					if row.runs[i].act.kind == actLink {
-						row.runs[i].act = action{}
+					if row.runs[i].Act.Kind == actLink {
+						row.runs[i].Act = action{}
 					}
 				}
 			}
@@ -253,8 +253,6 @@ func (m *Model) transcript(width int) []transcriptRow {
 	}
 	return rows
 }
-
-func slicesCloneRuns(r []run) []run { return append([]run(nil), r...) }
 
 func separator(wm ansi.Method, key string, line int, label string, width int, st spaceview.Style, t spaceview.Theme) transcriptRow {
 	label = " " + label + " "
@@ -288,7 +286,7 @@ func (m *Model) header(msg *Message, key string, w who, mark run, width int, sel
 	glyph := iconSlot(m.widthMethod, w.glyph)
 	runs := []run{mark,
 		deco(glyph, spaceview.Style{FG: w.color, BG: bg, Bold: true}),
-		{text: name, style: spaceview.Style{FG: w.color, BG: bg, Bold: true}, act: action{kind: actAuthor, value: msg.Account, extra: msg.Nick}},
+		{Text: name, Style: spaceview.Style{FG: w.color, BG: bg, Bold: true}, Act: action{Kind: actAuthor, Value: msg.Account, Extra: msg.Nick}},
 	}
 	label := func(text string, st spaceview.Style) {
 		st.BG = bg
@@ -320,9 +318,9 @@ func (m *Model) header(msg *Message, key string, w who, mark run, width int, sel
 func fitRuns(wm ansi.Method, runs []run, width int) []run {
 	used := 0
 	for i, r := range runs {
-		w := wm.StringWidth(r.text)
+		w := wm.StringWidth(r.Text)
 		if used+w > width {
-			r.text = truncate(wm, r.text, max(width-used, 0), "…")
+			r.Text = truncate(wm, r.Text, max(width-used, 0), "…")
 			return append(runs[:i:i], r)
 		}
 		used += w

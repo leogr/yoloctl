@@ -70,7 +70,7 @@ func TestThreadViewShowsTheWholeTreeFromAnyMessage(t *testing.T) {
 	m.hover = hoverKey{area: hitFilter, id: h.id}
 	var hint strings.Builder
 	for _, r := range m.hoverHint() {
-		hint.WriteString(r.text)
+		hint.WriteString(r.Text)
 	}
 	if !strings.Contains(hint.String(), "Thread  click or Alt+F to choose people instead") {
 		t.Fatalf("chip hint: %q", hint.String())

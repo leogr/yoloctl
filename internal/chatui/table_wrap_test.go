@@ -17,7 +17,7 @@ import (
 func stripped(lines []displayLine) []displayLine {
 	out := slices.Clone(lines)
 	for i := range out {
-		out[i].table, out[i].cells = nil, nil
+		out[i].Table, out[i].Cells = nil, nil
 	}
 	return out
 }
@@ -33,10 +33,10 @@ func separators(runs []run) []int {
 	var at []int
 	x := 0
 	for _, r := range runs {
-		if !r.copy && r.text == " │ " {
+		if !r.Copy && r.Text == " │ " {
 			at = append(at, x)
 		}
-		x += ansi.StringWidthWc(r.text)
+		x += ansi.StringWidthWc(r.Text)
 	}
 	return at
 }
@@ -61,16 +61,16 @@ func checkWrappedTable(t *testing.T, lines []displayLine, rows []bodyRow, width 
 	var seps []int
 	wrapped := false
 	for _, row := range rows {
-		dl := lines[row.line]
-		if dl.table == nil {
+		dl := lines[row.Line]
+		if dl.Table == nil {
 			continue
 		}
-		if w := runsWidth(ansi.WcWidth, row.runs); w > width {
-			t.Fatalf("line %d: a row %d cells wide in %d", row.line, w, width)
+		if w := runsWidth(ansi.WcWidth, row.Runs); w > width {
+			t.Fatalf("line %d: a row %d cells wide in %d", row.Line, w, width)
 		}
-		at := separators(row.runs)
-		if row.decor {
-			at = ruleDividers(row.runs[0].text)
+		at := separators(row.Runs)
+		if row.Decor {
+			at = ruleDividers(row.Runs[0].Text)
 			for i := range at {
 				at[i]-- // each divider is the middle of " │ "
 			}
@@ -78,24 +78,24 @@ func checkWrappedTable(t *testing.T, lines []displayLine, rows []bodyRow, width 
 		if seps == nil {
 			seps = at
 		} else if !slices.Equal(at, seps) {
-			t.Fatalf("line %d: separators at %v, other rows at %v", row.line, at, seps)
+			t.Fatalf("line %d: separators at %v, other rows at %v", row.Line, at, seps)
 		}
-		wrapped = wrapped || row.frags != nil
+		wrapped = wrapped || row.Frags != nil
 	}
 	if !wrapped {
 		t.Fatal("the table was not wrapped to the view")
 	}
 	for n, dl := range lines {
-		if dl.cells == nil {
+		if dl.Cells == nil {
 			continue
 		}
-		for c, cr := range dl.cells {
+		for c, cr := range dl.Cells {
 			next := cr[0]
 			for _, row := range rows {
-				if row.line != n {
+				if row.Line != n {
 					continue
 				}
-				for _, f := range row.frags {
+				for _, f := range row.Frags {
 					if f[0] >= cr[0] && f[1] <= cr[1] && f[0] < f[1] {
 						if f[0] != next {
 							t.Fatalf("line %d cell %d: fragment %v after byte %d", n, c, f, next)
@@ -105,7 +105,7 @@ func checkWrappedTable(t *testing.T, lines []displayLine, rows []bodyRow, width 
 				}
 			}
 			if next != cr[1] {
-				t.Fatalf("line %d cell %d: fragments end at %d of %v (%q)", n, c, next, cr, dl.text[cr[0]:cr[1]])
+				t.Fatalf("line %d cell %d: fragments end at %d of %v (%q)", n, c, next, cr, dl.Text[cr[0]:cr[1]])
 			}
 		}
 	}
@@ -119,13 +119,13 @@ func TestFittingTablesRenderAsBefore(t *testing.T) {
 	lines := displayLines(ansi.WcWidth, sampleTable+"\nafter", false, theme, "")
 	natural := 0
 	for _, dl := range lines {
-		natural = max(natural, ansi.StringWidthWc(dl.text))
+		natural = max(natural, ansi.StringWidthWc(dl.Text))
 	}
 	after := len(lines) - 1
 	for _, width := range []int{natural, natural + 1, 200} {
 		want := bodyRows(ansi.WcWidth, stripped(lines), width, theme)
-		at := slices.IndexFunc(want, func(r bodyRow) bool { return r.line == after })
-		want = slices.Insert(want, at, bodyRow{line: after, decor: true})
+		at := slices.IndexFunc(want, func(r bodyRow) bool { return r.Line == after })
+		want = slices.Insert(want, at, bodyRow{Line: after, Decor: true})
 		got := bodyRows(ansi.WcWidth, lines, width, theme)
 		got = slices.DeleteFunc(got, tableRowRuleDecoration)
 		if !reflect.DeepEqual(got, want) {
@@ -147,12 +147,12 @@ func TestNarrowTablesWrapCellsInTheirColumns(t *testing.T) {
 		lines, rows := tableView(text, width)
 		checkWrappedTable(t, lines, rows, width)
 		for _, row := range rows {
-			if row.line != 0 {
+			if row.Line != 0 {
 				continue
 			}
-			for _, r := range row.runs {
-				if r.copy && !r.style.Bold {
-					t.Fatalf("width %d: header text %q is not bold", width, r.text)
+			for _, r := range row.Runs {
+				if r.Copy && !r.Style.Bold {
+					t.Fatalf("width %d: header text %q is not bold", width, r.Text)
 				}
 			}
 		}
@@ -168,8 +168,8 @@ func TestWrappedCellsKeepAlignment(t *testing.T) {
 	checkWrappedTable(t, lines, rows, width)
 	var rule string
 	for _, row := range rows {
-		if row.decor && lines[row.line].table != nil {
-			rule = row.runs[0].text
+		if row.Decor && lines[row.Line].Table != nil {
+			rule = row.Runs[0].Text
 		}
 	}
 	parts := strings.Split(rule, "─┼─")
@@ -178,15 +178,15 @@ func TestWrappedCellsKeepAlignment(t *testing.T) {
 		starts = append(starts, starts[len(starts)-1]+ansi.StringWidthWc(p)+3)
 	}
 	for _, row := range rows {
-		if row.line != 2 {
+		if row.Line != 2 {
 			continue
 		}
 		dl := lines[2]
-		for c, cr := range dl.cells {
+		for c, cr := range dl.Cells {
 			lo, hi, x := -1, -1, 0
-			for _, r := range row.runs {
-				w := ansi.StringWidthWc(r.text)
-				if r.copy && r.start >= cr[0] && r.start < cr[1] {
+			for _, r := range row.Runs {
+				w := ansi.StringWidthWc(r.Text)
+				if r.Copy && r.Start >= cr[0] && r.Start < cr[1] {
 					if lo < 0 {
 						lo = x
 					}
@@ -199,7 +199,7 @@ func TestWrappedCellsKeepAlignment(t *testing.T) {
 			}
 			alloc := ansi.StringWidthWc(parts[c])
 			before, after := lo-starts[c], starts[c]+alloc-hi
-			switch dl.table.align[c] {
+			switch dl.Table.Align[c] {
 			case 'l':
 				if before != 0 {
 					t.Fatalf("left column starts %d cells in", before)
@@ -312,21 +312,21 @@ func TestWrappedCellsKeepTargets(t *testing.T) {
 	checkWrappedTable(t, lines, rows, 30)
 	var links, mentions, refs int
 	for _, row := range rows {
-		for _, r := range row.runs {
+		for _, r := range row.Runs {
 			switch {
-			case !r.copy && r.act.kind != actNone:
-				t.Fatalf("decoration %q has a target", r.text)
-			case r.act.kind == actLink:
-				if r.act.value != url {
-					t.Fatalf("a link fragment points at %q", r.act.value)
+			case !r.Copy && r.Act.Kind != actNone:
+				t.Fatalf("decoration %q has a target", r.Text)
+			case r.Act.Kind == actLink:
+				if r.Act.Value != url {
+					t.Fatalf("a link fragment points at %q", r.Act.Value)
 				}
 				links++
-			case r.act.kind == actRef:
-				if r.act.value != ref || ref == "" {
-					t.Fatalf("a reference fragment points at %q, want %q", r.act.value, ref)
+			case r.Act.Kind == actRef:
+				if r.Act.Value != ref || ref == "" {
+					t.Fatalf("a reference fragment points at %q, want %q", r.Act.Value, ref)
 				}
 				refs++
-			case r.act.kind == actMention && r.act.value == "sol":
+			case r.Act.Kind == actMention && r.Act.Value == "sol":
 				mentions++
 			}
 		}
@@ -351,7 +351,7 @@ func TestWrappedTableSelectionCopiesLogicalRows(t *testing.T) {
 	for _, row := range m.lastTranscript {
 		if row.key == key && row.line == 2 {
 			for _, f := range row.frags {
-				if f[0] >= dl.cells[1][0] {
+				if f[0] >= dl.Cells[1][0] {
 					notes = append(notes, f)
 				}
 			}
@@ -372,13 +372,13 @@ func TestWrappedTableSelectionCopiesLogicalRows(t *testing.T) {
 		}
 		return forward
 	}
-	a, b := dl.cells[1][0]+2, notes[1][0]+1
-	if got := copyRange(a, b); got != dl.text[a:b+1] {
-		t.Fatalf("partial cell copied %q, want %q", got, dl.text[a:b+1])
+	a, b := dl.Cells[1][0]+2, notes[1][0]+1
+	if got := copyRange(a, b); got != dl.Text[a:b+1] {
+		t.Fatalf("partial cell copied %q, want %q", got, dl.Text[a:b+1])
 	}
-	a = dl.cells[0][0] + 1
-	if got := copyRange(a, b); got != dl.text[a:b+1] || !strings.Contains(got, " │ ") {
-		t.Fatalf("cross-cell copy %q, want %q", got, dl.text[a:b+1])
+	a = dl.Cells[0][0] + 1
+	if got := copyRange(a, b); got != dl.Text[a:b+1] || !strings.Contains(got, " │ ") {
+		t.Fatalf("cross-cell copy %q, want %q", got, dl.Text[a:b+1])
 	}
 	before, _ := m.selectedText(*m.sel)
 	m.Update(tea.WindowSizeMsg{Width: 70, Height: 30})
@@ -395,18 +395,18 @@ func TestWrappedTableSelectionCopiesLogicalRows(t *testing.T) {
 		}
 		x := 0
 		for _, r := range row.runs {
-			if !r.copy && r.text == " │ " {
+			if !r.Copy && r.Text == " │ " {
 				y := i - m.scroll + m.layout.bodyTop
 				p, ok := m.pointAt(x+1, y)
 				boundary := p.lo == row.end
 				for _, f := range row.frags {
 					boundary = boundary || p.lo == f[0]
 				}
-				if !ok || !boundary || actionAt(ansi.WcWidth, row.runs, x+1).kind != actNone {
+				if !ok || !boundary || actionAt(ansi.WcWidth, row.runs, x+1).Kind != actNone {
 					t.Fatalf("a separator click gave %+v on row %+v", p, row.frags)
 				}
 			}
-			x += ansi.StringWidthWc(r.text)
+			x += ansi.StringWidthWc(r.Text)
 		}
 	}
 }
@@ -435,8 +435,8 @@ func TestWrappedTableKeepsTheReadingPosition(t *testing.T) {
 					continue
 				}
 				f := row.frags[0]
-				inFirst := f[0] < dl.cells[1][0]
-				if column == 0 && inFirst && f[0] > dl.cells[0][0] || column == 1 && !inFirst && f[0] > dl.cells[1][0] && top < 0 {
+				inFirst := f[0] < dl.Cells[1][0]
+				if column == 0 && inFirst && f[0] > dl.Cells[0][0] || column == 1 && !inFirst && f[0] > dl.Cells[1][0] && top < 0 {
 					top = i
 				}
 			}
@@ -527,12 +527,12 @@ func TestFitToWrappedTableKeepsPaddedRows(t *testing.T) {
 func TestWrappedTableGapAnchorGoesToTheNextCellText(t *testing.T) {
 	m := tableModel(50, "| A | B |\n|---|---|\n| "+strings.Repeat("first column words ", 4)+"| short |")
 	dl := m.body(&m.messages[0], m.lastTextWidth).lines[2]
-	gap := dl.cells[0][1] + 1 // the separator's bar
+	gap := dl.Cells[0][1] + 1 // the separator's bar
 	m.follow, m.anchor = false, &viewAnchor{key: "server:t", line: 2, offset: gap}
 	m.View()
 	row := m.lastTranscript[m.scroll]
-	if row.key != "server:t" || row.line != 2 || !row.holds(dl.cells[1][0]) {
-		t.Fatalf("a gap anchor placed row %+v, want the row showing byte %d", row, dl.cells[1][0])
+	if row.key != "server:t" || row.line != 2 || !row.holds(dl.Cells[1][0]) {
+		t.Fatalf("a gap anchor placed row %+v, want the row showing byte %d", row, dl.Cells[1][0])
 	}
 	later := m.lastTranscript[m.scroll+1]
 	if later.key != "server:t" || later.line != 2 || later.offset > gap || later.holds(gap) {
@@ -556,7 +556,7 @@ func TestWrappedTablesAreBounded(t *testing.T) {
 		t.Fatal("a table needing more rows than are left must wrap as prose")
 	}
 	large := displayLines(ansi.WcWidth, header+row(40), false, theme, "")
-	if large[0].table == nil {
+	if large[0].Table == nil {
 		t.Fatal("fixture must be within the aligned table bounds")
 	}
 	if fitTable(ansi.WcWidth, large, 0, 60, maxBodyRows, theme) != nil {
@@ -568,7 +568,7 @@ func TestWrappedTablesAreBounded(t *testing.T) {
 	}
 	cells := 0
 	for _, dl := range large {
-		cells += len(dl.cells)
+		cells += len(dl.Cells)
 	}
 	refused := testing.AllocsPerRun(5, func() { bodyRows(ansi.WcWidth, large, 60, theme) })
 	prose := testing.AllocsPerRun(5, func() { bodyRows(ansi.WcWidth, plain, 60, theme) })

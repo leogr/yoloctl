@@ -484,8 +484,8 @@ func TestArtifactSourceURLIsNotClickable(t *testing.T) {
 	y, line := lineWith(t, m, "airc.local")
 	x := strings.Index(line, "http")
 	x = len([]rune(line[:x])) + 3
-	if act := actionAt(ansi.WcWidth, m.lastTranscript[m.scroll+y-m.layout.bodyTop].runs, x); act.kind != actNone {
-		t.Fatalf("the source URL is a %v target", act.kind)
+	if act := actionAt(ansi.WcWidth, m.lastTranscript[m.scroll+y-m.layout.bodyTop].runs, x); act.Kind != actNone {
+		t.Fatalf("the source URL is a %v target", act.Kind)
 	}
 	m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
 	m.Update(tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseLeft})

@@ -133,7 +133,7 @@ func (m *Model) View() tea.View {
 				if !ok {
 					return nil
 				}
-				return func(r run) (int, int) { return lo - r.start, hi - r.start }
+				return func(r run) (int, int) { return lo - r.Start, hi - r.Start }
 			}
 		}
 	}

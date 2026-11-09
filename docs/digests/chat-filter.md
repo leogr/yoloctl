@@ -1,6 +1,6 @@
 # Native chat message filter and mention identities
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Nickname labels and suggestion selection verified at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `d9aec4ac854ffd5b4f60a93817b8c5afce10847d` and accompanying changes.
 
 [FACT] One resolver names who an `@token` means, case-folded, with the
 existing mention boundaries (an `@` not after a nickname byte, then nickname
@@ -98,7 +98,7 @@ both aliases and not counting a mention of the human's other alias. [13](#source
 ## Sources
 
 1. <a id="source-1"></a> [Filter and resolver](../../internal/chatui/filter.go#L13-L767) — `messageFilter`, `nameBindings`, `bindings`, `resolve`, `selfNames`, `mentionToken`, `isTransport`, `matches`, `shown`, `reconcile`, `arrivalShown`, `setFilter`, `shownAnchor`, `filterScopeRows`, `filterChip`, `filterCommand`, `filterChoices`.
-2. <a id="source-2"></a> [Mention tokens](../../internal/chatui/body.go#L385-L422) — `eachMention`, `mentions`, `selfMention`; `decorateTokens` marks self.
+2. <a id="source-2"></a> [Mention tokens](../../internal/chatui/body.go#L160) — `eachMention`, `mentions`, `selfMention`; `decorateTokens` marks self.
 3. <a id="source-3"></a> [Host identities](../../cmd/yoloctl/chat_view.go#L28-L156) — `runChatView` supplies `Options.Nick` from `openChatHeader`'s saved nick; `chatIdentities` carries the saved `Nick`; `Identity.Nick` in chatui/model.go.
 4. <a id="source-4"></a> [Suggestions](../../internal/chatui/suggest.go#L61-L242) — `refreshSuggest`, `refreshOpenSuggest`, `accountAway`, `joinDetail`; `complete` and mention actions in model.go. `TestMentionsUseTheSavedNickPerAccount` (filter_test.go L440–487) checks name-prefix matching without displaying the name; nickname_display_test.go `TestIdentityRefreshKeepsSuggestionSelection`, `TestCatalogRefreshTracksSelectedAccountWhenRowsMove` and `TestCatalogRefreshClampsMissingSuggestion` cover selection retention and fallback.
 5. <a id="source-5"></a> [Mouse actions](../../internal/chatui/mouse.go#L205-L350) — `clickHit` (`hitFilter`), `activate` (`actFilter`), `showMessage`, `mentionCard`.

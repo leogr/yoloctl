@@ -119,11 +119,11 @@ func (m *Model) details(mo tea.Mouse, h hit, onTarget bool) tea.Cmd {
 		return nil
 	}
 	if row, ok := m.rowAt(mo.Y); ok && m.inTranscript(mo.X, mo.Y) {
-		switch act := actionAt(m.widthMethod, row.runs, mo.X); act.kind {
+		switch act := actionAt(m.widthMethod, row.runs, mo.X); act.Kind {
 		case actAuthor:
-			m.openCard(act.extra, act.value)
+			m.openCard(act.Extra, act.Value)
 		case actMention:
-			m.mentionCard(act.value)
+			m.mentionCard(act.Value)
 		}
 	}
 	return nil
@@ -203,7 +203,7 @@ func (m *Model) mouseUp(mo tea.Mouse) tea.Cmd {
 			return m.copySelection()
 		}
 		row, _ := m.rowAt(mo.Y)
-		if act := actionAt(m.widthMethod, row.runs, mo.X); act.kind != actNone && act == d.act {
+		if act := actionAt(m.widthMethod, row.runs, mo.X); act.Kind != actNone && act == d.act {
 			return m.activate(act)
 		}
 		if row.key != "" && row.key == d.key && row.kind != rowEvent {
@@ -300,19 +300,19 @@ func (m *Model) clickHit(h hit, mo tea.Mouse) tea.Cmd {
 
 // activate runs a clicked target inside message text or a header.
 func (m *Model) activate(act action) tea.Cmd {
-	switch act.kind {
+	switch act.Kind {
 	case actLink:
-		return m.openLink(act.value)
+		return m.openLink(act.Value)
 	case actAuthor:
-		return m.requestAttach(act.extra, act.value)
+		return m.requestAttach(act.Extra, act.Value)
 	case actReply, actRef:
-		m.showMessage(act.value)
+		m.showMessage(act.Value)
 	case actMention:
-		m.mentionCard(act.value)
+		m.mentionCard(act.Value)
 	case actFilter:
 		m.setFilter("", "")
 	case actCopyCode:
-		return m.copyCode(act.value)
+		return m.copyCode(act.Value)
 	}
 	return nil
 }

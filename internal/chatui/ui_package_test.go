@@ -490,7 +490,7 @@ func cardRole(m *Model, account string) string {
 			_, role := m.memberCard(mem, 80, 0)
 			var b strings.Builder
 			for _, r := range role {
-				b.WriteString(r.text)
+				b.WriteString(r.Text)
 			}
 			return strings.TrimSpace(b.String())
 		}

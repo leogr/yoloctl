@@ -1,17 +1,10 @@
-package chatui
+package markdownview
 
 import (
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
 )
-
-// Syntax highlighting for fenced code: a deliberately small, dependency-free
-// lexer for common languages. It colors keywords, strings, comments, numbers
-// and well-known types or constants, carries block comments and multi-line
-// strings across a block's lines, and never changes, adds or drops a byte:
-// it only styles the line's text, so display, wrapping and copy are as
-// before. An unknown or missing language stays plain.
 
 // tokenClass is what a highlighted span is.
 type tokenClass int
@@ -186,21 +179,21 @@ func tokenStyle(c tokenClass, base spaceview.Style, t spaceview.Theme) spaceview
 
 // highlightLine styles one code line. The pieces cover text exactly, in
 // order; the returned state continues onto the block's next line.
-func highlightLine(sx *syntax, text string, state hlState, base spaceview.Style, t spaceview.Theme) ([]piece, hlState) {
+func highlightLine(sx *syntax, text string, state hlState, base spaceview.Style, t spaceview.Theme) ([]Piece, hlState) {
 	if sx == nil {
-		return []piece{{end: len(text), style: base, code: true}}, state
+		return []Piece{{End: len(text), Style: base, Code: true}}, state
 	}
-	var pieces []piece
+	var pieces []Piece
 	emit := func(start, end int, c tokenClass) {
 		if start >= end {
 			return
 		}
 		st := tokenStyle(c, base, t)
-		if n := len(pieces); n > 0 && pieces[n-1].style == st && pieces[n-1].end == start {
-			pieces[n-1].end = end
+		if n := len(pieces); n > 0 && pieces[n-1].Style == st && pieces[n-1].End == start {
+			pieces[n-1].End = end
 			return
 		}
-		pieces = append(pieces, piece{start: start, end: end, style: st, code: true})
+		pieces = append(pieces, Piece{Start: start, End: end, Style: st, Code: true})
 	}
 	if sx.mode == modeDiff {
 		emit(0, len(text), diffClass(text))
@@ -356,7 +349,7 @@ func highlightLine(sx *syntax, text string, state hlState, base spaceview.Style,
 	}
 	flush(len(text))
 	if len(pieces) == 0 {
-		pieces = []piece{{end: len(text), style: base, code: true}}
+		pieces = []Piece{{End: len(text), Style: base, Code: true}}
 	}
 	return pieces, state
 }

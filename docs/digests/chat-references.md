@@ -1,6 +1,6 @@
 # Chat message references
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; packaged AIRC source verified at `8a03beadfa18dfcc958711652547e1acdc3569c8`. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `d9aec4ac854ffd5b4f60a93817b8c5afce10847d` and accompanying changes.
 
 [FACT] In prose, a shared reference is `m:` plus exactly 22 base64url
 characters whose decoding is a server ID's 16 bytes in display order and
@@ -57,7 +57,7 @@ unchanged; arbitrary opaque IDs still have no copy or navigation action.
 
 ## Sources
 
-1. <a id="source-1"></a> [Body tokens](../../internal/chatui/body.go#L229-L380) — `decorateTokens`, `refPrefix`, `compactRef`, `refID`, `msgidPrefix`, `messageID`, `linked`, `nickByte`.
+1. <a id="source-1"></a> [Body tokens](../../internal/chatui/body.go#L16) — `decorateTokens`, `refPrefix`, `compactRef`, `refID`, `msgidPrefix`, `messageID`, `nickByte`; shared `Linked` prevents overriding link targets.
 2. <a id="source-2"></a> [Navigation](../../internal/chatui/mouse.go#L289-L324) — `activate`, `showMessage`.
 3. <a id="source-3"></a> [Hover hints](../../internal/chatui/hover.go#L213-L214) — `actRef`; kinds in rows.go L15–L23.
 4. <a id="source-4"></a> [Copy reference](../../internal/chatui/model.go#L1004-L1152) — `messageActions`, `runAction`; Help row in overlay.go L106.
@@ -65,5 +65,5 @@ unchanged; arbitrary opaque IDs still have no copy or navigation action.
 6. <a id="source-6"></a> [Nickname grammar](../../internal/managedchat/settings.go#L8-L20) — `ValidateNickname`; mirrored by `validNick` in chatui/overlay.go.
 7. <a id="source-7"></a> [Packaged AIRC references](https://github.com/leogr/airc/blob/8a03beadfa18dfcc958711652547e1acdc3569c8/skills/airc/SKILL.md#L188-L196) — shared references, refused `@N`, full msgids; codec and saved-record presentation in `src/agent_session/reference.rs` and `state.rs` L319–593.
 8. <a id="source-8"></a> [Shared vectors](../../internal/chatui/testdata/message-references.json#L1-L53) — byte-identical copy of AIRC `tests/data/message-references.json` (SHA-256 `ee5a9cc849c6c3b1a603fdc6aa390500b987876da734f9e79876969e0f47a0ed`); this component checks the canonical entries, AIRC also the opaque ones.
-9. <a id="source-9"></a> [Previews](../../internal/chatui/preview.go#L11-L179) — `previewLabel`, `previewKeys`, `substitute`, `subAt`, `subMap`, `refreshPreviews`; `copyText` in body.go, `body` and `transcript` in transcript.go, `pointAt` in selection.go, `quoteSource` in quote.go.
+9. <a id="source-9"></a> [Previews](../../internal/chatui/preview.go#L19) — `previewLabel`, `previewKeys`, `substitute`, `refreshPreviews`; pure `ApplyReplacements`, `ReplacementBounds`, `ReplacementSourceMap` and `DisplayLine.CopyText` live in markdownview; transcript and selection remain chat-owned.
 10. <a id="source-10"></a> [Preview regressions](../../internal/chatui/preview_test.go#L1-L159) — span, copy, click, Quote, loaded-only, table cell, source view, budget, later targets, rename, wrapped atomic span and hover; spans in `quoteFixtures`.
