@@ -1,6 +1,6 @@
 # Host and Lima diagnostics
 
-Verification: `8931e8df3abebc5c0fdd6f77bd473110a2e7d23b` and accompanying changes; log bound and failure semantics at `2060bcc8a46f0bfd1d6dcde7de8cdc9bb71a958d` and accompanying changes; open retry at `c1502bd5e70a6d7dee5e52e8b1ad28caf479ccbd` and accompanying changes; logs-directory check at `f15ce301325c25538cab3f7acaf88962827c38bc` and accompanying changes.
+Verification: `8931e8df3abebc5c0fdd6f77bd473110a2e7d23b` and accompanying changes; log bound and failure semantics at `2060bcc8a46f0bfd1d6dcde7de8cdc9bb71a958d` and accompanying changes; open retry at `c1502bd5e70a6d7dee5e52e8b1ad28caf479ccbd` and accompanying changes; logs-directory check at `f15ce301325c25538cab3f7acaf88962827c38bc` and accompanying changes; stale-generation handling at `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes.
 
 [FACT] The Lima Client’s inventory, VM create/start/stop/delete/copy and account-disk commands
 capture launcher stderr, including successful warnings and debug output. They
@@ -24,7 +24,11 @@ checks that it is still the file at that name, so concurrent yoloctl
 processes neither rotate twice nor write into a rotated file; each record is
 one write. Opening is attempted at most four times per record, and an ENOENT
 from creating the file while another writer renames it (seen on macOS CI) is
-retried within that bound. [2](#source-2) [5](#source-5)
+retried within that bound. The locked descriptor/name identity check comes
+before the current file's regular-file/owner/0600/single-link validation: two
+rotations can unlink a waiting writer's old inode, which is reopened rather
+than written or rejected for its zero link count. A hard-linked or nonprivate
+**current** file is still refused. [2](#source-2) [5](#source-5) [16](#source-16)
 
 [FACT] Command failures retain the underlying exit error and include a bounded,
 printable 2 KiB stderr suffix. Capture completion follows the direct child,
@@ -61,7 +65,7 @@ not native macOS/Lima/TUI runtime validation. [5](#source-5) [8](#source-8)
 2. <a id="source-2"></a> [Capture and log](../../internal/lima/diagnostics.go#L24-L250) — `LogDiagnostics`, `openLogsDirectory`, `appendHostLog`, `openHostLog` (ENOENT retry), `appendLocked` (bound, lock, rotation), `recordDiagnostics`, `runWithDiagnostics`.
 3. <a id="source-3"></a> [Lima commands](../../internal/lima/lima.go#L31-L122) — `Create`, `runSpace`, `runDisk`.
 4. <a id="source-4"></a> [Inventory](../../internal/lima/list.go#L28-L158) — `Client.List`, `homeHasInstances`.
-5. <a id="source-5"></a> [Lima regressions](../../internal/lima/diagnostics_test.go#L63-L378) — warning, skip, operation, error, daemon, planted-log, rotation, ENOENT-retry and logs-directory mode tests.
+5. <a id="source-5"></a> [Lima regressions](../../internal/lima/diagnostics_test.go#L63) — warning, skip, operation, error, daemon, planted-log, rotation, ENOENT-retry and logs-directory mode tests.
 6. <a id="source-6"></a> [Interactive helpers](../../cmd/yoloctl/chat_stream_stderr.go#L26-L107) — `callChatStream`, `callChatViewControllerInto`, `stderrTail.finish`; its callers are `chat_open.go:38` and `chat_view.go:86,416,662`.
 7. <a id="source-7"></a> [Telemetry](../../cmd/yoloctl/space_view.go#L147-L191) — `streamSpaceView`.
 8. <a id="source-8"></a> [Chat regressions](../../cmd/yoloctl/chat_view_diagnostics_test.go#L17-L57) — interactive methods, success/error diagnostics and terminal sinks.
@@ -72,3 +76,5 @@ not native macOS/Lima/TUI runtime validation. [5](#source-5) [8](#source-8)
 13. <a id="source-13"></a> [Chat callbacks](../../cmd/yoloctl/chat_view.go#L86-L700) — nickname, participant polling (`agentsLoop`) and attach (`resolveAttach`); setup/reconnect use `openChatHeader` in `chat_open.go:38`.
 14. <a id="source-14"></a> [Lima v2.2.1 instance enumeration](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/store/store.go#L47-L70) — directory-only, dot/underscore exclusions.
 15. <a id="source-15"></a> [Stop regression](../../cmd/yoloctl/lima_log_failure_stop_test.go#L1-L56) — `stopSpaceRuntime` with a planted log; `RecordDiagnostics` callers in `chat_stream_stderr.go` and `space_view.go`.
+
+16. <a id="source-16"></a> [Stale-generation regression](../../internal/lima/diagnostics_test.go#L316) — `TestHostDiagnosticsReopensUnlinkedGeneration` uses two production rotations, a retained unlinked descriptor and current hardlink/mode negatives; `appendLocked` in diagnostics.go checks identity before current-file validation.

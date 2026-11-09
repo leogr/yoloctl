@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -306,6 +307,91 @@ func TestHostDiagnosticsLogRotatesWithinItsBound(t *testing.T) {
 	}
 	if total < hostLogLimit {
 		t.Fatalf("rotation dropped the current generation: %d bytes", total)
+	}
+}
+
+// A writer can open host.log, then wait while two other appends rotate it
+// out of both retained names. Its owned private inode now has no links.
+// Reopen the current name before validating that current file's privacy.
+func TestHostDiagnosticsReopensUnlinkedGeneration(t *testing.T) {
+	for _, kind := range []string{"private", "hard-link", "public"} {
+		for _, delayed := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/delayed=%v", kind, delayed), func(t *testing.T) {
+				root := t.TempDir()
+				dir, err := openLogsDirectory(root)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = unix.Close(dir) }()
+				path := filepath.Join(root, "logs", "host.log")
+				savedOpen := openHostLog
+				fd, err := savedOpen(dir, "host.log")
+				if err != nil {
+					t.Fatal(err)
+				}
+				old := os.NewFile(uintptr(fd), path)
+				defer func() { _ = old.Close() }()
+				// Use production rotation twice; sparse fixture padding makes each
+				// next append rotate without timers or competing goroutines.
+				for _, line := range []string{"middle\n", "current\n"} {
+					if err := os.Truncate(path, hostLogLimit); err != nil {
+						t.Fatal(err)
+					}
+					if err := appendHostLog(dir, "host.log", path, line); err != nil {
+						t.Fatal(err)
+					}
+				}
+				var st unix.Stat_t
+				if err := unix.Fstat(fd, &st); err != nil {
+					t.Fatal(err)
+				}
+				if st.Nlink != 0 || st.Uid != uint32(os.Getuid()) || st.Mode&0777 != 0600 || st.Mode&unix.S_IFMT != unix.S_IFREG {
+					t.Fatalf("old generation fixture: %+v", st)
+				}
+				switch kind {
+				case "hard-link":
+					if err := os.Link(path, filepath.Join(root, "alias")); err != nil {
+						t.Fatal(err)
+					}
+				case "public":
+					if err := os.Chmod(path, 0644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				calls := 0
+				openHostLog = func(dir int, name string) (int, error) {
+					calls++
+					if delayed && calls == 1 {
+						return unix.Dup(fd) // the open completed before the two rotations
+					}
+					return savedOpen(dir, name)
+				}
+				t.Cleanup(func() { openHostLog = savedOpen })
+				err = appendHostLog(dir, "host.log", path, "fresh\n")
+				wantCalls := 1
+				if delayed {
+					wantCalls++
+				}
+				if calls != wantCalls {
+					t.Fatalf("opens=%d want=%d: %v", calls, wantCalls, err)
+				}
+				want := "current\n"
+				if kind == "private" {
+					if err != nil {
+						t.Fatal(err)
+					}
+					want += "fresh\n"
+				} else if err == nil || !strings.Contains(err.Error(), "must be an owned private regular file") {
+					t.Fatalf("unsafe current log accepted: %v", err)
+				}
+				if raw, err := os.ReadFile(path); err != nil || string(raw) != want {
+					t.Fatalf("current generation: %q %v", raw, err)
+				}
+				if err := unix.Fstat(fd, &st); err != nil || st.Size != hostLogLimit {
+					t.Fatalf("stale generation was written: size=%d err=%v", st.Size, err)
+				}
+			})
+		}
 	}
 }
 

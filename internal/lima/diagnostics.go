@@ -145,11 +145,13 @@ func appendLocked(f *os.File, fd, dir int, name, path, line string) (bool, error
 	if err := unix.Fstat(fd, &st); err != nil {
 		return false, err
 	}
-	if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Uid != uint32(os.Getuid()) || st.Mode&0777 != 0600 || st.Nlink != 1 {
-		return false, fmt.Errorf("host diagnostics log %q must be an owned private regular file", path)
-	}
 	if err := unix.Fstatat(dir, name, &named, unix.AT_SYMLINK_NOFOLLOW); err != nil || named.Dev != st.Dev || named.Ino != st.Ino {
 		return true, nil // rotated or replaced meanwhile: reopen the current file
+	}
+	// Two rotations can unlink a waiting writer's old inode. Validate only
+	// the current named file; never append to that stale descriptor.
+	if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Uid != uint32(os.Getuid()) || st.Mode&0777 != 0600 || st.Nlink != 1 {
+		return false, fmt.Errorf("host diagnostics log %q must be an owned private regular file", path)
 	}
 	if st.Size > 0 && st.Size+int64(len(line)) > hostLogLimit {
 		// Keep one previous generation; renaming never follows a planted name.
