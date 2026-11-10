@@ -14,8 +14,9 @@ Styles and themes reuse `spaceview`; no Markdown dependency is added.
 [FACT] Parsing sanitizes invalid UTF-8 and controls, normalizes line endings
 and expands tabs with the chosen width method. Source mode and the existing
 block/inline/lexer behavior share that implementation. Tables retain 32-column,
-512-body-row and aligned-text budgets; layout keeps the 16,384-row bound and
-its existing notice. Code-card copy intents retain block source bytes. These
+512-body-row and aligned-text budgets; layout defaults to the 16,384-row bound and
+its existing notice. `LayoutOptions.UnlimitedRows` lets the file view render
+its complete admitted document; chat leaves that option unset. Code-card copy intents retain block source bytes. These
 are the existing subset and limits, not a CommonMark contract.
 [2](#source-2) [4](#source-4) [5](#source-5)
 

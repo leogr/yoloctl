@@ -437,6 +437,8 @@ func opensLiveSurface(args []string) bool {
 		return false
 	}
 	switch args[0] {
+	case "follow":
+		return !hasHelp(args[1:])
 	case "chat":
 		return chatOpensLiveSurface(args[1:])
 	case "attach": // root alias for `box attach` — joins a live agent session

@@ -35,7 +35,7 @@ func closeEffect(p *panes.Pane) string {
 		len(args) > 1 && (args[0] == "space" || args[0] == "sp") && args[1] == "edit",
 		(args[0] == "agent" || args[0] == "feature" || args[0] == "capability") && catalogOpensLiveSurface(args[1:]):
 		return "unsaved changes are lost"
-	case len(args) > 1 && args[1] == "logs" && hasFollow(args[2:]):
+	case args[0] == "follow", len(args) > 1 && args[1] == "logs" && hasFollow(args[2:]):
 		return "the follow ends"
 	case len(args) > 1 && args[0] == "box" && args[1] == "use",
 		len(args) > 1 && args[0] == "account" && args[1] == "secret":

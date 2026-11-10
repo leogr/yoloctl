@@ -33,6 +33,7 @@ func TestCloseClassificationWalksEveryLiveRoute(t *testing.T) {
 		{"box edit coder", "unsaved changes are lost"}, {"space edit", "unsaved changes are lost"},
 		{"account edit work", "unsaved changes are lost"}, {"agent edit claude", "unsaved changes are lost"},
 		{"feature edit go", "unsaved changes are lost"}, {"capability edit net", "unsaved changes are lost"},
+		{"follow notes.md", "the follow ends"}, {"follow --host /tmp/log", "the follow ends"},
 		{"box logs coder -f", "the follow ends"}, {"space logs --follow", "the follow ends"},
 		{"box use coder --stdin", "the input ends"}, {"account secret set work TOKEN", "the input ends"},
 	} {

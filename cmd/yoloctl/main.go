@@ -226,5 +226,5 @@ func readOnlyStartup(args []string) bool {
 	if len(args) == 0 {
 		return false
 	}
-	return args[0] == "version" || args[0] == "install"
+	return args[0] == "version" || args[0] == "install" || args[0] == "follow"
 }

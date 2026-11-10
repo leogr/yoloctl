@@ -43,7 +43,7 @@ func newClientRootCmd() *cobra.Command {
 		}
 	}
 	space.AddCommand(newSpaceExportCmd(), newSpaceImportCmd(), newSpaceOperationCmd(), newSpaceViewCmd(), newSpaceStorageCmd(), newSpaceSetCmd(), newSpaceEditCmd())
-	root.AddCommand(newChatCmd())
+	root.AddCommand(newChatCmd(), newFollowCmd())
 	show, _, _ := root.Find([]string{"space", "show"})
 	show.RunE = controllerSpaceShow
 	list, _, _ := root.Find([]string{"space", "list"})

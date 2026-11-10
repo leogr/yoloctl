@@ -97,6 +97,12 @@ effects. The extraction preserved the existing syntax and bounds; the subset
 since adds code-span table pipes, heading levels, aligned ordered items, list
 hanging indents, `---` rules and angle autolinks, without new blocks. [43](#source-43)
 
+[FACT] `follow PATH` uses the shared renderer for a live file pane, with source
+toggle, explicit selection copy and inert links. It polls once per second,
+refreshes off the input loop, follows the end until scrolling up and retains a
+stale display on read failure. Page keys browse the active plain window for
+large files; the footer identifies omitted bytes. [45](#source-45)
+
 [FACT] The native chat component supplies multiline editing, bounded block and
 inline Markdown display, source/code copy, a sorted Participants panel with
 trusted identities, presence and topic notices, live mention and command
@@ -335,3 +341,5 @@ checks transport behavior; it does not measure graphical parity. [4](#source-4)
 43. <a id="source-43"></a> [Shared Markdown renderer](../digests/markdown-renderer.md).
 
 44. <a id="source-44"></a> [Per-TUI space selection](../digests/tui-space-switch.md).
+
+45. <a id="source-45"></a> [Live file view](../digests/follow-view.md).

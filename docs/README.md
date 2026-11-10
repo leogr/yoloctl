@@ -20,6 +20,7 @@ or session history. Repository working rules are in [AGENTS.md](../AGENTS.md).
 | How do I provide AWS credentials, install the AWS CLI and grant Bedrock egress? | [Accounts](specs/accounts.md), [CLI](specs/cli.md) | [AWS CLI and Bedrock setup](digests/bedrock.md) |
 | Why does an operation recreate, block, or fail to clean up; how are runtime targets selected; what updates the VM image? | [Lifecycle](specs/lifecycle.md) | [Reconcile, teardown and runtime targets](digests/lifecycle.md), [space archives](digests/space-archives.md), [VM image replacement](digests/vm-images.md) |
 | What survives export/import, and why can a native link be rejected? | [Lifecycle](specs/lifecycle.md) | [Space archives](digests/space-archives.md) |
+| How do I follow a granted VM file or explicitly watch a host file, including Markdown and large logs? | [CLI](specs/cli.md), [TUI](specs/tui.md) | [Live file view](digests/follow-view.md) |
 | How do image builds share work, stream logs to every requester, publish immutable results and release cancelled attempts? | [Controller](specs/controller.md), [Lifecycle](specs/lifecycle.md) | [Image preparation](digests/image-preparation.md), [build progress](digests/image-progress.md) |
 | How are unused images/cache collected, and why can cleanup or a low-disk build stop? | [Lifecycle](specs/lifecycle.md) | [Storage cleanup](digests/storage-gc.md) |
 | Why can a Firecracker VM pause while its guest disk still has space? | [Lifecycle](specs/lifecycle.md) | [Host backing storage](digests/host-storage.md) |

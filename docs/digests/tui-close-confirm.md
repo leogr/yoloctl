@@ -1,6 +1,6 @@
 # TUI close confirmation
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes; re-read cited symbols when changing behavior.
 
 [FACT] Closing a pane or tab ends its local client. Only an established
 holder-backed view is known to leave its session running: `box attach`, root
@@ -14,7 +14,7 @@ never claims that the remote process stopped. [1](#source-1) [2](#source-2)
   exited pane, and a pane without a session.
 - **Asks:** every other live route, classified from the pane's launch argv and
   never from its title, aliases included. An editor (`box`/`space`/`account`/
-  catalog `edit`) says `unsaved changes are lost`; a follow (`box`/`space logs
+  catalog `edit`) says `unsaved changes are lost`; a follow (`follow PATH` or `box`/`space logs
   -f`) says `the follow ends`; `box use --stdin` and `account secret set` say
   `the input ends`. Everything else, including any live route the classifier
   does not name, says `its client ends; the remote side's outcome is unknown`.

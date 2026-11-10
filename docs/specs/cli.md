@@ -112,6 +112,14 @@ conversations it replaced. JSON adds `assigned_source`, `current` and
 includes the agent's reported state and a context of unknown size as tokens
 used; it has no activity fallback. [16](#source-16)
 
+[FACT] Host-only `follow PATH` watches a file inside the selected running VM's
+current grants, with guest-side completion and no automatic boot. Relative paths
+use the space default workdir. Explicit `--host` instead reads an ordinarily
+readable host file and cannot combine with `--space`. `--format auto|text|markdown`
+selects rendering; auto recognizes Markdown extensions. Whole documents through
+2 MiB render completely; larger files use a browsable 1 MiB plain window.
+[25](#source-25)
+
 [FACT] `space view` is a host-only live view of one running space. It reads
 through one long-lived internal stream after the usual bundle and running-VM
 check, so it never starts a VM. It refuses box operators and shows unavailable
@@ -225,3 +233,5 @@ version probe is bounded. Ordinary commands retain startup setup. [18](#source-1
 23. <a id="source-23"></a> [AWS CLI and Bedrock configuration](../digests/bedrock.md).
 
 24. <a id="source-24"></a> [Per-TUI space selection](../digests/tui-space-switch.md).
+
+25. <a id="source-25"></a> [Live file view](../digests/follow-view.md).

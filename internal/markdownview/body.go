@@ -311,7 +311,11 @@ func Overlay(pieces []Piece, start, end int, f func(Piece) Piece) []Piece {
 // Muted table dividers sit between logical body rows, after wrapped fragments.
 // Every added row counts toward maxBodyRows: the row that reaches it is
 // followed only by the limit notice.
-func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Theme, limited *bool) []BodyRow {
+func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Theme, limited *bool, unlimited bool) []BodyRow {
+	rowLimit := MaxBodyRows
+	if unlimited {
+		rowLimit = int(^uint(0) >> 1)
+	}
 	var rows []BodyRow
 	cards, pad := CodeCards(wm, lines, width), CardPad(width)
 	var fitted [][]BodyRow // the current table's rows, nil when it renders as text
@@ -328,7 +332,7 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 		if tbl != nil && (n == 0 || lines[n-1].Table != tbl) {
 			if tbl.SpaceBefore {
 				rows = append(rows, BodyRow{Line: n, Decor: true})
-				if len(rows) >= MaxBodyRows {
+				if len(rows) >= rowLimit {
 					return limit(n, 0)
 				}
 			}
@@ -336,7 +340,7 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 			if tbl.SpaceAfter {
 				after = 1 // the spacer after the table needs a row too
 			}
-			fitted, first = FitTable(wm, lines[n:], n, width, MaxBodyRows-len(rows)-after, theme), n
+			fitted, first = FitTable(wm, lines[n:], n, width, rowLimit-len(rows)-after, theme), n
 			rowRule = nil
 			if n+1 < len(lines) && lines[n+1].Table == tbl && lines[n+1].Decor {
 				rule := lines[n+1].Text
@@ -348,7 +352,7 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 		}
 		if tbl != nil && rowRule != nil && n > first+2 && dl.Cells != nil {
 			rows = append(rows, BodyRow{Line: n, Decor: true, Runs: rowRule})
-			if len(rows) >= MaxBodyRows {
+			if len(rows) >= rowLimit {
 				return limit(n, 0)
 			}
 		}
@@ -378,7 +382,7 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 			}
 			runs = append(runs, suffix...)
 			rows = append(rows, BodyRow{Line: n, Runs: PadCard(wm, runs, cards[n]), Decor: true})
-			if len(rows) >= MaxBodyRows {
+			if len(rows) >= rowLimit {
 				return limit(n, 0)
 			}
 		default:
@@ -407,14 +411,14 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 				}
 				runs = PadCard(wm, append(runs, suffix...), cards[n])
 				rows = append(rows, BodyRow{Line: n, Start: r[0], End: r[1], Runs: runs})
-				if len(rows) >= MaxBodyRows {
+				if len(rows) >= rowLimit {
 					return limit(n, r[1])
 				}
 			}
 		}
 		if tbl != nil && tbl.SpaceAfter && (n+1 == len(lines) || lines[n+1].Table != tbl) {
 			rows = append(rows, BodyRow{Line: n + 1, Decor: true})
-			if len(rows) >= MaxBodyRows {
+			if len(rows) >= rowLimit {
 				return limit(n+1, 0)
 			}
 		}

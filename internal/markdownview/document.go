@@ -47,6 +47,8 @@ func Parse(text string, options ParseOptions) Document {
 type LayoutOptions struct {
 	Method ansi.Method
 	Theme  spaceview.Theme
+	// UnlimitedRows is for complete file documents; chat keeps its default bound.
+	UnlimitedRows bool
 }
 
 type LayoutResult struct {
@@ -56,7 +58,7 @@ type LayoutResult struct {
 
 func Layout(doc Document, width int, options LayoutOptions) LayoutResult {
 	var result LayoutResult
-	result.Rows = bodyRows(options.Method, doc.Lines, width, options.Theme, &result.Limited)
+	result.Rows = bodyRows(options.Method, doc.Lines, width, options.Theme, &result.Limited, options.UnlimitedRows)
 	return result
 }
 
