@@ -160,6 +160,14 @@ remains uncertain; no upload is replayed automatically. Transcript attachment
 metadata comes only from validated reserved tags, never message text.
 [10](#source-10)
 
+[FACT] Audit control/viewing/export are host-only registered operations;
+operator authority grants no audit access. Desired state is native, while a
+separate audit receipt domain isolates uncertain control from unrelated boxes.
+Startup reconciliation skips reserved/held audit state and retains the existing
+global uncertainty rules. Firecracker uses a fixed PID-1 collector unit and a
+read-only support query before toggles; unsupported media needs explicit host
+image recreation. [18](#source-18)
+
 ## Sources
 
 1. <a id="source-1"></a> [Controller implementation](../digests/controller.md).
@@ -181,3 +189,5 @@ metadata comes only from validated reserved tags, never message text.
 
 16. <a id="source-16"></a> [Controller image preparation](../digests/image-preparation.md).
 17. <a id="source-17"></a> [Controller process supervision](../digests/controller-supervision.md).
+
+18. <a id="source-18"></a> [VM-native audit contracts](../digests/audit.md).

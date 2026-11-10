@@ -19,6 +19,7 @@ import (
 // effect gate sits. A new mutating method fails this test until it is
 // explicitly classified and instrumented.
 var mutationGates = map[string]string{
+	"audit.enable": "handler", "audit.disable": "handler",
 	// The space-operation wrapper gates after its native locks, before the
 	// command and its deferred role synchronization.
 	"box.create": "wrapper", "box.copy": "wrapper", "box.start": "wrapper", "box.stop": "wrapper",
@@ -61,7 +62,7 @@ func TestEveryMutationIsGatedAndClassified(t *testing.T) {
 			t.Errorf("%s is classified as wrapper-gated but the wrapper does not gate it", method)
 		}
 	}
-	if mutations != 41 || len(mutationGates) != 41 {
+	if mutations != 43 || len(mutationGates) != 43 {
 		t.Fatalf("%d mutations, %d classified", mutations, len(mutationGates))
 	}
 }

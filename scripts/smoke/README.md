@@ -684,3 +684,106 @@ Darwin's Go fork/exec error pipe merges session, controlling-TTY and exec errors
 comparison run is a no-reproduction result, not proof that Rosetta caused a
 previous failure. Preserve the first failure and run the ordinary parallel full
 Go suite as well as isolated repetitions; do not substitute `-p1` for that gate.
+
+### Falco audit host qualification
+
+Run only from the host against a separately owned disposable space. Do not use
+the space hosting this development session. Local rule/unit tests do not prove
+modern-eBPF loading or workload identity.
+
+Every host command must explicitly select the fixture home with
+`YOLOCTL_HOME="$SMOKE_ROOT/home"`; never inherit a different home. Verify
+SMOKE_ROOT is the owned test fixture before using these examples.
+
+For Lima, start the disposable space with this controller build, then run
+`yoloctl audit enable --space NAME`. Check `audit status --space NAME --json`
+for enabled desired state, active service, pinned tool version and a loaded
+modern-eBPF driver. Failed status includes the phase, process/timeout error and
+a bounded escaped stderr prefix; it does not infer a kernel problem from every
+Falco failure. Validation with `-V` alone does not open the capture engine or
+prove event-schema compatibility. In the VM, run an owned executable named
+`yolo-audit-test` to exercise the controlled rule. Read `audit logs --space
+NAME --json`, then `audit export --space NAME --output NEW.jsonl`; check the
+finite interval/count and explicit drops/metadata/retention gaps. Confirm a
+second export to the same file is refused. Disable auditing; prove the service
+and probe are stopped and retained export still works. Verify boxes were not
+restarted. Measure idle/build overhead and drops; no SLA is asserted.
+
+For that controlled rule, in the disposable VM (or a writable directory of a
+disposable box), copy an ELF executable rather than using a shell script:
+
+```sh
+audit_probe_dir=$(mktemp -d /tmp/yoloctl-audit-test-XXXXXXXX)
+cp /usr/bin/true "$audit_probe_dir/yolo-audit-test"
+"$audit_probe_dir/yolo-audit-test"
+```
+
+A direct VM execution has no box metadata and displays `(vm)`. A box
+execution needs live container/plugin metadata for enrichment. Check that
+pretty output shows the pinned rule message, available process/user/container
+and file fields without `<NA>` clutter or a repeated raw field dump; `--verbose`
+adds raw fields, JSON always retains them. Check narrow-terminal wrapping and
+four/eight-space message/field indentation. Old records cannot recover newly
+added fields. In follow mode,
+the initial summary appears once; idle sliding-window polls and new events do
+not repeat it unless loss/gap state changes. Verify idle TUI selection is stable,
+selected messages/fields are readable, and terminal colours become plain when
+piped or with `NO_COLOR=1`. These remain host checks, not fixture-test proof.
+
+For metadata-plugin qualification, confirm the pinned `yolo` and `container`
+plugins loaded. The controller publishes a private snapshot with generation metadata;
+read/exported events must show the selected `yolo.*` fields. Stop publication in
+the owned fixture, wait beyond the 15-second freshness bound and prove events
+remain visible with unavailable metadata. Check missing/ambiguous IDs and
+container recreation/name reuse. No raw Env/argv may appear in the snapshot,
+logs or export. Repeat on native Linux amd64 and arm64; cross-building and a
+synthetic ABI fixture are not native Falco event evidence.
+
+For rules/labels qualification, create a fresh disposable box with this build.
+Verify the native system containerd/default-namespace identity and the selected
+`yoloctl.audit.*` labels, then compare exported box/space/account/agent/runtime
+and network fields to the actual launch. Missing legacy labels and delayed
+metadata must produce an unlabelled event, not silence. Run the controlled test
+inside both confined and declared unrestricted-network boxes. Exercise ordinary
+shell, git, compiler and permitted debugger workloads; do not assert that every
+alert is malicious or that labels prove the triggering PID was confined.
+
+| Rule family | Disposable positive case | Negative/noise control |
+|---|---|---|
+| Runtime/admin socket | Attempt a listed admin socket; inspect success/refusal | Ordinary operator endpoint traffic |
+| Infrastructure | Attempt a write to selected infrastructure | Controller deployment, audit rotation and verified OpenShell setup |
+| Kernel instrumentation | Attempt a workload BPF/module syscall | The supervised VM-root Falco probe load |
+| Namespace | Attempt a workload namespace/mount syscall | Verified OpenShell launch paths/context |
+| Process inspection | Unexpected cross-process inspection | Configured debugger executable in known confined context |
+| Protected file | Denied open of a listed sensitive file | Ordinary allowed project reads |
+| Persistence | Change selected unit/cron/key/loader paths, including real symlink locations and rename/hard-link targets | Host package maintenance and containerd/BuildKit image-layer symlinks pointing at protected VM paths |
+| Anonymous executable | Explicit opt-in test only; rule starts disabled | Compiler/package temporary executables |
+
+Repeat image-build/unpack controls with containerd, BuildKit, nerdctl and shims;
+verify their genuine writes to protected VM paths still alert. After explicit
+updated enable, compare a box event with its native full container ID and labels
+on both Lima systemd scopes and Firecracker cgroupfs. A `(vm)` label reflects
+Falco's host report and is not proof that container recognition succeeded.
+
+These are later host acceptance cases, not actions for the active development
+space. Record actual metadata gaps, false positives and missing syscall evidence;
+a rule-validation or synthetic event fixture PASS does not establish these hits.
+
+
+For Firecracker, begin with a separately owned old-image fixture. Audit enable
+must refuse before installing tools or changing desired state, with the explicit
+image-update hint. From the host run
+`YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl space recreate NAME --update-vm-image`
+using the candidate bundle. This discards sessions/ephemeral workdirs and
+preserves native data/accounts/declarations; boxes need explicit starts. Verify
+the same native disk UUID and selected account/declaration bytes afterward.
+A controller-only update cannot change the kernel or PID-1.
+
+On the updated native amd64/KVM fixture, verify `/sys/kernel/btf/vmlinux`, then
+repeat the Lima enable/event/export/disable and metadata/rule cases above.
+Confirm a loaded modern-eBPF probe, fixed PID-1 service ownership, acknowledged
+collector/descendant teardown, controller/VM restart reconciliation and no box
+restart on a toggle. Do not infer driver support from rule validation, BTF
+section inspection or a simulated backend. Repeat the Lima checks against
+this final candidate. Audit logs/tools are omitted from ordinary space backup;
+an import must have auditing disabled.

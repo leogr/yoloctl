@@ -358,3 +358,18 @@ func (store Receipts) CheckImageCleanup(space, disk string, exclude ...string) e
 	}
 	return nil
 }
+
+// CheckAuditReconcile refuses startup application while its native domain is
+// reserved or held. It never treats current service state as historical proof.
+func (store Receipts) CheckAuditReconcile(space, disk string) error {
+	s := &Server{Hello: Hello{Space: space}, DiskID: disk, Receipts: store}
+	h, err := s.loadHolds("")
+	if err != nil {
+		return err
+	}
+	_, receipts, _ := h.conflict(&Scope{Writes: []Resource{{Kind: ResourceAudit}}})
+	if len(receipts) != 0 {
+		return fmt.Errorf("audit state is reserved or held in space %s; review its operation before reconciling", space)
+	}
+	return nil
+}
