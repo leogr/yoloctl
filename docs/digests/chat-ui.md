@@ -1,6 +1,6 @@
 # Native chat UI component
 
-Verification: `3bae6dd1d6ffa1356f7678850584fe6d9cf0fac8` and accompanying changes.
+Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; re-read affected cited symbols when changing behavior.
 
 [FACT] `internal/chatui` is a transport-neutral Bubble Tea model. Its caller
 supplies connection events, logical messages, correlated receipts, roster/topic

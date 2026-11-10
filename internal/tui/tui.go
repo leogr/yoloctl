@@ -805,7 +805,7 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 		return nil
 	}
 	if !m.standalone {
-		args = pinReopenArgs(args, func() (string, error) { return reopenSpace(spaceenv.Current()) })
+		args = pinReopenArgs(args, func() (string, error) { return m.reopenSpace(spaceenv.Current()) })
 	}
 	// A pane's requests name it, so an empty pane of its tab can take them;
 	// one arriving before Start returns names no pane.

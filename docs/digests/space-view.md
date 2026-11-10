@@ -1,6 +1,6 @@
 # Live space view
 
-Verification: `2e70c9288f335135add2780e2607fa818ce8341c` and accompanying changes; `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; re-read affected cited symbols when changing behavior.
 
 [FACT] `space view [SPACE]` is a host-only command added beside export and
 import; its positional completes running spaces. It refuses box operators and

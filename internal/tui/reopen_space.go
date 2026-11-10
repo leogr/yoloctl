@@ -15,3 +15,13 @@ func reopenSpace(native *spaceenv.Context) (string, error) {
 	space, _, err := config.ResolveSpace("", false)
 	return space, err
 }
+
+// reopenSpace uses the same implicit target as this TUI's child environment.
+// Native clients keep their trusted scope; explicit argv bypasses this callback.
+func (m *model) reopenSpace(native *spaceenv.Context) (string, error) {
+	if native != nil || m.ctxSpace == "" {
+		return reopenSpace(native)
+	}
+	space, _, err := config.ResolveSpace(m.ctxSpace, true)
+	return space, err
+}

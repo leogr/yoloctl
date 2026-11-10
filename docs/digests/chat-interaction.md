@@ -1,6 +1,6 @@
 # Native chat input and message actions
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; drag pick `9cb4a0f7fca3cd6090c23db9de447b858b68c38a` and accompanying changes; code-block copy buttons `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; channel selection verified at `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; narrow channel layout `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `77a14b6864848cababd79a2d98e231f8c9575dd8` and accompanying changes; re-read affected cited symbols when changing behavior.
 
 See [reading and selection](chat-reading.md) for drag copy and scrolling, and
 [participants, settings and attachment](chat-participants.md) for people and

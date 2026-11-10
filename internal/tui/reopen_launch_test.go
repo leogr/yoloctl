@@ -21,6 +21,7 @@ func TestPaneReopenKeepsActualLaunchTarget(t *testing.T) {
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			t.Setenv("YOLOCTL_HOME", t.TempDir())
+			t.Setenv(config.SpaceEnv, "")
 			if err := (&config.Context{Space: "first"}).Save(); err != nil {
 				t.Fatal(err)
 			}
@@ -35,6 +36,13 @@ func TestPaneReopenKeepsActualLaunchTarget(t *testing.T) {
 			t.Cleanup(func() { executable = oldExec })
 			executable = func() (string, error) { return script, nil }
 			m := newTestModel(t, 100, 26)
+			if err := m.initSpace(); err != nil {
+				t.Fatal(err)
+			}
+			// Another TUI/global context change must not override this model's pin.
+			if err := (&config.Context{Space: "outside"}).Save(); err != nil {
+				t.Fatal(err)
+			}
 			p := m.startPane(args, 20, 100)
 			if p == nil {
 				t.Fatalf("start: %s", m.status)
@@ -62,6 +70,7 @@ func TestPaneReopenKeepsActualLaunchTarget(t *testing.T) {
 			if err := (&config.Context{Space: "changed"}).Save(); err != nil {
 				t.Fatal(err)
 			}
+			m.ctxSpace = "different-tui-selection"
 			m.reattachPane(tab, p)
 			next := tab.Focused()
 			if next == p {

@@ -1,6 +1,6 @@
 # TUI re-attach and view reopen
 
-Verification: `2e70c9288f335135add2780e2607fa818ce8341c` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; re-read affected cited symbols when changing behavior.
 
 [FACT] Ended panes offer explicit actions:
 - `attach`/`box attach`: `[ Re-attach ]`, regardless of exit status.
@@ -21,7 +21,8 @@ restoration of its process/cwd/history; logs may repeat their normal initial tai
 
 [FACT] Every pane privately copies its launch argv (`Pane.Args`), never parsing
 `Pane.Command`. Eligible implicit spaces are pinned once: trusted native context,
-then the existing saved context/default resolver. The target is inserted as the
+then this TUI's pinned space (the same target as its child environment), with
+the existing context/default resolver for an unpinned model. The target is inserted as the
 proper positional or `--space` before `--`, passed to the child and recorded.
 Reopen never resolves it again. Context errors preserve the initial CLI error
 path without offering unbound replay. Direct re-attach strips only new-session;
@@ -59,9 +60,9 @@ The end banner uses `EndHint` (`r to re-attach to api` or `r to reopen`).
 ## Sources
 
 1. <a id="source-1"></a> [Re-attach](../../internal/tui/reattach.go#L1) — `reattachArgs`, `viewEndAction`, `viewActionForPane`, `reattachHint`, `reattachable`, `reattachPane`, `reattachSlots`, `applyReattachButtons`, `reattachClick`.
-2. <a id="source-2"></a> [Pane start and keys](../../internal/tui/tui.go#L1567) — `handleExitedTabKey`; `startPane` (L854) sets `Args` and `EndHint`; `Pane.Args` in panes/layout.go.
+2. <a id="source-2"></a> [Pane start and keys](../../internal/tui/tui.go#L1548) — `handleExitedTabKey`; `startPane` (L801) sets `Args` and `EndHint`; `Pane.Args` in panes/layout.go.
 3. <a id="source-3"></a> [Mouse routing](../../internal/tui/mouse.go#L236-L241) — `handleMouse` calls `reattachClick` after popups and before chrome.
-4. <a id="source-4"></a> [Drawing order](../../internal/tui/tui.go#L1801) — `applyReattachButtons` before `applyOverlay`.
+4. <a id="source-4"></a> [Drawing order](../../internal/tui/tui.go#L1787) — `applyReattachButtons` before `applyOverlay`.
 5. <a id="source-5"></a> [Tests](../../internal/tui/reattach_test.go#L17) — `TestReattachArgs`, `TestEndedAttachReattachesInPlace`, `TestReattachOnlyEndedAttachViews`, `TestReattachButton`, `TestReattachKeyIgnoresLockModifiers`; `reopen_test.go`, `reopen_launch_test.go` and `reopen_args_test.go` cover non-box actions, actual child argv/context changes, exclusions and clipping.
 6. <a id="source-6"></a> [End banner](../../internal/tui/term/session.go#L322) — `writeExitBanner`, `ExitCloseHint`; `TestExitBannerEndHint` in term_test.go; `attachedSetupOutput` in attach.go.
 
@@ -69,5 +70,5 @@ The end banner uses `EndHint` (`r to re-attach to api` or `r to reopen`).
 8. <a id="source-8"></a> [Typed framing](../../internal/termio/tabrequest.go#L15) — `TabRequest`, `ValidateResumeTarget`, `ReadTabRequests`; `claimTabRequests` in cmd/yoloctl/resume_target.go and startup in main.go; chat_view.go/space_view.go consume that context channel.
 9. <a id="source-9"></a> [Retained target](../../internal/tui/term/session.go#L120) — `Start`, `pump`, `ResumeTarget`; `resumeTargetKind` and `reattachArgsForPane` in internal/tui/resume_target.go; resume_target_test.go in term and tui, and reattach_completion_test.go.
 
-10. <a id="source-10"></a> [View classification and target pinning](../../internal/tui/reopen_args.go#L1) — `parseReopenView`, `plainInteractiveShell`, `pinReopenArgs`; `reopenSpace` in reopen_space.go mirrors CLI context resolution; `startPane` passes and records pinned argv. Regressions in reopen_args_test.go, reopen_space_test.go and reopen_launch_test.go.
+10. <a id="source-10"></a> [View classification and target pinning](../../internal/tui/reopen_args.go#L1) — `parseReopenView`, `plainInteractiveShell`, `pinReopenArgs`; `reopenSpace` in reopen_space.go preserves trusted native scope and the per-TUI pin; `startPane` passes and records pinned argv. Regressions in reopen_args_test.go, reopen_space_test.go and reopen_launch_test.go.
 11. <a id="source-11"></a> [Space view reconnect](../../internal/tui/spaceview/run.go#L17) — `Run`, `keepConnected` retry an unavailable stream without booting a VM.

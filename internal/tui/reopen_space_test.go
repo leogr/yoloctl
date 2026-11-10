@@ -14,6 +14,7 @@ import (
 
 func TestReopenSpaceMatchesCLIResolution(t *testing.T) {
 	t.Setenv("YOLOCTL_HOME", t.TempDir())
+	t.Setenv(config.SpaceEnv, "")
 	got, err := reopenSpace(nil)
 	want, _, cliErr := config.ResolveSpace("", false)
 	if err != nil || cliErr != nil || got != want || got != "default" {
@@ -56,5 +57,22 @@ func TestReopenSpaceMatchesCLIResolution(t *testing.T) {
 	pinned := pinReopenArgs(args, func() (string, error) { return reopenSpace(nil) })
 	if !slices.Equal(pinned, args) {
 		t.Fatal("malformed context changed original argv/error path")
+	}
+}
+
+func TestReopenTargetUsesModelPinWithNativeAndExplicitPrecedence(t *testing.T) {
+	t.Setenv("YOLOCTL_HOME", t.TempDir())
+	t.Setenv(config.SpaceEnv, "inherited")
+	m := &model{ctxSpace: "tui-pinned"}
+	if got, err := m.reopenSpace(nil); err != nil || got != "tui-pinned" {
+		t.Fatal("inherited context overrode the TUI pin", got, err)
+	}
+	if got, err := m.reopenSpace(&spaceenv.Context{Space: "native"}); err != nil || got != "native" {
+		t.Fatal("TUI pin overrode trusted native scope", got, err)
+	}
+	args := []string{"chat", "--space", "explicit"}
+	got := pinReopenArgs(args, func() (string, error) { t.Fatal("explicit space consulted TUI pin"); return m.reopenSpace(nil) })
+	if !slices.Equal(got, args) {
+		t.Fatal("explicit target changed", got)
 	}
 }
