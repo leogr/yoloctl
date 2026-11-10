@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -59,6 +60,10 @@ func TestHolderAgainstPrivilegedEndpoint(t *testing.T) {
 	if r.err != nil || r.status != 3 {
 		t.Fatalf("RunHolder = %d, %v; output %q", r.status, r.err, a.output())
 	}
+	var exit *ExitError
+	if err := a.wait(t); !errors.As(err, &exit) || exit.Status != 3 {
+		t.Fatalf("Attach = %v, want ExitError status 3", err)
+	}
 	if !strings.Contains(a.output(), "got:hello") {
 		t.Fatalf("output = %q", a.output())
 	}
@@ -69,6 +74,82 @@ func TestHolderAgainstPrivilegedEndpoint(t *testing.T) {
 	if _, err := readSessionFile[Marker](opts.MarkerPath); !os.IsNotExist(err) {
 		t.Fatalf("marker after a clean exit: %v", err)
 	}
+}
+
+// A completed holder-side write does not join the independent Attach consumer.
+// Hold that consumer inside its output write until the real holder has exited,
+// then release and join it before inspecting the final bytes.
+func TestHolderEndpointDelayedAttachConsumer(t *testing.T) {
+	opts, _ := startHolderEndpoint(t)
+	opts.Argv = []string{"sh", "-c", `read -r line; printf 'got:%s\n' "$line"; exit 3`}
+	res := runHolderAsync(context.Background(), opts)
+	var conn net.Conn
+	waitFor(t, "attach socket", func() bool {
+		c, err := net.Dial("unix", opts.AttachSocket)
+		if err != nil {
+			return false
+		}
+		conn = c
+		return true
+	})
+	t.Cleanup(func() { _ = conn.Close() })
+	pr, pw := io.Pipe()
+	t.Cleanup(func() { _ = pw.Close(); _ = pr.Close() })
+	a := &attachClient{stdinW: pw, done: make(chan error, 1)}
+	w := &heldEndpointOutput{client: a, entered: make(chan struct{}), release: make(chan struct{})}
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(w.release) }) }
+	t.Cleanup(release)
+	go func() {
+		a.done <- Attach(context.Background(), conn, AttachIO{Stdin: pr, Stdout: w})
+	}()
+	if _, err := io.WriteString(pw, "hello\r"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-w.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for the delayed consumer")
+	}
+	select {
+	case r := <-res:
+		if r.err != nil || r.status != 3 {
+			t.Fatalf("RunHolder = %d, %v", r.status, r.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for the holder while its consumer is held")
+	}
+	if got := a.output(); got != "" {
+		t.Fatalf("held consumer output = %q, want empty", got)
+	}
+	select {
+	case err := <-a.done:
+		t.Fatalf("Attach returned before consumer release: %v", err)
+	default:
+	}
+	release()
+	var exit *ExitError
+	if err := a.wait(t); !errors.As(err, &exit) || exit.Status != 3 {
+		t.Fatalf("Attach = %v, want ExitError status 3", err)
+	}
+	if !strings.Contains(a.output(), "got:hello") {
+		t.Fatalf("joined consumer output = %q", a.output())
+	}
+}
+
+type heldEndpointOutput struct {
+	client  *attachClient
+	entered chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (w *heldEndpointOutput) Write(p []byte) (int, error) {
+	w.once.Do(func() {
+		close(w.entered)
+		<-w.release
+	})
+	return w.client.Write(p)
 }
 
 // Unlike openshell-sandbox, the endpoint hangs up a session whose holder
