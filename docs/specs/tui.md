@@ -65,7 +65,7 @@ re-attaches on its own. Lifecycle auto-attach panes also offer ordinary
 this does not prove lifecycle success or replay its command. Suppressed and
 noninteractive lifecycle commands are excluded. [41](#source-41)
 
-[FACT] Ended chat, space-view, followed log and interactive VM/box-shell panes
+[FACT] Ended chat, space-view, followed log, `follow` file-view and interactive VM/box-shell panes
 use `[ Reopen ]`/`r` in the same slot. Arbitrary remote commands, shell scripts,
 editors and secret/input prompts are excluded. Implicit spaces are pinned in
 the initial child argv and reused unchanged; changing palette context cannot

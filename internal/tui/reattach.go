@@ -92,7 +92,7 @@ func reattachAction(args []string, box string) endedViewAction {
 
 func viewEndAction(args []string) (endedViewAction, bool) {
 	v, ok := parseReopenView(args)
-	if !ok || v.kind == "attach" || !v.spaceExplicit {
+	if !ok || v.kind == "attach" || !v.spaceExplicit && !v.host {
 		return endedViewAction{}, false
 	}
 	return endedViewAction{v.args, "[ Reopen ]", "r to reopen"}, true

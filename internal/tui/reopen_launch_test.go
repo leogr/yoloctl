@@ -16,7 +16,7 @@ func TestPaneReopenKeepsActualLaunchTarget(t *testing.T) {
 	for _, args := range [][]string{
 		{"chat"}, {"space", "view"}, {"sp", "shell", "--root", "--"},
 		{"box", "logs", "api", "-f"}, {"box", "exec", "api", "--", "/bin/bash", "-i"},
-		{"attach", "api", "--new-session"},
+		{"attach", "api", "--new-session"}, {"follow", "notes.md", "--format", "markdown"},
 		{"box", "attach", "api", "--chat-room-id", "r", "--chat-member-id", "m", "--chat-box-id", "b", "--chat-allow-start", "--passthrough"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {

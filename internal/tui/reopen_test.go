@@ -36,6 +36,11 @@ func TestReopenViewArgs(t *testing.T) {
 		{[]string{"account", "secret", "set", "token"}, false},
 		{[]string{"box", "start", "api"}, false},
 		{[]string{"unknown", "--follow"}, false},
+		{[]string{"follow", "notes.md"}, true},
+		{[]string{"follow", "--space=dev", "--format", "text", "notes.md"}, true},
+		{[]string{"follow", "--host", "/tmp/service.log"}, true},
+		{[]string{"follow", "--host", "--space=dev", "notes.md"}, false},
+		{[]string{"follow", "--format=bogus", "notes.md"}, false},
 		{nil, false},
 	} {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
@@ -62,7 +67,7 @@ func TestEndedViewsReopenInPlace(t *testing.T) {
 	oldExec := executable
 	t.Cleanup(func() { executable = oldExec })
 	executable = func() (string, error) { return truePath(t), nil }
-	for _, args := range [][]string{{"chat", "--space", "dev"}, {"box", "logs", "api", "-f"}, {"space", "logs", "dev", "--follow"}, {"space", "view", "dev"}, {"space", "ssh", "--root"}, {"box", "exec", "api", "--", "bash", "-il"}} {
+	for _, args := range [][]string{{"chat", "--space", "dev"}, {"box", "logs", "api", "-f"}, {"space", "logs", "dev", "--follow"}, {"space", "view", "dev"}, {"space", "ssh", "--root"}, {"box", "exec", "api", "--", "bash", "-il"}, {"follow", "--space", "dev", "notes.md"}, {"follow", "--host", "--format", "text", "/tmp/service.log"}} {
 		for _, failed := range []bool{false, true} {
 			t.Run(strings.Join(args, " ")+map[bool]string{false: "/success", true: "/failed"}[failed], func(t *testing.T) {
 				m := newTestModel(t, 100, 26)

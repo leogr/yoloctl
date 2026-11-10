@@ -1,6 +1,6 @@
 # Live file view
 
-Verification: `6c7d331534c2c5b9fa952ff752610eb03a845ce6` and accompanying changes.
+Verification: `5ab92ee7f49123d5581438727083e6934618565f` and accompanying changes.
 
 [FACT] Host-only `yoloctl follow PATH [--space SPACE] [--format auto|text|markdown]`
 opens one live pane. Default mode pins the selected space and absolute VM path;
@@ -49,14 +49,17 @@ selection.
 [FACT] Markdown parsing/layout/copy geometry comes from `markdownview`, with
 unlimited document rows for this caller; chat retains its default row bound.
 Ctrl+S toggles source below the size threshold. Drag selects; `y` or Ctrl+Shift+C
-explicitly copies through the existing host clipboard policy. Code-copy controls
+explicitly copies through the existing host clipboard policy. In the TUI an
+ended follow pane offers [Reopen](tui-reattach.md) with its exact launch argv
+(path, `--host`/`--space`, `--format`); an implicit space is the one pinned at
+launch. Code-copy controls
 use the same policy. Terminal controls are sanitized; links have no opener,
 and there are no chat identities, Quote actions or implicit effects. Close
 ends the local follow view. Component tests cover current-grant refusal,
 changed/unchanged wire payloads, edits/replacement/shrink, complete 2 MiB
 Markdown beyond chat's row limit, window browsing, slow reads and cancellation.
 These establish component behavior, not native terminal or live backend parity.
-[4](#source-4) [5](#source-5) [6](#source-6)
+[4](#source-4) [5](#source-5) [6](#source-6) [9](#source-9)
 
 [FACT] Body rows keep the terminal background behind and after their text, as
 chat transcript rows do. Prose, headings, pipe text and tables have no row fill;
@@ -74,3 +77,4 @@ and light themes. [7](#source-7) [8](#source-8)
 6. <a id="source-6"></a> [Shared layout option](../../internal/markdownview/document.go#L1) — `LayoutOptions.UnlimitedRows`; internal/tui/confirm_close.go `closeEffect` and tui.go `opensLiveSurface` own pane routing/closing.
 7. <a id="source-7"></a> [Body row painting](../../internal/followview/model.go#L492) — `View`, body `Paint` fill.
 8. <a id="source-8"></a> [Background regression](../../internal/followview/background_test.go#L18) — `TestBodyRowsKeepTerminalBackground`.
+9. <a id="source-9"></a> [Reopen classification](../../internal/tui/reopen_args.go#L24) — `parseReopenView` `follow` case, `pinReopenArgs`; `viewEndAction` in reattach.go; follow cases in reopen_args_test.go, reopen_test.go and reopen_launch_test.go.

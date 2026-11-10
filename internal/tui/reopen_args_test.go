@@ -49,6 +49,17 @@ func TestParseReopenView(t *testing.T) {
 		{[]string{"chat", "status"}, false, "", false},
 		{[]string{"space", "logs"}, false, "", false},
 		{[]string{"space", "view", "--help"}, false, "", false},
+		{[]string{"follow", "notes.md"}, true, "", false},
+		{[]string{"follow", "--space", "dev", "--format", "markdown", "notes.md"}, true, "dev", false},
+		{[]string{"follow", "--host", "--format=text", "/tmp/service.log"}, true, "", false},
+		{[]string{"follow", "--", "-odd.md"}, true, "", false},
+		{[]string{"follow", "--host", "--space", "dev", "notes.md"}, false, "", false},
+		{[]string{"follow", "--format", "html", "notes.md"}, false, "", false},
+		{[]string{"follow", ""}, false, "", false},
+		{[]string{"follow", "a.md", "b.md"}, false, "", false},
+		{[]string{"follow"}, false, "", false},
+		{[]string{"follow", "notes.md", "--help"}, false, "", false},
+		{[]string{"follow", "--space", "bad/name", "notes.md"}, false, "", false},
 		{nil, false, "", false},
 	} {
 		t.Run(strings.Join(tc.argv, " "), func(t *testing.T) {
@@ -76,6 +87,8 @@ func TestPinReopenArgsRetainsLaunchSpace(t *testing.T) {
 		{[]string{"sp", "view", "--no-motion"}, []string{"sp", "view", "--no-motion", "first"}},
 		{[]string{"space", "shell", "--root", "--start", "--"}, []string{"space", "shell", "--root", "--start", "first", "--"}},
 		{[]string{"box", "exec", "api", "--", "bash", "-il"}, []string{"box", "exec", "api", "--space", "first", "--", "bash", "-il"}},
+		{[]string{"follow", "notes.md", "--format", "markdown"}, []string{"follow", "notes.md", "--format", "markdown", "--space", "first"}},
+		{[]string{"follow", "--host=false", "--", "-odd.md"}, []string{"follow", "--host=false", "--space", "first", "--", "-odd.md"}},
 	} {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
 			calls := 0
@@ -99,6 +112,9 @@ func TestPinReopenArgsPreservesExplicitAndInvalid(t *testing.T) {
 		{"chat", "--space", ""}, {"space", "view", "bad/name"},
 		{"box", "exec", "api", "--", "bash", "-c", "echo hi"}, {"box", "edit", "api"},
 		{"space", "ssh", "--", "uname"}, {"space", "logs"}, {"chat", "--unknown"},
+		// follow --host reads a host file: no space applies, so none is pinned.
+		{"follow", "--host", "/tmp/service.log"}, {"follow", "--space=dev", "notes.md"},
+		{"follow", "--host", "--space", "dev", "notes.md"}, {"follow", "--format", "html", "notes.md"},
 	} {
 		got := pinReopenArgs(args, func() (string, error) { t.Fatal("explicit or invalid argv consulted current context"); return "", nil })
 		if !slices.Equal(got, args) {

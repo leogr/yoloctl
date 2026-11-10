@@ -19,6 +19,9 @@ type reopenView struct {
 	space           string
 	positionalSpace bool
 	spaceExplicit   bool
+	// host is follow's explicit host-file target: no space applies, so it
+	// is never pinned and needs no space to be replayed.
+	host bool
 }
 
 func parseReopenView(args []string) (reopenView, bool) {
@@ -42,6 +45,11 @@ func parseReopenView(args []string) (reopenView, bool) {
 		f.String("human", "", "")
 		f.String("box", "", "")
 		f.String("catalog-read", "single", "")
+	case "follow":
+		kind = "follow"
+		f.String("space", "", "")
+		f.Bool("host", false, "")
+		f.String("format", "auto", "")
 	case "space", "sp":
 		if len(args) < 2 {
 			return reopenView{}, false
@@ -111,6 +119,15 @@ func parseReopenView(args []string) (reopenView, bool) {
 			if len(pos) != 0 {
 				return reopenView{}, false
 			}
+		case "follow":
+			// Mirror follow's own argument checks: one nonempty path, a known
+			// format and --host never combined with --space.
+			v.host, _ = f.GetBool("host")
+			format, _ := f.GetString("format")
+			if len(pos) != 1 || pos[0] == "" || v.host && v.spaceExplicit ||
+				format != "auto" && format != "text" && format != "markdown" {
+				return reopenView{}, false
+			}
 		case "logs":
 			if len(pos) != 1 || layout.ValidateName("agentbox", pos[0]) != nil {
 				return reopenView{}, false
@@ -161,7 +178,7 @@ func plainInteractiveShell(args []string) bool {
 // to the original command to report, without offering unpinned replay.
 func pinReopenArgs(args []string, resolve func() (string, error)) []string {
 	v, ok := parseReopenView(args)
-	if !ok || v.spaceExplicit {
+	if !ok || v.spaceExplicit || v.host {
 		return slices.Clone(args)
 	}
 	space, err := resolve()

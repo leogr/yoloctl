@@ -1,13 +1,14 @@
 # TUI re-attach and view reopen
 
-Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; re-read affected cited symbols when changing behavior.
+Verification: `5ab92ee7f49123d5581438727083e6934618565f` and accompanying changes; re-read affected cited symbols when changing behavior.
 
 [FACT] Ended panes offer explicit actions:
 - `attach`/`box attach`: `[ Re-attach ]`, regardless of exit status.
 - Lifecycle auto-attach: Re-attach when a validated host target was retained.
-- Interactive chat/space view, followed box/space logs, interactive
-  `space ssh/shell` without a remote command, and `box exec` of plain
-  sh/bash/zsh/fish with interactive/login flags: `[ Reopen ]`.
+- Interactive chat/space view, followed box/space logs, `follow PATH`
+  (one nonempty path, a known `--format`, `--host` never with `--space`),
+  interactive `space ssh/shell` without a remote command, and `box exec` of
+  plain sh/bash/zsh/fish with interactive/login flags: `[ Reopen ]`.
 - Help, `--box-use`, suppressed lifecycle attachment, finite/remote commands,
   shell scripts/`-c`/stdin modes, editors, secret prompts and standalone views
   are excluded. Running followers are not restarted. [1](#source-1)
@@ -24,6 +25,7 @@ restoration of its process/cwd/history; logs may repeat their normal initial tai
 then this TUI's pinned space (the same target as its child environment), with
 the existing context/default resolver for an unpinned model. The target is inserted as the
 proper positional or `--space` before `--`, passed to the child and recorded.
+`follow --host` names a host file, so it receives no space and replays as launched.
 Reopen never resolves it again. Context errors preserve the initial CLI error
 path without offering unbound replay. Direct re-attach strips only new-session;
 space, passthrough and chat identity/start-consent guards remain.
