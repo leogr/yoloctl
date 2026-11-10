@@ -55,7 +55,7 @@ Ports are copied verbatim from the source manifest (the workdir's
 devcontainer.json is NOT re-read); the source and the copy cannot both
 hold the same published host port at the same time.
 
---space picks the DESTINATION space (flag > pinned context > default);
+--space picks the DESTINATION space (flag > YOLOCTL_SPACE > global context > default);
 --from-space picks the space holding SOURCE (defaults to the
 destination). A cross-space copy needs the destination space to grant
 the host workdir and any extra mounts (yoloctl space mount add);

@@ -60,6 +60,8 @@ func asking(ps []*panes.Pane) []*panes.Pane {
 // closeConfirm is the open popup: bound to the pane or tab being closed and
 // to the running commands it listed. It never proceeds on its own.
 type closeConfirm struct {
+	space         string // nonempty: close all tabs and change this TUI default
+	all           []switchPane
 	tab           *tabs.Tab
 	pane          *panes.Pane // nil when the whole tab closes
 	current       *tabs.Tab   // the tab shown when it opened
@@ -115,6 +117,10 @@ func (m *model) cancelConfirm() {
 // refreshes the list instead of closing anything unlisted.
 func (m *model) acceptConfirm() {
 	c := m.confirm
+	if c.space != "" {
+		m.acceptSpaceSwitch()
+		return
+	}
 	var now []*panes.Pane
 	if c.pane != nil {
 		now = asking([]*panes.Pane{c.pane})
@@ -143,7 +149,7 @@ func (m *model) checkConfirm() {
 	if c == nil {
 		return
 	}
-	if m.tabs.Index(c.tab) < 0 || m.tabs.Current() != c.current || c.pane != nil && !hasPane(c.tab, c.pane) {
+	if c.space == "" && (m.tabs.Index(c.tab) < 0 || m.tabs.Current() != c.current || c.pane != nil && !hasPane(c.tab, c.pane)) {
 		m.cancelConfirm()
 		m.ownerClosed(c.notice, c.noticeUntil, c.x, c.y) // a live notice outlives it, inert
 		return
@@ -194,6 +200,9 @@ const (
 // ends.
 func (m *model) confirmEntries() []string {
 	var entries []string
+	if m.confirm.space != "" {
+		entries = m.switchSummary()
+	}
 	for _, p := range m.confirm.listed {
 		effect := closeEffect(p)
 		if p.Exited {
@@ -228,17 +237,20 @@ func (m *model) confirmOverlay() *overlay {
 	if c.pane == nil {
 		title = "Close tab?"
 	}
+	if c.space != "" {
+		title = "Switch from " + m.ctxSpace + " to " + c.space + " and close all tabs?"
+	}
 	selected := confirmKeep
 	if c.close {
-		selected = confirmClose
+		selected = m.confirmCloseLabel()
 	}
-	footer := confirmKeep + "   " + confirmClose
+	footer := confirmKeep + "   " + m.confirmCloseLabel()
 	if n := liveNotice(c.notice, c.noticeUntil); n != "" {
 		footer = n + "\n" + footer
 	}
 	frame := popup{Title: title, Footer: footer, Selected: selected}
 	entries := m.confirmEntries()
-	buttons := ansi.StringWidth(confirmKeep + "   " + confirmClose)
+	buttons := ansi.StringWidth(confirmKeep + "   " + m.confirmCloseLabel())
 	want := max(buttons, ansi.StringWidth(title)+2)
 	for _, e := range entries {
 		want = max(want, ansi.StringWidth(e))
@@ -282,11 +294,11 @@ func (m *model) confirmClick(mo tea.Mouse) {
 	mx, my := m.overlayPoint(o, mo)
 	if footer := len(rows) - 2; len(rows) >= 3 && my == footer {
 		line := ansi.Strip(rows[footer])
-		for _, b := range []string{confirmKeep, confirmClose} {
+		for _, b := range []string{confirmKeep, m.confirmCloseLabel()} {
 			if i := strings.Index(line, b); i >= 0 {
 				x := ansi.StringWidth(line[:i])
 				if mx >= x && mx < x+len(b) {
-					if b == confirmClose {
+					if b == m.confirmCloseLabel() {
 						m.acceptConfirm()
 					} else {
 						m.cancelConfirm()
@@ -297,4 +309,11 @@ func (m *model) confirmClick(mo tea.Mouse) {
 		}
 	}
 	m.cancelConfirm()
+}
+
+func (m *model) confirmCloseLabel() string {
+	if m.confirm.space != "" {
+		return "[ Close tabs & switch ]"
+	}
+	return confirmClose
 }

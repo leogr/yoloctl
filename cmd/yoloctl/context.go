@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// resolveSpaceFlag applies the current-context resolver (flag > pin >
+// resolveSpaceFlag applies the current-context resolver (explicit flag > YOLOCTL_SPACE > context pin >
 // "default") to the --space flag value. Call this at the top of any
 // RunE that has a --space flag; the resolver also validates the final
 // name so the existing validateSpaceName call is no longer needed at
@@ -23,7 +23,7 @@ func resolveSpaceFlag(cmd *cobra.Command, spaceName *string) error {
 }
 
 // resolveSpacePositional returns the space name from args[0] if given,
-// else from the context pin, else the literal "default". Validates the
+// else from YOLOCTL_SPACE, then the global context pin, else the literal "default". Validates the
 // final value. Used by `yoloctl space {create,start,stop,destroy}` —
 // commands where the space name is a positional arg, not a --space
 // flag. Positional name beats the pin: context only fills implicit targets

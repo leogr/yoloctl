@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"image/color"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,9 +28,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/fsnotify/fsnotify"
 	"github.com/leogr/yoloctl/internal/config"
-	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
@@ -70,11 +67,6 @@ type tabExitMsg struct{ session *term.Session }
 type spinnerTickMsg struct{}
 type osc52NoticeMsg struct{ notice string }
 
-// contextMsg carries a freshly-resolved current space for the status-bar
-// chip — sent at startup and whenever context.yaml changes underneath the
-// TUI (watchContext).
-type contextMsg struct{ space string }
-
 // spinnerFrames replaces the seven-column brand while a console command is
 // busy; spinnerInterval is the advance cadence (10 fps reads as smooth).
 var spinnerFrames = []string{".:.    ", " .:.   ", "  .:.  ", "   .:. ", "    .:.", "   .:. ", "  .:.  ", " .:.   "}
@@ -85,10 +77,11 @@ const spinnerInterval = 100 * time.Millisecond
 // suggestion list; Line guards staleness (the palette may have moved
 // on by the time the subprocess answers).
 type suggestionsMsg struct {
-	Line    string
-	Items   []yoloctlcli.Candidate
-	Nav     bool // arrive in menu-steering (the ↓-on-empty reveal); typing leaves it false
-	NoSpace bool // Items' NoSpace directive bit: accepted values keep the token open
+	Generation uint64
+	Line       string
+	Items      []yoloctlcli.Candidate
+	Nav        bool // arrive in menu-steering (the ↓-on-empty reveal); typing leaves it false
+	NoSpace    bool // Items' NoSpace directive bit: accepted values keep the token open
 }
 
 // debugTUI writes input-event diagnostics when YOLOCTL_TUI_DEBUG=1 for
@@ -148,10 +141,12 @@ type model struct {
 	selectionPointer     *tea.Mouse
 	selectionTickPending bool
 
-	// Current space for the always-shown status-bar chip. Seeded at startup
-	// and kept live by watchContext (re-resolved on every context.yaml
-	// change).
-	ctxSpace string
+	// ctxSpace is pinned at launch; global context changes cannot retarget it.
+	ctxSpace         string
+	spaceBound       bool
+	spaceListRequest uint64
+	spaceGeneration  uint64
+	spacePicker      *spacePicker
 
 	sugg        []yoloctlcli.Candidate // last suggestion list (overlay, while typing)
 	suggSel     int                    // selected index into sugg: the ghost / TAB target
@@ -198,10 +193,10 @@ func Run(ctx context.Context) error {
 	defer func() { _ = m.console.Close() }()
 	m.console.SetOSC52Handler(m.handleOSC52Output)
 	m.console.SetBellHandler(m.handleBellOutput)
-	m.ctxSpace = m.resolveContext()            // seed the status-bar chip
-	if stop := m.watchContext(); stop != nil { // live-update on context.yaml changes
-		defer stop()
+	if err := m.initSpace(); err != nil {
+		return err
 	}
+
 	err = runProgram(ctx, p)
 	m.eachSession(func(p *panes.Pane) { p.Session.Close() })
 	if err != nil && ctx.Err() != nil {
@@ -260,57 +255,6 @@ func (m *model) osc52HostMsg(event termio.OSC52) tea.Msg {
 		return tea.RawMsg{Msg: sequence}
 	}
 	return osc52NoticeMsg{notice: notice}
-}
-
-// resolveContext resolves the ambient space the way a no-flag CLI command
-// would (context.yaml pin → "default") for the status-bar chip. Re-reads
-// context.yaml every call. Best-effort: any error falls back to the default.
-func (m *model) resolveContext() (space string) {
-	space, _, err := config.ResolveSpace("", false)
-	if err != nil || space == "" {
-		space = config.DefaultSpaceName
-	}
-	return space
-}
-
-// watchContext live-updates the space chip when context.yaml
-// changes underneath the TUI (a `yoloctl space use ...` in another terminal, or
-// a hand edit). It watches the config DIRECTORY — robust against the
-// atomic tmp+rename save and the file being absent — and re-resolves on
-// any event touching context.yaml. Returns a stop func, or nil if a
-// watcher couldn't start (the chip still shows the startup value).
-func (m *model) watchContext() func() {
-	path, err := layout.ContextPath()
-	if err != nil {
-		return nil
-	}
-	w, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil
-	}
-	if err := w.Add(filepath.Dir(path)); err != nil {
-		_ = w.Close()
-		return nil
-	}
-	go func() {
-		target := filepath.Clean(path)
-		for {
-			select {
-			case ev, ok := <-w.Events:
-				if !ok {
-					return
-				}
-				if filepath.Clean(ev.Name) == target {
-					m.program.Send(contextMsg{space: m.resolveContext()})
-				}
-			case _, ok := <-w.Errors:
-				if !ok {
-					return
-				}
-			}
-		}
-	}()
-	return func() { _ = w.Close() }
 }
 
 // spinnerCmd schedules the next spinner advance; the loop continues by
@@ -803,7 +747,7 @@ func (m *model) dispatch(args []string) tea.Cmd {
 		m.status = "cannot locate yoloctl binary: " + err.Error()
 		return nil
 	}
-	started, err := m.console.Run(nil, promptLine(args), append([]string{self}, args...)...)
+	started, err := m.console.Run(m.childEnv(), promptLine(args), append([]string{self}, args...)...)
 	if !started {
 		m.status = "a palette command is still running — wait for it"
 		return nil
@@ -862,6 +806,7 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 	var self atomic.Pointer[term.Session]
 	s, err := term.Start(term.Options{
 		TrustedView:     true,
+		Env:             m.childEnv(),
 		Argv:            append([]string{exe}, args...),
 		Rows:            max(rows, 1),
 		Cols:            max(cols, 1),
@@ -962,10 +907,6 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		m.reportInputErrors()
 		return m, nil
 
-	case contextMsg:
-		m.ctxSpace = msg.space
-		return m, nil
-
 	case prefixTickMsg: // a prefix window or notice expired: repaint
 		return m, nil
 
@@ -1037,7 +978,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		return m, nil
 
 	case suggestionsMsg:
-		if line, _ := m.pal.Line(); m.focusPalette && line == msg.Line {
+		if line, _ := m.pal.Line(); m.focusPalette && line == msg.Line && msg.Generation == m.spaceGeneration {
 			// A fresh list resets the selection to the first item (the
 			// default ghost / TAB target); typing re-anchors here and stays
 			// out of steering, a ↓-on-empty reveal arrives already steering.
@@ -1047,8 +988,34 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		}
 		return m, nil
 
+	case spaceListMsg:
+		m.receiveSpaceList(msg)
+		return m, nil
+
 	case tabRequestMsg:
+		if msg.generation != m.spaceGeneration {
+			return m, nil
+		}
+		if msg.from != nil {
+			if _, p := m.tabs.Owner(func(p *panes.Pane) bool { return p.Session == msg.from }); p == nil {
+				return m, nil
+			}
+		}
+		// A valid request may add a pane while the space review is open,
+		// but it must not steal the modal's saved focus. Acceptance will
+		// revalidate the complete pane/session set before closing anything.
+		modal := m.spacePicker != nil || m.confirm != nil && m.confirm.space != ""
+		current, focused, palette := m.tabs.Current(), m.tabs.Focused(), m.focusPalette
 		m.handleTabRequest(msg.req, msg.chat, msg.from)
+		if modal {
+			if i := m.tabs.Index(current); i >= 0 {
+				m.tabs.Select(i)
+				if focused != nil && hasPane(current, focused) {
+					current.Layout.SetFocus(focused)
+				}
+			}
+			m.focusPalette = palette
+		}
 		return m, nil
 
 	case tabExitMsg:
@@ -1087,6 +1054,10 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		if cmd, handled := m.browserKey(normalizeHostKey(msg.Key(), m.hostKitty)); handled {
 			return m, cmd
 		}
+		if m.spacePicker != nil {
+			m.spacePickerKey(normalizeHostKey(msg.Key(), m.hostKitty))
+			return m, nil
+		}
 		if m.confirm != nil {
 			m.confirmKey(normalizeHostKey(msg.Key(), m.hostKitty)) // modal: every key is its
 			return m, nil
@@ -1123,7 +1094,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 
 	case tea.PasteMsg:
 		m.disarmPrefix()
-		if m.browserDialog != nil || m.confirm != nil || m.picker != nil {
+		if m.browserDialog != nil || m.confirm != nil || m.picker != nil || m.spacePicker != nil {
 			return m, nil
 		}
 		m.clearTabSelection()
@@ -1242,6 +1213,10 @@ func alternateScrollKey(button tea.MouseButton, applicationCursor bool) []byte {
 func (m *model) handleChromeClick(mo tea.Mouse) bool {
 	if m.standalone {
 		return false
+	}
+	if mo.Y == 0 && mo.X >= m.width-1-runewidth.StringWidth(m.contextChip()) && m.contextChip() != "" {
+		m.openSpacePicker()
+		return true
 	}
 	stripRow := m.tabStripRow()
 	switch {
@@ -1630,15 +1605,9 @@ func (m *model) refreshSuggestions() {
 	if !ok {
 		return
 	}
-	go func() {
-		items, directive := yoloctlcli.Complete(context.Background(), words, last)
-		matched := matchCandidates(items, last)
-		m.program.Send(suggestionsMsg{
-			Line:    line,
-			Items:   matched,
-			NoSpace: noSpaceGoverns(matched, directive),
-		})
-	}()
+	request := m.suggestionsCommand(line, words, last, false)
+	program := m.program
+	go func() { program.Send(request()) }()
 }
 
 // showAllSuggestions reveals the full top-level menu for an empty palette
@@ -1649,10 +1618,21 @@ func (m *model) showAllSuggestions() {
 	if m.program == nil { // no event loop under test
 		return
 	}
-	go func() {
-		items, _ := yoloctlcli.Complete(context.Background(), nil, "") // top-level commands: always space-terminated
-		m.program.Send(suggestionsMsg{Line: "", Items: items, Nav: true})
-	}()
+	request := m.suggestionsCommand("", nil, "", true)
+	program := m.program
+	go func() { program.Send(request()) }()
+}
+
+// Both asynchronous paths capture environment and generation on the event
+// loop. Completion finishing after a switch cannot repopulate the new pin.
+func (m *model) suggestionsCommand(line string, words []string, last string, nav bool) tea.Cmd {
+	env, generation := m.childEnv(), m.spaceGeneration
+	words = slices.Clone(words)
+	return func() tea.Msg {
+		items, directive := yoloctlcli.Complete(context.Background(), words, last, env)
+		matched := matchCandidates(items, last)
+		return suggestionsMsg{Generation: generation, Line: line, Items: matched, Nav: nav, NoSpace: noSpaceGoverns(matched, directive)}
+	}
 }
 
 // matchCandidates keeps the completions whose value extends the token
@@ -1689,7 +1669,7 @@ func (m *model) completePalette() {
 			return
 		}
 	}
-	items, directive := yoloctlcli.Complete(context.Background(), words, last)
+	items, directive := yoloctlcli.Complete(context.Background(), words, last, m.childEnv())
 	if matched := matchCandidates(items, last); len(matched) > 0 {
 		v := matched[0].Value
 		m.pal.ApplyCompletion(v + completionTerminator(v, noSpaceGoverns(matched, directive)))
@@ -1819,6 +1799,7 @@ func (m *model) View() tea.View {
 			copy(lines[len(lines)-len(prompt):], prompt)
 		}
 	}
+	m.applySpacePicker(lines)
 	v := tea.NewView(strings.Join(lines, "\n"))
 	v.AltScreen = true
 	v.ReportFocus = true
@@ -2091,13 +2072,17 @@ func paintRow(row, bg string) string {
 	return bg + strings.ReplaceAll(row, cReset, cReset+bg) + cReset
 }
 
-// contextChip is the always-shown current context for the status bar:
-// the current space in parentheses. Empty context has no chip.
+// contextChip shows this TUI's pinned default; bound clients have no arrow.
+// An empty context (standalone/test models) has no chip.
 func (m *model) contextChip() string {
 	if m.ctxSpace == "" {
 		return ""
 	}
-	return runewidth.Truncate("("+m.ctxSpace+")", max(m.width-len([]rune(brandPrefix()))-3, 0), "…")
+	chip := "[ " + m.ctxSpace + " ▾ ]"
+	if m.spaceBound {
+		chip = "[ " + m.ctxSpace + " ]"
+	}
+	return runewidth.Truncate(chip, max(m.width-len([]rune(brandPrefix()))-3, 0), "…")
 }
 
 // paletteRegion is the display width the editable line gets on row 0: the

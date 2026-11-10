@@ -13,9 +13,12 @@ import (
 )
 
 // DefaultSpaceName is the literal space-name fallback when neither a
-// --space flag nor a context pin is set. Exported so the CLI can use
+// --space flag, process pin nor a global context pin is set. Exported so the CLI can use
 // it as the Cobra flag default.
 const DefaultSpaceName = "default"
+
+// SpaceEnv is an optional per-process default, never an authorization grant.
+const SpaceEnv = "YOLOCTL_SPACE"
 
 const (
 	contextFileMode os.FileMode = 0o644
@@ -106,14 +109,15 @@ func (c *Context) Save() error {
 type ResolutionSource string
 
 const (
-	SourceFlag    ResolutionSource = "flag"    // explicit --space
-	SourceContext ResolutionSource = "context" // ~/.config/yoloctl/context.yaml pin
-	SourceDefault ResolutionSource = "default" // hardcoded fallback ("default")
+	SourceEnvironment ResolutionSource = "environment" // per-process default
+	SourceFlag        ResolutionSource = "flag"        // explicit --space
+	SourceContext     ResolutionSource = "context"     // ~/.config/yoloctl/context.yaml pin
+	SourceDefault     ResolutionSource = "default"     // hardcoded fallback ("default")
 )
 
 // ResolveSpace applies the space resolution order:
 //
-//	flag > context pin > "default"
+//	flag > nonempty YOLOCTL_SPACE > context pin > "default"
 //
 // flagValue is the raw --space string; flagChanged is true if the user
 // actually passed --space (Cobra's Flag.Changed). Returns the resolved
@@ -127,6 +131,12 @@ func ResolveSpace(flagValue string, flagChanged bool) (string, ResolutionSource,
 			return "", "", err
 		}
 		return flagValue, SourceFlag, nil
+	}
+	if space := os.Getenv(SpaceEnv); space != "" {
+		if err := layout.ValidateExistingSpaceName(space); err != nil {
+			return "", "", fmt.Errorf("%s: %w", SpaceEnv, err)
+		}
+		return space, SourceEnvironment, nil
 	}
 	ctx, err := LoadContext()
 	if err != nil {

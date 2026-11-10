@@ -13,9 +13,10 @@ import (
 )
 
 type tabRequestMsg struct {
-	req  termio.TabRequest
-	chat bool
-	from *term.Session // the requesting pane's session; nil if not yet known
+	generation uint64
+	req        termio.TabRequest
+	chat       bool
+	from       *term.Session // the requesting pane's session; nil if not yet known
 }
 
 // tabRequestHandler gives only `space view` and native `chat` tabs a request
@@ -27,9 +28,10 @@ func (m *model) tabRequestHandler(args []string, self *atomic.Pointer[term.Sessi
 	if !isSpaceView(args) && !chat {
 		return nil
 	}
+	generation := m.spaceGeneration
 	return func(r termio.TabRequest) {
 		if m.program != nil {
-			m.program.Send(tabRequestMsg{req: r, chat: chat, from: self.Load()})
+			m.program.Send(tabRequestMsg{req: r, chat: chat, from: self.Load(), generation: generation})
 		}
 	}
 }

@@ -1475,17 +1475,23 @@ targets when no --space flag is passed. Resolution order:
 
   --space flag       (per-command override, always wins)
     ↓ otherwise
+  YOLOCTL_SPACE      (nonempty per-process default, e.g. the TUI pin)
+    ↓ otherwise
   context pin        (~/.config/yoloctl/context.yaml)
     ↓ otherwise
   "default"
 
 Without arguments, prints the currently resolved space and where it came
 from. With SPACE, pins that space. Pass --reset (no SPACE) to clear the pin
-so resolution falls back to "default".
+so resolution uses YOLOCTL_SPACE if set, otherwise "default".
 
   yoloctl space use            # show the current space + source
   yoloctl space use prod       # switch the pin to "prod"
-  yoloctl space use --reset    # clear the pin`,
+  yoloctl space use --reset    # clear the pin
+
+space use writes the global default. An open TUI keeps its own default;
+use its top-right space menu (or pane prefix then s) to switch that TUI.
+Switching asks before closing its tabs and does not rewrite the global pin.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if reset && len(args) > 0 {

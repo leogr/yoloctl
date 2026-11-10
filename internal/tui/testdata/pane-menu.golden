@@ -15,13 +15,13 @@
                                         │ │ Resize border  ^arrows Alt+arrows │ 
                                         │ │ ───────────────────────────────── │ 
                                         │ │ New tab                         c │ 
+                                        │ │ Switch space                    s │ 
                                         │ │ Next tab                        n │ 
                                         │ │ Previous tab                    p │ 
                                         │ │ Pick a tab                      w │ 
                                         │ │ Tab by number               1…9 0 │ 
                                         │ │ Detach whole tab                d │ 
-                                        │ │ ───────────────────────────────── │ 
-                                        │ │ Send ^Q                        ^Q │ 
+                                        │ │ ────────────────────────────────… │ 
                                         │ │ press a key or click · Esc closes │ 
                                         │ ╰───────────────────────────────────╯ 
                                         │                                       

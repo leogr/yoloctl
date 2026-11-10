@@ -419,6 +419,7 @@ func resizeAct(d panes.Dir, cells int) func(*model, tea.Key) tea.Cmd {
 
 // paneKeys is PLAN-r2.3's R2 key table.
 var paneKeys = []paneBinding{
+	{key: "s", help: "switch this TUI space", text: "s", act: func(m *model, _ tea.Key) tea.Cmd { m.openSpacePicker(); return nil }},
 	{key: "|", help: "split right: an empty pane opens beside the focused pane, for a command or a tab", text: "|", act: splitAct(true)},
 	{key: "-", help: "split below", text: "-", act: splitAct(false)},
 	{key: "←", help: "focus the pane that way", code: tea.KeyLeft, act: focusAct(panes.Left)},

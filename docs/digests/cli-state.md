@@ -2,8 +2,11 @@
 
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
 
-[FACT] Flag/context space selection is centralized: explicit flag, current
-pin, then `default`; explicit positional targets also win over context.
+[FACT] Flag/context space selection is centralized: explicit flag, nonempty
+`YOLOCTL_SPACE`, global context pin, then `default`; explicit positional targets
+also win. Invalid environment pins fail rather than falling back; trusted native
+and operator bindings remain authoritative. A full TUI pins its default for its
+child commands and completion; [switching its space](tui-space-switch.md) is local.
 `box create NAME` resolves space before its default account and refuses an
 existing declaration or runtime rather than rewriting it. [1](#source-1)
 [2](#source-2)

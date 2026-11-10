@@ -55,9 +55,17 @@ bounded list scrolling by row to a long entry's warning, refresh on an added com
 tab switch and a browser prompt, other panes' output while it is open, and a
 child gesture in flight at open finishing at its owner. [4](#source-4)
 
+[FACT] [Switching this TUI's space](tui-space-switch.md) uses the same close
+warnings in one all-tabs confirmation, always Keep by default. It additionally
+warns about drafts/local view state, binds the complete pane/session set, and
+refreshes after additions or replacements before closing it.
+[5](#source-5)
+
 ## Sources
 
 1. <a id="source-1"></a> [Close confirmation](../../internal/tui/confirm_close.go#L1-L300) — `closeEffect`, `requestDetachPane`, `requestDetachTab`, `acceptConfirm`, `checkConfirm`, `confirmKey`, `confirmOverlay`, `confirmClick`.
 2. <a id="source-2"></a> [Holder-backed view](../../internal/tui/term/session.go#L344-L346) — `Session.HolderView`.
 3. <a id="source-3"></a> [Routing](../../internal/tui/mouse.go#L196-L211) — the popup's press handling in `handleMouse`; keys and paste in tui.go `Update`, focus in frames.go `syncFocus`, `Popup.Selected` in popup.go.
 4. <a id="source-4"></a> [Popup tests](../../internal/tui/confirm_close_test.go#L1-L335) — `TestCloseClassificationWalksEveryLiveRoute`, `TestHolderBackedViewDetachesAtOnce`, `TestConfirmPopupBindsToItsList` and the others.
+
+5. <a id="source-5"></a> [Space switch](../../internal/tui/space_switch.go#L258) — `acceptSpaceSwitch`; `closeConfirm.space` selects aggregate review.

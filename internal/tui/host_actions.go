@@ -119,8 +119,9 @@ func (m *model) showBrowserDialog() {
 	})
 	if p != nil {
 		m.cancelConfirm() // a browser prompt cancels an open close popup (Keep)
-		m.closePicker()   // and an open tab picker
-		m.disarmPrefix()  // a prefix never acts on the key after the prompt
+		m.closeSpacePicker()
+		m.closePicker()  // and an open tab picker
+		m.disarmPrefix() // a prefix never acts on the key after the prompt
 		m.browserDialog = &browserDialog{surface: p.Session, returnPalette: m.focusPalette}
 		m.focusPalette = true
 	}

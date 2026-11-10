@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/config"
+	"github.com/leogr/yoloctl/internal/operator"
 	"github.com/leogr/yoloctl/internal/termio"
 	"github.com/leogr/yoloctl/internal/tui/term"
 	"github.com/leogr/yoloctl/internal/tui/yoloctlcli"
@@ -889,10 +890,10 @@ func TestContextChipInBar(t *testing.T) {
 		m := newTestModel(t, width, 20)
 		m.ctxSpace = "prod"
 		row := strings.SplitN(m.View().Content, "\n", 2)[0]
-		if got := ansi.Strip(row); !strings.HasSuffix(got, "(prod) ") || ansi.StringWidth(got) != width {
+		if got := ansi.Strip(row); !strings.HasSuffix(got, "[ prod ▾ ] ") || ansi.StringWidth(got) != width {
 			t.Fatalf("space is not right aligned at width %d: %q", width, got)
 		}
-		if !strings.Contains(row, cBold+"(prod)") {
+		if !strings.Contains(row, cBold+"[ prod ▾ ]") {
 			t.Fatalf("space is not bold: %q", row)
 		}
 	}
@@ -904,35 +905,31 @@ func TestPaletteCommandEchoOmitsWorkingDirectory(t *testing.T) {
 	}
 }
 
-// A contextMsg (delivered by the watcher) updates the chip live.
-func TestContextMsgUpdatesChip(t *testing.T) {
-	m := newTestModel(t, 100, 20)
-	_, _ = m.Update(contextMsg{space: "staging"})
-	if m.ctxSpace != "staging" {
-		t.Fatalf("contextMsg not applied: %q", m.ctxSpace)
+// Each model resolves once; changing the global default never retargets it.
+func TestTUIPinsStartupSpace(t *testing.T) {
+	t.Setenv("YOLOCTL_HOME", t.TempDir())
+	t.Setenv(config.SpaceEnv, "")
+	old := tuiOperatorClient
+	tuiOperatorClient = func() (*operator.Client, error) { return nil, nil }
+	t.Cleanup(func() { tuiOperatorClient = old })
+	m := newTestModel(t, 80, 24)
+	if err := m.initSpace(); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(m.View().Content, "staging") {
-		t.Errorf("bar did not reflect the updated context")
-	}
-}
-
-// resolveContext re-reads context.yaml every call — the action the watcher
-// fires on each change (default when unpinned, the pin once set).
-func TestResolveContextReflectsPin(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	m := newTestModel(t, 80, 20)
-
-	if s := m.resolveContext(); s != "default" {
-		t.Fatalf("unpinned: got %q, want default", s)
-	}
-
 	c, _ := config.LoadContext()
 	c.Space = "prod"
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
-	if s := m.resolveContext(); s != "prod" {
-		t.Fatalf("after pin: got %q, want prod", s)
+	if m.ctxSpace != "default" {
+		t.Fatal(m.ctxSpace)
+	}
+	other := newTestModel(t, 80, 24)
+	if err := other.initSpace(); err != nil {
+		t.Fatal(err)
+	}
+	if other.ctxSpace != "prod" {
+		t.Fatal(other.ctxSpace)
 	}
 }
 

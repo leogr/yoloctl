@@ -134,3 +134,40 @@ func TestLegacyLongSpaceContextRemainsUsable(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveSpaceEnvironment(t *testing.T) {
+	t.Setenv("YOLOCTL_HOME", t.TempDir())
+	c, _ := LoadContext()
+	c.Space = "global"
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		pin, flag string
+		explicit  bool
+		want      string
+		source    ResolutionSource
+		bad       bool
+	}{
+		{"local", "ignored", false, "local", SourceEnvironment, false},
+		{"local", "explicit", true, "explicit", SourceFlag, false},
+		{"bad/name", "explicit", true, "explicit", SourceFlag, false},
+		{"bad/name", "", false, "", "", true},
+		{strings.Repeat("s", 63), "", false, strings.Repeat("s", 63), SourceEnvironment, false},
+		{"", "", false, "global", SourceContext, false},
+	} {
+		t.Run(tc.pin+tc.flag, func(t *testing.T) {
+			t.Setenv(SpaceEnv, tc.pin)
+			got, source, err := ResolveSpace(tc.flag, tc.explicit)
+			if tc.bad {
+				if err == nil {
+					t.Fatal("invalid environment pin accepted")
+				}
+				return
+			}
+			if err != nil || got != tc.want || source != tc.source {
+				t.Fatalf("%q %q %v", got, source, err)
+			}
+		})
+	}
+}

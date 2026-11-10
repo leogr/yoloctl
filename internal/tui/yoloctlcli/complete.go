@@ -39,11 +39,12 @@ func (d Directive) NoSpace() bool {
 // Complete asks `yoloctl __complete words... last` for candidates.
 // words are the whitespace-split palette tokens before the one being
 // completed; last is the (possibly empty) token under the cursor.
+// env is the caller-captured child environment; nil inherits the process env.
 // Returns each candidate's value, its (cobra-supplied) description, and
 // the reply's closing directive. Best-effort: errors and the completion
 // latency budget (shells re-run this on every TAB; 2s is generous) yield
 // nil and a zero (default) directive.
-func Complete(ctx context.Context, words []string, last string) ([]Candidate, Directive) {
+func Complete(ctx context.Context, words []string, last string, env []string) ([]Candidate, Directive) {
 	self, err := os.Executable()
 	if err != nil {
 		return nil, 0
@@ -52,7 +53,9 @@ func Complete(ctx context.Context, words []string, last string) ([]Candidate, Di
 	defer cancel()
 	args := append([]string{"__complete"}, words...)
 	args = append(args, last)
-	out, err := exec.CommandContext(ctx, self, args...).Output()
+	cmd := exec.CommandContext(ctx, self, args...)
+	cmd.Env = env
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, 0
 	}

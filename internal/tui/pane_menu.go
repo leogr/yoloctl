@@ -68,6 +68,7 @@ func menuRows(prefix string) []menuRow {
 		info("Resize border", "^arrows Alt+arrows"),
 		sep,
 		row("New tab", "c"),
+		row("Switch space", "s"),
 		row("Next tab", "n"),
 		row("Previous tab", "p"),
 		row("Pick a tab", "w"),
@@ -175,6 +176,8 @@ func (m *model) bindingWhy(b paneBinding) string {
 		return ""
 	}
 	switch b.text {
+	case "s":
+		return m.spaceSwitchWhy()
 	case "|", "-":
 		switch {
 		case l == nil:
@@ -382,6 +385,9 @@ func (m *model) noticeOverlay() *overlay {
 // activeOverlay is the modal pane popup on screen, if any: the close
 // confirmation, the tab picker, the menu or the inert notice.
 func (m *model) activeOverlay() *overlay {
+	if o := m.spacePickerOverlay(); o != nil {
+		return o
+	}
 	if o := m.confirmOverlay(); o != nil {
 		return o
 	}
@@ -410,6 +416,9 @@ func (m *model) overlayPoint(o *overlay, mo tea.Mouse) (x, y int) {
 // whichever base path drew them; each row outside it keeps its cells and
 // every run is closed with a reset at the overlay's edges.
 func (m *model) applyOverlay(base []string) {
+	if m.spacePicker != nil {
+		return
+	} // anchored in full-screen coordinates after chrome composition
 	o := m.activeOverlay()
 	if o == nil || o.w <= 0 || o.h <= 0 {
 		return

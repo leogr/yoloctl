@@ -103,6 +103,8 @@ func (m *model) syncFocus() {
 	// console keep the focus they had when it opened.
 	palette := m.focusPalette
 	switch {
+	case m.spacePicker != nil:
+		palette = m.spacePicker.returnPalette
 	case m.confirm != nil:
 		palette = m.confirm.returnPalette
 	case m.picker != nil:

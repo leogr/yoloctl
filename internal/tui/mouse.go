@@ -201,6 +201,25 @@ func (m *model) handleMouse(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, press := msg.(tea.MouseClickMsg); press {
 		m.disarmPrefix() // a press ends a resize window, then takes its route
 	}
+	if m.spacePicker != nil {
+		switch msg.(type) {
+		case tea.MouseClickMsg:
+			if m.mouseOwners == nil {
+				m.mouseOwners = make(map[tea.MouseButton]mouseOwner)
+			}
+			m.mouseOwners[mo.Button] = mouseOwner{}
+			m.spacePickerClick(m.mouseHit(mo))
+			return m, nil
+		case tea.MouseWheelMsg:
+			if mo.Button == tea.MouseWheelUp {
+				m.spacePicker.row = max(m.spacePicker.row-1, 0)
+			}
+			if mo.Button == tea.MouseWheelDown {
+				m.spacePicker.row = min(m.spacePicker.row+1, max(len(m.spacePicker.names)-1, 0))
+			}
+			return m, nil
+		}
+	}
 	if m.picker != nil {
 		switch msg.(type) {
 		case tea.MouseClickMsg:

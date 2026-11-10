@@ -19,7 +19,11 @@ write it never fails an operation that succeeded.
 [42](#source-42)
 
 [FACT] Palette commands echo without PWD. A fixed-width ASCII wave replaces the
-left brand while busy; bold `(space)` is the rightmost status item.
+left brand while busy; bold `[ space ▾ ]` is the rightmost status item. Each TUI pins its default
+independently of global `space use`. The chip or pane-prefix `s` opens a local
+space dropdown; switching asks before closing all tabs and clearing drafts.
+Explicit command targets still win, and a busy palette command must finish
+or be interrupted before switching. [44](#source-44)
 [1](#source-1)
 
 [FACT] A tab can be split into panes, each hosting one palette subprocess
@@ -329,3 +333,5 @@ checks transport behavior; it does not measure graphical parity. [4](#source-4)
 42. <a id="source-42"></a> [Host and Lima diagnostics](../digests/host-diagnostics.md).
 
 43. <a id="source-43"></a> [Shared Markdown renderer](../digests/markdown-renderer.md).
+
+44. <a id="source-44"></a> [Per-TUI space selection](../digests/tui-space-switch.md).

@@ -1,10 +1,12 @@
 # CLI selection and availability
 
 [FACT] Host and in-box operator clients use the same Cobra box definitions,
-flags, aliases and completion callbacks. Explicit space flags/positionals beat
-host context; operator scope is fixed to its own space. `box create NAME` chooses
+flags, aliases and completion callbacks. Host selection uses explicit space
+flags/positionals, nonempty `YOLOCTL_SPACE`, global context, then `default`, in
+that order. Operator/native scope remains fixed. The full TUI pins its own default and can
+switch it through its space menu after confirming local tab closure. `box create NAME` chooses
 the space before resolving account defaults. `box run` and root `run`/`ps` are
-unavailable; use named `box create`, `box attach` and `box list`. [1](#source-1) [2](#source-2)
+unavailable; use named `box create`, `box attach` and `box list`. [1](#source-1) [2](#source-2) [24](#source-24)
 
 [FACT] New space names, including import destinations, use 1–16 ASCII
 characters: an alphanumeric first, then alphanumeric, dot, underscore or hyphen.
@@ -221,3 +223,5 @@ version probe is bounded. Ordinary commands retain startup setup. [18](#source-1
 22. <a id="source-22"></a> [Native credential formats and import](../digests/claude-auth.md).
 
 23. <a id="source-23"></a> [AWS CLI and Bedrock configuration](../digests/bedrock.md).
+
+24. <a id="source-24"></a> [Per-TUI space selection](../digests/tui-space-switch.md).

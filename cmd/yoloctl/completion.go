@@ -13,7 +13,6 @@ import (
 	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/capabilities"
-	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/features"
 	"github.com/leogr/yoloctl/internal/ocifeature"
@@ -352,18 +351,14 @@ func completeNoArgs(_ *cobra.Command, _ []string, _ string) ([]cobra.Completion,
 
 // spaceScope resolves the space a completion should list within, mirroring the
 // exact resolution the commands themselves use (config.ResolveSpace): the
-// explicit --space flag, else the context pin, else "default". It MUST key off
+// explicit --space flag, trusted native context, process pin, global pin, default. It MUST key off
 // the flag's Changed bit, not emptiness — the --space flag's own default value
 // is "default", so its value is never empty; an emptiness check would pin every
 // completion to "default" and ignore `space use` entirely.
 func spaceScope(cmd *cobra.Command) string {
-	flagValue, flagChanged := "", false
-	if f := cmd.Flags().Lookup("space"); f != nil {
-		flagValue, flagChanged = f.Value.String(), f.Changed
-	}
-	space, _, err := config.ResolveSpace(flagValue, flagChanged)
+	space, err := selectedSpace(cmd)
 	if err != nil {
-		return defaultSpaceName
+		return "" // invalid pins never complete against a different space
 	}
 	return space
 }
