@@ -1,18 +1,25 @@
 # Native chat participants, settings and attachment
 
-Verification: `704a65d4dde24e4b67df90907d7725c8cfe1a86d` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Participants sort operators, voiced, then others, case-folded; observed
 `@`/`+` modes, never inferred, precede names. The panel opens from 80 columns
 (22 wide, 28 from 100), keeping 48 transcript columns; narrower, Ctrl+P overlays
-it. Each participant is a two-row card (glyph tile, mark, name and presence dot,
+it. With multiple channels, the channel rail remains above participants at both
+side-panel widths. Without a side panel, a single clickable channel strip sits
+above the transcript and outside the participant overlay, including wide views
+with participants closed. It preserves channel order, slides to keep the current
+channel visible, abbreviates names, and shows unread/mention counts. A `+N`
+picker entry covers hidden channels on either side, with their unread/mention
+totals. Only below the minimum chat size does it use vertical channel rows,
+keeping the current channel visible and taking priority over the resize hint. Each participant is a two-row card (glyph tile, mark, name and presence dot,
 then an identity line: model and effort for agent boxes) whatever the room size;
 a closing note shows only with room. When the cards do not fit, the panel
 scrolls by whole cards below its fixed heading, with dim `▲ N above` / `▼ N more`
 rows: the wheel over the panel moves one card, Alt+PgUp/PgDn (or Shift+PgUp/PgDn)
 a page (the cards shown while more are below, so pages never skip one), and
 nothing scrolls while every card fits; a panel left only its heading shows no card.
-[1](#source-1) [16](#source-16)
+[1](#source-1) [16](#source-16) [17](#source-17) [18](#source-18)
 
 [FACT] Roster changes (joins, departures, same-account nicks, operator/voice,
 live topic) become display-only notice rows after the latest message and a blank
@@ -80,3 +87,7 @@ lock. [5](#source-5) [13](#source-13) [14](#source-14)
 14. <a id="source-14"></a> [Opt-in live lookup](../../cmd/yoloctl/chat_attach_lock_live_test.go#L54) — `TestLiveChatAttachTargetAnswersWhileSpaceLockIsHeld`; run recipe in scripts/smoke/README.md.
 15. <a id="source-15"></a> [Nickname refresh](../../internal/chatui/overlay.go#L70-L80) — `refreshParticipantLabels` and suggest.go `refreshOpenSuggest` (L161–189), called by `SessionMsg` (model.go L559–575) and `catalog` (channels.go L358–370); `TestNicknameSaveReconnectRefreshesOpenLabels` and `TestCatalogRenameRefreshesOpenCardAndSuggestions` in nickname_display_test.go; retained names in presence.go `observeMembers`/`addPresence` (L42–145).
 16. <a id="source-16"></a> [Scrolling regressions](../../internal/chatui/participants_scroll_test.go#L1) — `TestParticipantsScrollInsteadOfShrinking`, `TestParticipantsFitWithoutScrolling`, `TestParticipantsTinyPanelWithChannelRail`, `TestParticipantsPageKeysNeverSkip`: many participants at small heights, side panel and overlay, rail-squeezed panels, gap-free paging.
+
+17. <a id="source-17"></a> [Channel layout](../../internal/chatui/view.go#L79) — `View`, `compactChannels`; `channels_narrow_test.go` — width, clicks, overlay and minimum-height coverage.
+
+18. <a id="source-18"></a> [Compact channel strip](../../internal/chatui/channel_strip.go#L10) — `channelStrip`, stable visible window, unread/mention totals and picker overflow.

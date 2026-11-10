@@ -1,16 +1,18 @@
 # Native chat input and message actions
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; drag pick `9cb4a0f7fca3cd6090c23db9de447b858b68c38a` and accompanying changes; code-block copy buttons `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; channel selection verified at `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; drag pick `9cb4a0f7fca3cd6090c23db9de447b858b68c38a` and accompanying changes; code-block copy buttons `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; channel selection verified at `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; narrow channel layout `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; re-read cited sources when changing behavior.
 
 See [reading and selection](chat-reading.md) for drag copy and scrolling, and
 [participants, settings and attachment](chat-participants.md) for people and
 guarded session access.
 
 [FACT] Layout: top band (space, channel, state, topic, unread, online count),
+channel navigation (side rail or one-row strip above the transcript),
 transcript, optional Participants panel, composer band (divider with channel and
 [filter](chat-filter.md) control, centered jump and byte count; reply row; draft; blank row) and footer, plus a notice row
 beside message actions. The band has dashboard colors, the `◈` icon and
-right-aligned state, no action buttons. As the first row, it, the resize hint
+right-aligned state, no action buttons. Below minimum size, channel rows precede
+the resize hint. As the first row, the band, compact channel list, resize hint
 and the browser prompt's top border use space view's explicit RGB black across
 the full width, with dark-palette text in every theme. [1](#source-1)
 [7](#source-7) [9](#source-9) [11](#source-11)

@@ -117,6 +117,8 @@ per row, without the clipboard [30](#source-30),
 renderer-matched Unicode widths for layout and hits (wcwidth until a supported
 mode-2027 report; grapheme widths thereafter),
 older-history paging, per-channel views with typed join/part/topic actions,
+channel navigation retained at narrow widths (a one-row strip when no side panel
+is shown, outside the participant overlay) [17](#source-17),
 explicit human channel selection that requests JOIN when needed (with drafts
 kept and fresh catalog/server ACL admission), while background updates and
 explicit part never automatically rejoin [18](#source-18),

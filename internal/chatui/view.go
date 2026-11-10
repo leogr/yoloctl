@@ -82,13 +82,30 @@ func (m *Model) View() tea.View {
 		return tea.NewView("")
 	}
 	if w < 20 || h < 7 {
-		return tea.NewView(spaceview.StyleText(fit(m.widthMethod, "Resize to at least 20×7", w), spaceview.Style{FG: m.theme.FirstRow().Text, BG: spaceview.FirstRowBG}))
+		m.hits = m.hits[:0]
+		m.layout = viewLayout{}
+		lines := m.compactChannels(w, h, 0)
+		if len(lines) > 0 {
+			lines[0] = spaceview.StyleText(fit(m.widthMethod, m.order[m.hits[0].item], w), spaceview.Style{FG: m.theme.FirstRow().Text, BG: spaceview.FirstRowBG})
+		}
+		if len(lines) < h {
+			lines = append(lines, spaceview.StyleText(fit(m.widthMethod, "Resize to at least 20×7", w), spaceview.Style{FG: m.theme.FirstRow().Text, BG: spaceview.FirstRowBG}))
+		}
+		return tea.NewView(strings.Join(lines, "\n"))
 	}
+
 	t := m.theme
 	m.hits = m.hits[:0]
 	lines := []string{m.topBar(w)}
 	if h >= 16 {
 		lines = append(lines, spaceview.StyleText(strings.Repeat("─", w), spaceview.Style{FG: t.Faint}))
+	}
+	panel := 0
+	if m.rosterOpen {
+		panel = panelWidth(w)
+	}
+	if panel == 0 && len(m.order) > 1 {
+		lines = append(lines, m.channelStrip(w, len(lines)))
 	}
 	top := len(lines)
 	draft, cursorRow, cursorCol := m.layoutDraft()
@@ -112,10 +129,6 @@ func (m *Model) View() tea.View {
 	// does the transcript give up its last row rather than overflow.
 	bodyHeight := max(h-top-1-boxRows-statusRows-inputRows-1, 0)
 
-	panel := 0
-	if m.rosterOpen {
-		panel = panelWidth(w)
-	}
 	tw := w
 	if panel > 0 {
 		tw = w - panel - 1
@@ -146,7 +159,7 @@ func (m *Model) View() tea.View {
 	m.layout.panelMembers = members
 	var side []panelRow
 	if panel > 0 {
-		// A wide panel lists open channels above the participants.
+		// Side panels list channels before allocating rows to participants.
 		rail := m.channelRail(panel)
 		side = append(rail, m.participantRows(members, panel, bodyHeight-len(rail), 0)...)
 	}
@@ -839,4 +852,30 @@ func (m *Model) participantOverlay(members []Member, lines []string, w, top, hei
 		}
 		lines[top+i] = overlayLine(m.widthMethod, lines[top+i], x, paint(m.widthMethod, runs, pw, m.theme.Popup, nil, spaceview.Style{}), w)
 	}
+}
+
+// compactChannels keeps channel navigation available below the minimum chat
+// size, where the transcript and participants no longer fit.
+func (m *Model) compactChannels(width, height, top int) []string {
+	if len(m.order) < 2 && m.width >= 20 && m.height >= 7 {
+		return nil // the top band already names the only channel
+	}
+	var lines []string
+	// Keep the current channel in the visible slice when height is limited;
+	// Alt navigation and the channel picker still reach the rest.
+	start := max(slices.Index(m.order, m.name)-height+1, 0)
+	for i := start; i < len(m.order); i++ {
+		name := m.order[i]
+		if len(lines) >= height {
+			break
+		}
+		style := spaceview.Style{FG: m.theme.Room, Bold: m.views[name].unread > 0}
+		if m.views[name] == m.cur {
+			style.BG, style.Bold = m.theme.Raised, true
+		}
+		label := truncate(m.widthMethod, name, width, "…")
+		m.hits = append(m.hits, hit{x0: 0, x1: width, y: len(lines) + top, area: hitChannel, item: i})
+		lines = append(lines, paint(m.widthMethod, []run{deco(label, style)}, width, style.BG, nil, spaceview.Style{}))
+	}
+	return lines
 }

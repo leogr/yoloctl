@@ -56,12 +56,12 @@ type panelRow struct {
 	channel int
 }
 
-// channelRail lists the open channels at the top of a wide side panel,
+// channelRail lists the open channels at the top of a side panel,
 // with unread counts and a marker on the visible one. One channel needs no
 // rail; the top band still names it.
 func (m *Model) channelRail(width int) []panelRow {
 	t := m.theme
-	if len(m.order) < 2 || width < 26 {
+	if len(m.order) < 2 {
 		return nil
 	}
 	count := fmt.Sprint(len(m.order))
