@@ -95,7 +95,7 @@ func TestHumanGlyphAndIconSlots(t *testing.T) {
 	m.opts.Identities["mopus"] = Identity{Name: "opus", Box: true, Agent: "claude"}
 	m.opts.Icons = map[string]config.AgentIcon{"claude": {Icon: "✳"}}
 	m.Update(MembersMsg{Members: []Member{{Nick: "leogr", Account: "mleo"}, {Nick: "opus", Account: "mopus"}}})
-	for _, height := range []int{30, 9} { // cards, then compact rows
+	for _, height := range []int{30, 12} { // cards with and without the note
 		m.Update(tea.WindowSizeMsg{Width: 100, Height: height})
 		panel := func(name string) string {
 			for _, line := range strings.Split(view(m), "\n") {

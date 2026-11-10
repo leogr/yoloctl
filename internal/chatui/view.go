@@ -16,13 +16,18 @@ type viewLayout struct {
 	bodyTop, bodyHeight int
 	transcriptWidth     int
 	panelMembers        []Member
-	// cardWidth is the participants panel's width when it drew two-row
+	// cardWidth is the participants panel's width when it drew its two-row
 	// cards, else 0.
-	cardWidth     int
-	inputTop      int
-	inputRows     int
-	firstDraftRow int
-	draftRows     []draftRow
+	cardWidth int
+	// panelX0 and panelX1 bound the participants panel's columns over the
+	// body rows (both 0 when it is hidden), so the wheel there scrolls it;
+	// rosterPage is the cards one page key moves, 0 when all fit.
+	panelX0, panelX1 int
+	rosterPage       int
+	inputTop         int
+	inputRows        int
+	firstDraftRow    int
+	draftRows        []draftRow
 }
 
 type hitArea int
@@ -171,6 +176,9 @@ func (m *Model) View() tea.View {
 			line += paint(m.widthMethod, runs, panel, 0, nil, selStyle)
 		}
 		lines = append(lines, line)
+	}
+	if panel > 0 {
+		m.layout.panelX0, m.layout.panelX1 = tw+1, w
 	}
 	if panel == 0 && m.rosterOverlay {
 		m.participantOverlay(members, lines, w, top, bodyHeight)
@@ -819,6 +827,7 @@ func (m *Model) suggestPopup(lines []string, w, composerTop int) {
 func (m *Model) participantOverlay(members []Member, lines []string, w, top, height int) {
 	pw := min(30, w)
 	x := w - pw
+	m.layout.panelX0, m.layout.panelX1 = x, w
 	rows := m.participantRows(members, pw, height, m.theme.Popup)
 	for i := range height {
 		var runs []run

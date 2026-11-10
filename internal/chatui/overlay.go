@@ -131,6 +131,7 @@ var helpSections = []struct {
 	}},
 	{"Participants", [][2]string{
 		{"Ctrl+P", "Show or hide the panel; on narrow screens it opens over the messages"},
+		{"wheel  Alt+PgUp  Alt+PgDn", "Scroll the participants when their cards do not fit: the wheel over the panel moves one card, the keys a page (Shift+PgUp and Shift+PgDn too, where the terminal passes them)"},
 		{"Click a box", "Attach that box's session, after its membership and declaration are checked again"},
 		{"Right-click a name", "Details. Only boxes can be attached; direct messages are not supported."},
 		{"@  +", "Channel operator · voiced"},

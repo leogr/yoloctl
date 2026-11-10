@@ -1,13 +1,18 @@
 # Native chat participants, settings and attachment
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `704a65d4dde24e4b67df90907d7725c8cfe1a86d` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Participants sort operators, voiced, then others, case-folded; observed
 `@`/`+` modes, never inferred, precede names. The panel opens from 80 columns
 (22 wide, 28 from 100), keeping 48 transcript columns; narrower, Ctrl+P overlays
-it. Roomy panels add glyph tiles, presence dots and identity lines (model and
-effort for agent boxes).
-[1](#source-1)
+it. Each participant is a two-row card (glyph tile, mark, name and presence dot,
+then an identity line: model and effort for agent boxes) whatever the room size;
+a closing note shows only with room. When the cards do not fit, the panel
+scrolls by whole cards below its fixed heading, with dim `▲ N above` / `▼ N more`
+rows: the wheel over the panel moves one card, Alt+PgUp/PgDn (or Shift+PgUp/PgDn)
+a page (the cards shown while more are below, so pages never skip one), and
+nothing scrolls while every card fits; a panel left only its heading shows no card.
+[1](#source-1) [16](#source-16)
 
 [FACT] Roster changes (joins, departures, same-account nicks, operator/voice,
 live topic) become display-only notice rows after the latest message and a blank
@@ -59,7 +64,7 @@ lock. [5](#source-5) [13](#source-13) [14](#source-14)
 
 ## Sources
 
-1. <a id="source-1"></a> [Participants](../../internal/chatui/roster.go#L17) — `sortedMembers`, `participantRows`, `memberCard`, `memberRuns`.
+1. <a id="source-1"></a> [Participants](../../internal/chatui/roster.go#L17) — `sortedMembers`, `participantRows`, `scrollRoster`, `rosterShown`, `memberCard`; wheel routing `inRoster` in mouse.go, page keys in model.go `key`.
 2. <a id="source-2"></a> [Presence notices](../../internal/chatui/presence.go#L42) — `observeMembers`, `addPresence`, `presenceRows`.
 3. <a id="source-3"></a> [Keys and actions](../../internal/chatui/model.go#L736) — `key`, `escape`, `runAction`, `append`, `pick`, `jumpToLatest`.
 4. <a id="source-4"></a> [Overlays](../../internal/chatui/overlay.go#L386) — `savedNick`, `saveNick`, cards, `requestAttach`, `attachDone`, `attachResolved`; help/settings in the same file.
@@ -74,3 +79,4 @@ lock. [5](#source-5) [13](#source-13) [14](#source-14)
 13. <a id="source-13"></a> [Attach lock wait](../../internal/spacelock/lock.go#L21-L64) — `AcquireWithWait`; the notice in cmd/yoloctl/space_operation.go L217-L224; the lookup in `callChatAttachTarget` (chat.go L110) and `resolveAttach`/`resolveAttachWith` (chat_view.go L650–L694).
 14. <a id="source-14"></a> [Opt-in live lookup](../../cmd/yoloctl/chat_attach_lock_live_test.go#L54) — `TestLiveChatAttachTargetAnswersWhileSpaceLockIsHeld`; run recipe in scripts/smoke/README.md.
 15. <a id="source-15"></a> [Nickname refresh](../../internal/chatui/overlay.go#L70-L80) — `refreshParticipantLabels` and suggest.go `refreshOpenSuggest` (L161–189), called by `SessionMsg` (model.go L559–575) and `catalog` (channels.go L358–370); `TestNicknameSaveReconnectRefreshesOpenLabels` and `TestCatalogRenameRefreshesOpenCardAndSuggestions` in nickname_display_test.go; retained names in presence.go `observeMembers`/`addPresence` (L42–145).
+16. <a id="source-16"></a> [Scrolling regressions](../../internal/chatui/participants_scroll_test.go#L1) — `TestParticipantsScrollInsteadOfShrinking`, `TestParticipantsFitWithoutScrolling`, `TestParticipantsTinyPanelWithChannelRail`, `TestParticipantsPageKeysNeverSkip`: many participants at small heights, side panel and overlay, rail-squeezed panels, gap-free paging.

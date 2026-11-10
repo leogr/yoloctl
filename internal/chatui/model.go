@@ -302,6 +302,9 @@ type Model struct {
 	layout            viewLayout
 	hits              []hit
 	reconnecting      bool
+	// rosterScroll is how many participant cards the panel has scrolled
+	// past; each frame clamps it to the cards that do not fit.
+	rosterScroll int
 	// gesture identifies the current mouse press, so a drag tick scheduled
 	// by an earlier gesture is ignored rather than doubling auto-scroll.
 	gesture uint64
@@ -826,6 +829,12 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		return m.scrollUp(m.page())
 	case "pgdown":
 		m.moveScroll(m.page())
+		return nil
+	case "alt+pgup", "shift+pgup":
+		m.scrollRoster(-max(m.layout.rosterPage, 1))
+		return nil
+	case "alt+pgdown", "shift+pgdown":
+		m.scrollRoster(max(m.layout.rosterPage, 1))
 		return nil
 	case "ctrl+up":
 		return m.scrollUp(1)

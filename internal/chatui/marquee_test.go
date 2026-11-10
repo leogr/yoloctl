@@ -223,20 +223,20 @@ func TestMarqueeStopsWhenItsRowChanges(t *testing.T) {
 }
 
 func TestMarqueeNeverStartsWithoutAClippedCard(t *testing.T) {
-	t.Run("compact rows", func(t *testing.T) {
+	t.Run("scroll marks", func(t *testing.T) {
 		delays := marqueeDelays(t)
 		m := marqueeModel(t, longModel)
-		m.Update(tea.WindowSizeMsg{Width: 80, Height: 14})
-		m.View()
-		if m.layout.cardWidth != 0 {
-			t.Fatal("the test needs one-row participants")
+		m.Update(tea.WindowSizeMsg{Width: 80, Height: 9})
+		m.scrollRoster(1)
+		marks := 0
+		for y, line := range strings.Split(view(m), "\n") {
+			if strings.Contains(line, "▲") || strings.Contains(line, "▼") {
+				hover(m, m.layout.panelX0+2, y)
+				marks++
+			}
 		}
-		for i := range m.layout.panelMembers {
-			x, y := hitFor(t, m, hitPanel, i)
-			hover(m, x, y)
-		}
-		if len(*delays) != 0 {
-			t.Fatal("compact rows never scroll")
+		if marks == 0 || len(*delays) != 0 {
+			t.Fatal("a scroll mark is not a card and never scrolls its label")
 		}
 	})
 	t.Run("no motion", func(t *testing.T) {

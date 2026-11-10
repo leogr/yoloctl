@@ -33,6 +33,16 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			m.hover = hoverKey{} // the rows moved under the pointer
 			return nil
 		}
+		if m.inRoster(mo.X, mo.Y) {
+			// One card per wheel event over the participants panel.
+			switch mo.Button {
+			case tea.MouseWheelUp:
+				m.scrollRoster(-1)
+			case tea.MouseWheelDown:
+				m.scrollRoster(1)
+			}
+			return nil
+		}
 		var cmd tea.Cmd
 		switch mo.Button {
 		case tea.MouseWheelUp:
@@ -51,6 +61,13 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		return m.mouseUp(mo)
 	}
 	return nil
+}
+
+// inRoster reports whether a cell lies on the participants panel's body
+// rows as the last frame drew it.
+func (m *Model) inRoster(x, y int) bool {
+	l := m.layout
+	return l.panelX1 > l.panelX0 && y >= l.bodyTop && y < l.bodyTop+l.bodyHeight && x >= l.panelX0 && x < l.panelX1
 }
 
 func (m *Model) inTranscript(x, y int) bool {

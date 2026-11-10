@@ -155,7 +155,8 @@ func TestExplicitAwayAndBack(t *testing.T) {
 // A long away reason must not hide the model, even in the smaller panel;
 // without a known model a box's reason stands alone; a human's row reads
 // "human" first.
-// Compact rows add no kind or trust tag: only " you" and the reason.
+// A short panel keeps the same cards and scrolls; they add no kind or
+// trust tag.
 func TestParticipantAwayDetails(t *testing.T) {
 	for _, width := range []int{80, 100} {
 		m := presenceModel(t)
@@ -180,17 +181,22 @@ func TestParticipantAwayDetails(t *testing.T) {
 		}})
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 14})
 		out = view(m)
-		if m.layout.cardWidth != 0 {
-			t.Fatalf("width %d: the test needs one-row participants", width)
+		if m.layout.cardWidth == 0 || m.layout.rosterPage == 0 || !strings.Contains(out, "▼") {
+			t.Fatalf("width %d: the test needs a scrolled card panel:\n%s", width, out)
 		}
-		for _, want := range []string{"opus paused", "leo you", "lee afk", "ghost brb"} {
-			if !strings.Contains(out, want) {
-				t.Fatalf("width %d: compact rows lack %q:\n%s", width, want, out)
+		seen := out
+		for range 4 {
+			m.scrollRoster(1)
+			seen += view(m)
+		}
+		for _, want := range []string{"leo · you", "Opus 5.5 · p", "human · afk", "brb"} {
+			if !strings.Contains(seen, want) {
+				t.Fatalf("width %d: scrolled cards lack %q:\n%s", width, want, seen)
 			}
 		}
-		for _, banned := range []string{"away:", "claude", "Opus 5.5", " human", "ghost ?", "unverified"} {
-			if strings.Contains(out, banned) {
-				t.Fatalf("width %d: compact rows show %q:\n%s", width, banned, out)
+		for _, banned := range []string{"away:", "claude", "ghost ?", "unverified"} {
+			if strings.Contains(seen, banned) {
+				t.Fatalf("width %d: scrolled cards show %q:\n%s", width, banned, seen)
 			}
 		}
 	}

@@ -104,11 +104,15 @@ func (m *Model) channelRail(width int) []panelRow {
 }
 
 // participantRows renders the participants panel: a quiet heading with the
-// count, then operators, voiced members and everyone else. With room, each
-// participant gets two rows (a glyph tile, the name, and a role line) and
-// the panel ends with a note; otherwise one compact row each.
+// count, then operators, voiced members and everyone else, each as a
+// two-row card (a glyph tile, the name, and a role line), and a closing
+// note. Cards keep their height however many participants there are: when
+// they do not fit, the list scrolls by whole cards (m.rosterScroll, clamped
+// here), with a dim row naming how many are above or below. The heading
+// never scrolls.
 func (m *Model) participantRows(members []Member, width, height int, bg spaceview.Color) []panelRow {
 	t := m.theme
+	m.layout.rosterPage = 0
 	if height <= 0 {
 		return nil
 	}
@@ -122,44 +126,88 @@ func (m *Model) participantRows(members []Member, width, height int, bg spacevie
 	if m.members == nil {
 		return append(rows, panelRow{member: -1, runs: []run{deco(" waiting for the room…", spaceview.Style{FG: t.Dim, BG: bg})}})
 	}
-	note := []string{" Everyone in " + m.name, " sees its messages.", " Click a box to attach."}
-	if 2+2*len(members)+1+len(note) <= height {
-		m.layout.cardWidth = width
-		for i, mem := range members {
-			name, role := m.memberCard(mem, width, bg)
-			rows = append(rows, panelRow{member: i, runs: name}, panelRow{member: i, runs: role})
-		}
-		rows = append(rows, panelRow{member: -1})
-		for _, line := range note {
-			rows = append(rows, panelRow{member: -1, runs: []run{deco(line, spaceview.Style{FG: t.Faint, BG: bg})}})
+	m.layout.cardWidth = width
+	var cards []panelRow
+	for i, mem := range members {
+		name, role := m.memberCard(mem, width, bg)
+		cards = append(cards, panelRow{member: i, runs: name}, panelRow{member: i, runs: role})
+	}
+	avail := height - len(rows)
+	if avail <= 0 {
+		// Only the heading fits (the channel rail took the rest): no card
+		// shows and nothing scrolls until the panel grows again.
+		return rows[:min(height, len(rows))]
+	}
+	if len(cards) <= avail {
+		m.rosterScroll = 0
+		rows = append(rows, cards...)
+		// The closing note shows only with room for all of it.
+		note := []string{" Everyone in " + m.name, " sees its messages.", " Click a box to attach."}
+		if len(cards)+1+len(note) <= avail {
+			rows = append(rows, panelRow{member: -1})
+			for _, line := range note {
+				rows = append(rows, panelRow{member: -1, runs: []run{deco(line, spaceview.Style{FG: t.Faint, BG: bg})}})
+			}
 		}
 		return rows
 	}
-	section := ""
-	for i, mem := range members {
-		label := "MEMBERS"
-		switch {
-		case mem.Op:
-			label = "OPERATORS"
-		case mem.Voice:
-			label = "VOICE"
-		}
-		if label != section && len(members) > 3 {
-			section = label
-			rows = append(rows, panelRow{member: -1, runs: []run{deco(" "+label, spaceview.Style{FG: t.Faint, BG: bg})}})
-		}
-		rows = append(rows, panelRow{member: i, runs: m.memberRuns(mem, width, bg)})
+	// Scrolled: the first k cards are hidden, the second heading row names
+	// them, and the last row names the cards below. The last position shows
+	// the last card.
+	more := func(text string) panelRow {
+		return panelRow{member: -1, runs: []run{deco(text, spaceview.Style{FG: t.Dim, BG: bg})}}
 	}
-	if len(rows) > height {
-		hidden := 0
-		for _, r := range rows[max(height-1, 0):] {
-			if r.member >= 0 {
-				hidden++
-			}
-		}
-		rows = append(rows[:max(height-1, 0)], panelRow{member: -1, runs: []run{deco(fmt.Sprintf(" +%d more", hidden), spaceview.Style{FG: t.Dim, BG: bg})}})
+	// A page is the cards one screen shows while more are below (one row
+	// names them), so paging never skips a card.
+	m.layout.rosterPage = max((avail-1)/2, 1)
+	k := min(max(m.rosterScroll, 0), (len(cards)-avail+1)/2)
+	m.rosterScroll = k
+	if k > 0 {
+		rows[1] = more(fmt.Sprintf(" ▲ %d above", k))
+	}
+	rest := cards[2*k:]
+	if len(rest) <= avail {
+		return append(rows, rest...)
+	}
+	// One row names what is below; a card is not split across that edge
+	// unless no whole card fits, when its name row still shows.
+	n := max(avail-1, 0)
+	if n > 1 && rest[n].member == rest[n-1].member {
+		n--
+	}
+	if n == 0 {
+		n = min(avail, 1)
+	}
+	seen := map[int]bool{}
+	for _, r := range rest[:n] {
+		seen[r.member] = true
+	}
+	rows = append(rows, rest[:n]...)
+	if n < avail {
+		rows = append(rows, more(fmt.Sprintf(" ▼ %d more", len(members)-k-len(seen))))
 	}
 	return rows
+}
+
+// scrollRoster moves the participants panel by n cards (negative: up)
+// when the last frame showed it scrolled; the next frame clamps it. It
+// reports whether it moved.
+func (m *Model) scrollRoster(n int) bool {
+	if !m.rosterShown() || m.layout.rosterPage == 0 {
+		return false
+	}
+	m.rosterScroll = max(m.rosterScroll+n, 0)
+	m.hover = hoverKey{} // the cards moved under the pointer
+	return true
+}
+
+// rosterShown reports whether the participants panel is on screen: the side
+// panel on a wide screen, or the overlay on a narrow one.
+func (m *Model) rosterShown() bool {
+	if panelWidth(m.width) > 0 {
+		return m.rosterOpen
+	}
+	return m.rosterOverlay
 }
 
 // roleMark is the cell right before a participant's name: @ for a channel
@@ -211,39 +259,6 @@ func (m *Model) memberCard(mem Member, width int, bg spaceview.Color) ([]run, []
 	text := m.roleLine(w, presence)
 	role := []run{deco("       "+m.roleText(mem, text, roleCells(width)), spaceview.Style{FG: t.Dim, BG: bg})}
 	return name, role
-}
-
-func (m *Model) memberRuns(mem Member, width int, bg spaceview.Color) []run {
-	t := m.theme
-	w := m.identify(mem.Nick, mem.Account)
-	presence, active := m.memberPresence(mem)
-	dot := m.presenceDot(presence, active, bg)
-	dot.Text = " " + dot.Text + " "
-	name := spaceview.Style{FG: w.color, BG: bg, Bold: !mem.Away}
-	if mem.Away {
-		name.FG = t.Dim
-	}
-	runs := []run{
-		dot,
-		deco(iconSlot(m.widthMethod, w.glyph), spaceview.Style{FG: w.color, BG: bg}),
-		m.roleMark(mem, bg),
-		m.hoverRun(run{Text: w.name, Style: name, Act: action{Kind: actAuthor, Value: mem.Account, Extra: mem.Nick}}, m.panelHovered(mem)),
-	}
-	var tags []run
-	if w.me {
-		tags = append(tags, deco(" you", spaceview.Style{FG: t.Dim, BG: bg}))
-	}
-	if tag, ok := m.stateTag(w, time.Now()); ok {
-		tags = append(tags, m.stateTagRun(tag, bg))
-	}
-	if label := presenceLabel(presence); label != "" {
-		tags = append(tags, deco(" "+label, spaceview.Style{FG: t.Faint, BG: bg}))
-	}
-	room := width - runsWidth(m.widthMethod, runs) - runsWidth(m.widthMethod, tags)
-	if room < 0 {
-		runs[3].Text = truncate(m.widthMethod, runs[3].Text, max(m.widthMethod.StringWidth(runs[3].Text)+room, 1), "…")
-	}
-	return append(runs, tags...)
 }
 
 // presenceDot is a participant's own IRC availability, always a solid ●:
