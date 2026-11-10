@@ -13,6 +13,9 @@ type popup struct {
 	Title  string
 	Lines  []string
 	Footer string
+	// FooterStyle optionally styles each visible footer row after wrapping and
+	// clipping. It must preserve the text and display width.
+	FooterStyle func(line string, row int) string
 	// Selected is the footer text drawn highlighted (reverse video), such as
 	// the default button.
 	Selected string
@@ -122,7 +125,11 @@ func (p popup) render(width, rows int, bg string) []string {
 			if p.Selected != "" {
 				line = strings.Replace(line, p.Selected, "\x1b[7m"+p.Selected+"\x1b[27m", 1)
 			}
-			line = cOrange + cBold + line + cReset
+			if p.FooterStyle != nil {
+				line = p.FooterStyle(line, i-len(body))
+			} else {
+				line = cOrange + cBold + line + cReset
+			}
 		}
 		line += padding
 		if framed {

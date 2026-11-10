@@ -4,17 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image/color"
 	"os"
 	"slices"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/operator"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/termio"
+	"github.com/leogr/yoloctl/internal/tui/spaceview"
 	"github.com/leogr/yoloctl/internal/tui/term"
 	"github.com/leogr/yoloctl/internal/tui/yoloctlcli"
 )
@@ -516,5 +519,86 @@ func TestSpacePickerLabels(t *testing.T) {
 	}
 	if snapshots.String() != string(want) {
 		t.Fatalf("space picker differs from golden:\n%s", snapshots.String())
+	}
+}
+
+func TestSpacePickerFooterStyle(t *testing.T) {
+	var snapshots strings.Builder
+	for _, dark := range []bool{true, false} {
+		for _, width := range []int{80, 44, 24, 16, 10} {
+			m := newTestModel(t, width, 40)
+			m.bgDetected, m.bgIsDark = true, dark
+			if dark {
+				m.background = color.Black
+			} else {
+				m.background = color.White
+			}
+			m.ctxSpace = "yolo"
+			m.spacePicker = &spacePicker{names: []string{"ftry", "yolo"}, row: 1}
+			o := m.spacePickerOverlay()
+			theme := spaceview.NewTheme(dark, m.background, nil)
+			expected := uv.NewScreenBuffer(2, 1)
+			uv.NewStyledString(spaceview.StyleText("h", spaceview.Style{FG: theme.Dim})+spaceview.StyleText("c", spaceview.Style{FG: theme.Brand})).Draw(expected, expected.Bounds())
+			rows := o.frame.render(o.w, o.h, m.surfaceBg())
+			count := len(strings.Split(o.frame.Footer, "\n"))
+			start := len(rows) - 1 - count
+			fmt.Fprintf(&snapshots, "dark=%v width=%d\n", dark, width)
+			codeSeen := false
+			for _, row := range rows[start : len(rows)-1] {
+				fmt.Fprintf(&snapshots, "%q\n", row)
+				buf := uv.NewScreenBuffer(o.w, 1)
+				uv.NewStyledString(row).Draw(buf, buf.Bounds())
+				for x := 2; x < o.w-2; x++ {
+					cell := buf.CellAt(x, 0)
+					if strings.TrimSpace(cell.Content) == "" {
+						continue
+					}
+					if cell.Style.Attrs&uv.AttrBold != 0 {
+						t.Fatalf("footer is bold: %q", row)
+					}
+					fg := cell.Style.Fg
+					if fg == nil {
+						t.Fatalf("footer foreground missing: %q", row)
+					}
+					r, g, b, a := fg.RGBA()
+					hr, hg, hb, ha := expected.CellAt(0, 0).Style.Fg.RGBA()
+					cr, cg, cb, ca := expected.CellAt(1, 0).Style.Fg.RGBA()
+					if r == cr && g == cg && b == cb && a == ca {
+						codeSeen = true
+					} else if r != hr || g != hg || b != hb || a != ha {
+						t.Fatalf("unexpected footer colour: %v", fg)
+					}
+				}
+			}
+			if !codeSeen {
+				t.Fatalf("command has no code colour at width%d", width)
+			}
+			if width >= 24 {
+				if !strings.Contains(strings.Join(rows, "\n"), spaceview.StyleText("Switches only this TUI", spaceview.Style{FG: theme.Dim})) && width >= 44 {
+					t.Fatal("first footer clause is not normal hint text")
+				}
+				styled := spaceview.StyleText("yoloctl space use", spaceview.Style{FG: theme.Brand})
+				if !strings.Contains(strings.Join(rows, "\n"), styled) {
+					t.Fatalf("whole command lacks inline-code style: %q", rows)
+				}
+				if width >= 44 && !strings.Contains(strings.Join(rows, "\n"), spaceview.StyleText(" changes the default", spaceview.Style{FG: theme.Dim})) {
+					t.Fatal("prose following command did not restore hint style")
+				}
+
+			}
+		}
+	}
+	path := "testdata/space-picker-footer-style.golden"
+	if *updateMenu {
+		if err := os.WriteFile(path, []byte(snapshots.String()), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshots.String() != string(want) {
+		t.Fatalf("footer style differs from golden:\n%s", snapshots.String())
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/tui/palette"
 	"github.com/leogr/yoloctl/internal/tui/panes"
+	"github.com/leogr/yoloctl/internal/tui/spaceview"
 	"github.com/leogr/yoloctl/internal/tui/tabs"
 	"github.com/leogr/yoloctl/internal/tui/term"
 )
@@ -212,10 +213,37 @@ func (m *model) spacePickerOverlay() *overlay {
 	footer = ansi.Wordwrap(footer, innerWidth, "")
 	footer = strings.ReplaceAll(footer, "\u00a0", " ")
 	footerLines := strings.Split(footer, "\n")
+	// Track the command's columns before truncating tiny-width words, so its
+	// surviving fragments retain inline-code colour without colouring prose.
+	codeSpans := make([][2]int, len(footerLines))
+	remaining := 0
 	for i, line := range footerLines {
+		start := strings.Index(line, "yoloctl")
+		if start >= 0 {
+			remaining = len("yoloctl space use")
+		} else if remaining > 0 {
+			start = 0
+		}
+		if start >= 0 && remaining > 0 {
+			used := min(remaining, len(strings.TrimRight(line[start:], " ")))
+			codeSpans[i] = [2]int{ansi.StringWidth(line[:start]), ansi.StringWidth(line[:start+used])}
+			remaining = max(remaining-used-1, 0) // wrapping consumes a space
+		}
 		footerLines[i] = ansi.Truncate(line, innerWidth, "…")
 	}
 	frame.Footer = strings.Join(footerLines, "\n")
+	theme := spaceview.NewTheme(!m.bgDetected || m.bgIsDark, m.background, nil)
+	hintStyle := spaceview.Style{FG: theme.Dim}
+	codeStyle := spaceview.Style{FG: theme.Brand} // same as chat inline code
+	frame.FooterStyle = func(line string, row int) string {
+		span := codeSpans[row]
+		if span[0] == span[1] {
+			return spaceview.StyleText(line, hintStyle)
+		}
+		return spaceview.StyleText(ansi.Cut(line, 0, span[0]), hintStyle) +
+			spaceview.StyleText(ansi.Cut(line, span[0], span[1]), codeStyle) +
+			spaceview.StyleText(ansi.Cut(line, span[1], ansi.StringWidth(line)), hintStyle)
+	}
 	h := min(frame.rowsFor(w, len(labels)), max(m.height-1, 1))
 	inner, _, shown := frame.layout(w, h)
 	p.scroll = max(min(p.scroll, max(len(labels)-shown, 0)), 0)

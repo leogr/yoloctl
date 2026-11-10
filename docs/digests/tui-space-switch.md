@@ -1,6 +1,6 @@
 # Per-TUI space selection
 
-Verification: `88595d59669105bfdd8988628f77098ebbd318d0` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `5ab92ee7f49123d5581438727083e6934618565f` and accompanying changes; re-read cited symbols when changing behavior.
 
 [FACT] A full TUI resolves its default once at startup. `YOLOCTL_SPACE` is a
 non-secret process default: explicit flag/positional target wins, then a
@@ -27,7 +27,9 @@ nothing. A bound native/operator client does not offer cross-space choices.
 This inventory does not probe or boot VMs. The footer names `yoloctl space use`
 as the command that changes the default. It wraps clauses first, keeping the
 command together when it fits, then wraps at word boundaries; words
-wider than the available width are ellipsized.
+wider than the available width are ellipsized. Footer prose uses the shared
+normal hint colour; command text uses the same theme accent as chat inline code,
+without the title's bold style, including visible command fragments at tiny widths.
 [3](#source-3) [6](#source-6) [13](#source-13)
 
 [FACT] A different target always opens one all-tabs confirmation, even with no
