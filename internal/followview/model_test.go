@@ -2,6 +2,7 @@ package followview
 
 import (
 	"context"
+	"image/color"
 	"os"
 	"path/filepath"
 	"strings"
@@ -269,5 +270,37 @@ func TestTinyViewsAndResizePreserveReadingAnchor(t *testing.T) {
 			}
 		}
 		fresh.Close()
+	}
+}
+
+func TestRenderOnlyKeepsUnavailableUntilAnActualReadRecovers(t *testing.T) {
+	text := "# Last good document\nretained content"
+	m, path := fileModel(t, text, Markdown)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	applyWork(t, m, key(m, 'r', 0))
+	failure := m.stale
+	if failure == "" {
+		t.Fatal("missing file did not become unavailable")
+	}
+	for _, render := range []struct {
+		name string
+		work func() tea.Cmd
+	}{
+		{"resize", func() tea.Cmd { _, cmd := m.Update(tea.WindowSizeMsg{Width: 79, Height: 12}); return cmd }},
+		{"source", func() tea.Cmd { return key(m, 's', tea.ModCtrl) }},
+		{"theme", func() tea.Cmd { _, cmd := m.Update(tea.BackgroundColorMsg{Color: color.Black}); return cmd }},
+	} {
+		applyWork(t, m, render.work())
+		if m.stale != failure || !strings.Contains(m.View().Content, "Unavailable (last display retained):") || m.view.text != text {
+			t.Fatalf("%s rendering claimed recovery without reading the unavailable source", render.name)
+		}
+	}
+	oldKey := m.snapshot.Key
+	writeFixture(t, path, []byte(text))
+	applyWork(t, m, key(m, 'r', 0))
+	if m.stale != "" || m.snapshot.Key != oldKey || m.snapshot.Changed || strings.Contains(m.View().Content, "Unavailable (last display retained):") {
+		t.Fatal("successful unchanged read did not clear unavailable", m.stale, m.snapshot)
 	}
 }

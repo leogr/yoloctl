@@ -186,3 +186,33 @@ func TestFollowIsHostOnlyAndItsFlagsHaveCompleters(t *testing.T) {
 		t.Fatal(err, buf.String())
 	}
 }
+
+func TestFollowCompletionAdvancesFromGrantRootIntoGuestChildren(t *testing.T) {
+	followSeams(t)
+	root := t.TempDir()
+	// A nested grant must not turn selection of the parent root back into a
+	// grant-prefix suggestion instead of listing the selected directory.
+	followGrants = func(context.Context, string) ([]string, error) {
+		return []string{root, filepath.Join(root, "nested")}, nil
+	}
+	calls := 0
+	followCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+		calls++
+		return exec.CommandContext(ctx, "python3", "-c", `print('{"entries":["notes.md"]}')`)
+	}
+	cmd := newFollowCmd()
+	cmd.SetContext(t.Context())
+	out, directive := cmd.ValidArgsFunction(cmd, nil, root)
+	if calls != 0 || len(out) == 0 || out[0] != cobra.CompletionWithDesc(root+"/", "space grant") || directive&cobra.ShellCompDirectiveNoFileComp == 0 {
+		t.Fatal("partial root did not complete without a guest read", calls, out, directive)
+	}
+	out, directive = cmd.ValidArgsFunction(cmd, nil, root+"/")
+	if calls != 1 || len(out) != 1 || out[0] != root+"/notes.md" || directive&cobra.ShellCompDirectiveNoFileComp == 0 {
+		t.Fatal("selected grant root did not list guest children", calls, out, directive)
+	}
+	followGrants = func(context.Context, string) ([]string, error) { return nil, errors.New("grant removed") }
+	out, directive = cmd.ValidArgsFunction(cmd, nil, root+"/")
+	if calls != 1 || len(out) != 0 || directive&cobra.ShellCompDirectiveNoFileComp == 0 {
+		t.Fatal("removed grant reached the reader or fell back to host completion", calls, out, directive)
+	}
+}

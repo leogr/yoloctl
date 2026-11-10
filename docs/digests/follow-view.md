@@ -1,6 +1,6 @@
 # Live file view
 
-Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes.
+Verification: `55ef4fde614e7adbd9a530d6551681847743e646` and accompanying changes.
 
 [FACT] Host-only `yoloctl follow PATH [--space SPACE] [--format auto|text|markdown]`
 opens one live pane. Default mode pins the selected space and absolute VM path;
@@ -20,7 +20,8 @@ handles, while listing opens only the selected directory for reading. A refusal
 suggests a direct path within a current grant. Host mode uses ordinary symlink
 semantics but refuses nonregular files. VM completion offers grant roots and
 up to 512 guest directory entries, with a short timeout and `NoFileComp` on
-success or error; it never substitutes host enumeration. Explicit host mode
+success or error; selecting a complete grant root lists its guest children.
+It never substitutes host enumeration. Explicit host mode
 uses host completion. [1](#source-1) [2](#source-2) [3](#source-3)
 
 [FACT] Files through 2 MiB are read completely. Above that, only one active
@@ -40,7 +41,9 @@ joins owned work; VM command cancellation kills/reaps its owned process group.
 Initial display follows the end; scrolling up pauses end-follow while refreshing
 the active bytes. `f`/End resumes; source-line position is retained best-effort
 and clamped after rewrites. Rename-save follows the pinned name, failures keep
-the last display marked unavailable, and changed content clears selection.
+the last display marked unavailable until an actual successful read; cached
+resize/source/theme rendering does not clear that state. Changed content clears
+selection.
 [2](#source-2) [4](#source-4)
 
 [FACT] Markdown parsing/layout/copy geometry comes from `markdownview`, with

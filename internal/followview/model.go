@@ -98,6 +98,7 @@ func (j *jobs) close()      { j.cancelWork(); j.wg.Wait() }
 
 type pollMsg struct{}
 type resultMsg struct {
+	read     bool
 	gen      uint64
 	snapshot Snapshot
 	raw      []byte
@@ -158,7 +159,7 @@ func (m *Model) work(read, render bool) tea.Cmd {
 	width, method, theme, source, format := m.width, m.method, m.theme, m.source, m.opts.Format
 	return func() tea.Msg {
 		return m.jobs.run(func(ctx context.Context) tea.Msg {
-			result := resultMsg{gen: gen, snapshot: snapshot, raw: raw}
+			result := resultMsg{gen: gen, read: read, snapshot: snapshot, raw: raw}
 			if read {
 				next, err := m.opts.Reader.Read(ctx, q)
 				result.err = err
@@ -171,7 +172,7 @@ func (m *Model) work(read, render bool) tea.Cmd {
 				}
 			}
 			if ctx.Err() != nil {
-				return resultMsg{gen: gen, err: ctx.Err()}
+				return resultMsg{gen: gen, read: read, err: ctx.Err()}
 			}
 			if render && (result.err == nil || snapshot.Key != "") {
 				result.view = renderFile(result.raw, result.snapshot.Large, source, format, width, method, theme)
@@ -210,15 +211,19 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.gen != m.gen {
 			return m, m.work(false, false)
 		}
-		if msg.err != nil {
-			m.stale = markdownview.Plain(msg.err.Error())
-		} else {
-			m.stale = ""
-			m.snapshot = msg.snapshot
-			m.raw = msg.raw
-			if msg.snapshot.Changed {
-				m.selection = nil
-				m.drag = false
+		// Cached rerendering says nothing about source availability. Only an
+		// actual read (including an unchanged success) can change that state.
+		if msg.read {
+			if msg.err != nil {
+				m.stale = markdownview.Plain(msg.err.Error())
+			} else {
+				m.stale = ""
+				m.snapshot = msg.snapshot
+				m.raw = msg.raw
+				if msg.snapshot.Changed {
+					m.selection = nil
+					m.drag = false
+				}
 			}
 		}
 		if msg.view != nil {

@@ -227,16 +227,22 @@ func completeFollowPaths(cmd *cobra.Command, args []string, token string) ([]cob
 		return nil, directive
 	}
 	var out []cobra.Completion
+	selectedRoot := false
 	for _, root := range roots {
 		candidate := strings.TrimRight(root, string(filepath.Separator)) + string(filepath.Separator)
-		if strings.HasPrefix(candidate, token) {
+		if candidate == token {
+			selectedRoot = true
+		} else if strings.HasPrefix(candidate, token) {
 			out = append(out, cobra.CompletionWithDesc(candidate, "space grant"))
 		}
 	}
-	if token == "" || len(out) > 0 {
+	if !selectedRoot && (token == "" || len(out) > 0) {
 		sort.Strings(out)
 		return out, directive | cobra.ShellCompDirectiveNoSpace
 	}
+	// A fully selected grant is a directory to list, including when another
+	// grant is nested below it. Prefix suggestions must not intercept it.
+	out = nil
 	literalParent, base := splitCompletionToken(token)
 	lookup := literalParent
 	if lookup == "" {
