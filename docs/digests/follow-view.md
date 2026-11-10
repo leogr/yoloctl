@@ -1,6 +1,6 @@
 # Live file view
 
-Verification: `55ef4fde614e7adbd9a530d6551681847743e646` and accompanying changes.
+Verification: `6c7d331534c2c5b9fa952ff752610eb03a845ce6` and accompanying changes.
 
 [FACT] Host-only `yoloctl follow PATH [--space SPACE] [--format auto|text|markdown]`
 opens one live pane. Default mode pins the selected space and absolute VM path;
@@ -58,6 +58,12 @@ Markdown beyond chat's row limit, window browsing, slow reads and cancellation.
 These establish component behavior, not native terminal or live backend parity.
 [4](#source-4) [5](#source-5) [6](#source-6)
 
+[FACT] Body rows keep the terminal background behind and after their text, as
+chat transcript rows do. Prose, headings, pipe text and tables have no row fill;
+only code cards (and a selection) carry their own background. The title and
+status rows keep their fills. A cell-level regression checks the default, dark
+and light themes. [7](#source-7) [8](#source-8)
+
 ## Sources
 
 1. <a id="source-1"></a> [CLI and completion](../../cmd/yoloctl/follow.go#L66) — `newFollowCmd`, `absoluteFollowPath`, `currentFollowGrants`, `completeFollowPaths`.
@@ -66,3 +72,5 @@ These establish component behavior, not native terminal or live backend parity.
 4. <a id="source-4"></a> [View and job ownership](../../internal/followview/model.go#L51) — `renderFile`, `jobs`, `Model.Update`, `scroll`, `View`, `Run`.
 5. <a id="source-5"></a> [Source regressions](../../internal/followview/source_test.go#L38) — temporary-file and fixed-reader transport tests; model_test.go covers rendering/input/state and cmd/yoloctl/follow_test.go covers selection/completion.
 6. <a id="source-6"></a> [Shared layout option](../../internal/markdownview/document.go#L1) — `LayoutOptions.UnlimitedRows`; internal/tui/confirm_close.go `closeEffect` and tui.go `opensLiveSurface` own pane routing/closing.
+7. <a id="source-7"></a> [Body row painting](../../internal/followview/model.go#L492) — `View`, body `Paint` fill.
+8. <a id="source-8"></a> [Background regression](../../internal/followview/background_test.go#L18) — `TestBodyRowsKeepTerminalBackground`.

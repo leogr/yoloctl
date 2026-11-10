@@ -489,7 +489,11 @@ func (m *Model) View() tea.View {
 			}
 			return lo - run.Start, hi - run.Start
 		}
-		rows = append(rows, markdownview.Paint(m.method, runs, m.width, m.theme.Surface, highlight, spaceview.Style{FG: m.theme.Text, BG: m.theme.Raised}))
+		// Body padding keeps the terminal background, like chat transcript
+		// rows: prose runs carry no background, so a Surface fill would draw a
+		// lighter bar in the padding after each line's text. Code cards and
+		// selections keep their own backgrounds.
+		rows = append(rows, markdownview.Paint(m.method, runs, m.width, 0, highlight, spaceview.Style{FG: m.theme.Text, BG: m.theme.Raised}))
 	}
 	mode := "text"
 	if m.view != nil && m.view.markdown {
