@@ -19,7 +19,7 @@ write it never fails an operation that succeeded.
 [42](#source-42)
 
 [FACT] Palette commands echo without PWD. A fixed-width ASCII wave replaces the
-left brand while busy; bold `[ space ▾ ]` is the rightmost status item. Each TUI pins its default
+left brand while busy; bold `space ▾` is the rightmost status item. Each TUI pins its default
 independently of global `space use`. The chip or pane-prefix `s` opens a local
 space dropdown; switching asks before closing all tabs and clearing drafts.
 Explicit command targets still win, and a busy palette command must finish

@@ -1,0 +1,42 @@
+width=80
+╭─ Switch space ───────────────────────────╮
+│ ftry                                     │
+│ yolo · current                           │
+│                                          │
+│ Switches only this TUI                   │
+│ yoloctl space use changes the default    │
+╰──────────────────────────────────────────╯
+width=44
+╭─ Switch space ───────────────────────────╮
+│ ftry                                     │
+│ yolo · current                           │
+│                                          │
+│ Switches only this TUI                   │
+│ yoloctl space use changes the default    │
+╰──────────────────────────────────────────╯
+width=24
+╭─ Switch space ───────╮
+│ ftry                 │
+│ yolo · current       │
+│                      │
+│ Switches only this   │
+│ TUI                  │
+│ yoloctl space use    │
+│ changes the default  │
+╰──────────────────────╯
+width=10
+╭─ Swit…─╮
+│ ftry   │
+│ yolo … │
+│        │
+│ Switc… │
+│ only   │
+│ this   │
+│ TUI    │
+│ yoloc… │
+│ space  │
+│ use    │
+│ chang… │
+│ the    │
+│ defau… │
+╰────────╯

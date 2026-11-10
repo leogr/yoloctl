@@ -475,3 +475,46 @@ func TestSpaceReviewCancelRetainsFocusedPaneOnSameTabReuse(t *testing.T) {
 		})
 	}
 }
+
+func TestSpacePickerLabels(t *testing.T) {
+	var snapshots strings.Builder
+	for _, width := range []int{80, 44, 24, 10} {
+		m := newTestModel(t, width, 40)
+		m.ctxSpace = "yolo"
+		m.spacePicker = &spacePicker{names: []string{"ftry", "yolo"}, row: 1}
+		o := m.spacePickerOverlay()
+		footer := o.frame.Footer
+		if strings.Contains(footer, "Esc") {
+			t.Fatalf("obsolete escape hint: %q", footer)
+		}
+		if width >= 24 && strings.Join(strings.Fields(footer), " ") != "Switches only this TUI yoloctl space use changes the default" {
+			t.Fatalf("footer words lost or split at width %d: %q", width, footer)
+		}
+		inner, _, _ := o.frame.layout(o.w, o.h)
+		if inner >= ansi.StringWidth("yoloctl space use") && !slices.ContainsFunc(strings.Split(footer, "\n"), func(row string) bool {
+			return strings.Contains(row, "yoloctl space use")
+		}) {
+			t.Fatalf("command split at width %d: %q", width, footer)
+		}
+		fmt.Fprintf(&snapshots, "width=%d\n", width)
+		for _, row := range o.frame.render(o.w, o.h, "") {
+			if ansi.StringWidth(row) > width {
+				t.Fatalf("row exceeds width %d: %q", width, row)
+			}
+			fmt.Fprintln(&snapshots, ansi.Strip(row))
+		}
+	}
+	path := "testdata/space-picker.golden"
+	if *updateMenu {
+		if err := os.WriteFile(path, []byte(snapshots.String()), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshots.String() != string(want) {
+		t.Fatalf("space picker differs from golden:\n%s", snapshots.String())
+	}
+}

@@ -175,7 +175,7 @@ func (m *model) spacePickerOverlay() *overlay {
 	if p == nil {
 		return nil
 	}
-	frame := popup{Title: "Switch space", Footer: "Only this TUI · space use is global · Esc keeps"}
+	frame := popup{Title: "Switch space"}
 	labels := make([]string, len(p.names))
 	want := 40
 	for i, name := range p.names {
@@ -196,6 +196,26 @@ func (m *model) spacePickerOverlay() *overlay {
 	// The dropdown is anchored just below the top-right chip, independent of
 	// which pane has focus. Leave the palette/tab strip geometry unchanged.
 	w := min(want+4, max(m.width, 1))
+	// Wrap words before handing the footer to the popup's cell wrapper.
+	// A word wider than a tiny terminal is ellipsized rather than split.
+	innerWidth := w
+	if w >= 5 {
+		innerWidth -= 4
+	}
+	footer := "Switches only this TUI · yoloctl space use changes the default"
+	if ansi.StringWidth(footer) > innerWidth {
+		footer = strings.ReplaceAll(footer, " · ", "\n")
+	}
+	if innerWidth >= ansi.StringWidth("yoloctl space use") {
+		footer = strings.ReplaceAll(footer, "yoloctl space use", "yoloctl\u00a0space\u00a0use")
+	}
+	footer = ansi.Wordwrap(footer, innerWidth, "")
+	footer = strings.ReplaceAll(footer, "\u00a0", " ")
+	footerLines := strings.Split(footer, "\n")
+	for i, line := range footerLines {
+		footerLines[i] = ansi.Truncate(line, innerWidth, "…")
+	}
+	frame.Footer = strings.Join(footerLines, "\n")
 	h := min(frame.rowsFor(w, len(labels)), max(m.height-1, 1))
 	inner, _, shown := frame.layout(w, h)
 	p.scroll = max(min(p.scroll, max(len(labels)-shown, 0)), 0)

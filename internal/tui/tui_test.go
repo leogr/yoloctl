@@ -890,10 +890,10 @@ func TestContextChipInBar(t *testing.T) {
 		m := newTestModel(t, width, 20)
 		m.ctxSpace = "prod"
 		row := strings.SplitN(m.View().Content, "\n", 2)[0]
-		if got := ansi.Strip(row); !strings.HasSuffix(got, "[ prod ▾ ] ") || ansi.StringWidth(got) != width {
+		if got := ansi.Strip(row); !strings.HasSuffix(got, "prod ▾ ") || ansi.StringWidth(got) != width {
 			t.Fatalf("space is not right aligned at width %d: %q", width, got)
 		}
-		if !strings.Contains(row, cBold+"[ prod ▾ ]") {
+		if !strings.Contains(row, cBold+"prod ▾") {
 			t.Fatalf("space is not bold: %q", row)
 		}
 	}

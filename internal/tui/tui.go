@@ -2080,9 +2080,9 @@ func (m *model) contextChip() string {
 	if m.ctxSpace == "" {
 		return ""
 	}
-	chip := "[ " + m.ctxSpace + " ▾ ]"
+	chip := m.ctxSpace + " ▾"
 	if m.spaceBound {
-		chip = "[ " + m.ctxSpace + " ]"
+		chip = m.ctxSpace
 	}
 	return runewidth.Truncate(chip, max(m.width-len([]rune(brandPrefix()))-3, 0), "…")
 }

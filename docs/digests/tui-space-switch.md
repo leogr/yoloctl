@@ -1,6 +1,6 @@
 # Per-TUI space selection
 
-Verification: `3bae6dd1d6ffa1356f7678850584fe6d9cf0fac8` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `88595d59669105bfdd8988628f77098ebbd318d0` and accompanying changes; re-read cited symbols when changing behavior.
 
 [FACT] A full TUI resolves its default once at startup. `YOLOCTL_SPACE` is a
 non-secret process default: explicit flag/positional target wins, then a
@@ -18,13 +18,16 @@ Completion retains its two-second deadline. Standalone attachment retains its
 original explicit/inherited selection and has no switcher.
 [3](#source-3) [4](#source-4) [5](#source-5) [12](#source-12)
 
-[FACT] Click the top-right `[ space ▾ ]` chip or press the configured pane prefix
+[FACT] Click the top-right `space ▾` chip or press the configured pane prefix
 then `s`. The dropdown lists the local bootstrap inventory, sorted with the
 current space marked, including stopped spaces. Up/down or the wheel moves;
 Enter or a row click selects; Esc/outside click keeps. Loading, unavailable and
 empty inventories are shown explicitly. Selecting the current space does
 nothing. A bound native/operator client does not offer cross-space choices.
-This inventory does not probe or boot VMs.
+This inventory does not probe or boot VMs. The footer names `yoloctl space use`
+as the command that changes the default. It wraps clauses first, keeping the
+command together when it fits, then wraps at word boundaries; words
+wider than the available width are ellipsized.
 [3](#source-3) [6](#source-6) [13](#source-13)
 
 [FACT] A different target always opens one all-tabs confirmation, even with no
