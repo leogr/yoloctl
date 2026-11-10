@@ -15,8 +15,11 @@ import (
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
 )
 
-// This golden was captured from d9aec4ac before moving production code. There
-// is deliberately no regeneration switch: an extraction must match it.
+// This golden was captured from d9aec4ac before moving production code, then
+// deliberately updated once for feat-markdown-improvements (a pipe inside a
+// code span stays in its table cell, --- draws a rule, list lines record
+// their item geometry). There is deliberately no regeneration switch: a
+// refactor must match it, and only an intended rendering change updates it.
 func TestMarkdownFrozenParity(t *testing.T) {
 	got := markdownParityBytes(t)
 	want, err := os.ReadFile("testdata/markdown-parity.json")

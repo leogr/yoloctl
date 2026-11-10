@@ -1,6 +1,6 @@
 # Native chat Quote
 
-Verification: `d9aec4ac854ffd5b4f60a93817b8c5afce10847d` and accompanying changes.
+Verification: `3bae6dd1d6ffa1356f7678850584fe6d9cf0fac8` and accompanying changes.
 
 [FACT] Only the chat view's own drag highlight can be quoted: the view
 requests all mouse motion, so yoloctl's local tab selection does not act over
@@ -60,7 +60,7 @@ refused. [1](#source-1)
 
 [FACT] Limits: the view's Markdown subset has no nested blocks, so a quoted
 fence shows as quoted text lines and a quoted table's TABs display expanded;
-cells split at unescaped pipes even inside backticks, and Markdown-looking cell
+cells split at unescaped pipes outside a matched code span, and Markdown-looking cell
 bytes may render once sent. Source view maps every highlight except a cut tab.
 [6](#source-6)
 
@@ -83,5 +83,5 @@ They use fake callbacks, not a live room. [7](#source-7) [8](#source-8) [9](#sou
 5. <a id="source-5"></a> [Help](../../internal/chatui/overlay.go#L109-L124) — Messages and Selecting text rows.
 6. <a id="source-6"></a> [Shared line builders](../../internal/markdownview/body.go#L101) — `parseLines`, `TableLines`, `TableCells`; shared inline.go owns `InlineMarkdownMap`, quote.go owns `SourceMap`, `TableText` and fences, selection.go owns `SourceSelection.Exact`; chat selection.go retains `selectedParts`.
 7. <a id="source-7"></a> [Quote regressions](../../internal/chatui/quote_test.go#L1-L435) — nine tests, `TestQuoteInsertsTheSourceAndReplies` through `TestQuoteEveryHighlightIsExactOrRefused`; `TestTableSpacersCopyNothing` in table_spacing_test.go (L151-L219).
-8. <a id="source-8"></a> [Table Quote regressions](../../internal/chatui/quote_table_test.go#L1-L363) — eight table tests.
+8. <a id="source-8"></a> [Table Quote regressions](../../internal/chatui/quote_table_test.go#L1-L383) — eight table tests; markdown_improvements_test.go covers list drag/Quote, autolink and rule Quote.
 9. <a id="source-9"></a> [Enter regressions](../../internal/chatui/quote_enter_test.go#L1-L166) — five Enter tests; `escape` (model.go L934) and `mouseUp` (mouse.go L179) reset the action.

@@ -1,6 +1,7 @@
 package chatui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -264,17 +265,35 @@ func TestQuoteTableLayouts(t *testing.T) {
 	}
 }
 
-// Pipes inside backticks split cells, as the parser has always done; an
-// escaped pipe stays in its cell.
+// A pipe inside a matched code span stays in its cell; an escaped pipe
+// stays in its cell too, and an unclosed backtick leaves its pipes
+// separators. Quote takes the selected cell text as shown.
 func TestQuoteTableCodeSpanPipes(t *testing.T) {
-	m := quoteModel(t, "| A | B | C | D |\n|---|---|---|---|\n| prefix | `left|right` | suffix |\n| p | a \\| b | c | d |")
+	m := quoteModel(t, "| A | B | C | D |\n|---|---|---|---|\n| prefix | `left|right` | suffix |\n| p | a \\| b | c | d |\n| ``x|`y`` | `a\\|b` | `open | z |")
 	lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
-	if len(lines[2].Cells) != 4 {
-		t.Fatalf("the parser should split the code span: %q %v", lines[2].Text, lines[2].Cells)
+	cells := func(n int) []string {
+		var out []string
+		for _, cr := range lines[n].Cells {
+			out = append(out, lines[n].Text[cr[0]:cr[1]])
+		}
+		return out
 	}
-	highlightSpan(t, m, "q", 2, "`left", 2, "right`")
-	if got := quoted(m); got != "> `left\tright`\n\n" {
+	for n, want := range map[int][]string{
+		2: {"prefix", "left|right", "suffix", ""},
+		3: {"p", "a | b", "c", "d"},
+		4: {"x|`y", "a\\|b", "`open", "z"},
+	} {
+		if got := cells(n); !slices.Equal(got, want) {
+			t.Fatalf("row %d cells %q, want %q", n, got, want)
+		}
+	}
+	highlightSpan(t, m, "q", 2, "left", 2, "right")
+	if got := quoted(m); got != "> left|right\n\n" {
 		t.Fatalf("code-span pipe: %q (%q)", got, m.notice)
+	}
+	highlightSpan(t, m, "q", 2, "prefix", 2, "suffix")
+	if got := quoted(m); got != "> prefix\tleft|right\tsuffix\n\n" {
+		t.Fatalf("code-span row: %q (%q)", got, m.notice)
 	}
 	highlightSpan(t, m, "q", 3, "a | b", 3, "c")
 	if got := quoted(m); got != "> a | b\tc\n\n" {

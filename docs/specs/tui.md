@@ -89,7 +89,9 @@ failed or stale reading shows its reason instead. [27](#source-27)
 
 [FACT] Markdown parsing, layout, copy geometry and optional source maps live in
 `internal/markdownview`; chat retains identities, previews, model state and
-effects. The extraction preserves the existing syntax and bounds. [43](#source-43)
+effects. The extraction preserved the existing syntax and bounds; the subset
+since adds code-span table pipes, heading levels, aligned ordered items, list
+hanging indents, `---` rules and angle autolinks, without new blocks. [43](#source-43)
 
 [FACT] The native chat component supplies multiline editing, bounded block and
 inline Markdown display, source/code copy, a sorted Participants panel with

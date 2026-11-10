@@ -1,6 +1,6 @@
 # Native chat UI component
 
-Verification: `d9aec4ac854ffd5b4f60a93817b8c5afce10847d` and accompanying changes.
+Verification: `3bae6dd1d6ffa1356f7678850584fe6d9cf0fac8` and accompanying changes.
 
 [FACT] `internal/chatui` is a transport-neutral Bubble Tea model. Its caller
 supplies connection events, logical messages, correlated receipts, roster/topic
@@ -34,11 +34,12 @@ executable. [1](#source-1) [15](#source-15)
 wrappers; identity decoration, loaded previews, caches and host effects remain
 in chat. [21](#source-21)
 
-[FACT] Display text renders headings, quotes, bullets, fenced code and tables,
+[FACT] Display text renders level-styled headings, quotes, bullets, number-aligned
+ordered items (both kinds wrap under their text), `---` rules, fenced code and tables,
 plus unpadded accent inline code, strong, italic, bold-italic, strikethrough and
-links whose URL stays visible; unpaired markers, snake_case and escapes stay
+links whose URL stays visible, and `<http(s)://…>` without brackets; unpaired markers, snake_case and escapes stay
 literal. Tables need a matching, aligning delimiter row and end at a block
-(fence, heading, quote, list); past 32 columns, 512 body rows or twice their
+(fence, heading, quote, list); a pipe inside a code span stays in its cell; past 32 columns, 512 body rows or twice their
 source plus 4 KiB once aligned, they stay text. Wider tables water-fill the
 view (column floor 4 cells or widest grapheme) and wrap cells in place, or
 wrap as prose if floors, that budget or the row limit forbid it. Prose wraps

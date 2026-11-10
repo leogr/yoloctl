@@ -2,6 +2,7 @@ package markdownview
 
 import (
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -14,6 +15,7 @@ type Piece struct {
 	Style      spaceview.Style
 	Code       bool // inline code: never re-styled as a mention or URL
 	Strike     bool
+	Auto       bool // an angle autolink: likewise never re-styled
 	Act        Action
 }
 
@@ -36,6 +38,11 @@ type DisplayLine struct {
 	Cells [][2]int
 	// Subs record caller-supplied display replacements.
 	Subs []TextSub
+	// List is set on a list item's line (see ListItem).
+	List ListItem
+	// Rule is a horizontal rule (a Decor line without text): bodyRows draws
+	// a thin line across the text width.
+	Rule bool
 }
 
 // TableInfo is shared by the display lines of one rendered table: what
@@ -173,15 +180,24 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 				}
 				st = spaceview.Style{FG: theme.Text, BG: CodeCard(theme)}
 				ls.Fence = fences
+			case strings.TrimSpace(line) == "---":
+				dl.Decor, dl.Rule = true, true
+				dl.Pieces = []Piece{{Style: spaceview.Style{FG: theme.Frame}}}
+				out = append(out, dl)
+				if srcs != nil {
+					*srcs = append(*srcs, ls)
+				}
+				continue
 			case strings.HasPrefix(trim, "#"):
 				prose = true
 				if n := len(trim) - len(strings.TrimLeft(trim, "#")); n <= 6 && strings.HasPrefix(trim[n:], " ") {
-					line, st.FG, st.Bold = strings.TrimLeft(trim[n:], " "), theme.Brand, true
+					line, st.FG, st.Bold = strings.TrimLeft(trim[n:], " "), HeadingColor(theme, n), true
 				}
 			case strings.HasPrefix(trim, "> "):
 				line, st.FG, prose, dl.Quote = strings.TrimPrefix(trim, "> "), theme.Dim, true, true
 			default:
-				line, prose = listItem(line, lead), true
+				line, dl.List = listItem(line, lead)
+				prose = true
 			}
 		}
 		if lead != nil && len(lead.At) == 0 {
@@ -200,7 +216,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 			}
 			dl.Text, spans = InlineMarkdownMap(dl.Text, st, theme, inline)
 			for _, sp := range spans {
-				p := Piece{Start: sp.Start, End: sp.End, Style: sp.Style, Code: sp.Code, Strike: sp.Strike}
+				p := Piece{Start: sp.Start, End: sp.End, Style: sp.Style, Code: sp.Code, Strike: sp.Strike, Auto: sp.Auto}
 				if sp.Link != "" {
 					p.Act = Action{Kind: IntentURL, Value: sp.Link}
 				}
@@ -227,7 +243,21 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 	if fence != "" {
 		out[opener].Block = block.String() // an unclosed fence runs to the end
 	}
+	alignOrdered(out)
 	return out
+}
+
+// HeadingColor is the text colour of a heading of level n (1–6), shown bold
+// at the terminal's cell size: the accent for level 1, body text for level 2,
+// the softer label colour for level 3; levels 4–6 keep the accent.
+func HeadingColor(theme spaceview.Theme, n int) spaceview.Color {
+	switch n {
+	case 2:
+		return theme.Text
+	case 3:
+		return theme.Label
+	}
+	return theme.Brand
 }
 
 // linked reports whether a Markdown link already targets part of
@@ -242,10 +272,11 @@ func Linked(pieces []Piece, start, end int) bool {
 }
 
 // overlay applies f to the parts of pieces inside [start, end), splitting
-// pieces at the boundaries. Ranges touching inline code stay unchanged.
+// pieces at the boundaries. Ranges touching inline code or an angle
+// autolink stay unchanged.
 func Overlay(pieces []Piece, start, end int, f func(Piece) Piece) []Piece {
 	for _, p := range pieces {
-		if p.Code && p.Start < end && p.End > start {
+		if (p.Code || p.Auto) && p.Start < end && p.End > start {
 			return pieces
 		}
 	}
@@ -338,6 +369,9 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 			if dl.Fence != FenceNone {
 				text = Truncate(wm, text, textWidth, "…")
 			}
+			if dl.Rule {
+				text = strings.Repeat("─", textWidth)
+			}
 			runs := append(CloneRuns(prefix), Deco(text, dl.Pieces[0].Style))
 			if button := CopyButtonRuns(wm, dl, textWidth, theme); button != nil {
 				runs = append(CloneRuns(prefix), button...)
@@ -352,8 +386,19 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 				prefix = []Run{Deco("│ ", spaceview.Style{FG: theme.Frame})}
 				textWidth = max(width-2, 1)
 			}
-			for _, r := range WrapRanges(wm, dl.Text, textWidth, !dl.Code) {
+			ranges, pad, hang := WrapRanges(wm, dl.Text, textWidth, !dl.Code), 0, 0
+			if r, p, h, ok := listRanges(wm, dl, textWidth); ok {
+				ranges, pad, hang = r, p, h
+			}
+			for k, r := range ranges {
 				runs := CloneRuns(prefix)
+				gutter := hang
+				if k == 0 {
+					gutter = pad
+				}
+				if gutter > 0 {
+					runs = append(runs, Deco(strings.Repeat(" ", gutter), spaceview.Style{}))
+				}
 				for _, p := range dl.Pieces {
 					s, e := max(p.Start, r[0]), min(p.End, r[1])
 					if s < e {
@@ -375,6 +420,33 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 		}
 	}
 	return rows
+}
+
+// listMinText is the narrowest text column a list item keeps beside its
+// gutter; in a narrower view the item wraps from the row start as before.
+const listMinText = 8
+
+// listRanges wraps a list item so that its continuation rows align under
+// its text: the item's text wraps to the width left beside the marker and
+// its Pad, and the first row also holds the indentation and marker. pad is
+// the decorative cells before the first row, hang those before the others.
+// ok is false for other lines and when the text column would be narrower
+// than listMinText.
+func listRanges(wm ansi.Method, dl DisplayLine, textWidth int) (ranges [][2]int, pad, hang int, ok bool) {
+	li := dl.List
+	if li.Content == 0 || li.Content > len(dl.Text) || dl.Code || dl.Quote {
+		return nil, 0, 0, false
+	}
+	hang = li.Pad + wm.StringWidth(dl.Text[:li.Content])
+	if textWidth-hang < listMinText {
+		return nil, 0, 0, false
+	}
+	ranges = WrapRanges(wm, dl.Text[li.Content:], textWidth-hang, true)
+	for k := range ranges {
+		ranges[k][0], ranges[k][1] = ranges[k][0]+li.Content, ranges[k][1]+li.Content
+	}
+	ranges[0][0] = 0
+	return ranges, li.Pad, hang, true
 }
 
 // codeCards sizes each fenced block, from its opener through its closer, to
@@ -565,7 +637,7 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 			b.WriteString(cl.text)
 			dl.Cells[c] = [2]int{start, b.Len()}
 			for _, sp := range cl.spans {
-				p := Piece{Start: start + sp.Start, End: start + sp.End, Style: sp.Style, Code: sp.Code, Strike: sp.Strike}
+				p := Piece{Start: start + sp.Start, End: start + sp.End, Style: sp.Style, Code: sp.Code, Strike: sp.Strike, Auto: sp.Auto}
 				if sp.Link != "" {
 					p.Act = Action{Kind: IntentURL, Value: sp.Link}
 				}
@@ -802,24 +874,87 @@ func WidestGrapheme(wm ansi.Method, s string) int {
 	return widest
 }
 
-// tableRow reports whether a line continues a table: it has an unescaped
-// pipe and does not start another block (a fence, heading, quote or list
-// item), as in GFM. It allocates nothing.
+// tableRow reports whether a line continues a table: it has a separator
+// pipe (see tableSeparators) and does not start another block (a fence,
+// heading, quote or list item), as in GFM. It allocates nothing unless the
+// line has backticks.
 func TableRow(line string) bool {
 	trim := strings.TrimLeft(line, " ")
 	bullet := len(trim) >= 2 && strings.IndexByte("-*+", trim[0]) >= 0 && trim[1] == ' '
 	if FenceMarker(trim) != "" || strings.HasPrefix(trim, "#") || strings.HasPrefix(trim, ">") || bullet || OrderedItem(trim) {
 		return false
 	}
-	for i := 0; i < len(trim); i++ {
-		switch trim[i] {
-		case '\\':
-			i++
-		case '|':
-			return true
+	found := false
+	tableSeparators(trim, func(int) bool {
+		found = true
+		return false
+	})
+	return found
+}
+
+// tableSeparators calls sep with the index of each pipe of t that separates
+// table cells, in order, until sep returns false: a pipe that is neither
+// escaped nor inside a code span on the line. A code span pairs a backtick
+// run with a later run of the same length, as inlineMarkdown pairs them:
+// the first later run at least as long must be exactly as long, otherwise
+// the opening backticks are literal. Backslashes inside a span are literal.
+// The runs are found in one pass and each run's closer by a binary search,
+// so no suffix of t is scanned again.
+func tableSeparators(t string, sep func(int) bool) {
+	var runs [][2]int   // each maximal backtick run: start, length
+	var closer [][2]int // per run, the closing run of an opener of its length (or one less, after an escaped backtick); -1 for none
+	if strings.IndexByte(t, '`') >= 0 {
+		for i := 0; i < len(t); {
+			if t[i] != '`' {
+				i++
+				continue
+			}
+			n := countRun(t[i:], '`')
+			runs, i = append(runs, [2]int{i, n}), i+n
+		}
+		closer = make([][2]int, len(runs))
+		// stair holds the runs after k that are longer than every run
+		// between k and them, nearest last: their lengths strictly decrease
+		// along the slice. The first later run at least want long is on it.
+		var stair []int
+		for k := len(runs) - 1; k >= 0; k-- {
+			for d := range 2 {
+				closer[k][d] = -1
+				want := runs[k][1] - d
+				if want <= 0 {
+					continue
+				}
+				if p := sort.Search(len(stair), func(x int) bool { return runs[stair[x]][1] < want }); p > 0 && runs[stair[p-1]][1] == want {
+					closer[k][d] = stair[p-1]
+				}
+			}
+			for len(stair) > 0 && runs[stair[len(stair)-1]][1] <= runs[k][1] {
+				stair = stair[:len(stair)-1]
+			}
+			stair = append(stair, k)
 		}
 	}
-	return false
+	r := 0 // the run at or after i
+	for i := 0; i < len(t); i++ {
+		switch t[i] {
+		case '\\':
+			i++ // an escaped character, a backtick included, is literal
+		case '|':
+			if !sep(i) {
+				return
+			}
+		case '`':
+			for runs[r][0]+runs[r][1] <= i {
+				r++
+			}
+			end := runs[r][0] + runs[r][1] // past the opening backticks
+			if d := i - runs[r][0]; d < 2 && closer[r][d] >= 0 {
+				c := runs[closer[r][d]]
+				end = c[0] + c[1] // past the closing backticks
+			}
+			i = end - 1
+		}
+	}
 }
 
 // orderedItem reports whether a line starts an ordered list item ("1. ").
@@ -828,25 +963,23 @@ func OrderedItem(trim string) bool {
 	return digits > 0 && digits < 10 && (strings.HasPrefix(trim[digits:], ". ") || strings.HasPrefix(trim[digits:], ") "))
 }
 
-// tableCells splits a table row on pipes that are not escaped, dropping one
-// leading and one trailing pipe. One scan decides every pipe, so an escaped
-// backslash before a pipe (\\|) leaves that pipe a separator. ok is false for
-// a line without an unescaped pipe.
+// tableCells splits a table row on its separator pipes (see
+// tableSeparators), dropping one leading and one trailing pipe. One scan
+// decides every pipe, so an escaped backslash before a pipe (\\|) leaves that
+// pipe a separator, and a pipe inside a code span stays in its cell. An
+// escaped character stays in its cell; inline Markdown unescapes it. ok is
+// false for a line without a separator pipe.
 func TableCells(line string) ([]string, bool) {
 	t := strings.TrimSpace(line)
 	var cells []string
-	start, last := 0, -1 // last is the index of the last unescaped pipe
-	for i := 0; i < len(t); i++ {
-		switch {
-		case t[i] == '\\' && i+1 < len(t):
-			i++ // an escaped character stays in its cell; inline Markdown unescapes it
-		case t[i] == '|':
-			cells = append(cells, t[start:i])
-			start, last = i+1, i
-			if len(cells) > MaxTableColumns+2 {
-				return cells, true // too many columns for a table either way
-			}
-		}
+	start, last := 0, -1 // last is the index of the last separator pipe
+	tableSeparators(t, func(i int) bool {
+		cells = append(cells, t[start:i])
+		start, last = i+1, i
+		return len(cells) <= MaxTableColumns+2 // too many columns for a table either way
+	})
+	if len(cells) > MaxTableColumns+2 {
+		return cells, true
 	}
 	if last < 0 {
 		return nil, false
