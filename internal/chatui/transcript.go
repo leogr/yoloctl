@@ -189,8 +189,9 @@ func (m *Model) transcript(width int) []transcriptRow {
 			}
 		}
 	}
+	elsewhere := m.loadedElsewhere(loaded)
 	for i := range m.messages {
-		m.refreshPreviews(i, textWidth, loaded)
+		m.refreshPreviews(i, textWidth, loaded, elsewhere)
 	}
 	var prev *Message
 	for i := range m.messages {

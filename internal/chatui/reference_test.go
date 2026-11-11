@@ -272,7 +272,7 @@ func TestMessageReferencesNavigateToLoadedMessages(t *testing.T) {
 	scroll := m.scroll
 	clickCell(m, missing[0])
 	m.View()
-	if !m.picked || m.selected != 0 || m.follow || m.scroll != scroll || !strings.Contains(m.notice, "not loaded in this channel; Page Up") {
+	if !m.picked || m.selected != 0 || m.follow || m.scroll != scroll || !strings.Contains(m.notice, "not loaded in any open channel; Page Up") {
 		t.Fatalf("a missing target moved the view: selected=%d scroll=%d/%d notice=%q", m.selected, m.scroll, scroll, m.notice)
 	}
 }
@@ -290,7 +290,7 @@ func TestReplyLabelsStillNavigate(t *testing.T) {
 		t.Fatalf("reply labels: %v", replies)
 	}
 	clickCell(m, replies[1])
-	if m.picked || !strings.Contains(m.notice, "not loaded in this channel") {
+	if m.picked || !strings.Contains(m.notice, "not loaded in any open channel") {
 		t.Fatalf("an unloaded reply target: picked=%v notice=%q", m.picked, m.notice)
 	}
 	clickCell(m, replies[0])
@@ -347,10 +347,11 @@ func TestCopyReference(t *testing.T) {
 	}
 }
 
-// References resolve only within the channel view that shows them: another
-// channel's message is not loaded here, and a deleted channel's kept history
-// still navigates without joining, paging or sending anything.
-func TestReferencesStayInTheirChannel(t *testing.T) {
+// A reference to a message loaded in another open channel previews it with
+// that channel's name and, clicked, switches there the way selecting the
+// channel does and selects it, requesting no history and sending nothing.
+// A deleted channel's kept history still navigates without joining.
+func TestReferencesReachOtherOpenChannels(t *testing.T) {
 	m, sends, actions := channelModel(t)
 	m.opts.LoadOlder = func(HistoryRequest) tea.Cmd { t.Fatal("a reference requested history"); return nil }
 	m.Update(IncomingMsg{Message: Message{ID: refTarget, Channel: "#space", Nick: "x", Text: "space message"}})
@@ -358,17 +359,101 @@ func TestReferencesStayInTheirChannel(t *testing.T) {
 	m.Update(IncomingMsg{Message: Message{ID: refMissing, Channel: "#build", Nick: "x", Text: "build message"}})
 	m.Update(IncomingMsg{Message: Message{ID: "b2", Channel: "#build", Nick: "x", Text: sharedTarget + " and msgid:" + refMissing}})
 	m.View()
+	if !strings.Contains(view(m), "↗ #space · x: space message") {
+		t.Fatalf("no cross-channel preview:\n%s", view(m))
+	}
 	if len(targetCells(m, actRef, refTarget)) == 0 || len(targetCells(m, actRef, refMissing)) == 0 {
 		t.Fatalf("references: %v", targetCells(m, actRef, ""))
 	}
 	clickCell(m, targetCells(m, actRef, refTarget)[0])
-	if m.name != "#build" || m.picked || !strings.Contains(m.notice, "not loaded in this channel") {
-		t.Fatalf("another channel's message resolved: %s picked=%v %q", m.name, m.picked, m.notice)
+	if m.name != "#space" || !m.picked || m.messages[m.selected].ID != refTarget || len(*sends) != 0 || len(*actions) != 0 {
+		t.Fatalf("cross-channel click: %s picked=%v sends=%v actions=%v %q", m.name, m.picked, *sends, *actions, m.notice)
 	}
+	alt(m, '2')
 	m.Update(MembershipMsg{Channel: "#build", State: "deleted"})
 	m.View()
 	clickCell(m, targetCells(m, actRef, refMissing)[0])
 	if m.name != "#build" || !m.picked || m.messages[m.selected].ID != refMissing || len(*sends) != 0 || len(*actions) != 0 || !m.views["#build"].deleted {
 		t.Fatalf("deleted view: %s picked=%v sends=%v actions=%v", m.name, m.picked, *sends, *actions)
+	}
+}
+
+// When the referenced message's channel was left, the click uses the
+// ordinary typed join of a deliberate selection, and shows the message once
+// that join switches to the channel. A preview appears as soon as another
+// channel loads the message, without touching the visible view.
+func TestCrossChannelReferenceJoinsLeftChannel(t *testing.T) {
+	m, sends, actions := channelModel(t)
+	m.Update(IncomingMsg{Message: Message{ID: refMissing, Channel: "#build", Nick: "x", Text: "build message"}})
+	m.Update(MembershipMsg{Channel: "#build", State: "left"})
+	m.Update(IncomingMsg{Message: Message{ID: "s2", Channel: "#space", Nick: "x", Text: "see msgid:" + refMissing + " and msgid:" + refTarget}})
+	m.View()
+	if !strings.Contains(view(m), "↗ #build · x: build message") || strings.Contains(view(m), "↗ #build · x: later") {
+		t.Fatalf("preview of a left channel's loaded message:\n%s", view(m))
+	}
+	// Loaded later in another channel: the visible view picks it up.
+	m.Update(IncomingMsg{Message: Message{ID: refTarget, Channel: "#build", Nick: "x", Text: "later"}})
+	if out := view(m); strings.Count(out, "↗ #build · x:") != 2 || !strings.Contains(out, "later") {
+		t.Fatalf("a message loaded elsewhere later is not previewed:\n%s", view(m))
+	}
+	clickCell(m, targetCells(m, actRef, refMissing)[0])
+	if m.name != "#space" || len(*actions) != 1 || (*actions)[0].Kind != "join" || (*actions)[0].Channel != "#build" || len(*sends) != 0 {
+		t.Fatalf("left channel: %s actions=%v sends=%v", m.name, *actions, *sends)
+	}
+	a := (*actions)[0]
+	m.Update(MembershipMsg{Channel: "#build", State: "joined", ID: a.ID})
+	m.Update(ControlMsg{ID: a.ID, Kind: "join", Channel: a.Channel, State: "confirmed"})
+	if m.name != "#build" || !m.picked || m.messages[m.selected].ID != refMissing {
+		t.Fatalf("after the join: %s picked=%v %q", m.name, m.picked, m.notice)
+	}
+}
+
+// A reference click that needs a join shows its message only through that
+// join's own switch. A refused or uncertain join, a part, a move elsewhere
+// before confirmation, a join that never started, or a new stream drops it
+// with the join intent: a later ordinary selection of the channel keeps its
+// reading position. (Cases after astra's review probe.)
+func TestCrossChannelReferenceEndsWithItsJoin(t *testing.T) {
+	for _, why := range []string{"refused", "uncertain", "part", "moved", "not-started", "new-stream"} {
+		t.Run(why, func(t *testing.T) {
+			m, _, actions := channelModel(t)
+			m.Update(IncomingMsg{Message: Message{ID: refTarget, Channel: "#build", Nick: "x", Text: "old target"}})
+			m.Update(IncomingMsg{Message: Message{ID: refMissing, Channel: "#build", Nick: "x", Text: "newer message"}})
+			m.Update(MembershipMsg{Channel: "#build", State: "left"})
+			if why == "not-started" {
+				m.connected = false
+			}
+			m.showMessage(refTarget)
+			switch why {
+			case "refused":
+				a := (*actions)[0]
+				m.Update(ControlMsg{ID: a.ID, Kind: "join", Channel: a.Channel, State: "refused", Code: CodeACLDenied})
+			case "uncertain":
+				a := (*actions)[0]
+				m.Update(ControlMsg{ID: a.ID, Kind: "join", Channel: a.Channel, State: "uncertain"})
+				m.pending = nil
+			case "part":
+				a := (*actions)[0]
+				m.Update(ControlMsg{ID: a.ID, Kind: "join", Channel: a.Channel, State: "confirmed"})
+				m.control("part", "#build", nil)
+			case "moved":
+				m.view("#third")
+				m.switchTo("#third")
+				a := (*actions)[0]
+				m.Update(MembershipMsg{Channel: "#build", State: "joined", ID: a.ID})
+				m.Update(ControlMsg{ID: a.ID, Kind: "join", Channel: a.Channel, State: "confirmed"})
+			case "new-stream":
+				m.Update(ConnectionMsg{Connected: false})
+			}
+			if m.joinSwitch.ref != "" {
+				t.Fatalf("the reference outlived its join: %+v", m.joinSwitch)
+			}
+			m.connected = true
+			m.views["#build"].membership = "joined"
+			m.selectChannel("#build")
+			if m.name != "#build" || m.picked || !m.follow {
+				t.Fatalf("stale reference moved a later ordinary selection: %s picked=%v follow=%v selected=%d", m.name, m.picked, m.follow, m.selected)
+			}
+		})
 	}
 }

@@ -115,7 +115,7 @@ var helpSections = []struct {
 		{"Alt+Y  Ctrl+Shift+C", "Copy the selected message's original text"},
 		{"Alt+C", "Copy its first fenced code block"},
 		{"Ctrl+O  click a link", "Open a web link with the host browser policy (seams.browser)"},
-		{"Copy reference  m:…", "Copies the selected message's shared reference, the same in every client; pasted into a message, a click on it shows that message if it is loaded in the same channel (Page Up loads older ones). msgid: and the full ID works the same. A loaded message a reference names shows in its place as ↗ author: text…; click it to show the message. Copy and Quote keep the reference."},
+		{"Copy reference  m:…", "Copies the selected message's shared reference, the same in every client; pasted into a message, a click on it shows that message if it is loaded in an open channel, switching to that channel the way selecting it does (Page Up loads older ones). msgid: and the full ID works the same. A loaded message a reference names shows in its place as ↗ author: text…, or ↗ #channel · author: text… from another channel; click it to show the message. Copy and Quote keep the reference."},
 	}},
 	{"Selecting text", [][2]string{
 		{"Drag", "Select message text; it also selects the message where it starts, so Enter quotes it. Releasing copies it. Names, times, gutters and the participants panel are never copied. Wrapped lines rejoin and messages are separated by a blank line."},

@@ -1,6 +1,8 @@
 package chatui
 
 import (
+	"fmt"
+	"hash/fnv"
 	"slices"
 	"strings"
 
@@ -24,11 +26,61 @@ func (m *Model) previewLabel(msg *Message) string {
 	return "↗ " + truncate(m.widthMethod, oneLine(m.author(msg).name), previewName, "…") + ": " + snippet
 }
 
+// crossRef is a referenced message loaded in another open channel.
+type crossRef struct {
+	channel string
+	msg     *Message
+}
+
+// previewLabelIn is a preview of a message in another channel: the same
+// label, naming the channel first.
+func (m *Model) previewLabelIn(t crossRef) string {
+	return "↗ " + t.channel + " · " + strings.TrimPrefix(m.previewLabel(t.msg), "↗ ")
+}
+
+// loadedElsewhere maps the IDs of messages loaded in the other open
+// channels, except those also loaded here, to their channel and message.
+func (m *Model) loadedElsewhere(here map[string]int) map[string]crossRef {
+	out := map[string]crossRef{}
+	for _, name := range m.order {
+		v := m.views[name]
+		if v == nil || v == m.cur {
+			continue
+		}
+		for i := range v.messages {
+			id := v.messages[i].ID
+			if _, dup := out[id]; id == "" || dup {
+				continue
+			}
+			if _, local := here[id]; !local {
+				out[id] = crossRef{channel: name, msg: &v.messages[i]}
+			}
+		}
+	}
+	return out
+}
+
+// otherLoaded fingerprints the other channels' loaded messages, so the
+// visible transcript rebuilds its previews when a referenced message
+// arrives, changes or leaves elsewhere. It reads only counts and the first
+// and last IDs of each channel.
+func (m *Model) otherLoaded() uint64 {
+	h := fnv.New64a()
+	for _, name := range m.order {
+		v := m.views[name]
+		if v == nil || v == m.cur || len(v.messages) == 0 {
+			continue
+		}
+		_, _ = fmt.Fprintf(h, "%s\x00%d\x00%s\x00%s\x00", name, len(v.messages), v.messages[0].ID, v.messages[len(v.messages)-1].ID)
+	}
+	return h.Sum64()
+}
+
 // previewKeys lists, for message i's references in its target-independent
 // lines, the preview each would show ("" stays the token): the cache key
 // of its substituted lines. A reference to the message itself, one whose
 // exact ID is not loaded in this view, and any on a table line stay tokens.
-func (m *Model) previewKeys(i int, base []displayLine, loaded map[string]int) []string {
+func (m *Model) previewKeys(i int, base []displayLine, loaded map[string]int, elsewhere ...map[string]crossRef) []string {
 	var out []string
 	for _, dl := range base {
 		if dl.Table != nil {
@@ -41,6 +93,10 @@ func (m *Model) previewKeys(i int, base []displayLine, loaded map[string]int) []
 			label := ""
 			if j, ok := loaded[p.Act.Value]; ok && j != i {
 				label = m.previewLabel(&m.messages[j])
+			} else if !ok && len(elsewhere) > 0 {
+				if target, ok := elsewhere[0][p.Act.Value]; ok {
+					label = m.previewLabelIn(target)
+				}
 			}
 			out = append(out, label)
 		}
@@ -82,10 +138,10 @@ func substitute(base []displayLine, keys []string, theme spaceview.Theme) []disp
 // highlight with an end in it clears, since its offsets no longer name the
 // same text, and a reading position on one of its lines moves to that
 // line's start.
-func (m *Model) refreshPreviews(i, width int, loaded map[string]int) {
+func (m *Model) refreshPreviews(i, width int, loaded map[string]int, elsewhere map[string]crossRef) {
 	msg := &m.messages[i]
 	body := m.body(msg, width)
-	keys := m.previewKeys(i, body.base, loaded)
+	keys := m.previewKeys(i, body.base, loaded, elsewhere)
 	if slices.Equal(keys, body.keys) || len(body.keys) == 0 && !slices.ContainsFunc(keys, func(k string) bool { return k != "" }) {
 		return
 	}

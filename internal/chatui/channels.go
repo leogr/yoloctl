@@ -71,6 +71,7 @@ type channelView struct {
 	built struct {
 		generation uint64
 		width      int
+		elsewhere  uint64 // otherLoaded when built: previews of other channels' messages
 		rows       []transcriptRow
 	}
 }
@@ -497,15 +498,21 @@ func (m *Model) membershipChanged(msg MembershipMsg) {
 // showJoined shows a channel this view asked to join, once, if the user is
 // still where the request started.
 func (m *Model) showJoined(channel string) {
-	if m.name == m.joinSwitch.from {
-		m.switchTo(channel)
-	}
+	js := m.joinSwitch
 	m.joinSwitch = joinSwitch{}
+	if m.name == js.from {
+		m.switchTo(channel)
+		if js.ref != "" && strings.EqualFold(m.name, channel) {
+			m.selectLoaded(js.ref)
+		}
+	}
 }
 
 // joinSwitch remembers an explicit join until the server confirms it, so
-// the view follows the confirmation whichever report arrives first.
-type joinSwitch struct{ id, from, channel string }
+// the view follows the confirmation whichever report arrives first. ref is a
+// message a reference click asked to show once this join switches; it lives
+// and ends with the join intent.
+type joinSwitch struct{ id, from, channel, ref string }
 
 // controlReady reports whether a channel action may start now. One send
 // or action is outstanding at a time, and an uncertain action blocks the

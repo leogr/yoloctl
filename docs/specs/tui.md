@@ -160,9 +160,11 @@ The card's State row shows the agent's reported state, or the box's activity
 when it reported none; the panel tags a name only for a wait or an API error
 (`⏳ needs permission`, `⚠ API error`) [31](#source-31). Copy reference puts a message's shared `m:`
 reference on the clipboard; a click on one, or on `msgid:` and the full ID,
-shows that message only when it is loaded in the same channel, and an `@N`
+shows that message when it is loaded in an open channel (switching to that channel
+the way selecting it does), and an `@N`
 number is plain text, never followed [24](#source-24). A reference to a message
-loaded in the same channel shows in its place as `↗ author: text…`, still
+loaded in the same channel shows in its place as `↗ author: text…` (from another
+open channel `↗ #channel · author: text…`), still
 copied and quoted as the reference [24](#source-24). Mentions resolve by account: suggestions insert a
 trusted account's saved nick once across its live aliases, and the divider's
 For me toggle beside the channel (Alt+M), the Alt+F picker, `/filter` or a card

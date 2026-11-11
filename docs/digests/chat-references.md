@@ -1,6 +1,6 @@
 # Chat message references
 
-Verification: `d9aec4ac854ffd5b4f60a93817b8c5afce10847d` and accompanying changes.
+Verification: `88971b185d6b7e9a7e33c16325d90c48c477f33c` and accompanying changes.
 
 [FACT] In prose, a shared reference is `m:` plus exactly 22 base64url
 characters whose decoding is a server ID's 16 bytes in display order and
@@ -15,18 +15,30 @@ passes a byte-identical copy of the packaged AIRC source's vector file.
 
 [FACT] A click on a reference or a reply label selects the message with exactly
 that ID among those loaded in the current channel view, leaves follow mode and
-anchors it. Nothing matches by number, offset or prefix. Nothing is fetched,
-joined or sent. A missing target keeps the position and says that it is not
-loaded in this channel and that Page Up may load older history. A loaded
+anchors it. Otherwise, when another open channel view has that ID loaded, the
+click selects that channel as a person does (`selectChannel`: at once when
+joined or deleted, else the ordinary typed join) and selects the message there.
+When a join is needed, the message travels with that join intent and is shown
+only by its own switch; a refused, uncertain, superseded or never-started join,
+a part, a new stream or a move elsewhere before confirmation drops it, so a
+later ordinary selection keeps that channel's reading position. Only channel views this client
+already shows are searched, so nothing outside existing membership and history
+becomes readable. Nothing matches by number, offset or prefix. Nothing is
+fetched or sent, and no join starts unless the holding channel was left. A
+target loaded nowhere keeps the position and says that it is not loaded in any
+open channel and that Page Up in its channel may load older history. A loaded
 target a [message filter](chat-filter.md) hides first shows all messages. A
 deleted channel's retained history still navigates, read-only.
 [2](#source-2) [5](#source-5)
 
 [FACT] A marked reference whose exact ID is loaded in this channel view shows
 in its place as one dimmed span, `↗ author: snippet…` (name cut to 16 cells,
-the target's text to 24 runes with whitespace collapsed); the span is the
-reference's own click target. Every such reference is previewed. An unloaded,
-evicted, other-channel or unknown target, a reference to the message itself,
+the target's text to 24 runes with whitespace collapsed); one loaded only in
+another open channel shows as `↗ #channel · author: snippet…`. The span is the
+reference's own click target. Every such reference is previewed. The visible
+transcript also rebuilds when another channel's loaded set changes in count or
+at its first/last ID (a cheap fingerprint, not a content hash). An unloaded, evicted
+or unknown target, a reference to the message itself,
 a table cell (aligned before any preview) and source view keep the token.
 The target-independent lines stay cached; a substitution step records each
 span's token, and the substituted lines are keyed on the previews they show,
@@ -58,12 +70,12 @@ unchanged; arbitrary opaque IDs still have no copy or navigation action.
 ## Sources
 
 1. <a id="source-1"></a> [Body tokens](../../internal/chatui/body.go#L16) — `decorateTokens`, `refPrefix`, `compactRef`, `refID`, `msgidPrefix`, `messageID`, `nickByte`; shared `Linked` prevents overriding link targets.
-2. <a id="source-2"></a> [Navigation](../../internal/chatui/mouse.go#L289-L324) — `activate`, `showMessage`.
+2. <a id="source-2"></a> [Navigation](../../internal/chatui/mouse.go#L322-L403) — `activate`, `showMessage`, `selectLoaded`, `channelHolding`; channels.go `joinSwitch.ref` carries a deferred message with its join and `showJoined` shows it, `selectChannel` owns join admission.
 3. <a id="source-3"></a> [Hover hints](../../internal/chatui/hover.go#L213-L214) — `actRef`; kinds in rows.go L15–L23.
 4. <a id="source-4"></a> [Copy reference](../../internal/chatui/model.go#L1004-L1152) — `messageActions`, `runAction`; Help row in overlay.go L106.
-5. <a id="source-5"></a> [Regressions](../../internal/chatui/reference_test.go#L22-L371) — shared vectors and unused bits, tokens, inert numbers, wrapped and missing targets, reply labels, copy, channels and deletion.
+5. <a id="source-5"></a> [Regressions](../../internal/chatui/reference_test.go#L22-L459) — `TestReferencesReachOtherOpenChannels`, `TestCrossChannelReferenceJoinsLeftChannel`, `TestCrossChannelReferenceEndsWithItsJoin`; shared vectors and unused bits, tokens, inert numbers, wrapped and missing targets, reply labels, copy, channels and deletion.
 6. <a id="source-6"></a> [Nickname grammar](../../internal/managedchat/settings.go#L8-L20) — `ValidateNickname`; mirrored by `validNick` in chatui/overlay.go.
 7. <a id="source-7"></a> [Packaged AIRC references](https://github.com/leogr/airc/blob/8a03beadfa18dfcc958711652547e1acdc3569c8/skills/airc/SKILL.md#L188-L196) — shared references, refused `@N`, full msgids; codec and saved-record presentation in `src/agent_session/reference.rs` and `state.rs` L319–593.
 8. <a id="source-8"></a> [Shared vectors](../../internal/chatui/testdata/message-references.json#L1-L53) — byte-identical copy of AIRC `tests/data/message-references.json` (SHA-256 `ee5a9cc849c6c3b1a603fdc6aa390500b987876da734f9e79876969e0f47a0ed`); this component checks the canonical entries, AIRC also the opaque ones.
-9. <a id="source-9"></a> [Previews](../../internal/chatui/preview.go#L19) — `previewLabel`, `previewKeys`, `substitute`, `refreshPreviews`; pure `ApplyReplacements`, `ReplacementBounds`, `ReplacementSourceMap` and `DisplayLine.CopyText` live in markdownview; transcript and selection remain chat-owned.
+9. <a id="source-9"></a> [Previews](../../internal/chatui/preview.go#L19) — `previewLabel`, `previewLabelIn`, `loadedElsewhere`, `otherLoaded` (rebuild key in view.go), `previewKeys`, `substitute`, `refreshPreviews`; pure `ApplyReplacements`, `ReplacementBounds`, `ReplacementSourceMap` and `DisplayLine.CopyText` live in markdownview; transcript and selection remain chat-owned.
 10. <a id="source-10"></a> [Preview regressions](../../internal/chatui/preview_test.go#L1-L159) — span, copy, click, Quote, loaded-only, table cell, source view, budget, later targets, rename, wrapped atomic span and hover; spans in `quoteFixtures`.

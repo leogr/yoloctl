@@ -134,8 +134,8 @@ func (m *Model) View() tea.View {
 		tw = w - panel - 1
 	}
 	m.lastTextWidth = max(tw-bodyIndent-1, 1)
-	if m.built.rows == nil || m.built.generation != m.generation || m.built.width != tw {
-		m.built.rows, m.built.generation, m.built.width = m.transcript(tw), m.generation, tw
+	if elsewhere := m.otherLoaded(); m.built.rows == nil || m.built.generation != m.generation || m.built.width != tw || m.built.elsewhere != elsewhere {
+		m.built.rows, m.built.generation, m.built.width, m.built.elsewhere = m.transcript(tw), m.generation, tw, elsewhere
 	}
 	transcript := m.built.rows
 	m.lastRows, m.lastBodyHeight = len(transcript), bodyHeight

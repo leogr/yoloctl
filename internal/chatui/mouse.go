@@ -326,7 +326,7 @@ func (m *Model) activate(act action) tea.Cmd {
 	case actAuthor:
 		return m.requestAttach(act.Extra, act.Value)
 	case actReply, actRef:
-		m.showMessage(act.Value)
+		return m.showMessage(act.Value)
 	case actMention:
 		m.mentionCard(act.Value)
 	case actFilter:
@@ -341,7 +341,32 @@ func (m *Model) activate(act action) tea.Cmd {
 // loaded in this channel, as reply labels and references name it.
 // Nothing is fetched or guessed: a missing target keeps the position. A
 // loaded target a filter hides first brings back all messages.
-func (m *Model) showMessage(id string) {
+func (m *Model) showMessage(id string) tea.Cmd {
+	if m.selectLoaded(id) {
+		return nil
+	}
+	// A message loaded in another open channel: select that channel the
+	// way a person does (joined: at once; otherwise through the ordinary
+	// typed join path, showing the message once the join switches to it).
+	if name, ok := m.channelHolding(id); ok {
+		cmd := m.selectChannel(name)
+		switch {
+		case m.name == name:
+			m.selectLoaded(id)
+		case m.joinSwitch.id != "" && strings.EqualFold(m.joinSwitch.channel, name):
+			// The message is shown only by that join's own switch: a refused,
+			// uncertain, superseded or reset join, or a move elsewhere before
+			// it confirms, drops it with the join intent.
+			m.joinSwitch.ref = id
+		}
+		return cmd
+	}
+	m.say(levelInfo, "That message is not loaded in any open channel; Page Up in its channel may load older history")
+	return nil
+}
+
+// selectLoaded selects message id when it is loaded in the visible channel.
+func (m *Model) selectLoaded(id string) bool {
 	for i := range m.messages {
 		if m.messages[i].ID == id {
 			if m.filter != nil && !m.shown(m.bindings())[i] {
@@ -352,10 +377,26 @@ func (m *Model) showMessage(id string) {
 			m.anchor = &viewAnchor{key: messageKey(m.messages[i]), line: lineTop}
 			m.clearInfo()
 			m.touch()
-			return
+			return true
 		}
 	}
-	m.say(levelInfo, "That message is not loaded in this channel; Page Up may load older history")
+	return false
+}
+
+// channelHolding names another open channel where message id is loaded.
+// Only channels this client already shows can hold one, so nothing beyond
+// existing membership and history becomes readable.
+func (m *Model) channelHolding(id string) (string, bool) {
+	for _, name := range m.order {
+		if v := m.views[name]; v != nil && v != m.cur {
+			for i := range v.messages {
+				if v.messages[i].ID == id {
+					return name, true
+				}
+			}
+		}
+	}
+	return "", false
 }
 
 // mentionCard opens the card of the participant a mention names: the
