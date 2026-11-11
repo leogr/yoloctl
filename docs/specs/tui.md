@@ -119,7 +119,7 @@ since adds code-span table pipes, heading levels, aligned ordered items, list
 hanging indents, `---` rules and angle autolinks, without new blocks. [43](#source-43)
 
 [FACT] `follow PATH` uses the shared renderer for a live file pane, with source
-toggle, explicit selection copy and inert links. It polls once per second,
+toggle, drag selection copied on release as in chat (plus explicit `y`) and inert links. It polls once per second,
 refreshes off the input loop, follows the end until scrolling up and retains a
 stale display on read failure. Page keys browse the active plain window for
 large files; the footer identifies omitted bytes. [45](#source-45)
@@ -129,7 +129,7 @@ inline Markdown display, source/code copy, a sorted Participants panel with
 trusted identities, presence and topic notices, live mention and command
 suggestions, `/help` and `/settings`, Ctrl+P for Participants, a shared `◈`
 chat icon and a dashboard-style header, click-drag selection with copy on release
-(a human-authorized, chat-only exception that still honors `seams.clipboard`),
+(a human-authorized exception, shared with the follow view, that still honors `seams.clipboard`),
 a Quote action (Alt+Q or a footer chip) that puts the original Markdown of a
 highlight inside one message into the draft as quoted lines and replies to it,
 refusing rather than approximating a part it cannot map exactly, except that a

@@ -233,9 +233,10 @@ Preserve application mouse ownership and complete gestures across tab/size
 changes. Local tab selection uses native graphemes, wrap metadata and tracked
 history; palette selection remains host-owned. Yoloctl local copy requires an explicit action,
 never a mouse release, and shares the default-on `seams.clipboard` policy with
-image paste and application OSC 52 writes. The native chat view is such an
-application: its human-authorized drag selection copies displayed text on
-release through that same policy (see [chat interaction](docs/digests/chat-interaction.md)). Preserve application copy preferences
+image paste and application OSC 52 writes. The native chat and follow views are such
+applications: their human-authorized drag selection copies displayed text on
+release through that same policy (see [chat interaction](docs/digests/chat-interaction.md) and
+[follow view](docs/digests/follow-view.md)). Preserve application copy preferences
 and bounded host terminal identity at launch; do not force agent settings. Do not assume
 that a host-consumed copy shortcut reaches yoloctl.
 Measure cell pixels explicitly; never infer them from padded window totals.

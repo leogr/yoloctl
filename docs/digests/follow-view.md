@@ -1,6 +1,6 @@
 # Live file view
 
-Verification: `5ab92ee7f49123d5581438727083e6934618565f` and accompanying changes.
+Verification: `d44b7e5ee21ea27b6f1b074972a0c9a07195dbe5` and accompanying changes.
 
 [FACT] Host-only `yoloctl follow PATH [--space SPACE] [--format auto|text|markdown]`
 opens one live pane. Default mode pins the selected space and absolute VM path;
@@ -48,11 +48,15 @@ selection.
 
 [FACT] Markdown parsing/layout/copy geometry comes from `markdownview`, with
 unlimited document rows for this caller; chat retains its default row bound.
-Ctrl+S toggles source below the size threshold. Drag selects; `y` or Ctrl+Shift+C
-explicitly copies through the existing host clipboard policy. In the TUI an
-ended follow pane offers [Reopen](tui-reattach.md) with its exact launch argv
-(path, `--host`/`--space`, `--format`); an implicit space is the one pinned at
-launch. Code-copy controls
+Ctrl+S toggles source below the size threshold. As in chat, releasing a drag
+(the pointer left the pressed cell) copies the selection's displayed text,
+table cells as laid out, through the host `seams.clipboard` callback, with chat's
+notices (copied characters/lines, clipboard off, over 1 MiB). A click alone copies
+nothing; `y` or Ctrl+Shift+C copies the selection again; clearing the highlight
+mid-drag (Esc, Ctrl+S) ends that gesture without a copy. [10](#source-10) In the
+TUI an ended follow pane offers [Reopen](tui-reattach.md) with its exact launch
+argv (path, `--host`/`--space`, `--format`); an implicit space is the one pinned
+at launch. Code-copy controls
 use the same policy. Terminal controls are sanitized; links have no opener,
 and there are no chat identities, Quote actions or implicit effects. Close
 ends the local follow view. Component tests cover current-grant refusal,
@@ -78,3 +82,4 @@ and light themes. [7](#source-7) [8](#source-8)
 7. <a id="source-7"></a> [Body row painting](../../internal/followview/model.go#L492) — `View`, body `Paint` fill.
 8. <a id="source-8"></a> [Background regression](../../internal/followview/background_test.go#L18) — `TestBodyRowsKeepTerminalBackground`.
 9. <a id="source-9"></a> [Reopen classification](../../internal/tui/reopen_args.go#L24) — `parseReopenView` `follow` case, `pinReopenArgs`; `viewEndAction` in reattach.go; follow cases in reopen_args_test.go, reopen_test.go and reopen_launch_test.go.
+10. <a id="source-10"></a> [Copy on release](../../internal/followview/model.go#L394) — `copyText`, `clearSelection`, `mouse` (L433); `TestDragCopiesOnReleaseAndControlsStayInert`, `TestReleaseCopyFollowsChatPolicy`, `TestClearingMidDragEndsTheGesture` in model_test.go; host callback in cmd/yoloctl/follow.go applies `seams.clipboard` and OSC 52 evaluation.

@@ -2,7 +2,8 @@
 
 Verification: `77a14b6864848cababd79a2d98e231f8c9575dd8` and accompanying changes; re-read affected cited symbols when changing behavior.
 
-See [reading and selection](chat-reading.md) for drag copy and scrolling, and
+See [reading and selection](chat-reading.md) for drag copy and scrolling (the
+follow view shares its copy-on-release policy and notices), and
 [participants, settings and attachment](chat-participants.md) for people and
 guarded session access.
 

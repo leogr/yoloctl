@@ -209,7 +209,9 @@ func TestSlowReadDoesNotBlockInputAndCloseJoinsIt(t *testing.T) {
 	}
 }
 
-func TestSelectionIsExplicitCopyAndControlsStayInert(t *testing.T) {
+// A human drag copies its displayed text on release, as in chat; y copies
+// the same text again; file content never runs a clipboard sequence.
+func TestDragCopiesOnReleaseAndControlsStayInert(t *testing.T) {
 	m, _ := fileModel(t, "one\ttwo\n\x1b]52;c;ZXZpbA==\a\n# Heading", Markdown)
 	var copied []string
 	m.opts.Copy = func(text string) tea.Cmd { copied = append(copied, text); return nil }
@@ -218,11 +220,11 @@ func TestSelectionIsExplicitCopyAndControlsStayInert(t *testing.T) {
 	m.Update(tea.MouseClickMsg(tea.Mouse{X: 0, Y: 1, Button: tea.MouseLeft}))
 	m.Update(tea.MouseMotionMsg(tea.Mouse{X: 7, Y: 1, Button: tea.MouseLeft}))
 	m.Update(tea.MouseReleaseMsg(tea.Mouse{X: 7, Y: 1, Button: tea.MouseLeft}))
-	if len(copied) != 0 {
-		t.Fatal("mouse release copied without an explicit action")
+	if len(copied) != 1 || copied[0] != "one two" || m.notice != "Copied 7 characters of displayed text · Esc clears the highlight" {
+		t.Fatalf("release copy %q, notice %q", copied, m.notice)
 	}
 	key(m, 'y', 0)
-	if len(copied) != 1 || copied[0] != "one two" {
+	if len(copied) != 2 || copied[1] != "one two" {
 		t.Fatal("display copy changed", copied)
 	}
 	if strings.Contains(m.View().Content, "\x1b]52;") {
@@ -302,5 +304,81 @@ func TestRenderOnlyKeepsUnavailableUntilAnActualReadRecovers(t *testing.T) {
 	applyWork(t, m, key(m, 'r', 0))
 	if m.stale != "" || m.snapshot.Key != oldKey || m.snapshot.Changed || strings.Contains(m.View().Content, "Unavailable (last display retained):") {
 		t.Fatal("successful unchanged read did not clear unavailable", m.stale, m.snapshot)
+	}
+}
+
+// Only a drag copies: a click (press and release on one cell) selects
+// nothing to copy; with the host clipboard off nothing is copied and the
+// chat notice explains why; a table copies its displayed cells; a code
+// block's copy button still copies its source on a click.
+func TestReleaseCopyFollowsChatPolicy(t *testing.T) {
+	m, _ := fileModel(t, "alpha beta\n\n| A | B |\n|---|---|\n| x | y |\n\n```go\nfmt.Println(1)\n```", Markdown)
+	var copied []string
+	m.opts.Copy = func(text string) tea.Cmd { copied = append(copied, text); return nil }
+	m.top, m.following = 0, false
+	drag := func(x0, y0, x1, y1 int) {
+		m.Update(tea.MouseClickMsg(tea.Mouse{X: x0, Y: y0, Button: tea.MouseLeft}))
+		if x1 != x0 || y1 != y0 {
+			m.Update(tea.MouseMotionMsg(tea.Mouse{X: x1, Y: y1, Button: tea.MouseLeft}))
+		}
+		m.Update(tea.MouseReleaseMsg(tea.Mouse{X: x1, Y: y1, Button: tea.MouseLeft}))
+	}
+	drag(2, 1, 2, 1)
+	if len(copied) != 0 {
+		t.Fatal("a click copied", copied)
+	}
+	rowOf := func(text string) int {
+		for y, line := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+			if strings.Contains(line, text) {
+				return y
+			}
+		}
+		t.Fatalf("no row shows %q:\n%s", text, m.View().Content)
+		return 0
+	}
+	header, body := rowOf("A │ B"), rowOf("x │ y")
+	drag(0, header, 6, body)
+	if len(copied) != 1 || !strings.Contains(copied[0], "A │ B") || !strings.Contains(copied[0], "x │ y") || strings.Contains(copied[0], "─") {
+		t.Fatalf("table copy %q", copied)
+	}
+	if !strings.HasPrefix(m.notice, "Copied 2 lines of displayed text") {
+		t.Fatalf("notice %q", m.notice)
+	}
+	label := rowOf("copy")
+	x := strings.Index(ansi.Strip(strings.Split(m.View().Content, "\n")[label]), "copy")
+	drag(x, label, x, label)
+	if len(copied) != 2 || copied[1] != "fmt.Println(1)\n" {
+		t.Fatalf("copy button %q", copied)
+	}
+	m.opts.Copy = nil
+	drag(0, 1, 5, 1)
+	if len(copied) != 2 || m.notice != "Host clipboard is off (seams.clipboard); nothing was copied" {
+		t.Fatalf("clipboard off: %q %q", copied, m.notice)
+	}
+}
+
+// Clearing the highlight in the middle of a drag (Esc, or Ctrl+S which
+// re-renders) ends that gesture: the following motion and release neither
+// panic nor copy.
+func TestClearingMidDragEndsTheGesture(t *testing.T) {
+	for _, clear := range []struct {
+		name string
+		code rune
+		mod  tea.KeyMod
+	}{{"esc", tea.KeyEscape, 0}, {"ctrl+s", 's', tea.ModCtrl}} {
+		t.Run(clear.name, func(t *testing.T) {
+			m, _ := fileModel(t, "alpha beta gamma\nsecond line", Markdown)
+			var copied []string
+			m.opts.Copy = func(text string) tea.Cmd { copied = append(copied, text); return nil }
+			m.top, m.following = 0, false
+			m.Update(tea.MouseClickMsg(tea.Mouse{X: 0, Y: 1, Button: tea.MouseLeft}))
+			m.Update(tea.MouseMotionMsg(tea.Mouse{X: 5, Y: 1, Button: tea.MouseLeft}))
+			key(m, clear.code, clear.mod)
+			m.Update(tea.MouseMotionMsg(tea.Mouse{X: 9, Y: 1, Button: tea.MouseLeft}))
+			m.Update(tea.MouseReleaseMsg(tea.Mouse{X: 9, Y: 1, Button: tea.MouseLeft}))
+			if len(copied) != 0 || m.selection != nil || m.drag {
+				t.Fatalf("copied %q, selection %v, drag %v", copied, m.selection, m.drag)
+			}
+		})
 	}
 }

@@ -130,6 +130,10 @@ type Model struct {
 	selection                       *selection
 	drag                            bool
 	pressed                         markdownview.Action
+	// pressX/pressY locate the press; moved records that the pointer
+	// left that cell, which makes the release a drag selection.
+	pressX, pressY int
+	moved          bool
 }
 
 func New(ctx context.Context, opts Options) *Model {
@@ -200,7 +204,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Mode == ansi.ModeUnicodeCore && (msg.Value == ansi.ModeReset || msg.Value == ansi.ModeSet || msg.Value == ansi.ModePermanentlySet) && m.method != ansi.GraphemeWidth {
 			m.captureAnchor()
 			m.method = ansi.GraphemeWidth
-			m.selection = nil
+			m.clearSelection()
 			m.gen++
 			return m, m.work(false, true)
 		}
@@ -221,7 +225,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.snapshot = msg.snapshot
 				m.raw = msg.raw
 				if msg.snapshot.Changed {
-					m.selection = nil
+					m.clearSelection()
 					m.drag = false
 				}
 			}
@@ -242,7 +246,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+s":
 			m.captureAnchor()
 			m.source = !m.source
-			m.selection = nil
+			m.clearSelection()
 			m.gen++
 			return m, m.work(false, true)
 		case "f", "end":
@@ -269,7 +273,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "y", "ctrl+shift+c":
 			return m, m.copySelection()
 		case "esc":
-			m.selection = nil
+			m.clearSelection()
 			m.notice = ""
 		}
 	case tea.MouseMsg:
@@ -384,22 +388,37 @@ func (m *Model) selectedText() string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// copyText writes text through the host clipboard callback, which applies
+// seams.clipboard, with the chat view's notices for the same outcomes.
 func (m *Model) copyText(text string) tea.Cmd {
 	if text == "" {
-		return nil
-	}
-	if m.opts.Copy == nil {
-		m.notice = "Host clipboard is off (seams.clipboard)"
 		return nil
 	}
 	if len(text) > 1<<20 {
 		m.notice = "Selection is larger than 1 MiB; nothing was copied"
 		return nil
 	}
-	m.notice = "Copied displayed text"
+	if m.opts.Copy == nil {
+		m.notice = "Host clipboard is off (seams.clipboard); nothing was copied"
+		return nil
+	}
+	lines := strings.Count(text, "\n") + 1
+	what := fmt.Sprintf("%d characters", len([]rune(text)))
+	if lines > 1 {
+		what = fmt.Sprintf("%d lines", lines)
+	}
+	m.notice = "Copied " + what + " of displayed text · Esc clears the highlight"
 	return m.opts.Copy(text)
 }
 func (m *Model) copySelection() tea.Cmd { return m.copyText(m.selectedText()) }
+
+// clearSelection drops the highlight and ends any drag in progress, so a
+// later motion or release of that gesture neither panics nor copies.
+func (m *Model) clearSelection() {
+	m.selection = nil
+	m.drag, m.moved = false, false
+}
 func (m *Model) pointAt(x, y int) (point, markdownview.Action, bool) {
 	if m.view == nil || len(m.view.rows) == 0 {
 		return point{}, markdownview.Action{}, false
@@ -432,22 +451,33 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		m.pause()
 		m.drag = true
 		m.pressed = act
+		m.pressX, m.pressY, m.moved = mouse.X, mouse.Y, false
 		m.selection = &selection{anchor: p, focus: p}
 	case tea.MouseMotionMsg:
-		if m.drag {
+		if m.drag && m.selection != nil {
+			if mouse.X != m.pressX || mouse.Y != m.pressY {
+				m.moved = true
+			}
 			if p, _, ok := m.pointAt(mouse.X, mouse.Y); ok {
 				m.selection.focus = p
 			}
 		}
 	case tea.MouseReleaseMsg:
-		if m.drag {
+		if m.drag && m.selection != nil {
 			p, act, ok := m.pointAt(mouse.X, mouse.Y)
 			m.drag = false
 			if ok {
 				m.selection.focus = p
-				if act.Kind == markdownview.IntentCopyCode && act == m.pressed && m.selection.anchor == p {
-					return m.copyText(act.Value)
-				}
+			}
+			// A human-authorized drag copies its displayed text on release,
+			// exactly like the chat view, through the same seams.clipboard
+			// callback. A click without a drag still only activates the copy
+			// button it was pressed and released on.
+			if m.moved {
+				return m.copySelection()
+			}
+			if ok && act.Kind == markdownview.IntentCopyCode && act == m.pressed && m.selection.anchor == p {
+				return m.copyText(act.Value)
 			}
 		}
 	}
