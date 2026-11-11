@@ -116,7 +116,7 @@ func main() {
 		// Independent holders and their SSH proxy children execute locally.
 		root = newRootCmd()
 	}
-	err = root.ExecuteContext(ctx)
+	err = executeRoot(root, func() (*cobra.Command, error) { return root.ExecuteContextC(ctx) })
 	os.Exit(classifyError(err))
 }
 
@@ -185,6 +185,7 @@ VM-local ephemeral) at /workdir.`,
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return asUserError(err)
 	})
+	addLogFlags(cmd)
 	cmd.AddCommand(
 		newSpaceCmd(),
 		newAgentboxCmd(),

@@ -224,7 +224,9 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 		_ = RemoveMarker(opts.MarkerPath) // no agent was started
 		return -1, fmt.Errorf("session: start agent: %w", err)
 	}
-	logf("agent started: %s", strings.Join(opts.Argv, " "))
+	// Never log the argv itself: agent arguments may carry prompts or
+	// tokens. The program name and the argument count identify the launch.
+	logf("agent started: %s", agentLaunchSummary(opts.Argv))
 
 	tr := newTitleRewriter(opts.Agentbox)
 	if opts.TitleTemplate != "" {
@@ -633,4 +635,18 @@ func shellJoin(argv []string) string {
 		quoted[i] = "'" + strings.ReplaceAll(a, "'", `'\''`) + "'"
 	}
 	return strings.Join(quoted, " ")
+}
+
+// agentLaunchSummary names the agent program and counts its arguments
+// without revealing them.
+func agentLaunchSummary(argv []string) string {
+	if len(argv) == 0 {
+		return "no command"
+	}
+	n := len(argv) - 1
+	unit := "arguments"
+	if n == 1 {
+		unit = "argument"
+	}
+	return fmt.Sprintf("%s (%d %s)", filepath.Base(argv[0]), n, unit)
 }

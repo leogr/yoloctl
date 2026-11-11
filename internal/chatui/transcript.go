@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // Anchor lines of the rows around one message's body, in display order.
@@ -245,7 +246,7 @@ func (m *Model) transcript(width int) []transcriptRow {
 		}
 		if msg.Error != "" {
 			rows = append(rows, transcriptRow{key: key, line: len(body.lines) + lineError, kind: rowDecor,
-				runs: append(slicesCloneRuns(indent), deco("✕ "+oneLine(msg.Error), spaceview.Style{FG: t.Bad}))})
+				runs: append(slicesCloneRuns(indent), deco(prettylog.DefaultGlyphs.Error+" "+oneLine(msg.Error), spaceview.Style{FG: t.Bad}))})
 		}
 		// Room events after a message stand apart from it: no selection or
 		// mention mark, and selecting it does not reach them.
@@ -305,9 +306,9 @@ func (m *Model) header(msg *Message, key string, w who, mark run, width int, sel
 	case Pending:
 		label("◌ sending", spaceview.Style{FG: t.Label})
 	case Rejected:
-		label("✕ not sent", spaceview.Style{FG: t.Bad, Bold: true})
+		label(prettylog.DefaultGlyphs.Error+" not sent", spaceview.Style{FG: t.Bad, Bold: true})
 	case Uncertain:
-		label("? uncertain, check history", spaceview.Style{FG: t.Capability, Bold: true})
+		label(prettylog.DefaultGlyphs.Unknown+" uncertain, check history", spaceview.Style{FG: t.Warn, Bold: true})
 	}
 	if m.source && msg.Replay {
 		label("history", spaceview.Style{FG: t.Dim})

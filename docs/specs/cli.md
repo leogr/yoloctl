@@ -199,6 +199,12 @@ to the shell's startup file. [18](#source-18)
 resolved config/cache roots without creating the Lima home. The external Lima
 version probe is bounded. Ordinary commands retain startup setup. [18](#source-18)
 
+[FACT] Global `--log-level debug|info|warn|error` (default `info`), `-q` (same
+as `warn`) and `--color=auto|always|never` select what the shared log renderer
+shows and whether it colours; they override `YOLOCTL_LOG` (same values) and
+`YOLOCTL_DEBUG=1` (`debug`). `-v` prints the version.
+Data output (`--json`, receipts, streams) is not rendered by it. [26](#source-26)
+
 ## Sources
 
 1. <a id="source-1"></a> [CLI, output and completion evidence](../digests/cli-state.md).
@@ -235,3 +241,5 @@ version probe is bounded. Ordinary commands retain startup setup. [18](#source-1
 24. <a id="source-24"></a> [Per-TUI space selection](../digests/tui-space-switch.md).
 
 25. <a id="source-25"></a> [Live file view](../digests/follow-view.md).
+
+26. <a id="source-26"></a> [Log presentation](../digests/log-presentation.md).

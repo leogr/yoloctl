@@ -289,7 +289,7 @@ test as runtime validation. Do not modify the VM/account hosting the active
 coding session to test it. Keep ignored research/build artifacts out of source
 scans and commits. When large ignored trees are present, scope Go checks to the
 maintained packages:
-`make check 'PKG=./ ./assets/... ./cmd/... ./internal/...'`.
+`make check 'PKG=./ ./assets/... ./cmd/... ./internal/... ./pkg/...'`.
 The root package binds the separate OpenShell helper's production source inputs;
 include it when scoping checks so its source/dependency regressions still run.
 

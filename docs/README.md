@@ -66,6 +66,7 @@ or session history. Repository working rules are in [AGENTS.md](../AGENTS.md).
 | What model, effort, context and state do chat participants show, and where do the values come from? | [TUI](specs/tui.md) | [Participant model and effort](digests/chat-participant-runtime.md), [agent state](digests/agent-state.md) |
 | How can optional AIRC delivery reach a busy Codex turn, and what prevents uncertain replay? | [Sessions](specs/sessions.md) | [AIRC packaging](digests/airc.md), [upstream delivery contracts](digests/airc-upstream.md) |
 | How do shared `m:` and `msgid:` message references resolve, and why is an `@N` number plain text? | [TUI](specs/tui.md) | [Chat message references](digests/chat-references.md) |
+| How are log lines rendered (levels, glyphs, colour, folding, steps), how do worker records reach the host, and what do `-q`/`-v`/`--color` change? | [CLI](specs/cli.md) | [Log presentation](digests/log-presentation.md) |
 | How does chat keep per-channel state and refresh desired identities without a runtime scan? | [TUI](specs/tui.md) | [Channels and live identities](digests/chat-channel-view.md) |
 | How do chat hover highlights and collapsed `[Pasted…]` chips work? | [TUI](specs/tui.md) | [Hover and pastes](digests/chat-hover-paste.md) |
 | How do inline `[Image #n]` drafts keep their order and send text and images safely? | [TUI](specs/tui.md) | [Composer image drafts](digests/chat-composer-images.md) |

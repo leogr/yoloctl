@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // viewLayout records where the last frame drew each region, so mouse
@@ -669,14 +670,16 @@ func (m *Model) noticeLine(w int) string {
 
 func (m *Model) noticeRuns() []run {
 	t := m.theme
-	icon, st := "› ", spaceview.Style{FG: t.Label}
+	// Level glyphs and tones are the shared log presentation's.
+	g := prettylog.DefaultGlyphs
+	icon, st := g.Info+" ", spaceview.Style{FG: t.Label}
 	switch m.noticeLevel {
 	case levelOK:
-		icon, st = "✓ ", spaceview.Style{FG: t.OK}
+		icon, st = g.OK+" ", spaceview.Style{FG: t.OK}
 	case levelWarn:
-		icon, st = "! ", spaceview.Style{FG: t.Capability, Bold: true}
+		icon, st = g.Warn+" ", spaceview.Style{FG: t.Warn, Bold: true}
 	case levelError:
-		icon, st = "✕ ", spaceview.Style{FG: t.Bad, Bold: true}
+		icon, st = g.Error+" ", spaceview.Style{FG: t.Bad, Bold: true}
 	}
 	return []run{deco(" "+icon, st), deco(oneLine(m.notice), st)}
 }
