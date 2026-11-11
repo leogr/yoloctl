@@ -282,7 +282,15 @@ func TestImageProgressWireDrainsBeforeFinalResponse(t *testing.T) {
 				return 0, streams.RecordEvidence.CompleteEffects(ctx, 0)
 			}
 			var stdout, stderr bytes.Buffer
-			err = invoke(t, s, request("box.start"), nil, &stdout, &stderr)
+			// This checks frame ordering across durable image preparation, not
+			// its wall-clock duration. Use the test's cancellation/deadline
+			// rather than invoke's short protocol-fixture timeout.
+			client, server := net.Pipe()
+			defer func() { _ = client.Close() }()
+			done := make(chan struct{})
+			go func() { defer close(done); s.ServeConn(t.Context(), server, Principal{}) }()
+			err = Call(t.Context(), client, s.Hello, request("box.start"), ClientIO{Out: &stdout, Err: &stderr})
+			<-done
 			if fail {
 				if err == nil || !strings.Contains(err.Error(), "actual solve failure") {
 					t.Fatal(err)

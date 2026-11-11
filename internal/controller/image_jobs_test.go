@@ -274,14 +274,21 @@ func TestAbandonedImageAccountingSurvivesReceiptEviction(t *testing.T) {
 	cancel()
 	take(t, pending)
 	take(t, job.done)
+	abandoned, err := m.server.Receipts.Read(phase.JobID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for i := 0; i < receiptLimit+1; i++ {
 		id := fmt.Sprintf("eviction-%020d", i)
 		r, err := m.server.Receipts.Begin(Request{ID: id, Method: "test", Dash: -1}, Principal{}, "generation")
 		if err != nil {
 			t.Fatal(err)
 		}
+		// Eviction orders by Started, not insertion. Make this fixture newer
+		// than the abandoned receipt even if the wall clock moves backwards.
+		r.Started = abandoned.Started.Add(time.Duration(i+1) * time.Second)
 		r.State = "complete"
-		r.Finished = time.Now().UTC()
+		r.Finished = r.Started
 		if err := m.server.Receipts.Save(r); err != nil {
 			t.Fatal(err)
 		}
