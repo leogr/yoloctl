@@ -156,6 +156,7 @@ exit 93`,
 	t.Setenv("PATH", bin)
 	c := container.NewWithOutput(cfg.Space, io.Discard, io.Discard)
 	var notice bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &notice))
 	if _, err := ensureAgentSession(t.Context(), c, cfg.Space, cfg.Name, &notice, true, nil, sessionStartOptions{}); err == nil || !strings.Contains(err.Error(), "publication is pending") {
 		t.Fatal("running-container revival accepted stale server authority", err)
 	}

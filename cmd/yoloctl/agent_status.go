@@ -20,6 +20,7 @@ import (
 	"github.com/leogr/yoloctl/internal/capabilities"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -138,7 +139,7 @@ func buildAgentStatusRows(ctx context.Context, rows []agentboxRow, opts agentSta
 		profile, err := agentprofile.Lookup(agentName)
 		if err != nil {
 			row.Error = fmt.Sprintf("load agent: %v", err)
-			_, _ = fmt.Fprintf(opts.Stderr, "warning: %s/%s: %v\n", r.Space, r.Container.Name, row.Error)
+			cliWarn(logging.Box, "%s/%s: %v", r.Space, r.Container.Name, row.Error)
 			out = append(out, row)
 			continue
 		}
@@ -152,9 +153,7 @@ func buildAgentStatusRows(ctx context.Context, rows []agentboxRow, opts agentSta
 		installed, err := fetchInstalledAgentVersion(ctx, c, r.Container.Name, profile)
 		if err != nil {
 			row.Error = fmt.Sprintf("read installed version: %v", err)
-			_, _ = fmt.Fprintf(opts.Stderr,
-				"warning: %s/%s: read installed %s version: %v\n",
-				r.Space, r.Container.Name, profile.Distribution(), err)
+			cliWarn(logging.Box, "%s/%s: read installed %s version: %v", r.Space, r.Container.Name, profile.Distribution(), err)
 		} else {
 			row.InstalledVersion = installed
 		}
@@ -165,8 +164,7 @@ func buildAgentStatusRows(ctx context.Context, rows []agentboxRow, opts agentSta
 				latest, latestErr = fetchAgentLatestCached(ctx, profile, opts.LatestTTL)
 				if latestErr != nil {
 					latestErrByPackage[profile.Distribution()] = latestErr
-					_, _ = fmt.Fprintf(opts.Stderr,
-						"warning: query %s: %v\n", profile.Distribution(), latestErr)
+					cliWarn(logging.Box, "query %s: %v", profile.Distribution(), latestErr)
 				} else {
 					latestByPackage[profile.Distribution()] = latest
 				}
@@ -370,7 +368,7 @@ func loadAgentboxShowMetadata(ctx context.Context, c *container.Client, d *conta
 		meta.UnconfinedNetwork = cfg.UnconfinedNetwork
 		meta.Privileged = cfg.Privileged
 	} else if !errors.Is(err, os.ErrNotExist) {
-		_, _ = fmt.Fprintf(errw, "warning: box manifest unavailable: %v\n", err)
+		cliWarn(logging.Box, "box manifest unavailable: %v", err)
 	}
 	// "none" is the generic-shell sentinel, never a profile — also guard the
 	// label-derived AgentName (a generic-shell box carries yoloctl.agent=none).
@@ -380,7 +378,7 @@ func loadAgentboxShowMetadata(ctx context.Context, c *container.Client, d *conta
 	profile, err := agentprofile.Lookup(meta.AgentName)
 	if err != nil {
 		meta.AgentVersionNote = "version unknown"
-		_, _ = fmt.Fprintf(errw, "warning: load agent %s: %v\n", meta.AgentName, err)
+		cliWarn(logging.Box, "load agent %s: %v", meta.AgentName, err)
 		return meta
 	}
 	meta.AgentPackage = profile.Distribution()
@@ -394,8 +392,7 @@ func loadAgentboxShowMetadata(ctx context.Context, c *container.Client, d *conta
 	version, err := fetchInstalledAgentVersion(ctx, c, name, profile)
 	if err != nil {
 		meta.AgentVersionNote = "version unknown"
-		_, _ = fmt.Fprintf(errw,
-			"warning: installed agent version probe failed: %v\n", err)
+		cliWarn(logging.Box, "installed agent version probe failed: %v", err)
 		return meta
 	}
 	meta.AgentVersion = version

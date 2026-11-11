@@ -8,6 +8,13 @@ switch it through its space menu after confirming local tab closure. `box create
 the space before resolving account defaults. `box run` and root `run`/`ps` are
 unavailable; use named `box create`, `box attach` and `box list`. [1](#source-1) [2](#source-2) [24](#source-24)
 
+[FACT] Command warnings, notices and mutation-result prose go through the
+shared logger to stderr; data tables, JSON, dry-run plans and raw session
+streams keep their writers. Routed mutations report outcomes after the final
+controller reply; host lifecycle steps finish after cleanup. Typed unknown
+results retain their text/status without invented retry or hold guidance.
+[27](#source-27)
+
 [FACT] New space names, including import destinations, use 1–16 ASCII
 characters: an alphanumeric first, then alphanumeric, dot, underscore or hyphen.
 Existing longer names remain usable. New macOS Lima spaces use
@@ -245,3 +252,5 @@ Data output (`--json`, receipts, streams) is not rendered by it. [26](#source-26
 25. <a id="source-25"></a> [Live file view](../digests/follow-view.md).
 
 26. <a id="source-26"></a> [Log presentation](../digests/log-presentation.md).
+
+27. <a id="source-27"></a> [CLI logging and outcomes](../digests/cli-logging.md).

@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spacelock"
 )
 
@@ -47,7 +47,7 @@ func (s editSnapshot) unchanged() bool {
 // space or identity with identical text). Reconcile remains inside the guard.
 func lockManifestEdit(ctx context.Context, notice io.Writer, space string, entity func() (func(), error)) (func(), error) {
 	unlockSpace, err := spacelock.AcquireWithWait(ctx, space, true, func() {
-		_, _ = fmt.Fprintf(notice, "Waiting for another operation in space %s; Ctrl-C cancels.\n", space)
+		cliInfo(logging.Host, "Waiting for another operation in space %s; Ctrl-C cancels.", space)
 	})
 	if err != nil {
 		return nil, err

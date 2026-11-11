@@ -16,6 +16,7 @@ import (
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -144,7 +145,9 @@ func startControllerSpace(ctx context.Context, boot *spaceconfig.Bootstrap, upda
 	if boot.ImageUpdate != nil {
 		return pendingImageUpdate(boot)
 	}
-	return startControllerSpaceImpl(ctx, boot, update, initialize, errw)
+	return cliRunStep(ctx, "Starting controller", func(ctx context.Context) error {
+		return startControllerSpaceImpl(ctx, boot, update, initialize, errw)
+	})
 }
 
 // These seams keep boot-authority race tests independent of a live hypervisor.
@@ -258,9 +261,11 @@ func startControllerSpaceImpl(ctx context.Context, boot *spaceconfig.Bootstrap, 
 		}
 		if !found {
 			if boot.VM.Backend == "firecracker" {
-				_, _ = fmt.Fprintf(errw, "formatting the %s system disk…\n", diskLabel(boot.VM.Disk))
+				cliInfo(logging.Host, "formatting the %s system disk…", diskLabel(boot.VM.Disk))
 			}
-			if err := vm.CreateWithSpec(ctx, boot.Name, vmhost.Spec{Mounts: mounts, DiskID: boot.DiskID, Format: format, CPUs: boot.VM.CPUs, Memory: boot.VM.Memory, Disk: boot.VM.Disk, Image: boot.VM.Image}); err != nil {
+			if err := cliRunStep(ctx, "Preparing VM system disk", func(ctx context.Context) error {
+				return vm.CreateWithSpec(ctx, boot.Name, vmhost.Spec{Mounts: mounts, DiskID: boot.DiskID, Format: format, CPUs: boot.VM.CPUs, Memory: boot.VM.Memory, Disk: boot.VM.Disk, Image: boot.VM.Image})
+			}); err != nil {
 				return err
 			}
 		} else {
@@ -274,7 +279,7 @@ func startControllerSpaceImpl(ctx context.Context, boot *spaceconfig.Bootstrap, 
 				return err
 			}
 		}
-		if err := vm.Start(ctx, boot.Name); err != nil {
+		if err := cliRunStep(ctx, "Booting VM", func(ctx context.Context) error { return vm.Start(ctx, boot.Name) }); err != nil {
 			return err
 		}
 	}
@@ -302,7 +307,7 @@ func startControllerSpaceImpl(ctx context.Context, boot *spaceconfig.Bootstrap, 
 			return err
 		}
 	}
-	if err := session.EnsureVMBinary(ctx, container.New(boot.Name)); err != nil {
+	if err := cliRunStep(ctx, "Installing controller binary", func(ctx context.Context) error { return session.EnsureVMBinary(ctx, container.New(boot.Name)) }); err != nil {
 		return err
 	}
 	if boot.Bundle != identity {
@@ -328,7 +333,9 @@ func startControllerSpaceImpl(ctx context.Context, boot *spaceconfig.Bootstrap, 
 		return err
 	}
 	deployment := controllerDeployment{Context: boot.Context(root), Initialize: initialize}
-	if err := nativeInfrastructure(ctx, boot.Name, "deploy", deployment, io.Discard, errw); err != nil {
+	if err := cliRunStep(ctx, "Deploying controller", func(ctx context.Context) error {
+		return nativeInfrastructure(ctx, boot.Name, "deploy", deployment, io.Discard, errw)
+	}); err != nil {
 		return err
 	}
 	readyCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -363,22 +370,22 @@ func stopControllerSpace(ctx context.Context, boot *spaceconfig.Bootstrap, errw 
 	cleanup, finishCleanup := context.WithTimeout(graceful, 90*time.Second)
 	defer finishCleanup()
 	if err := controllerControl(cleanup, boot, "control.drain", errw); err != nil {
-		_, _ = fmt.Fprintf(errw, "warning: controller drain unavailable: %v\n", err)
+		cliWarn(logging.Host, "controller drain unavailable: %v", err)
 	} else {
 		// Root-only cleanup is callable after admission closes.
 		if err := nativeInfrastructure(cleanup, boot.Name, "stop-workloads", nil, io.Discard, errw); err != nil {
-			_, _ = fmt.Fprintf(errw, "warning: workload cleanup failed: %v\n", err)
+			cliWarn(logging.Host, "workload cleanup failed: %v", err)
 		}
 	}
 	finishCleanup()
-	if err := vmhost.New().Stop(graceful, boot.Name); err == nil || errors.Is(err, vmapi.ErrHostStoragePaused) {
+	if err := cliRunStep(graceful, "Stopping VM", func(ctx context.Context) error { return vmhost.New().Stop(ctx, boot.Name) }); err == nil || errors.Is(err, vmapi.ErrHostStoragePaused) {
 		return err
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	_, _ = fmt.Fprintln(errw, "warning: graceful shutdown failed; forcing VM stop; unflushed writes may be lost")
+	cliWarn(logging.Host, "graceful shutdown failed; forcing VM stop; unflushed writes may be lost")
 	forced, stop := context.WithTimeout(ctx, 30*time.Second)
 	defer stop()
-	return vmhost.New().ForceStop(forced, boot.Name, true)
+	return cliRunStep(forced, "Forcing VM stop", func(ctx context.Context) error { return vmhost.New().ForceStop(ctx, boot.Name, true) })
 }

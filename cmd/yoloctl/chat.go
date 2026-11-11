@@ -12,6 +12,7 @@ import (
 
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/managedchat"
 	"github.com/spf13/cobra"
 )
@@ -80,8 +81,8 @@ func newChatCmd() *cobra.Command {
 		}
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		if !jsonOutput {
-			_, err := fmt.Fprintln(cmd.OutOrStdout(), "Nickname saved. Reconnect your human chat view to use it; existing connections keep their current nickname.")
-			return err
+			cliInfo(logging.Chat, "Nickname saved. Reconnect your human chat view to use it; existing connections keep their current nickname.")
+			return nil
 		}
 		return nil
 	}
@@ -171,8 +172,8 @@ func writeChatRevokedName(cmd *cobra.Command, arg string, status managedchat.Sta
 	}
 	for i := len(status.Room.Members) - 1; i >= 0; i-- {
 		if m := status.Room.Members[i]; m.Name == arg {
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "Revoked chat member %s (ID %s).\n", m.Name, m.ID)
-			return err
+			cliInfo(logging.Chat, "Revoked chat member %s (ID %s).", m.Name, m.ID)
+			return nil
 		}
 	}
 	return nil

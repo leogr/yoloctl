@@ -11,6 +11,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
@@ -67,7 +68,7 @@ func controllerMountChange(action string) func(*cobra.Command, []string) error {
 		if action == "add" {
 			readOnly, _ := cmd.Flags().GetBool("read-only")
 			if !proposed.AddMount(canonical, !readOnly) {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s is already granted to space %s\n", canonical, space)
+				cliInfo(logging.Host, "%s is already granted to space %s", canonical, space)
 				return nil
 			}
 		} else if !proposed.RemoveMount(canonical) {
@@ -121,7 +122,7 @@ func controllerMountChange(action string) func(*cobra.Command, []string) error {
 		if err := startControllerSpace(cmd.Context(), &next, false, nil, cmd.ErrOrStderr()); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "updated mounts for space %s; start its boxes explicitly\n", space)
+		cliInfo(logging.Host, "updated mounts for space %s; start its boxes explicitly", space)
 		return nil
 	}
 }
@@ -174,6 +175,8 @@ func controllerSpaceShell(cmd *cobra.Command, args []string) error {
 			remote = append([]string{"sudo"}, remote...)
 		}
 	}
+	resumeSteps := suspendCLISteps()
+	defer resumeSteps()
 	sh := vmhost.InteractiveShell(cmd.Context(), space, remote)
 	sh.Stdin, sh.Stdout = os.Stdin, os.Stdout
 	return asPassthroughExitError(vmhost.RunWithFilteredStderr(sh, os.Stderr))

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/managedchat"
 	"github.com/spf13/cobra"
 )
@@ -61,7 +62,7 @@ func runChatEnrollCommand(cmd *cobra.Command, box string, call chatControllerCal
 	} else {
 		outputErr = writeChatStatus(cmd, status)
 		if outputErr == nil && connectErr == nil {
-			_, outputErr = fmt.Fprintf(cmd.OutOrStdout(), "Connect acknowledged for client %q in box %q; wake listening remains the agent's responsibility.\n", connection.Client, connection.Box)
+			cliInfo(logging.Chat, "Connect acknowledged for client %q in box %q; wake listening remains the agent's responsibility.", connection.Client, connection.Box)
 		}
 	}
 	return errors.Join(connectErr, outputErr)

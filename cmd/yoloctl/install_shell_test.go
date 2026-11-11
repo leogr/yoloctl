@@ -144,11 +144,12 @@ func shellFixture(t *testing.T) (home, bin, link string) {
 
 func runShellSteps(t *testing.T, bin, link string, req shellRequest, answers string) (string, error) {
 	t.Helper()
-	return runShellStepsFrom(t.Context(), bin, link, req, strings.NewReader(answers))
+	return runShellStepsFrom(t, t.Context(), bin, link, req, strings.NewReader(answers))
 }
 
-func runShellStepsFrom(ctx context.Context, bin, link string, req shellRequest, in io.Reader) (string, error) {
+func runShellStepsFrom(t *testing.T, ctx context.Context, bin, link string, req shellRequest, in io.Reader) (string, error) {
 	var out, prompts bytes.Buffer
+	defer bindCLITestLogger(t, &out)()
 	req.in, req.prompt = in, &prompts
 	err := installShellSteps(ctx, installOut{w: &out}, bin, link, req)
 	return out.String() + prompts.String(), err
@@ -164,7 +165,7 @@ func (failingReader) Read([]byte) (int, error) { return 0, errors.New("terminal 
 func TestInstallShellStepsStopOnInputErrorOrInterrupt(t *testing.T) {
 	home, bin, link := shellFixture(t)
 	rc := filepath.Join(home, ".bashrc")
-	_, err := runShellStepsFrom(t.Context(), bin, link, shellRequest{apply: true, interactive: true, completion: true}, failingReader{})
+	_, err := runShellStepsFrom(t, t.Context(), bin, link, shellRequest{apply: true, interactive: true, completion: true}, failingReader{})
 	if _, statErr := os.Stat(rc); err == nil || !strings.Contains(err.Error(), "terminal gone") || !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("input error: %v, rc %v", err, statErr)
 	}
@@ -173,7 +174,7 @@ func TestInstallShellStepsStopOnInputErrorOrInterrupt(t *testing.T) {
 	for _, shell := range []string{"/usr/bin/bash", "/bin/tcsh"} {
 		t.Setenv("SHELL", shell)
 		for _, req := range []shellRequest{{apply: true, addPath: true, completion: true}, {}, {interactive: true}} {
-			_, err = runShellStepsFrom(ctx, bin, link, req, strings.NewReader(""))
+			_, err = runShellStepsFrom(t, ctx, bin, link, req, strings.NewReader(""))
 			if _, statErr := os.Stat(rc); !errors.Is(err, context.Canceled) || !errors.Is(statErr, os.ErrNotExist) {
 				t.Fatalf("interrupted %s %+v: %v, rc %v", shell, req, err, statErr)
 			}

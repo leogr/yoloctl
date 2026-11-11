@@ -1,74 +1,48 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
-	"golang.org/x/term"
+	"github.com/leogr/yoloctl/internal/logging"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
-// Install output roles use the TUI's dark theme colors
-// (internal/tui/spaceview/theme.go newTheme and internal/tui/tui.go
-// cOrange/cDim). Commands and versions use the terminal's own color in bold,
-// which stays readable on light backgrounds.
+// Roles name instructional data spans. Log records receive their colours
+// from the process logger; generated instructions carry no embedded styling.
 const (
-	roleOK    = 108 // ✓, running
-	roleWarn  = 221 // !, the update label
-	roleBad   = 203 // ✗
-	roleBrand = 215 // space names
-	roleLabel = 110 // paths
-	roleDim   = 243 // explanations
-	roleBold  = -1  // default color, bold
+	roleOK = iota
+	roleWarn
+	roleBad
+	roleBrand
+	roleLabel
+	roleDim
+	roleBold
 )
 
-// installOut writes the install command's curated output: colored on a
-// terminal, plain when NO_COLOR is set, TERM is dumb or the output is not a
-// terminal. Text and glyphs are the same either way.
-type installOut struct {
-	w     io.Writer
-	color bool
-}
+// installOut keeps generated instructions on their data writer. Result and
+// warning records use the one process Logger and its shared colour policy.
+type installOut struct{ w io.Writer }
 
-func newInstallOut(w io.Writer) installOut {
-	return installOut{w: w, color: installColor(w)}
-}
+func newInstallOut(w io.Writer) installOut { return installOut{w: w} }
 
-func installColor(w io.Writer) bool {
-	if _, set := os.LookupEnv("NO_COLOR"); set || os.Getenv("TERM") == "dumb" {
-		return false
-	}
-	f, ok := w.(*os.File)
-	return ok && term.IsTerminal(int(f.Fd()))
-}
-
-// paint styles text in a role; plain output returns it unchanged.
-func (o installOut) paint(role int, text string) string {
-	if !o.color || text == "" {
-		return text
-	}
-	switch role {
-	case roleBold:
-		return "\x1b[1m" + text + "\x1b[0m"
-	case roleBrand:
-		return fmt.Sprintf("\x1b[1;38;5;%dm%s\x1b[0m", role, text)
-	}
-	return fmt.Sprintf("\x1b[38;5;%dm%s\x1b[0m", role, text)
-}
+// paint retains instructional text; styling belongs to log records.
+func (o installOut) paint(_ int, text string) string { return text }
 
 func (o installOut) line(parts ...string) { _, _ = fmt.Fprintln(o.w, strings.Join(parts, "")) }
 
 func (o installOut) ok(parts ...string) {
-	o.line(append([]string{o.paint(roleOK, "✓ ")}, parts...)...)
+	logging.L().LogAttrs(context.Background(), slog.LevelInfo, strings.Join(parts, ""),
+		prettylog.Actor(logging.Install), slog.String(prettylog.KeyState, string(prettylog.StepOK)))
 }
 
-func (o installOut) warn(parts ...string) {
-	o.line(append([]string{o.paint(roleWarn, "! ")}, parts...)...)
-}
-
+func (o installOut) warn(parts ...string) { cliWarn(logging.Install, "%s", strings.Join(parts, "")) }
 func (o installOut) bad(parts ...string) {
-	o.line(append([]string{o.paint(roleBad, "✗ ")}, parts...)...)
+	cliLog(slog.LevelError, logging.Install, "%s", strings.Join(parts, ""))
 }
 
 // dim writes explanation text wrapped at width columns after indent.

@@ -11,6 +11,7 @@ import (
 	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/features"
+	"github.com/leogr/yoloctl/internal/logging"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 )
 
@@ -31,9 +32,7 @@ func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentb
 	}
 	profile, err := agentprofile.Lookup(agentName)
 	if err != nil {
-		_, _ = fmt.Fprintf(notice,
-			"notice: autoupdate skipped (load agent %q: %v)\n",
-			agentName, err)
+		cliNotice(logging.Box, "autoupdate skipped (load agent %q: %v)", agentName, err)
 		return nil
 	}
 	if profile.Distribution() == "" {
@@ -41,8 +40,7 @@ func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentb
 	}
 	latest, err := preparedAgentLatest(ctx, profile)
 	if err != nil {
-		_, _ = fmt.Fprintf(notice,
-			"notice: autoupdate skipped (release source unreachable: %v)\n", err)
+		cliNotice(logging.Box, "autoupdate skipped (release source unreachable: %v)", err)
 		return nil
 	}
 	id, err := c.ResolveContainerID(ctx, agentboxName)
@@ -51,9 +49,7 @@ func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentb
 		installed, err = fetchInstalledAgentVersion(ctx, c, id, profile)
 	}
 	if err != nil {
-		_, _ = fmt.Fprintf(notice,
-			"notice: autoupdate skipped (read installed %s version: %v)\n",
-			profile.Distribution(), err)
+		cliNotice(logging.Box, "autoupdate skipped (read installed %s version: %v)", profile.Distribution(), err)
 		return nil
 	}
 	if installed == latest.Latest {
@@ -61,9 +57,7 @@ func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentb
 		// "already up to date" either.
 		return nil
 	}
-	_, _ = fmt.Fprintf(notice,
-		"autoupdate: %s %s → %s\n",
-		profile.Distribution(), installed, latest.Latest)
+	cliInfo(logging.Box, "autoupdate: %s %s → %s", profile.Distribution(), installed, latest.Latest)
 	if err := installAgentLatest(ctx, c, id, profile); err != nil {
 		return fmt.Errorf("autoupdate %s in %s: %w", profile.Distribution(), agentboxName, err)
 	}

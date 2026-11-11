@@ -20,6 +20,7 @@ import (
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -198,7 +199,7 @@ func runControllerDocument(ctx context.Context, req controller.Request, catalogD
 		if err := saveVerifiedAccount(ctx, cfg); err != nil {
 			return true, err
 		}
-		_, _ = fmt.Fprintf(os.Stdout, "saved account %s\n", name)
+		cliInfo(logging.Host, "saved account %s", name)
 		printSecretPickupNote(os.Stderr, name)
 		return true, nil
 	}
@@ -328,7 +329,7 @@ func applyControllerAuthImport(ctx context.Context, req controller.Request) (res
 		if err := saveVerifiedAccount(ctx, acct); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintf(os.Stdout, "imported %s API key into account %s (secret %s)\n", target.profile.Name, target.name, rule.Secret)
+		cliInfo(logging.Host, "imported %s API key into account %s (secret %s)", target.profile.Name, target.name, rule.Secret)
 		printSecretPickupNote(os.Stderr, target.name)
 		return nil
 	}
@@ -344,7 +345,7 @@ func applyControllerAuthImport(ctx context.Context, req controller.Request) (res
 	if len(doc.NativeFiles) > 0 {
 		destination = target.stateDir + "/" + target.profile.Auth.ProfilesDir
 	}
-	_, _ = fmt.Fprintf(os.Stdout, "imported %s login into account %s (%s)\n", target.profile.Name, target.name, destination)
+	cliInfo(logging.Host, "imported %s login into account %s (%s)", target.profile.Name, target.name, destination)
 	return nil
 }
 

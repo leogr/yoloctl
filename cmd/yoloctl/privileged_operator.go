@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"os"
+	"log/slog"
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/boxendpoint"
 	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/internal/logging"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // Privileged boxes (privileged: true) are started by the host. A box operator
@@ -54,10 +55,6 @@ func (e *privilegedLaunchError) Error() string {
 		e.box, e.reason, e.box, e.space)
 }
 
-// privilegedLaunchWarnings receives the host launch warning, on the same
-// stream as the other authority warnings; tests replace it.
-var privilegedLaunchWarnings io.Writer = os.Stderr
-
 // guardPrivilegedLaunch authorizes one launch of cfg's container. details and
 // inspectErr are the seam's observation of the existing container; both are
 // nil for a new box.
@@ -67,7 +64,7 @@ func guardPrivilegedLaunch(ctx context.Context, cfg *agentbox.Config, launch pri
 		return nil
 	}
 	if currentControllerPrincipal(ctx).Admin() {
-		_, _ = fmt.Fprintf(privilegedLaunchWarnings, "warning: launching box %s as privileged (%s): %s\n", cfg.Name, why, agentbox.PrivilegedAuthority)
+		logging.L().LogAttrs(ctx, slog.LevelWarn, fmt.Sprintf("launching box %s as privileged (%s)", cfg.Name, why), prettylog.Actor(logging.Box), slog.String(prettylog.KeyErr, agentbox.PrivilegedAuthority))
 		return nil
 	}
 	if inspectErr == nil && continuesPrivilegedRuntime(ctx, cfg, launch, details) {
@@ -206,7 +203,7 @@ func savedDeclarationError(cfg *agentbox.Config, err error) error {
 func warnBoxAuthority(cfg *agentbox.Config) {
 	warnBoxOperator(cfg)
 	if cfg.Privileged {
-		_, _ = fmt.Fprintf(os.Stderr, "warning: box %s is privileged: %s\n", cfg.Name, agentbox.PrivilegedAuthority)
+		logging.L().LogAttrs(context.Background(), slog.LevelWarn, fmt.Sprintf("box %s is privileged", cfg.Name), prettylog.Actor(logging.Box), slog.String(prettylog.KeyErr, agentbox.PrivilegedAuthority))
 	}
 }
 

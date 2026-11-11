@@ -8,6 +8,7 @@ import (
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/operator"
 	"github.com/leogr/yoloctl/internal/port"
 	"github.com/leogr/yoloctl/internal/sandbox"
@@ -81,7 +82,7 @@ func newAgentboxDestroyCmd() *cobra.Command {
 					return err
 				}
 				for _, notice := range notices {
-					_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "notice: %s\n", notice)
+					cliNotice(logging.Box, "%s", notice)
 				}
 			}
 			if native {
@@ -95,8 +96,7 @@ func newAgentboxDestroyCmd() *cobra.Command {
 				// clients see a clean disconnect; the agent itself goes down
 				// with the container stop/remove below).
 				if err := session.StopHolderUnit(cmd.Context(), c, name); err != nil {
-					_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-						"warning: session holder cleanup for %s: %v\n", name, err)
+					cliWarn(logging.Box, "session holder cleanup for %s: %v", name, err)
 				}
 				// Drop any port forwards owned by this agentbox before the
 				// container goes away — the socat targets stop being routable
@@ -116,8 +116,7 @@ func newAgentboxDestroyCmd() *cobra.Command {
 						if !isContainerGone(err) {
 							return err
 						}
-						_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-							"notice: box %s has no running container; cleaning up its declaration and VM state\n", name)
+						cliNotice(logging.Box, "box %s has no running container; cleaning up its declaration and VM state", name)
 					}
 				}
 				// Missing containers can still have a stale operator registration.
@@ -129,8 +128,7 @@ func newAgentboxDestroyCmd() *cobra.Command {
 				// either way the sandbox netns/veth can leak (spike 0.3).
 				// Collect whatever this teardown orphaned.
 				if err := sandbox.ReapOrphanedNetns(cmd.Context(), spaceName, cmd.ErrOrStderr()); err != nil {
-					_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-						"warning: leaked netns cleanup for %s: %v\n", name, err)
+					cliWarn(logging.Box, "leaked netns cleanup for %s: %v", name, err)
 				}
 
 			}

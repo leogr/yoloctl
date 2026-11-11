@@ -16,6 +16,7 @@ import (
 	"github.com/leogr/yoloctl/internal/accountstate"
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/manifestio"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
@@ -151,7 +152,7 @@ are prepared at runtime use. Space creation already initializes its first accoun
 			if err := saveVerifiedAccount(cmd.Context(), c); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "created account %s at %s\n", name, c.Path())
+			cliInfo(logging.Box, "created account %s at %s", name, c.Path())
 			return nil
 		},
 	}
@@ -432,7 +433,7 @@ func runAccountEdit(cmd *cobra.Command, space, name string) error {
 		return err
 	}
 	if string(before) == string(after) {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "no changes")
+		cliInfo(logging.Box, "no changes")
 		return nil
 	}
 	// Strict decode: a hand-edit that misspells a field — `secrets:`
@@ -464,7 +465,7 @@ func runAccountEdit(cmd *cobra.Command, space, name string) error {
 	if err := edited.Save(); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "saved account %s\n", name)
+	cliInfo(logging.Box, "saved account %s", name)
 	printSecretPickupNote(cmd.ErrOrStderr(), name)
 	return nil
 }
@@ -525,9 +526,7 @@ func runAccountDestroy(cmd *cobra.Command, space, name string, force, yes bool) 
 		return err
 	}
 	if len(referencing) > 0 {
-		_, _ = fmt.Fprintf(stderr,
-			"warning: %d box(es) still select account %s: %s\n",
-			len(referencing), name, strings.Join(referencing, ", "))
+		cliWarn(logging.Box, "%d box(es) still select account %s: %s", len(referencing), name, strings.Join(referencing, ", "))
 		if !force {
 			return asUserError(fmt.Errorf(
 				"refusing to destroy account %s while boxes select it — repoint or destroy those boxes, or pass --force",
@@ -563,7 +562,7 @@ func runAccountDestroy(cmd *cobra.Command, space, name string, force, yes bool) 
 	if err := c.Delete(); err != nil {
 		return fmt.Errorf("delete account manifest (native state already removed — retry the destroy): %w", err)
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "destroyed account %s (secrets + native state)\n", name)
+	cliInfo(logging.Box, "destroyed account %s (secrets + native state)", name)
 
 	return nil
 }
@@ -600,8 +599,7 @@ func boxesReferencingSpace(space string, stderr io.Writer, force bool, match fun
 		if err == nil {
 			r = boxRefs{Account: cfg.Account, Agent: cfg.Agent, Features: cfg.Features, Capabilities: cfg.Capabilities}
 		} else {
-			_, _ = fmt.Fprintf(stderr, "warning: box %s/%s manifest is unreadable (%v); reading its references loosely\n",
-				ref.Space, ref.Name, err)
+			cliWarn(logging.Box, "box %s/%s manifest is unreadable (%v); reading its references loosely", ref.Space, ref.Name, err)
 			var looseErr error
 			r, looseErr = looseBoxRefs(ref.Space, ref.Name)
 			if looseErr != nil {
@@ -610,8 +608,7 @@ func boxesReferencingSpace(space string, stderr io.Writer, force bool, match fun
 						"cannot determine references in box %s/%s manifest: %w (repair it or pass --force)",
 						ref.Space, ref.Name, looseErr))
 				}
-				_, _ = fmt.Fprintf(stderr, "warning: box %s/%s references could not be fully read (%v); continuing because --force was given\n",
-					ref.Space, ref.Name, looseErr)
+				cliWarn(logging.Box, "box %s/%s references could not be fully read (%v); continuing because --force was given", ref.Space, ref.Name, looseErr)
 			}
 		}
 		if match(r) {
@@ -665,9 +662,7 @@ box explicitly.`,
 // account content never produces a reconcile action, and environment
 // injection is container-create-time.
 func printSecretPickupNote(w io.Writer, name string) {
-	_, _ = fmt.Fprintf(w,
-		"note: running boxes selecting account %s are not updated automatically; recreate an affected box to replace its environment-injected credentials\n",
-		name)
+	cliNotice(logging.Box, "running boxes selecting account %s are not updated automatically; recreate an affected box to replace its environment-injected credentials", name)
 }
 
 func newAccountSecretSetCmd() *cobra.Command {
@@ -723,7 +718,7 @@ never echoed or logged.
 				return err
 			}
 			// Confirmation deliberately omits the value.
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "set secret %s on account %s\n", key, name)
+			cliInfo(logging.Box, "set secret %s on account %s", key, name)
 			printSecretPickupNote(cmd.ErrOrStderr(), name)
 			return nil
 		},
@@ -763,13 +758,13 @@ its create-time environment until explicitly recreated.
 				return err
 			}
 			if !c.UnsetSecret(key) {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "secret %s was not set on account %s\n", key, name)
+				cliInfo(logging.Box, "secret %s was not set on account %s", key, name)
 				return nil
 			}
 			if err := saveVerifiedAccount(cmd.Context(), c); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "unset secret %s on account %s\n", key, name)
+			cliInfo(logging.Box, "unset secret %s on account %s", key, name)
 			printSecretPickupNote(cmd.ErrOrStderr(), name)
 			return nil
 		},

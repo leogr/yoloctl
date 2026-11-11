@@ -68,6 +68,7 @@ func TestDestroyRevokesOwnChatMembershipSoTheNameCanBeReused(t *testing.T) {
 	before := loadRoom(t, store)
 	member, _ := activeChatMember(before, "worker")
 	var notice bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &notice))
 	revokeDestroyedChatMember(t.Context(), "work", "worker", id, &notice)
 	after := loadRoom(t, store)
 	if _, active := activeChatMember(after, "worker"); active {
@@ -76,7 +77,7 @@ func TestDestroyRevokesOwnChatMembershipSoTheNameCanBeReused(t *testing.T) {
 	if after.Generation != before.Generation+1 || len(*applied) != 1 || (*applied)[0] != after.Generation {
 		t.Fatalf("revocation not saved then applied once: generation %d→%d, applied %v", before.Generation, after.Generation, *applied)
 	}
-	if want := "notice: revoked box worker's chat membership (member " + member.ID + "); the name can be enrolled again\n"; notice.String() != want {
+	if want := "notice: chat: revoked box worker's chat membership (member " + member.ID + "); the name can be enrolled again\n"; notice.String() != want {
 		t.Fatalf("notice %q", notice.String())
 	}
 	// The reused name now enrolls: the refusal that motivated this is gone.
@@ -102,6 +103,7 @@ func TestDestroyLeavesOtherChatMembershipsAlone(t *testing.T) {
 		{"someone-else", id, ""},
 	} {
 		var notice bytes.Buffer
+		t.Cleanup(bindCLITestLogger(t, &notice))
 		revokeDestroyedChatMember(t.Context(), "work", tc.name, tc.id, &notice)
 		if _, active := activeChatMember(loadRoom(t, store), "worker"); !active || len(*applied) != 0 {
 			t.Fatalf("%s/%q revoked another membership", tc.name, tc.id)
@@ -115,6 +117,7 @@ func TestDestroyLeavesOtherChatMembershipsAlone(t *testing.T) {
 		return empty, nil
 	}
 	var notice bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &notice))
 	revokeDestroyedChatMember(t.Context(), "work", "worker", id, &notice)
 	if notice.Len() != 0 {
 		t.Fatalf("no room still printed %q", notice.String())
@@ -130,11 +133,12 @@ func TestDestroyChatRevocationFailuresOnlyWarn(t *testing.T) {
 		return errors.New("managed server is absent")
 	}
 	var notice bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &notice))
 	revokeDestroyedChatMember(t.Context(), "work", "worker", id, &notice)
 	if _, active := activeChatMember(loadRoom(t, store), "worker"); active {
 		t.Fatal("desired revocation was not saved before application")
 	}
-	if got := notice.String(); !strings.HasPrefix(got, "warning: box worker's chat membership") || !strings.Contains(got, "has not applied it yet (managed server is absent); run yoloctl chat ensure --space work") {
+	if got := notice.String(); !strings.HasPrefix(got, "warning: chat: box worker's chat membership") || !strings.Contains(got, "has not applied it yet (managed server is absent); run yoloctl chat ensure --space work") {
 		t.Fatalf("apply failure notice %q", got)
 	}
 	nativeChatStoreFn = func() (managedchat.Store, error) { return managedchat.Store{}, errors.New("native disk unavailable") }
@@ -223,6 +227,7 @@ func TestWrappedDestroyKeepsSavedButUnappliedRevocationSuccessful(t *testing.T) 
 		return errors.New("managed server is absent")
 	}
 	var notice bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &notice))
 	if err := wrappedDestroy(t, store, id, &notice); err != nil {
 		t.Fatal("saved-but-unapplied revocation failed the destroy:", err)
 	}
@@ -243,6 +248,7 @@ func TestWrappedDestroyWithUnreadableChatStoreKeepsTheReleaseFailure(t *testing.
 	unreadable := errors.New("native disk unavailable")
 	nativeChatStoreFn = func() (managedchat.Store, error) { return managedchat.Store{}, unreadable }
 	var notice bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &notice))
 	err := wrappedDestroy(t, store, id, &notice)
 	if !errors.Is(err, unreadable) {
 		t.Fatal("release did not report the unreadable store", err)

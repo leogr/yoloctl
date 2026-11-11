@@ -12,6 +12,7 @@ import (
 	"github.com/leogr/yoloctl/internal/account"
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -127,7 +128,7 @@ destination controller. Cross-space copying requires both spaces running.
 			}
 			opts = merged
 			for _, n := range notices {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "notice: %s\n", n)
+				cliNotice(logging.Box, "%s", n)
 			}
 			// A real --agent override re-derives --image / --features from the
 			// NEW agent's profile (the merge already handled --agent none).
@@ -162,8 +163,7 @@ destination controller. Cross-space copying requires both spaces running.
 			if err := createAgentbox(cmd.Context(), opts, cmd.ErrOrStderr(), &agentUpdated); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "copied box %q (space %s) to %q (space %s)\n",
-				source, srcSpace, newName, opts.Space)
+			cliInfo(logging.Box, "copied box %q (space %s) to %q (space %s)", source, srcSpace, newName, opts.Space)
 			if opts.ManifestOnly {
 				return nil
 			}

@@ -44,6 +44,7 @@ func TestSpaceCreateSizesTheSystemDisk(t *testing.T) {
 		{"40G", "firecracker", 200 << 10, "", "must use KiB, MiB or GiB", ""},
 	} {
 		var out bytes.Buffer
+		t.Cleanup(bindCLITestLogger(t, &out))
 		got, err := resolveSpaceDisk(tc.value, tc.backend, tc.free<<20, "/host", &out)
 		switch {
 		case tc.refused != "":
@@ -88,6 +89,7 @@ func TestSpaceSetDiskGrowsForTheNextRecreate(t *testing.T) {
 	}
 	cmd := newClientRootCmd()
 	var out, errw bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &errw))
 	cmd.SetOut(&out)
 	cmd.SetErr(&errw)
 	cmd.SetArgs([]string{"space", "set", "dev", "--disk", "50GiB"})
@@ -103,7 +105,7 @@ func TestSpaceSetDiskGrowsForTheNextRecreate(t *testing.T) {
 	if !reflect.DeepEqual(&want, after) {
 		t.Fatalf("changed more than the disk: %+v", after)
 	}
-	if !strings.Contains(out.String(), "disk 50GiB saved; it applies at the next yoloctl space recreate dev") ||
+	if out.Len() != 0 || !strings.Contains(errw.String(), "disk 50GiB saved; it applies at the next yoloctl space recreate dev") ||
 		!strings.Contains(errw.String(), "40.0 GiB free; the VM's 50 GiB disk cannot be filled") {
 		t.Fatalf("output %q, notice %q", out.String(), errw.String())
 	}
@@ -129,6 +131,7 @@ func TestSpaceShowAndListNameASavedDiskNotYetApplied(t *testing.T) {
 		t.Fatalf("no VM: %q", got)
 	}
 	var out bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &out))
 	instances := []vmapi.Instance{{Name: "dev", Status: "Stopped", Disk: 30 * diskGiB}, {Name: "ok", Status: "Running", Disk: 40 * diskGiB}}
 	if err := printInstances(&out, instances, map[string]string{"dev": "50GiB", "ok": "40GiB"}); err != nil {
 		t.Fatal(err)
@@ -192,6 +195,7 @@ func runSpaceSet(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	cmd := newClientRootCmd()
 	var out bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &out))
 	cmd.SetOut(&out)
 	cmd.SetErr(io.Discard)
 	cmd.SetArgs(append([]string{"space", "set", "dev"}, args...))

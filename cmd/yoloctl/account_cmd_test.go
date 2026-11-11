@@ -29,6 +29,7 @@ func execAccount(t *testing.T, cmd *cobra.Command, stdin string, args ...string)
 		saveSpaceForTest(t, "default", "/work")
 	}
 	var outBuf, errBuf bytes.Buffer
+	defer bindCLITestLogger(t, &errBuf)()
 	cmd.SetOut(&outBuf)
 	cmd.SetErr(&errBuf)
 	cmd.SetIn(strings.NewReader(stdin))
@@ -85,12 +86,12 @@ func TestAccountRoundtrip(t *testing.T) {
 	const name = "personal"
 
 	// create
-	out, _, err := execAccount(t, newAccountCreateCmd(), "", name)
+	out, createLog, err := execAccount(t, newAccountCreateCmd(), "", name)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if !strings.Contains(out, name) {
-		t.Errorf("create output %q should mention the name", out)
+	if out != "" || !strings.Contains(createLog, name) {
+		t.Errorf("create stdout=%q log=%q should leave stdout empty and mention the name", out, createLog)
 	}
 	if ok, _ := account.Exists("default", name); !ok {
 		t.Fatal("account should exist after create")
@@ -114,8 +115,8 @@ func TestAccountRoundtrip(t *testing.T) {
 	if strings.Contains(out, secretValue) || strings.Contains(errOut, secretValue) {
 		t.Errorf("secret set output leaked the value: %q / %q", out, errOut)
 	}
-	if !strings.Contains(out, secretName) {
-		t.Errorf("secret set output %q should name the secret", out)
+	if out != "" || !strings.Contains(errOut, secretName) {
+		t.Errorf("secret set stdout=%q log=%q should leave stdout empty and name the secret", out, errOut)
 	}
 	// Account content never synchronizes native state or drives reconcile;
 	// create-time environment injection needs an explicit recreate.
@@ -173,12 +174,12 @@ func TestAccountRoundtrip(t *testing.T) {
 		t.Error("secret should be gone after unset")
 	}
 	// secret unset again — absent case (no error, reports "was not set")
-	out, _, err = execAccount(t, newAccountSecretUnsetCmd(), "", name, secretName)
+	out, errOut, err = execAccount(t, newAccountSecretUnsetCmd(), "", name, secretName)
 	if err != nil {
 		t.Fatalf("secret unset (absent): %v", err)
 	}
-	if !strings.Contains(out, "was not set") {
-		t.Errorf("unsetting an absent secret should report it: %q", out)
+	if out != "" || !strings.Contains(errOut, "was not set") {
+		t.Errorf("unsetting an absent secret stdout=%q log=%q", out, errOut)
 	}
 
 	// destroy (no referencing boxes; -y to skip the prompt) removes manifest

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os/exec"
 	"strings"
 	"sync/atomic"
@@ -16,6 +17,7 @@ import (
 
 func TestStorageSchedulerWakeAndCancellationLogging(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
+		defer bindCLITestLogger(t, io.Discard)()
 		var out bytes.Buffer
 		server := &controller.Server{}
 		var runs atomic.Int32

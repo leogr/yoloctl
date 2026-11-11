@@ -14,6 +14,7 @@ import (
 	"github.com/leogr/yoloctl/internal/account"
 	"github.com/leogr/yoloctl/internal/accountstate"
 	"github.com/leogr/yoloctl/internal/agentprofile"
+	"github.com/leogr/yoloctl/internal/logging"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
 )
@@ -263,13 +264,13 @@ refuses to overwrite state used by a running box.
 			if err := accountStopUsers(cmd.Context(), target.space, target.name, false, cmd.ErrOrStderr()); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "importing %s\n", doc.Source)
+			cliInfo(logging.Box, "importing %s", doc.Source)
 			for _, write := range writes {
 				if _, err := accountStateOperation(cmd.Context(), target.space, accountstate.Request{Action: "write", Account: target.name, Agent: target.profile.Name, Path: write.Path, Data: write.Data}); err != nil {
 					return err
 				}
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "imported %s login into account %s (%s)\n", target.profile.Name, target.name, target.stateDir)
+			cliInfo(logging.Box, "imported %s login into account %s (%s)", target.profile.Name, target.name, target.stateDir)
 			return nil
 		},
 	}
@@ -318,7 +319,7 @@ func importSecretIntoAccount(t accountAuthTarget, rule agentprofile.ImportSecret
 		return asUserError(fmt.Errorf("%s field %q is empty or not a string value", path, rule.Field))
 	}
 	// Source path is logged (the user's own host path); the VALUE never is.
-	_, _ = fmt.Fprintf(errw, "extracting %s from %s\n", rule.Field, path)
+	cliInfo(logging.Box, "extracting %s from %s", rule.Field, path)
 	release, err := lockBoxAccount(t.space, t.name)
 	if err != nil {
 		return err
@@ -335,9 +336,8 @@ func importSecretIntoAccount(t accountAuthTarget, rule agentprofile.ImportSecret
 	if err := acct.Save(); err != nil {
 		return fmt.Errorf("save account %s: %w", t.name, err)
 	}
-	_, _ = fmt.Fprintf(out, "imported %s API key from %s into account %s (secret %s)\n",
-		t.profile.Name, path, t.name, rule.Secret)
-	_, _ = fmt.Fprintf(errw, "the box delivers it to %s via env injection; create or recreate the box to apply\n", t.profile.Name)
+	cliInfo(logging.Box, "imported %s API key from %s into account %s (secret %s)", t.profile.Name, path, t.name, rule.Secret)
+	cliInfo(logging.Box, "the box delivers it to %s via env injection; create or recreate the box to apply", t.profile.Name)
 	return nil
 }
 

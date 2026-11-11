@@ -14,6 +14,7 @@ import (
 
 	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/features"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -206,7 +207,7 @@ copy (built-ins themselves are read-only).`, k.name),
 			if err := k.copy(src, newName); err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "copied %s %q to custom %s %q\n", k.name, src, k.name, newName)
+			cliInfo(logging.Host, "copied %s %q to custom %s %q", k.name, src, k.name, newName)
 			return nil
 		},
 	}
@@ -261,13 +262,13 @@ func runCatalogEdit(ctx context.Context, out io.Writer, k catalogKind, name stri
 		return err
 	}
 	if string(before) == string(after) {
-		_, _ = fmt.Fprintln(out, "no changes")
+		cliInfo(logging.Host, "no changes")
 		return nil
 	}
 	if err := k.validateAfterEdit(name); err != nil {
 		return asUserError(fmt.Errorf("edited %s %q is invalid (left as saved at %s): %w", k.name, name, path, err))
 	}
-	_, _ = fmt.Fprintf(out, "saved %s %q\n", k.name, name)
+	cliInfo(logging.Host, "saved %s %q", k.name, name)
 	return nil
 }
 
@@ -312,8 +313,7 @@ func runCatalogDestroy(cmd *cobra.Command, k catalogKind, name string, force boo
 		return err
 	}
 	if len(referrers) > 0 {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s %q is still named by: %s\n",
-			k.name, name, strings.Join(referrers, ", "))
+		cliWarn(logging.Box, "%s %q is still named by: %s", k.name, name, strings.Join(referrers, ", "))
 		if !force {
 			return asUserError(fmt.Errorf(
 				"refusing to destroy %s %q while it is still named — remove those references, or pass --force",
@@ -338,7 +338,7 @@ func runCatalogDestroy(cmd *cobra.Command, k catalogKind, name string, force boo
 		}
 		return err
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "destroyed custom %s %q\n", k.name, name)
+	cliInfo(logging.Host, "destroyed custom %s %q", k.name, name)
 	return nil
 }
 

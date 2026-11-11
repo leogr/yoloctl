@@ -52,7 +52,7 @@ func main() {
 	defer stop()
 	ctx, closeRequests, err := claimTabRequests(ctx)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "yoloctl: private tab channel:", err)
+		renderCLIError(&cobra.Command{}, fmt.Errorf("private tab channel: %w", err))
 		os.Exit(exitRuntime)
 	}
 	defer closeRequests()
@@ -92,7 +92,7 @@ func main() {
 	// Never silently fall back to the user's unrelated ~/.lima.
 	operator, err := loadOperatorClient()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "yoloctl:", err)
+		renderCLIError(&cobra.Command{}, err)
 		os.Exit(exitRuntime)
 	}
 	if operator == nil && readOnlyStartup(os.Args[1:]) {
@@ -101,13 +101,13 @@ func main() {
 			err = os.Setenv("LIMA_HOME", home)
 		}
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "yoloctl:", err)
+			renderCLIError(&cobra.Command{}, err)
 			os.Exit(exitRuntime)
 		}
 	}
 	if operator == nil && !readOnlyStartup(os.Args[1:]) {
 		if err := vmhost.SetupHome(); err != nil {
-			fmt.Fprintln(os.Stderr, "yoloctl:", err)
+			renderCLIError(&cobra.Command{}, err)
 			os.Exit(exitRuntime)
 		}
 	}

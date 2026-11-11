@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"github.com/leogr/yoloctl/internal/account"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spacelock"
@@ -53,6 +55,7 @@ func newClientRootCmd() *cobra.Command {
 	for _, action := range []string{"add", "remove"} {
 		cmd, _, _ := root.Find([]string{"space", "mount", action})
 		cmd.RunE = controllerMountChange(action)
+		wrapHostLogCommand(cmd, logging.Host)
 	}
 	shell, _, _ := root.Find([]string{"space", "ssh"})
 	shell.RunE = controllerSpaceShell
@@ -79,156 +82,159 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				return asUserError(err)
 			}
 		}
-		update, restartSessions := false, false
-		if action == "start" {
-			update, _ = cmd.Flags().GetBool("update-controller")
-			restartSessions, _ = cmd.Flags().GetBool("restart-sessions")
-			if restartSessions && !update {
-				return asUserError(errors.New("--restart-sessions requires --update-controller"))
+		titles := map[string]string{"create": "Creating", "start": "Starting", "stop": "Stopping", "recreate": "Recreating", "destroy": "Destroying"}
+		results := map[string]string{"create": "Created space " + space, "start": "Space " + space + " ready", "stop": "Stopped space " + space, "recreate": "recreated space " + space + "; start boxes with box start --space " + space, "destroy": "Destroyed space " + space}
+		return cliOperation(cmd, titles[action]+" space "+space, results[action], space, func() error {
+			update, restartSessions := false, false
+			if action == "start" {
+				update, _ = cmd.Flags().GetBool("update-controller")
+				restartSessions, _ = cmd.Flags().GetBool("restart-sessions")
+				if restartSessions && !update {
+					return asUserError(errors.New("--restart-sessions requires --update-controller"))
+				}
 			}
-		}
-		if action == "start" {
-			// Compatibility may offer recreation before taking the lifecycle
-			// lock. Refuse an unbootable target before that offer as well.
+			if action == "start" {
+				// Compatibility may offer recreation before taking the lifecycle
+				// lock. Refuse an unbootable target before that offer as well.
+				boot, err := spaceconfig.LoadBootstrap(space)
+				if err != nil {
+					return err
+				}
+				if err := vmhost.ValidateInstancePaths(boot.VM.Backend, space); err != nil {
+					return asUserError(err)
+				}
+				if err := ensureCommandVMCompatibility(cmd, space); err != nil {
+					return err
+				}
+			}
+			release, err := lockHostLifecycle(cmd, space)
+			if err != nil {
+				return err
+			}
+			defer release()
+			if action == "create" {
+				return createControllerSpace(cmd, space)
+			}
 			boot, err := spaceconfig.LoadBootstrap(space)
 			if err != nil {
 				return err
 			}
-			if err := vmhost.ValidateInstancePaths(boot.VM.Backend, space); err != nil {
-				return asUserError(err)
+			// Recheck the locked snapshot before either boot or recreate teardown.
+			// Cleanup remains available.
+			if action == "start" || action == "recreate" {
+				if err := vmhost.ValidateInstancePaths(boot.VM.Backend, space); err != nil {
+					return asUserError(err)
+				}
 			}
-			if err := ensureCommandVMCompatibility(cmd, space); err != nil {
-				return err
+			// Only recreate allocates VM storage; start leaves other spaces'
+			// bundles uninspected.
+			if action == "recreate" {
+				if err := vmhost.ValidateInstancePlacement(boot.VM.Backend, space); err != nil {
+					return asUserError(err)
+				}
 			}
-		}
-		release, err := lockHostLifecycle(cmd, space)
-		if err != nil {
-			return err
-		}
-		defer release()
-		if action == "create" {
-			return createControllerSpace(cmd, space)
-		}
-		boot, err := spaceconfig.LoadBootstrap(space)
-		if err != nil {
-			return err
-		}
-		// Recheck the locked snapshot before either boot or recreate teardown.
-		// Cleanup remains available.
-		if action == "start" || action == "recreate" {
-			if err := vmhost.ValidateInstancePaths(boot.VM.Backend, space); err != nil {
-				return asUserError(err)
-			}
-		}
-		// Only recreate allocates VM storage; start leaves other spaces'
-		// bundles uninspected.
-		if action == "recreate" {
-			if err := vmhost.ValidateInstancePlacement(boot.VM.Backend, space); err != nil {
-				return asUserError(err)
-			}
-		}
-		switch action {
-		case "start":
-			seed, err := loadControllerSeed(space)
-			if err != nil {
-				return err
-			}
-			if err := startControllerSpace(cmd.Context(), boot, update, seed, cmd.ErrOrStderr()); err != nil {
-				var mismatch *spaceVMCompatibilityError
-				if !errors.As(err, &mismatch) {
+			switch action {
+			case "start":
+				seed, err := loadControllerSeed(space)
+				if err != nil {
 					return err
 				}
-				release() // approved recreation owns its own lifecycle lock
-				return offerSpaceVMRecreate(cmd, boot, err)
-			}
-			if err := retireControllerSeed(space); err != nil || !update {
-				return err
-			}
-			// The prompt and the box restarts run outside the host lifecycle
-			// lock; each restart takes the controller's own native locks.
-			release()
-			return offerSessionRestarts(cmd.Context(), space, hostSessionRestartOffer(cmd, boot), restartSessions)
-		case "stop":
-			if err := stopControllerSpace(cmd.Context(), boot, cmd.ErrOrStderr()); err != nil {
-				return err
-			}
-			// A stopped VM is when a finished data disk grow is recorded.
-			if err := settleDataDiskGrow(boot, cmd.OutOrStdout()); err != nil {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "data disk grow not recorded yet: %v\n", err)
-			}
-			return nil
-		case "recreate", "destroy":
-			force, _ := cmd.Flags().GetBool("force")
-			if !force {
-				prompt := fmt.Sprintf("destroy space %s, its persistent disk, accounts and declarations? [y/N]: ", space)
+				if err := startControllerSpace(cmd.Context(), boot, update, seed, cmd.ErrOrStderr()); err != nil {
+					var mismatch *spaceVMCompatibilityError
+					if !errors.As(err, &mismatch) {
+						return err
+					}
+					release() // approved recreation owns its own lifecycle lock
+					return offerSpaceVMRecreate(cmd, boot, err)
+				}
+				if err := retireControllerSeed(space); err != nil || !update {
+					return err
+				}
+				// The prompt and the box restarts run outside the host lifecycle
+				// lock; each restart takes the controller's own native locks.
+				release()
+				return offerSessionRestarts(cmd.Context(), space, hostSessionRestartOffer(cmd, boot), restartSessions)
+			case "stop":
+				if err := stopControllerSpace(cmd.Context(), boot, cmd.ErrOrStderr()); err != nil {
+					return err
+				}
+				// A stopped VM is when a finished data disk grow is recorded.
+				if err := settleDataDiskGrow(boot, cmd.OutOrStdout()); err != nil {
+					cliWarn(logging.Host, "data disk grow not recorded yet: %v", err)
+				}
+				return nil
+			case "recreate", "destroy":
+				force, _ := cmd.Flags().GetBool("force")
+				if !force {
+					prompt := fmt.Sprintf("destroy space %s, its persistent disk, accounts and declarations? [y/N]: ", space)
+					if action == "recreate" {
+						prompt = fmt.Sprintf("recreate space %s? Declarations and accounts survive; sessions and VM-local workdirs are lost. [y/N]: ", space)
+					}
+					ok, err := promptYesNo(prompt, cmd.InOrStdin(), cmd.ErrOrStderr())
+					if err != nil {
+						return err
+					}
+					if !ok {
+						return asUserError(errors.New(action + " declined"))
+					}
+				}
 				if action == "recreate" {
-					prompt = fmt.Sprintf("recreate space %s? Declarations and accounts survive; sessions and VM-local workdirs are lost. [y/N]: ", space)
+					updateImage, _ := cmd.Flags().GetBool("update-vm-image")
+					rollbackImage, _ := cmd.Flags().GetBool("rollback-vm-image")
+					if updateImage || rollbackImage || cmd.Flags().Changed("vm-image") {
+						return recreateSpaceImage(cmd, boot)
+					}
+					if boot.ImageUpdate != nil {
+						return pendingImageUpdate(boot)
+					}
+					identity, err := controller.ExecutableIdentity()
+					if err != nil {
+						return err
+					}
+					if identity != boot.Bundle && boot.VM.Backend == "firecracker" {
+						return errors.New("controller build differs; use space start --update-controller before recreating")
+					}
+					if boot.DiskUUID == "" {
+						return errors.New("initialization incomplete; run space start before recreating")
+					}
+					if _, err := controllerMounts(boot); err != nil {
+						return err
+					}
+					if err := vmhost.New().RequireAccountDisk(cmd.Context(), space, boot.DiskID); err != nil {
+						return err
+					}
 				}
-				ok, err := promptYesNo(prompt, cmd.InOrStdin(), cmd.ErrOrStderr())
-				if err != nil {
+				var replaced uint64 // the deleted VM's system disk, when known
+				if action == "recreate" {
+					if inst, found, err := findSpaceInstance(cmd.Context(), space); err == nil && found {
+						replaced = inst.Disk
+					}
+				}
+				if err := deleteSpaceRuntime(cmd.Context(), space, cmd.ErrOrStderr()); err != nil {
 					return err
 				}
-				if !ok {
-					return asUserError(errors.New(action + " declined"))
+				if action == "destroy" {
+					if err := vmhost.New().DeleteAccountDisk(cmd.Context(), boot.DiskID); err != nil {
+						return fmt.Errorf("delete persistent disk (bootstrap retained for retry): %w", err)
+					}
+					return purgeSpaceBundle(space, cmd.ErrOrStderr())
 				}
+				if err := startControllerSpace(cmd.Context(), boot, boot.VM.Backend != "firecracker", nil, cmd.ErrOrStderr()); err != nil {
+					return fmt.Errorf("replacement failed; persistent data retained; retry space start %s: %w", space, err)
+				}
+				if saved, err := spaceconfig.VMDiskBytes(boot.VM.Disk); err == nil && replaced != 0 && replaced != saved {
+					cliInfo(logging.Host, "system disk %d → %d GiB (the saved setting)", replaced/spaceconfig.GiB, saved/spaceconfig.GiB)
+				}
+				return nil
 			}
-			if action == "recreate" {
-				updateImage, _ := cmd.Flags().GetBool("update-vm-image")
-				rollbackImage, _ := cmd.Flags().GetBool("rollback-vm-image")
-				if updateImage || rollbackImage || cmd.Flags().Changed("vm-image") {
-					return recreateSpaceImage(cmd, boot)
-				}
-				if boot.ImageUpdate != nil {
-					return pendingImageUpdate(boot)
-				}
-				identity, err := controller.ExecutableIdentity()
-				if err != nil {
-					return err
-				}
-				if identity != boot.Bundle && boot.VM.Backend == "firecracker" {
-					return errors.New("controller build differs; use space start --update-controller before recreating")
-				}
-				if boot.DiskUUID == "" {
-					return errors.New("initialization incomplete; run space start before recreating")
-				}
-				if _, err := controllerMounts(boot); err != nil {
-					return err
-				}
-				if err := vmhost.New().RequireAccountDisk(cmd.Context(), space, boot.DiskID); err != nil {
-					return err
-				}
-			}
-			var replaced uint64 // the deleted VM's system disk, when known
-			if action == "recreate" {
-				if inst, found, err := findSpaceInstance(cmd.Context(), space); err == nil && found {
-					replaced = inst.Disk
-				}
-			}
-			if err := deleteSpaceRuntime(cmd.Context(), space, cmd.ErrOrStderr()); err != nil {
-				return err
-			}
-			if action == "destroy" {
-				if err := vmhost.New().DeleteAccountDisk(cmd.Context(), boot.DiskID); err != nil {
-					return fmt.Errorf("delete persistent disk (bootstrap retained for retry): %w", err)
-				}
-				return purgeSpaceBundle(space, cmd.ErrOrStderr())
-			}
-			if err := startControllerSpace(cmd.Context(), boot, boot.VM.Backend != "firecracker", nil, cmd.ErrOrStderr()); err != nil {
-				return fmt.Errorf("replacement failed; persistent data retained; retry space start %s: %w", space, err)
-			}
-			if saved, err := spaceconfig.VMDiskBytes(boot.VM.Disk); err == nil && replaced != 0 && replaced != saved {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "system disk %d → %d GiB (the saved setting)\n", replaced/spaceconfig.GiB, saved/spaceconfig.GiB)
-			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "recreated space %s; start boxes with box start --space %s\n", space, space)
-			return nil
-		}
-		return errors.New("unknown space lifecycle action")
+			return errors.New("unknown space lifecycle action")
+		})
 	}
 }
 
 func lockHostLifecycle(cmd *cobra.Command, space string) (func(), error) {
 	return spacelock.AcquireWithWait(cmd.Context(), space, true, func() {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Waiting for space %s lifecycle operation; Ctrl-C cancels.\n", space)
+		cliNotice(logging.Host, "Waiting for space %s lifecycle operation; Ctrl-C cancels.", space)
 	})
 }
 
@@ -291,7 +297,11 @@ func createControllerSpace(cmd *cobra.Command, space string) error {
 		return asUserError(err)
 	}
 	boot.VM.Image, _ = cmd.Flags().GetString("vm-image")
-	boot.VM.Image, err = vmhost.ResolveImage(cmd.Context(), boot.VM.Backend, boot.VM.Image)
+	err = cliRunStep(cmd.Context(), "Preparing VM image", func(ctx context.Context) error {
+		var resolveErr error
+		boot.VM.Image, resolveErr = vmhost.ResolveImage(ctx, boot.VM.Backend, boot.VM.Image)
+		return resolveErr
+	})
 	if err != nil {
 		return err
 	}
@@ -325,7 +335,7 @@ func createControllerSpace(cmd *cobra.Command, space string) error {
 	}
 	// Publish ownership before allocating anything. An interrupted allocation
 	// remains discoverable through this boot record, never an orphan disk.
-	if err := vmhost.New().CreateAccountDisk(cmd.Context(), boot.DiskID); err != nil {
+	if err := cliRunStep(cmd.Context(), "Allocating data disk", func(ctx context.Context) error { return vmhost.New().CreateAccountDisk(ctx, boot.DiskID) }); err != nil {
 		return fmt.Errorf("allocate data disk (bootstrap retained; inspect before retrying): %w", err)
 	}
 	if err := startControllerSpace(cmd.Context(), boot, false, seed, cmd.ErrOrStderr()); err != nil {

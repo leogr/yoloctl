@@ -385,7 +385,7 @@ func TestAFailedResumeIsRetriedNeverReplaced(t *testing.T) {
 	if f.recordAtStart.Resume.Generation != 3 || rec.Resume.Outcome != agentsession.OutcomeUnverified {
 		t.Fatalf("the retry is a new request: %+v", rec.Resume)
 	}
-	want := "warning: the previous resume of " + assigned + " failed (agent exited with status 1 at 1970-01-01T00:03:20Z); retrying — yoloctl box restart coder --new-session starts a new conversation\n"
+	want := "warning: session: the previous resume of " + assigned + " failed (agent exited with status 1 at 1970-01-01T00:03:20Z); retrying — yoloctl box restart coder --new-session starts a new conversation\n"
 	if f.notices.String() != want {
 		t.Fatalf("one retry warning:\n%q\nwant\n%q", f.notices.String(), want)
 	}

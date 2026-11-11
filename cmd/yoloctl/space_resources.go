@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -107,6 +108,7 @@ not recompress existing layers. An omitted flag preserves its current value.
 	cmd.Flags().String("data-disk", "", "Data disk size in whole GiB, such as 20GiB; only grows, offline at the next space start, after a cheap copy of the disk (Firecracker)")
 	cmd.Flags().Bool("no-backup", false, "With --data-disk, grow without the pre-grow copy when the host filesystem cannot make one; export the space first")
 	cmd.Flags().String("image-layer-compression", "", "Newly built image layers inside the VM: none (default; faster, more disk) or gzip (less disk); applies from the next space start")
+	wrapHostLogCommand(cmd, logging.Host)
 	return cmd
 }
 
@@ -118,7 +120,7 @@ func layerCompressionLabel(value string) string {
 }
 
 func newSpaceEditCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "edit [SPACE]",
 		Short: "Edit a stopped space's CPU, memory and system disk allocation in $EDITOR",
 		Long: `Open a private temporary YAML containing only cpus, memory and disk in
@@ -136,6 +138,8 @@ Other space settings and identities cannot be changed here.`,
 			return editSpaceResources(cmd, name, runEditor)
 		},
 	}
+	wrapHostLogCommand(cmd, logging.Host)
+	return cmd
 }
 
 func readSpaceResourceSnapshot(name string) (spaceResourceSnapshot, error) {
@@ -219,15 +223,12 @@ func changeSpaceResources(cmd *cobra.Command, name string, expected *spaceResour
 	if err := applyVMResources(cmd.Context(), name, r); err != nil {
 		return fmt.Errorf("VM resources saved but not applied; inspect the error, then retry space set or run space start %s: %w", name, err)
 	}
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "space %s: %d CPUs, %s RAM; remains stopped (start with yoloctl space start %s)\n", name, r.CPUs, r.Memory, name)
-	if err == nil && compressionChanged {
-		_, err = fmt.Fprintf(cmd.OutOrStdout(), "space %s: image layer compression %s saved; it applies to images built after the next yoloctl space start %s\n", name, layerCompressionLabel(doc.LayerCompression), name)
+	cliInfo(logging.Host, "space %s: %d CPUs, %s RAM; remains stopped (start with yoloctl space start %s)\n", name, r.CPUs, r.Memory, name)
+	if compressionChanged {
+		cliInfo(logging.Host, "space %s: image layer compression %s saved; it applies to images built after the next yoloctl space start %s\n", name, layerCompressionLabel(doc.LayerCompression), name)
 	}
-	if err == nil && diskChanged {
-		_, err = fmt.Fprintf(cmd.OutOrStdout(), "space %s: disk %s saved; it applies at the next yoloctl space recreate %s (the VM keeps its current disk until then)\n", name, disk, name)
-	}
-	if err != nil {
-		return err
+	if diskChanged {
+		cliInfo(logging.Host, "space %s: disk %s saved; it applies at the next yoloctl space recreate %s (the VM keeps its current disk until then)\n", name, disk, name)
 	}
 	// A new size, or the same size again to resume an interrupted request.
 	g := current.boot.DataDiskGrow
@@ -283,8 +284,8 @@ func editSpaceResources(cmd *cobra.Command, name string, editor func(context.Con
 		return fmt.Errorf("edits kept at %s: %w", path, err)
 	}
 	if bytes.Equal(raw, edited) {
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), "no changes")
-		return err
+		cliInfo(logging.Host, "no changes")
+		return nil
 	}
 	var doc spaceResourceDocument
 	if err := strictyaml.Decode(edited, &doc); err != nil {

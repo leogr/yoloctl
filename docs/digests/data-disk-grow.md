@@ -57,7 +57,7 @@ fallback, stopped-only reads and extends, the boot record and the log check.
 ## Sources
 
 1. <a id="source-1"></a> [Sizes and checkpoint](../../internal/spaceconfig/disk.go#L50-L106) — `DataDiskBytes`, `DataDiskGrow`, `validate`; `Bootstrap.DataDiskGrow` and `VMSettings.DataDisk` in bootstrap.go.
-2. <a id="source-2"></a> [CLI](../../cmd/yoloctl/space_disk.go#L131-L281) — `selectSpaceDataDisk`, `growSpaceDataDisk`, `settleDataDiskGrow`, `dataDiskShown`; `changeSpaceResources` in space_resources.go; the stop case in controller_lifecycle.go; the export guard in space_archive.go.
+2. <a id="source-2"></a> [CLI](../../cmd/yoloctl/space_disk.go#L131-L280) — `selectSpaceDataDisk`, `growSpaceDataDisk`, `settleDataDiskGrow`, `dataDiskShown`; `changeSpaceResources` in space_resources.go; the stop case in controller_lifecycle.go; the export guard in space_archive.go.
 3. <a id="source-3"></a> [Host grow](../../internal/firecracker/datadisk_linux.go#L1-L244) — `stopped`, `DataDiskGrowSupported`, `DataDiskState`, `ExtendDataDisk`, `cloneDataDisk`, `DataDiskGrowLogged`, `RemoveDataDiskBackup`, `pendingDataDiskGrow`.
 4. <a id="source-4"></a> [Superblock](../../internal/ext4sb/ext4sb.go#L1-L46) — `Read`; adapter interface `DataDiskGrower` and `ErrNoReflink` in internal/vmapi/storage.go; `CreateAccountDisk` sizes in internal/vm/vm.go.
 5. <a id="source-5"></a> [Guest grow](../../internal/vmguest/datadisk_linux.go#L1-L87) — `growDataDisk`; called before the data disk mount in init_linux.go `boot`.

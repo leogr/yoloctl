@@ -113,6 +113,7 @@ func TestChatOperatorServerLifecycleSuppressesOnlyIncidentalAttachment(t *testin
 			cmd := &cobra.Command{}
 			cmd.SetContext(t.Context())
 			var notice bytes.Buffer
+			t.Cleanup(bindCLITestLogger(t, &notice))
 			cmd.SetErr(&notice)
 			if err := prepareAutoAttach(cmd, "work", "chat", false, true); err != nil {
 				t.Fatal("server lifecycle preflight refused finite work", err)

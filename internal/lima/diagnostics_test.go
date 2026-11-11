@@ -462,3 +462,48 @@ func TestHostDiagnosticsLogsDirectoryRequiresOwnerAndPrivateMode(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestLifecycleProgressCapturesDefaultStdoutAndStderr(t *testing.T) {
+	c := diagnosticFixture(t, "printf 'launcher output\\n'; printf 'launcher warning\\n' >&2\n")
+	var progress bytes.Buffer
+	withoutLimaTerminalWrites(t, func() {
+		c.stdout = os.Stdout
+		if err := c.Stop(WithProgress(t.Context(), &progress), "fixture"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(progress.String(), "launcher output") || !strings.Contains(progress.String(), "launcher warning") {
+		t.Fatalf("lost launcher progress: %q", progress.String())
+	}
+	if !strings.Contains(readDiagnostics(t), "launcher output") {
+		t.Fatal("stdout diagnostic not retained")
+	}
+}
+
+func TestLifecycleProgressPreservesExplicitStdout(t *testing.T) {
+	c := diagnosticFixture(t, "printf 'data'; printf 'diagnostic' >&2\n")
+	var output, progress bytes.Buffer
+	c.stdout = &output
+	if err := c.Stop(WithProgress(t.Context(), &progress), "fixture"); err != nil {
+		t.Fatal(err)
+	}
+	if output.String() != "data" || progress.String() != "diagnostic" {
+		t.Fatalf("output=%q progress=%q", output.String(), progress.String())
+	}
+}
+
+func TestLifecycleProgressDoesNotWaitForDaemonFDs(t *testing.T) {
+	c := diagnosticFixture(t, "echo before-daemon; echo diagnostic >&2\nsleep 5 &\nexit 0\n")
+	var progress bytes.Buffer
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	withoutLimaTerminalWrites(t, func() {
+		c.stdout = os.Stdout
+		if err := c.Stop(WithProgress(ctx, &progress), "fixture"); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if ctx.Err() != nil || !strings.Contains(progress.String(), "before-daemon") {
+		t.Fatal("waited for descendant or lost stdout")
+	}
+}

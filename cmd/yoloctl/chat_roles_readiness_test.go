@@ -216,6 +216,7 @@ func TestChatRoleLifecycleHolderReadiness(t *testing.T) {
 				return tc.state, nil
 			}
 			var notice bytes.Buffer
+			t.Cleanup(bindCLITestLogger(t, &notice))
 			syncNativeChatRolesFn = func(ctx context.Context, space string) error {
 				return synchronizeChatRoles(ctx, space, store, boxes, &notice)
 			}

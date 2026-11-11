@@ -238,7 +238,7 @@ func TestSessionRestartOfferLeavesRecreationsRunning(t *testing.T) {
 		"gamma": {Name: "gamma", Drift: boxstate.DriftInSync},
 	}
 	fixture := func(t *testing.T, interactive bool, answer string) (*sessionRestartOffer, *[]string, *bytes.Buffer) {
-		o, restarted, errw := sessionOfferFixture(interactive, answer)
+		o, restarted, errw := sessionOfferFixture(t, interactive, answer)
 		o.drift = func(_ context.Context, names []string) ([]boxDriftView, error) {
 			if !slices.Equal(names, []string{"alpha", "gamma"}) {
 				t.Fatalf("drift of %v", names)
@@ -325,7 +325,7 @@ func TestSessionRestartOfferLeavesRecreationsRunning(t *testing.T) {
 		}
 	})
 	t.Run("managed workloads", func(t *testing.T) {
-		o, log, errw := workloadOfferFixture(false)
+		o, log, errw := workloadOfferFixture(t, false)
 		o.drift = func(_ context.Context, names []string) ([]boxDriftView, error) {
 			view := []boxDriftView{}
 			for _, name := range names {

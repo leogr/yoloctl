@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/spacelock"
 	"github.com/spf13/cobra"
@@ -217,11 +217,11 @@ func registerSpaceOperations(root *cobra.Command) {
 			unlock, err := spacelock.AcquireWithWait(cmd.Context(), name, true, func() {
 				if call, ok := cmd.Context().Value(controllerAdvisoryKey{}).(func(context.Context, controller.AdvisoryNotice) (controller.AdvisoryReply, error)); ok {
 					if reply, err := call(cmd.Context(), controller.AdvisoryNotice{Action: "blocker"}); err == nil && reply.Holder != nil {
-						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Waiting for space lock held by %s; Ctrl-C cancels.\n", reply.Holder.String())
+						cliInfo(logging.Host, "Waiting for space lock held by %s; Ctrl-C cancels.", reply.Holder.String())
 						return
 					}
 				}
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Waiting for another operation in space %s; Ctrl-C cancels.\n", name)
+				cliInfo(logging.Host, "Waiting for another operation in space %s; Ctrl-C cancels.", name)
 			})
 			if err != nil {
 				return err

@@ -9,6 +9,7 @@ import (
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/openshellrelease"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -128,7 +129,7 @@ func (a managedApplier) Recreate(ctx context.Context, c *agentbox.Config, policy
 	}
 	if missing {
 		if a.notice != nil {
-			_, _ = fmt.Fprintf(a.notice, "notice: box %s has no container; creating it\n", c.Name)
+			cliNotice(logging.Box, "box %s has no container; creating it", c.Name)
 		}
 		if err := a.endSession(ctx, c, sessionEndedByRecreate); err != nil {
 			return err
@@ -256,13 +257,13 @@ func cleanupManagedSession(ctx context.Context, c *container.Client, name string
 	if err := session.StopHolderUnit(ctx, c, name); err != nil {
 		ended = false
 		if notice != nil {
-			_, _ = fmt.Fprintf(notice, "warning: session holder cleanup for %s: %v\n", name, err)
+			cliWarn(logging.Box, "session holder cleanup for %s: %v", name, err)
 		}
 	}
 	if err := cleanupStoppedSessionState(ctx, c, name); err != nil {
 		ended = false
 		if notice != nil {
-			_, _ = fmt.Fprintf(notice, "warning: session state cleanup for %s: %v\n", name, err)
+			cliWarn(logging.Box, "session state cleanup for %s: %v", name, err)
 		}
 	}
 	return ended

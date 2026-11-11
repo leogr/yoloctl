@@ -517,8 +517,8 @@ func TestBoxCopy_ManifestOnlyEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("box copy: %v (stderr: %s)", err, stderr)
 	}
-	if !strings.Contains(stdout, `copied box "src" (space default) to "dst" (space default)`) {
-		t.Errorf("stdout = %q, want the copied-box line", stdout)
+	if stdout != "" || !strings.Contains(stderr, `copied box "src" (space default) to "dst" (space default)`) {
+		t.Errorf("stdout=%q stderr=%q, want copied-box log only on stderr", stdout, stderr)
 	}
 	if !strings.Contains(stderr, "8080") {
 		t.Errorf("stderr = %q, want the inherited-ports notice", stderr)
@@ -605,8 +605,8 @@ func TestBoxCopy_CrossSpaceManifestOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("box copy: %v (stderr: %s)", err, stderr)
 	}
-	if !strings.Contains(stdout, `copied box "src" (space other) to "dst" (space default)`) {
-		t.Errorf("stdout = %q, want the cross-space copied-box line", stdout)
+	if stdout != "" || !strings.Contains(stderr, `copied box "src" (space other) to "dst" (space default)`) {
+		t.Errorf("stdout=%q stderr=%q, want cross-space copied-box log only on stderr", stdout, stderr)
 	}
 	dst, err := agentbox.Load("default", "dst")
 	if err != nil {

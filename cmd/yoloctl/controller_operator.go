@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -17,11 +18,13 @@ import (
 	"github.com/leogr/yoloctl/internal/atomicfile"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/openshell"
 	"github.com/leogr/yoloctl/internal/operator"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"golang.org/x/sys/unix"
 )
 
@@ -421,7 +424,7 @@ const operatorAuthorityNotice = "full box authority in this space: other existin
 
 func warnBoxOperator(cfg *agentbox.Config) {
 	if enabled, err := agentbox.OperatorEnabled(cfg); err == nil && enabled {
-		_, _ = fmt.Fprintf(os.Stderr, "warning: box %s has %s\n", cfg.Name, operatorAuthorityNotice)
+		logging.L().LogAttrs(context.Background(), slog.LevelWarn, fmt.Sprintf("box %s has operator authority", cfg.Name), prettylog.Actor(logging.Box), slog.String(prettylog.KeyErr, operatorAuthorityNotice))
 	}
 }
 

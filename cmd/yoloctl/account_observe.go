@@ -8,6 +8,7 @@ import (
 	"github.com/leogr/yoloctl/internal/account"
 	"github.com/leogr/yoloctl/internal/accountstate"
 	"github.com/leogr/yoloctl/internal/agentprofile"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -88,22 +89,21 @@ no running box may use the account.
 				return err
 			}
 			where := path.Join(profile.StateContainerPath, line.Settings)
-			out := cmd.OutOrStdout()
 			switch {
 			case result.Outcome == "enabled":
-				_, _ = fmt.Fprintf(out, "enabled the %s status line reporter in account %s (%s); boxes started from now on report agent state\n", profile.Name, name, where)
+				cliInfo(logging.Box, "enabled the %s status line reporter in account %s (%s); boxes started from now on report agent state", profile.Name, name, where)
 			case result.Outcome == "restored":
-				_, _ = fmt.Fprintf(out, "disabled the %s status line reporter in account %s (%s); the previous status line is restored\n", profile.Name, name, where)
+				cliInfo(logging.Box, "disabled the %s status line reporter in account %s (%s); the previous status line is restored", profile.Name, name, where)
 			case result.Outcome == "removed":
-				_, _ = fmt.Fprintf(out, "disabled the %s status line reporter in account %s (%s); no previous status line was saved, so it is removed\n", profile.Name, name, where)
+				cliInfo(logging.Box, "disabled the %s status line reporter in account %s (%s); no previous status line was saved, so it is removed", profile.Name, name, where)
 			case enable && result.Outcome == "unchanged":
-				_, _ = fmt.Fprintf(out, "the %s status line reporter is already enabled in account %s\n", profile.Name, name)
+				cliInfo(logging.Box, "the %s status line reporter is already enabled in account %s", profile.Name, name)
 			case enable:
 				// No settings yet: the launcher seeds them, with the reporter
 				// and its own defaults, at the account's first start.
 				return asUserError(fmt.Errorf("account %s has no %s settings yet (%s); a new account is seeded with the reporter by the agent's launcher at its first start; nothing changed", name, profile.Name, where))
 			default:
-				_, _ = fmt.Fprintf(out, "the %s status line reporter is not enabled in account %s; nothing changed\n", profile.Name, name)
+				cliInfo(logging.Box, "the %s status line reporter is not enabled in account %s; nothing changed", profile.Name, name)
 			}
 			return nil
 		},

@@ -26,7 +26,7 @@ func TestAccountObserveSetsTheProfilesStatusLine(t *testing.T) {
 		sent = append(sent, r)
 		return accountstate.Result{Outcome: outcome}, nil
 	}
-	out, _, err := execAccount(t, newAccountObserveCmd(), "", "personal", "agy", "--enable")
+	_, out, err := execAccount(t, newAccountObserveCmd(), "", "personal", "agy", "--enable")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestAccountObserveSetsTheProfilesStatusLine(t *testing.T) {
 		{"--disable", "", "not enabled"},
 	} {
 		outcome = c.outcome
-		out, _, err := execAccount(t, newAccountObserveCmd(), "", "personal", "agy", c.flag)
+		_, out, err := execAccount(t, newAccountObserveCmd(), "", "personal", "agy", c.flag)
 		if err != nil || !strings.Contains(out, c.want) {
 			t.Errorf("%s %q: %q %v, want %q", c.flag, c.outcome, out, err, c.want)
 		}

@@ -16,6 +16,7 @@ import (
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/managedchat"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
@@ -152,7 +153,7 @@ func chatEnsureOutcome(status managedchat.Status, errw io.Writer) error {
 		return errors.New("chat ensure reported the server not ready")
 	}
 	if len(status.Pending) > 0 {
-		_, _ = fmt.Fprintf(errw, "The chat server is ready; still pending: %s\n", strings.Join(status.Pending, "; "))
+		cliNotice(logging.Host, "The chat server is ready; still pending: %s", strings.Join(status.Pending, "; "))
 	}
 	return nil
 }
@@ -226,22 +227,23 @@ func staleSessions(boxes []boxstate.Box, chatServer string, chatKnown bool) (sta
 // lists again and skips a box whose session changed; the controller checks
 // the same binding again before teardown.
 func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOffer, explicit bool) error {
+	o.errw = cliTerminalWriter(o.errw)
 	boxes, err := o.inventory(ctx)
 	if err != nil {
 		// The update itself succeeded; only a requested restart fails with it.
 		if explicit {
 			return fmt.Errorf("controller updated, but its agent sessions could not be listed, so none was restarted: %w", err)
 		}
-		_, _ = fmt.Fprintf(o.errw, "warning: controller updated, but its agent sessions could not be listed (%v); check them with yoloctl box list --space %s\n", err, space)
+		cliWarn(logging.Host, "controller updated, but its agent sessions could not be listed (%v); check them with yoloctl box list --space %s", err, space)
 		return nil
 	}
 	chatServer, chatErr := o.chatServer(ctx)
 	if chatErr != nil {
-		_, _ = fmt.Fprintf(o.errw, "warning: the managed chat room could not be read (%v); boxes with a managed workload are left running\n", chatErr)
+		cliWarn(logging.Host, "the managed chat room could not be read (%v); boxes with a managed workload are left running", chatErr)
 	}
 	stale, unknown := staleSessions(boxes, chatServer, chatErr == nil)
 	if len(unknown) > 0 {
-		_, _ = fmt.Fprintf(o.errw, "Could not check or identify the agent sessions of %s; they are left running.\n", strings.Join(unknown, ", "))
+		cliWarn(logging.Host, "Could not check or identify the agent sessions of %s; they are left running.", strings.Join(unknown, ", "))
 	}
 	conversations := map[string]*agentsession.Status{}
 	for _, b := range boxes {
@@ -257,17 +259,17 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 	for i, s := range stale {
 		names[i] = s.name
 	}
-	_, _ = fmt.Fprintf(o.errw, "These boxes still run agent sessions of the previous build, which this build cannot attach to: %s.\n", strings.Join(names, ", "))
-	_, _ = fmt.Fprintln(o.errw, "Restarting a box ends its agent's current process.")
+	cliNotice(logging.Host, "These boxes still run agent sessions of the previous build, which this build cannot attach to: %s.", strings.Join(names, ", "))
+	cliWarn(logging.Host, "Restarting a box ends its agent's current process.")
 	for _, s := range stale {
 		if s.kind == agentSession {
 			_, _ = fmt.Fprintf(o.errw, "%s: %s\n", s.name, restartConversationNote(conversations[s.name]))
 		}
 		switch s.kind {
 		case chatServerSession:
-			_, _ = fmt.Fprintf(o.errw, "%s is the managed chat server: restarting it restarts the room on this build, and every connected chat client must reconnect.\n", s.name)
+			cliNotice(logging.Host, "%s is the managed chat server: restarting it restarts the room on this build, and every connected chat client must reconnect.", s.name)
 		case workloadSession:
-			_, _ = fmt.Fprintf(o.errw, "%s runs a managed workload, which is started again after its restart.\n", s.name)
+			cliNotice(logging.Host, "%s runs a managed workload, which is started again after its restart.", s.name)
 		}
 	}
 	commands := func(lead string) {
@@ -312,15 +314,15 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 		}
 		current, _ := staleSessions(now, chatServer, chatErr == nil)
 		if !containsStale(current, s) {
-			_, _ = fmt.Fprintf(o.errw, "Skipped box %s: its session changed since it was listed; left running.\n", s.name)
+			cliWarn(logging.Host, "Skipped box %s: its session changed since it was listed; left running.", s.name)
 			continue
 		}
-		_, _ = fmt.Fprintf(o.errw, "Restarting box %s\n", s.name)
+		cliNotice(logging.Host, "Restarting box %s", s.name)
 		// A failed restart may already have stopped a workload: say how to
 		// bring it back.
 		down := func(what string) {
 			if step := s.recovery(space); step != "" {
-				_, _ = fmt.Fprintf(o.errw, "%s may be down. Recover it with:\n  %s\n", what, step)
+				cliWarn(logging.Host, "%s may be down. Recover it with:\n%s", what, step)
 			}
 		}
 		if err := o.restart(ctx, s.name, s.holder, s.kind == workloadSession); err != nil {
@@ -333,11 +335,11 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 				down("The chat room")
 				return notAttempted(fmt.Errorf("start the chat room again: %w", err))
 			}
-			_, _ = fmt.Fprintln(o.errw, "The chat room was restarted on this build; every connected chat client must reconnect.")
+			cliNotice(logging.Host, "The chat room was restarted on this build; every connected chat client must reconnect.")
 		}
 	}
 	if restarted > 0 {
-		_, _ = fmt.Fprintf(o.errw, "Restarted %s on this build. A tracked conversation is requested on the box's next attach and stays unverified until its agent reports it; resume an untracked one yourself.\n", boxCount(restarted))
+		cliNotice(logging.Host, "Restarted %s on this build. A tracked conversation is requested on the box's next attach and stays unverified until its agent reports it; resume an untracked one yourself.", boxCount(restarted))
 	}
 	return nil
 }
@@ -354,7 +356,7 @@ func setAsideRecreations(ctx context.Context, space string, o sessionRestartOffe
 	}
 	view, err := o.drift(ctx, names)
 	if err != nil {
-		_, _ = fmt.Fprintf(o.errw, "warning: could not check whether %s also require recreation (%v); a restart refuses a box that does\n", strings.Join(names, ", "), err)
+		cliWarn(logging.Host, "could not check whether %s also require recreation (%v); a restart refuses a box that does", strings.Join(names, ", "), err)
 		return stale
 	}
 	drift := make(map[string]boxDriftView, len(view))
@@ -372,11 +374,11 @@ func setAsideRecreations(ctx context.Context, space string, o sessionRestartOffe
 			keep = append(keep, s)
 			continue
 		case remedyUnknown:
-			_, _ = fmt.Fprintf(o.errw, "Could not check whether box %s also requires recreation (%s); its restart refuses it if so.\n", s.name, reason)
+			cliWarn(logging.Host, "Could not check whether box %s also requires recreation (%s); its restart refuses it if so.", s.name, reason)
 			keep = append(keep, s)
 			continue
 		}
-		_, _ = fmt.Fprintf(o.errw, "Box %s runs an agent session of the previous build and also requires recreation (%s), which a restart refuses, so it is left running. Recreation ends its agent's current process and replaces its container: the workdir and the account's native state are kept, other files in the container are lost. Inspect it, then recreate it explicitly if replacement is intended:\n", s.name, reason)
+		cliWarn(logging.Host, "Box %s runs an agent session of the previous build and also requires recreation (%s), which a restart refuses, so it is left running. Recreation ends its agent's current process and replaces its container: the workdir and the account's native state are kept, other files in the container are lost. Inspect it, then recreate it explicitly if replacement is intended:", s.name, reason)
 		_, _ = fmt.Fprintf(o.errw, "  yoloctl box inspect %s --space %s\n  yoloctl box recreate %s --space %s --no-attach\n", s.name, space, s.name, space)
 		switch s.kind {
 		case chatServerSession:
@@ -498,6 +500,6 @@ func startRestartedWorkload(ctx context.Context, c *container.Client, space, nam
 	if _, err := startWorkloadSession(ctx, c, space, name, errw, true, &updated, sessionStartOptions{}); err != nil {
 		return fmt.Errorf("box %s restarted, but its managed workload did not start again (recover with yoloctl box attach %s --space %s): %w", name, name, space, err)
 	}
-	_, _ = fmt.Fprintf(errw, "Started the managed workload of box %s again on this build.\n", name)
+	cliNotice(logging.Host, "Started the managed workload of box %s again on this build.", name)
 	return nil
 }

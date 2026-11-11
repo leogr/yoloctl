@@ -14,8 +14,10 @@ import (
 	"github.com/leogr/yoloctl/internal/installmigration"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/lima"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/releasebundle"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 func TestInstallDecisionDoesNotTurnYesIntoConflictOrMigrationConsent(t *testing.T) {
@@ -261,6 +263,7 @@ func TestInstallSpaceAdviceUpdate(t *testing.T) {
 		}
 		for _, installed := range []bool{true, false} {
 			var out bytes.Buffer
+			t.Cleanup(bindCLITestLogger(t, &out))
 			printSpaceAdvice(installOut{w: &out}, advice, "/absolute/install/link", installed)
 			text := out.String()
 			command := "  update    YOLOCTL_HOME=" + shellArg(os.Getenv("YOLOCTL_HOME")) + " /absolute/install/link space start " + b.Name + " --update-controller\n"
@@ -296,19 +299,17 @@ func TestInstallSpaceAdviceRecreateTooOldLimaVM(t *testing.T) {
 	}
 }
 
-// Color only on a terminal; NO_COLOR and TERM=dumb force plain text, and the
-// words never change.
+// Installer data stays byte-exact; only records use the shared logger's colours.
 func TestInstallOutputColor(t *testing.T) {
-	if newInstallOut(&bytes.Buffer{}).color {
-		t.Fatal("a buffer is not a terminal")
-	}
-	plain, colored := installOut{}, installOut{color: true}
-	if plain.paint(roleOK, "✓ ") != "✓ " || colored.paint(roleOK, "✓ ") != "\x1b[38;5;108m✓ \x1b[0m" || colored.paint(roleBold, "v1") != "\x1b[1mv1\x1b[0m" {
-		t.Fatal("paint roles")
-	}
-	t.Setenv("NO_COLOR", "")
-	if installColor(os.Stdout) {
-		t.Fatal("NO_COLOR, even empty, disables color")
+	var data, logs bytes.Buffer
+	l := prettylog.New(&logs, prettylog.Options{Format: prettylog.FormatPretty, Color: true, Palette: prettylog.ANSIPalette, Verbosity: prettylog.Normal})
+	restore := logging.SetLogger(l)
+	defer func() { _ = l.Close(); restore() }()
+	o := newInstallOut(&data)
+	o.line(o.paint(roleBold, "export PATH=$HOME/.local/bin:$PATH"))
+	o.warn("another yoloctl is first on PATH")
+	if data.String() != "export PATH=$HOME/.local/bin:$PATH\n" || !strings.Contains(logs.String(), "\x1b[") || !strings.Contains(logs.String(), "another yoloctl is first on PATH") {
+		t.Fatalf("data=%q logs=%q", data.String(), logs.String())
 	}
 	if got := wrapWords("aa bb cc dd", 5); !slices.Equal(got, []string{"aa bb", "cc dd"}) {
 		t.Fatal(got)

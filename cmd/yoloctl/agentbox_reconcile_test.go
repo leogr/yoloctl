@@ -240,6 +240,8 @@ func TestBoxSetAlreadyGrantedStillReconciles(t *testing.T) {
 	calls := stubSetReconcile(t)
 
 	var out bytes.Buffer
+
+	t.Cleanup(bindCLITestLogger(t, &out))
 	err := runSet(t.Context(), &out, "default", "coder", setOptions{Capabilities: []string{"fs.pty.allocate"}})
 	if err != nil {
 		t.Fatalf("runSet: %v", err)
@@ -271,6 +273,7 @@ func TestBoxSetUnchangedScalarsAreNotRewritten(t *testing.T) {
 
 	image, readOnly := "img:1", false
 	var out bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &out))
 	if err := runSet(t.Context(), &out, "default", "coder", setOptions{Image: &image, ReadOnly: &readOnly}); err != nil {
 		t.Fatalf("runSet: %v", err)
 	}
@@ -296,6 +299,8 @@ func TestBoxSetWithoutFieldsIsANoOp(t *testing.T) {
 	calls := stubSetReconcile(t)
 
 	var out bytes.Buffer
+
+	t.Cleanup(bindCLITestLogger(t, &out))
 	if err := runSet(t.Context(), &out, "default", "coder", setOptions{}); err != nil {
 		t.Fatalf("runSet: %v", err)
 	}

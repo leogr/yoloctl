@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"log/slog"
 	"time"
 )
 
@@ -156,5 +156,5 @@ func completeNativeContainerCreation(ctx context.Context, actions nativeCreateAc
 // nativeCreateCleanupNotice reports cleanup left behind by a failed create;
 // tests replace it.
 var nativeCreateCleanupNotice = func(err error) {
-	_, _ = fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	slog.Warn(fmt.Sprintf("%v", err), slog.String("actor", "box"), slog.String("executor", "openshell"))
 }

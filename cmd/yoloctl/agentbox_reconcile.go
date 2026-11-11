@@ -15,6 +15,7 @@ import (
 	"github.com/leogr/yoloctl/internal/agentsession"
 	"github.com/leogr/yoloctl/internal/capabilities"
 	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/ocifeature"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -195,13 +196,13 @@ func runRebuild(ctx context.Context, lock *agentsession.BoxLock, out, errw io.Wr
 		if err := applier.Recreate(ctx, cfg, policy); err != nil {
 			return fmt.Errorf("recreate container: %w", err)
 		}
-		_, _ = fmt.Fprintf(out, "Box %q: rebuilt composed image and recreated.\n", name)
+		cliInfo(logging.Box, "Box %q: rebuilt composed image and recreated.", name)
 		return applySessionStart(lock, tracking, true, false, errw)
 	}
 	if err := applier.Create(ctx, cfg, policy); err != nil {
 		return fmt.Errorf("create container: %w", err)
 	}
-	_, _ = fmt.Fprintf(out, "Box %q: built composed image and created.\n", name)
+	cliInfo(logging.Box, "Box %q: built composed image and created.", name)
 	return applySessionStart(lock, tracking, true, false, errw)
 }
 
@@ -213,14 +214,12 @@ func printDryRun(out io.Writer, cfg *agentbox.Config, actual agentbox.ActualStat
 	if err != nil {
 		// Don't fail the dry-run on a missing policy — still useful
 		// to see the container-level diff. Just note it.
-		_, _ = fmt.Fprintf(out, "WARNING: cannot compute desired policy: %v\n", err)
-		_, _ = fmt.Fprintf(out, "         (showing container-level diff only; policy diff skipped)\n\n")
+		cliWarn(logging.Box, "cannot compute desired policy: %v\n(showing container-level diff only; policy diff skipped)", err)
 		desired = actual.PolicyContent // forces "policy unchanged" branch
 	}
 	desiredImage, _, err := agentbox.ResolvedImage(cfg)
 	if err != nil {
-		_, _ = fmt.Fprintf(out, "WARNING: cannot resolve runtime image: %v\n", err)
-		_, _ = fmt.Fprintf(out, "         (showing diff with the image axis skipped)\n\n")
+		cliWarn(logging.Box, "cannot resolve runtime image: %v\n(showing diff with the image axis skipped)", err)
 		desiredImage = actual.Image // forces "image unchanged" branch
 	}
 	plan := agentbox.Diff(cfg, actual, desiredImage, desired)
@@ -362,7 +361,7 @@ func runEdit(ctx context.Context, out io.Writer, spaceName, name string) error {
 		return err
 	}
 	if bytes.Equal(pre, post) {
-		_, _ = fmt.Fprintln(out, "no changes")
+		cliInfo(logging.Box, "no changes")
 		return nil
 	}
 
@@ -410,6 +409,8 @@ func runEdit(ctx context.Context, out io.Writer, spaceName, name string) error {
 // waits for the editor to exit. Editor stdio is wired to the user's
 // terminal so curses-based editors work.
 func runEditor(ctx context.Context, path string) error {
+	resumeSteps := suspendCLISteps()
+	defer resumeSteps()
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		editor = "vi"
@@ -607,7 +608,7 @@ func runSet(ctx context.Context, out io.Writer, spaceName, name string, opts set
 	}
 
 	if opts.empty() {
-		_, _ = fmt.Fprintln(out, "no fields specified; nothing to do (use `box set --help` to list available fields)")
+		cliInfo(logging.Box, "no fields specified; nothing to do (use `box set --help` to list available fields)")
 		return nil
 	}
 
@@ -621,7 +622,7 @@ func runSet(ctx context.Context, out io.Writer, spaceName, name string, opts set
 		// the runtime: a set that died between its save and its reconcile
 		// leaves exactly that. Converge anyway, so repeating a set is how you
 		// recover from one; an in-sync box is reported as such.
-		_, _ = fmt.Fprintf(out, "box %s: manifest already holds the requested values\n", name)
+		cliInfo(logging.Box, "box %s: manifest already holds the requested values", name)
 		return setReconcile(ctx, lock, out, client, cfg, name)
 	}
 
@@ -851,22 +852,22 @@ func mutateAndReconcile(
 func printReconcileResult(out io.Writer, name string, r agentbox.ReconcileResult) error {
 	switch {
 	case r.ContainerCreated:
-		_, _ = fmt.Fprintf(out, "box %s: container created\n", name)
+		cliInfo(logging.Box, "box %s: container created", name)
 	case r.ContainerRecreated:
-		_, _ = fmt.Fprintf(out, "box %s: container recreated\n", name)
+		cliInfo(logging.Box, "box %s: container recreated", name)
 	case r.ContainerRestarted:
-		_, _ = fmt.Fprintf(out, "box %s: container restarted (policy reloaded)\n", name)
+		cliInfo(logging.Box, "box %s: container restarted (policy reloaded)", name)
 	default:
 		if !r.HasChanges() {
-			_, _ = fmt.Fprintf(out, "box %s: already in sync\n", name)
+			cliInfo(logging.Box, "box %s: already in sync", name)
 			return nil
 		}
 	}
 	for _, pf := range r.PortForwardsRemoved {
-		_, _ = fmt.Fprintf(out, "  - port forward %d:%d removed\n", pf.Published, pf.Target)
+		cliInfo(logging.Box, "  - port forward %d:%d removed", pf.Published, pf.Target)
 	}
 	for _, pf := range r.PortForwardsAdded {
-		_, _ = fmt.Fprintf(out, "  + port forward %d:%d added\n", pf.Published, pf.Target)
+		cliInfo(logging.Box, "  + port forward %d:%d added", pf.Published, pf.Target)
 	}
 	return nil
 }

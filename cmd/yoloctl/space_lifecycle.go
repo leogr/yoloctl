@@ -13,6 +13,7 @@ import (
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
@@ -129,7 +130,7 @@ func stopSpaceBoxes(ctx context.Context, space string, boxes []boxstate.Box, not
 				box := boxes[i]
 				running := box.Container != nil && boxstate.ContainerRunning(box.Container.Status)
 				if running {
-					_, _ = fmt.Fprintf(w, "notice: stopping box %s\n", box.Name)
+					cliNotice(logging.Host, "stopping box %s", box.Name)
 				}
 				if err := stopAgentboxRuntimePartsObserved(ctx, c, space, box.Name, w, running, false, box.Container == nil); err != nil && !isContainerGone(err) {
 					errs[i] = fmt.Errorf("stop box %s: %w", box.Name, err)
@@ -222,15 +223,15 @@ func stopSpaceRuntime(ctx context.Context, space string, notice io.Writer) error
 	if resolveErr == nil {
 		for _, b := range boxes {
 			if err := stopAgentboxRuntimePartsObserved(graceful, container.New(space), space, b.Name, notice, b.Container != nil && boxstate.ContainerRunning(b.Container.Status), false, b.Container == nil); err != nil && !isContainerGone(err) {
-				_, _ = fmt.Fprintf(notice, "warning: stop box %s: %v\n", b.Name, err)
+				cliWarn(logging.Host, "stop box %s: %v", b.Name, err)
 			}
 		}
 	} else {
-		_, _ = fmt.Fprintf(notice, "warning: guest cleanup unavailable: %v\n", resolveErr)
+		cliWarn(logging.Host, "guest cleanup unavailable: %v", resolveErr)
 	}
 	if resolveErr == nil {
 		if err := lifecycleReapOrphanedNetns(graceful, space, notice); err != nil {
-			_, _ = fmt.Fprintf(notice, "warning: leaked netns cleanup: %v\n", err)
+			cliWarn(logging.Host, "leaked netns cleanup: %v", err)
 		}
 	}
 	err = vmhost.New().Stop(graceful, space)
@@ -241,7 +242,7 @@ func stopSpaceRuntime(ctx context.Context, space string, notice io.Writer) error
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	_, _ = fmt.Fprintln(notice, "warning: graceful shutdown failed; forcing VM stop; unflushed writes may be lost")
+	cliWarn(logging.Host, "graceful shutdown failed; forcing VM stop; unflushed writes may be lost")
 	forced, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	return vmhost.New().ForceStop(forced, space, true)

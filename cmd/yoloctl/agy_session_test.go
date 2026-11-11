@@ -291,7 +291,7 @@ func TestAgyFailedResumeRetriesWithTheBoxArguments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "warning: the previous resume of " + conv + " failed (agent exited with status 1 at 1970-01-01T00:03:20Z); retrying — yoloctl box restart coder --new-session starts a new conversation\n"
+	want := "warning: session: the previous resume of " + conv + " failed (agent exited with status 1 at 1970-01-01T00:03:20Z); retrying — yoloctl box restart coder --new-session starts a new conversation\n"
 	if f.notices.String() != want {
 		t.Fatalf("retry warning:\n%q\nwant\n%q", f.notices.String(), want)
 	}

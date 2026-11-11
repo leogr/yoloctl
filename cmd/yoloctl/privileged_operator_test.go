@@ -144,9 +144,7 @@ func TestPrivilegedLaunchReason(t *testing.T) {
 func TestOperatorPrivilegedLaunchBoundary(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	var warnings bytes.Buffer
-	previous := privilegedLaunchWarnings
-	privilegedLaunchWarnings = &warnings
-	t.Cleanup(func() { privilegedLaunchWarnings = previous })
+	t.Cleanup(bindCLITestLogger(t, &warnings))
 	declared := privilegedTestConfig("dev")
 	ordinary := privilegedTestConfig("dev")
 	ordinary.Privileged = false

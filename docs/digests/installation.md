@@ -1,6 +1,6 @@
 # Installation, releases and host homes
 
-Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes (CI runner/publication selection); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); other sections at `1d265df3`.
+Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes (CI runner/publication selection); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); CLI log routing re-read at `4790dfd41173646e5eae877abb674545808de006` and accompanying changes; other sections at `1d265df3`.
 
 [FACT] Coordinated builds stamp hosts and Linux companions with one version and
 random bundle. Only strict `vMAJOR.MINOR.PATCH[-PRERELEASE]` selects release;
@@ -62,10 +62,11 @@ clients, `OPENSHELL_SANDBOX`, Linux container markers and invalid bundles before
 writing. Absence of signals cannot prove host execution. Unknown executables are
 fingerprinted, never executed. Non-TTY without `--yes` prints only; unknown
 conflicts require terminal confirmation; `--yes` accepts managed upgrades only.
-Output: one `✓ Installed yoloctl V → LINK (was OLD)` line, `!` warnings
-(PATH shadowing, unknown build, downgrade), `✗` failures (a prerequisite only
-when it fails); TUI dark-theme colors only on a terminal without `NO_COLOR` or
-`TERM=dumb`. [7](#source-7)
+Result, warning and failure records use the shared process logger on stderr
+(PATH shadowing, unknown build and downgrade are warnings; prerequisites are
+reported only on failure). Pretty/plain format and colour follow the common
+policy; generated instructions keep their data writer without embedded palette
+escapes. [7](#source-7) [12](#source-12)
 
 [FACT] Shell setup (PATH and completion blocks) is in
 [install shell setup](install-shell-setup.md). [10](#source-10)
@@ -125,7 +126,7 @@ show only recovery guidance. [9](#source-9)
    [publication](../../scripts/publish-release.py#L1-L199), `identity`, `verify_artifact`, `main`;
    [archive checks](../../scripts/check-dist.go#L1-L172), `run`, `extract`.
 7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L279), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go;
-   [output](../../cmd/yoloctl/install_output.go#L1-L133), `installOut`, `installColor`, `installCommand`.
+   [output](../../cmd/yoloctl/install_output.go#L1-L107), `installOut`, `installCommand`.
 8. <a id="source-8"></a> [Publication engine](../../internal/installer/engine.go#L1-L496), `Inspect`, `Publish`, `lock`, `publishDirectory`
    (platform `renameNoReplace`/`noReplaceUnsupported` in rename_linux.go and rename_darwin.go);
    [no-replace fallback regressions](../../internal/installer/publish_fallback_test.go#L1);
@@ -138,3 +139,5 @@ show only recovery guidance. [9](#source-9)
 10. <a id="source-10"></a> [Install shell setup](install-shell-setup.md).
 
 11. <a id="source-11"></a> [Checked main publication](../../scripts/push-main-checked.sh#L157-L181) — required jobs and per-job checkout/tree verification; fixtures in scripts/test_push_main_checked.py.
+
+12. <a id="source-12"></a> [CLI log routing](cli-logging.md) — installer presentation and data separation.

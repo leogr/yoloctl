@@ -76,6 +76,7 @@ func TestMaybeAutoAttach(t *testing.T) {
 	newCmd := func() (*cobra.Command, *bytes.Buffer) {
 		cmd := &cobra.Command{}
 		var errBuf bytes.Buffer
+		t.Cleanup(bindCLITestLogger(t, &errBuf))
 		cmd.SetErr(&errBuf)
 		cmd.SetIn(strings.NewReader(""))
 		return cmd, &errBuf
@@ -128,7 +129,7 @@ func TestMaybeAutoAttach(t *testing.T) {
 		if got == nil || *got != *want {
 			t.Errorf("attach called with %+v, want %+v", got, want)
 		}
-		if !strings.Contains(errBuf.String(), "notice: attaching to box coder (skip with --no-attach)") {
+		if !strings.Contains(errBuf.String(), "notice: box: attaching to box coder (skip with --no-attach)") {
 			t.Errorf("missing the attaching notice, got %q", errBuf.String())
 		}
 	})
@@ -173,6 +174,7 @@ func TestShouldWarnPostAutoupdate(t *testing.T) {
 // is always space-qualified.
 func TestFinishAttachDetachHint(t *testing.T) {
 	var buf bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &buf))
 	if err := finishAttach(context.Canceled, &buf, "staging", "coder"); err != nil {
 		t.Fatalf("a cancellation is a detach, not an error: %v", err)
 	}

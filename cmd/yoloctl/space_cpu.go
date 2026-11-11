@@ -6,6 +6,7 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/resources"
 	"github.com/leogr/yoloctl/internal/vmapi"
 	"github.com/spf13/cobra"
@@ -27,7 +28,7 @@ func resolveSpaceCPUs(ctx context.Context, backend, value string, errw io.Writer
 		if err != nil || n == 0 {
 			return 0, asUserError(fmt.Errorf("invalid --cpus %q; use auto or a positive integer", value))
 		}
-		_, _ = fmt.Fprintf(errw, "VM CPUs: %d (explicit)\n", n)
+		cliInfo(logging.Host, "VM CPUs: %d (explicit)", n)
 		return int(n), nil
 	}
 	host, err := readHostCPU(ctx)
@@ -43,6 +44,6 @@ func resolveSpaceCPUs(ctx context.Context, backend, value string, errw io.Writer
 	if clipped {
 		basis += fmt.Sprintf(", %s maximum %d", backend, maximum)
 	}
-	_, _ = fmt.Fprintf(errw, "VM CPUs: %d (automatic: %s; override with --cpus)\n", n, basis)
+	cliInfo(logging.Host, "VM CPUs: %d (automatic: %s; override with --cpus)", n, basis)
 	return n, nil
 }

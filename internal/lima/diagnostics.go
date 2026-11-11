@@ -1,6 +1,7 @@
 package lima
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -208,31 +209,108 @@ func (t *diagnosticTail) bytes() []byte {
 	return append([]byte(nil), t.buf...)
 }
 
-// runWithDiagnostics owns fd2, including in debug mode. An OS pipe avoids the
-// os/exec copier wait when a daemonized host-agent keeps stderr open.
-func runWithDiagnostics(cmd *exec.Cmd) error {
-	pr, pw, err := os.Pipe()
+type progressContextKey struct{}
+
+type progressWriter struct {
+	mu     sync.Mutex
+	writer io.Writer
+}
+
+func (w *progressWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	// Presentation failures must not stop draining the launcher pipe.
+	_, _ = w.writer.Write(p)
+	return len(p), nil
+}
+
+// WithProgress routes lifecycle launcher diagnostics to the current operation.
+// Explicit command stdout consumers remain authoritative.
+func WithProgress(ctx context.Context, w io.Writer) context.Context {
+	return context.WithValue(ctx, progressContextKey{}, w)
+}
+
+func progressFrom(ctx context.Context) io.Writer {
+	w, _ := ctx.Value(progressContextKey{}).(io.Writer)
+	return w
+}
+
+// runWithDiagnostics preserves explicit stdout consumers such as JSON readers.
+func runWithDiagnostics(cmd *exec.Cmd) error { return runWithProgress(cmd, nil) }
+
+// Owned OS pipes avoid os/exec copier waits when daemon descendants retain FDs.
+func runWithProgress(cmd *exec.Cmd, progress io.Writer) error {
+	if progress != nil {
+		progress = &progressWriter{writer: progress}
+	}
+	var tail, stdoutTail diagnosticTail
+	type capture struct {
+		reader, writer *os.File
+		done           chan struct{}
+	}
+	var captures []capture
+	open := func(dst io.Writer) (*os.File, error) {
+		pr, pw, err := os.Pipe()
+		if err != nil {
+			return nil, err
+		}
+		done := make(chan struct{})
+		captures = append(captures, capture{pr, pw, done})
+		go func() { _, _ = io.Copy(dst, pr); close(done) }()
+		return pw, nil
+	}
+	var stderr io.Writer = &tail
+	if progress != nil {
+		stderr = io.MultiWriter(&tail, progress)
+	}
+	pw, err := open(stderr)
 	if err != nil {
 		return fmt.Errorf("capture limactl stderr: %w", err)
 	}
-	var tail diagnosticTail
-	done := make(chan struct{})
-	go func() { _, _ = io.Copy(&tail, pr); close(done) }()
 	cmd.Stderr = pw
-	err = cmd.Run()
-	_ = pw.Close()
-	select {
-	case <-done:
-	case <-time.After(stderrDrainGrace):
+	if progress != nil && cmd.Stdout == os.Stdout {
+		out, openErr := open(io.MultiWriter(&stdoutTail, progress))
+		if openErr != nil {
+			for _, c := range captures {
+				_ = c.writer.Close()
+				_ = c.reader.Close()
+				<-c.done
+			}
+			return fmt.Errorf("capture limactl stdout: %w", openErr)
+		}
+		cmd.Stdout = out
 	}
-	_ = pr.Close()
-	<-done
+	err = cmd.Run()
+	for _, c := range captures {
+		_ = c.writer.Close()
+	}
+	deadline := time.NewTimer(stderrDrainGrace)
+	defer deadline.Stop()
+	drained := true
+	for _, c := range captures {
+		if drained {
+			select {
+			case <-c.done:
+			case <-deadline.C:
+				drained = false
+			}
+		}
+	}
+	for _, c := range captures {
+		_ = c.reader.Close()
+		<-c.done
+	}
+
 	raw := tail.bytes()
 	operation := "limactl"
 	if len(cmd.Args) > 1 {
 		operation += " " + cmd.Args[1]
 	}
-	err = recordDiagnostics(operation, raw, err)
+	if output := stdoutTail.bytes(); len(output) != 0 {
+		err = recordDiagnostics(operation+" stdout", output, err)
+		raw = append(output, raw...)
+	}
+	err = recordDiagnostics(operation, tail.bytes(), err)
 	if err == nil {
 		return nil
 	}

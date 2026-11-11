@@ -14,6 +14,7 @@ import (
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/features"
 	"github.com/leogr/yoloctl/internal/imagejob"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/ocifeature"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
@@ -72,7 +73,7 @@ func runImagePrune(ctx context.Context, out io.Writer, spaceName string, dryRun 
 	}
 	removed, err := collectImages(ctx, container.New(spaceName), refs, out, dryRun)
 	if err == nil && !dryRun {
-		_, _ = fmt.Fprintf(out, "pruned %d composed image(s).\n", removed)
+		cliInfo(logging.Box, "pruned %d composed image(s).", removed)
 	}
 	return err
 }
@@ -243,12 +244,12 @@ func listImagesAllSpaces(ctx context.Context, filter string, notice io.Writer) (
 	var rows []imageRow
 	for _, inst := range instances {
 		if inst.Status != "Running" {
-			_, _ = fmt.Fprintf(notice, "notice: skipping space %s (%s) — start it to list its images\n", inst.Name, inst.Status)
+			cliNotice(logging.Box, "skipping space %s (%s) — start it to list its images", inst.Name, inst.Status)
 			continue
 		}
 		imgs, err := container.New(inst.Name).ImagesList(ctx, filter)
 		if err != nil {
-			_, _ = fmt.Fprintf(notice, "notice: could not list images in space %s: %v\n", inst.Name, err)
+			cliNotice(logging.Box, "could not list images in space %s: %v", inst.Name, err)
 			continue
 		}
 		rows = append(rows, tagImageRows(inst.Name, imgs)...)

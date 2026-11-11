@@ -65,9 +65,11 @@ RFC 3339) each install it as slog's default once; `SetLogger` swaps it for
 tests. It has no UI dependency. The root command's persistent
 `--log-level debug|info|warn|error`, `-q` (`warn`) and `--color` win over
 `YOLOCTL_LOG` (same values) and `YOLOCTL_DEBUG=1` (`debug`); `-q` with another
-level is an error, and `-v` stays Cobra's `--version` shorthand. `main` renders an unsilenced command error once
-through the `renderCLIError` hook (by default Cobra's `Error:` line) and closes
-the Logger. [8](#source-8) [9](#source-9) [13](#source-13)
+level is an error, and `-v` stays Cobra's `--version` shorthand. `main` renders
+an unsilenced command error once through the `renderCLIError` hook and closes
+the Logger. The CLI migration uses structured error/uncertain outcomes and
+stderr-only command logs; data writers remain separate.
+[8](#source-8) [9](#source-9) [13](#source-13) [16](#source-16)
 
 [FACT] Relayed worker records go to the process Logger when the command's
 stderr is the process stderr, else as plain lines to that writer; a rendering
@@ -103,3 +105,5 @@ and the theme's `Warn` tone. [10](#source-10)
 13. <a id="source-13"></a> [Adapter regressions](../../internal/logging/logging_test.go#L1) — env, `SetLogger` restore, palette, no UI imports; logtheme and cmd/yoloctl logflags_test.go; chatui level_glyph_test.go; session holder_argv_test.go.
 14. <a id="source-14"></a> [Host record routing](../../internal/controller/client.go#L45) — `clientLogStreams`, `HostLogSink`, `case "log"`; cmd/yoloctl stepview.go `installStepView`, controller_client.go `callControllerTerminal`.
 15. <a id="source-15"></a> [Steps block](../../pkg/prettylog/stepview/stepview.go#L1) — `Install`, `Apply`, `blockRows`, `summaryLocked`, `Writer`, `Suspend`, `Close`; failures.go `Failures`; cmd/yoloctl logflags.go `executeRoot` order; stepview_test.go screen regressions.
+
+16. <a id="source-16"></a> [CLI routing](cli-logging.md) — command outcomes, stderr/data separation and input handoffs.

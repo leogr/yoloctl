@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
@@ -49,7 +50,7 @@ func recreateSpaceImage(cmd *cobra.Command, boot *spaceconfig.Bootstrap) error {
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "recreated space %s with VM image %s; start boxes with box start --space %s\n", boot.Name, boot.VM.Image, boot.Name)
+	cliInfo(logging.Host, "recreated space %s with VM image %s; start boxes with box start --space %s", boot.Name, boot.VM.Image, boot.Name)
 	return nil
 }
 

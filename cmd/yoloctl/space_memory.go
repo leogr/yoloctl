@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/resources"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
@@ -40,7 +41,7 @@ func resolveSpaceMemory(ctx context.Context, value string, errw io.Writer) (stri
 		return "", err
 	}
 	value = fmt.Sprintf("%dGiB", allocation/resources.GiB)
-	_, _ = fmt.Fprintf(errw, "VM memory: %s (automatic; override with --memory)\n", value)
+	cliInfo(logging.Host, "VM memory: %s (automatic; override with --memory)", value)
 	return value, nil
 }
 

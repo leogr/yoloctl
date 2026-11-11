@@ -39,9 +39,10 @@ func inSync(_ context.Context, names []string) ([]boxDriftView, error) {
 // build, one that could not be asked, one of another build whose holder
 // could not be identified, and boxes without a running session. Restarts
 // record "name holder".
-func sessionOfferFixture(interactive bool, answer string) (*sessionRestartOffer, *[]string, *bytes.Buffer) {
+func sessionOfferFixture(t *testing.T, interactive bool, answer string) (*sessionRestartOffer, *[]string, *bytes.Buffer) {
 	var restarted []string
 	var errw bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &errw))
 	o := &sessionRestartOffer{
 		inventory: func(context.Context) ([]boxstate.Box, error) {
 			return []boxstate.Box{
@@ -75,7 +76,7 @@ func sessionOfferFixture(interactive bool, answer string) (*sessionRestartOffer,
 // the exact restart command, unknown ones are named as left running, and
 // nobody is asked.
 func TestSessionRestartOfferWithoutTerminalOnlyPrints(t *testing.T) {
-	o, restarted, errw := sessionOfferFixture(false, "y\n")
+	o, restarted, errw := sessionOfferFixture(t, false, "y\n")
 	if err := offerSessionRestarts(context.Background(), "work", *o, false); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +108,7 @@ func TestSessionRestartOfferWithoutTerminalOnlyPrints(t *testing.T) {
 // in listed order; anything else leaves the sessions and prints the commands.
 func TestSessionRestartPromptDefaultsToNo(t *testing.T) {
 	for _, answer := range []string{"", "\n", "n\n", "maybe\n"} {
-		o, restarted, errw := sessionOfferFixture(true, answer)
+		o, restarted, errw := sessionOfferFixture(t, true, answer)
 		if err := offerSessionRestarts(context.Background(), "work", *o, false); err != nil {
 			t.Fatal(err)
 		}
@@ -115,7 +116,7 @@ func TestSessionRestartPromptDefaultsToNo(t *testing.T) {
 			t.Fatalf("answer %q restarted %v:\n%s", answer, *restarted, errw)
 		}
 	}
-	o, restarted, errw := sessionOfferFixture(true, "yes\n")
+	o, restarted, errw := sessionOfferFixture(t, true, "yes\n")
 	if err := offerSessionRestarts(context.Background(), "work", *o, false); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +128,7 @@ func TestSessionRestartPromptDefaultsToNo(t *testing.T) {
 // --restart-sessions is the explicit opt-in: no prompt, terminal or not.
 func TestSessionRestartFlagRestartsWithoutAsking(t *testing.T) {
 	for _, interactive := range []bool{false, true} {
-		o, restarted, errw := sessionOfferFixture(interactive, "")
+		o, restarted, errw := sessionOfferFixture(t, interactive, "")
 		if err := offerSessionRestarts(context.Background(), "work", *o, true); err != nil {
 			t.Fatal(err)
 		}
@@ -140,7 +141,7 @@ func TestSessionRestartFlagRestartsWithoutAsking(t *testing.T) {
 // A failed restart stops the sequence and is never retried: the error names
 // the boxes not attempted and keeps an unknown outcome inspectable.
 func TestSessionRestartStopsAtTheFirstFailure(t *testing.T) {
-	o, _, _ := sessionOfferFixture(false, "")
+	o, _, _ := sessionOfferFixture(t, false, "")
 	var calls []string
 	lost := &controller.OutcomeUnknown{ID: "req1", Cause: errors.New("reply lost")}
 	o.restart = func(_ context.Context, name, _ string, _ bool) error { calls = append(calls, name); return lost }
@@ -155,7 +156,7 @@ func TestSessionRestartStopsAtTheFirstFailure(t *testing.T) {
 // a warning after the successful update, and an error only when restarts
 // were requested.
 func TestSessionRestartOfferQuietWhenCurrentAndFailsWithoutInventory(t *testing.T) {
-	o, restarted, errw := sessionOfferFixture(true, "y\n")
+	o, restarted, errw := sessionOfferFixture(t, true, "y\n")
 	o.inventory = func(context.Context) ([]boxstate.Box, error) {
 		return []boxstate.Box{{Name: "beta", Session: boxstate.SessionInfo{State: boxstate.SessionRunning, Build: boxstate.SessionBuildCurrent}}}, nil
 	}
@@ -167,7 +168,7 @@ func TestSessionRestartOfferQuietWhenCurrentAndFailsWithoutInventory(t *testing.
 		t.Fatalf("requested restarts without inventory: %v %v", err, *restarted)
 	}
 	if err := offerSessionRestarts(context.Background(), "work", *o, false); err != nil || len(*restarted) != 0 ||
-		!strings.Contains(errw.String(), "warning: controller updated, but its agent sessions could not be listed (controller unavailable); check them with yoloctl box list --space work") {
+		!strings.Contains(errw.String(), "warning: host: controller updated, but its agent sessions could not be listed (controller unavailable); check them with yoloctl box list --space work") {
 		t.Fatalf("offer without inventory: %v %v %q", err, *restarted, errw)
 	}
 }
@@ -223,7 +224,7 @@ func TestSessionRestartSkipsSessionsReplacedAfterListing(t *testing.T) {
 		{"after it restarted", false, 2, []string{"alpha 11@a", "gamma 13@g"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			o, restarted, errw := sessionOfferFixture(true, "yes\n")
+			o, restarted, errw := sessionOfferFixture(t, true, "yes\n")
 			reads := 0
 			base := o.inventory
 			o.inventory = func(ctx context.Context) ([]boxstate.Box, error) {
@@ -258,6 +259,7 @@ func TestSessionRestartPromptDoesNotRestartAReplacement(t *testing.T) {
 	restarts := 0
 	answer := strings.NewReader("yes\n")
 	var out bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &out))
 	o := sessionRestartOffer{
 		inventory: func(context.Context) ([]boxstate.Box, error) {
 			return []boxstate.Box{runningSession("alpha", build, "11@a")}, nil
@@ -334,7 +336,7 @@ func TestDevNullIsNotAnInteractivePrompt(t *testing.T) {
 	if isInteractive(f) || isTerminalWriter(f) {
 		t.Fatal("/dev/null counted as a terminal")
 	}
-	o, restarted, out := sessionOfferFixture(false, "")
+	o, restarted, out := sessionOfferFixture(t, false, "")
 	o.in, o.interactive = f, isInteractive(f)
 	if err := offerSessionRestarts(context.Background(), "work", *o, false); err != nil {
 		t.Fatal(err)
@@ -367,9 +369,10 @@ func TestRestartSessionsRequiresUpdateController(t *testing.T) {
 // workloadOfferFixture lists the managed chat server, a box running another
 // session_command workload and an agent box, all on the previous build. Its
 // log records each restart and chat ensure in order.
-func workloadOfferFixture(interactive bool) (*sessionRestartOffer, *[]string, *bytes.Buffer) {
+func workloadOfferFixture(t *testing.T, interactive bool) (*sessionRestartOffer, *[]string, *bytes.Buffer) {
 	var log []string
 	var errw bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &errw))
 	declared := func(name, holder string, command []string) boxstate.Box {
 		b := runningSession(name, boxstate.SessionBuildOther, holder)
 		b.Config = &agentbox.Config{Name: name, Agent: "none", Account: "none", SessionCommand: command}
@@ -402,7 +405,7 @@ func workloadOfferFixture(interactive bool) (*sessionRestartOffer, *[]string, *b
 // confirms readiness and membership; another session_command workload is
 // started again by its own restart; an agent box keeps no session.
 func TestSessionRestartBringsManagedWorkloadsBack(t *testing.T) {
-	o, log, errw := workloadOfferFixture(false)
+	o, log, errw := workloadOfferFixture(t, false)
 	if err := offerSessionRestarts(context.Background(), "work", *o, true); err != nil {
 		t.Fatalf("%v\n%s", err, errw)
 	}
@@ -430,7 +433,7 @@ func TestSessionRestartListingsNameWorkloadRecovery(t *testing.T) {
 		answer      string
 		lead        string
 	}{{false, "", "Nothing was restarted. To restart them:"}, {true, "\n", "Left running. To restart them later:"}} {
-		o, log, errw := workloadOfferFixture(c.interactive)
+		o, log, errw := workloadOfferFixture(t, c.interactive)
 		o.in = strings.NewReader(c.answer)
 		if err := offerSessionRestarts(context.Background(), "work", *o, false); err != nil || len(*log) != 0 {
 			t.Fatalf("%v %v", err, *log)
@@ -452,7 +455,7 @@ func TestSessionRestartListingsNameWorkloadRecovery(t *testing.T) {
 // exact recovery command and an error (a nonzero exit); the boxes after it
 // are not attempted.
 func TestSessionRestartReportsAFailedChatEnsure(t *testing.T) {
-	o, log, errw := workloadOfferFixture(false)
+	o, log, errw := workloadOfferFixture(t, false)
 	o.ensureChat = func(context.Context) error {
 		*log = append(*log, "chat ensure")
 		return errors.New("readiness unconfirmed")
@@ -472,7 +475,7 @@ func TestSessionRestartReportsAFailedChatEnsure(t *testing.T) {
 
 // A failed workload restart names its recovery too.
 func TestSessionRestartReportsAFailedWorkloadRestart(t *testing.T) {
-	o, _, errw := workloadOfferFixture(false)
+	o, _, errw := workloadOfferFixture(t, false)
 	o.restart = func(_ context.Context, name, _ string, _ bool) error {
 		if name == "svc" {
 			return errors.New("holder did not open its socket")
@@ -488,14 +491,14 @@ func TestSessionRestartReportsAFailedWorkloadRestart(t *testing.T) {
 // Without the room, a declared session_command cannot be classified: such
 // boxes are left running, while agent boxes are still offered.
 func TestSessionRestartLeavesWorkloadsRunningWithoutTheRoom(t *testing.T) {
-	o, log, errw := workloadOfferFixture(false)
+	o, log, errw := workloadOfferFixture(t, false)
 	o.chatServer = func(context.Context) (string, error) { return "", errors.New("chat status unavailable") }
 	if err := offerSessionRestarts(context.Background(), "work", *o, true); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(*log, []string{"restart alpha workload=false"}) ||
 		!strings.Contains(errw.String(), "Could not check or identify the agent sessions of chat, svc; they are left running.") ||
-		!strings.Contains(errw.String(), "warning: the managed chat room could not be read (chat status unavailable)") {
+		!strings.Contains(errw.String(), "warning: host: the managed chat room could not be read (chat status unavailable)") {
 		t.Fatalf("log %v:\n%s", *log, errw)
 	}
 }
@@ -548,6 +551,7 @@ func TestRestartedWorkloadStartsThroughTheSharedSessionStart(t *testing.T) {
 		return "", nil
 	}
 	var errw bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &errw))
 	if err := startRestartedWorkload(context.Background(), nil, "work", "svc", &errw); err != nil || !slices.Equal(started, []string{"work/svctrue"}) ||
 		!strings.Contains(errw.String(), "Started the managed workload of box svc again on this build.") {
 		t.Fatalf("%v %v %q", err, started, errw.String())
@@ -578,6 +582,7 @@ func TestChatEnsureOutcomeRequiresAReadyServer(t *testing.T) {
 		{managedchat.Status{ServerReady: true}, "chat ensure reported no managed room", ""},
 	} {
 		var errw bytes.Buffer
+		t.Cleanup(bindCLITestLogger(t, &errw))
 		err := chatEnsureOutcome(c.status, &errw)
 		if (err == nil) != (c.err == "") || err != nil && err.Error() != c.err || !strings.Contains(errw.String(), c.shown) || c.shown == "" && errw.Len() != 0 {
 			t.Errorf("%+v: error %v, shown %q", c.status, err, errw.String())
@@ -626,7 +631,7 @@ func TestSessionRestartTreatsAPendingChatEnsureAsFailure(t *testing.T) {
 			cmd := &cobra.Command{}
 			cmd.SetOut(io.Discard)
 			cmd.SetErr(io.Discard)
-			o, log, out := workloadOfferFixture(false)
+			o, log, out := workloadOfferFixture(t, false)
 			o.ensureChat = hostSessionRestartOffer(cmd, boot).ensureChat
 			err := offerSessionRestarts(context.Background(), "work", *o, true)
 			if ready {
@@ -651,7 +656,7 @@ func TestSessionRestartTreatsAPendingChatEnsureAsFailure(t *testing.T) {
 func TestSessionRestartNeverReplaysALostChatOutcome(t *testing.T) {
 	for _, phase := range []string{"restart", "ensure"} {
 		t.Run(phase, func(t *testing.T) {
-			o, log, out := workloadOfferFixture(false)
+			o, log, out := workloadOfferFixture(t, false)
 			lost := &controller.OutcomeUnknown{ID: "lost-chat-" + phase, Cause: errors.New("reply lost")}
 			orig := o.restart
 			o.restart = func(ctx context.Context, name, holder string, workload bool) error {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"log/slog"
 	"time"
 )
 
@@ -197,5 +197,5 @@ func completeNativeContainerRemoval(ctx context.Context, scope nativeContainerRe
 // nativeRemovalNotice names cleanup left behind after the container was
 // removed; a later create of the same box name gets fresh runtime state.
 var nativeRemovalNotice = func(err error) {
-	_, _ = fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	slog.Warn(fmt.Sprintf("%v", err), slog.String("actor", "box"), slog.String("executor", "openshell"))
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -85,5 +85,5 @@ func WithdrawNativeForwards(ctx context.Context, c *container.Client, name strin
 // nativeForwardNotice reports forward units left listed after an acknowledged
 // stop; tests replace it.
 var nativeForwardNotice = func(err error) {
-	_, _ = fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	slog.Warn(fmt.Sprintf("%v", err), slog.String("actor", "box"), slog.String("executor", "openshell"))
 }

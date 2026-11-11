@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/leogr/yoloctl/internal/layout"
@@ -54,7 +55,7 @@ func (a LiveApplier) prepareNativeContainerRemoval(ctx context.Context, name, ci
 	removed := false
 	warn := func(resource string, failure error) {
 		if failure != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "warning: box %s: %s: %v\n", name, resource, failure)
+			slog.Warn(fmt.Sprintf("box %s: %s: %v", name, resource, failure), slog.String("actor", "box"), slog.String("executor", "openshell"))
 		}
 	}
 	closeOwned := func() error {
@@ -140,7 +141,7 @@ func (a LiveApplier) prepareNativeContainerRemoval(ctx context.Context, name, ci
 					// own error is a notice and the removal continues.
 					listenerRetired = true
 					if err := operator.RetireNativeListener(stop, *live); err != nil {
-						_, _ = fmt.Fprintf(os.Stderr, "warning: box %s: operator listener %s was not retired: %v\n", name, live.Incarnation, err)
+						slog.Warn(fmt.Sprintf("box %s: operator listener %s was not retired: %v", name, live.Incarnation, err), slog.String("actor", "box"), slog.String("executor", "openshell"))
 					}
 				}
 				if err := a.Client.StopContainerID(stop, cid, force); err != nil {
@@ -175,7 +176,7 @@ func (a LiveApplier) prepareNativeContainerRemoval(ctx context.Context, name, ci
 					// leftover is named, never a re-scan condition. A later
 					// create gets a fresh incarnation.
 					if err := retained.withdraw(withdraw, removed, remaining); err != nil {
-						_, _ = fmt.Fprintf(os.Stderr, "warning: box %s: operator registration was not fully removed: %v\n", name, err)
+						slog.Warn(fmt.Sprintf("box %s: operator registration was not fully removed: %v", name, err), slog.String("actor", "box"), slog.String("executor", "openshell"))
 					}
 				}
 				warn("public SSH socket could not be removed", removeNativePublicSSHSocket(sandbox.SocketHostPath(name)))

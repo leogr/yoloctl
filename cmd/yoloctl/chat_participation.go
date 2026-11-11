@@ -14,6 +14,7 @@ import (
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/managedchat"
 	"github.com/leogr/yoloctl/internal/spacelock"
 	"github.com/spf13/cobra"
@@ -59,8 +60,8 @@ func addChatParticipationCommands(parent *cobra.Command) {
 			if jsonOutput {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(result)
 			}
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s acknowledged for client %q in box %q; enrollment is unchanged.\n", result.Action, result.Client, result.Box)
-			return err
+			cliInfo(logging.Chat, "%s acknowledged for client %q in box %q; enrollment is unchanged.", result.Action, result.Client, result.Box)
+			return nil
 		}
 		parent.AddCommand(cmd)
 	}

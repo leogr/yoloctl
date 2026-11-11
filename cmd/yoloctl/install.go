@@ -14,6 +14,7 @@ import (
 	"github.com/leogr/yoloctl/internal/guestbinary"
 	"github.com/leogr/yoloctl/internal/installer"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/releasebundle"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/spf13/cobra"
@@ -209,6 +210,7 @@ func newInstallCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&yes, "yes", false, "Accept a managed upgrade only; never resolve a conflict or change shell files")
 	cmd.Flags().BoolVar(&addToPath, "add-to-path", false, "Add <bin-dir> to PATH in your shell's startup file without asking (when missing)")
 	cmd.Flags().BoolVar(&completion, "completion", false, "Set up yoloctl shell completion without asking (when not set up)")
+	wrapHostLogCommand(cmd, logging.Install)
 	return cmd
 }
 

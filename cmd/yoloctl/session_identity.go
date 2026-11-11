@@ -11,6 +11,7 @@ import (
 	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/agentsession"
 	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 )
@@ -319,7 +320,7 @@ func (l *trackedLaunch) launch(ctx context.Context, c *container.Client, cfg *ag
 		}
 	}
 	if r := rec.Resume; !allocated && kind == agentsession.KindResume && r != nil && r.Outcome == agentsession.OutcomeFailed && rec.Launch != nil && r.Generation == rec.Launch.Generation && l.notice != nil {
-		_, _ = fmt.Fprintf(l.notice, "warning: the previous resume of %s failed (%s); retrying — yoloctl box restart %s --new-session starts a new conversation\n", r.Requested, r.Detail, l.name)
+		cliWarn(logging.Session, "the previous resume of %s failed (%s); retrying — yoloctl box restart %s --new-session starts a new conversation", r.Requested, r.Detail, l.name)
 	}
 	if err := rec.Allocate(kind, now); err != nil {
 		return err
@@ -352,7 +353,7 @@ func (l *trackedLaunch) launch(ctx context.Context, c *container.Client, cfg *ag
 		argv = append(append([]string{"env"}, env...), argv...)
 	}
 	if missing != "" && l.notice != nil {
-		_, _ = fmt.Fprintf(l.notice, "no saved conversation found for %s; starting a new conversation %s\n", missing, rec.Assigned.ID)
+		cliInfo(logging.Session, "no saved conversation found for %s; starting a new conversation %s", missing, rec.Assigned.ID)
 	}
 	startErr := start(argv, token)
 	return errors.Join(startErr, l.settle(ctx, c, generation, token, startErr))
@@ -401,7 +402,7 @@ func retireForNewSession(l *agentsession.BoxLock, t *conversationTracking, errw 
 	if err := agentsession.Save(l, rec); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(errw, "notice: conversation %s of box %s is replaced; the next session starts a new one\n", id, l.Box())
+	cliNotice(logging.Session, "conversation %s of box %s is replaced; the next session starts a new one", id, l.Box())
 	return nil
 }
 

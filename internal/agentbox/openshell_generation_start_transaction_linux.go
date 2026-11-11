@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"log/slog"
 	"time"
 )
 
@@ -139,5 +139,5 @@ func nativeLostReply(err error) bool {
 // nativeStartCleanupNotice reports state left behind by a failed start; tests
 // replace it.
 var nativeStartCleanupNotice = func(err error) {
-	_, _ = fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	slog.Warn(fmt.Sprintf("%v", err), slog.String("actor", "box"), slog.String("executor", "openshell"))
 }

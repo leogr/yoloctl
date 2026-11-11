@@ -24,8 +24,9 @@ type Client struct {
 	stdout io.Writer
 }
 
-// New returns a Client that preserves command stdout. Launcher stderr is
-// captured to the private host log and returned with failures, never printed.
+// New returns a Client with default stdout. Lifecycle progress can be routed
+// through WithProgress; explicit data writers are preserved. Launcher tails
+// are retained in the private host log and returned with failures.
 func New() *Client {
 	return &Client{
 		binary: DefaultBinary,
@@ -52,7 +53,7 @@ func (c *Client) Create(ctx context.Context, name string, template []byte) error
 	cmd := c.spaceCommand(ctx, name, "create", "--name="+InstanceName(name), "--tty=false", "-")
 	cmd.Stdin = bytes.NewReader(template)
 	cmd.Stdout = c.stdout
-	return runWithDiagnostics(cmd)
+	return runWithProgress(cmd, progressFrom(ctx))
 }
 
 // Start boots a previously-created instance and blocks until it is Running.
@@ -110,13 +111,13 @@ func (c *Client) CopyTo(ctx context.Context, space, localPath, remotePath string
 func (c *Client) runSpace(ctx context.Context, space string, args ...string) error {
 	cmd := c.spaceCommand(ctx, space, args...)
 	cmd.Stdout = c.stdout
-	return runWithDiagnostics(cmd)
+	return runWithProgress(cmd, progressFrom(ctx))
 }
 
 func (c *Client) runDisk(ctx context.Context, id string, args ...string) error {
 	cmd := c.diskCommand(ctx, id, args...)
 	cmd.Stdout = c.stdout
-	return runWithDiagnostics(cmd)
+	return runWithProgress(cmd, progressFrom(ctx))
 }
 
 // InstanceConfigPath returns the path of the active lima.yaml for the

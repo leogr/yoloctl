@@ -18,6 +18,7 @@ import (
 	"github.com/leogr/yoloctl/internal/atomicfile"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/spacearchive"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
@@ -39,7 +40,9 @@ Boxes must be stopped, or pass --stop to stop them. Boxes stay stopped. A stoppe
 VM is temporarily started for a verified export and stopped again afterward.
 The archive contains credentials in plaintext (gzip is not encryption). Existing
 output files are never overwritten. A leading ~/ in the archive path expands
-to your home directory.`, Args: cobra.ExactArgs(2), RunE: exportSpace}
+to your home directory.`, Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		return cliOperation(cmd, "Exporting space "+args[0], "Exported space "+args[0], args[0], func() error { return exportSpace(cmd, args) })
+	}}
 	cmd.Flags().Bool("stop", false, "Stop running boxes before taking the consistent backup")
 	return cmd
 }
@@ -55,7 +58,9 @@ Recorded host grants are reused; --workdir remaps the original default workdir,
 and --mount-map OLD=NEW remaps other host paths. Native file ownership is adjusted
 to the importing developer. Partial imports retain private recovery state; use
 space start to resume or space destroy to discard that new space. A leading ~/
-in the archive path expands to your home directory.`, Args: cobra.ExactArgs(2), RunE: importSpace}
+in the archive path expands to your home directory.`, Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		return cliOperation(cmd, "Importing space "+args[0], "Imported space "+args[0]+"; start boxes explicitly", args[0], func() error { return importSpace(cmd, args) })
+	}}
 	cmd.Flags().String("backend", vmhost.DefaultBackend(), "Destination VM backend: lima or firecracker")
 	cmd.Flags().String("vm-image", "", "Optional prepared Firecracker image override (otherwise prepared locally)")
 	cmd.Flags().String("workdir", "", "Replacement path for the archived default host workdir")
@@ -139,8 +144,8 @@ func exportSpace(cmd *cobra.Command, args []string) (result error) {
 	if err := writeExclusiveArchive(target, func(w io.Writer) error { return spacearchive.Write(cmd.Context(), w, *boot, state) }); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "exported space %s to %s; archive includes account credentials\n", name, target)
-	return err
+	cliInfo(logging.Host, "exported space %s to %s; archive includes account credentials", name, target)
+	return nil
 }
 
 func writeExclusiveArchive(path string, write func(io.Writer) error) error {
@@ -272,8 +277,8 @@ func importSpace(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "imported space %s using %s; accounts and declarations restored; start boxes explicitly\n", name, boot.VM.Backend)
-	return err
+	cliInfo(logging.Host, "imported space %s using %s; accounts and declarations restored; start boxes explicitly", name, boot.VM.Backend)
+	return nil
 }
 
 func prepareImportedSpace(cmd *cobra.Command, name string, m spacearchive.Manifest, seed *controller.StoreBundle) (*spaceconfig.Bootstrap, error) {

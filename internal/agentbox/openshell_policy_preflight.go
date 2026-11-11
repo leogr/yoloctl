@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"log/slog"
 	"sync"
 
 	"github.com/leogr/yoloctl/internal/container"
@@ -94,7 +94,7 @@ var nativeRouteNotice = func() func(string, error) {
 		}
 		if !seen[key] {
 			seen[key] = true
-			_, _ = fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+			slog.Warn(fmt.Sprintf("%v", err), slog.String("actor", "box"), slog.String("executor", "openshell"))
 		}
 	}
 }()

@@ -9,6 +9,7 @@ import (
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/port"
 	"github.com/spf13/cobra"
 )
@@ -96,9 +97,9 @@ route); a loopback-only server is unreachable on those routes.`,
 				return err
 			}
 			if len(result.PortForwardsAdded) > 0 {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "forwarded published:%d -> %s:%d\n", published, name, target)
+				cliInfo(logging.Box, "forwarded published:%d -> %s:%d", published, name, target)
 			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "published:%d -> %s:%d already forwarded\n", published, name, target)
+				cliInfo(logging.Box, "published:%d -> %s:%d already forwarded", published, name, target)
 			}
 			return nil
 		},
@@ -148,9 +149,9 @@ declared is a no-op.
 				return err
 			}
 			if !found && len(result.PortForwardsRemoved) == 0 {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "no forward %d:%d on %s; nothing to do\n", published, target, name)
+				cliInfo(logging.Box, "no forward %d:%d on %s; nothing to do", published, target, name)
 			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "unforwarded published:%d -> %s:%d\n", published, name, target)
+				cliInfo(logging.Box, "unforwarded published:%d -> %s:%d", published, name, target)
 			}
 			return nil
 		},

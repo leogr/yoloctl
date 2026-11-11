@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
 	"strings"
 
@@ -62,7 +63,7 @@ func ReapOrphanedNetns(ctx context.Context, space string, notice io.Writer) erro
 		// spike 0.3 observed. Expected to no-op most of the time.
 		_ = vmhost.ShellCommand(ctx, space, "sudo", "ip", "link", "del",
 			vethHostPrefix+strings.TrimPrefix(ns, netnsPrefix)).Run()
-		_, _ = fmt.Fprintf(notice, "notice: reaped leaked sandbox netns %s\n", ns)
+		slog.Log(context.Background(), slog.Level(2), fmt.Sprintf("reaped leaked sandbox netns %s", ns), slog.String("actor", "session"), slog.String("executor", "openshell"))
 	}
 	return nil
 }

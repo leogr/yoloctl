@@ -17,6 +17,7 @@ import (
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/terminal"
@@ -105,6 +106,8 @@ func selectSessionTransport(ctx context.Context, space, name string) (io.ReadWri
 // exit code), and session.ErrSessionClosed when the holder goes away
 // mid-attach.
 func attachToSession(ctx context.Context, space, name string) error {
+	resumeSteps := suspendCLISteps()
+	defer resumeSteps()
 	transport, err := selectSessionTransport(ctx, space, name)
 	if err != nil {
 		return err
@@ -260,7 +263,7 @@ func (p *paintedWriter) painted() bool { return p.set.Load() }
 // regardless of the caller's pinned/default space.
 func finishAttach(err error, errw io.Writer, space, name string) error {
 	if errors.Is(err, context.Canceled) {
-		_, _ = fmt.Fprintf(errw, "\ndetached — the session keeps running; reattach: yoloctl box attach %s --space %s\n", name, space)
+		cliNotice(logging.Session, "detached — the session keeps running; reattach: yoloctl box attach %s --space %s", name, space)
 		return nil
 	}
 	return err
@@ -443,10 +446,9 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 	// the user was detached. A tracked launch closes first, so a crash
 	// before the removal only repeats the close.
 	if ts, ok := readVMTombstoneFn(ctx, c, name); ok {
-		_, _ = fmt.Fprintf(errw, "notice: previous session exited with status %d at %s; starting a fresh one\n",
-			ts.ExitCode, ts.ExitedAt.Format(time.RFC3339))
+		cliNotice(logging.Session, "previous session exited with status %d at %s; starting a fresh one", ts.ExitCode, ts.ExitedAt.Format(time.RFC3339))
 		if tracked != nil {
-			_, _ = fmt.Fprint(errw, tracked.exitHint(ts))
+			cliNotice(logging.Session, "%s", tracked.exitHint(ts))
 			if err := tracked.noteExit(ts); err != nil {
 				return "", err
 			}
@@ -649,7 +651,7 @@ func sessionHolderTuning(ctx context.Context, errw io.Writer, box, space, agent,
 	}
 	expanded, strip, err := session.ExpandBoxTitleTemplate(t.GetBoxTitleTemplate(), box, space, agent, account, icons[agent])
 	if err != nil {
-		_, _ = fmt.Fprintf(errw, "warning: tui.yaml box_title_template or agent_icons is invalid (%v); using the default composition\n", err)
+		cliWarn(logging.Session, "tui.yaml box_title_template or agent_icons is invalid (%v); using the default composition", err)
 		expanded, strip = "", ""
 	}
 	return t.Session.RingBufferBytes, expanded, strip

@@ -20,7 +20,7 @@ func TestChatRevokeByNameNamesTheResolvedID(t *testing.T) {
 		want string
 	}{
 		// The newest same-name membership is the one the name just revoked.
-		{"wk1", false, "Revoked chat member wk1 (ID " + newest + ").\n"},
+		{"wk1", false, "chat: Revoked chat member wk1 (ID " + newest + ").\n"},
 		{newest, false, ""}, // an ID argument keeps the plain status output
 		{"wk1", true, ""},   // JSON stays one document
 	} {
@@ -34,10 +34,11 @@ func TestChatRevokeByNameNamesTheResolvedID(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		var out bytes.Buffer
+		var out, logs bytes.Buffer
+		t.Cleanup(bindCLITestLogger(t, &logs))
 		revoke.SetOut(&out)
-		if err := writeChatRevokedName(revoke, tc.arg, status); err != nil || out.String() != tc.want {
-			t.Fatalf("revoke %q json=%v: %q, %v; want %q", tc.arg, tc.json, out.String(), err, tc.want)
+		if err := writeChatRevokedName(revoke, tc.arg, status); err != nil || out.Len() != 0 || logs.String() != tc.want {
+			t.Fatalf("revoke %q json=%v: %q, %v; want %q", tc.arg, tc.json, logs.String(), err, tc.want)
 		}
 	}
 }

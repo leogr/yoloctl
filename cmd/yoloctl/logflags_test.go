@@ -76,7 +76,7 @@ func TestExecuteRootRendersUnsilencedErrorsOnce(t *testing.T) {
 		silenced bool
 		want     string
 	}{
-		{"shown", false, "Error: boom\n"},
+		{"shown", false, "error: host: Command failed: boom\n"},
 		{"silenced", true, ""},
 	} {
 		root := &cobra.Command{Use: "x"}
@@ -86,6 +86,7 @@ func TestExecuteRootRendersUnsilencedErrorsOnce(t *testing.T) {
 		}}
 		root.AddCommand(leaf)
 		var errOut bytes.Buffer
+		t.Cleanup(bindCLITestLogger(t, &errOut))
 		root.SetErr(&errOut)
 		root.SetArgs([]string{"leaf"})
 		err := executeRoot(root, root.ExecuteC)
@@ -97,9 +98,10 @@ func TestExecuteRootRendersUnsilencedErrorsOnce(t *testing.T) {
 	root := &cobra.Command{Use: "x"}
 	root.AddCommand(&cobra.Command{Use: "leaf", Run: func(*cobra.Command, []string) {}})
 	var errOut bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &errOut))
 	root.SetErr(&errOut)
 	root.SetArgs([]string{"nope"})
-	if err := executeRoot(root, root.ExecuteC); err == nil || !strings.HasPrefix(errOut.String(), "Error: unknown command") {
+	if err := executeRoot(root, root.ExecuteC); err == nil || !strings.HasPrefix(errOut.String(), "error: host: Command failed: unknown command") {
 		t.Fatalf("err %v output %q", err, errOut.String())
 	}
 }

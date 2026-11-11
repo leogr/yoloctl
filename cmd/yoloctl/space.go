@@ -20,6 +20,7 @@ import (
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
@@ -325,7 +326,7 @@ leaves everything unchanged. Start boxes explicitly after the restart.
 				return err
 			}
 			if !scfg.AddMount(canonical, !readOnly) {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s is already granted to space %s\n", canonical, name)
+				cliInfo(logging.Host, "%s is already granted to space %s", canonical, name)
 				return nil
 			}
 			if err := scfg.Validate(); err != nil {
@@ -339,12 +340,12 @@ leaves everything unchanged. Start boxes explicitly after the restart.
 				if err := os.MkdirAll(canonical, 0o755); err != nil {
 					return asUserError(fmt.Errorf("create %s: %w", canonical, err))
 				}
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "notice: created %s\n", canonical)
+				cliNotice(logging.Host, "created %s", canonical)
 			}
 			if err := scfg.Save(); err != nil {
 				return fmt.Errorf("save space config: %w", err)
 			}
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "granted %s (%s) to space %s\n", canonical, accessLabel(!readOnly), name)
+			cliInfo(logging.Host, "granted %s (%s) to space %s", canonical, accessLabel(!readOnly), name)
 			return applyMountChange(cmd, name, restart)
 		},
 	}
@@ -398,7 +399,7 @@ unchanged. Start boxes explicitly after the restart.
 			if err := scfg.Save(); err != nil {
 				return fmt.Errorf("save space config: %w", err)
 			}
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "removed grant %s from space %s\n", canonical, name)
+			cliInfo(logging.Host, "removed grant %s from space %s", canonical, name)
 			return applyMountChange(cmd, name, restart)
 		},
 	}
@@ -471,9 +472,7 @@ func confirmSpaceMountRestart(cmd *cobra.Command, name string, yes bool) (bool, 
 			}
 		}
 		if len(running) > 0 {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-				"restarting space %s will stop %d running box(es) and terminate their agent sessions; declarations are preserved:\n",
-				name, len(running))
+			cliInfo(logging.Host, "restarting space %s will stop %d running box(es) and terminate their agent sessions; declarations are preserved:", name, len(running))
 			for _, box := range running {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  - %s (%s)\n", box.Name, box.Status)
 			}
@@ -504,11 +503,10 @@ func applyMountChange(cmd *cobra.Command, name string, restart bool) error {
 		if err := spaceMountRefresh(name); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-			"space %s is not running; the mount change will be live on its next start\n", name)
+		cliNotice(logging.Host, "space %s is not running; the mount change will be live on its next start", name)
 		return nil
 	}
-	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "restarting space %s...\n", name)
+	cliInfo(logging.Host, "restarting space %s...", name)
 	if err := spaceMountStop(ctx, name); err != nil {
 		return err
 	}
@@ -933,7 +931,7 @@ sessions do not. Start boxes explicitly afterward. --force skips confirmation.`,
 			if err := ensureSpaceRunning(cmd.Context(), name); err != nil {
 				return fmt.Errorf("replacement failed; accounts and declarations retained; retry space start %s: %w", name, err)
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "recreated space %s; start its boxes with box start --space %s\n", name, name)
+			cliInfo(logging.Host, "recreated space %s; start its boxes with box start --space %s", name, name)
 			return nil
 		}}
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Skip confirmation")
@@ -955,7 +953,7 @@ func purgeSpaceBundle(name string, stderr io.Writer) error {
 	if err := os.RemoveAll(bundle); err != nil {
 		return fmt.Errorf("remove space bundle %s (retry space destroy): %w", bundle, err)
 	} else {
-		_, _ = fmt.Fprintf(stderr, "purged space bundle %s\n", bundle)
+		cliInfo(logging.Host, "purged space bundle %s", bundle)
 	}
 	// Clear the context pin if it points at the removed space, so a later
 	// no-flag command doesn't resolve to a space that no longer exists.
@@ -964,7 +962,7 @@ func purgeSpaceBundle(name string, stderr io.Writer) error {
 		if err := ctx.Save(); err != nil {
 			return fmt.Errorf("space removed, but clearing context pin failed: %w", err)
 		} else {
-			_, _ = fmt.Fprintf(stderr, "cleared context pin (was %s)\n", name)
+			cliInfo(logging.Host, "cleared context pin (was %s)", name)
 		}
 	}
 	return nil
@@ -1106,7 +1104,7 @@ func ensureSpaceRunningForShell(ctx context.Context, name string, start bool, st
 			"space %s is not running (status: %s) — start it with: "+
 				"yoloctl space start %s  (or pass --start)", name, inst.Status, name))
 	}
-	_, _ = fmt.Fprintf(stderr, "starting space %s...\n", name)
+	cliInfo(logging.Host, "starting space %s...", name)
 	if err := refreshLimaConfig(name); err != nil {
 		return err
 	}

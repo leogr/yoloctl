@@ -17,6 +17,7 @@ import (
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/internal/logging"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
 )
@@ -134,10 +135,9 @@ openshell-sandbox policy.`,
 				return err
 			}
 
-			errw := cmd.ErrOrStderr()
-			_, _ = fmt.Fprintf(errw, "updating %s in %d box(es) (latest release)\n", pkg, len(targets))
+			cliInfo(logging.Box, "updating %s in %d box(es) (latest release)", pkg, len(targets))
 			for i, name := range targets {
-				_, _ = fmt.Fprintf(errw, "[%d/%d] %s\n", i+1, len(targets), name)
+				cliInfo(logging.Box, "[%d/%d] %s", i+1, len(targets), name)
 				id, err := c.ResolveContainerID(cmd.Context(), name)
 				if err != nil {
 					return err
@@ -148,11 +148,11 @@ openshell-sandbox policy.`,
 						return err
 					}
 					if !proceed {
-						_, _ = fmt.Fprintf(errw, "  skipped (agent not running, no confirmation)\n")
+						cliInfo(logging.Box, "  skipped (agent not running, no confirmation)")
 						continue
 					}
 				}
-				_, _ = fmt.Fprintf(errw, "  updating %s...\n", pkg)
+				cliInfo(logging.Box, "  updating %s...", pkg)
 				if err := installAgentLatest(cmd.Context(), c, id, profile); err != nil {
 					return fmt.Errorf("update %s in %s: %w", pkg, name, err)
 				}
@@ -240,7 +240,7 @@ func preflightAgentRunning(cmd *cobra.Command, spaceName, agentboxName, containe
 	errw := cmd.ErrOrStderr()
 	running, err := agentProcessRunning(cmd.Context(), spaceName, containerID, agentCommand)
 	if err != nil {
-		_, _ = fmt.Fprintf(errw, "  warning: pre-flight check could not run (%v); proceeding\n", err)
+		cliWarn(logging.Box, "pre-flight check could not run (%v); proceeding", err)
 		return true, nil
 	}
 	if running {
@@ -317,6 +317,8 @@ func interpretPgrepExit(err error) (bool, error) {
 // deciding whether the input is interactive enough to prompt at all
 // (see isInteractive + preflightAgentRunning).
 func promptYesNo(prompt string, in io.Reader, out io.Writer) (bool, error) {
+	resumeSteps := suspendCLISteps()
+	defer resumeSteps()
 	_, _ = fmt.Fprint(out, prompt)
 	scanner := bufio.NewScanner(in)
 	if !scanner.Scan() {
@@ -391,7 +393,7 @@ func runAgentVersions(ctx context.Context, out, errw io.Writer) error {
 		pkg := profile.Distribution()
 		info, err := fetchAgentLatest(ctx, &profile)
 		if err != nil {
-			_, _ = fmt.Fprintf(errw, "warning: query %s: %v\n", pkg, err)
+			cliWarn(logging.Box, "query %s: %v", pkg, err)
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t(error)\t-\n", n, pkg)
 			continue
 		}

@@ -27,6 +27,7 @@ import (
 	"github.com/leogr/yoloctl/internal/devcontainer"
 	"github.com/leogr/yoloctl/internal/features"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/manifestio"
 	"github.com/leogr/yoloctl/internal/ocifeature"
 	"github.com/leogr/yoloctl/internal/port"
@@ -276,14 +277,14 @@ func maybeAutoAttach(cmd *cobra.Command, space, name string, noAttach, noAutoupd
 		return err
 	}
 	if protected {
-		_, err := fmt.Fprintln(cmd.ErrOrStderr(), "Managed chat server lifecycle completed; interactive server attachment is unavailable to operators.")
-		return err
-	}
-	if !stdinIsTerminalFn(cmd.InOrStdin()) {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "attach with: yoloctl box attach %s --space %s\n", name, space)
+		cliNotice(logging.Chat, "Managed chat server lifecycle completed; interactive server attachment is unavailable to operators.")
 		return nil
 	}
-	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "notice: attaching to box %s (skip with --no-attach)\n", name)
+	if !stdinIsTerminalFn(cmd.InOrStdin()) {
+		cliInfo(logging.Session, "attach with: yoloctl box attach %s --space %s", name, space)
+		return nil
+	}
+	cliNotice(logging.Box, "attaching to box %s (skip with --no-attach)", name)
 	return ensureAndAttachSessionFn(cmd.Context(), container.New(space), space, name, cmd.ErrOrStderr(), noAutoupdate, alreadyUpdated, sessionStartOptions{})
 }
 
@@ -338,8 +339,7 @@ declared box.
 			// VM kernel for its ABI and scans the retained box log.
 			ll, llErr := inspectLandlock(cmd.Context(), spaceName, args[0])
 			if llErr != nil {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-					"warning: landlock probe failed: %v\n", llErr)
+				cliWarn(logging.Box, "landlock probe failed: %v", llErr)
 			}
 			// Best-effort agent-state resolution. Surfaces the account-owned
 			// bind-mount source so users can see
@@ -769,7 +769,7 @@ func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, 
 		if err := gateWithoutImageBuild(cmd.Context()); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintf(errw, "notice: box %s is already running\n", name)
+		cliNotice(logging.Box, "box %s is already running", name)
 		if newSession {
 			if err := liveHolderError(cmd.Context(), c, name); err != nil {
 				return err
@@ -1275,9 +1275,7 @@ func resolveEffectiveWorkdir(spaceName, agentboxName, workdirFlag, workdirMode s
 			return agentbox.Workdir{}, err
 		}
 		workdir = scfg.DefaultWorkdir
-		_, _ = fmt.Fprintf(notice,
-			"notice: using space %s default workdir %s (override with --workdir PATH or --workdir-mode ephemeral)\n",
-			spaceName, workdir)
+		cliNotice(logging.Box, "using space %s default workdir %s (override with --workdir PATH or --workdir-mode ephemeral)", spaceName, workdir)
 	}
 	return buildWorkdir(agentboxName, workdir, agentbox.WorkdirModeHost, notice)
 }
@@ -1304,7 +1302,7 @@ func buildWorkdir(name, workdir, workdirMode string, notice io.Writer) (agentbox
 			if err := os.MkdirAll(wd.Canonical, 0o755); err != nil {
 				return agentbox.Workdir{}, asUserError(fmt.Errorf("create workdir %s: %w", wd.Canonical, err))
 			}
-			_, _ = fmt.Fprintf(notice, "notice: created host workdir %s (will mount at /workdir)\n", wd.Canonical)
+			cliNotice(logging.Box, "created host workdir %s (will mount at /workdir)", wd.Canonical)
 		}
 		return wd, nil
 	}
@@ -1791,9 +1789,7 @@ func createAgentbox(ctx context.Context, opts agentboxCreateOptions, notice io.W
 		// (no host copy); see the symmetric guard in
 		// newAgentboxDestroyCmd. Print a one-time notice so users don't
 		// discover this after losing work.
-		_, _ = fmt.Fprintf(notice,
-			"notice: box %s is --workdir-mode ephemeral; /workdir is VM-local at %s and `box destroy` will wipe it. Use --workdir PATH if the work isn't throwaway.\n",
-			opts.Name, opts.workdir.Source)
+		cliNotice(logging.Box, "box %s is --workdir-mode ephemeral; /workdir is VM-local at %s and `box destroy` will wipe it. Use --workdir PATH if the work isn't throwaway.", opts.Name, opts.workdir.Source)
 	}
 
 	// Resolve opts into the desired Config (policy, credentials, devcontainer
@@ -1813,11 +1809,9 @@ func createAgentbox(ctx context.Context, opts agentboxCreateOptions, notice io.W
 		if err := persistBoxManifestWithAccount(cfg); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintf(notice,
-			"notice: wrote manifest for %s (not applied). Materialize it with: yoloctl box reconcile %s --space %s\n",
-			opts.Name, opts.Name, opts.Space)
+		cliNotice(logging.Box, "wrote manifest for %s (not applied). Materialize it with: yoloctl box reconcile %s --space %s", opts.Name, opts.Name, opts.Space)
 		if cfg.Privileged {
-			_, _ = fmt.Fprintf(notice, "notice: box %s is privileged; only the host can materialize or start it\n", opts.Name)
+			cliNotice(logging.Box, "box %s is privileged; only the host can materialize or start it", opts.Name)
 		}
 		return nil
 	}
@@ -1839,13 +1833,9 @@ func createAgentbox(ctx context.Context, opts agentboxCreateOptions, notice io.W
 	// Persisted with live binds: surface where the agent's identity persists.
 	if cfg.HasAgent() {
 		if stateMount.Enabled {
-			_, _ = fmt.Fprintf(notice,
-				"notice: account-state: persisting %s state at %s (account %s)\n",
-				cfg.Agent, stateMount.Source, cfg.Account)
+			cliNotice(logging.Box, "account-state: persisting %s state at %s (account %s)", cfg.Agent, stateMount.Source, cfg.Account)
 		} else {
-			_, _ = fmt.Fprintf(notice,
-				"notice: account-state: agent %s declares no state path — nothing persists beyond box destroy\n",
-				cfg.Agent)
+			cliNotice(logging.Box, "account-state: agent %s declares no state path — nothing persists beyond box destroy", cfg.Agent)
 		}
 	}
 	inspector := agentbox.LiveInspector{Client: c}
@@ -2272,7 +2262,7 @@ func stopAgentboxRuntimePartsObserved(ctx context.Context, c *container.Client, 
 		}
 	}
 	if err := lifecycleStopHolderUnit(ctx, c, name); err != nil {
-		_, _ = fmt.Fprintf(errw, "warning: session holder cleanup for %s: %v\n", name, err)
+		cliWarn(logging.Box, "session holder cleanup for %s: %v", name, err)
 	}
 	if err := lifecycleUnforwardAgentbox(ctx, c, name); err != nil {
 		return fmt.Errorf("port forward cleanup for %s: %w", name, err)
@@ -2281,18 +2271,18 @@ func stopAgentboxRuntimePartsObserved(ctx context.Context, c *container.Client, 
 		if err := lifecycleStopAgentboxContainer(ctx, c, name); err != nil {
 			if isContainerGone(err) {
 				if cleanErr := lifecycleCleanupStoppedSessionState(ctx, c, name); cleanErr != nil {
-					_, _ = fmt.Fprintf(errw, "warning: session state cleanup for %s: %v\n", name, cleanErr)
+					cliWarn(logging.Box, "session state cleanup for %s: %v", name, cleanErr)
 				}
 			}
 			return err
 		}
 	}
 	if err := lifecycleCleanupStoppedSessionState(ctx, c, name); err != nil {
-		_, _ = fmt.Fprintf(errw, "warning: session state cleanup for %s: %v\n", name, err)
+		cliWarn(logging.Box, "session state cleanup for %s: %v", name, err)
 	}
 	if reap {
 		if err := lifecycleReapOrphanedNetns(ctx, spaceName, errw); err != nil {
-			_, _ = fmt.Fprintf(errw, "warning: leaked netns cleanup for %s: %v\n", name, err)
+			cliWarn(logging.Box, "leaked netns cleanup for %s: %v", name, err)
 		}
 	}
 	return nil
@@ -2399,8 +2389,7 @@ After the restart the agent CLI is autoupdated to registry-latest
 				if !isContainerGone(err) {
 					return err
 				}
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
-					"notice: box %s has no running container to stop; starting it from its declaration\n", name)
+				cliNotice(logging.Box, "box %s has no running container to stop; starting it from its declaration", name)
 			}
 			var agentUpdated bool
 			previous := cmd.Context()
@@ -2455,13 +2444,13 @@ func removeAgentboxConfig(space, name string, notice io.Writer) error {
 	}
 	if cfg, err := agentbox.Load(space, name); err == nil {
 		if err := cfg.Delete(); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			_, _ = fmt.Fprintf(notice, "warning: removing box manifest %s: %v\n", name, err)
+			cliWarn(logging.Box, "removing box manifest %s: %v", name, err)
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		// Couldn't load (parse/migration error) — try a direct unlink.
 		if path, perr := layout.BoxPath(space, name); perr == nil {
 			if rerr := manifestio.Remove(path); rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
-				_, _ = fmt.Fprintf(notice, "warning: removing box manifest %s: %v\n", name, rerr)
+				cliWarn(logging.Box, "removing box manifest %s: %v", name, rerr)
 			}
 		}
 	}
@@ -2963,8 +2952,7 @@ func listAgentboxesAcrossSpaces(ctx context.Context, stderr io.Writer) ([]agentb
 		}
 		containers, err := container.New(inst.Name).List(ctx, agentbox.LabelAgentbox)
 		if err != nil {
-			_, _ = fmt.Fprintf(stderr,
-				"warning: skipping space %s (list failed): %v\n", inst.Name, err)
+			cliWarn(logging.Box, "skipping space %s (list failed): %v", inst.Name, err)
 			continue
 		}
 		for _, c := range containers {

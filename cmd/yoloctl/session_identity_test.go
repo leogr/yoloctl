@@ -45,6 +45,7 @@ func newIdentityFixture(t *testing.T) *identityFixture {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	f := &identityFixture{t: t, unit: map[string]bool{}, marker: map[string]session.Marker{}, tombstone: map[string]session.Tombstone{}, names: []string{"coder"}, unitErr: map[string]error{}, markerErr: map[string]error{}}
+	t.Cleanup(bindCLITestLogger(t, &f.notices))
 	oldActive, oldMarker, oldTomb, oldNames, oldNow := holderUnitActiveFn, readVMMarkerFn, readVMTombstoneFn, listBoxNamesFn, sessionNow
 	oldState, oldProbe := holderUnitStateFn, probeVMMarkerFn
 	oldResumeFile := resumeFilePresentFn

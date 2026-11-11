@@ -267,6 +267,8 @@ func installLimaAdvice(space string) (*adviceItem, string) {
 // Read precisely one answer without consuming input meant for a later lifecycle
 // prompt or the inherited terminal of a child command.
 func confirmInstall(prompt string, in io.Reader, out io.Writer) (bool, error) {
+	resumeSteps := suspendCLISteps()
+	defer resumeSteps()
 	_, _ = fmt.Fprint(out, prompt)
 	var answer strings.Builder
 	one := []byte{0}

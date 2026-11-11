@@ -28,6 +28,7 @@ func TestStorageBeforeBuild(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
+				defer bindCLITestLogger(t, io.Discard)()
 				available := test.initial
 				cleaned, pruned := false, false
 				refs := []string{"local/from:latest", "local/output:latest"}
@@ -72,6 +73,7 @@ func TestStorageBeforeBuild(t *testing.T) {
 
 func TestStorageBeforeBuildDelayedReclamation(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
+		defer bindCLITestLogger(t, io.Discard)()
 		start := time.Now()
 		measures := 0
 		c := storageCollector{
@@ -97,6 +99,7 @@ func TestStorageBeforeBuildDelayedReclamation(t *testing.T) {
 
 func TestStorageBeforeBuildTimeoutDiagnostic(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
+		defer bindCLITestLogger(t, io.Discard)()
 		c := storageCollector{
 			disk: func() (storagegc.Disk, error) { return storagegc.Disk{Total: 100, Available: 5}, nil },
 			images: func(ctx context.Context, _ []string) (int, error) {

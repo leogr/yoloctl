@@ -14,6 +14,7 @@ import (
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/agentboximage"
 	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/storagegc"
 )
@@ -144,7 +145,7 @@ func collectImages(ctx context.Context, c gcImageClient, refs []string, out io.W
 			return removed, fmt.Errorf("remove image %s: %w", ref, err)
 		}
 		removed++
-		_, _ = fmt.Fprintf(out, "removed unreferenced composed image %s\n", ref)
+		cliInfo(logging.Storage, "removed unreferenced composed image %s", ref)
 	}
 	if dryRun {
 		_, _ = fmt.Fprintf(out, "would prune %d composed image(s); kept %d. No images removed.\n", len(remove), managed-len(remove))
@@ -212,7 +213,7 @@ func (c storageCollector) collect(ctx context.Context, extra []string, out io.Wr
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(out, "storage cleanup: %d obsolete image(s) removed; root free %.1f GiB (was %.1f GiB)\n", removed, gib(after.Available), gib(before.Available))
+	cliInfo(logging.Storage, "storage cleanup: %d obsolete image(s) removed; root free %.1f GiB (was %.1f GiB)", removed, gib(after.Available), gib(before.Available))
 	return nil
 }
 
@@ -224,7 +225,7 @@ func (c storageCollector) beforeBuild(ctx context.Context, refs []string, out io
 	if !disk.Low() {
 		return nil
 	}
-	_, _ = fmt.Fprintln(out, "notice: VM disk space is low; cleaning unused images and build cache before the build")
+	cliNotice(logging.Storage, "VM disk space is low; cleaning unused images and build cache before the build")
 	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()

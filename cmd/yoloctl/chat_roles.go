@@ -14,6 +14,7 @@ import (
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/managedchat"
 	"github.com/leogr/yoloctl/internal/operator"
 	"github.com/leogr/yoloctl/internal/session"
@@ -121,7 +122,7 @@ func synchronizeChatRoles(ctx context.Context, space string, store managedchat.S
 			return nil
 		}
 	}
-	_, _ = fmt.Fprintln(notice, "Channel roles saved and published; managed chat server is absent or stopped. Run chat ensure to apply the pending generation.")
+	cliInfo(logging.Chat, "Channel roles saved and published; managed chat server is absent or stopped. Run chat ensure to apply the pending generation.")
 	return nil
 }
 
@@ -144,7 +145,7 @@ func applyChangedChatRoles(ctx context.Context, r *managedchat.Room, proof manag
 		status, err = control.Call(ctx, "status")
 		var dialErr *net.OpError
 		if errors.As(err, &dialErr) && dialErr.Op == "dial" && dialErr.Net == "unix" && (errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED)) {
-			_, _ = fmt.Fprintln(notice, "Channel roles saved and published; managed chat holder is stopped and control is unavailable. Run chat ensure to apply the pending generation.")
+			cliInfo(logging.Chat, "Channel roles saved and published; managed chat holder is stopped and control is unavailable. Run chat ensure to apply the pending generation.")
 			return nil
 		}
 	case "active", "activating":

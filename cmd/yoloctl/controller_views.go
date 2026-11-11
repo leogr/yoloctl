@@ -14,6 +14,7 @@ import (
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
@@ -99,7 +100,7 @@ func controllerAllSpaces(cmd *cobra.Command, method string) error {
 		cancel()
 		if err != nil {
 			unavailable = append(unavailable, fmt.Errorf("space %s unavailable: %w", name, err))
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "space %s unavailable: %v\n", name, err)
+			cliWarn(logging.Host, "space %s unavailable: %v", name, err)
 		}
 	}
 	asJSON, _ := cmd.Flags().GetBool("json")
@@ -234,7 +235,7 @@ func controllerSpaceList(cmd *cobra.Command, _ []string) error {
 		}
 		boot, err := spaceconfig.LoadBootstrap(name)
 		if err != nil {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "space %s: %v\n", name, err)
+			cliWarn(logging.Host, "space %s: %v", name, err)
 			instances = append(instances, vmhost.Instance{Name: name, Status: "Unconfigured"})
 			continue
 		}

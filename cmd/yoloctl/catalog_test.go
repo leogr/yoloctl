@@ -21,6 +21,7 @@ import (
 func execCmd(t *testing.T, cmd *cobra.Command, stdin string, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	var outBuf, errBuf bytes.Buffer
+	defer bindCLITestLogger(t, &errBuf)()
 	cmd.SetOut(&outBuf)
 	cmd.SetErr(&errBuf)
 	cmd.SetIn(strings.NewReader(stdin))

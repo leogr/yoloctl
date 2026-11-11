@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/leogr/yoloctl/internal/vmapi"
@@ -35,7 +36,7 @@ func resolveSpaceDisk(value, backend string, available uint64, path string, errw
 	var size uint64
 	if value == "" || value == "auto" {
 		size = spaceconfig.AutoVMDisk(available)
-		_, _ = fmt.Fprintf(errw, "system disk %d GiB (half of %d GiB free)\n", size/spaceconfig.GiB, available/spaceconfig.GiB)
+		cliInfo(logging.Host, "system disk %d GiB (half of %d GiB free)", size/spaceconfig.GiB, available/spaceconfig.GiB)
 	} else {
 		n, err := spaceconfig.VMDiskBytes(value)
 		if err != nil {
@@ -63,8 +64,7 @@ func diskCapacityNotice(errw io.Writer, backend string, size, available uint64) 
 	if backend == "firecracker" {
 		pause = ", and the host pauses the VM at 2 GiB free"
 	}
-	_, _ = fmt.Fprintf(errw, "the host filesystem has %.1f GiB free; the VM's %d GiB disk cannot be filled%s\n",
-		float64(available)/float64(spaceconfig.GiB), size/spaceconfig.GiB, pause)
+	cliWarn(logging.Host, "the host filesystem has %.1f GiB free; the VM's %d GiB disk cannot be filled%s", float64(available)/float64(spaceconfig.GiB), size/spaceconfig.GiB, pause)
 }
 
 // growSpaceDisk validates a requested system disk size for a saved space:
@@ -217,9 +217,8 @@ func growSpaceDataDisk(boot *spaceconfig.Bootstrap, requested string, noBackup b
 	if err := boot.Save(); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "space %s: data disk %s → %s extended; its filesystem is grown and checked before mounting at the next yoloctl space start %s\n",
-		boot.Name, diskBytesLabel(from), diskBytesLabel(to), boot.Name)
-	return err
+	cliInfo(logging.Host, "space %s: data disk %s → %s extended; its filesystem is grown and checked before mounting at the next yoloctl space start %s", boot.Name, diskBytesLabel(from), diskBytesLabel(to), boot.Name)
+	return nil
 }
 
 // settleDataDiskGrow records a finished data disk grow once the VM is
@@ -252,8 +251,8 @@ func settleDataDiskGrow(boot *spaceconfig.Bootstrap, out io.Writer) error {
 	if err := boot.Save(); err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(out, "space %s: data disk %s → %s, verified\n", boot.Name, diskBytesLabel(grow.From), diskBytesLabel(grow.To))
-	return err
+	cliInfo(logging.Host, "space %s: data disk %s → %s, verified", boot.Name, diskBytesLabel(grow.From), diskBytesLabel(grow.To))
+	return nil
 }
 
 // dataDiskShown is space show's data disk line.

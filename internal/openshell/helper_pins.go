@@ -1,10 +1,11 @@
 package openshell
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
+	"log/slog"
 	"regexp"
 	"slices"
 	"strings"
@@ -132,7 +133,7 @@ var existingHelperNotice = func() func(string) {
 			return
 		}
 		seen[box] = true
-		_, _ = fmt.Fprintf(os.Stderr, "notice: box %s runs the OpenShell helper of an earlier yoloctl build; recreate it to use this build's helper\n", box)
+		slog.Log(context.Background(), slog.Level(2), fmt.Sprintf("box %s runs the OpenShell helper of an earlier yoloctl build; recreate it to use this build's helper", box), slog.String("actor", "box"), slog.String("executor", "openshell"))
 	}
 }()
 

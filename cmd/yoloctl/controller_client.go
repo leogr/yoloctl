@@ -112,7 +112,10 @@ func routeControllerCommands(root *cobra.Command) {
 	if root.RunE == nil || (!ordinary && method != "box.edit" && method != "account.edit") || strings.HasPrefix(method, "space.") {
 		return
 	}
-	root.RunE = func(cmd *cobra.Command, args []string) error {
+	root.RunE = func(cmd *cobra.Command, args []string) (result error) {
+		if cliRoutedOutcome(cmd, method) {
+			defer func() { result = cliFinishCommand(result, strings.ReplaceAll(method, ".", " ")+" completed") }()
+		}
 		if f := cmd.Flag("all-spaces"); f != nil && f.Value.String() == "true" {
 			return controllerAllSpaces(cmd, method)
 		}
@@ -156,7 +159,7 @@ func routeControllerCommands(root *cobra.Command) {
 			}
 			delete(req.Flags, "file")
 			delete(req.Flags, "anthropic-dir")
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "importing %s\n", doc.Source)
+			cliInfo(logging.Host, "importing %s", doc.Source)
 		}
 		if method == "account.secret.set" {
 			if err := prepareControllerSecret(cmd, &req); err != nil {
@@ -286,7 +289,7 @@ func editThroughController(cmd *cobra.Command, target controllerTarget, method s
 		return err
 	}
 	if bytes.Equal(edited, doc.Data) {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "no changes")
+		cliInfo(logging.Host, "no changes")
 		return nil
 	}
 	doc.Data = edited
@@ -333,10 +336,10 @@ func reportClientDetached(cmd *cobra.Command, req controller.Request, err error)
 	cmd.SilenceErrors = true
 	name := managedBoxName(req)
 	if detached.Owned {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%v; nothing is retried\ncheck: yoloctl box session %s --space %s\nreattach: yoloctl box attach %s --space %s\n",
+		cliNotice(logging.Session, "%v; nothing is retried\ncheck: yoloctl box session %s --space %s\nreattach: yoloctl box attach %s --space %s",
 			err, name, req.Space, name, req.Space)
 	} else {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%v; nothing is retried\n", err)
+		cliNotice(logging.Session, "%v; nothing is retried", err)
 	}
 	return err
 }
@@ -368,7 +371,7 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 			err = &controller.ExitError{Status: status.ExitCode(), Message: err.Error()}
 		}
 		if detached {
-			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), managedDetachHint(req))
+			cliNotice(logging.Session, "%s", managedDetachHint(req))
 		}
 		return err
 	}

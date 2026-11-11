@@ -8,6 +8,7 @@ import (
 	"io/fs"
 
 	"github.com/leogr/yoloctl/internal/boxstate"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/managedchat"
 )
 
@@ -40,7 +41,7 @@ func activeChatMember(r *managedchat.Room, name string) (managedchat.Member, boo
 func revokeDestroyedChatMember(ctx context.Context, space, name, boxID string, notice io.Writer) {
 	retry := fmt.Sprintf("run yoloctl chat revoke %s --space %s", name, space)
 	warn := func(format string, args ...any) {
-		_, _ = fmt.Fprintf(notice, "warning: box %s's chat membership "+format+"\n", append([]any{name}, args...)...)
+		cliWarn(logging.Chat, "box %s's chat membership "+format, append([]any{name}, args...)...)
 	}
 	store, err := nativeChatStoreFn()
 	if err != nil {
@@ -92,5 +93,5 @@ func revokeDestroyedChatMember(ctx context.Context, space, name, boxID string, n
 		warn("(member %s) is revoked, but the chat server has not applied it yet (%v); run yoloctl chat ensure --space %s", member.ID, err, space)
 		return
 	}
-	_, _ = fmt.Fprintf(notice, "notice: revoked box %s's chat membership (member %s); the name can be enrolled again\n", name, member.ID)
+	cliNotice(logging.Chat, "revoked box %s's chat membership (member %s); the name can be enrolled again", name, member.ID)
 }
