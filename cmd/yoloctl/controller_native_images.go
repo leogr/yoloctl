@@ -35,7 +35,7 @@ func (s *imageWarmState) prepareNativeCreationImage(ctx context.Context, p agent
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if _, err := s.call(ctx, controller.ImageRequest{Action: "preparing", Reference: p.DesiredRef, Box: s.box}); err != nil {
+	if _, err := s.call(ctx, preparingRequest(p, s.box)); err != nil {
 		return err
 	}
 	if err := s.prepareNativeCreationImageInputs(ctx, p); err != nil {

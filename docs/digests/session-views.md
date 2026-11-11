@@ -57,7 +57,7 @@ bounded frames, without advancing VT event sequence or replaying side effects.
 Host clipboard reads require a local paste gesture. [20](#source-20)
 
 [FACT] Snapshots are never decoded from command stdout. The trusted CLI child
-inherits a private Unix socket; controller protocol 2 relays this channel
+inherits a private Unix socket; the controller protocol relays this channel
 separately from stdout/stderr/stdin, with independent bounded input credits.
 Only registered managed-session methods can request it. The worker inherits
 another private descriptor and relays the holder frames, observing final status.

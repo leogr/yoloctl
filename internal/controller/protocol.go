@@ -16,7 +16,8 @@ import (
 	"github.com/leogr/yoloctl/internal/termio"
 )
 
-const ProtocolVersion = 2
+// Protocol 3 adds the structured "log" frame and Request.Log.
+const ProtocolVersion = 3
 const MaxFrame = 4 << 20
 const MaxDocument = 1 << 20
 
@@ -38,6 +39,10 @@ type Request struct {
 	Session  *SessionPreferences `json:"session,omitempty"`
 	// Dash preserves the positional boundary for box exec and space ssh.
 	Dash int `json:"dash"`
+	// Log is the host's --log-level (LogDebug, LogWarn, LogError; empty is
+	// info). The worker filters with it; the host still decides format,
+	// colour and folding.
+	Log string `json:"log,omitempty"`
 }
 
 // Holder tuning and terminal identity travel to the VM. Host integration policy
@@ -70,6 +75,9 @@ type Frame struct {
 	Signal        int      `json:"signal,omitempty"`
 	// Owned marks a "detached" frame whose authorized setup continues.
 	Owned bool `json:"owned,omitempty"`
+	// State on an "exit" frame is the durable receipt state when the
+	// outcome is not known: "uncertain" or "command-uncertain".
+	State string `json:"state,omitempty"`
 }
 
 type Wire struct {
@@ -255,6 +263,9 @@ func (r Request) Validate() error {
 	if len(r.Method) > 128 || len(r.Args) > 1024 || len(r.Flags) > 128 ||
 		len(r.Payload) > 2*MaxDocument || len(r.Term) > 128 || r.Dash < -1 || r.Dash > len(r.Args) {
 		return errors.New("controller request exceeds limits")
+	}
+	if _, err := LogVerbosity(r.Log); err != nil {
+		return err
 	}
 	if len(r.Cwd) > 4096 || !utf8.ValidString(r.Cwd) || bytes.ContainsRune([]byte(r.Cwd), 0) ||
 		!utf8.ValidString(r.Term) || bytes.ContainsRune([]byte(r.Term), 0) {

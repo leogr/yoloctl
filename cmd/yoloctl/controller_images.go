@@ -197,7 +197,7 @@ func (s *imageWarmState) prepare(ctx context.Context, p agentboximage.PreparedCo
 	return err
 }
 func (s *imageWarmState) prepareImages(ctx context.Context, p agentboximage.PreparedContext) error {
-	if _, err := s.call(ctx, controller.ImageRequest{Action: "preparing", Reference: p.DesiredRef, Box: s.box}); err != nil {
+	if _, err := s.call(ctx, preparingRequest(p, s.box)); err != nil {
 		return err
 	}
 	if len(p.Recipe.Dockerfile) == 0 {
@@ -232,7 +232,7 @@ func (s *imageWarmState) prepareImages(ctx context.Context, p agentboximage.Prep
 			baseRef = s.entries[base.DesiredRef].pin.Reference
 			// The recursive base changed the request's quiet-phase label. Restore
 			// the composed destination before its resolution and solve can wait.
-			if _, err := s.call(ctx, controller.ImageRequest{Action: "preparing", Reference: p.DesiredRef, Box: s.box}); err != nil {
+			if _, err := s.call(ctx, preparingRequest(p, s.box)); err != nil {
 				return err
 			}
 		}
@@ -560,4 +560,11 @@ func (s *imageWarmState) publishPrepared(ctx context.Context, p agentboximage.Pr
 		}
 	}
 	return nil
+}
+
+// preparingRequest announces an image: its reference, box and, for a
+// composed image, the first feature names with the count of the others.
+func preparingRequest(p agentboximage.PreparedContext, box string) controller.ImageRequest {
+	names, more := controller.ProgressFeatureNames(p.Features)
+	return controller.ImageRequest{Action: "preparing", Reference: p.DesiredRef, Box: box, Features: names, MoreFeatures: more}
 }

@@ -20,6 +20,9 @@ func TestPreparedCompositionKeepsDesiredRecipeSeparateFromBaseDigest(t *testing.
 	if p.DesiredRef != ref || p.BaseRef != RefAgentbox || string(p.Recipe.Dockerfile) != df+composedLabels(RefAgentbox) {
 		t.Fatal("prepared and applied recipes disagree")
 	}
+	if len(p.Features) != 1 || p.Features[0] != "go" {
+		t.Fatalf("progress feature names %v", p.Features)
+	}
 	a, err := p.BindBase("sha256:"+strings.Repeat("a", 64), "linux/amd64")
 	if err != nil {
 		t.Fatal(err)

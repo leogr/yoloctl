@@ -5,6 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+
+	"github.com/leogr/yoloctl/internal/logging"
+	"github.com/leogr/yoloctl/pkg/prettylog"
+	"github.com/leogr/yoloctl/pkg/prettylog/stepview"
 )
 
 type ClientIO struct {
@@ -14,11 +19,87 @@ type ClientIO struct {
 	Resize  <-chan Size
 	Signals <-chan int
 	View    io.ReadWriteCloser
+	// Log renders relayed structured records; nil follows Err (see
+	// clientLogStreams).
+	Log LogSink
+	// LogError receives the first error Log returned for this call. Nil
+	// writes one diagnostic line to Err instead (never through Log). Either
+	// way the call's result is unchanged and later records are still tried.
+	LogError func(error)
 }
 
 type ExitError struct {
 	Status  int
 	Message string
+	// Rendered reports that the last explicit outcome record of this call was
+	// a failed or unknown outcome the host sink accepted before this exit.
+	// Step transitions never set it. Error and ExitCode are unchanged.
+	Rendered bool
+	// State is the controller's durable receipt state when the outcome is
+	// not known ("uncertain", or "command-uncertain" for a lost exec result);
+	// empty for a known result. Message keeps the existing wording.
+	State string
+}
+
+// clientLogStreams picks where relayed records go when the caller chose no
+// sink: the same place the command's stderr frames go. Process stderr gets
+// the process Logger (and, with an interactive steps block, a stderr that
+// writes above the block); any other writer (a buffer, a diagnostic tail,
+// io.Discard) gets plain lines at the process verbosity.
+func clientLogStreams(streams ClientIO) ClientIO {
+	if streams.Log != nil {
+		return streams
+	}
+	if f, ok := streams.Err.(*os.File); ok && f == os.Stderr {
+		streams.Log = HostLogSink()
+		if v := stepview.Current(); v != nil {
+			streams.Err = v.Writer(f)
+		}
+		return streams
+	}
+	w := streams.Err
+	if w == nil {
+		w = io.Discard
+	}
+	streams.Log = expandFailures(prettylog.New(w, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity()}))
+	return streams
+}
+
+// HostLogSink is the process Logger as a relayed-record sink. Without a
+// steps block (a pipe, -q, --log-level warn/error, NO_COLOR or TERM=dumb
+// output) a failed step's last output lines follow its failure, as the
+// block's expansion does on a terminal; at debug they are already shown.
+func HostLogSink() LogSink {
+	if stepview.Current() != nil {
+		return logging.Logger()
+	}
+	return expandFailures(logging.Logger())
+}
+
+func expandFailures(l *prettylog.Logger) LogSink {
+	if logging.Verbosity() >= prettylog.Trace {
+		return l
+	}
+	return stepview.NewFailures(l)
+}
+
+func reportLogError(streams ClientIO, err error) {
+	if streams.LogError != nil {
+		streams.LogError(err)
+		return
+	}
+	if streams.Err != nil {
+		_, _ = fmt.Fprintf(streams.Err, "yoloctl: showing controller log records failed: %v\n", err)
+	}
+}
+
+// OutcomeRendered reports whether err is a remote exit whose outcome the
+// host already rendered, so a caller does not print a second outcome line.
+// Host-detected results (OutcomeUnknown, ImageInterrupted, ClientDetached)
+// are never rendered remotely.
+func OutcomeRendered(err error) bool {
+	var exit *ExitError
+	return errors.As(err, &exit) && exit.Rendered
 }
 
 func (e *ExitError) Error() string {
@@ -49,6 +130,9 @@ func (e *OutcomeUnknown) Unwrap() error { return e.Cause }
 // proof that a launch failed. A signal forwarded before an attach hands off
 // returns ClientDetached. EOF on stdin does not detach an output stream.
 func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Request, streams ClientIO) error {
+	if req.Log == "" {
+		req.Log = LogSetting(logging.Verbosity())
+	}
 	if err := req.Validate(); err != nil {
 		_ = conn.Close()
 		return err
@@ -69,7 +153,7 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 		return fmt.Errorf("controller handshake: %w", err)
 	}
 	if first.Type == "exit" {
-		return &ExitError{first.Status, first.Error}
+		return &ExitError{Status: first.Status, Message: first.Error}
 	}
 	if first.Type != "hello" || first.Hello == nil {
 		return errors.New("invalid controller handshake")
@@ -80,6 +164,9 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 	if err := wire.Write(Frame{Type: "request", Request: &req}); err != nil {
 		return &OutcomeUnknown{req.ID, err}
 	}
+	streams = clientLogStreams(streams)
+	logSink := streams.Log
+	rendered, logFailed := false, false
 	credits := make(chan struct{}, 8)
 	for range cap(credits) {
 		credits <- struct{}{}
@@ -202,6 +289,22 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 					return err
 				}
 			}
+		case "log":
+			record, err := prettylog.UnmarshalRecord(f.Data)
+			if err != nil {
+				return &OutcomeUnknown{req.ID, errors.New("invalid controller log record")}
+			}
+			// Only the LAST explicit outcome counts, and only a rendered failure
+			// or uncertainty: an earlier ok (or a sub-step) never hides a later
+			// error exit.
+			handleErr := logSink.Handle(ctx, record)
+			if handleErr != nil && !logFailed {
+				logFailed = true
+				reportLogError(streams, handleErr)
+			}
+			if outcome := prettylog.StructureOf(record).Outcome; outcome != "" {
+				rendered = handleErr == nil && (outcome == string(prettylog.OutcomeFailed) || outcome == string(prettylog.OutcomeUnknown))
+			}
 		case "exit":
 			if f.ImageRetryJob != "" {
 				return &ImageInterrupted{JobID: f.ImageRetryJob, Retryable: true, Cause: errors.New(f.Error)}
@@ -209,7 +312,10 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 			if f.Status == 0 && f.Error == "" {
 				return nil
 			}
-			return &ExitError{f.Status, f.Error}
+			if f.State != "" && f.State != "uncertain" && f.State != "command-uncertain" {
+				return &OutcomeUnknown{req.ID, errors.New("unexpected controller result state")}
+			}
+			return &ExitError{Status: f.Status, Message: f.Error, Rendered: rendered, State: f.State}
 		case "detached":
 			return &ClientDetached{ID: req.ID, Signal: f.Signal, Owned: f.Owned}
 		default:

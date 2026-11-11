@@ -321,7 +321,7 @@ func (a LiveApplier) Create(ctx context.Context, c *Config, policy []byte) error
 		}
 		return a.createQualifiedNativeContainer(ctx, c, runtimeImage, policy)
 	}
-	runtimeImage, err := agentboximage.EnsureComposedImage(ctx, a.Client, c.Image, candidates, agentboximage.Options{Notice: os.Stderr, FeaturePlan: plan})
+	runtimeImage, err := agentboximage.EnsureComposedImage(ctx, a.Client, c.Image, candidates, agentboximage.Options{Notice: agentboximage.LogNotices, FeaturePlan: plan})
 	if err != nil {
 		return fmt.Errorf("ensure runtime image for %s: %w", c.Name, err)
 	}

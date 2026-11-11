@@ -5,10 +5,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/pkg/prettylog"
+	"github.com/leogr/yoloctl/pkg/prettylog/stepview"
 )
 
 func TestLogSettingsFlagsWinOverEnvironment(t *testing.T) {
@@ -98,5 +101,32 @@ func TestExecuteRootRendersUnsilencedErrorsOnce(t *testing.T) {
 	root.SetArgs([]string{"nope"})
 	if err := executeRoot(root, root.ExecuteC); err == nil || !strings.HasPrefix(errOut.String(), "Error: unknown command") {
 		t.Fatalf("err %v output %q", err, errOut.String())
+	}
+}
+
+// A command that ends (Ctrl-C, lost connection) while a step is still
+// running leaves that step as uncertain and the error as the last line:
+// the steps block is closed before the error is rendered.
+func TestExecuteRootClosesTheStepsBlockBeforeTheError(t *testing.T) {
+	var screen bytes.Buffer
+	l := prettylog.New(&screen, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: prettylog.Normal})
+	restore := logging.SetLogger(l)
+	defer restore()
+	stepview.Install(l, &screen, stepview.Options{Interval: time.Hour})
+	root := &cobra.Command{Use: "x"}
+	root.AddCommand(&cobra.Command{Use: "leaf", RunE: func(*cobra.Command, []string) error {
+		l.StartStep("Building image a1b2c3", prettylog.Actor("builder"))
+		return errors.New("connection ended before the result")
+	}})
+	root.SetErr(&screen)
+	root.SetArgs([]string{"leaf"})
+	if err := executeRoot(root, root.ExecuteC); err == nil {
+		t.Fatal("no error")
+	}
+	out := screen.String()
+	unfinished := strings.LastIndex(out, "did not finish before the command ended")
+	failure := strings.LastIndex(out, "connection ended before the result")
+	if unfinished < 0 || failure < unfinished || stepview.Current() != nil {
+		t.Fatalf("%q", out)
 	}
 }

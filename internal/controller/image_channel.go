@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strconv"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/leogr/yoloctl/internal/imagejob"
 )
@@ -17,7 +21,62 @@ type ImageRequest struct {
 	Recipe    ImageRecipe `json:"recipe,omitempty"`
 	Reference string      `json:"reference,omitempty"`
 	JobID     string      `json:"job_id,omitempty"`
+	// Features names some of a composed image's features in a "preparing"
+	// notice (display only, at most ProgressFeatures); MoreFeatures counts the
+	// rest.
+	Features     []string `json:"features,omitempty"`
+	MoreFeatures int      `json:"more_features,omitempty"`
 }
+
+// ProgressFeatures is how many feature names a preparing notice shows.
+const ProgressFeatures = 16
+
+// ProgressFeatureNames is the display part of a feature list: the first
+// ProgressFeatures names and the count of the others.
+func ProgressFeatureNames(names []string) ([]string, int) {
+	if len(names) <= ProgressFeatures {
+		return names, 0
+	}
+	return names[:ProgressFeatures], len(names) - ProgressFeatures
+}
+
+// progressFeatures formats the display of a preparing notice's features. It
+// refuses only input over its bounds (more than ProgressFeatures names, an
+// implausible count); a name that is not plain printable text is counted
+// instead of shown, never a reason to stop a preparation.
+func progressFeatures(names []string, more int) (string, error) {
+	if len(names) > ProgressFeatures || more < 0 || more > 1<<20 {
+		return "", errors.New("invalid feature progress")
+	}
+	shown := make([]string, 0, len(names))
+	for _, n := range names {
+		if plainName(n) {
+			shown = append(shown, n)
+		} else {
+			more++
+		}
+	}
+	if more > 0 {
+		shown = append(shown, "+"+strconv.Itoa(more)+" more")
+	}
+	if len(shown) == 0 {
+		return "", nil
+	}
+	return " (features: " + strings.Join(shown, ", ") + ")", nil
+}
+
+func plainName(n string) bool {
+	if n == "" || len(n) > 128 || !utf8.ValidString(n) {
+		return false
+	}
+	for _, r := range n {
+		if r <= ' ' || r == 0x7f || unicode.IsControl(r) || unicode.IsSpace(r) {
+			return false
+		}
+	}
+	return true
+}
+
 type ImageReply struct {
 	Pin          PinnedImage           `json:"pin,omitempty"`
 	LocalTarget  *imagejob.LocalTarget `json:"local_target,omitempty"`

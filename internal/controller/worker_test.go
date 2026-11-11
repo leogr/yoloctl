@@ -280,6 +280,8 @@ func TestMain(m *testing.M) {
 			_, _ = released.Write([]byte{1})
 			time.Sleep(time.Minute)
 			finishExit(94)
+		case "test.log":
+			logWorker(work, finishExit)
 		default:
 			finishExit(95)
 		}

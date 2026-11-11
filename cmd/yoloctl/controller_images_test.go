@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -291,5 +292,16 @@ func TestNestedBasePreparationRestoresComposedProgressBeforeSolve(t *testing.T) 
 	}
 	if acquisitions != 2 || finished != 1 || len(notices) != 3 || notices[0] != composed || notices[1] != agentboximage.RefAgentbox || notices[2] != composed {
 		t.Fatal("base/composed phase or outside-lock drain sequence", acquisitions, finished, notices)
+	}
+}
+
+func TestPreparingRequestAbbreviatesFeatures(t *testing.T) {
+	var names []string
+	for i := range 65 {
+		names = append(names, "f"+strconv.Itoa(i))
+	}
+	r := preparingRequest(agentboximage.PreparedContext{DesiredRef: "local/composed:x", Features: names}, "worker")
+	if r.Action != "preparing" || r.Box != "worker" || len(r.Features) != controller.ProgressFeatures || r.MoreFeatures != 65-controller.ProgressFeatures {
+		t.Fatalf("%+v", r)
 	}
 }

@@ -7,11 +7,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/leogr/yoloctl/internal/imagejob"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	digest "github.com/opencontainers/go-digest"
 )
 
@@ -112,6 +114,11 @@ type imageJob struct {
 	slotted, building, finished, uncertain bool
 	result                                 PinnedImage
 	err                                    error
+	// step is the job's build/pull/retain step; it ends with the job's result.
+	step *prettylog.Step
+	// image titles the stage step: the starting request's image reference
+	// and features; the short job ID when unknown.
+	image string
 }
 
 // ImageJobs is controller-owned. Workers only hold an interest and consume a
@@ -259,9 +266,7 @@ func (m *ImageJobs) acquireWithProgress(ctx context.Context, recipe ImageRecipe,
 			attempt = hex.EncodeToString(h.Sum(nil))
 		}
 		jobCtx, cancel := context.WithCancel(m.ctx)
-		job = &imageJob{owner: owner, ownerCtx: ctx, progress: progress, phase: ImagePhase{PrivateVersion: 1, JobID: id, StableInput: stable, Attempt: attempt, SolveRef: id, Incarnation: m.incarnation, PreparedRef: "yoloctl/prepared/" + id}, recipe: imagejob.Copy(recipe), ctx: jobCtx, cancel: cancel, done: make(chan struct{})}
-		job.ctx = context.WithValue(job.ctx, imageBuildLogKey{}, &job.log)
-		job.log.setPhase("Waiting for image build " + id)
+		job = &imageJob{owner: owner, ownerCtx: ctx, progress: progress, phase: ImagePhase{PrivateVersion: 1, JobID: id, StableInput: stable, Attempt: attempt, SolveRef: id, Incarnation: m.incarnation, PreparedRef: "yoloctl/prepared/" + id}, recipe: imagejob.Copy(recipe), ctx: jobCtx, cancel: cancel, done: make(chan struct{}), image: output.imageLabel()}
 		m.jobs[id] = job
 		go m.run(job)
 	}
@@ -270,8 +275,8 @@ func (m *ImageJobs) acquireWithProgress(ctx context.Context, recipe ImageRecipe,
 	job.interests++
 	m.notify()
 	m.mu.Unlock()
-	if joined && output != nil {
-		_, _ = fmt.Fprintf(output, "Joining image build %s\n", jobID)
+	if joined {
+		output.note("Joining image build " + shortImageJob(jobID))
 	}
 	unsubscribe := job.log.subscribe(output)
 	defer unsubscribe()
@@ -572,15 +577,20 @@ func (m *ImageJobs) run(j *imageJob) {
 		server.mu.Unlock()
 		m.mu.Unlock()
 		if err == nil {
-			stage := "Building image "
+			stage, executor := "Building image ", imageExecutor
 			switch j.recipe.Builder {
 			case "pull/1":
-				stage = "Pulling image "
+				stage, executor = "Pulling image ", "containerd"
 			case imagejob.LocalRetainBuilder:
-				stage = "Retaining local image "
+				stage, executor = "Retaining local image ", "containerd"
 			}
-			j.log.setPhase(stage + jobID)
-			result, err = m.backend.Build(j.ctx, j.recipe, phase)
+			title := j.image
+			if title == "" {
+				title = shortImageJob(jobID)
+			}
+			j.step = j.log.Logger().StartStep(stage+title, prettylog.Actor(imageActor), prettylog.Executor(executor), slog.String("job", shortImageJob(jobID)))
+			target := imageProgressTarget{step: j.step, log: j.log.Logger().Slog().With(prettylog.Actor(imageActor), prettylog.Executor(executor))}
+			result, err = m.backend.Build(context.WithValue(j.ctx, imageBuildStepKey{}, target), j.recipe, phase)
 			if err == nil {
 				err = m.backend.Validate(context.WithoutCancel(j.ctx), result)
 			}
@@ -645,6 +655,7 @@ func (m *ImageJobs) run(j *imageJob) {
 	} else if err != nil {
 		j.err = &ImageInterrupted{JobID: j.phase.JobID, Retryable: !permitted, Cause: err}
 	}
+	j.endSteps(knownFailure)
 	close(j.done)
 	m.notify()
 	orphan := j.interests == 0 || !j.phase.AbandonedAt.IsZero()
@@ -688,6 +699,32 @@ func (m *ImageJobs) RetainedReferences() []string {
 		refs = append(refs, j.phase.PreparedRef)
 	}
 	return refs
+}
+
+// endSteps ends the job's open steps with its result: ok, a known build
+// failure, or an uncertain (interrupted) outcome in the existing wording.
+// Steps already ended are unchanged (end calls are idempotent).
+func (j *imageJob) endSteps(knownFailure bool) {
+	for _, s := range []*prettylog.Step{j.step} {
+		switch {
+		case s == nil:
+		case j.err == nil:
+			s.Done()
+		case knownFailure:
+			s.Fail(j.err)
+		default:
+			s.Unknown(j.err)
+		}
+	}
+}
+
+// shortImageJob is the job ID shown in progress (the full ID stays in
+// receipts, errors and ImageInterrupted).
+func shortImageJob(id string) string {
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
 }
 
 func jobBlocker(j *imageJob) BlockerSummary {

@@ -28,6 +28,7 @@ func addLogFlags(root *cobra.Command) {
 		// A worker or background process may already have installed its
 		// Logger; Init then keeps it.
 		logging.Init(s)
+		installStepView(s)
 		return nil
 	}
 }
@@ -73,6 +74,9 @@ var renderCLIError = func(root *cobra.Command, err error) {
 func executeRoot(root *cobra.Command, run func() (*cobra.Command, error)) error {
 	root.SilenceErrors = true
 	executed, err := run()
+	// The steps block ends first, so the command's final error is the last
+	// thing on the terminal, never followed by a redrawn or unfinished step.
+	closeStepView()
 	if err != nil && (executed == nil || executed == root || !executed.SilenceErrors) {
 		renderCLIError(root, err)
 	}

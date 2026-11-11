@@ -125,11 +125,9 @@ func EnsureComposedImage(ctx context.Context, c Client, base string, candidates 
 		return "", err
 	}
 	if opts.Force {
-		_, _ = fmt.Fprintf(opts.Notice, "notice: rebuilding composed image %s (cache-busted)\n", ref)
+		notice(ctx, opts.Notice, "rebuilding composed image %s (cache-busted)", ref)
 	} else {
-		_, _ = fmt.Fprintf(opts.Notice,
-			"notice: composed image %s not present in space; building from %s + features (this may take several minutes)\n",
-			ref, base)
+		notice(ctx, opts.Notice, "composed image %s not present in space; building from %s + features (this may take several minutes)", ref, base)
 	}
 	files, err := opts.FeaturePlan.BuildFiles(ctx)
 	if err != nil {

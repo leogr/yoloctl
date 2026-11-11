@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strings"
 
 	"github.com/leogr/yoloctl/assets"
@@ -18,6 +19,9 @@ type PreparedContext struct {
 	DesiredRef string
 	BaseRef    string
 	Recipe     imagejob.Recipe
+	// Features names the features a composed image installs, for progress
+	// only; the recipe alone defines the build.
+	Features []string
 }
 
 // BindBase fixes the platform and the immutable FROM image at prepare time.
@@ -51,7 +55,7 @@ func PrepareComposed(ctx context.Context, base string, candidates []string, opts
 		return PreparedContext{}, err
 	}
 	r := imagejob.Recipe{Builder: "composed/" + builderVersion, Dockerfile: []byte(dockerfile + composedLabels(base)), Files: files, Force: opts.Force, NoCache: noCache}
-	return PreparedContext{DesiredRef: ref, BaseRef: base, Recipe: imagejob.Copy(r)}, nil
+	return PreparedContext{DesiredRef: ref, BaseRef: base, Recipe: imagejob.Copy(r), Features: slices.Sorted(slices.Values(candidates))}, nil
 }
 
 func refreshNeedsNoCache(base string, candidates []string, force bool) (bool, error) {

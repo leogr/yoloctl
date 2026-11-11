@@ -90,6 +90,9 @@ type earlyControllerWorkerOps struct {
 	phase  func(controller.WorkerInput) earlyWorkerPhase
 	launch func(controller.WorkerInput, string) *workerLaunchCandidate
 	load   func(context.Context) error
+	// log claims the structured log pipe (close-on-exec) before LoadRuntime
+	// or any handler can start a child. Optional: nil keeps stderr logging.
+	log func(controller.WorkerInput) *os.File
 }
 type earlyControllerWorker struct {
 	mu          sync.Mutex
@@ -98,6 +101,7 @@ type earlyControllerWorker struct {
 	inputDigest string
 	phase       earlyWorkerPhase
 	launch      *workerLaunchCandidate
+	log         *os.File
 	closed      bool
 	closeOnce   sync.Once
 	closeErr    error
@@ -121,6 +125,7 @@ func acquireEarlyControllerWorker(ctx context.Context) (*earlyControllerWorker, 
 		},
 		launch: consumeEarlyWorkerLaunch,
 		load:   controller.LoadRuntime,
+		log:    controller.OpenWorkerLog,
 	})
 }
 func acquireEarlyControllerWorkerWith(ctx context.Context, ops earlyControllerWorkerOps) (_ *earlyControllerWorker, result error) {
@@ -162,6 +167,9 @@ func acquireEarlyControllerWorkerWith(ctx context.Context, ops earlyControllerWo
 	if err := earlyWorkerContext(ctx); err != nil {
 		return nil, err
 	}
+	if ops.log != nil {
+		e.log = ops.log(e.work)
+	}
 	if err := ops.load(ctx); err != nil {
 		return nil, err
 	}
@@ -178,6 +186,16 @@ func (e *earlyControllerWorker) TakeCheckpoint() (*os.File, error) {
 	}
 	return e.mandatory.TakeCheckpoint()
 }
+
+// Log is the claimed structured log pipe, or nil.
+func (e *earlyControllerWorker) Log() *os.File {
+	if e == nil {
+		return nil
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.log
+}
 func (e *earlyControllerWorker) Close() error {
 	if e == nil {
 		return nil
@@ -185,9 +203,12 @@ func (e *earlyControllerWorker) Close() error {
 	e.closeOnce.Do(func() {
 		e.mu.Lock()
 		e.closed = true
-		launch, phase, mandatory := e.launch, e.phase, e.mandatory
+		launch, phase, mandatory, logFile := e.launch, e.phase, e.mandatory, e.log
 		e.mu.Unlock()
 		var err error
+		if logFile != nil {
+			_ = logFile.Close() // the worker Logger is closed first by its owner
+		}
 		if launch != nil {
 			err = errors.Join(err, launch.Close())
 		}

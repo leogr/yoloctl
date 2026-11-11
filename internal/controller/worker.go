@@ -27,6 +27,11 @@ type WorkerInput struct {
 	WorkerAssociationDigest string             `json:"worker_association_digest,omitempty"`
 	NativePhaseFD           int                `json:"native_phase_fd,omitempty"`
 	NativePhasePipe         *NativePhasePipeID `json:"native_phase_pipe,omitempty"`
+	// LogFD is the write end of the worker's structured log pipe. It is the
+	// LAST inherited descriptor, after every slot above, so it never moves
+	// the payload/checkpoint/view/phase/namespace layout.
+	LogFD   int                `json:"log_fd,omitempty"`
+	LogPipe *NativePhasePipeID `json:"log_pipe,omitempty"`
 }
 
 // WorkerPIDAnchor is supplied only by actual controller launch admission.
@@ -65,6 +70,17 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 	}
 	defer func() { _ = releasedRead.Close() }()
 	defer func() { _ = releasedWrite.Close() }()
+	logRead, logWrite, err := os.Pipe()
+	if err != nil {
+		return 2, err
+	}
+	defer func() { _ = logRead.Close() }()
+	defer func() { _ = logWrite.Close() }()
+	logPipe, _ := nativePhasePipeIdentity(int(logWrite.Fd()))
+	logSink := streams.Log
+	if logSink == nil {
+		logSink = plainLogSink(streams.Err)
+	}
 	cmd := exec.CommandContext(workerCtx, executable, "controller-internal", "worker")
 	cmd.Env = []string{
 		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -86,13 +102,14 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 	// Phase is appended FIRST; the optional namespace/bootstrap pair follows it.
 	phaseFD, phasePipe, closePhaseWrite := prepareNativePhaseTransport(cmd, observation)
 	defer closePhaseWrite()
-	work := WorkerInput{Principal: p, Request: req, NativePhaseFD: phaseFD, NativePhasePipe: phasePipe}
+	work := WorkerInput{Principal: p, Request: req, NativePhaseFD: phaseFD, NativePhasePipe: phasePipe, LogPipe: logPipe}
 	var prepared workerPreparedHandoff
 	var privateInput []byte
 	if streams.WorkerHandoff != nil {
 		candidateWork := work
 		candidateWork.PIDNamespaceFD = 3 + len(cmd.ExtraFiles)
 		candidateWork.PIDNamespaceBootstrapFD = candidateWork.PIDNamespaceFD + 1
+		candidateWork.LogFD = candidateWork.PIDNamespaceBootstrapFD + 1
 		var phaseChild *os.File
 		if phaseFD != 0 {
 			_, phaseChild = observation.pipe()
@@ -128,6 +145,17 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 	if namespaceIndex != 0 {
 		work.PIDNamespaceFD = namespaceIndex
 	}
+	// The log pipe is appended last; a prepared handoff already fixed its slot
+	// in the canonical input after the transferred pair.
+	logIndex := 3 + len(cmd.ExtraFiles)
+	if prepared != nil {
+		if work.LogFD != logIndex {
+			return 2, errors.New("worker log descriptor differs from the prepared handoff")
+		}
+	} else {
+		work.LogFD = logIndex
+	}
+	cmd.ExtraFiles = append(cmd.ExtraFiles, logWrite)
 	cmd.WaitDelay = 5 * time.Second
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	var terminal *os.File
@@ -155,6 +183,13 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 	}
 	observation.Started(cmd.Process.Pid)
 	closePhaseWrite()
+	_ = logWrite.Close()
+	logDone := make(chan struct{})
+	var logErr error
+	go func() {
+		defer close(logDone)
+		logErr = relayWorkerLog(context.WithoutCancel(ctx), logRead, logSink)
+	}()
 	if req.View {
 		_ = viewChild.Close()
 		if streams.View == nil {
@@ -253,6 +288,7 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 		}
 	}()
 	err = cmd.Wait()
+	exited := time.Now()
 	observation.Exited()
 	cancelWorker()
 	// Terminate transient children before joining their inherited checkpoint
@@ -291,6 +327,9 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 			err = errors.New("worker exited with an inherited terminal still open")
 		}
 	}
+	// Every record the worker wrote precedes its result: the controller sends
+	// the exit frame only after this join.
+	joinWorkerLog(logRead, logDone, &logErr, exited, logSink)
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
 		code := exit.ExitCode()

@@ -146,6 +146,9 @@ func (t *Tracker) transition(ts *tracked, st Structure, r slog.Record) {
 	}
 	if v.State != StepRunning {
 		v.Took, v.Err, v.Reason = st.Took, st.Err, st.Reason
+		if r.Message != "" {
+			v.Title = r.Message // an end state may retitle its step ("… ready")
+		}
 	}
 	v.Attrs = mergeAttrs(v.Attrs, r)
 }

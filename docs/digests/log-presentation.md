@@ -69,6 +69,19 @@ level is an error, and `-v` stays Cobra's `--version` shorthand. `main` renders 
 through the `renderCLIError` hook (by default Cobra's `Error:` line) and closes
 the Logger. [8](#source-8) [9](#source-9) [13](#source-13)
 
+[FACT] Relayed worker records go to the process Logger when the command's
+stderr is the process stderr, else as plain lines to that writer; a rendering
+error is reported once without changing the result. On a terminal at the
+default `info` level, `stepview` draws running root steps as a block cut to the terminal (no
+terminal reads or keys), leaves one line per ended root plus a failed
+sub-step's last 20 lines, defers output while suspended and summarizes a
+replayed snapshot after its end record. It closes before the command's final
+error, showing a root step still running as `?` "did not finish before the
+command ended". Without a block, below debug, a failed relayed step's last 20
+lines follow as error records split under the message limit (the heading cuts
+the step title to 120 bytes); their write
+errors are reported like the step's. [14](#source-14) [15](#source-15)
+
 [FACT] The holder logs an agent launch as its program name and argument count,
 never its argv. Chat notices and delivery marks use the shared `✗`/`?` glyphs
 and the theme's `Warn` tone. [10](#source-10)
@@ -88,3 +101,5 @@ and the theme's `Warn` tone. [10](#source-10)
 11. <a id="source-11"></a> [Rendering regressions](../../pkg/prettylog/render_test.go#L1-L160) — pretty/plain goldens, escaping, colour, quiet and error levels, `DecideColor` table; fold, blocking writer and interleaving in behavior_test.go.
 12. <a id="source-12"></a> [Step and wire regressions](../../pkg/prettylog/behavior_test.go#L84-L397) — review1_test.go bounded empty lines, last reserved key, strict decoding, unambiguous fold keys; step lines, snapshot round trip through the wire at Quiet, monotonic states, eviction, typed round trip, caps, unrepresentable records, incomplete streams, `Route`.
 13. <a id="source-13"></a> [Adapter regressions](../../internal/logging/logging_test.go#L1) — env, `SetLogger` restore, palette, no UI imports; logtheme and cmd/yoloctl logflags_test.go; chatui level_glyph_test.go; session holder_argv_test.go.
+14. <a id="source-14"></a> [Host record routing](../../internal/controller/client.go#L45) — `clientLogStreams`, `HostLogSink`, `case "log"`; cmd/yoloctl stepview.go `installStepView`, controller_client.go `callControllerTerminal`.
+15. <a id="source-15"></a> [Steps block](../../pkg/prettylog/stepview/stepview.go#L1) — `Install`, `Apply`, `blockRows`, `summaryLocked`, `Writer`, `Suspend`, `Close`; failures.go `Failures`; cmd/yoloctl logflags.go `executeRoot` order; stepview_test.go screen regressions.

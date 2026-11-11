@@ -175,8 +175,10 @@ depth, writers and completion together. A correct host-only RunE change is
 incomplete if helper dispatch, unknown outcomes or server validation differ.
 [1](#source-1) [2](#source-2)
 
-[FACT] Image preparation reports immediately, streams plain BuildKit logs to
-stderr for original and joined clients, and reports quiet work every two seconds.
+[FACT] Image preparation reports immediately and shows BuildKit progress as
+steps for original and joined clients: an inline block on a terminal, one line
+per step change otherwise, tool output with `--log-level debug` and a failed
+step's last lines on failure; quiet work is reported every two seconds at debug.
 Image builds may share unfinished preparation while each command keeps
 its own application receipt. Ctrl-C releases a private attempt when its last
 requester leaves; cancellation is best effort, so leftover work may still use

@@ -39,6 +39,9 @@ type Streams struct {
 	Resize         <-chan Size
 	Signals        <-chan int
 	View           io.ReadWriteCloser
+	// Log receives the worker's structured records (relayed as "log" frames).
+	// Nil renders them as plain lines on Err.
+	Log LogSink
 	// Release marks runtime setup complete before a long-lived attachment.
 	// It must be called only after the native mutation lock is released.
 	// ErrClientDetached reports a completed setup whose client already left.
@@ -882,7 +885,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		case "prepared":
 			// The driver calls this only outside native apply guards. Draining here
 			// must never migrate into BeginEffects, which runs while guards are held.
-			imageProgressOutput.finish()
+			imageProgressOutput.prepared()
 			imageProgressOutput = nil
 			return ImageReply{}, nil
 		case "preparing":
@@ -894,14 +897,21 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 					return ImageReply{}, err
 				}
 			}
-			if imageProgressOutput == nil {
-				imageProgressOutput = newImageProgress(connCtx, clientSink{frameWriter{wire, "stderr"}, output})
+			features, err := progressFeatures(r.Features, r.MoreFeatures)
+			if err != nil {
+				return ImageReply{}, err
 			}
-			description := r.Reference
+			if imageProgressOutput == nil {
+				imageProgressOutput = newImageProgress(connCtx, clientSink{frameWriter{wire, "log"}, output})
+			}
+			image := r.Reference + features
+			description, subject := r.Reference, "Image "+r.Reference
 			if r.Box != "" {
 				description += " for box " + r.Box
+				subject = "Image for box " + r.Box
 			}
-			imageProgressOutput.preparing(description)
+			description += features
+			imageProgressOutput.preparing(description, image, subject, features)
 			return ImageReply{}, nil
 		case "check-desired":
 			resource := Resource{Kind: ResourceImages, Name: r.Reference}
@@ -939,9 +949,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			}
 			progress := imageProgressOutput
 			p, e := s.Images.acquireWithProgress(ctx, r.Recipe, summaryForRequest(req), func(wait ImageWait) {
-				if progress != nil {
-					_, _ = io.WriteString(progress, wait.String())
-				}
+				progress.note(strings.TrimRight(wait.String(), "\n"))
 			}, progress)
 			if e != nil {
 				var interrupted *ImageInterrupted
@@ -1007,6 +1015,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 	status, runErr := s.Execute(execCtx, principal, req, Streams{
 		NativePhase: phase, WorkerHandoff: workerHandoff,
 		In: input, Out: clientSink{frameWriter{wire, "stdout"}, output}, Err: clientSink{frameWriter{wire, "stderr"}, output},
+		Log:    frameLog{clientSink{frameWriter{wire, "log"}, output}},
 		Resize: sizes, Signals: signals, Release: setupDone, View: viewWorker,
 		BeginEffects: beginEffects, RecordEvidence: evidence, Image: imageCall, Advisory: advisoryCall, NativeNonce: nativeNonceCall, OperatorRetire: operatorRetire,
 		PIDAnchor: pidAnchor, PIDAnchorCheck: pidAnchorCheck,
@@ -1075,6 +1084,9 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		}
 	}
 	exit := Frame{Type: "exit", Status: status}
+	if receipt != nil && (receipt.State == "uncertain" || receipt.State == "command-uncertain") {
+		exit.State = receipt.State
+	}
 	if imageInterrupted != nil && receipt != nil && receipt.EffectPhase == EffectWaiting && (receipt.State == "complete" || receipt.Recovery != nil && receipt.Recovery.Disposition == DispositionNotApplied) && execCtx.Err() == nil {
 		exit.ImageRetryJob = imageInterrupted.JobID
 	}

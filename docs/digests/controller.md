@@ -21,7 +21,7 @@ post-replacement flush failure reports an uncertain commit. Native deletion
 also flushes its directory. Host shares carry no declaration lock or write.
 [3](#source-3) [4](#source-4) [5](#source-5) [6](#source-6)
 
-[FACT] Protocol 2 uses bounded length-prefixed JSON frames. Handshake requires
+[FACT] Protocol 3 uses bounded length-prefixed JSON frames. Handshake requires
 matching bundle, protocol, space and supplied generation. Methods and flags are
 validated against the explicit registry/shared Cobra surface; positional flag
 injection is rejected. Secret/import payloads use a private worker descriptor,
@@ -43,6 +43,16 @@ handoff and full post-setup native context. One OS-thread lock spans independent
 namespace comparison, real process observations, final checks and observer Close;
 original handoff/channel Close remains with their existing owners. [34](#source-34)
 Control-only requests send no stdin/EOF frames.
+A worker's structured log records use one more private pipe, appended after
+every other inherited descriptor and recorded by pipe identity; intake claims
+it close-on-exec before runtime loading, so tools never inherit it. The
+request carries the host verbosity. The controller relays each record as a
+`log` frame and reads the pipe to EOF before the exit frame, waiting at most
+2 s after the worker exits, then sends an explicit incomplete-stream record;
+a partial or corrupt tail is reported, not parsed. An exit frame names an
+`uncertain` or `command-uncertain` receipt state; the client exposes it, and
+whether it already rendered a failed/unknown outcome record, on `ExitError`.
+[35](#source-35) [36](#source-36)
 Bridge closure permits a bounded graceful exit before killing a stuck process.
 [17](#source-17) [18](#source-18) [2](#source-2) [7](#source-7) [8](#source-8)
 
@@ -145,3 +155,6 @@ this test seam does not change server authorization. [19](#source-19)
 33. <a id="source-33"></a> [Original handoff checkpoint](../../internal/vmanchor/worker_checkpoint_binding_linux.go#L76) — local cancellation versus sticky original source/stream failure; physical channel classification is outermost-only.
 
 34. <a id="source-34"></a> [SDK original source borrow](../../internal/openshell/worker_process_source_linux.go#L1) — concrete original handoff, sticky context selection, phase-bound parent checks before final local process view and owned-only observer cleanup; no source installer.
+
+35. <a id="source-35"></a> [Worker log pipe](../../internal/controller/worker.go#L73) — log pipe creation, last-slot `LogFD`/`LogPipe`, relay goroutine and `joinWorkerLog` before return; `OpenWorkerLog` in worker_log_linux.go; intake claim in cmd/yoloctl/controller_worker_intake.go and `InitWorker` in controller_internal.go `runControllerWorker`.
+36. <a id="source-36"></a> [Log frames](../../internal/controller/log_transport.go#L1) — `LogVerbosity`, `frameLog`, `relayWorkerLog`, `joinWorkerLog`; client.go `case "log"`/`"exit"`, `ExitError.Rendered`/`State`, `OutcomeRendered`; server.go exit `State`.

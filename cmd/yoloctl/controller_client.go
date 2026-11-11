@@ -19,10 +19,12 @@ import (
 
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/termio"
 	"github.com/leogr/yoloctl/internal/tui"
+	"github.com/leogr/yoloctl/pkg/prettylog/stepview"
 	"github.com/muesli/cancelreader"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -400,7 +402,15 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 		defer func() { _ = view.Close() }()
 	}
 	req.Term = os.Getenv("TERM")
-	streams := controller.ClientIO{In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), Err: cmd.ErrOrStderr()}
+	errOut := cmd.ErrOrStderr()
+	streams := controller.ClientIO{In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), Err: errOut}
+	processStderr := errOut == io.Writer(os.Stderr)
+	if processStderr {
+		streams.Log = controller.HostLogSink()
+		if v := stepview.Current(); v != nil {
+			streams.Err = v.Writer(os.Stderr)
+		}
+	}
 	if view != nil && !passthrough && controller.ManagedSessionMethod(req.Method) {
 		req.View = true
 		streams.View = view
@@ -428,8 +438,19 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 		// Preparation/CLI diagnostics are plain text; session stdout and the
 		// private view already carry their own terminal bytes and must bypass
 		// this adapter. Redirected stderr must retain its original bytes.
-		if writerIsTerminal(streams.Err) {
-			streams.Err = &rawTerminalStderr{out: streams.Err}
+		// Relayed log records follow the same rule: the steps block writes
+		// CRLF itself; otherwise the process Logger is routed through the
+		// adapter while the terminal is raw.
+		if writerIsTerminal(errOut) {
+			raw := &rawTerminalStderr{out: errOut}
+			if v := stepview.Current(); v != nil && processStderr {
+				streams.Err = v.Writer(raw)
+			} else {
+				streams.Err = raw
+				if processStderr {
+					defer logging.Logger().Route(raw, nil)()
+				}
+			}
 		}
 		reader, err := cancelreader.NewReader(input)
 		if err != nil {

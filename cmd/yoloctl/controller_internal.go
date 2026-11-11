@@ -22,6 +22,7 @@ import (
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/operator"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
@@ -485,6 +486,14 @@ func runControllerWorker(ctx context.Context) error {
 	}
 	defer func() { _ = early.Close() }() // optional errors cannot rewrite ordinary result
 	work := early.work
+	workerProcess = true
+	if logFile := early.Log(); logFile != nil {
+		// Shared command code logs through the process Logger; in a worker it
+		// writes framed records that the controller relays to the host.
+		verbosity, _ := controller.LogVerbosity(work.Request.Log)
+		workerLog := logging.InitWorker(logFile, verbosity)
+		defer func() { _ = workerLog.Close() }()
+	}
 	if err := controller.VerifyStoreDirectories(spaceenv.Current().DiskMount); err != nil {
 		return err
 	}

@@ -5,10 +5,12 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"log/slog"
 
 	"github.com/leogr/yoloctl/assets"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/ocifeature"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // Client is the slice of container.Client surface agentboximage
@@ -29,7 +31,8 @@ type Options struct {
 	FeaturePlan ocifeature.Plan
 	// Notice receives one-line progress messages ("notice: image X
 	// not present...", "notice: image X rebuilding..."). io.Discard
-	// or nil to silence.
+	// or nil to silence; LogNotices sends them as Notice records to the
+	// process Logger (slog.Default) instead.
 	Notice io.Writer
 
 	// Force reruns image installers, preserving their download-cache mounts
@@ -72,13 +75,9 @@ func EnsureImage(ctx context.Context, c Client, ref string, opts Options) error 
 		}
 	}
 	if opts.Force {
-		_, _ = fmt.Fprintf(opts.Notice,
-			"notice: rebuilding image %s from embedded context (rerunning installers, retaining downloads)\n",
-			ref)
+		notice(ctx, opts.Notice, "rebuilding image %s from embedded context (rerunning installers, retaining downloads)", ref)
 	} else {
-		_, _ = fmt.Fprintf(opts.Notice,
-			"notice: image %s not present in space; building from embedded context (this may take several minutes on first run)\n",
-			ref)
+		notice(ctx, opts.Notice, "image %s not present in space; building from embedded context (this may take several minutes on first run)", ref)
 	}
 	tarBuf, err := tarContext(assets.AgentboxContexts, agentboxContext)
 	if err != nil {
@@ -104,4 +103,22 @@ func imageRefreshArgs(force bool) map[string]string {
 		return nil
 	}
 	return map[string]string{imageRefreshArg: rand.Text()}
+}
+
+// LogNotices is the Options.Notice value that reports build notices as
+// Notice records through the process Logger (relayed to the host from a
+// controller worker) rather than as text lines.
+var LogNotices io.Writer = logNotices{}
+
+type logNotices struct{}
+
+func (logNotices) Write(p []byte) (int, error) { return len(p), nil }
+
+func notice(ctx context.Context, w io.Writer, format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if _, ok := w.(logNotices); ok {
+		slog.Default().Log(ctx, prettylog.LevelNotice, msg, prettylog.Actor("builder"), prettylog.Executor("nerdctl"))
+		return
+	}
+	_, _ = fmt.Fprintf(w, "notice: %s\n", msg)
 }
