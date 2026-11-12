@@ -20,6 +20,7 @@ import (
 // explicitly classified and instrumented.
 var mutationGates = map[string]string{
 	"audit.enable": "handler", "audit.disable": "handler",
+	"audit.rules.import": "handler", "audit.rules.remove": "handler", "audit.rules.edit": "handler",
 	// The space-operation wrapper gates after its native locks, before the
 	// command and its deferred role synchronization.
 	"box.create": "wrapper", "box.copy": "wrapper", "box.start": "wrapper", "box.stop": "wrapper",
@@ -62,7 +63,7 @@ func TestEveryMutationIsGatedAndClassified(t *testing.T) {
 			t.Errorf("%s is classified as wrapper-gated but the wrapper does not gate it", method)
 		}
 	}
-	if mutations != 43 || len(mutationGates) != 43 {
+	if mutations != 46 || len(mutationGates) != 46 {
 		t.Fatalf("%d mutations, %d classified", mutations, len(mutationGates))
 	}
 }

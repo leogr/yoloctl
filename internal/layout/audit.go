@@ -2,6 +2,7 @@ package layout
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -20,6 +21,18 @@ func AuditDir() (string, error) {
 }
 
 func AuditRunDir() string { return filepath.Join(spaceenv.RunRoot, "audit") }
+
+// AuditRulesDir contains immutable controller-owned rule generations, never
+// workload state. root is the verified native AuditDir (or an isolated fixture).
+func AuditRulesDir(root string) string { return filepath.Join(root, "rules") }
+
+func AuditRulesGeneration(root, generation string) (string, error) {
+	raw, err := hex.DecodeString(generation)
+	if err != nil || len(raw) != sha256.Size || fmt.Sprintf("%x", raw) != generation {
+		return "", errors.New("invalid audit rule generation")
+	}
+	return filepath.Join(AuditRulesDir(root), generation), nil
+}
 
 func AuditCacheDir() (string, error) {
 	root, err := CacheRoot()

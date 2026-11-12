@@ -223,7 +223,11 @@ Lima/vendor and parsed marker formats retain their existing owners and bytes.
 
 [FACT] Host-only `audit` opens the read-only Falco view; `audit status`,
 `enable`, `disable`, `logs --follow --json` and finite JSONL `export --output`
-use the running controller. Audit never starts a stopped space. Enable is
+use the running controller. Host-only `audit rules import/list/remove/edit`
+manages native ordered files and Falco selection; one file is at most 2 MiB.
+Invalid changes preserve the prior selection; enabled accepted changes restart
+capture. Editor conflicts preserve the host text. Rules can be prepared while
+audit is disabled, without enabling it. Audit never starts a stopped space. Enable is
 explicit; viewing never installs tools. Old Firecracker images require explicit
 `space recreate NAME --update-vm-image`; audit never replaces media. Exports refuse overwrite and publish
 only completed privacy-filtered output. Pretty logs show the wrapped pinned rule

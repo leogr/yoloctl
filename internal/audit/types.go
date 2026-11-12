@@ -24,14 +24,19 @@ const (
 )
 
 type Desired struct {
-	Enabled     bool   `yaml:"enabled" json:"enabled"`
-	Version     string `yaml:"version,omitempty" json:"version,omitempty"`
-	RulesSHA256 string `yaml:"rules_sha256,omitempty" json:"rules_sha256,omitempty"`
+	Enabled         bool   `yaml:"enabled" json:"enabled"`
+	Version         string `yaml:"version,omitempty" json:"version,omitempty"`
+	RulesSHA256     string `yaml:"rules_sha256,omitempty" json:"rules_sha256,omitempty"`
+	RulesGeneration string `yaml:"rules_generation,omitempty" json:"rules_generation,omitempty"`
+	EffectiveSHA256 string `yaml:"effective_sha256,omitempty" json:"effective_sha256,omitempty"`
 }
 
 func (d Desired) Validate() error {
 	if d.Version != "" && d.Version != Version {
 		return errors.New("unsupported audit version; use the selected yoloctl build")
+	}
+	if (d.RulesGeneration != "" || d.EffectiveSHA256 != "") && (!validDigest(d.RulesGeneration) || !validDigest(d.EffectiveSHA256)) {
+		return errors.New("invalid audit generation or effective fingerprint")
 	}
 	if d.Enabled && (d.Version != Version || len(d.RulesSHA256) != 64) {
 		return errors.New("enabled auditing needs a pinned version and rules digest")
@@ -60,16 +65,24 @@ type Event struct {
 	Result            string            `json:"result,omitempty"`
 }
 
+type RuleSummary struct {
+	Files            int    `json:"files"`
+	SelectionEntries int    `json:"selection_entries"`
+	Warnings         uint64 `json:"warnings"`
+	Compatible       bool   `json:"compatible"`
+}
+
 type Status struct {
-	ActualVersion string  `json:"actual_version,omitempty"`
-	Desired       Desired `json:"desired"`
-	State         string  `json:"state"`
-	Architecture  string  `json:"architecture"`
-	Driver        string  `json:"driver"`
-	DriverDrops   *uint64 `json:"driver_drops"`
-	Error         string  `json:"error,omitempty"`
-	Drops         uint64  `json:"drops"`
-	MetadataGaps  uint64  `json:"metadata_gaps"`
+	Rules         RuleSummary `json:"rules"`
+	ActualVersion string      `json:"actual_version,omitempty"`
+	Desired       Desired     `json:"desired"`
+	State         string      `json:"state"`
+	Architecture  string      `json:"architecture"`
+	Driver        string      `json:"driver"`
+	DriverDrops   *uint64     `json:"driver_drops"`
+	Error         string      `json:"error,omitempty"`
+	Drops         uint64      `json:"drops"`
+	MetadataGaps  uint64      `json:"metadata_gaps"`
 }
 
 type Query struct {

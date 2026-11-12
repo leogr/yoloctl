@@ -72,6 +72,14 @@ func newAuditCmd() *cobra.Command {
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(result)
 		}
 		_, err = fmt.Fprintf(cmd.OutOrStdout(), "Desired: %t  State: %s  Driver: %s\nVersion: actual=%s desired=%s\nDrops: %d  Metadata gaps: %d\n%s\n", result.Desired.Enabled, audit.Clean(result.State), audit.Clean(result.Driver), audit.Clean(result.ActualVersion), audit.Clean(result.Desired.Version), result.Drops, result.MetadataGaps, audit.Clean(result.Error))
+		if err != nil {
+			return err
+		}
+		selection := "default"
+		if result.Rules.SelectionEntries > 0 {
+			selection = fmt.Sprintf("customized (%d entries)", result.Rules.SelectionEntries)
+		}
+		_, err = fmt.Fprintf(cmd.OutOrStdout(), "Rules: %d files; selection %s; Falco warnings at validation %d; compatible %t\n", result.Rules.Files, selection, result.Rules.Warnings, result.Rules.Compatible)
 		return err
 	}}
 	status.Flags().Bool("json", false, "Print JSON")
@@ -131,7 +139,7 @@ func newAuditCmd() *cobra.Command {
 	addAuditQueryFlags(export)
 	export.Flags().String("output", "", "New private host output file (refuses overwrite)")
 	_ = export.MarkFlagRequired("output")
-	cmd.AddCommand(status, logs, export)
+	cmd.AddCommand(status, logs, export, newAuditRulesCmd())
 	return cmd
 }
 
@@ -184,7 +192,7 @@ func auditTarget(cmd *cobra.Command) (controllerTarget, error) {
 	if err := requireAuditHost(); err != nil {
 		return controllerTarget{}, err
 	}
-	return selectControllerTarget(cmd.Context(), cmd)
+	return controllerTargetForCommand(cmd.Context(), cmd)
 }
 func callAudit(ctx context.Context, target controllerTarget, method string, input *auditRequest, in io.Reader, out io.Writer) error {
 	if target.Operator {

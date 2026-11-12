@@ -39,6 +39,10 @@ import (
 // explicit entry and an explicit operator authorization decision.
 var controllerOperations = map[string]controller.Operation{
 	"audit.status":          {},
+	"audit.rules.list":      {},
+	"audit.rules.import":    {Mutates: true, EffectGated: true, Footprint: controller.FootprintAudit},
+	"audit.rules.remove":    {Mutates: true, EffectGated: true, Footprint: controller.FootprintAudit},
+	"audit.rules.edit":      {Mutates: true, EffectGated: true, Footprint: controller.FootprintAudit},
 	"audit.logs":            {},
 	"audit.export":          {},
 	"audit.enable":          {Mutates: true, EffectGated: true, Footprint: controller.FootprintAudit},

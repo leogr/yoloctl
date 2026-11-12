@@ -200,7 +200,7 @@ func TestAuditNativeToggleGateAndStopFailure(t *testing.T) {
 }
 
 func TestAuditWorkerRejectsOperatorBeforeStorage(t *testing.T) {
-	for _, method := range []string{"audit.status", "audit.enable", "audit.disable", "audit.logs", "audit.export"} {
+	for _, method := range []string{"audit.status", "audit.enable", "audit.disable", "audit.logs", "audit.export", "audit.rules.list", "audit.rules.import", "audit.rules.remove", "audit.rules.edit"} {
 		ctx := withControllerPrincipal(t.Context(), controller.Principal{Box: "operator"})
 		handled, err := runControllerAudit(ctx, controller.Request{Method: method}, strings.NewReader("untrusted archive"), io.Discard)
 		if !handled || err == nil || !strings.Contains(err.Error(), "host controller endpoint") {

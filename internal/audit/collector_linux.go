@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/safepath"
 )
 
@@ -32,7 +33,7 @@ var collectProbeSupport = ProbeSupport
 func Collect(parent context.Context, root, run, tools string, service ServiceConfig) (result error) {
 	ctx, cancel := signal.NotifyContext(parent, syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
-	health := Health{Epoch: service.Epoch, State: "starting", Version: service.Version, RulesSHA256: service.RulesSHA256}
+	health := Health{Epoch: service.Epoch, State: "starting", Version: service.Version, RulesSHA256: service.RulesSHA256, RulesGeneration: service.RulesGeneration, EffectiveSHA256: service.EffectiveSHA256}
 	save := func() error {
 		raw, err := json.Marshal(health)
 		if err != nil {
@@ -60,16 +61,41 @@ func Collect(parent context.Context, root, run, tools string, service ServiceCon
 	if err := collectProbeSupport(); err != nil {
 		return err
 	}
+	configPath := filepath.Join(root, "falco.json")
+	if service.RulesGeneration != "" {
+		store := RuleStore{Root: root}
+		set, err := store.Read(service.RulesGeneration)
+		if err != nil {
+			return err
+		}
+		if !set.Compatible() || set.Fingerprint != service.EffectiveSHA256 {
+			return errors.New("audit generation is incompatible with this build or service")
+		}
+		if _, err := store.Configuration(service.RulesGeneration, tools, filepath.Join(run, "metadata.tsv")); err != nil {
+			return err
+		}
+		dir, err := layout.AuditRulesGeneration(root, service.RulesGeneration)
+		if err != nil {
+			return err
+		}
+		configPath = filepath.Join(dir, "falco.json")
+	} else if service.EffectiveSHA256 != "" {
+		return errors.New("audit fingerprint has no selected generation")
+	}
 	binary := filepath.Join(tools, "bin", "falco")
-	args := []string{"-c", filepath.Join(root, "falco.json")}
-	validate, cancelValidate := context.WithTimeout(ctx, 15*time.Second)
-	err := runFalcoPhase(validate, "rules validation", binary, append(append([]string{}, args...), "-V", filepath.Join(root, "rules.yaml"))...)
-	cancelValidate()
-	if err != nil {
-		return err
+	args := []string{"-c", configPath}
+	// Legacy built-in-only services retain their existing preflight. Managed
+	// generations were already validated by one dry-run before publication.
+	if service.RulesGeneration == "" {
+		validate, cancelValidate := context.WithTimeout(ctx, 15*time.Second)
+		err := runFalcoPhase(validate, "rules validation", binary, append(append([]string{}, args...), "-V", filepath.Join(root, "rules.yaml"))...)
+		cancelValidate()
+		if err != nil {
+			return err
+		}
 	}
 	probe, cancelProbe := context.WithTimeout(ctx, 15*time.Second)
-	err = runFalcoPhase(probe, "modern eBPF preflight", binary, append(append([]string{}, args...), "-M", "2")...)
+	err := runFalcoPhase(probe, "modern eBPF preflight", binary, append(append([]string{}, args...), "-M", "2")...)
 	cancelProbe()
 	if err != nil {
 		return err

@@ -64,3 +64,17 @@ func SelectionDocument(raw []byte) ([]byte, error) {
 	}
 	return bytes.Clone(raw), nil
 }
+
+// SelectionEntries counts only the explicit sequence; selector meaning remains
+// Falco-owned. This labels default versus customized selection in list/status.
+func SelectionEntries(raw []byte) (int, error) {
+	framed, err := SelectionDocument(raw)
+	if err != nil {
+		return 0, err
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(framed, &doc); err != nil {
+		return 0, err
+	}
+	return len(doc.Content[0].Content[1].Content), nil
+}

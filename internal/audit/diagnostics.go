@@ -1,6 +1,10 @@
 package audit
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+	"unicode"
+)
 
 // Retain a prefix, but always consume writes completely so Falco cannot block
 // on a full stderr pipe. Event stdout never enters this diagnostic buffer.
@@ -36,4 +40,19 @@ func (p *stderrPrefix) summary() string {
 		label = "; stderr prefix (truncated): "
 	}
 	return label + text
+}
+
+// DiagnosticText escapes terminal controls while preserving ordinary diagnostic
+// lines/tabs. Unlike retained event fields it has no feature size quota.
+func DiagnosticText(raw string) string {
+	var out strings.Builder
+	for _, r := range strings.ToValidUTF8(raw, "�") {
+		if r != '\n' && r != '\t' && (unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '\u2028' || r == '\u2029') {
+			quoted := strconv.QuoteRuneToASCII(r)
+			out.WriteString(quoted[1 : len(quoted)-1])
+		} else {
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
 }

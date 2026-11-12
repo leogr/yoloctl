@@ -56,17 +56,21 @@ func Configuration(root, tools, metadata string) ([]byte, error) {
 }
 
 type ServiceConfig struct {
-	Epoch       string `json:"epoch"`
-	Version     string `json:"version"`
-	RulesSHA256 string `json:"rules_sha256"`
+	Epoch           string `json:"epoch"`
+	Version         string `json:"version"`
+	RulesSHA256     string `json:"rules_sha256"`
+	RulesGeneration string `json:"rules_generation,omitempty"`
+	EffectiveSHA256 string `json:"effective_sha256,omitempty"`
 }
 
 type Health struct {
-	Version     string  `json:"version"`
-	RulesSHA256 string  `json:"rules_sha256"`
-	Epoch       string  `json:"epoch"`
-	State       string  `json:"state"`
-	Error       string  `json:"error,omitempty"`
-	Loaded      bool    `json:"loaded"`
-	DriverDrops *uint64 `json:"driver_drops,omitempty"`
+	Version         string  `json:"version"`
+	RulesSHA256     string  `json:"rules_sha256"`
+	RulesGeneration string  `json:"rules_generation,omitempty"`
+	EffectiveSHA256 string  `json:"effective_sha256,omitempty"`
+	Epoch           string  `json:"epoch"`
+	State           string  `json:"state"`
+	Error           string  `json:"error,omitempty"`
+	Loaded          bool    `json:"loaded"`
+	DriverDrops     *uint64 `json:"driver_drops,omitempty"`
 }

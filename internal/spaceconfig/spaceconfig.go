@@ -42,9 +42,11 @@ type Mount struct {
 // Config is a space's persistent declaration.
 // AuditSettings is native desired state, not boot authority or a box setting.
 type AuditSettings struct {
-	Enabled     bool   `yaml:"enabled" json:"enabled"`
-	Version     string `yaml:"version,omitempty" json:"version,omitempty"`
-	RulesSHA256 string `yaml:"rules_sha256,omitempty" json:"rules_sha256,omitempty"`
+	Enabled         bool   `yaml:"enabled" json:"enabled"`
+	Version         string `yaml:"version,omitempty" json:"version,omitempty"`
+	RulesSHA256     string `yaml:"rules_sha256,omitempty" json:"rules_sha256,omitempty"`
+	RulesGeneration string `yaml:"rules_generation,omitempty" json:"rules_generation,omitempty"`
+	EffectiveSHA256 string `yaml:"effective_sha256,omitempty" json:"effective_sha256,omitempty"`
 }
 
 func (a *AuditSettings) Validate() error {
@@ -58,6 +60,14 @@ func (a *AuditSettings) Validate() error {
 		raw, err := hex.DecodeString(a.RulesSHA256)
 		if err != nil || len(raw) != 32 {
 			return errors.New("invalid audit rules digest")
+		}
+	}
+	if a.RulesGeneration != "" || a.EffectiveSHA256 != "" {
+		for _, value := range []string{a.RulesGeneration, a.EffectiveSHA256} {
+			raw, err := hex.DecodeString(value)
+			if err != nil || len(raw) != 32 || hex.EncodeToString(raw) != value {
+				return errors.New("invalid audit generation or effective fingerprint")
+			}
 		}
 	}
 	if a.Enabled && (a.Version == "" || a.RulesSHA256 == "") {

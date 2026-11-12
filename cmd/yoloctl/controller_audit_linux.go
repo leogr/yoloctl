@@ -52,6 +52,16 @@ func nativeAuditStatus(ctx context.Context) (audit.Status, error) {
 		return status, err
 	}
 	status.Desired, status.Architecture, status.Driver = nativeAuditDesired(cfg), runtime.GOARCH, "unloaded"
+	ruleSnapshot, err := nativeAuditRules(cfg)
+	if err != nil {
+		return status, err
+	}
+	entries, err := audit.SelectionEntries(ruleSnapshot.Rules.Selection)
+	if err != nil {
+		return status, err
+	}
+	status.Rules = audit.RuleSummary{Files: len(ruleSnapshot.Rules.Files), SelectionEntries: entries, Warnings: ruleSnapshot.Rules.Warnings, Compatible: ruleSnapshot.Rules.Compatible()}
+
 	root, err := layout.AuditDir()
 	if err != nil {
 		return status, err
@@ -86,9 +96,12 @@ func nativeAuditStatus(ctx context.Context) (audit.Status, error) {
 	if serviceErr == nil && healthErr == nil && json.Unmarshal(serviceRaw, &service) == nil && json.Unmarshal(healthRaw, &health) == nil && health.Epoch == service.Epoch {
 		status.Error = audit.Clean(health.Error)
 		status.DriverDrops = health.DriverDrops
-		if health.Loaded && health.State == "running" && state == "active" && health.Version == service.Version && health.RulesSHA256 == service.RulesSHA256 {
+		if health.Loaded && health.State == "running" && state == "active" && health.Version == service.Version && health.RulesSHA256 == service.RulesSHA256 && health.RulesGeneration == service.RulesGeneration && health.EffectiveSHA256 == service.EffectiveSHA256 {
 			status.ActualVersion = health.Version
 			status.Driver = "modern_ebpf"
+			if !status.Rules.Compatible || !status.Desired.Enabled || service.Version != audit.Version || service.RulesSHA256 != audit.RulesDigest() || service.RulesGeneration != status.Desired.RulesGeneration || service.EffectiveSHA256 != status.Desired.EffectiveSHA256 {
+				status.State = "stale"
+			}
 		}
 		if health.State == "failed" {
 			status.State = "failed"
@@ -112,6 +125,12 @@ func runControllerAudit(ctx context.Context, req controller.Request, in io.Reade
 		if err := decodeBoundedJSON(bytes.NewReader(req.Payload), &input, 4096); err != nil {
 			return true, err
 		}
+	}
+	if strings.HasPrefix(req.Method, "audit.rules.") {
+		return true, runControllerAuditRules(ctx, req, input, in, out)
+	}
+	if input.Rules != nil {
+		return true, errors.New("audit operation takes no rules payload")
 	}
 	if input.Query.Box != "" {
 		if err := layout.ValidateName("agentbox", input.Query.Box); err != nil {
@@ -197,6 +216,37 @@ func runControllerAudit(ctx context.Context, req controller.Request, in io.Reade
 	if err != nil {
 		return true, err
 	}
+	// Retained custom rules are validated with this build before stopping a
+	// still-running old collector. A rejected upgrade leaves it unchanged/stale.
+	if enable && cfg.Audit != nil && cfg.Audit.RulesGeneration != "" {
+		root, err := layout.AuditDir()
+		if err != nil {
+			return true, err
+		}
+		tools, err := audit.Install(root, runtime.GOARCH, raw)
+		if err != nil {
+			return true, err
+		}
+		prepared, validation, _, err := (audit.RuleStore{Root: root}).Prepare(ctx, cfg.Audit.RulesGeneration, audit.RuleChange{Kind: "refresh"}, tools, layout.AuditMetadataPath(), auditRulesValidate)
+		if err != nil {
+			return true, describeAuditRuleValidation(validation, err)
+		}
+		if err := ctx.Err(); err != nil {
+			return true, err
+		}
+		if err := controller.BeginScopedEffects(ctx, controller.EffectIntent{Scope: &controller.Scope{Writes: []controller.Resource{{Kind: controller.ResourceAudit}}}}); err != nil {
+			return true, err
+		}
+		cfg.Audit.Enabled = true
+		if err := selectNativeAuditRules(ctx, req.ID, cfg, prepared); err != nil {
+			return true, err
+		}
+		status, err := nativeAuditStatus(ctx)
+		if err != nil {
+			return true, err
+		}
+		return true, json.NewEncoder(out).Encode(status)
+	}
 	if err := controller.BeginScopedEffects(ctx, controller.EffectIntent{Scope: &controller.Scope{Writes: []controller.Resource{{Kind: controller.ResourceAudit}}}}); err != nil {
 		return true, err
 	}
@@ -269,6 +319,10 @@ func auditUnit() vmservice.Unit {
 }
 
 func waitAuditReady(ctx context.Context, epoch string) error {
+	return waitAuditReadyFor(ctx, audit.ServiceConfig{Epoch: epoch, Version: audit.Version, RulesSHA256: audit.RulesDigest()})
+}
+
+func waitAuditReadyFor(ctx context.Context, expected audit.ServiceConfig) error {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -276,8 +330,8 @@ func waitAuditReady(ctx context.Context, epoch string) error {
 	for {
 		raw, err := safepath.ReadFile(auditRuntimeDir(), "health.json", 4096)
 		var health audit.Health
-		if err == nil && json.Unmarshal(raw, &health) == nil && health.Epoch == epoch {
-			if health.State == "running" && health.Loaded && health.Version == audit.Version && health.RulesSHA256 == audit.RulesDigest() {
+		if err == nil && json.Unmarshal(raw, &health) == nil && health.Epoch == expected.Epoch {
+			if health.State == "running" && health.Loaded && health.Version == expected.Version && health.RulesSHA256 == expected.RulesSHA256 && health.RulesGeneration == expected.RulesGeneration && health.EffectiveSHA256 == expected.EffectiveSHA256 {
 				return nil
 			}
 			if health.State == "failed" {
@@ -326,6 +380,9 @@ func collectNativeAudit(ctx context.Context) error {
 	}
 	if err := decodeBoundedJSON(bytes.NewReader(raw), &service, 4096); err != nil {
 		return err
+	}
+	if service.Version != desired.Version || service.RulesSHA256 != desired.RulesSHA256 || service.RulesGeneration != desired.RulesGeneration || service.EffectiveSHA256 != desired.EffectiveSHA256 {
+		return errors.New("audit service differs from selected desired generation")
 	}
 	pin, err := audit.Pinned(runtime.GOARCH)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -110,8 +109,8 @@ func TestPinnedRuleSetDryRun(t *testing.T) {
 			}
 			// Exactly one validator process per candidate. No -V companion,
 			// phase deadline, temporary collector, alternate engine or service.
-			cmd := exec.CommandContext(t.Context(), filepath.Join(tools, "bin", "falco"), "-c", configPath, "--dry-run")
-			output, err := cmd.CombinedOutput()
+			validation, err := ValidateRuleSet(t.Context(), filepath.Join(tools, "bin", "falco"), configPath)
+			output := []byte(validation.Diagnostics)
 			t.Logf("single dry-run err=%v output:\n%s", err, output)
 			if (err != nil) != tc.wantError {
 				t.Fatalf("single packaged dry-run result: %v", err)

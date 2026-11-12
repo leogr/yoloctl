@@ -101,7 +101,7 @@ func TestAuditFollowReportsOnlyInitialAndLossChanges(t *testing.T) {
 }
 
 func TestAuditAuthorizationIsHostOnly(t *testing.T) {
-	for _, method := range []string{"audit.status", "audit.enable", "audit.disable", "audit.logs", "audit.export"} {
+	for _, method := range []string{"audit.status", "audit.enable", "audit.disable", "audit.logs", "audit.export", "audit.rules.list", "audit.rules.import", "audit.rules.remove", "audit.rules.edit"} {
 		request := controller.Request{ID: "audit-test-0123456789abcdef", Space: "test", Method: method, Dash: -1}
 		if err := controller.Authorize(controller.Principal{}, request, "test", controllerOperations); err != nil {
 			t.Fatal(method, err)

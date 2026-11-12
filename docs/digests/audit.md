@@ -1,9 +1,10 @@
 # VM-native Falco auditing
 
-Verification: `bfc2e8addfd696da0629a8816c26cba6384d9ba7` and accompanying changes.
+Verification: `2cb8f6e9efb3fccaea3f4c48cd2812dbac21f21d` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
-opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
+opens a read-only view; `status`, `enable`, `disable`, `logs`, `export` and
+`rules list/import/remove/edit` use
 the running matching controller. They never boot or recreate a VM. Operators
 have neither the registered frontend surface nor server authority for audit
 operations. Opening or filtering the view does not install or enable auditing. Existing
@@ -94,6 +95,11 @@ an existing file; interrupted/invalid exports never publish a partial result.
 Export also works with auditing disabled while the controller is running.
 [1](#source-1) [2](#source-2) [14](#source-14)
 
+[FACT] Host rule management retains ordered native generations and a rules-only
+editor, with conflict preservation. One dry-run validates before publication;
+enabled accepted changes restart capture, disabled changes remain off. Loaded
+health is bound to the selected generation. [24](#source-24)
+
 ## Sources
 
 1. <a id="source-1"></a> [Host commands](../../cmd/yoloctl/audit.go#L1) — `newAuditCmd`, `scanAudit`, `publishAuditExport`.
@@ -124,3 +130,5 @@ Export also works with auditing disabled while the controller is running.
 22. <a id="source-22"></a> [Selected rendering](../../internal/audit/output.go#L1) — `SelectedFields`, `RenderOutput`.
 
 23. <a id="source-23"></a> [Rule paths and container recognition](audit-rules.md) — pinned matcher configuration, symlink semantics and qualification limits.
+
+24. <a id="source-24"></a> [Native rule management](audit-rule-management.md) — immutable store, single validation, host CLI and selected apply.
