@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/leogr/yoloctl/internal/chatimage"
+	"github.com/leogr/yoloctl/internal/chatstream"
 	"github.com/leogr/yoloctl/internal/chatui"
 )
 
@@ -42,15 +43,10 @@ func (c *chatPreviews) configure(s *chatSession, opts *chatui.Options) {
 		header := s.header
 		s.mu.Unlock()
 		return func() tea.Msg {
-			fail := chatui.PreviewErrorMsg{Request: req.Request, Code: "failed"}
-			id, err := chatImageIdentity(header, req.Channel)
+			frame, err := chatPreviewFrame(header, req)
 			if err != nil {
-				return fail
+				return chatui.PreviewErrorMsg{Request: req.Request, Code: "failed"}
 			}
-			frame := chatimage.Frame{Op: chatimage.OpPreview, Generation: req.Generation, Request: req.Request,
-				RoomID: id.RoomID, DiskID: id.DiskID, HumanID: id.HumanID, ChannelID: id.ChannelID, Channel: req.Channel,
-				MessageID: req.MessageID, Artifact: req.Artifact.ID, Bytes: req.Artifact.Bytes, SHA256: req.Artifact.SHA256,
-				Chip: req.Chip}
 			if err := conn.Send(frame); err != nil {
 				return chatui.PreviewErrorMsg{Request: req.Request, Code: "unavailable"}
 			}
@@ -88,4 +84,17 @@ func (c *chatPreviews) relay(send func(tea.Msg)) {
 			}
 		}
 	}()
+}
+
+// chatPreviewFrame is the preview request for req with the room, disk, human
+// and channel identities of header at the moment the person asked.
+func chatPreviewFrame(header chatstream.Header, req chatui.PreviewRequest) (chatimage.Frame, error) {
+	id, err := chatImageIdentity(header, req.Channel)
+	if err != nil {
+		return chatimage.Frame{}, err
+	}
+	return chatimage.Frame{Op: chatimage.OpPreview, Generation: req.Generation, Request: req.Request,
+		RoomID: id.RoomID, DiskID: id.DiskID, HumanID: id.HumanID, ChannelID: id.ChannelID, Channel: req.Channel,
+		MessageID: req.MessageID, Artifact: req.Artifact.ID, Bytes: req.Artifact.Bytes, SHA256: req.Artifact.SHA256,
+		Chip: req.Chip}, nil
 }

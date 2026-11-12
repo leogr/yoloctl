@@ -35,7 +35,7 @@ smoke_init
 REPORT="${CHAT_IMAGES_REPORT:-$(dirname "$SMOKE_ROOT")/chat-images-live-$(date -u +%Y%m%dT%H%M%SZ).md}"
 [[ ! -e "$REPORT" ]] || smoke_fail "report $REPORT already exists"
 POSTER=poster
-REQUIRED="1a 1b 1c 1d 1e 1f 1g 1h 2 3"
+REQUIRED="1a 1b 1c 1d 1e 1f 1g 1h 2 3a 3b 3c"
 PHASE=setup
 SPACE_ATTEMPTED=0
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -225,10 +225,14 @@ Expected: no message offers Show image; chips stay as before."
 run_ui ui-2 "the TUI without COLORTERM" env -u COLORTERM "$YOLOCTL"
 ask 2 "without COLORTERM chat offers no Show image and keeps chips"
 
-step "3. Standalone chat" "This opens the chat view directly, outside the TUI. Select gradient.png.
-Expected: no Show image action (standalone previews are not built yet); the chip stays."
+step "3. Standalone chat" "This opens the chat view directly, outside the TUI, where it is its own image host.
+  a) gradient.png → Show image: the gradient appears under the message.
+  b) wide.png → Show image: gradient.png collapses to its chip; wide.png appears.
+  c) Quit: no image remains on the terminal."
 run_ui ui-3 "standalone chat" "$YOLOCTL" chat --space "$SMOKE_SPACE"
-ask 3 "standalone chat offers no Show image"
+ask 3a "standalone chat draws gradient.png"
+ask 3b "standalone chat replaces it with wide.png"
+ask 3c "quitting standalone chat leaves no image on the terminal"
 
 step "4. Optional: another terminal" "In a terminal without Kitty graphics (for example Terminal.app) run:
   YOLOCTL_HOME='$YOLOCTL_HOME' XDG_CONFIG_HOME='$XDG_CONFIG_HOME' XDG_CACHE_HOME='$XDG_CACHE_HOME' '$YOLOCTL'

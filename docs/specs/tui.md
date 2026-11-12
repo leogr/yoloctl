@@ -299,7 +299,8 @@ controller, scales it and places it under that message; elsewhere the chip
 stays. A reduced colour profile, disconnect or lost channel membership
 collapses it. The TUI keeps up to 8 prepared previews (16 MiB) in memory and
 re-shows one without another read; a chat pane's end or a capability change
-empties that cache.
+empties that cache. Standalone `yoloctl chat` outside a TUI is its own image
+host with the same probe, bounds, cache and placeholder filter.
 [7](#source-7) [47](#source-47) [49](#source-49) [50](#source-50)
 
 [DERIVED] Passing these tests cannot establish native terminal equivalence.

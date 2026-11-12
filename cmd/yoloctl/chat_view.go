@@ -78,7 +78,16 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 		Clipboard: clipboard, Browser: prefs.BrowserPolicy(), Identities: identities, Icons: prefs.GetAgentIcons()}
 	s := &chatSession{catalogRead: mode, ctx: ctx, target: target, members: members, header: header, agentsWake: make(chan struct{}, 1)}
 	configureChatImages(s, &opts, prefs.ClipboardEnabled(), hostintegration.ReadImage)
-	previews.configure(s, &opts)
+	// Inside the TUI only its image channel shows previews; chat never probes
+	// the emulated terminal of its tab. On its own, chat owns the host
+	// terminal and is its own image host.
+	var standalone *standaloneImages
+	if ownsTerminalImages(previews, os.Getenv("YOLOCTL_TUI"), prefs.ImagesEnabled()) {
+		standalone = newStandaloneImages(target.Space, readChatArtifactForPreview)
+		standalone.configure(s, &opts)
+	} else {
+		previews.configure(s, &opts)
+	}
 	opts.LoadOlder = s.loadOlder
 	opts.Send = s.send
 	opts.Copy = func(text string) tea.Cmd {
@@ -118,7 +127,14 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 	opts.RefreshChannels = func() tea.Cmd {
 		return func() tea.Msg { return s.refreshCatalog() }
 	}
-	s.program = tea.NewProgram(chatui.New(opts), tea.WithoutSignalHandler(), tea.WithInput(cmd.InOrStdin()), tea.WithOutput(cmd.OutOrStdout()))
+	var model tea.Model = chatui.New(opts)
+	if standalone != nil {
+		model = standalone.wrap(model)
+	}
+	s.program = tea.NewProgram(model, tea.WithoutSignalHandler(), tea.WithInput(cmd.InOrStdin()), tea.WithOutput(cmd.OutOrStdout()))
+	if standalone != nil {
+		standalone.send = s.program.Send
+	}
 	previews.relay(s.program.Send)
 	s.start(false)
 	s.refreshAgents()
@@ -134,6 +150,9 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 		}
 	}()
 	_, err = s.program.Run()
+	if standalone != nil {
+		standalone.close(cmd.OutOrStdout()) // free this view's image on the host terminal
+	}
 	close(programDone)
 	cancel()
 	s.stop()

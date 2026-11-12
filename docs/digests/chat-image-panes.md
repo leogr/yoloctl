@@ -28,8 +28,23 @@ image's channel; collapsing releases a shown image. [1](#source-1) [3](#source-3
 only a pane's own preview rows draw image cells; copy, Quote and the source
 copy keep the original text. [1](#source-1) [3](#source-3)
 
+[FACT] Standalone `yoloctl chat` is its own image host when it has no TUI
+image channel, `YOLOCTL_TUI` is not `1` and `seams.images` is on; inside a TUI
+without a channel it shows chips and never probes its tab's emulated terminal.
+At start it sends the same version, non-storing graphics and CSI 16t queries
+(again on focus) and advertises the outcome as generation 1. It answers
+requests like the TUI broker: stale, unsupported, a cache hit, busy while its
+single 30 s read/decode job runs, then `not_png`, `too_large` or `failed`. It
+reads through the same host controller reader for the view's space, prepares
+at 60×12 cells, deletes its previous image, transmits and replies ready only
+after the transmit is written. A changed cell size starts a new generation and
+empties the cache; a release with the shown token or exit deletes the image.
+Every frame passes the TUI's placeholder filter, so only the shown preview's
+cells display. [4](#source-4)
+
 ## Sources
 
 1. <a id="source-1"></a> [preview_image.go](../../internal/chatui/preview_image.go#L1) — `PreviewCapabilityMsg`, `PreviewReadyMsg`, `PreviewErrorMsg`, `previewArtifact`, `canPreview`, `togglePreview`, `releasePreview`, `previewUpdate`, `previewRows`; the `trueColor` field, message action, `actPreview` and the transcript call in model.go, mouse.go, transcript.go.
 2. <a id="source-2"></a> [chat_image_preview.go](../../cmd/yoloctl/chat_image_preview.go#L1) — `claimChatPreviews`, `configure`, `relay`; chat_view.go wiring; chat_image_preview_test.go.
 3. <a id="source-3"></a> [preview_image_test.go](../../internal/chatui/preview_image_test.go#L1) — action gating, request fields, placeholder rows and colour, hide, errors, stray ready, capability change, reduced colour profile, lost connection or membership, literal placeholders.
+4. <a id="source-4"></a> [chat_image_standalone.go](../../cmd/yoloctl/chat_image_standalone.go#L1) — `ownsTerminalImages`, `standaloneImages` (`start`, `update`, `checkProbe`, `advertise`, `acceptCellSize`, `answer`, `finish`, `show`, `release`, `filter`, `close`), `standaloneChat`; chat_view.go wiring; chat_image_standalone_test.go.

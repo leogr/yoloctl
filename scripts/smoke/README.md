@@ -51,7 +51,7 @@ wide image, a non-PNG named `.png` and a PNG over the 16 Mi-pixel decode
 bound. The operator then opens the TUI on the same terminal and answers finite
 rows: draw, aspect, chip copy, re-show, error notices, resize/tab switch and
 quit cleanup; the same with `COLORTERM` removed (no Show image); standalone
-`yoloctl chat` (no Show image); and, optionally, a terminal without Kitty
+`yoloctl chat` as its own image host (draw, replace, quit cleanup); and, optionally, a terminal without Kitty
 graphics. Each launched UI's exit status is its own row. The Markdown report
 beside the fixture root records OS, terminal name/version, `COLORTERM`,
 yoloctl bundle and checkout, the fixture, every row, the cleanup outcome and a

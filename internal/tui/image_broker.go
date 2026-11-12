@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,8 +25,6 @@ const (
 	imageOutboxCap = 64
 	// Preview requests held while the host terminal is probed.
 	imagePendingCap = 8
-	maxPreviewCols  = 60
-	maxPreviewRows  = 12
 )
 
 // ReadChatArtifact reads one previewed artifact for a chat pane of space
@@ -69,7 +66,7 @@ type imageBroker struct {
 	// job is the single fetch/decode slot; deletes are image IDs to free.
 	job     *imageJob
 	deletes []uint32
-	cache   previewCache
+	cache   chatimage.Cache
 }
 
 // imageHandler is OnImage for native chat panes: it only queues the frame
@@ -119,7 +116,7 @@ func (m *model) capabilityFrame() chatimage.Frame {
 	a := m.images.advertised
 	f := chatimage.Frame{Op: chatimage.OpCapability, Generation: a.generation, Supported: a.supported}
 	if a.supported {
-		f.MaxCols, f.MaxRows = maxPreviewCols, maxPreviewRows
+		f.MaxCols, f.MaxRows = chatimage.PreviewCols, chatimage.PreviewRows
 	}
 	return f
 }
@@ -141,7 +138,7 @@ func (m *model) syncImages() tea.Cmd {
 		if !b.advertised.known || b.advertised.supported != supported {
 			b.advertised.known, b.advertised.supported = true, supported
 			b.advertised.generation++
-			b.cache = previewCache{} // a host change clears the cache
+			b.cache.Clear() // a host change clears the cache
 		}
 	}
 	// The first chat pane starts the probe; every live chat pane learns the
@@ -219,7 +216,7 @@ func (m *model) flushImageDeletes() tea.Cmd {
 func (m *model) answerPreview(msg imageMsg) tea.Cmd {
 	b := &m.images
 	a := b.advertised
-	key := previewKey(msg.frame, m.hostGeometry.width, m.hostGeometry.height)
+	key := chatimage.CacheKey(msg.frame, m.hostGeometry.width, m.hostGeometry.height)
 	code := ""
 	switch {
 	case msg.frame.Generation != a.generation:
@@ -230,7 +227,7 @@ func (m *model) answerPreview(msg imageMsg) tea.Cmd {
 	if code == "" {
 		// A preview shown before, at this cell size and under the same
 		// identities, is shown again without another read.
-		if p, ok := b.cache.get(key); ok {
+		if p, ok := b.cache.Get(key); ok {
 			return m.showPrepared(msg.session, msg.frame, a.generation, p)
 		}
 	}
@@ -254,7 +251,7 @@ func (m *model) answerPreview(msg imageMsg) tea.Cmd {
 		data, err := read(ctx, msg.space, msg.frame)
 		var prepared chatimage.Prepared
 		if err == nil {
-			prepared, err = chatimage.Prepare(data, job.cellW, job.cellH, maxPreviewCols, maxPreviewRows)
+			prepared, err = chatimage.Prepare(data, job.cellW, job.cellH, chatimage.PreviewCols, chatimage.PreviewRows)
 		}
 		b.mu.Lock()
 		job.prepared, job.err, job.done = prepared, err, true
@@ -301,7 +298,7 @@ func (m *model) finishImageJob(live map[*term.Session]bool) tea.Cmd {
 		reply("failed")
 		return nil
 	}
-	b.cache.put(previewKey(f, job.cellW, job.cellH), job.prepared)
+	b.cache.Put(chatimage.CacheKey(f, job.cellW, job.cellH), job.prepared)
 	return m.showPrepared(s, f, job.generation, job.prepared)
 }
 
@@ -347,7 +344,7 @@ func (m *model) endImagePane(s *term.Session) {
 		job.cancel()
 	}
 	if s.HasImageChannel() {
-		m.images.cache = previewCache{}
+		m.images.cache.Clear()
 	}
 }
 
@@ -383,63 +380,4 @@ func chatPaneSpace(args []string, pinned string) string {
 		}
 	}
 	return pinned
-}
-
-// Cache bounds (plan §3C): prepared previews kept in memory per host.
-const (
-	previewCacheEntries = 8
-	previewCacheBytes   = 16 << 20
-)
-
-// previewKey identifies a prepared preview: the artifact, the identities it
-// was read under and the cell size it was scaled for.
-func previewKey(f chatimage.Frame, cellW, cellH int) string {
-	return strings.Join([]string{f.Artifact, f.SHA256, f.RoomID, f.DiskID, f.HumanID, f.ChannelID, strconv.Itoa(cellW), strconv.Itoa(cellH)}, "|")
-}
-
-// previewCache is an in-memory LRU of host-made preview PNGs, bounded by
-// entries and bytes. It lives only as long as the TUI.
-type previewCache struct {
-	keys  []string // least recently used first
-	items map[string]chatimage.Prepared
-	bytes int
-}
-
-func (c *previewCache) get(key string) (chatimage.Prepared, bool) {
-	p, ok := c.items[key]
-	if ok {
-		c.touch(key)
-	}
-	return p, ok
-}
-
-func (c *previewCache) put(key string, p chatimage.Prepared) {
-	if len(p.PNG) > previewCacheBytes {
-		return
-	}
-	if c.items == nil {
-		c.items = map[string]chatimage.Prepared{}
-	}
-	if old, ok := c.items[key]; ok {
-		c.bytes -= len(old.PNG)
-	}
-	c.items[key] = p
-	c.bytes += len(p.PNG)
-	c.touch(key)
-	for len(c.keys) > previewCacheEntries || c.bytes > previewCacheBytes {
-		oldest := c.keys[0]
-		c.keys = c.keys[1:]
-		c.bytes -= len(c.items[oldest].PNG)
-		delete(c.items, oldest)
-	}
-}
-
-func (c *previewCache) touch(key string) {
-	for i, k := range c.keys {
-		if k == key {
-			c.keys = append(c.keys[:i], c.keys[i+1:]...)
-			break
-		}
-	}
-	c.keys = append(c.keys, key)
 }

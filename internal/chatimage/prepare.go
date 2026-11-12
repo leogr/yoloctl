@@ -12,8 +12,11 @@ import (
 )
 
 // Preview bounds (plan §3C): a re-encoded PNG of at most 512×512 pixels and
-// 2 MiB, decoded from at most 16 Mi source pixels.
+// 2 MiB, decoded from at most 16 Mi source pixels, filling at most
+// PreviewCols×PreviewRows cells.
 const (
+	PreviewCols        = 60
+	PreviewRows        = 12
 	MaxPreviewPixels   = 512
 	MaxPreviewBytes    = 2 << 20
 	MaxDecodePixels    = 16 << 20

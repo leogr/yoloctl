@@ -421,35 +421,3 @@ func TestBrokerReshowsACachedPreviewWithoutAnotherRead(t *testing.T) {
 		t.Fatalf("%d reads after a pane ended, want 2", reads.Load())
 	}
 }
-
-func TestPreviewCacheBoundsEntriesAndBytes(t *testing.T) {
-	var c previewCache
-	for i := 0; i < previewCacheEntries; i++ {
-		c.put(strconv.Itoa(i), chatimage.Prepared{PNG: []byte{1}})
-	}
-	c.get("0") // most recently used now
-	c.put("new", chatimage.Prepared{PNG: []byte{1}})
-	if _, ok := c.items["1"]; ok || len(c.items) != previewCacheEntries {
-		t.Fatalf("entries %d, least recently used kept", len(c.items))
-	}
-	if _, ok := c.items["0"]; !ok {
-		t.Fatal("a recently used entry was evicted")
-	}
-	big := chatimage.Prepared{PNG: make([]byte, 9<<20)}
-	c.put("big1", big)
-	c.put("big2", big)
-	if _, ok := c.items["big1"]; ok || c.bytes > previewCacheBytes {
-		t.Fatalf("bytes %d over the bound", c.bytes)
-	}
-	c.put("huge", chatimage.Prepared{PNG: make([]byte, previewCacheBytes+1)})
-	if _, ok := c.items["huge"]; ok {
-		t.Fatal("an entry larger than the cache was stored")
-	}
-	total := 0
-	for _, p := range c.items {
-		total += len(p.PNG)
-	}
-	if total != c.bytes || len(c.keys) != len(c.items) {
-		t.Fatalf("accounting: bytes %d/%d keys %d items %d", c.bytes, total, len(c.keys), len(c.items))
-	}
-}
