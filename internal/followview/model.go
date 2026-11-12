@@ -487,11 +487,8 @@ func (m *Model) View() tea.View {
 	if m.width == 0 || m.height == 0 {
 		return tea.NewView("")
 	}
-	title := "host"
-	if m.opts.Space != "" {
-		title = m.opts.Space
-	}
-	title = "follow · " + title + " · " + strings.ReplaceAll(markdownview.Plain(m.opts.Path), "\n", " ")
+	// The title names the file only; the space is already shown by the TUI.
+	title := "follow · " + strings.ReplaceAll(markdownview.Plain(m.opts.Path), "\n", " ")
 	titleStyle := spaceview.Style{FG: m.theme.Brand, BG: spaceview.FirstRowBG, Bold: true}
 	rows := []string{markdownview.Paint(m.method, []markdownview.Run{markdownview.Deco(title, titleStyle)}, m.width, spaceview.FirstRowBG, nil, spaceview.Style{})}
 	a, b, selected := m.selectedBounds()
