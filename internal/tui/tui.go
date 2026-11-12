@@ -123,6 +123,7 @@ type model struct {
 	hostGraphemes    bool // mirrors Bubble Tea's mode-2027 width negotiation
 	hostBlurred      bool
 	hostGeometry     hostGeometry
+	imageHost        imageHost
 	frames           *displayFrames // scoped to one View call
 	// placeholderFocus is the empty pane the palette last opened for
 	// (placeholder.go).
@@ -872,6 +873,9 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		m.syncFocus()
 		cmd = tea.Batch(cmd, m.syncMouseShift(), m.syncHostGeometry(), m.syncHostMouseEncoding())
 	}()
+	if m.imageProbeMsg(msg) {
+		return m, nil
+	}
 	switch msg := msg.(type) {
 	case tea.RawMsg:
 		// Bubble Tea has queued this sequence before invoking Update. Only

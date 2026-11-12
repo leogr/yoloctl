@@ -41,6 +41,8 @@ func (m *model) acceptHostCellSize(width, height int) {
 	if !g.Valid() {
 		return
 	}
+	// A measurement can be the image probe's last missing signal.
+	defer m.checkImageProbe(time.Now())
 	h := &m.hostGeometry
 	h.pending = false
 	if h.width == width && h.height == height {
