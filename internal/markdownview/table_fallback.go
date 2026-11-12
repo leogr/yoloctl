@@ -40,6 +40,9 @@ func labelledTable(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft i
 		end++
 	}
 	lines = lines[:end]
+	if len(lines) <= 2 {
+		return nil
+	} // Header-only tables must retain their text route.
 	message := "Table layout exceeds the display limit; showing labelled rows."
 	if reason == TableTooNarrow {
 		message = fmt.Sprintf("Table too narrow for %d columns; showing labelled rows.", len(tbl.Natural))

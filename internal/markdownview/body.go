@@ -736,9 +736,6 @@ func FitTableLayout(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft 
 		natural += w
 	}
 	if natural <= avail && !tbl.Unpadded {
-		if len(lines)+max(len(lines)-3, 0) >= rowsLeft {
-			return nil, TableNoRows
-		}
 		return nil, TableFits
 	}
 	alloc, ok := WaterFill(tbl.Natural, tbl.Floor, avail)

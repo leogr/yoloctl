@@ -33,10 +33,6 @@ func TestTableReadabilityOnlyAppliesToSqueezedColumns(t *testing.T) {
 			t.Fatalf("width%d reason=%v want%v", tc.width, reason, tc.reason)
 		}
 	}
-	_, noRows := FitTableLayout(o.Method, doc.Lines, 0, 20, 1, o.Theme)
-	if noRows != TableNoRows {
-		t.Fatal("natural fit escaped row allowance", noRows)
-	}
 	small := Parse("|a|b|c|d|e|f|g|h|\n|---|---|---|---|---|---|---|---|\n|1|2|3|4|5|6|7|8|", o)
 	_, reason := FitTableLayout(o.Method, small.Lines, 0, 60, 100, o.Theme)
 	if reason != TableFits {
@@ -170,6 +166,41 @@ func TestScreenshotDerivedTableAtMatchedWidths(t *testing.T) {
 					t.Fatalf("method%v width%d overflow", method, width)
 				}
 			}
+		}
+	}
+}
+
+func TestHeaderOnlyTablesKeepTheirTextAtEveryLayout(t *testing.T) {
+	source := "| alphaheader | betaheader |\n|---|---|"
+	for _, method := range []ansi.Method{ansi.WcWidth, ansi.GraphemeWidth} {
+		o := documentOptions()
+		o.Method = method
+		doc := Parse(source, o)
+		before := RenderText(doc)
+		for _, width := range []int{16, 40, 100} {
+			rows := Layout(doc, width, LayoutOptions{Method: method, Theme: o.Theme}).Rows
+			var copied strings.Builder
+			for _, r := range rows {
+				for _, p := range r.Runs {
+					if p.Copy {
+						copied.WriteString(p.Text)
+					}
+				}
+			}
+			if got := copied.String(); !strings.Contains(got, "alphaheader") || !strings.Contains(got, "betaheader") {
+				t.Fatalf("method%v width%d lost header: %q", method, width, got)
+			}
+			if RenderText(doc) != before {
+				t.Fatal("logical header changed")
+			}
+			quoted := TableText(doc.Lines, 0, 0, 0, len(doc.Lines[0].Text))
+			if len(quoted) != 1 || quoted[0].Text != "alphaheader\tbetaheader" {
+				t.Fatalf("header quote=%+v", quoted)
+			}
+		}
+		o.Source = true
+		if got := RenderText(Parse(source, o)); got != source {
+			t.Fatal("source changed", got)
 		}
 	}
 }
