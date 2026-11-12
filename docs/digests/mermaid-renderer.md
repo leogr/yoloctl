@@ -33,7 +33,7 @@ Its isolated Cargo graph uses recipe/package/version/target/cfg-derived crate
 metadata: source-path remapping alone does not normalize Cargo's crate identity.
 `--check` rebuilds in a fresh temporary root and requires exact artifact,
 manifest and pinned-output equality. It does not change committed files.
-[3](#source-3) [6](#source-6)
+[3](#source-3) [6](#source-6) [7](#source-7)
 
 [FACT] Tests validate committed inputs and instantiate the real module through
 wazero with fresh instances for flowchart, sequence, strict-width and invalid
@@ -44,8 +44,9 @@ guarantee. [5](#source-5)
 ## Sources
 
 1. <a id="source-1"></a> [Embedding](../../internal/mermaid/artifact.go#L1).
-2. <a id="source-2"></a> [Pins](../../third_party/mermaid-text/pins.json#L1), [manifest](../../internal/mermaid/wasm/manifest.json#L1) and adjacent patches/licenses.
+2. <a id="source-2"></a> [Pins](../../third_party/mermaid-text/pins.json#L1) — with the embedded internal/mermaid/wasm/manifest.json and adjacent patches/licenses.
 3. <a id="source-3"></a> [Builder](../../scripts/build-mermaid.py#L1) — `load_inputs`, `prepare`, `build_env`, `collect_licenses`, `main`.
 4. <a id="source-4"></a> [WASI command](../../third_party/mermaid-text/worker/src/main.rs#L1).
 5. <a id="source-5"></a> [Artifact tests](../../internal/mermaid/artifact_test.go#L1) — `TestArtifactManifestMatchesPinnedInputs`, `TestPinnedWASICommand`.
-6. <a id="source-6"></a> [Crate identity](../../third_party/mermaid-text/rustc-repro.py#L1) and [maintenance regressions](../../scripts/test_mermaid_build.py#L1).
+6. <a id="source-6"></a> [Crate identity](../../third_party/mermaid-text/rustc-repro.py#L1).
+7. <a id="source-7"></a> [Maintenance regressions](../../scripts/test_mermaid_build.py#L1).

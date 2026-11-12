@@ -9,6 +9,7 @@ import (
 	"github.com/leogr/yoloctl/internal/buildinfo"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/mermaid"
 	"github.com/leogr/yoloctl/internal/openshell"
 	"github.com/leogr/yoloctl/internal/port"
 	"github.com/leogr/yoloctl/internal/session"
@@ -47,6 +48,10 @@ func main() {
 	}
 	if len(os.Args) > 1 && os.Args[1] == openshell.NetworkWorkerCommand {
 		os.Exit(openshell.NetworkWorkerMain(os.Args[2:]))
+	}
+	// The host-only Mermaid renderer worker, started by chat/follow views.
+	if len(os.Args) == 2 && os.Args[1] == mermaid.WorkerArgument {
+		os.Exit(mermaid.WorkerMain())
 	}
 	ctx, stop := commandSignalContext()
 	defer stop()
