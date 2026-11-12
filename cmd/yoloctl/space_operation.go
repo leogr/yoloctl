@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -13,8 +14,28 @@ import (
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/spacelock"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"github.com/spf13/cobra"
 )
+
+// acquireSpaceOperationLock only shows prolonged contention. Its step ends at
+// the lock result, before the command proceeds or returns the original error.
+func acquireSpaceOperationLock(ctx context.Context, name string) (func(), error) {
+	var step *prettylog.Step
+	unlock, err := spacelock.AcquireWithWait(ctx, name, true, func() {
+		title := fmt.Sprintf("Waiting for another operation in space %s; Ctrl-C cancels.", name)
+		if call, ok := ctx.Value(controllerAdvisoryKey{}).(func(context.Context, controller.AdvisoryNotice) (controller.AdvisoryReply, error)); ok {
+			if reply, err := call(ctx, controller.AdvisoryNotice{Action: "blocker"}); err == nil && reply.Holder != nil {
+				title = fmt.Sprintf("Waiting for space lock held by %s; Ctrl-C cancels.", reply.Holder.String())
+			}
+		}
+		step = cliStep(ctx, title, prettylog.Actor(logging.Host))
+	})
+	if step != nil {
+		cliEndStep(step, err)
+	}
+	return unlock, err
+}
 
 type spaceReleaseKey struct{}
 type spaceHeldKey struct{}
@@ -214,15 +235,7 @@ func registerSpaceOperations(root *cobra.Command) {
 			}
 		}()
 		for _, name := range spaces {
-			unlock, err := spacelock.AcquireWithWait(cmd.Context(), name, true, func() {
-				if call, ok := cmd.Context().Value(controllerAdvisoryKey{}).(func(context.Context, controller.AdvisoryNotice) (controller.AdvisoryReply, error)); ok {
-					if reply, err := call(cmd.Context(), controller.AdvisoryNotice{Action: "blocker"}); err == nil && reply.Holder != nil {
-						cliInfo(logging.Host, "Waiting for space lock held by %s; Ctrl-C cancels.", reply.Holder.String())
-						return
-					}
-				}
-				cliInfo(logging.Host, "Waiting for another operation in space %s; Ctrl-C cancels.", name)
-			})
+			unlock, err := acquireSpaceOperationLock(cmd.Context(), name)
 			if err != nil {
 				return err
 			}

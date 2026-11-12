@@ -1,6 +1,6 @@
 # CLI log routing and outcomes
 
-Verification: `d0f086be331757cd4700188ce48a56d78c14ce89` and accompanying changes.
+Verification: `b63d673d39ee54202ea058b27e9e6f283e49cee2` and accompanying changes.
 
 [FACT] CLI warnings, notices and mutation-result prose use the process
 `internal/logging` Logger; worker processes send records and the host renders
@@ -14,6 +14,11 @@ records, including their continuation text. [1](#source-1) [2](#source-2)
 [FACT] Create emits the ephemeral-workdir notice after image warming and
 operation admission, including manifest-only admission. Preparation re-entry
 does not repeat it. [10](#source-10)
+
+[FACT] Prolonged space-lock contention starts a host step with the existing
+holder/advisory wording. Acquisition ends it successfully; a returned error
+ends it failed. Uncontended locks stay silent. Lock timing, cancellation and
+returned errors are unchanged. [11](#source-11)
 
 [FACT] A routed mutation reports its final outcome only after its controller
 call returns, including receipt finalization. Intermediate worker prose is not
@@ -70,3 +75,5 @@ BuildKit run or native terminal. [4](#source-4)
 9. <a id="source-9"></a> [Launcher capture](../../internal/lima/diagnostics.go#L213) — `WithProgress`, `runWithProgress`; lima.go lifecycle callers; diagnostics_test.go progress and daemon-FD fixtures.
 
 10. <a id="source-10"></a> [Ephemeral notice](../../cmd/yoloctl/agentbox.go#L1759) — `noticeEphemeralWorkdir`, `createAgentbox`; ephemeral_notice_test.go two-pass warm/admission regression.
+
+11. <a id="source-11"></a> [Lock-wait progress](../../cmd/yoloctl/space_operation.go#L25) — `acquireSpaceOperationLock`; space_lock_progress_test.go exercises real lock acquisition, cancellation and uncontended silence.
