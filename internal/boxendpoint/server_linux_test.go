@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -670,21 +671,85 @@ func TestStalledOutputIsBoundedForCooperativePeer(t *testing.T) {
 	waitUntracked(t, srv, 5*time.Second)
 }
 
-// stallConn stops delivering transport bytes to its client once stalled.
+// stallConn stops delivering transport bytes, including an already pending Read.
 type stallConn struct {
 	net.Conn
 	stalled chan struct{}
+	blocked chan struct{}
 	done    chan struct{}
+	once    sync.Once
 }
 
-func (c *stallConn) Read(b []byte) (int, error) {
+func (c *stallConn) waitStalled() bool {
 	select {
 	case <-c.stalled:
+		c.once.Do(func() { close(c.blocked) })
 		<-c.done
-		return 0, io.EOF
+		return true
 	default:
+		return false
 	}
-	return c.Conn.Read(b)
+}
+func (c *stallConn) Read(b []byte) (int, error) {
+	if c.waitStalled() {
+		return 0, io.EOF
+	}
+	n, err := c.Conn.Read(b)
+	if c.waitStalled() {
+		return 0, io.EOF
+	}
+	return n, err
+}
+
+// controlledRead finishes an underlying read only when the test permits it.
+type controlledRead struct {
+	net.Conn
+	entered chan struct{}
+	finish  chan struct{}
+}
+
+func (c *controlledRead) Read(b []byte) (int, error) {
+	close(c.entered)
+	<-c.finish
+	b[0] = 'x'
+	return 1, nil
+}
+func TestStallConnWithholdsReadAlreadyInFlight(t *testing.T) {
+	raw := &controlledRead{entered: make(chan struct{}), finish: make(chan struct{})}
+	conn := &stallConn{Conn: raw, stalled: make(chan struct{}), blocked: make(chan struct{}), done: make(chan struct{})}
+	release := sync.OnceFunc(func() { close(conn.done) })
+	finish := sync.OnceFunc(func() { close(raw.finish) })
+	t.Cleanup(release)
+	t.Cleanup(finish)
+	type result struct {
+		n   int
+		err error
+	}
+	read := make(chan result, 1)
+	go func() { var b [1]byte; n, err := conn.Read(b[:]); read <- result{n, err} }()
+	select {
+	case <-raw.entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("underlying read did not start")
+	}
+	close(conn.stalled)
+	finish()
+	select {
+	case <-conn.blocked:
+	case got := <-read:
+		t.Fatalf("pending read escaped stall: %+v", got)
+	case <-time.After(5 * time.Second):
+		t.Fatal("transport did not acknowledge stall")
+	}
+	release()
+	select {
+	case got := <-read:
+		if got.n != 0 || !errors.Is(got.err, io.EOF) {
+			t.Fatal("stalled read delivered bytes", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("fixture cleanup did not release read")
+	}
 }
 
 // A peer that withholds all transport progress loses only its own connection;
@@ -695,14 +760,15 @@ func TestUnresponsivePeerLosesOnlyItsConnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn := &stallConn{Conn: raw, stalled: make(chan struct{}), done: make(chan struct{})}
+	conn := &stallConn{Conn: raw, stalled: make(chan struct{}), blocked: make(chan struct{}), done: make(chan struct{})}
 	t.Cleanup(func() { close(conn.done); _ = raw.Close() })
 	c, chans, reqs, err := ssh.NewClientConn(conn, "endpoint", clientConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 	client := ssh.NewClient(c, chans, reqs)
-	for _, command := range []string{"head -c 1048576 /dev/zero", "sleep 0.3; exit 3"} {
+	var gates []io.WriteCloser
+	for _, command := range []string{"read gate; head -c 1048576 /dev/zero", "read gate; exit 3"} {
 		s, err := client.NewSession()
 		if err != nil {
 			t.Fatal(err)
@@ -710,11 +776,29 @@ func TestUnresponsivePeerLosesOnlyItsConnection(t *testing.T) {
 		if _, err := s.StdoutPipe(); err != nil {
 			t.Fatal(err)
 		}
+		gate, err := s.StdinPipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		gates = append(gates, gate)
 		if err := s.Start(command); err != nil {
 			t.Fatal(err)
 		}
 	}
 	close(conn.stalled)
+	// Neither child may output or finish before stall activation. Release output
+	// first, then require its pending transport Read to acknowledge the stall.
+	if _, err := io.WriteString(gates[0], "go\n"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-conn.blocked:
+	case <-time.After(5 * time.Second):
+		t.Fatal("client transport did not enter stall")
+	}
+	if _, err := io.WriteString(gates[1], "go\n"); err != nil {
+		t.Fatal(err)
+	}
 	other := dialEndpoint(t, sock)
 	// The server itself must release the stalled connection, its sessions and
 	// their slots; test cleanup only unblocks the client wrapper afterwards.
