@@ -12,6 +12,7 @@ import (
 
 	"github.com/leogr/yoloctl/internal/audit"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/spf13/cobra"
 )
@@ -149,10 +150,8 @@ func changeAuditRules(cmd *cobra.Command, target controllerTarget, kind string, 
 	if callErr != nil {
 		return callErr
 	}
-	if response.Status != nil && response.Status.RuleCleanupWarning != "" {
-		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Warning: rule retirement deferred: "+audit.DiagnosticText(response.Status.RuleCleanupWarning)); err != nil {
-			return err
-		}
+	if response.Status != nil {
+		reportAuditRuleCleanup(*response.Status)
 	}
 
 	if !response.Changed {
@@ -233,4 +232,10 @@ func auditSelectionEditorDocument(selection []byte) []byte {
 		return bytes.Clone(selection)
 	}
 	return append([]byte(auditSelectionHelp), selection...)
+}
+
+func reportAuditRuleCleanup(status audit.Status) {
+	if status.RuleCleanupWarning != "" {
+		logging.L().Warn("Rule retirement deferred", "actor", logging.Audit, "err", status.RuleCleanupWarning)
+	}
 }

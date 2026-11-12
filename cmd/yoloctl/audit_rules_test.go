@@ -13,7 +13,9 @@ import (
 
 	"github.com/leogr/yoloctl/internal/audit"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceenv"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"github.com/spf13/cobra"
 )
 
@@ -138,5 +140,30 @@ func TestAuditRulesEditorHelpDoesNotAccumulate(t *testing.T) {
 	}
 	if string(selection) != "rules:\n- disable: {rule: '*'}\n" {
 		t.Fatal("changed source buffer")
+	}
+}
+
+func TestAuditRuleCleanupWarningHonorsLogLevel(t *testing.T) {
+	for _, level := range []prettylog.Verbosity{prettylog.Normal, prettylog.Quiet, prettylog.Errors} {
+		func() {
+			var out bytes.Buffer
+			logger := prettylog.New(&out, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: level})
+			restore := logging.SetLogger(logger)
+			defer restore()
+			reportAuditRuleCleanup(audit.Status{RuleCleanupWarning: "fixture inventory unknown\x1b]52;c;data\a"})
+			if err := logger.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if level == prettylog.Errors {
+				if out.Len() != 0 {
+					t.Fatal("error-only mode showed a warning", out.String())
+				}
+			} else if !strings.Contains(out.String(), "Rule retirement deferred") || !strings.Contains(out.String(), "fixture inventory unknown") {
+				t.Fatal("warning lost", out.String())
+			}
+			if strings.ContainsAny(out.String(), "\x1b\a") {
+				t.Fatal("warning emitted raw terminal controls")
+			}
+		}()
 	}
 }
