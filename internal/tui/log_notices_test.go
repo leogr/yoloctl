@@ -83,3 +83,48 @@ func TestNoticeBackgroundUsesSharedThemeWithoutAQuery(t *testing.T) {
 		t.Fatal("light/dark warning tone did not change")
 	}
 }
+
+func TestWrappedNoticePreservesResolvedPaletteAndGeometry(t *testing.T) {
+	m := newTestModel(t, 100, 30)
+	for _, tc := range []struct {
+		name string
+		bg   color.Color
+		mode prettylog.ColorMode
+		code string
+	}{
+		{"unknown", nil, prettylog.ColorAlways, "38;5;3m"},
+		{"dark", color.Black, prettylog.ColorAlways, "38;5;221m"},
+		{"light", color.White, prettylog.ColorAlways, "38;5;136m"},
+		{"no colour", color.Black, prettylog.ColorNever, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m.bgDetected, m.background = false, nil
+			if tc.bg != nil {
+				_, _ = m.Update(tea.BackgroundColorMsg{Color: tc.bg})
+			}
+			settings := logging.Settings{Verbosity: prettylog.Errors, Color: tc.mode}
+			shown := m.noticeLineOptions(prettylog.KindWarn, "careful: action refused", settings)
+			plain := ansi.Strip(shown)
+			style := m.noticeFooterOptions(prettylog.KindWarn, settings)
+			// Match popup.render: strip/wrap first, then style without adding
+			// another glyph, clipping, padding or changing the hit geometry.
+			for i, row := range strings.Split(ansi.Hardwrap(plain, 12, true), "\n") {
+				got := style(row, i)
+				if ansi.Strip(got) != row || ansi.StringWidth(got) != ansi.StringWidth(row) {
+					t.Fatalf("footer changed text/width: %q => %q", row, got)
+				}
+				if tc.code == "" {
+					if strings.ContainsRune(got, '\x1b') {
+						t.Fatalf("colour disabled: %q", got)
+					}
+				} else if !strings.Contains(shown, tc.code) || !strings.Contains(got, tc.code) {
+					t.Fatalf("palette mismatch: line=%q footer=%q want=%s", shown, got, tc.code)
+				}
+			}
+			selected := "\x1b[7mKeep\x1b[27m"
+			if got := style(selected, 0); !strings.Contains(got, selected) {
+				t.Fatalf("button highlighting lost: %q", got)
+			}
+		})
+	}
+}

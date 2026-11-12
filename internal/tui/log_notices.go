@@ -9,7 +9,6 @@ import (
 
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/logging/logtheme"
-	"github.com/leogr/yoloctl/internal/tui/spaceview"
 	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
@@ -77,15 +76,20 @@ func (m *model) statusLine() string {
 // Popup wrapping and hit geometry operate on plain text. Apply the shared tone
 // after wrapping, without adding a second glyph or changing any cell widths.
 func (m *model) noticeFooter(kind prettylog.Kind) func(string, int) string {
+	return m.noticeFooterOptions(kind, logging.CurrentSettings())
+}
+
+func (m *model) noticeFooterOptions(kind prettylog.Kind, settings logging.Settings) func(string, int) string {
 	return func(line string, _ int) string {
-		s := logging.CurrentSettings()
-		_, colored := prettylog.DecideColor(os.Stderr, s.Color, os.Getenv, logging.IsTerminal)
-		if !colored {
+		// A pretty record starts with the kind's styled glyph. Use that
+		// renderer-owned style prefix, from the same resolved palette as the
+		// status line, rather than reinterpreting Color's private encoding.
+		// The empty record is ours, never child PTY output. Preserve already
+		// wrapped text and the popup's own reverse-video button highlighting.
+		prefix, _, found := strings.Cut(m.noticeLineOptions(kind, "", settings), prettylog.DefaultGlyphs.For(kind))
+		if !found || prefix == "" {
 			return line
 		}
-		theme := spaceview.NewTheme(m.bgIsDark || !m.bgDetected, m.background, nil)
-		return spaceview.StyleText(line, spaceview.Style{
-			FG: theme.LogTone(kind), Bold: kind == prettylog.KindWarn || kind == prettylog.KindError || kind == prettylog.KindUnknown,
-		})
+		return prefix + line + cReset
 	}
 }
