@@ -46,8 +46,10 @@ failures answer `not_png` or `too_large`, others `failed`. Otherwise the host
 allocates an ID, registers the placement and chip for that pane (deleting a
 replaced one), writes one Kitty sequence through Bubble Tea's raw output
 (direct PNG, `a=T`, virtual placement `U=1`, quiet, 4 KiB base64 chunks) and
-answers `ready` with a fresh token, the ID and the cell size. A release with
-that token or the pane's end deletes exactly that ID. Nothing is cached yet:
+answers `ready` with a fresh token, the ID and the cell size, only after the
+transmit has been written (the two are sequenced). A release with that token or
+the pane's end deletes exactly that ID; a pane's end also cancels its in-flight
+job, and the TUI deletes every image it still owns when it exits. Nothing is cached yet:
 another request reads again. [3](#source-3) [4](#source-4)
 
 ## Sources

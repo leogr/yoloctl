@@ -17,7 +17,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/chatstream"
 	"github.com/leogr/yoloctl/internal/chatui"
 	"github.com/leogr/yoloctl/internal/config"
@@ -32,19 +31,8 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 	// Claim the TUI's image control channel before anything else can start a
 	// helper that would inherit it. Without a valid channel, chat simply
 	// shows chips.
-	if images, err := chatimage.InheritedChannel(); err == nil && images != nil {
-		defer func() { _ = images.Close() }()
-		conn := chatimage.NewConn(images, false)
-		go func() {
-			// Previews are not drawn yet: read and discard host frames so a
-			// host write never waits on this pane.
-			for {
-				if _, err := conn.Receive(); err != nil {
-					return
-				}
-			}
-		}()
-	}
+	previews := claimChatPreviews()
+	defer previews.close()
 	mode, err := chatCatalogMode(cmd)
 	if err != nil {
 		return err
@@ -90,6 +78,7 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 		Clipboard: clipboard, Browser: prefs.BrowserPolicy(), Identities: identities, Icons: prefs.GetAgentIcons()}
 	s := &chatSession{catalogRead: mode, ctx: ctx, target: target, members: members, header: header, agentsWake: make(chan struct{}, 1)}
 	configureChatImages(s, &opts, prefs.ClipboardEnabled(), hostintegration.ReadImage)
+	previews.configure(s, &opts)
 	opts.LoadOlder = s.loadOlder
 	opts.Send = s.send
 	opts.Copy = func(text string) tea.Cmd {
@@ -130,6 +119,7 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 		return func() tea.Msg { return s.refreshCatalog() }
 	}
 	s.program = tea.NewProgram(chatui.New(opts), tea.WithoutSignalHandler(), tea.WithInput(cmd.InOrStdin()), tea.WithOutput(cmd.OutOrStdout()))
+	previews.relay(s.program.Send)
 	s.start(false)
 	s.refreshAgents()
 	go s.agentsLoop()

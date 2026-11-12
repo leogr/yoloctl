@@ -214,6 +214,7 @@ func Run(ctx context.Context) error {
 	}
 
 	err = runProgram(ctx, p)
+	m.deleteOwnedImages(os.Stdout) // free this TUI's images on the host terminal
 	m.eachSession(func(p *panes.Pane) { p.Session.Close() })
 	if err != nil && ctx.Err() != nil {
 		return nil // outer signal: normal shutdown
@@ -893,6 +894,10 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 	if m.imageProbeMsg(msg) {
 		return m, nil
 	}
+	if r, ok := msg.(imageReadyMsg); ok {
+		m.imageReady(r)
+		return m, nil
+	}
 	switch msg := msg.(type) {
 	case tea.RawMsg:
 		// Bubble Tea has queued this sequence before invoking Update. Only
@@ -1066,6 +1071,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 			return m, nil // its view was closed first
 		}
 		p.Exited = true
+		m.cancelImageJob(msg.session)
 		if p, ok := m.imageRegistry.Release(msg.session); ok { // an ended session shows no preview
 			m.images.deletes = append(m.images.deletes, p.ID)
 		}

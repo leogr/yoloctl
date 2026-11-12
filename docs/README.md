@@ -61,6 +61,7 @@ or session history. Repository working rules are in [AGENTS.md](../AGENTS.md).
 | How are host clipboard PNGs published with bounded input and uncertain-result recovery? | [Controller](specs/controller.md) | [Chat image publication](digests/chat-images.md) |
 | Which panes may display chat image preview cells, and what happens to other image placeholders in the TUI? | [TUI](specs/tui.md) | [Chat image previews](digests/chat-image-previews.md) |
 | How does the host read a chat image artifact for a preview, and how is the confined relay bounded? | [TUI](specs/tui.md) | [Chat image fetch](digests/chat-image-fetch.md) |
+| How does a chat pane ask for, draw and release an image preview? | [TUI](specs/tui.md) | [Chat image panes](digests/chat-image-panes.md) |
 | How do chat selection/copy, participants, suggestions, help/settings, attach and scrolling behave? | [TUI](specs/tui.md) | [Input and actions](digests/chat-interaction.md), [reading and selection](digests/chat-reading.md), [participants, settings and attachment](digests/chat-participants.md) |
 | How does chat Quote turn a highlight into quoted original Markdown or table cell text, and when does it refuse? | [TUI](specs/tui.md) | [Chat Quote](digests/chat-quote.md) |
 | How does the chat For me/participant filter choose messages and replies, and whom does an `@name` mean across live aliases? | [TUI](specs/tui.md) | [Message filter and mention identities](digests/chat-filter.md) |

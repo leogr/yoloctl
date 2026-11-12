@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/markdownview"
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
 	"github.com/leogr/yoloctl/pkg/prettylog"
@@ -28,6 +29,7 @@ const (
 	lineError    = 1
 	lineEvents   = 2
 	linePresence = 3
+	linePreview  = 1 << 16 // and the preview's next rows
 	lineSpacer   = 1 << 20
 )
 
@@ -135,6 +137,10 @@ func (m *Model) body(msg *Message, width int) cachedBody {
 		// markers are; a typed look-alike marker stays text.
 		text = attachmentText(msg)
 	}
+	// Literal image placeholder characters in message text are display only
+	// spaces: only this pane's own preview rows draw image cells. Copy,
+	// Quote and the source copy keep the original text.
+	text = chatimage.NeutralizeText(text)
 	body, ok := m.bodyCache[key]
 	if !ok || body.text != text || body.source != m.source || body.me != m.self {
 		base := displayLines(m.widthMethod, text, m.source, m.theme, m.self)
@@ -281,6 +287,7 @@ func (m *Model) transcript(width int) []transcriptRow {
 			}
 			rows = append(rows, row)
 		}
+		rows = append(rows, m.previewRows(msg, key, len(body.lines), indent)...)
 		if msg.Error != "" {
 			rows = append(rows, transcriptRow{key: key, line: len(body.lines) + lineError, kind: rowDecor,
 				runs: append(slicesCloneRuns(indent), deco(prettylog.DefaultGlyphs.Error+" "+oneLine(msg.Error), spaceview.Style{FG: t.Bad}))})

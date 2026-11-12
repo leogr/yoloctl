@@ -290,8 +290,11 @@ their launch environment.
 [FACT] Image placeholder cells (Kitty U+10EEEE) reach the display only inside
 the one chat preview registered for that pane's session; any other placeholder
 in any pane or the palette console is shown as a space. A native chat pane's
-explicit copy turns preview cells into their attachment chip.
-[7](#source-7) [47](#source-47)
+explicit copy turns preview cells into their attachment chip. On a host
+terminal that passes the image probe, a chat message's single image attachment
+offers Show image: the TUI reads it through the controller, scales it and
+places it under that message; elsewhere the chip stays.
+[7](#source-7) [47](#source-47) [49](#source-49)
 
 [DERIVED] Passing these tests cannot establish native terminal equivalence.
 Claims must name the tested terminal versions/configurations and distinguish
@@ -397,3 +400,5 @@ log or row replay is added. [48](#source-48)
 47. <a id="source-47"></a> [Chat image previews](../digests/chat-image-previews.md).
 
 48. <a id="source-48"></a> [TUI log notices](../digests/tui-log-notices.md).
+
+49. <a id="source-49"></a> [Chat image panes](../digests/chat-image-panes.md).

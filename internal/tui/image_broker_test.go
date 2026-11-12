@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -164,20 +165,25 @@ func TestBrokerClosesAChannelAfterAFailedSend(t *testing.T) {
 	t.Fatal("channel of a non-reading pane was not closed")
 }
 
-// rawOutput runs cmd and every command it batches, collecting raw host output.
-func rawOutput(cmd tea.Cmd) string {
+// rawOutput runs cmd and every command it batches or sequences, in order,
+// collecting raw host output; other messages go back into m when m is set.
+func rawOutput(cmd tea.Cmd, m ...*model) string {
 	if cmd == nil {
 		return ""
 	}
-	switch msg := cmd().(type) {
-	case tea.RawMsg:
-		return fmt.Sprint(msg.Msg)
-	case tea.BatchMsg:
+	msg := cmd()
+	if raw, ok := msg.(tea.RawMsg); ok {
+		return fmt.Sprint(raw.Msg)
+	}
+	if v := reflect.ValueOf(msg); v.IsValid() && v.Kind() == reflect.Slice && v.Type().Elem() == reflect.TypeOf(tea.Cmd(nil)) {
 		var out strings.Builder
-		for _, c := range msg {
-			out.WriteString(rawOutput(c))
+		for i := 0; i < v.Len(); i++ {
+			out.WriteString(rawOutput(v.Index(i).Interface().(tea.Cmd), m...))
 		}
 		return out.String()
+	}
+	if len(m) > 0 && msg != nil {
+		_, _ = m[0].Update(msg)
 	}
 	return ""
 }
@@ -234,7 +240,7 @@ func TestBrokerFetchesPreparesTransmitsAndRegisters(t *testing.T) {
 	var raw strings.Builder
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		raw.WriteString(rawOutput(m.syncImages())) // only here: no other path consumes the job
+		raw.WriteString(rawOutput(m.syncImages(), m)) // only here: no other path consumes the job
 		if _, ok := m.imageRegistry.Active(s); ok {
 			break
 		}
@@ -296,5 +302,58 @@ func TestBrokerAnswersBusyStaleAndFailures(t *testing.T) {
 	}
 	if _, ok := m.imageRegistry.Active(s); ok {
 		t.Fatal("a failed preview was registered")
+	}
+}
+
+// Review step 9 conditions: ready only after the transmit write, owned
+// images freed when the TUI exits, a pane's job canceled when the pane ends.
+func TestBrokerReadyFollowsTransmitAndCleansUp(t *testing.T) {
+	data := smallPNG(t)
+	m, s := supportedBroker(t, func(context.Context, string, chatimage.Frame) ([]byte, error) { return data, nil })
+	m.imageHandler()(s, previewFrame(7))
+	var cmd tea.Cmd
+	deadline := time.Now().Add(10 * time.Second)
+	for cmd == nil || !strings.Contains(rawOutputPeek(cmd), "a=T") {
+		cmd = m.syncImages()
+		if time.Now().After(deadline) {
+			t.Fatal("no transmit")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(200 * time.Millisecond)
+	if strings.Contains(s.GridText(), `"op":"ready"`) {
+		t.Fatal("ready sent before the transmit was written")
+	}
+	_ = rawOutput(cmd, m) // the transmit, then the ready message
+	pump(t, m, s, func() bool { return strings.Contains(s.GridText(), `"op":"ready"`) })
+	p, _ := m.imageRegistry.Active(s)
+	var out strings.Builder
+	m.deleteOwnedImages(&out)
+	if out.String() != chatimage.DeleteSequence(p.ID) {
+		t.Fatalf("exit cleanup %q", out.String())
+	}
+}
+
+// rawOutputPeek runs cmd only far enough to see a raw write it batches or
+// sequences first, without delivering later messages.
+func rawOutputPeek(cmd tea.Cmd) string { return rawOutput(cmd) }
+
+func TestBrokerCancelsAnEndedPanesJob(t *testing.T) {
+	canceled := make(chan struct{})
+	m, s := supportedBroker(t, func(ctx context.Context, _ string, _ chatimage.Frame) ([]byte, error) {
+		<-ctx.Done()
+		close(canceled)
+		return nil, ctx.Err()
+	})
+	m.imageHandler()(s, previewFrame(9))
+	_ = m.syncImages()
+	if m.images.job == nil {
+		t.Fatal("job not started")
+	}
+	_, _ = m.Update(tabExitMsg{session: s})
+	select {
+	case <-canceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("job of an ended pane was not canceled")
 	}
 }

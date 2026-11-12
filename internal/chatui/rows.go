@@ -13,6 +13,10 @@ const (
 	actCopyCode            // value: a fenced block's code, copied as is
 )
 
+// actPreview toggles an image preview (value: the message's server ID). It is
+// numbered past markdownview's shared intents (up to 8).
+const actPreview actionKind = 16
+
 type rowKind int
 
 const (

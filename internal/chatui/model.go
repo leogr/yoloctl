@@ -188,7 +188,11 @@ type Options struct {
 	Account         string
 	MaxMessageBytes int
 	Send            func(Outgoing) tea.Cmd
-	Copy, OpenLink  func(string) tea.Cmd
+	// PreviewImage asks the host to show one artifact's image; nil means no
+	// previews. ReleasePreview frees a shown image by its host token.
+	PreviewImage   func(PreviewRequest) tea.Cmd
+	ReleasePreview func(token string) tea.Cmd
+	Copy, OpenLink func(string) tea.Cmd
 	// ConfirmLinks requires a second explicit Ctrl+O for the fixed URL shown
 	// in a local prompt. The caller still owns URL validation and opening.
 	ConfirmLinks bool
@@ -271,7 +275,12 @@ type Model struct {
 	pending           *pendingAction
 	lastRefresh       time.Time
 	opts              Options
-	width, height     int
+	// previewCap is the host's image capability; preview is the pane's one
+	// requested or shown image; previewSeq numbers requests.
+	previewCap    PreviewCapabilityMsg
+	preview       *imagePreview
+	previewSeq    uint64
+	width, height int
 	// Zero is WcWidth, as in Bubble Tea before a supported mode-2027 report.
 	widthMethod       ansi.Method
 	connected         bool
@@ -402,6 +411,9 @@ func (m *Model) say(level noticeLevel, text string) {
 func (m *Model) touch() { m.generation++ }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, ok := m.previewUpdate(msg); ok {
+		return m, cmd
+	}
 	_, cmd := m.update(msg)
 	switch msg.(type) {
 	case MembersMsg, IncomingMsg, DeliveryMsg, CatalogMsg, SessionMsg, ConnectionMsg, GapMsg, MembershipMsg:
@@ -1059,6 +1071,11 @@ func (m *Model) messageActions() []messageAction {
 	if _, ok := firstCode(msg.Text); ok {
 		out = append(out, messageAction{"code", "Copy code", "Alt+C"})
 	}
+	if m.previewShown(msg) {
+		out = append(out, messageAction{"image", "Hide image", ""})
+	} else if m.canPreview(msg) {
+		out = append(out, messageAction{"image", "Show image", ""})
+	}
 	switch {
 	case msg.Artifact != nil:
 		out = append(out, messageAction{"artifact", "Copy file id", ""})
@@ -1101,6 +1118,8 @@ func (m *Model) runAction(id string) tea.Cmd {
 	}
 	target := m.messageName(msg)
 	switch id {
+	case "image":
+		return m.togglePreview(msg)
 	case "reply":
 		if msg.ID == "" {
 			m.say(levelWarn, "Not confirmed yet; you can reply once the room echoes it")

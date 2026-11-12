@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -293,9 +294,44 @@ func (m *model) finishImageJob(live map[*term.Session]bool) tea.Cmd {
 	if old, replaced := m.imageRegistry.Activate(s, placement, f.Chip); replaced {
 		b.deletes = append(b.deletes, old.ID)
 	}
-	m.sendImage(s, chatimage.Frame{Op: chatimage.OpReady, Generation: job.generation, Request: f.Request,
-		Token: token, ID: id, Cols: placement.Cols, Rows: placement.Rows})
-	return tea.Raw(chatimage.TransmitSequence(id, job.prepared))
+	ready := imageReadyMsg{session: s, frame: chatimage.Frame{Op: chatimage.OpReady, Generation: job.generation, Request: f.Request,
+		Token: token, ID: id, Cols: placement.Cols, Rows: placement.Rows}}
+	// The pane learns "ready" only after the transmit is written, so it
+	// never draws placeholder cells for an image the terminal lacks.
+	return tea.Sequence(tea.Raw(chatimage.TransmitSequence(id, job.prepared)), func() tea.Msg { return ready })
+}
+
+// imageReadyMsg follows a preview's transmit write; the ready frame goes out
+// only if the pane still holds that preview.
+type imageReadyMsg struct {
+	session *term.Session
+	frame   chatimage.Frame
+}
+
+func (m *model) imageReady(msg imageReadyMsg) {
+	if p, ok := m.imageRegistry.Active(msg.session); ok && p.Token == msg.frame.Token {
+		m.sendImage(msg.session, msg.frame)
+	}
+}
+
+// cancelImageJob cancels the in-flight job of a pane that ended: its read
+// stops promptly and frees the single slot; its result is dropped.
+func (m *model) cancelImageJob(s *term.Session) {
+	if job := m.images.job; job != nil && job.msg.session == s {
+		job.cancel()
+	}
+}
+
+// deleteOwnedImages frees every image this TUI still owns on the host
+// terminal when it exits, by ID only.
+func (m *model) deleteOwnedImages(w io.Writer) {
+	var seq strings.Builder
+	for _, p := range m.imageRegistry.All() {
+		seq.WriteString(chatimage.DeleteSequence(p.ID))
+	}
+	if seq.Len() > 0 {
+		_, _ = io.WriteString(w, seq.String())
+	}
 }
 
 // chatImageHandler gives only native chat panes the image channel.

@@ -1,6 +1,6 @@
 # Native chat composer image drafts
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Show image action on `292d87b9ed18f1b1a1b05a68d6cf5ba71957139d` and accompanying changes.
 
 [FACT] Ctrl+V asks the host's `ReadImage` callback for one clipboard PNG; with
 no callback (`seams.clipboard` off or unsupported) nothing is read. One read
@@ -48,8 +48,9 @@ acknowledging the operation; text alone never does, and the rest waits for
 Enter. Operation guidance leads with the inspect command, also for a later
 outcome of a published or removed image, and is kept as a wrapped note in its
 channel and shown even from a hidden one. Artifact messages render as an inert
-`[file NAME · SIZE]` chip with Copy file id; source view keeps the original
-text but no link target. [1](#source-1) [6](#source-6)
+`[file NAME · SIZE]` chip with Copy file id (and Show image when the host
+supports previews, see the chat image panes digest); source view keeps the
+original text but no link target. [1](#source-1) [6](#source-6)
 
 [FACT] Regressions cover reads and their bounds, inline order with typed text
 and pastes, undo/redo and cuts, per-channel drafts with a hidden channel

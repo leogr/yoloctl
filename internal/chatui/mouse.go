@@ -330,6 +330,13 @@ func (m *Model) activate(act action) tea.Cmd {
 		return m.requestAttach(act.Extra, act.Value)
 	case actReply, actRef:
 		return m.showMessage(act.Value)
+	case actPreview:
+		for i := range m.messages {
+			if m.messages[i].ID == act.Value {
+				return m.togglePreview(&m.messages[i])
+			}
+		}
+		return nil
 	case actMention:
 		m.mentionCard(act.Value)
 	case actFilter:

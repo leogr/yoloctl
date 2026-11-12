@@ -44,6 +44,10 @@ func (c Color) Spec() (index int, r, g, b uint8, kind ColorKind) {
 	return int(c) - 1, 0, 0, 0, ColorIndexed
 }
 
+// RGB names one truecolor value, for native views that must draw an exact
+// colour (an image placeholder's ID).
+func RGB(r, g, b uint8) Color { return rgb(r, g, b) }
+
 // PaletteColor names one 256-color palette index, for native views that
 // need a shade the dashboard theme does not define.
 func PaletteColor(index int) Color { return ix(index) }

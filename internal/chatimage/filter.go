@@ -74,6 +74,20 @@ func (r *Registry) Release(owner any) (Placement, bool) {
 	return p, ok
 }
 
+// All returns every registered preview, for freeing them when the host exits.
+func (r *Registry) All() []Placement {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]Placement, 0, len(r.active))
+	for _, p := range r.active {
+		out = append(out, p)
+	}
+	return out
+}
+
 // Active returns the owner's displayed preview, if any.
 func (r *Registry) Active(owner any) (Placement, bool) {
 	if r == nil || owner == nil {
