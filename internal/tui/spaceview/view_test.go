@@ -603,3 +603,38 @@ func TestHeaderMergesTheSummaryWhenItFits(t *testing.T) {
 		}
 	}
 }
+
+// Scrolling must not erase the VM frame's right edge or its clickable label.
+func TestScrollbarHasOwnColumnBesideVMFrame(t *testing.T) {
+	for _, width := range []int{49, 64, 80, 120, 160, 200} {
+		for _, scroll := range []int{0, 8, 10000} {
+			m := fixtureModel(t, width, 16)
+			m.scroll = scroll
+			rows := plainRows(m)
+			f := m.last
+			if f.contentH <= f.bodyH {
+				t.Fatalf("fixture does not scroll at %d", width)
+			}
+			borders, thumbs := 0, 0
+			for y := f.bodyY; y < f.bodyY+f.bodyH; y++ {
+				cells := f.c.cells[y]
+				if cells[width-1].text == "┃" {
+					thumbs++
+				}
+				if cells[0].text == "║" || cells[0].text == "╔" || cells[0].text == "╚" {
+					borders++
+					right := cells[width-2].text
+					if right != "║" && right != "╗" && right != "╝" {
+						t.Fatalf("width=%d scroll=%d broken frame: %q", width, scroll, rows[y])
+					}
+					if cells[width-1].text != " " && cells[width-1].text != "┃" {
+						t.Fatalf("content in scrollbar column: %q", rows[y])
+					}
+				}
+			}
+			if borders == 0 || thumbs == 0 {
+				t.Fatalf("width=%d scroll=%d borders=%d thumbs=%d", width, scroll, borders, thumbs)
+			}
+		}
+	}
+}

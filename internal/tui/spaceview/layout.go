@@ -126,16 +126,23 @@ func (m *Model) render() *frame {
 		return f
 	}
 	f.c.putFirstRow(b.titleBar(w))
-	var body []line
-	switch {
-	case m.d.inv == nil:
-		body = b.waiting(w)
-	case w < compactWidth:
-		body = b.compactBody(w, f)
-	default:
-		body = b.body(w, f)
+	layoutBody := func(width int) []line {
+		switch {
+		case m.d.inv == nil:
+			return b.waiting(width)
+		case width < compactWidth:
+			return b.compactBody(width, f)
+		default:
+			return b.body(width, f)
+		}
 	}
 	f.bodyY, f.bodyH = 1, h-2
+	body := layoutBody(w)
+	if len(body) > f.bodyH {
+		// The scrollbar owns the last column; lay out content beside it rather
+		// than painting over the VM frame (or a compact row's last cell).
+		body = layoutBody(w - 1)
+	}
 	f.contentH = len(body)
 	f.scroll = clampScroll(m.scroll, f.contentH, f.bodyH)
 	for i := 0; i < f.bodyH && f.scroll+i < len(body); i++ {
@@ -457,7 +464,7 @@ func attachVerb(box spacetelemetry.Box) string {
 
 // ---- scrollbar ------------------------------------------------------------------
 
-// scrollbar reuses the rightmost column: an orange thumb over the frame.
+// scrollbar draws in the rightmost column, reserved by render.
 func (b *builder) scrollbar(f *frame) {
 	view, content := f.bodyH, f.contentH
 	thumb := max(1, view*view/content)

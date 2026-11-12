@@ -1,6 +1,6 @@
 # Live space view
 
-Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; re-read affected cited symbols when changing behavior.
+Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; scrollbar layout re-read at `85f67be08d8bceefb03db745cad123ea5bbade49` and accompanying changes; re-read affected cited symbols when changing behavior.
 
 [FACT] `space view [SPACE]` is a host-only command added beside export and
 import; its positional completes running spaces. It refuses box operators and
@@ -45,7 +45,9 @@ and network listeners never create one. See [chat presence](chat-presence.md).
 [FACT] The layout is a pure function from data and UI state to a cell canvas
 with click targets. It uses four to one card columns from 160/120/80 columns,
 and a compact list below 48. It never exceeds the terminal dimensions; below
-20×7 it shows a resize hint. The dashboard scrolls only vertically. Cards show `yolo.*` items as raised pills, with the operator
+20×7 it shows a resize hint. The dashboard scrolls only vertically. Overflowing content reserves the
+rightmost column for the scrollbar, keeping the VM frame intact. The title
+and footer keep the full width. [35](#source-35) Cards show `yolo.*` items as raised pills, with the operator
 capability in a warning color. A feature that grants its same-named capability
 shows once, as the capability. Members of a chat room share a colored corner
 marker; hovering the room highlights its members. A declared or evidenced
@@ -142,3 +144,5 @@ and local PTYs; they do not establish live-VM or proxy-confined chat coverage.
 32. <a id="source-32"></a> [Space view memory readings](space-view-memory.md) — VM, pool and box memory presentation.
 33. <a id="source-33"></a> [privileged.go](../../internal/agentbox/privileged.go#L78-L103) — `ClassifyRuntime`; `TestParseRuntimeStatesCarriesLaunchEvidence` in `runtime_state_test.go` at L43, `TestTelemetryInventoryCarriesPrivilege` in `space_telemetry_test.go` at L319.
 34. <a id="source-34"></a> [layout.go](../../internal/tui/spaceview/layout.go#L1309-L1338) — `privilegeMark`, `privilegedPill`; hint at L410, compact chip at L1516, click in `popup.go` at L166; `privileged_test.go` and its `privilegedFixtureModel` in `fixture_test.go`.
+
+35. <a id="source-35"></a> [Scrollbar layout](../../internal/tui/spaceview/layout.go#L116) — `Model.render`, `builder.scrollbar`; `TestScrollbarHasOwnColumnBesideVMFrame` in view_test.go.
