@@ -124,6 +124,7 @@ type model struct {
 	hostBlurred      bool
 	hostGeometry     hostGeometry
 	imageHost        imageHost
+	images           imageBroker
 	frames           *displayFrames // scoped to one View call
 	// placeholderFocus is the empty pane the palette last opened for
 	// (placeholder.go).
@@ -837,6 +838,7 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 		OnBell:           m.paneBellHandler(&self),
 		OnBrowser:        m.browserHandler(),
 		OnTabRequest:     m.tabRequestHandler(args, &self),
+		OnImage:          m.chatImageHandler(args),
 		ImageCopy:        isChatView(args),
 		ResumeTargetKind: resumeKind,
 		EndHint:          m.reattachHint(args),
@@ -871,7 +873,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		m.checkConfirm()
 		m.syncPlaceholder()
 		m.syncFocus()
-		cmd = tea.Batch(cmd, m.syncMouseShift(), m.syncHostGeometry(), m.syncHostMouseEncoding())
+		cmd = tea.Batch(cmd, m.syncMouseShift(), m.syncHostGeometry(), m.syncHostMouseEncoding(), m.syncImages())
 	}()
 	if m.imageProbeMsg(msg) {
 		return m, nil
@@ -1048,6 +1050,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 			return m, nil // its view was closed first
 		}
 		p.Exited = true
+		m.imageRegistry.Release(msg.session) // an ended session shows no preview
 		m.reportInputErrors()
 		if m.standalone {
 			return m, tea.Quit

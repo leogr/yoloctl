@@ -17,6 +17,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/chatstream"
 	"github.com/leogr/yoloctl/internal/chatui"
 	"github.com/leogr/yoloctl/internal/config"
@@ -28,6 +29,22 @@ import (
 )
 
 func runChatView(cmd *cobra.Command, _ []string) error {
+	// Claim the TUI's image control channel before anything else can start a
+	// helper that would inherit it. Without a valid channel, chat simply
+	// shows chips.
+	if images, err := chatimage.InheritedChannel(); err == nil && images != nil {
+		defer func() { _ = images.Close() }()
+		conn := chatimage.NewConn(images, false)
+		go func() {
+			// Previews are not drawn yet: read and discard host frames so a
+			// host write never waits on this pane.
+			for {
+				if _, err := conn.Receive(); err != nil {
+					return
+				}
+			}
+		}()
+	}
 	mode, err := chatCatalogMode(cmd)
 	if err != nil {
 		return err

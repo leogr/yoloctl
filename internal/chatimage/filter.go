@@ -14,6 +14,7 @@ import (
 type Placement struct {
 	ID         uint32
 	Rows, Cols int
+	Token      string // host-issued; the child releases by it
 }
 
 // Registry records, per owning session, the one preview it may display. The
@@ -43,7 +44,22 @@ func (r *Registry) Activate(owner any, p Placement, chip string) {
 	r.ledger.Remember(p.ID, chip)
 }
 
-// Release forgets the owner's preview (collapse, close, access loss).
+// ReleaseToken forgets the owner's preview only if token names it, so a
+// stale release cannot remove a newer preview.
+func (r *Registry) ReleaseToken(owner any, token string) bool {
+	if r == nil {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if p, ok := r.active[owner]; ok && token != "" && p.Token == token {
+		delete(r.active, owner)
+		return true
+	}
+	return false
+}
+
+// Release forgets the owner's preview (close, access loss).
 func (r *Registry) Release(owner any) {
 	if r == nil {
 		return

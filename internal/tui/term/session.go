@@ -88,6 +88,7 @@ type Session struct {
 
 	requestFile *os.File
 	imageConn   *chatimage.Conn
+	imageFile   *os.File
 	requestDone chan struct{}
 	resumeMu    sync.Mutex
 	resume      *termio.TabRequest
@@ -238,6 +239,7 @@ func Start(opts Options) (*Session, error) {
 	}
 	if imageParent != nil {
 		s.imageConn = chatimage.NewConn(imageParent, true)
+		s.imageFile = imageParent
 		go func() {
 			defer func() { _ = s.imageConn.Close() }()
 			for {
@@ -558,5 +560,13 @@ func (s *Session) SendImage(f chatimage.Frame) error {
 	if s.imageConn == nil {
 		return errors.New("term: session has no image channel")
 	}
+	// A child that stops reading must not hold the sender.
+	_ = s.imageFile.SetWriteDeadline(time.Now().Add(imageSendTimeout))
 	return s.imageConn.Send(f)
 }
+
+// HasImageChannel reports whether the session was given an image channel.
+func (s *Session) HasImageChannel() bool { return s.imageConn != nil }
+
+// imageSendTimeout bounds one image control write.
+const imageSendTimeout = time.Second
