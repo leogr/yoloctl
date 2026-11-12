@@ -394,3 +394,27 @@ func TestClientCancelDuringRenderIsBusyAndNotThrottled(t *testing.T) {
 		}
 	}
 }
+
+// Lookup answers from the cache only: a miss before rendering, the drawing
+// after, and never a transient outcome.
+func TestClientLookupNeverRenders(t *testing.T) {
+	c, starts, _ := testClient(t, selfWorker)
+	if _, ok := c.Lookup(simple, 80, ansi.GraphemeWidth); ok || starts.Load() != 0 {
+		t.Fatal("lookup before any render")
+	}
+	drawn := c.Render(context.Background(), simple, 80, ansi.GraphemeWidth)
+	got, ok := c.Lookup(simple, 80, ansi.GraphemeWidth)
+	if !ok || got.Status != OK || strings.Join(got.Lines, "\n") != strings.Join(drawn.Lines, "\n") {
+		t.Fatalf("lookup after render: %+v %v", got, ok)
+	}
+	if _, ok := c.Lookup(simple, 81, ansi.GraphemeWidth); ok {
+		t.Fatal("lookup at another width hit")
+	}
+	busy, _, _ := testClient(t, func() *exec.Cmd { return exec.Command("sh", "-c", "exit 0") })
+	if r := busy.Render(context.Background(), simple, 80, ansi.GraphemeWidth); !r.Transient() {
+		t.Fatalf("%+v", r)
+	}
+	if _, ok := busy.Lookup(simple, 80, ansi.GraphemeWidth); ok {
+		t.Fatal("a transient outcome was cached")
+	}
+}

@@ -117,7 +117,7 @@ func markdownParityBytes(t *testing.T) []byte {
 			}{{"wc", ansi.WcWidth}, {"grapheme", ansi.GraphemeWidth}} {
 				for _, source := range []bool{false, true} {
 					var srcs []lineSrc
-					lines := displayLinesMap(method.wm, in.text, source, theme, "me", &srcs)
+					lines := displayLinesMap(method.wm, in.text, source, theme, "me", &srcs, nil)
 					if in.name == "preview" && !source {
 						lines = substitute(lines, []string{"↗ author: a loaded message"}, theme)
 					}

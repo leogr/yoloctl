@@ -218,7 +218,7 @@ func TestTableSpacersCopyNothing(t *testing.T) {
 	}
 	theme := New(Options{}).theme
 	var srcs []lineSrc
-	if mapped := displayLinesMap(ansi.WcWidth, text, false, theme, "", &srcs); !reflect.DeepEqual(mapped, displayLines(ansi.WcWidth, text, false, theme, "")) || len(srcs) != len(mapped) {
+	if mapped := displayLinesMap(ansi.WcWidth, text, false, theme, "", &srcs, nil); !reflect.DeepEqual(mapped, displayLines(ansi.WcWidth, text, false, theme, "")) || len(srcs) != len(mapped) {
 		t.Fatalf("the mapped display differs or misses lines: %d sources for %d lines", len(srcs), len(mapped))
 	}
 }

@@ -139,26 +139,40 @@ func (m *Model) body(msg *Message, width int) cachedBody {
 	text = chatimage.NeutralizeText(text)
 	cacheText := text + "\x00" + strings.Join(chips, "\x00")
 	body, ok := m.bodyCache[key]
-	if !ok || body.text != cacheText || body.source != m.source || body.me != m.self {
-		base := displayLines(m.widthMethod, text, m.source, m.theme, m.self)
+	if !ok || body.stale || body.text != cacheText || body.source != m.source || body.me != m.self || len(body.fences) > 0 && body.drawWidth != width {
+		next := cachedBody{text: cacheText, source: m.source, me: m.self, width: -1}
+		var base []displayLine
+		if m.opts.Mermaid != nil && !m.source {
+			base = m.parseDiagrams(key, text, width, &next) // drawings are for this width
+		} else {
+			base = displayLines(m.widthMethod, text, m.source, m.theme, m.self)
+		}
 		if len(tokens) > 0 {
 			previewID := ""
 			if previewArtifact(msg) != nil {
 				previewID = msg.ID
 			}
-			if placed, ok := placeChips(base, tokens, chips, previewID); ok {
+			placed, placedOK := placeChips(base, tokens, chips, previewID)
+			if placedOK && len(placed) == len(base) {
 				base = placed
-			} else if literal, ok := literalChipLines(msg, tokens, chips, func(text string) []displayLine {
-				return displayLines(m.widthMethod, text, m.source, m.theme, m.self)
-			}, m.widthMethod); ok {
-				base = literal
 			} else {
-				// Not reached for well-formed text: the chips as plain text.
-				plain := attachmentText(msg)
-				if msg.Artifact != nil {
-					plain = artifactLabel(msg.Artifact)
+				// Other lines than the parse with drawings: no fence outcomes
+				// apply to them.
+				next.fences, next.outcomes, next.class, next.pending, next.transient, next.fenceAt = nil, nil, nil, nil, nil, nil
+				if placedOK {
+					base = placed
+				} else if literal, ok := literalChipLines(msg, tokens, chips, func(text string) []displayLine {
+					return displayLines(m.widthMethod, text, m.source, m.theme, m.self)
+				}, m.widthMethod); ok {
+					base = literal
+				} else {
+					// Not reached for well-formed text: the chips as plain text.
+					plain := attachmentText(msg)
+					if msg.Artifact != nil {
+						plain = artifactLabel(msg.Artifact)
+					}
+					base = displayLines(m.widthMethod, chatimage.NeutralizeText(plain), m.source, m.theme, m.self)
 				}
-				base = displayLines(m.widthMethod, chatimage.NeutralizeText(plain), m.source, m.theme, m.self)
 			}
 		}
 		lines, keys := base, body.keys
@@ -167,7 +181,11 @@ func (m *Model) body(msg *Message, width int) cachedBody {
 		} else {
 			keys = nil
 		}
-		body = cachedBody{text: cacheText, source: m.source, me: m.self, base: base, keys: keys, lines: lines, width: -1}
+		next.base, next.keys, next.lines = base, keys, lines
+		if ok && m.anchor != nil && m.anchor.key == key && body.fenceAt != nil && next.fenceAt != nil {
+			m.anchor.line, m.anchor.offset = carryLine(body, next, m.anchor.line, m.anchor.offset)
+		}
+		body = next
 		if !m.source && len(m.tableRows[key]) > 0 {
 			valid := map[markdownview.TableRowID]bool{}
 			for _, record := range markdownview.TableRecords(markdownview.Document{Lines: lines}) {

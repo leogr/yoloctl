@@ -132,7 +132,8 @@ refreshes off the input loop, follows the end until scrolling up and retains a
 stale display on read failure. Page keys browse the active plain window for
 large files; the footer identifies omitted bytes. [45](#source-45) It draws admitted
 `mermaid` fences as text diagrams (default-on `markdown.mermaid`), with a reason
-row for any it does not draw. [52](#source-52)
+row for any it does not draw; chat draws up to 20 per screen the same way, on
+the host only. [52](#source-52)
 
 [FACT] The native chat component supplies multiline editing, bounded block and
 inline Markdown display, source/code copy, a sorted Participants panel with

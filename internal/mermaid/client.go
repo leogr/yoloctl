@@ -180,6 +180,20 @@ func (c *Client) Render(ctx context.Context, source string, width int, method an
 	return r
 }
 
+// Lookup returns the cached outcome of a rendering without rendering it:
+// it never waits for the worker, so a UI goroutine may call it.
+func (c *Client) Lookup(source string, width int, method ansi.Method) (Result, bool) {
+	name := methodName(method)
+	if name == "" || width <= 0 || width > 4096 || !validSource(source) {
+		return Result{}, false
+	}
+	return c.cache.get(newCacheKey(source, width, name))
+}
+
+// OnHost reports whether this process may run the worker: the host CLI, not
+// a space VM, controller or agent box.
+func OnHost() bool { return onHost() }
+
 // errProtocol marks a reply that arrived but broke the protocol (frame size,
 // JSON, version, artifact or drawing checks), as opposed to a lost exchange.
 var errProtocol = errors.New("mermaid worker broke the protocol")

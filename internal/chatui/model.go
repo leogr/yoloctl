@@ -234,6 +234,9 @@ type Options struct {
 	UploadImage func(ImageUpload) tea.Cmd
 	// NoMotion holds active participant dots steady instead of breathing.
 	NoMotion bool
+	// Mermaid draws admitted mermaid fences on the screen; nil
+	// (markdown.mermaid off, or not the host) keeps them as code cards.
+	Mermaid DiagramRenderer
 }
 
 const maxMessages = 256
@@ -428,6 +431,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focus = focusComposer
 	}
 	m.settleImages()
+	if next := m.settleDiagrams(); next != nil {
+		cmd = tea.Batch(cmd, next)
+	}
 	if next := m.settleMarquee(); next != nil {
 		cmd = tea.Batch(cmd, next)
 	}
@@ -444,6 +450,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case diagramResultMsg:
+		m.diagramResult(msg)
+	case diagramSettleMsg:
 	case tea.ModeReportMsg:
 		// Mirror Bubble Tea v2.0.10's renderer predicate, including Reset
 		// (supported but currently off). The renderer never reverts.
@@ -1694,6 +1703,7 @@ func (m *Model) selectMessage(delta int) {
 	m.picked, m.focus, m.actionIndex = true, focusMessages, 0
 	m.clearInfo()
 	m.follow = false
+	m.diagrams.moves++
 	m.anchor = &viewAnchor{key: messageKey(m.messages[m.selected]), line: lineTop}
 	m.suggest = nil
 	m.touch()

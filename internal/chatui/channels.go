@@ -70,7 +70,8 @@ type channelView struct {
 		rows          []draftRow
 		row, col      int
 	}
-	built struct {
+	diagrams diagramState
+	built    struct {
 		generation uint64
 		width      int
 		elsewhere  uint64 // otherLoaded when built: previews of other channels' messages

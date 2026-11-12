@@ -13,7 +13,7 @@ or session history. Repository working rules are in [AGENTS.md](../AGENTS.md).
 | How is the pinned Mermaid WASI artifact regenerated and checked? | [TUI](specs/tui.md) | [Mermaid artifact](digests/mermaid-renderer.md) |
 | How does the host run Mermaid diagrams (worker process, limits, failure reasons, cache)? | [TUI](specs/tui.md) | [Mermaid worker](digests/mermaid-worker.md) |
 | Which Mermaid fences are drawn (admitted syntax, caps, refusal reasons, fidelity corpus)? | [TUI](specs/tui.md) | [Mermaid admission](digests/mermaid-admission.md) |
-| How do follow and the Markdown renderer show Mermaid drawings (rows, notes, Quote, refresh budget, `markdown.mermaid`)? | [TUI](specs/tui.md) | [Mermaid views](digests/mermaid-views.md) |
+| How do follow, chat and the Markdown renderer show Mermaid drawings (rows, notes, Quote, budgets, `markdown.mermaid`)? | [TUI](specs/tui.md) | [Mermaid views](digests/mermaid-views.md) |
 | How are releases installed and verified, which home does each build use, what does install advise for spaces, and how does it set up PATH and completion? | [Model](specs/model.md), [CLI](specs/cli.md) | [Build identity and installation](digests/installation.md), [install shell setup](digests/install-shell-setup.md); [installation guide](install.md) |
 | Where do commands execute, and how are compatibility/recovery/operator authority enforced? | [Controller and storage diagram](specs/controller.md) | [Controller](digests/controller.md), [operator](digests/operator.md) |
 | When does a crashed Firecracker controller restart, when does it stay failed, and how is that policy deployed? | [Controller](specs/controller.md), [Lifecycle](specs/lifecycle.md) | [Controller supervision](digests/controller-supervision.md) |

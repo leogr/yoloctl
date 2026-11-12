@@ -66,8 +66,8 @@ func chatDecorator(me string) markdownview.Decorator {
 func displayLines(wm ansi.Method, text string, source bool, theme spaceview.Theme, me string) []displayLine {
 	return markdownview.Parse(text, markdownview.ParseOptions{Method: wm, Theme: theme, Source: source, Decorate: chatDecorator(me)}).Lines
 }
-func displayLinesMap(wm ansi.Method, text string, source bool, theme spaceview.Theme, me string, srcs *[]lineSrc) []displayLine {
-	doc := markdownview.Parse(text, markdownview.ParseOptions{Method: wm, Theme: theme, Source: source, MapSource: srcs != nil, Decorate: chatDecorator(me)})
+func displayLinesMap(wm ansi.Method, text string, source bool, theme spaceview.Theme, me string, srcs *[]lineSrc, diagrams func(string) (markdownview.Diagram, bool)) []displayLine {
+	doc := markdownview.Parse(text, markdownview.ParseOptions{Method: wm, Theme: theme, Source: source, MapSource: srcs != nil, Decorate: chatDecorator(me), Diagrams: diagrams})
 	if srcs != nil {
 		if *srcs == nil {
 			*srcs = doc.Sources

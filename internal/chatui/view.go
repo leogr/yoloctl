@@ -115,10 +115,7 @@ func (m *Model) View() tea.View {
 		tw = w - panel - 1
 	}
 	m.lastTextWidth = max(tw-bodyIndent-1, 1)
-	if elsewhere := m.otherLoaded(); m.built.rows == nil || m.built.generation != m.generation || m.built.width != tw || m.built.elsewhere != elsewhere {
-		m.built.rows, m.built.generation, m.built.width, m.built.elsewhere = m.transcript(tw), m.generation, tw, elsewhere
-	}
-	transcript := m.built.rows
+	transcript := m.buildTranscript(tw)
 	// boxRows are the composer's rows besides the draft: with room, a blank
 	// row above it; the reply being written; and always a blank row below
 	// its last visible line. statusRows keep a notice readable above a
@@ -246,6 +243,15 @@ func (m *Model) View() tea.View {
 		v.Cursor = nil
 	}
 	return v
+}
+
+// buildTranscript returns the transcript rows for width tw, rebuilt only
+// when they changed (see touch) or another channel's loaded messages did.
+func (m *Model) buildTranscript(tw int) []transcriptRow {
+	if elsewhere := m.otherLoaded(); m.built.rows == nil || m.built.generation != m.generation || m.built.width != tw || m.built.elsewhere != elsewhere {
+		m.built.rows, m.built.generation, m.built.width, m.built.elsewhere = m.transcript(tw), m.generation, tw, elsewhere
+	}
+	return m.built.rows
 }
 
 // layoutDraft wraps the composer draft, reusing the last layout while the

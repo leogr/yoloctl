@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/hostintegration"
+	"github.com/leogr/yoloctl/internal/markdownview"
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
 )
 
@@ -92,6 +93,20 @@ type cachedBody struct {
 	width  int
 	rows   []bodyRow
 	closed map[int]bool
+	// Closed mermaid fences, by occurrence (mermaid.go): source, outcome
+	// shown, class when built, and whether an eligible drawing was missing;
+	// fenceAt maps display lines to occurrences; drawWidth is the body width
+	// the outcomes are for.
+	fences    []string
+	outcomes  []markdownview.Diagram
+	class     []int8
+	pending   []bool
+	transient []bool // showing a busy/unavailable/internal answer
+	fenceAt   []int
+	drawWidth int
+	// stale: rebuild at the next layout (dropBody); the old lines stay
+	// until then so a reading position can be carried over.
+	stale bool
 }
 
 func messageKey(msg Message) string {
@@ -242,6 +257,7 @@ func (m *Model) moveScroll(delta int) {
 	}
 	m.scroll = min(max(m.scroll+delta, 0), max(m.lastRows-m.lastBodyHeight, 0))
 	m.follow = m.scroll == max(m.lastRows-m.lastBodyHeight, 0)
+	m.diagrams.moves++ // a new screen for diagram counts
 	m.anchor = nil
 	if m.follow {
 		m.unread, m.unreadMentions = 0, 0

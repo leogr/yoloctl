@@ -283,7 +283,7 @@ func TestQuoteMappingKeepsTheDisplay(t *testing.T) {
 	for _, text := range quoteFixtures {
 		for _, source := range []bool{false, true} {
 			var srcs []lineSrc
-			got := displayLinesMap(ansi.WcWidth, text, source, m.theme, "leogr", &srcs)
+			got := displayLinesMap(ansi.WcWidth, text, source, m.theme, "leogr", &srcs, nil)
 			if want := displayLines(ansi.WcWidth, text, source, m.theme, "leogr"); !reflect.DeepEqual(got, want) || len(srcs) != len(got) {
 				t.Fatalf("%q source=%v: lines differ or %d sources for %d lines", text, source, len(srcs), len(got))
 			}
@@ -340,7 +340,7 @@ func TestQuoteEveryHighlightIsExactOrRefused(t *testing.T) {
 						continue
 					}
 					sliced++
-					if r := rendered(joinQuote(got), source, m); r != strings.Trim(want, "\n") {
+					if r := rendered(joinQuote(got), source, m, cachedBody{}); r != strings.Trim(want, "\n") {
 						t.Fatalf("%q %v %v-%v: %q renders %q, highlighted %q", text, source, p, q, joinQuote(got), r, want)
 					}
 					if !strings.Contains(src, joinQuote(got)) && !strings.Contains(src, trimFence(joinQuote(got))) {

@@ -22,6 +22,7 @@ import (
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/hostintegration"
 	"github.com/leogr/yoloctl/internal/managedchat"
+	"github.com/leogr/yoloctl/internal/mermaid"
 	"github.com/leogr/yoloctl/internal/termio"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -98,6 +99,7 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 		return tea.Raw(sequence)
 	}
 	configureChatBrowser(ctx, &opts, prefs.BrowserPolicy(), hostintegration.OpenURL)
+	defer configureChatDiagrams(&opts, prefs.MermaidEnabled(), mermaid.OnHost())()
 	opts.ResolveAttach = func(account string) tea.Cmd {
 		return func() tea.Msg { return s.resolveAttach(cmd, account) }
 	}
@@ -880,4 +882,16 @@ func chatCatalog(c chatstream.Catalog) chatui.CatalogMsg {
 		out.Channels = []chatui.ChannelInfo{{Name: out.Default}}
 	}
 	return out
+}
+
+// configureChatDiagrams gives chat the process's Mermaid renderer when
+// markdown.mermaid is on and this is the host (a box or space VM keeps code
+// cards, with no reason row); the returned func ends its worker.
+func configureChatDiagrams(opts *chatui.Options, enabled, onHost bool) func() {
+	if !enabled || !onHost {
+		return func() {}
+	}
+	client := mermaid.Default()
+	opts.Mermaid = client
+	return client.Close
 }

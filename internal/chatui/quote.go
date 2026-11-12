@@ -59,8 +59,9 @@ func (m *Model) quoteSource(i int) ([]quoteLine, bool, string) {
 		return nil, false, quoteChips
 	}
 	var srcs []lineSrc
-	displayLinesMap(m.widthMethod, msg.Text, m.source, m.theme, m.self, &srcs)
-	lines := m.body(msg, max(m.lastTextWidth, 1)).lines // with previews
+	body := m.body(msg, max(m.lastTextWidth, 1))
+	displayLinesMap(m.widthMethod, msg.Text, m.source, m.theme, m.self, &srcs, diagramLookup(body))
+	lines := body.lines // with previews and drawings
 	if len(lines) != len(srcs) {
 		return nil, false, quoteCut
 	}
@@ -70,7 +71,7 @@ func (m *Model) quoteSource(i int) ([]quoteLine, bool, string) {
 			srcs[n].Src = subMap(lines[n]).Then(srcs[n].Src)
 		}
 	}
-	q := quoteSpans{lines: lines, srcs: srcs, text: plain(msg.Text), m: m}
+	q := quoteSpans{lines: lines, srcs: srcs, text: plain(msg.Text), m: m, body: body}
 	ia, la, oa, ib, lb, ob, _ := m.ordered(*m.sel)
 	if ia != i {
 		la, oa = 0, 0
@@ -162,6 +163,7 @@ type quoteSpans struct {
 	srcs  []lineSrc
 	text  string // plain(message text)
 	m     *Model
+	body  cachedBody // the message's body: its drawings render quoted fences
 }
 
 // blank reports whether display lines from through to are all blank source
@@ -177,7 +179,7 @@ func (q quoteSpans) blank(from, to int) bool {
 // starts or ends inside line la or lb; any other side takes whole source
 // lines, line breaks and markers included.
 func (q quoteSpans) exact(la, oa, lb, ob int, startEdge, endEdge bool) (string, string) {
-	text, ok := (markdownview.SourceSelection{Lines: q.lines, Sources: q.srcs, Text: q.text, Render: func(s string) string { return rendered(s, q.m.source, q.m) }}).Exact(la, oa, lb, ob, startEdge, endEdge)
+	text, ok := (markdownview.SourceSelection{Lines: q.lines, Sources: q.srcs, Text: q.text, Render: func(s string) string { return rendered(s, q.m.source, q.m, q.body) }}).Exact(la, oa, lb, ob, startEdge, endEdge)
 	if !ok {
 		return "", quoteCut
 	}
@@ -185,9 +187,9 @@ func (q quoteSpans) exact(la, oa, lb, ob int, startEdge, endEdge bool) (string, 
 }
 
 // rendered is the copyable text text shows as in the current view.
-func rendered(text string, source bool, m *Model) string {
+func rendered(text string, source bool, m *Model, body cachedBody) string {
 	var out []string
-	for _, dl := range displayLines(m.widthMethod, text, source, m.theme, m.self) {
+	for _, dl := range displayLinesMap(m.widthMethod, text, source, m.theme, m.self, nil, diagramBySource(body)) {
 		if !dl.Decor {
 			out = append(out, dl.Text)
 		}

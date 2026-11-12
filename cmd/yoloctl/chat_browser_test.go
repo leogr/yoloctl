@@ -42,3 +42,15 @@ func TestChatBrowserPolicyAndValidation(t *testing.T) {
 		})
 	}
 }
+
+// Chat draws diagrams only with markdown.mermaid on and on the host.
+func TestChatDiagramsFollowPreferenceAndHost(t *testing.T) {
+	for _, c := range []struct{ enabled, host, want bool }{{true, true, true}, {false, true, false}, {true, false, false}} {
+		var opts chatui.Options
+		closeDiagrams := configureChatDiagrams(&opts, c.enabled, c.host)
+		if (opts.Mermaid != nil) != c.want {
+			t.Fatalf("enabled=%v host=%v: renderer %v", c.enabled, c.host, opts.Mermaid)
+		}
+		closeDiagrams()
+	}
+}
