@@ -49,7 +49,7 @@ fn size(t: c.terminal.Terminal, _: ?*anyopaque, out: *size_report.Size) callconv
     return true;
 }
 
-export fn yolo_vt_abi() u32 { return 6; }
+export fn yolo_vt_abi() u32 { return 7; }
 
 // Callbacks and the advertised identity are local to a C terminal wrapper;
 // the native snapshot deliberately does not serialize function pointers.
@@ -498,6 +498,26 @@ export fn yolo_vt_selection_text(t: c.terminal.Terminal, buf: [*]u8, len: usize)
     const sel = v.screens.active.selection orelse return 0;
     var out: std.Io.Writer = .fixed(buf[0..len]);
     var f: formatter.ScreenFormatter = .init(v.screens.active, .{ .emit = .plain, .unwrap = true, .trim = true });
+    f.content = .{ .selection = sel };
+    f.format(&out) catch return 0xffffffff;
+    return @intCast(out.buffered().len);
+}
+
+// The selection as the native formatter emits it with styles: the same cells,
+// soft-wrap unwrapping, hard breaks and trimming as yolo_vt_selection_text,
+// plus SGR for each cell's style, so a caller can recover cell colours (for
+// example Kitty placeholder image IDs) in selection order. Only text and SGR
+// are emitted: never modes, queries, hyperlinks or clipboard effects.
+export fn yolo_vt_selection_vt(t: c.terminal.Terminal, buf: [*]u8, len: usize) u32 {
+    const v = c.terminal.zigTerminal(t) orelse return 0xffffffff;
+    const sel = v.screens.active.selection orelse return 0;
+    var out: std.Io.Writer = .fixed(buf[0..len]);
+    // No default colours or palette: the formatter would emit them as OSC
+    // 10/11/4 headers. Cells keep their own SGR colours.
+    var f: formatter.ScreenFormatter = .init(v.screens.active, .{
+        .emit = .vt, .unwrap = true, .trim = true,
+        .foreground = null, .background = null, .palette = null,
+    });
     f.content = .{ .selection = sel };
     f.format(&out) catch return 0xffffffff;
     return @intCast(out.buffered().len);

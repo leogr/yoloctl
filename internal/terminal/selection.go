@@ -69,3 +69,30 @@ func (t *Terminal) SelectedText(limit int) (string, error) {
 	}
 	return string(text), nil
 }
+
+// SelectedStyledText is SelectedText with each cell's style as SGR, in
+// selection order, so callers can recover cell colours. It never contains
+// modes, queries, hyperlinks or clipboard effects; like SelectedText it fails
+// rather than truncating.
+func (t *Terminal) SelectedStyledText(limit int) (string, error) {
+	if limit < 1 || limit > 1<<20 {
+		return "", errors.New("invalid selection size limit")
+	}
+	p := t.call("ghostty_wasm_alloc", uint64(limit))
+	if p == 0 || t.err != nil {
+		return "", errors.New("cannot allocate selection text")
+	}
+	defer t.call("ghostty_wasm_free", p, uint64(limit))
+	n := t.call("yolo_vt_selection_vt", t.ptr, p, uint64(limit))
+	if t.err != nil {
+		return "", t.err
+	}
+	if n > uint64(limit) {
+		return "", errors.New("selection exceeds size limit")
+	}
+	text, ok := t.mod.Memory().Read(uint32(p), uint32(n))
+	if !ok {
+		return "", errors.New("selection text outside memory")
+	}
+	return string(text), nil
+}

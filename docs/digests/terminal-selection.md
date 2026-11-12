@@ -1,6 +1,6 @@
 # Native selection and explicit copy
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `cd6a24374e95eed1a1029a6032522724603ab8bd` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Plain left drag selects local text in tab content when the child does
 not request mouse reporting, when viewing history, or after the child exits.
@@ -18,7 +18,11 @@ while held; release stops this timer. In a divided tab the selection stays
 inside its pane [19](#source-19). Selection
 text comes from native cells, unwraps soft wraps and preserves hard line breaks.
 Its bounded formatter rejects oversized output rather than truncating it.
-[1](#source-1) [3](#source-3) [4](#source-4)
+A second export (bridge ABI 7) formats the same selection with each cell's
+SGR style, emitting only text and SGR (no default-colour or palette headers,
+even when host or application defaults are set), so callers can recover cell
+colours in selection order; hard breaks are `\r\n` there. [1](#source-1) [3](#source-3)
+[4](#source-4) [20](#source-20)
 
 [FACT] Frame snapshots include selection spans alongside text/cursor data.
 Highlighting reverses selected grapheme styles without extracting clipboard
@@ -64,8 +68,8 @@ agent preferences still win. [12](#source-12) [13](#source-13) [14](#source-14)
 
 1. <a id="source-1"></a> [selection.go](../../internal/tui/selection.go#L1-L144) — selection eligibility, autoscroll, key copy and highlighting.
 2. <a id="source-2"></a> [mouse.go](../../internal/tui/mouse.go#L1-L273) — gesture ownership, local selection and application routing.
-3. <a id="source-3"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L411-L460) — native gesture bridge and bounded plain-text formatter.
-4. <a id="source-4"></a> [selection.go](../../internal/terminal/selection.go#L1-L71) — viewport mapping, validation, clearing and text extraction.
+3. <a id="source-3"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L452-L526) — native gesture bridge, bounded plain-text formatter and `yolo_vt_selection_vt` styled export.
+4. <a id="source-4"></a> [selection.go](../../internal/terminal/selection.go#L1-L98) — viewport mapping, validation, clearing, `SelectedText` and `SelectedStyledText`.
 5. <a id="source-5"></a> [selection.go](../../internal/tui/term/selection.go#L1-L50) — terminal locking and synchronized-output handling.
 6. <a id="source-6"></a> [selection_test.go](../../internal/tui/selection_test.go#L1-L128) — real PTY selection/copy, policy, palette/application boundaries and autoscroll.
 7. <a id="source-7"></a> [selection_test.go](../../internal/terminal/selection_test.go#L1-L123) — native text, history/reflow, screen invalidation and eviction contracts.
@@ -81,3 +85,4 @@ agent preferences still win. [12](#source-12) [13](#source-13) [14](#source-14)
 17. <a id="source-17"></a> [controller_view_test.go](../../cmd/yoloctl/controller_view_test.go#L98) — wire preservation and control rejection.
 18. <a id="source-18"></a> [identity_test.go](../../internal/termio/identity_test.go#L10) — literal argv execution.
 19. <a id="source-19"></a> [TUI panes](tui-panes.md) — selection kept inside its pane in a divided tab.
+20. <a id="source-20"></a> [selection_styled_test.go](../../internal/terminal/selection_styled_test.go#L1) — placeholder colours, order, breaks and size bound through the styled export.

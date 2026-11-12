@@ -68,7 +68,7 @@ def main():
             "bridge_sha256": digest(source / "src/yolo_bridge.zig"),
             "patch_sha256": digest(patch),
             "artifact_sha256": digest(artifact),
-            "abi": 6,
+            "abi": 7,
         }
         if args.check:
             if artifact.read_bytes() != (ASSETS / "ghostty-vt.wasm").read_bytes():

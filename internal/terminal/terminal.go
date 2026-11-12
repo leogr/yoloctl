@@ -26,7 +26,7 @@ var artifact, _ = assets.ReadFile("wasm/ghostty-vt.wasm")
 
 const (
 	scratchSize = 64 * 1024
-	bridgeABI   = 6
+	bridgeABI   = 7
 )
 
 type contextKey struct{}
