@@ -357,3 +357,19 @@ func TestBrokerCancelsAnEndedPanesJob(t *testing.T) {
 		t.Fatal("job of an ended pane was not canceled")
 	}
 }
+
+// seams.images off gives chat panes no image channel at all.
+func TestImagesSeamOffGivesChatNoChannel(t *testing.T) {
+	m := newTestModel(t, 80, 8)
+	if m.chatImageHandler([]string{"chat"}) == nil {
+		t.Fatal("chat pane has no image channel with previews on")
+	}
+	off := false
+	m.cfg.Seams.Images = &off
+	if m.chatImageHandler([]string{"chat"}) != nil {
+		t.Fatal("chat pane has an image channel with seams.images off")
+	}
+	if m.chatImageHandler([]string{"space", "view"}) != nil {
+		t.Fatal("a non-chat pane has an image channel")
+	}
+}

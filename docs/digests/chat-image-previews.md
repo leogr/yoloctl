@@ -1,6 +1,6 @@
 # Chat image previews (host boundary)
 
-Verification: `e1f1d5e998638a327cbce30e2a9bca11ea9ee387` and accompanying changes; image channel on `09260f88375983bd8b64cdeb08e88e1e2709415f` and accompanying changes; host probe on `9db70c2a200005f0afdd9156e802f65974a56e72` and accompanying changes; broker on `39eb0a8673de8270a8b0a91d90b3400937549f2a` and accompanying changes; broker conditions and channel identity on `4c2527aa7013f10159edf27819bb572d1ce11be9` and accompanying changes; fetch on `b3b2cf92659f79545ec4cc8d405d5f1b0a3c122e` and accompanying changes.
+Verification: `e1f1d5e998638a327cbce30e2a9bca11ea9ee387` and accompanying changes; image channel on `09260f88375983bd8b64cdeb08e88e1e2709415f` and accompanying changes; host probe on `9db70c2a200005f0afdd9156e802f65974a56e72` and accompanying changes; broker on `39eb0a8673de8270a8b0a91d90b3400937549f2a` and accompanying changes; broker conditions and channel identity on `4c2527aa7013f10159edf27819bb572d1ce11be9` and accompanying changes; fetch on `b3b2cf92659f79545ec4cc8d405d5f1b0a3c122e` and accompanying changes; images seam on `0c095e355ee1cd3de4aeb62b9c2d1d9373230d3f` and accompanying changes.
 
 [FACT] Previews use Kitty Unicode placeholder cells: U+10EEEE with a row and a
 column diacritic, drawn in a 24-bit foreground colour that is the image ID.
@@ -48,7 +48,8 @@ withdrawn while the measurement is missing. A refusal, another terminal
 counts, and a cell measurement re-checks the probe as soon as it arrives.
 [6](#source-6) [7](#source-7) [8](#source-8)
 
-[FACT] The TUI gives the channel only to native chat panes. Their frames
+[FACT] The TUI gives the channel only to native chat panes, and only while
+`seams.images` (default on, read when the TUI starts) allows previews. Their frames
 wait in a 16-frame inbox until the event loop drains it; frames to panes
 leave through a 64-frame outbox written in order by one sender goroutine with
 a 1 s write deadline; overflow is dropped and the pane keeps its chip, and a
@@ -76,4 +77,4 @@ characters (copy maps them to chips, see the terminal selection digest).
 6. <a id="source-6"></a> [detect.go](../../internal/chatimage/detect.go#L1) — `ParseTerminalVersion`, `Terminal.Supported`, `Probe`; ids.go `IDs`; detect_test.go.
 7. <a id="source-7"></a> [image_probe.go](../../internal/tui/image_probe.go#L1) — `startImageProbe`, `imageProbeMsg`, `checkImageProbe`, `imagesSupported`; image_probe_test.go.
 8. <a id="source-8"></a> [host_geometry.go](../../internal/tui/host_geometry.go#L39) — `acceptHostCellSize` re-checks the probe.
-9. <a id="source-9"></a> [image_broker.go](../../internal/tui/image_broker.go#L1) — `imageHandler`, `sendImage`, `syncImages`, `answerPreview`, `chatImageHandler`; `Registry.ReleaseToken`; `Session.SendImage` deadline; chat_view.go claim; image_broker_test.go.
+9. <a id="source-9"></a> [image_broker.go](../../internal/tui/image_broker.go#L1) — `chatImageHandler` (config/tui.go `ImagesEnabled`), `imageHandler`, `sendImage`, `syncImages`, `answerPreview`, `chatImageHandler`; `Registry.ReleaseToken`; `Session.SendImage` deadline; chat_view.go claim; image_broker_test.go.

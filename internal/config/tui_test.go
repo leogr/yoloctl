@@ -283,3 +283,18 @@ func TestDefaultBoxTitleBackslash(t *testing.T) {
 		})
 	}
 }
+
+func TestImagesSeamDefaultsOn(t *testing.T) {
+	var cfg *TUI
+	if !cfg.ImagesEnabled() || !(&TUI{}).ImagesEnabled() {
+		t.Fatal("previews not on by default")
+	}
+	var off TUI
+	if err := yaml.Unmarshal([]byte("seams:\n  images: false\n"), &off); err != nil || off.ImagesEnabled() {
+		t.Fatalf("images: false not honoured: %v", err)
+	}
+	var def TUI
+	if err := yaml.Unmarshal([]byte(defaultTUIYAML), &def); err != nil || def.Seams.Images == nil || !*def.Seams.Images {
+		t.Fatal("default config does not spell images out")
+	}
+}

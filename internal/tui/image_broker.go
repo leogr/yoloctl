@@ -336,8 +336,8 @@ func (m *model) deleteOwnedImages(w io.Writer) {
 
 // chatImageHandler gives only native chat panes the image channel.
 func (m *model) chatImageHandler(args []string) func(*term.Session, chatimage.Frame) {
-	if !isChatView(args) {
-		return nil
+	if !isChatView(args) || !m.cfg.ImagesEnabled() {
+		return nil // seams.images off: no channel, so no probe, download or graphics
 	}
 	return m.imageHandlerFor(chatPaneSpace(args, m.ctxSpace))
 }

@@ -103,6 +103,9 @@ type TUISeams struct {
 	Clipboard *bool `yaml:"clipboard,omitempty"`
 	// Browser is on (default), ask, or off, independent of clipboard policy.
 	Browser string `yaml:"browser,omitempty"`
+	// Images controls chat image previews, defaulting on, independently of
+	// the clipboard policy.
+	Images *bool `yaml:"images,omitempty"`
 	// Legacy opt-outs remain deny-only to avoid silently enabling clipboard
 	// access when loading an existing file. New configs use only clipboard.
 	OSC52Clipboard *bool `yaml:"osc52_clipboard,omitempty"`
@@ -242,6 +245,13 @@ func (t *TUI) ClipboardEnabled() bool {
 	return true
 }
 
+// ImagesEnabled reports whether chat image previews may run: off means the
+// TUI gives chat panes no image channel, so nothing is probed, downloaded
+// or drawn. It applies when the TUI starts.
+func (t *TUI) ImagesEnabled() bool {
+	return t == nil || t.Seams.Images == nil || *t.Seams.Images
+}
+
 func (t *TUI) BrowserPolicy() string {
 	if t == nil || t.Seams.Browser == "" {
 		return "on"
@@ -329,6 +339,10 @@ seams:
   # Open a box's HTTP(S) links on this host: on (default) | ask | off.
   # "ask" opens a prompt with the destination; Ctrl+O opens, Esc cancels.
   browser: "on"
+  # Chat image previews in Kitty and Ghostty (on by default). Off never
+  # downloads an image or sends graphics to your terminal; chats keep their
+  # file chips. Applies when the TUI starts.
+  images: true
 `
 
 // LoadTUI reads tui.yaml. A missing file is materialized with explicit

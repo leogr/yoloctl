@@ -230,6 +230,8 @@ to close the PTY. [2](#source-2)
 [FACT] `seams.clipboard` defaults on and controls yoloctl copy-out and explicit
 image reads. Host-terminal copy/paste remains independent; native clipboard
 reads inside a box are unsupported. [3](#source-3) [13](#source-13)
+`seams.images` (default on, read at TUI start) independently allows chat image
+previews; off gives chat panes no image channel. [47](#source-47)
 
 [FACT] OSC 52 writes are validated at the outer host boundary; OSC 52 reads
 are denied and writes excluded from replay. Managed views separately handle
