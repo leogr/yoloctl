@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
 )
@@ -281,7 +282,8 @@ func (e *emulator) Title() string {
 	if e.err != nil {
 		return ""
 	}
-	return e.vt.Title()
+	// A workload-set title is chrome: it never displays image placeholders.
+	return chatimage.NeutralizeText(e.vt.Title())
 }
 func (e *emulator) Rows() int {
 	e.mu.Lock()

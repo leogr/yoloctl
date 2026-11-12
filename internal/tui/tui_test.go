@@ -26,6 +26,7 @@ import (
 func newTestModel(t testing.TB, width, height int) *model {
 	t.Helper()
 	m := &model{pending: &atomic.Bool{}, focusPalette: true, cfg: &config.TUI{}, imageLedger: chatimage.NewLedger()}
+	m.imageRegistry = chatimage.NewRegistry(m.imageLedger)
 	m.console = term.NewConsole(24, 80, 0, m.wake)
 	t.Cleanup(func() { _ = m.console.Close() })
 	_, _ = m.Update(tea.WindowSizeMsg{Width: width, Height: height})

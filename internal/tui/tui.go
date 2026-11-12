@@ -103,7 +103,10 @@ type model struct {
 	// imageLedger maps native chat preview image IDs to attachment chips
 	// for local copy; bounded, host-wide (IDs are allocated per host).
 	imageLedger *chatimage.Ledger
-	cfg         *config.TUI
+	// imageRegistry admits placeholder cells only for each session's own
+	// registered preview; every other placeholder is neutralized per frame.
+	imageRegistry *chatimage.Registry
+	cfg           *config.TUI
 
 	width, height    int
 	focusPalette     bool
@@ -188,6 +191,7 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	m := &model{pending: &atomic.Bool{}, focusPalette: true, cfg: cfg, imageLedger: chatimage.NewLedger()}
+	m.imageRegistry = chatimage.NewRegistry(m.imageLedger)
 	m.prefixChord, m.status = resolvePanePrefix(cfg) // a fallback says so once
 	m.prefixResolved = true
 	defer m.resetHostMouse(os.Stdout)
@@ -1735,7 +1739,7 @@ func (m *model) selectedSuggestion() int {
 var composePanes = panes.Compose
 
 func (m *model) View() tea.View {
-	frames := &displayFrames{console: m.console.Frame()}
+	frames := &displayFrames{console: m.consoleDisplayFrame()}
 	if t := m.tabs.Current(); t != nil {
 		if l := m.laidOut(t); l.Bars() || l.Dropping() {
 			// One snapshot per visible pane, composed with the pane bars
@@ -1744,12 +1748,12 @@ func (m *model) View() tea.View {
 			frames.panes = make(map[*panes.Pane]terminal.Frame)
 			for _, p := range t.Layout.Visible() {
 				if !p.Empty() { // an empty pane draws its hint, not a frame
-					frames.panes[p] = p.Session.Frame()
+					frames.panes[p] = m.sessionFrame(p.Session)
 				}
 			}
 			frames.tab = frames.panes[t.Focused()]
 		} else if p := t.Focused(); !p.Empty() {
-			frames.tab = p.Session.Frame()
+			frames.tab = m.sessionFrame(p.Session)
 		}
 	}
 	m.frames = frames

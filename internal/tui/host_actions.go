@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/hostintegration"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/tui/panes"
@@ -199,7 +200,7 @@ func (m *model) browserPopup(rows int) []string {
 		label := strings.Join(strings.Fields(ansi.Strip(p.Title())), " ")
 		lines = append(lines, ansi.Truncate("From: "+label, max(m.width-4, 1), "…"))
 	}
-	lines = append(lines, prompt.request.URL)
+	lines = append(lines, chatimage.NeutralizeText(prompt.request.URL))
 	return (popup{
 		Title: "Open link in your browser?", Lines: lines,
 		Footer: "Ctrl+O Open     Esc Cancel",

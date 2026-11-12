@@ -287,6 +287,12 @@ agents can recognize terminal-specific preferences; existing processes keep
 their launch environment.
 [6](#source-6) [7](#source-7)
 
+[FACT] Image placeholder cells (Kitty U+10EEEE) reach the display only inside
+the one chat preview registered for that pane's session; any other placeholder
+in any pane or the palette console is shown as a space. A native chat pane's
+explicit copy turns preview cells into their attachment chip.
+[7](#source-7) [47](#source-47)
+
 [DERIVED] Passing these tests cannot establish native terminal equivalence.
 Claims must name the tested terminal versions/configurations and distinguish
 core scenarios from selection, frame rendering, reflow, replay and real agent
@@ -377,3 +383,5 @@ checks transport behavior; it does not measure graphical parity. [4](#source-4)
 45. <a id="source-45"></a> [Live file view](../digests/follow-view.md).
 
 46. <a id="source-46"></a> [Disconnected chat input and reopen](../digests/chat-interaction.md).
+
+47. <a id="source-47"></a> [Chat image previews](../digests/chat-image-previews.md).

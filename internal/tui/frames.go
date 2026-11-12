@@ -1,10 +1,14 @@
 package tui
 
 import (
+	"slices"
+
 	tea "charm.land/bubbletea/v2"
+	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/tui/panes"
 	"github.com/leogr/yoloctl/internal/tui/tabs"
+	"github.com/leogr/yoloctl/internal/tui/term"
 )
 
 // A View uses exactly one immutable snapshot per surface. All layout helpers,
@@ -40,7 +44,42 @@ func (m *model) consoleFrame() terminal.Frame {
 	if m.frames != nil {
 		return m.frames.console
 	}
-	return m.console.Frame()
+	return m.consoleDisplayFrame()
+}
+
+// consoleDisplayFrame is the palette console's frame with every image
+// placeholder neutralized: the console never displays a preview.
+func (m *model) consoleDisplayFrame() terminal.Frame {
+	return m.filterImages(nil, m.console.Frame())
+}
+
+// sessionFrame is a session's frame with image placeholders admitted only
+// for that session's registered preview (see chatimage.FilterLine).
+func (m *model) sessionFrame(s *term.Session) terminal.Frame {
+	return m.filterImages(s, s.Frame())
+}
+
+// filterImages neutralizes every placeholder cell in f that is not a cell of
+// the owner's registered preview. Rows without placeholders are not copied.
+func (m *model) filterImages(owner *term.Session, f terminal.Frame) terminal.Frame {
+	var key any
+	if owner != nil {
+		key = owner
+	}
+	p, ok := m.imageRegistry.Active(key)
+	var lines []string
+	for i, line := range f.Lines {
+		if filtered := chatimage.FilterLine(line, p, ok); filtered != line {
+			if lines == nil {
+				lines = slices.Clone(f.Lines)
+			}
+			lines[i] = filtered
+		}
+	}
+	if lines != nil {
+		f.Lines = lines
+	}
+	return f
 }
 
 func (m *model) tabFrame() terminal.Frame {
@@ -48,7 +87,7 @@ func (m *model) tabFrame() terminal.Frame {
 		return m.frames.tab
 	}
 	if p := m.tabs.Focused(); p != nil && !p.Empty() {
-		return p.Session.Frame()
+		return m.sessionFrame(p.Session)
 	}
 	return terminal.Frame{}
 }

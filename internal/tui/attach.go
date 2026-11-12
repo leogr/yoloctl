@@ -25,6 +25,7 @@ func RunAttached(ctx context.Context, args []string) (detached bool, err error) 
 		return false, err
 	}
 	m := &model{pending: &atomic.Bool{}, cfg: cfg, standalone: true, initialArgs: args, imageLedger: chatimage.NewLedger()}
+	m.imageRegistry = chatimage.NewRegistry(m.imageLedger)
 	defer m.resetHostMouse(os.Stdout)
 	// runProgram owns context cancellation and graceful terminal cleanup.
 	p := tea.NewProgram(m, m.programOptions()...)
