@@ -144,10 +144,14 @@
   tags: [yoloctl]
   enabled: false
 
+# PT_UID evt.arg resolves names; rawarg UID comparison is rejected by this pin.
+# For these three UID-only calls, evt.args retains decimal UID before "(name)".
+# Match the zero-UID suffix in-condition only; never persist aggregate args.
+# A crafted resolved name containing "uid=0(" can cause an extra alert.
 - rule: Yolo UID set to root
   desc: Successful selected UID-setting call requesting root; ancestry is not proof of confinement stage
   condition: >-
-    yolo_runtime_descendant and evt.type in (setuid, setreuid, setresuid) and evt.res = SUCCESS and (evt.arg.uid = 0 or evt.arg.ruid = 0 or evt.arg.euid = 0 or evt.arg.suid = 0)
+    yolo_runtime_descendant and evt.type in (setuid, setreuid, setresuid) and evt.res = SUCCESS and evt.args contains "uid=0("
   output: "Yolo UID set to root requested_uid=%evt.arg.uid requested_ruid=%evt.arg.ruid requested_euid=%evt.arg.euid requested_suid=%evt.arg.suid parent=%proc.pexepath executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
   priority: CRITICAL
   tags: [yoloctl]

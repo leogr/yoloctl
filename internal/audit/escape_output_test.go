@@ -77,3 +77,26 @@ func TestEscapeNumericFieldsRemainBoundedAndDoNotCoerceOtherTypes(t *testing.T) 
 		t.Fatal(event, err)
 	}
 }
+
+func TestEscapeUIDDisplayRemainsResolvedText(t *testing.T) {
+	// Pinned Falco TYPE_ARGSTR resolves PT_UID to user names/placeholders.
+	// These display fields are distinct from the numeric rendering in evt.args.
+	raw := []byte(`{"time":"2026-11-12T00:00:00Z","rule":"Yolo UID set to root","priority":"Critical","output_fields":{"evt.arg.uid":"root","evt.arg.ruid":"<NA>","evt.arg.euid":"root","evt.arg.suid":"<NONE>","evt.rawarg.uid":0,"evt.args":"uid=0(root)","evt.res":"SUCCESS"}}`)
+	event, err := ParseEvent(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"requested_uid=root", "requested_ruid=<NA>", "requested_euid=root", "requested_suid=<NONE>", "result=SUCCESS"} {
+		if !strings.Contains(event.Output, want) {
+			t.Fatal(want, event.Output)
+		}
+	}
+	if event.OutputFields["evt.arg.uid"] != "root" {
+		t.Fatal(event.OutputFields)
+	}
+	for _, key := range []string{"evt.rawarg.uid", "evt.args"} {
+		if _, retained := event.OutputFields[key]; retained {
+			t.Fatal("predicate-only field changed the retained schema", key, event.OutputFields)
+		}
+	}
+}

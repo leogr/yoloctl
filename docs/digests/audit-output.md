@@ -32,7 +32,9 @@ process name/executable, user name/UID, container ID/name, file/socket name,
 source/target, selected client/remote IP, remote port, parent executable,
 UID syscall arguments/result and supported `yolo.*` identity fields. UID and
 remote-port fields accept bounded unsigned numeric JSON as well as strings;
-other fields do not gain numeric coercion.
+other fields do not gain numeric coercion. The UID condition
+uses `evt.args` only for matching; aggregate arguments are never persisted.
+Retained `evt.arg.*` values remain resolved names/placeholders.
 Selected values share a 4 KiB budget; individual strings are escaped and capped
 at 1024 bytes. The stored message is capped at 1024 bytes and reconstructed
 from the pinned template and selected fields. Arbitrary incoming `output`,

@@ -56,12 +56,16 @@ cgroup identity or noise rates. [5](#source-5) [6](#source-6) [8](#source-8)
 [FACT] Seven added rules use schema-1/protocol-2 confined-container labels and
 OpenShell runtime ancestry, excluding the runtime executables and fixed helper.
 The eighth, disabled host-classification candidate, uses ancestry without labels.
-This selects descendants, including possible setup children; it does not prove
-which confinement stage a process reached. Only **UID set to root** (successful
-setuid/setreuid/setresuid requesting a zero UID, including saved UID) and
+Ancestry includes setup children; it does not prove confinement. Only **UID set to root** (successful
+setuid/setreuid/setresuid requesting zero, including saved UID) and
 **audit escape test** (`yolo-esc-test`) ship enabled. An already-root no-op can
-match; capabilities, setfsuid and GID transitions are outside scope. The control
-checks selection only, never the escape predicates. [1](#source-1) [12](#source-12)
+match; capabilities, setfsuid and GIDs are outside scope. The condition uses
+`evt.args contains "uid=0("`: the pinned formatter retains the decimal UID
+before its resolved name, covering uid/ruid/euid/suid. Resolved `evt.arg.*`
+contains names/placeholders. A crafted name containing `uid=0(` can also match
+a nonzero UID: this accepted heuristic can produce an extra alert. Aggregate
+arguments are never persisted. The control tests selection only.
+[1](#source-1) [12](#source-12) [15](#source-15) [16](#source-16)
 
 [FACT] Six candidates ship disabled: direct PATH-child mutation/write-open,
 broader protected-prefix writes, connects outside the inner address, root exec,
@@ -72,15 +76,14 @@ known client tuple; it excludes loopback and the inner `10.200.0.2` address.
 `EINPROGRESS` means an attempt in progress, not completed egress. A bypass
 retaining that inner address and unconnected UDP are not detected. Device
 exclusions include PTY and descriptor aliases. Host attribution alone cannot
-establish escape. These rules remain disabled pending separate qualification.
-[1](#source-1) [12](#source-12) [13](#source-13) [14](#source-14)
+establish escape. [1](#source-1) [12](#source-12) [13](#source-13) [14](#source-14)
 
 [FACT] The shared label predicate excludes privileged runtime mode and absent
 labels. Unconfined-network descendants remain eligible for the enabled
 UID/control rules. Labels and ancestry remain selection heuristics; the rules
 provide alerts without remediation or tamper-proof guarantees.
-Existing rules and the broker exception are byte-identical. Structural tests
-and pinned engine compilation do not prove live selection or low noise.
+Existing rules/broker exception stay byte-identical. Compilation and fixtures
+do not prove live selection or noise rates.
 [1](#source-1) [12](#source-12)
 
 ## Sources
@@ -99,3 +102,5 @@ and pinned engine compilation do not prove live selection or low noise.
 12. <a id="source-12"></a> [Escape regressions](../../internal/audit/escape_rules_test.go#L1) — enablement, selectors, original-rule hash, PATH parity and network/device boundaries.
 13. <a id="source-13"></a> [Composer](../../internal/agentbox/compose.go#L200) — extra mounts, `pathDirs`, `lintPathOverlap`.
 14. <a id="source-14"></a> [PTY capability](../../internal/capabilities/capabilities.go#L1) — permitted PTY aliases.
+15. <a id="source-15"></a> [libs 0.26.1 event extraction](https://github.com/falcosecurity/libs/blob/0.26.1/userspace/libsinsp/sinsp_filtercheck_event.cpp#L1070) — `TYPE_ARGS` retains numeric and resolved forms; `TYPE_ARGSTR` prefers resolved text.
+16. <a id="source-16"></a> [libs 0.26.1 UID formatting](https://github.com/falcosecurity/libs/blob/0.26.1/userspace/libsinsp/event.cpp#L1164) — `PT_UID` resolves to names or placeholders.

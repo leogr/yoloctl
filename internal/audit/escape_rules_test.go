@@ -94,7 +94,7 @@ func TestEscapeFamilySelectionAndEnablement(t *testing.T) {
 		}
 	}
 	uid := entries["Yolo UID set to root"]
-	if uid.Condition != "yolo_runtime_descendant and evt.type in (setuid, setreuid, setresuid) and evt.res = SUCCESS and (evt.arg.uid = 0 or evt.arg.ruid = 0 or evt.arg.euid = 0 or evt.arg.suid = 0)" || uid.Priority != "CRITICAL" {
+	if uid.Condition != `yolo_runtime_descendant and evt.type in (setuid, setreuid, setresuid) and evt.res = SUCCESS and evt.args contains "uid=0("` || uid.Priority != "CRITICAL" {
 		t.Fatal(uid)
 	}
 	control := entries["Yolo audit escape test"]
@@ -261,5 +261,44 @@ func TestEscapeNetworkPredicateFixtures(t *testing.T) {
 				t.Fatal(tc.name, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestEscapeUIDPredicateUsesPinnedNumericRendering(t *testing.T) {
+	condition := escapeEntries(t)["Yolo UID set to root"].Condition
+	const prefix = "yolo_runtime_descendant and evt.type in (setuid, setreuid, setresuid) and evt.res = SUCCESS and evt.args contains "
+	if !strings.HasPrefix(condition, prefix) {
+		t.Fatal(condition)
+	}
+	needle, err := strconv.Unquote(strings.TrimPrefix(condition, prefix))
+	if err != nil || needle != "uid=0(" {
+		t.Fatal(needle, err)
+	}
+	// libs 0.26.1 TYPE_ARGS renders PT_UID as name=decimal(resolved).
+	// These are rendering-contract fixtures, not native captured-event proof.
+	for _, name := range []string{"uid", "ruid", "euid", "suid"} {
+		for _, resolved := range []string{"root", "<NA>", "other-root-name"} {
+			for _, uid := range []string{"0", "1", "10", "1000", "-1"} {
+				args := "res=0(SUCCESS) " + name + "=" + uid + "(" + resolved + ") "
+				if got := strings.Contains(args, needle); got != (uid == "0") {
+					t.Fatal(args, got)
+				}
+			}
+		}
+	}
+	for _, tc := range []struct {
+		args string
+		want bool
+	}{
+		{"res=0(SUCCESS) ruid=-1(<NONE>) euid=0(<NA>) suid=-1(<NONE>) ", true},
+		{"res=0(SUCCESS) ruid=0(root) euid=1000(sandbox) suid=-1(<NONE>) ", true},
+		{"res=0(SUCCESS) ruid=1000(sandbox) euid=1000(sandbox) suid=0(root) ", true},
+		{"res=0(SUCCESS) ruid=-1(<NONE>) euid=10(other) suid=1000(sandbox) ", false},
+		// Explicitly accepted heuristic limit: resolved names are unescaped.
+		{"res=0(SUCCESS) uid=1000(uid=0() ", true},
+	} {
+		if got := strings.Contains(tc.args, needle); got != tc.want {
+			t.Fatal(tc.args, got)
+		}
 	}
 }

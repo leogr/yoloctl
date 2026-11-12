@@ -830,7 +830,21 @@ read-only diagnostic capture should record connect/exec fields `fd.cip`,
 `proc.pvpid`, `user.uid`, UID arguments and their actual JSON types. Exercise
 ordinary agent traffic to different remotes, localhost and Unix sockets,
 outer-maintenance traffic, unconfined networking and box startup/root helpers.
-No absent tuple may be treated as an escape. SUCCESS and EINPROGRESS must be
+For the UID predicate, use `evt.args contains "uid=0("` on only successful
+setuid/setreuid/setresuid events. Resolved `evt.arg.*` are names/placeholders;
+the pinned engine rejects typed raw-UID comparisons. In this diagnostic only,
+omit the ancestry macro and print `%evt.args` once to inspect its numeric and
+resolved forms; keep aggregate arguments out of ordinary retained events. From the VM, run a root no-op in the owned disposable container:
+
+```sh
+nerdctl exec --user root "$FIXTURE_CONTAINER" python3 -c 'import os; os.setuid(0)'
+```
+
+Require a successful diagnostic event containing `uid=0(`, independently of
+whether its resolved name is present or unavailable. This is outside-sandbox
+predicate qualification, not an escape or proof of the production selector;
+keep the confined control/outer-maintenance negative leg separate. Do not widen
+workload grants or substitute `evt.arg.uid = root`. No absent tuple may be treated as an escape. SUCCESS and EINPROGRESS must be
 reported separately; source-address anomalies do not prove proxy bypass.
 Keep the network candidate disabled until that evidence is reviewed; root exec
 and host-classified exec remain disabled regardless of this diagnostic.
