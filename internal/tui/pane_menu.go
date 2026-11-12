@@ -9,6 +9,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/tui/panes"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // The pane menu is the armed prefix's picture: a popup at the focused
@@ -342,10 +343,13 @@ func (m *model) menuOverlay() *overlay {
 	}
 	footer := menuHint
 	if n := liveNotice(p.menu.notice, p.menu.noticeUntil); n != "" {
-		footer = n
+		footer = m.noticeLine(prettylog.KindWarn, n)
 	}
 	widest = max(widest, ansi.StringWidth(menuHint))
 	frame := popup{Title: "panes", Footer: footer}
+	if footer != menuHint {
+		frame.FooterStyle = m.noticeFooter(prettylog.KindWarn)
+	}
 	x, y, w, h := m.fitOverlay(nil, widest+4, 0, func(w int) int { return frame.rowsFor(w, len(rows)) })
 	p.menu.x, p.menu.y = x, y
 	inner, _, capacity := frame.layout(w, h)
@@ -368,15 +372,16 @@ func (m *model) noticeOverlay() *overlay {
 		return nil
 	}
 	aw, ah := m.tabArea()
-	want := noticeWidth(n.text)
+	shown := m.noticeLine(prettylog.KindWarn, n.text)
+	want := noticeWidth(shown)
 	x := min(max(n.x, 0), aw)
 	w := min(want, aw-x)
 	if w < min(overlayMinW, want) {
 		w = min(want, aw)
 		x = max(aw-w, 0)
 	}
-	frame := popup{Title: "panes", Footer: n.text}
-	rows := len(strings.Split(ansi.Hardwrap(n.text, max(w-4, 1), true), "\n")) + 2
+	frame := popup{Title: "panes", Footer: shown, FooterStyle: m.noticeFooter(prettylog.KindWarn)}
+	rows := len(strings.Split(ansi.Hardwrap(shown, max(w-4, 1), true), "\n")) + 2
 	h := min(rows, ah)
 	y := min(max(n.y, 0), max(ah-h, 0))
 	return &overlay{x: x, y: y, w: w, h: h, frame: frame}

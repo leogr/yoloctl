@@ -83,7 +83,7 @@ func (c *Console) Run(env []string, display string, argv ...string) (bool, error
 	cmd.Env = forceEnv(env, "TERM=xterm-256color", "YOLOCTL_TUI=1")
 	ptmx, releaseSlave, err := startPTYGeometry(cmd, c.LocalGeometry())
 	if err != nil {
-		c.echo(fmt.Sprintf("\x1b[31m%v\x1b[0m\r\n", err))
+		c.echo("\x18\x1b\\" + c.logNotice(1, err.Error()) + "\r\n")
 		return true, err
 	}
 	c.cmd, c.ptmx = cmd, ptmx
@@ -110,7 +110,7 @@ func (c *Console) ShowError(message string) bool {
 		return r
 	}, ansi.Strip(message))
 	c.Clear()
-	c.echo("\x1b[31mError: " + strings.ReplaceAll(message, "\n", "\r\n") + "\x1b[0m\r\n")
+	c.echo("\x18\x1b\\" + strings.ReplaceAll(c.logNotice(1, message), "\n", "\r\n") + "\r\n")
 	return true
 }
 
@@ -164,11 +164,11 @@ func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, releaseSlave func(time.Time
 	// failure — so the overlay shows every command's exit code; a blank
 	// line after it (laid in by the overlay's content-fit padding)
 	// separates it from the tab strip.
-	if code := exitCode(cmd, err); code == 0 {
-		c.echo("\x1b[32m✓ exit 0\x1b[0m\r\n")
-	} else {
-		c.echo(fmt.Sprintf("\x1b[31m✗ exit %d\x1b[0m\r\n", code))
-	}
+	// Cancel an unfinished child parser string before an uncoloured host line.
+	// The old coloured banner incidentally supplied ESC; plain text must not
+	// be swallowed into a trailing OSC or cross into the next command.
+	code := exitCode(cmd, err)
+	c.echo("\x18\x1b\\" + c.logNotice(code, fmt.Sprintf("exit %d", code)) + "\r\n")
 	c.mu.Lock()
 	c.cmd, c.ptmx = nil, nil
 	c.mu.Unlock()

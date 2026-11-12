@@ -15,6 +15,7 @@ import (
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
 	"github.com/leogr/yoloctl/internal/tui/term"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 var selectionClock = time.Now()
@@ -77,7 +78,7 @@ func (m *model) selectMouse(owner mouseOwner, mo tea.Mouse, action terminal.Mous
 		x, y = min(max(x, 0), r.W-1), min(max(y, 0), r.H-1)
 	}
 	if err := owner.surface.SelectMouse(action, x, y, mo.Mod&tea.ModAlt != 0, uint64(time.Since(selectionClock))); err != nil {
-		m.status = err.Error()
+		m.setStatus(prettylog.KindError, err.Error())
 	}
 }
 
@@ -108,7 +109,7 @@ func (m *model) copySelection(k tea.Key) (tea.Cmd, bool) {
 	}
 	text, err := m.selectedCopyText(tab.Session)
 	if err != nil {
-		m.status = err.Error()
+		m.setStatus(prettylog.KindError, err.Error())
 		return nil, true
 	}
 	if text == "" {

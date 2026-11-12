@@ -14,6 +14,7 @@ import (
 	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 const DefaultScrollbackLines = 10000
@@ -24,6 +25,7 @@ type emulator struct {
 	err                             error
 	input                           *inputWriter
 	colors                          [2]color.Color
+	logPalette                      prettylog.Palette
 	palette                         [256]color.Color
 	queries                         *terminal.ColorQueries
 	kbTail                          []byte

@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/tui/panes"
 	"github.com/leogr/yoloctl/internal/tui/tabs"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // Closing a pane or tab ends its local client. Only an established
@@ -246,9 +247,12 @@ func (m *model) confirmOverlay() *overlay {
 	}
 	footer := confirmKeep + "   " + m.confirmCloseLabel()
 	if n := liveNotice(c.notice, c.noticeUntil); n != "" {
-		footer = n + "\n" + footer
+		footer = m.noticeLine(prettylog.KindWarn, n) + "\n" + footer
 	}
 	frame := popup{Title: title, Footer: footer, Selected: selected}
+	if liveNotice(c.notice, c.noticeUntil) != "" {
+		frame.FooterStyle = m.noticeFooter(prettylog.KindWarn)
+	}
 	entries := m.confirmEntries()
 	buttons := ansi.StringWidth(confirmKeep + "   " + m.confirmCloseLabel())
 	want := max(buttons, ansi.StringWidth(title)+2)

@@ -224,7 +224,7 @@ func (d *data) diskEvents(s *spacetelemetry.Sample) []event {
 		if l == spacetelemetry.DiskCritical {
 			text = fmt.Sprintf("%s disk almost full: %s GiB free (%.0f%% used)", disk.name, gib(u.Free), usedPercent(*u))
 		}
-		out = append(out, event{text: text, bad: l == spacetelemetry.DiskCritical})
+		out = append(out, event{text: text, bad: l == spacetelemetry.DiskCritical, warn: l == spacetelemetry.DiskWarn})
 	}
 	return out
 }

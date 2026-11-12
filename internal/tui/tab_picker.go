@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/tui/panes"
 	"github.com/leogr/yoloctl/internal/tui/tabs"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // tabPicker is prefix w: the tabs as a list in the pane overlay at the
@@ -105,9 +106,13 @@ func (m *model) pickerFrame() popup {
 		}
 	}
 	if n := liveNotice(m.picker.notice, m.picker.noticeUntil); n != "" {
-		footer = n + " · " + footer
+		footer = m.noticeLine(prettylog.KindWarn, n) + " · " + footer
 	}
-	return popup{Title: title, Footer: footer}
+	frame := popup{Title: title, Footer: footer}
+	if liveNotice(m.picker.notice, m.picker.noticeUntil) != "" {
+		frame.FooterStyle = m.noticeFooter(prettylog.KindWarn)
+	}
+	return frame
 }
 
 // pickerLabels are every tab's row text, and whether the join would refuse

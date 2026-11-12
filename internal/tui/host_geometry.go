@@ -7,6 +7,7 @@ import (
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/tui/panes"
 	"github.com/leogr/yoloctl/internal/tui/tabs"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // Only CSI 16t measures a cell. TIOCGWINSZ can include window padding in its
@@ -87,7 +88,7 @@ func (m *model) layoutTab(t *tabs.Tab) {
 		}
 		r := p.Rect()
 		if err := p.Session.ResizeGeometry(m.surfaceGeometry(r.H, r.W)); err != nil {
-			m.status = err.Error()
+			m.setStatus(prettylog.KindError, err.Error())
 		}
 	}
 }

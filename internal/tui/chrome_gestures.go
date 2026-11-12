@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/leogr/yoloctl/internal/tui/panes"
 	"github.com/leogr/yoloctl/internal/tui/tabs"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // chromeKind is what a left press on yoloctl's own chrome started.
@@ -197,7 +198,7 @@ func (m *model) dockMotion(mo tea.Mouse) {
 		}
 	}
 	if g.status == "" || m.status == g.status {
-		m.status = text
+		m.setStatus(prettylog.KindNotice, text)
 	}
 	g.status = text
 }
@@ -216,7 +217,7 @@ func (m *model) dockRelease(g chromeGesture, mo tea.Mouse) {
 		why = m.joinTab(g.tab, m.tabs.Current(), p, side)
 	}
 	if why != "" {
-		m.status = why
+		m.setStatus(prettylog.KindWarn, why)
 	}
 }
 

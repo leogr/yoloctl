@@ -329,6 +329,10 @@ get no box evidence. A connection never promises that an agent wakes.
 output, resizes, an unread viewer, detach/rejoin and final status. Its guest audit
 checks transport behavior; it does not measure graphical parity. [4](#source-4)
 
+[FACT] Host status, pane refusals and exit notices share the log glyphs and
+semantic theme roles. Direct-action feedback remains visible at every log
+level; command logs keep their own filter. [48](#source-48)
+
 ## Sources
 
 1. <a id="source-1"></a> [Routing, keys, mouse and paste evidence](../digests/tui-input.md).
@@ -385,3 +389,5 @@ checks transport behavior; it does not measure graphical parity. [4](#source-4)
 46. <a id="source-46"></a> [Disconnected chat input and reopen](../digests/chat-interaction.md).
 
 47. <a id="source-47"></a> [Chat image previews](../digests/chat-image-previews.md).
+
+48. <a id="source-48"></a> [TUI log notices](../digests/tui-log-notices.md).

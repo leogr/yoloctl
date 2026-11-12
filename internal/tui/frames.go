@@ -9,6 +9,7 @@ import (
 	"github.com/leogr/yoloctl/internal/tui/panes"
 	"github.com/leogr/yoloctl/internal/tui/tabs"
 	"github.com/leogr/yoloctl/internal/tui/term"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // A View uses exactly one immutable snapshot per surface. All layout helpers,
@@ -151,7 +152,7 @@ func (m *model) syncFocus() {
 	}
 	if m.console != nil {
 		if err := m.console.UpdateFocus(!m.hostBlurred && m.browserDialog == nil && palette && m.console.Busy()); err != nil {
-			m.status = "console focus: " + err.Error()
+			m.setStatus(prettylog.KindError, "console focus: "+err.Error())
 		}
 	}
 	// Only the current tab's focused pane is focused: one source of focus.
@@ -161,7 +162,7 @@ func (m *model) syncFocus() {
 			return
 		}
 		if err := p.Session.UpdateFocus(!m.hostBlurred && !palette && p == focused); err != nil {
-			m.status = "tab focus: " + err.Error()
+			m.setStatus(prettylog.KindError, "tab focus: "+err.Error())
 		}
 	})
 }

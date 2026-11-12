@@ -30,6 +30,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/config"
+	"github.com/leogr/yoloctl/internal/logging/logtheme"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/terminal"
@@ -39,6 +40,7 @@ import (
 	"github.com/leogr/yoloctl/internal/tui/tabs"
 	"github.com/leogr/yoloctl/internal/tui/term"
 	"github.com/leogr/yoloctl/internal/tui/yoloctlcli"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"github.com/mattn/go-runewidth"
 )
 
@@ -112,6 +114,7 @@ type model struct {
 	focusPalette     bool
 	scrollOff        int // lines back into the focused surface's scrollback; 0 = live
 	status           string
+	statusKind       prettylog.Kind
 	osc52NoticeShown bool
 	browserPrompts   map[*term.Session]browserPrompt
 	browserDialog    *browserDialog
@@ -196,6 +199,7 @@ func Run(ctx context.Context) error {
 	m.imageRegistry = chatimage.NewRegistry(m.imageLedger)
 	m.prefixChord, m.status = resolvePanePrefix(cfg) // a fallback says so once
 	m.prefixResolved = true
+	m.statusKind = prettylog.KindWarn
 	defer m.resetHostMouse(os.Stdout)
 	// runProgram owns context cancellation and graceful terminal cleanup.
 	p := tea.NewProgram(m, m.programOptions()...)
@@ -293,6 +297,9 @@ func (m *model) Init() tea.Cmd {
 }
 
 func (m *model) updateTerminalColors() {
+	logPalette := m.noticePalette()
+	m.console.SetLogPalette(logPalette)
+	m.eachSession(func(p *panes.Pane) { p.Session.SetLogPalette(logPalette) })
 	m.console.SetColors(m.foreground, m.background)
 	m.eachSession(func(p *panes.Pane) { p.Session.SetColors(m.foreground, m.background) })
 }
@@ -757,12 +764,12 @@ func (m *model) dispatch(args []string) tea.Cmd {
 	}
 	self, err := executable()
 	if err != nil {
-		m.status = "cannot locate yoloctl binary: " + err.Error()
+		m.setStatus(prettylog.KindError, "cannot locate yoloctl binary: "+err.Error())
 		return nil
 	}
 	started, err := m.console.Run(m.childEnv(), promptLine(args), append([]string{self}, args...)...)
 	if !started {
-		m.status = "a palette command is still running — wait for it"
+		m.setStatus(prettylog.KindWarn, "a palette command is still running — wait for it")
 		return nil
 	}
 	if err != nil {
@@ -811,7 +818,7 @@ var executable = os.Executable
 func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 	exe, err := executable()
 	if err != nil {
-		m.status = "cannot locate yoloctl binary: " + err.Error()
+		m.setStatus(prettylog.KindError, "cannot locate yoloctl binary: "+err.Error())
 		return nil
 	}
 	if !m.standalone {
@@ -844,10 +851,11 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 		EndHint:          m.reattachHint(args),
 		Foreground:       m.foreground,
 		Background:       m.background,
+		LogPalette:       m.noticePalette(),
 		Palette:          m.hostPalette,
 	})
 	if err != nil {
-		m.status = err.Error()
+		m.setStatus(prettylog.KindError, err.Error())
 		return nil
 	}
 	self.Store(s)
@@ -908,7 +916,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		h := &m.hostMouseEncoding
 		if uint64(msg) == h.epoch && h.negotiating {
 			h.negotiating, h.failed = false, true
-			m.status = "host mouse encoding was not confirmed; reopen yoloctl to restore mouse reporting"
+			m.setStatus(prettylog.KindWarn, "host mouse encoding was not confirmed; reopen yoloctl to restore mouse reporting")
 			return m, tea.Raw(mouseTrackingOff + mouseEncodingOff)
 		}
 		return m, nil
@@ -956,7 +964,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 			}
 			m.osc52NoticeShown = true
 		}
-		m.status = msg.notice
+		m.setStatus(prettylog.KindWarn, msg.notice)
 		return m, nil
 
 	case tea.ForegroundColorMsg:
@@ -980,6 +988,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		if msg.Color != nil { // nil when the terminal didn't answer
 			m.background = msg.Color
+			logtheme.SetBackground(msg.Color)
 			r, g, b, _ := msg.RGBA() // 16-bit, alpha-premultiplied
 			m.bgDetected = true
 			m.bgIsDark = msg.IsDark()
@@ -1105,7 +1114,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 	case browserFinishedMsg:
 		m.finishBrowserPrompt(msg.surface, msg.id)
 		if msg.err != nil {
-			m.status = msg.err.Error()
+			m.setStatus(prettylog.KindError, msg.err.Error())
 		}
 		return m, nil
 	case tea.KeyReleaseMsg:
@@ -1131,7 +1140,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 			m.pal.Insert(msg.Content)
 			m.refreshSuggestions()
 		} else if t := m.tabs.Focused(); t != nil && t.Empty() {
-			m.status = "nothing takes input here" // the empty pane's input is the palette
+			m.setStatus(prettylog.KindWarn, "nothing takes input here") // the empty pane's input is the palette
 		} else if t != nil && !t.Exited {
 			// Bracket only when the child enabled DECSET 2004
 			// (mode tracker; H2).
@@ -1152,19 +1161,19 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 // asynchronous PTY failures are collected on a wake from the writer.
 func (m *model) sendInput(surface interface{ SendInput([]byte) error }, p []byte) {
 	if err := surface.SendInput(p); err != nil {
-		m.status = err.Error()
+		m.setStatus(prettylog.KindError, err.Error())
 	}
 }
 
 func (m *model) reportInputErrors() {
 	if m.console != nil {
 		if err := m.console.TakeInputError(); err != nil {
-			m.status = "console: " + err.Error()
+			m.setStatus(prettylog.KindError, "console: "+err.Error())
 		}
 	}
 	m.eachSession(func(p *panes.Pane) {
 		if err := p.Session.TakeInputError(); err != nil {
-			m.status = p.Title() + ": " + err.Error()
+			m.setStatus(prettylog.KindError, p.Title()+": "+err.Error())
 		}
 	})
 	m.reportViewErrors()
@@ -1191,7 +1200,7 @@ func (m *model) reportViewErrors() {
 		if err := p.Session.TakeViewError(); err != nil {
 			message := p.Title() + ": " + err.Error()
 			if m.standalone || errors.Is(err, session.ErrSessionClosed) {
-				m.status = message
+				m.setStatus(prettylog.KindWarn, message)
 				return
 			}
 			messages = append(messages, message)
@@ -1820,7 +1829,7 @@ func (m *model) View() tea.View {
 	if m.standalone {
 		lines = base
 		if m.status != "" && len(lines) > 0 {
-			lines[len(lines)-1] = cOrange + ansi.Truncate(ansi.Strip(m.status), max(m.width, 1), "") + cReset
+			lines[len(lines)-1] = ansi.Truncate(m.statusLine(), max(m.width, 1), "")
 		}
 		if prompt := m.browserPopup(len(lines)); len(prompt) > 0 {
 			copy(lines[len(lines)-len(prompt):], prompt)
@@ -2203,7 +2212,7 @@ func (m *model) inputLine() string {
 	case newTab && line != "":
 		legend = "new tab · Esc cancels" // the placeholder went with the first character
 	case m.status != "":
-		legend, legendStyle = m.status, cOrange
+		legend, legendStyle = m.statusLine(), ""
 	case m.focusPalette:
 		legend = "Esc hide palette · " + prefix + " panes · ^←/→ tabs · ^D quit"
 		switch {
@@ -2261,8 +2270,8 @@ func (m *model) inputLine() string {
 		switch {
 		case avail < 1:
 			legend, sep, sepW = "", "", 0
-		case runewidth.StringWidth(legend) > avail:
-			legend = runewidth.Truncate(legend, avail, "…")
+		case ansi.StringWidth(legend) > avail:
+			legend = ansi.Truncate(legend, avail, "…")
 		}
 	}
 
@@ -2276,7 +2285,7 @@ func (m *model) inputLine() string {
 		}
 		right += cBlue + cBold + chip + cReset
 	}
-	rightW := chipW + sepW + runewidth.StringWidth(legend)
+	rightW := chipW + sepW + ansi.StringWidth(legend)
 
 	styledGhost := ""
 	if ghost != "" {

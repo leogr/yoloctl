@@ -76,6 +76,7 @@ type event struct {
 	box  string
 	text string
 	bad  bool
+	warn bool
 }
 
 func (d *data) applyInventory(at time.Time, inv *spacetelemetry.Inventory) []event {

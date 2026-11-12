@@ -10,6 +10,7 @@ package spaceview
 import (
 	"context"
 	"image/color"
+	"log/slog"
 	"os/exec"
 	"slices"
 	"sort"
@@ -19,6 +20,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/spacetelemetry"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // VMInfo is host-side knowledge about the VM; the guest reports CPUs and
@@ -66,6 +68,7 @@ type connState struct {
 
 type toast struct {
 	text  string
+	kind  prettylog.Kind
 	bad   bool
 	until time.Time
 }
@@ -341,7 +344,12 @@ func (m *Model) startTween() {
 }
 
 func (m *Model) say(text string, bad bool) {
-	m.toast = &toast{text: text, bad: bad, until: m.now.Add(toastFor)}
+	level := prettylog.LevelNotice
+	if bad {
+		level = prettylog.LevelError
+	}
+	kind := prettylog.KindOf(slog.NewRecord(time.Time{}, level, text, 0))
+	m.toast = &toast{text: text, kind: kind, bad: bad, until: m.now.Add(toastFor)}
 }
 
 // ---- update ---------------------------------------------------------------------------------
@@ -391,6 +399,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				text = e.box + " " + e.text
 			}
 			m.say(text, e.bad)
+			if e.warn {
+				m.toast.kind = prettylog.KindWarn
+			}
 		}
 	case popupLoadedMsg:
 		if m.popup != nil && m.popup.id == msg.id {

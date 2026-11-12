@@ -66,7 +66,7 @@ func TestReattachAfterRealAttachCompletion(t *testing.T) {
 				}
 				t.Logf("before diagnostic dismissal: palette=%v slots=%d status=%q", m.focusPalette, len(m.reattachSlots()), m.status)
 				if end == "admission-refused" {
-					if !m.focusPalette || !strings.Contains(m.console.GridText(), "Error:") {
+					if !m.focusPalette || !strings.Contains(m.console.GridText(), "✗") {
 						t.Fatal("admission error lost its diagnostic")
 					}
 					_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})

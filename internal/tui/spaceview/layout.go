@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/spacetelemetry"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // Click targets. A target's key identifies it across frames, so hover and
@@ -324,11 +325,9 @@ func (b *builder) footer(w int, f *frame) line {
 		left = line{{text: " / ", style: on(t.Brand).bold()}, {text: m.filter + "▏", style: on(t.Bright)},
 			{text: "  type to filter boxes · enter keeps · esc clears", style: bar}}
 	case m.toast != nil && m.now.Before(m.toast.until):
-		c := t.Brand
-		if m.toast.bad {
-			c = t.Bad
-		}
-		left = line{{text: " ◆ ", style: on(c).bold()}, {text: m.toast.text, style: on(t.Bright)}}
+		kind := m.toast.kind
+		c := t.LogTone(kind)
+		left = line{{text: " " + prettylog.DefaultGlyphs.For(kind) + " ", style: on(c).bold()}, {text: m.toast.text, style: on(c)}}
 	default:
 		left = b.hint(bar, on)
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/leogr/yoloctl/internal/tui/panes"
 	"github.com/leogr/yoloctl/internal/tui/tabs"
 	"github.com/leogr/yoloctl/internal/tui/term"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 type tabRequestMsg struct {
@@ -45,12 +46,12 @@ func (m *model) handleTabRequest(r termio.TabRequest, chat bool, from *term.Sess
 	switch {
 	case chat:
 		if r.ValidateChat() != nil {
-			m.status = "chat sent an invalid attach request; nothing was opened"
+			m.setStatus(prettylog.KindWarn, "chat sent an invalid attach request; nothing was opened")
 			return
 		}
 		args = r.ChatAttachArgs()
 	case r.Chat() || r.NoAutoupdate || r.Passthrough || r.Op != "attach" || layout.ValidateExistingSpaceName(r.Space) != nil || layout.ValidateName("agentbox", r.Box) != nil:
-		m.status = "space view sent an invalid request; nothing was opened"
+		m.setStatus(prettylog.KindWarn, "space view sent an invalid request; nothing was opened")
 		return
 	default:
 		args = []string{"box", "attach", r.Box, "--space", r.Space}
@@ -67,7 +68,7 @@ func (m *model) handleTabRequest(r termio.TabRequest, chat bool, from *term.Sess
 	command := "yoloctl " + strings.Join(args, " ")
 	if t, p := m.tabs.Owner(func(p *panes.Pane) bool { return p.Command == command && !p.Exited }); p != nil {
 		if home != nil && home.Layout.Empty() != nil {
-			m.status = fmt.Sprintf("already open in tab %d", m.tabs.Index(t)+1)
+			m.setStatus(prettylog.KindNotice, fmt.Sprintf("already open in tab %d", m.tabs.Index(t)+1))
 		}
 		m.activatePane(t, p)
 		return

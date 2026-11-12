@@ -15,6 +15,7 @@ import (
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // Options configures one tab session.
@@ -29,6 +30,7 @@ type Options struct {
 	ScrollbackLines        int // 0 → DefaultScrollbackLines
 	Foreground, Background color.Color
 	Palette                [256]color.Color
+	LogPalette             prettylog.Palette
 
 	// OnData wakes the renderer after each PTY read batch. Called from
 	// I/O workers and on input rejection; must not block or reenter the terminal.
@@ -255,6 +257,7 @@ func Start(opts Options) (*Session, error) {
 	s.SetBellHandler(opts.OnBell)
 	s.SetColors(opts.Foreground, opts.Background)
 	s.SetPalette(opts.Palette)
+	s.SetLogPalette(opts.LogPalette)
 	if viewParent != nil {
 		s.startView(viewParent)
 	}
@@ -379,12 +382,7 @@ func (s *Session) ResumeTarget() (termio.TabRequest, bool) {
 // Exactly one blank line separates the previous visible content and banner.
 // A non-empty hint follows the close hint on the same line, after " · ".
 func writeExitBanner(e *emulator, code int, hint string) {
-	var status string
-	if code == 0 {
-		status = "\x1b[32m✓ exit 0\x1b[0m"
-	} else {
-		status = fmt.Sprintf("\x1b[31m✗ exit %d\x1b[0m", code)
-	}
+	status := e.logNotice(code, fmt.Sprintf("exit %d", code))
 	_, _ = e.Write([]byte(termio.SessionEndResetInPlace))
 	row, hasContent := e.lastContentRow()
 	sep := "\r\n"

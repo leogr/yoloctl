@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/tui/panes"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 type mouseSurface interface {
@@ -163,7 +164,7 @@ func (m *model) deliverMouse(owner mouseOwner, mo tea.Mouse, action terminal.Mou
 			event.Pixels = &point
 		}
 		if err := owner.surface.SendMouse(event); err != nil {
-			m.status = err.Error()
+			m.setStatus(prettylog.KindError, err.Error())
 		}
 	}
 }
@@ -185,7 +186,7 @@ func (m *model) handleMouse(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.hostMouseEncoding.pixels {
 		cw, ch := m.hostGeometry.width, m.hostGeometry.height
 		if cw <= 0 || ch <= 0 {
-			m.status = "pixel mouse report has no measured host cell size"
+			m.setStatus(prettylog.KindWarn, "pixel mouse report has no measured host cell size")
 			return m, nil
 		}
 		// UV preserves its cell-coordinate convention for every SGR report.

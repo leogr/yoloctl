@@ -65,7 +65,7 @@ func TestOtherViewFailureStillOpensThePalette(t *testing.T) {
 	<-s.Done() // the refusal kills the relay client
 	_, _ = m.Update(tabExitMsg{session: s})
 	text := m.console.GridText()
-	if !m.focusPalette || !strings.Contains(text, "Error: box attach coder: ") || strings.Contains(text, "holder closed") || m.status != "" {
+	if !m.focusPalette || !strings.Contains(text, "✗ box attach coder: ") || strings.Contains(text, "holder closed") || m.status != "" {
 		t.Fatalf("a view refusal must stay a palette result: focus=%v status=%q\n%s", m.focusPalette, m.status, m.console.GridText())
 	}
 }
