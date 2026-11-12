@@ -2,6 +2,7 @@ package tui
 
 import (
 	"encoding/base64"
+	"errors"
 	"runtime"
 	"strings"
 	"time"
@@ -10,8 +11,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
+	"github.com/leogr/yoloctl/internal/tui/term"
 )
 
 var selectionClock = time.Now()
@@ -103,7 +106,7 @@ func (m *model) copySelection(k tea.Key) (tea.Cmd, bool) {
 	if tab == nil || tab.Empty() {
 		return nil, false
 	}
-	text, err := tab.Session.SelectedText()
+	text, err := m.selectedCopyText(tab.Session)
 	if err != nil {
 		m.status = err.Error()
 		return nil, true
@@ -142,4 +145,26 @@ func selectionLines(f terminal.Frame) []string {
 		lines[y] = rows[0].Render() + cReset
 	}
 	return lines
+}
+
+// selectedCopyText is a session's selected text for the clipboard. A native
+// chat session's preview image cells become their attachment chips (from the
+// host's bounded ledger, or a generic marker when it no longer knows them);
+// the result keeps the plain clipboard bound.
+func (m *model) selectedCopyText(s *term.Session) (string, error) {
+	if !s.CopiesImages() {
+		return s.SelectedText()
+	}
+	styled, err := s.SelectedStyledText()
+	if err != nil || styled == "" {
+		return "", err
+	}
+	text, err := chatimage.MapSelection(styled, m.imageLedger)
+	if err != nil {
+		return "", errors.New("cannot copy this chat selection: unexpected terminal output")
+	}
+	if len(text) > termio.MaxOSC52DecodedBytes {
+		return "", errors.New("selection exceeds clipboard size limit")
+	}
+	return text, nil
 }

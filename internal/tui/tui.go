@@ -28,6 +28,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -99,7 +100,10 @@ type model struct {
 	pal          palette.Model
 	program      *tea.Program // for wake/exit sends from session goroutines
 	pending      *atomic.Bool // coalesces onData wakes
-	cfg          *config.TUI
+	// imageLedger maps native chat preview image IDs to attachment chips
+	// for local copy; bounded, host-wide (IDs are allocated per host).
+	imageLedger *chatimage.Ledger
+	cfg         *config.TUI
 
 	width, height    int
 	focusPalette     bool
@@ -183,7 +187,7 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	m := &model{pending: &atomic.Bool{}, focusPalette: true, cfg: cfg}
+	m := &model{pending: &atomic.Bool{}, focusPalette: true, cfg: cfg, imageLedger: chatimage.NewLedger()}
 	m.prefixChord, m.status = resolvePanePrefix(cfg) // a fallback says so once
 	m.prefixResolved = true
 	defer m.resetHostMouse(os.Stdout)
@@ -828,6 +832,7 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 		OnBell:           m.paneBellHandler(&self),
 		OnBrowser:        m.browserHandler(),
 		OnTabRequest:     m.tabRequestHandler(args, &self),
+		ImageCopy:        isChatView(args),
 		ResumeTargetKind: resumeKind,
 		EndHint:          m.reattachHint(args),
 		Foreground:       m.foreground,

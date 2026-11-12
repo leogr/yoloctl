@@ -12,6 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/operator"
 	"github.com/leogr/yoloctl/internal/termio"
@@ -24,7 +25,7 @@ import (
 // a no-op), console sized via a WindowSizeMsg like the real startup.
 func newTestModel(t testing.TB, width, height int) *model {
 	t.Helper()
-	m := &model{pending: &atomic.Bool{}, focusPalette: true, cfg: &config.TUI{}}
+	m := &model{pending: &atomic.Bool{}, focusPalette: true, cfg: &config.TUI{}, imageLedger: chatimage.NewLedger()}
 	m.console = term.NewConsole(24, 80, 0, m.wake)
 	t.Cleanup(func() { _ = m.console.Close() })
 	_, _ = m.Update(tea.WindowSizeMsg{Width: width, Height: height})

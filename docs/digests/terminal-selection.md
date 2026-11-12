@@ -24,6 +24,16 @@ even when host or application defaults are set), so callers can recover cell
 colours in selection order; hard breaks are `\r\n` there. [1](#source-1) [3](#source-3)
 [4](#source-4) [20](#source-20)
 
+[FACT] A native chat pane's local copy uses that styled selection: each
+maximal run of Kitty placeholder cells (U+10EEEE with its marks) drawn with one
+24-bit image ID becomes the attachment chip the host recorded for that ID, or
+`[image attachment]` once its bounded ledger (256 IDs) has forgotten it;
+contiguous cells without an ID (no colour or a palette colour) form one generic
+run. A line holding only the previous line's image is dropped,
+so one preview copies as one chip. Any control other than text, line breaks
+and SGR refuses the copy; the mapped text keeps the clipboard bound. Other
+panes copy plain native text. [21](#source-21) [22](#source-22)
+
 [FACT] Frame snapshots include selection spans alongside text/cursor data.
 Highlighting reverses selected grapheme styles without extracting clipboard
 text from ANSI strings. Pins follow output/reflow; screen changes invalidate
@@ -86,3 +96,5 @@ agent preferences still win. [12](#source-12) [13](#source-13) [14](#source-14)
 18. <a id="source-18"></a> [identity_test.go](../../internal/termio/identity_test.go#L10) — literal argv execution.
 19. <a id="source-19"></a> [TUI panes](tui-panes.md) — selection kept inside its pane in a divided tab.
 20. <a id="source-20"></a> [selection_styled_test.go](../../internal/terminal/selection_styled_test.go#L1) — placeholder colours, order, breaks and size bound through the styled export.
+21. <a id="source-21"></a> [chatimage copy.go](../../internal/chatimage/copy.go#L1) — `Ledger`, `MapSelection`, `tokenize`, `parseSGR`; tests in copy_test.go, including the native styled path.
+22. <a id="source-22"></a> [TUI copy](../../internal/tui/selection.go#L95) — `copySelection`, `selectedCopyText`; `term.Options.ImageCopy` set for chat views in tui.go; image_copy_test.go.

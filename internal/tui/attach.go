@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/tui/term"
 )
@@ -23,7 +24,7 @@ func RunAttached(ctx context.Context, args []string) (detached bool, err error) 
 	if err != nil {
 		return false, err
 	}
-	m := &model{pending: &atomic.Bool{}, cfg: cfg, standalone: true, initialArgs: args}
+	m := &model{pending: &atomic.Bool{}, cfg: cfg, standalone: true, initialArgs: args, imageLedger: chatimage.NewLedger()}
 	defer m.resetHostMouse(os.Stdout)
 	// runProgram owns context cancellation and graceful terminal cleanup.
 	p := tea.NewProgram(m, m.programOptions()...)

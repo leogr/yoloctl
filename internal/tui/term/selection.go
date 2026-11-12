@@ -31,6 +31,16 @@ func (e *emulator) ClearSelection() {
 }
 
 func (e *emulator) SelectedText() (string, error) {
+	return e.selected(false)
+}
+
+// SelectedStyledText is SelectedText with each cell's SGR style, for copy
+// mappings that need cell colours (native chat image previews).
+func (e *emulator) SelectedStyledText() (string, error) {
+	return e.selected(true)
+}
+
+func (e *emulator) selected(styled bool) (string, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.closed {
@@ -46,6 +56,11 @@ func (e *emulator) SelectedText() (string, error) {
 	}
 	if e.err != nil {
 		return "", e.err
+	}
+	if styled {
+		// Styles add bytes; the mapped clipboard text is bounded again by
+		// the caller.
+		return e.vt.SelectedStyledText(1 << 20)
 	}
 	return e.vt.SelectedText(termio.MaxOSC52DecodedBytes)
 }

@@ -49,6 +49,10 @@ type Options struct {
 	// original command class. These classes cannot request new tabs; metadata
 	// never opens a tab or launches an action.
 	ResumeTargetKind termio.ResumeTargetKind
+	// ImageCopy marks a native chat session: copying its local selection maps
+	// preview image cells back to attachment chips instead of exporting the
+	// placeholder characters. Other sessions copy plain native text.
+	ImageCopy bool
 	// EndHint, when set, extends the end banner's close hint with one more
 	// plain-text action (for example how to re-attach). The TUI sets it
 	// only for panes that offer that action.
@@ -65,6 +69,7 @@ type Session struct {
 	managed   *managedView
 	onBrowser func(*Session, session.BrowserRequest, <-chan struct{})
 	endHint   string
+	imageCopy bool
 
 	done    chan struct{} // closed when pump finishes (status written)
 	exited  chan struct{} // closed when the direct child has been reaped
@@ -163,6 +168,7 @@ func Start(opts Options) (*Session, error) {
 		writer:    writer,
 		onBrowser: opts.OnBrowser,
 		endHint:   opts.EndHint,
+		imageCopy: opts.ImageCopy,
 		release:   releaseSlave,
 		done:      make(chan struct{}),
 		exited:    make(chan struct{}),
@@ -478,3 +484,7 @@ func forceEnv(base []string, forced ...string) []string {
 	}
 	return append(out, forced...)
 }
+
+// CopiesImages reports whether copying this session's selection maps preview
+// image cells to attachment chips (native chat sessions only).
+func (s *Session) CopiesImages() bool { return s.imageCopy }
