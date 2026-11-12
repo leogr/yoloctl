@@ -1,0 +1,7 @@
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    alt accepted
+        S-->>C: 200
+        Note left of C: done
+    end

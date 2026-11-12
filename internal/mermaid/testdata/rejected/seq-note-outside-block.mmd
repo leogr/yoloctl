@@ -1,0 +1,8 @@
+sequenceDiagram
+    participant A as API
+    participant B as Broker
+    participant C as Cache
+    alt cached
+        B->>C: read
+        Note over A: idle
+    end

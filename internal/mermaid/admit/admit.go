@@ -285,7 +285,47 @@ func pipeLabel(s string) (string, string) {
 
 // ---- sequence -----------------------------------------------------------
 
-type sequence struct{ depth int }
+type sequence struct {
+	depth int
+	// stmts are the statements in order, for the note placement checks;
+	// order is the participants by first appearance (their columns).
+	stmts []seqStmt
+	order map[string]int
+	line0 int // the line number being checked
+}
+
+// Statement kinds that note placement depends on.
+const (
+	stmtOther = iota
+	stmtMessage
+	stmtNote
+	stmtOpen  // alt, opt, loop, par, critical, break
+	stmtInner // else, and
+	stmtEnd
+)
+
+type seqStmt struct {
+	kind  int
+	line  int
+	ids   []string // a message's two participants, a note's
+	where string   // a note's "left of ", "right of " or "over "
+}
+
+func (q *sequence) add(kind int, where string, ids ...string) {
+	q.stmts = append(q.stmts, seqStmt{kind: kind, line: q.line0, ids: ids, where: where})
+	q.participant(ids...)
+}
+
+func (q *sequence) participant(ids ...string) {
+	if q.order == nil {
+		q.order = map[string]int{}
+	}
+	for _, id := range ids {
+		if _, ok := q.order[id]; !ok {
+			q.order[id] = len(q.order)
+		}
+	}
+}
 
 var blockWords = map[string]bool{"alt": true, "opt": true, "loop": true, "par": true, "critical": true, "break": true}
 var innerWords = map[string]bool{"else": true, "and": true}
@@ -300,6 +340,7 @@ func checkSequence(lines []string, from int) Decision {
 		if line == "" || strings.HasPrefix(line, "%%") {
 			continue
 		}
+		q.line0 = n + 1
 		if reason := q.line(line); reason != "" {
 			return reject(Sequence, "line %d: %s", n+1, reason)
 		}
@@ -307,7 +348,83 @@ func checkSequence(lines []string, from int) Decision {
 	if q.depth != 0 {
 		return reject(Sequence, "block without end")
 	}
+	if n, reason := q.notePlacement(); reason != "" {
+		return reject(Sequence, "line %d: %s", n, reason)
+	}
 	return Decision{Kind: Sequence}
+}
+
+// notePlacement refuses the notes the renderer draws in the wrong place
+// (deep QA D1/D2): it draws a note beside the message before it, so a note
+// right after a block's start, else/and or end lands in the wrong block; and
+// a block's frame spans only its messages' participants, so inside a block a
+// note left of its first or right of its last participant, or one beside or
+// over a participant outside that span, crosses or leaves the frame.
+func (q *sequence) notePlacement() (int, string) {
+	type block struct{ lo, hi int } // column span of its messages (lo > hi: none)
+	spans := make([]block, len(q.stmts))
+	// One pass: a message widens the innermost block; a block's span joins
+	// its parent's when it ends, so each statement is visited once.
+	var open []int
+	for i, st := range q.stmts {
+		switch st.kind {
+		case stmtOpen:
+			spans[i] = block{lo: len(q.order), hi: -1}
+			open = append(open, i)
+		case stmtEnd:
+			child := spans[open[len(open)-1]]
+			open = open[:len(open)-1]
+			if len(open) > 0 {
+				p := &spans[open[len(open)-1]]
+				p.lo, p.hi = min(p.lo, child.lo), max(p.hi, child.hi)
+			}
+		case stmtMessage:
+			if len(open) > 0 {
+				b := &spans[open[len(open)-1]]
+				for _, id := range st.ids {
+					b.lo, b.hi = min(b.lo, q.order[id]), max(b.hi, q.order[id])
+				}
+			}
+		}
+	}
+	open = open[:0]
+	boundary := false // the statement before (past other notes) starts, splits or ends a block
+	for i, st := range q.stmts {
+		switch st.kind {
+		case stmtOpen:
+			open = append(open, i)
+			boundary = true
+		case stmtInner:
+			boundary = true
+		case stmtEnd:
+			open = open[:len(open)-1]
+			boundary = true
+		case stmtMessage:
+			boundary = false
+		case stmtNote:
+			if boundary {
+				return st.line, "a note right after a block's start, else, and or end is drawn in the wrong place; put a message before it"
+			}
+			if len(open) == 0 {
+				continue
+			}
+			// Inside the frame: over a participant within the span, left of one
+			// right of its left edge, right of one left of its right edge.
+			span := spans[open[len(open)-1]]
+			for _, id := range st.ids {
+				c := q.order[id]
+				switch {
+				case st.where == "left of " && c <= span.lo:
+					return st.line, "a note left of a block's first participant crosses the block's frame"
+				case st.where == "right of " && c >= span.hi:
+					return st.line, "a note right of a block's last participant crosses the block's frame"
+				case c < span.lo || c > span.hi:
+					return st.line, "a note inside a block over a participant without messages in that block is drawn outside it"
+				}
+			}
+		}
+	}
+	return 0, ""
 }
 
 func (q *sequence) line(line string) string {
@@ -321,14 +438,17 @@ func (q *sequence) line(line string) string {
 			return "end without block"
 		}
 		q.depth--
+		q.add(stmtEnd, "")
 		return ""
 	case blockWords[word]:
 		q.depth++
+		q.add(stmtOpen, "")
 		return ""
 	case innerWords[word]:
 		if q.depth == 0 {
 			return word + " outside a block"
 		}
+		q.add(stmtInner, "")
 		return ""
 	case word == "participant" || word == "actor":
 		id, tail := ident(rest)
@@ -342,12 +462,14 @@ func (q *sequence) line(line string) string {
 				return "unsupported participant"
 			}
 		}
+		q.participant(id)
 		return ""
 	case word == "activate" || word == "deactivate":
 		id, tail := ident(rest)
 		if id == "" || strings.TrimSpace(tail) != "" {
 			return "unsupported " + word
 		}
+		q.participant(id)
 		return ""
 	case word == "Note" || word == "note":
 		return q.note(rest)
@@ -374,12 +496,14 @@ func (q *sequence) note(s string) string {
 	if len(ids) > 2 || len(ids) == 2 && where != "over " {
 		return "unsupported note"
 	}
-	for _, id := range ids {
+	for i, id := range ids {
 		id = strings.TrimSpace(id)
 		if n, tail := ident(id); n == "" || tail != "" {
 			return "unsupported note"
 		}
+		ids[i] = id
 	}
+	q.add(stmtNote, where, ids...)
 	return ""
 }
 
@@ -416,5 +540,6 @@ func (q *sequence) message(s string) string {
 	if _, ok := strings.CutPrefix(rest, ":"); !ok {
 		return "message needs a text"
 	}
+	q.add(stmtMessage, "", from, to)
 	return ""
 }

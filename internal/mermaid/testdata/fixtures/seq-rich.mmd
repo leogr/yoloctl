@@ -9,11 +9,11 @@ sequenceDiagram
     activate S
     S->>S: replay canonical VT state from the exact build
     S-->>T: snapshot plus live output stream
+    Note right of S: holder answers terminal queries exactly once
     deactivate S
     alt the session is gone
         T-->>U: show the reconnect banner with the last known status
     else still running
         T-->>U: render frames
     end
-    Note right of S: holder answers terminal queries exactly once
     deactivate T

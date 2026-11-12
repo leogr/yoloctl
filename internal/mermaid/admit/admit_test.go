@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode"
+	"unicode/utf8"
 )
 
 func TestReviewedFixturesAreAdmittedAndOthersRejected(t *testing.T) {
@@ -31,6 +33,26 @@ func TestAcceptAndRejectTable(t *testing.T) {
 		source string
 		reason string // "" = admitted
 	}{
+		// note placement (deep QA D1/D2): a note goes beside the message before it;
+		// a block's frame spans its messages' participants
+		{"sequenceDiagram\nA->>B: m\nalt x\nA->>B: n\nend\nNote right of B: after", "line 6: a note right after a block's start, else, and or end is drawn in the wrong place; put a message before it"},
+		{"sequenceDiagram\nA->>B: m\nalt x\nA->>B: n\nend\nNote over A,B: after", "line 6: a note right after a block's start, else, and or end is drawn in the wrong place; put a message before it"},
+		{"sequenceDiagram\nA->>B: m\nalt x\nNote over A,B: first\nA->>B: n\nend", "line 4: a note right after a block's start, else, and or end is drawn in the wrong place; put a message before it"},
+		{"sequenceDiagram\nalt x\nA->>B: n\nelse y\nNote over A,B: n\nA->>B: o\nend", "line 5: a note right after a block's start, else, and or end is drawn in the wrong place; put a message before it"},
+		{"sequenceDiagram\nloop x\nalt y\nA->>B: n\nend\nA->>B: o\nend\nNote over A: after", "line 8: a note right after a block's start, else, and or end is drawn in the wrong place; put a message before it"},
+		{"sequenceDiagram\nalt x\nA->>B: n\nend\nB->>A: o\nNote right of B: fine", ""},
+		{"sequenceDiagram\nNote over A: first\nA->>B: m", ""},
+		{"sequenceDiagram\nA->>B: m\nNote right of B: one\nNote left of A: two", ""},
+		{"sequenceDiagram\nalt x\nA->>B: n\nNote left of A: l\nend", "line 4: a note left of a block's first participant crosses the block's frame"},
+		{"sequenceDiagram\nalt x\nA->>B: n\nNote right of B: r\nend", "line 4: a note right of a block's last participant crosses the block's frame"},
+		// interior side notes stay: the frame is A–D
+		{"sequenceDiagram\nparticipant A\nparticipant B\nparticipant C\nparticipant D\nalt x\nA->>D: n\nB->>C: m\nNote right of B: hi\nNote left of C: ho\nend", ""},
+		{"sequenceDiagram\nparticipant A\nparticipant B\nparticipant C\nalt x\nB->>C: n\nNote left of A: l\nend", "line 7: a note left of a block's first participant crosses the block's frame"},
+		{"sequenceDiagram\nparticipant A\nparticipant B\nparticipant C\nalt x\nB->>C: n\nNote over A: o\nend", "line 7: a note inside a block over a participant without messages in that block is drawn outside it"},
+		{"sequenceDiagram\nparticipant A\nparticipant B\nparticipant C\nalt x\nB->>C: n\nNote over B,C: o\nend", ""},
+		// a block's span includes its nested blocks' messages, before and after the note
+		{"sequenceDiagram\nparticipant A\nparticipant B\nparticipant C\nloop x\nA->>B: n\nNote over C: o\nalt y\nB->>C: m\nend\nend", ""},
+		{"sequenceDiagram\nparticipant A\nparticipant B\nparticipant C\nloop x\nA->>C: n\nalt y\nA->>B: m\nNote over C: o\nend\nend", "line 9: a note inside a block over a participant without messages in that block is drawn outside it"},
 		// flowchart
 		{"graph TD\nA-->B", ""},
 		{"flowchart TB\n  A[x] --> B{y} --> C(z)", ""},
@@ -127,5 +149,57 @@ func TestValidationKeepsTheSourceUnchanged(t *testing.T) {
 	before := strings.Clone(source)
 	if d := Check(source); !d.Admitted() || source != before {
 		t.Fatal(d)
+	}
+}
+
+// Admission never panics, is deterministic, and admits only a known kind of
+// valid UTF-8 source without control characters other than LF.
+func FuzzAdmission(f *testing.F) {
+	for _, seed := range []string{
+		"flowchart LR\n A --> B\n", "graph TD\n A{x} -- y --> B(z)\n subgraph s[t]\n C\n end\n",
+		"sequenceDiagram\n actor A as U\n A->>+B: hi\n alt x\n Note over A,B: n\n else y\n end\n",
+		";", "%%\n", "flowchart LR\n A[\"a\"] -.->|l| B & C ==> D\n", "sequenceDiagram\n A-xB: no\n", "\xff",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, source string) {
+		d := Check(source)
+		if again := Check(source); again != d {
+			t.Fatalf("not deterministic: %+v then %+v", d, again)
+		}
+		if !d.Admitted() {
+			return
+		}
+		if d.Kind == Unknown || !utf8.ValidString(source) {
+			t.Fatalf("admitted %+v for %q", d, source)
+		}
+		for _, r := range source {
+			if r != '\n' && unicode.IsControl(r) {
+				t.Fatalf("admitted a control character in %q", source)
+			}
+		}
+	})
+}
+
+// Admission is one pass over the statements, also for deep nesting: a
+// large nested sequence is checked in time linear in its size.
+func BenchmarkCheckNestedSequence(b *testing.B) {
+	var src strings.Builder
+	src.WriteString("sequenceDiagram\nparticipant A\nparticipant B\n")
+	for range 2000 {
+		src.WriteString("loop x\nA->>B: m\n")
+	}
+	for range 20000 {
+		src.WriteString("A->>B: m\n")
+	}
+	for range 2000 {
+		src.WriteString("end\n")
+	}
+	source := src.String()
+	b.SetBytes(int64(len(source)))
+	for b.Loop() {
+		if d := Check(source); !d.Admitted() {
+			b.Fatal(d.Reason)
+		}
 	}
 }

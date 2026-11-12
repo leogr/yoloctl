@@ -133,3 +133,56 @@ func TestMermaidDrawingQuotesTheWholeFenceOrNothing(t *testing.T) {
 		}
 	}
 }
+
+// Parsing with drawings, notes and misses keeps one in-bounds source per
+// display line, and mapping, Quote and layout never panic.
+func FuzzDiagramSourceMap(f *testing.F) {
+	f.Add("intro\n```mermaid\nflowchart LR\n A --> B\n```\nafter", uint8(2))
+	f.Add("```mermaid\n```\n```mermaid\nx", uint8(0))
+	f.Add("| a | b |\n|---|---|\n```Mermaid\n a\n```\n```mermaid\nb\n```", uint8(5))
+	f.Add("> q\n~~~mermaid\n\tx\n~~~\n- item", uint8(3))
+	f.Fuzz(func(t *testing.T, text string, rows uint8) {
+		if len(text) > 4096 {
+			return
+		}
+		calls := 0
+		options := documentOptions()
+		options.MapSource = true
+		options.Diagrams = func(string) (Diagram, bool) {
+			calls++
+			switch calls % 3 {
+			case 0:
+				return Diagram{Note: "mermaid: not drawn (x)"}, true
+			case 1:
+				lines := make([]string, int(rows)%7)
+				for i := range lines {
+					lines[i] = strings.Repeat("─", i) + "│"
+				}
+				return Diagram{Lines: lines}, true
+			}
+			return Diagram{}, false
+		}
+		doc := Parse(text, options)
+		if len(doc.Sources) != len(doc.Lines) {
+			t.Fatalf("%d sources for %d lines", len(doc.Sources), len(doc.Lines))
+		}
+		plain := Plain(text)
+		for i, ls := range doc.Sources {
+			if ls.Start < 0 || ls.Start > ls.End || ls.End > len(plain) {
+				t.Fatalf("line %d source [%d,%d) of %d bytes", i, ls.Start, ls.End, len(plain))
+			}
+			for o := 0; o <= len(doc.Lines[i].Text); o++ {
+				LineStart(ls, o)
+				LineEnd(ls, o)
+			}
+		}
+		if n := len(doc.Lines); n > 0 {
+			sel := SourceSelection{Lines: doc.Lines, Sources: doc.Sources, Text: plain, Render: func(s string) string {
+				return RenderText(Parse(s, documentOptions()))
+			}}
+			sel.Exact(0, 0, n-1, len(doc.Lines[n-1].Text), true, true)
+			sel.Exact(n/2, 0, n-1, 0, true, false)
+		}
+		Layout(doc, 40, LayoutOptions{Method: options.Method, Theme: options.Theme})
+	})
+}

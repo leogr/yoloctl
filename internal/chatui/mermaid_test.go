@@ -432,3 +432,43 @@ func TestChatReadingPositionSurvivesANoteGoingAway(t *testing.T) {
 		t.Fatalf("drawings %q notes %q", drawings, notes)
 	}
 }
+
+// carryLine maps every display line to a line of the rebuilt body; a line
+// outside the fences to the same text, whatever the fences show before and
+// after.
+func FuzzCarryLine(f *testing.F) {
+	f.Add("intro\n```mermaid\nflowchart LR\n A --> B\n```\nafter\n```mermaid\nx\n```\nend", uint8(1), uint8(9))
+	f.Add("```mermaid\n```", uint8(0), uint8(3))
+	f.Fuzz(func(t *testing.T, text string, before, after uint8) {
+		if len(text) > 2048 {
+			return
+		}
+		parse := func(seed uint8) cachedBody {
+			n := 0
+			var body cachedBody
+			lookup := func(string) (markdownview.Diagram, bool) {
+				n++
+				switch (int(seed) + n) % 3 {
+				case 0:
+					return markdownview.Diagram{Note: "mermaid: not drawn (x)"}, true
+				case 1:
+					return markdownview.Diagram{Lines: make([]string, 1+(int(seed)+n)%5)}, true
+				}
+				return markdownview.Diagram{}, false
+			}
+			body.lines = markdownview.Parse(text, markdownview.ParseOptions{Method: ansi.WcWidth, Diagrams: lookup}).Lines
+			body.fenceAt = fenceLines(body.lines, n)
+			return body
+		}
+		old, next := parse(before), parse(after)
+		for line := range old.lines {
+			got, _ := carryLine(old, next, line, 0)
+			if got < 0 || got >= len(next.lines) {
+				t.Fatalf("line %d carried to %d of %d", line, got, len(next.lines))
+			}
+			if old.fenceAt[line] < 0 && next.lines[got].Text != old.lines[line].Text {
+				t.Fatalf("line %d %q carried to %d %q", line, old.lines[line].Text, got, next.lines[got].Text)
+			}
+		}
+	})
+}
