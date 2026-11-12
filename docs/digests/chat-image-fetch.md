@@ -58,7 +58,10 @@ IDs, and the cell size. A later request with the same key, still current and
 supported, is transmitted again from the cache under a new ID and token without
 another read, even while a job runs. The end of any chat pane with an image
 channel and every new capability generation empty it; it lives only as long as
-the TUI. [4](#source-4)
+the TUI. A hit is not re-checked by the controller: the requesting pane's
+connected and joined state is the gate, so a removal the chat stream has not
+reported yet can re-show an image this human already opened in this TUI.
+[4](#source-4) [5](#source-5)
 
 ## Sources
 
@@ -66,3 +69,4 @@ the TUI. [4](#source-4)
 2. <a id="source-2"></a> [chat_artifact_read.go](../../cmd/yoloctl/chat_artifact_read.go#L1) — `chatArtifactReadRequest`, `decodeChatArtifactReadRequest`, `matchesRoom`, `runControllerChatArtifactRead`, `executeChatArtifactRead`, `runChatArtifactRelay`, `verifyChatArtifactFrame`; registry and dispatch in controller_internal.go; chat_artifact_read_test.go.
 3. <a id="source-3"></a> [prepare.go](../../internal/chatimage/prepare.go#L1) — `Prepare`, `downscale`, `TransmitSequence`, `DeleteSequence`; prepare_test.go.
 4. <a id="source-4"></a> [image_broker.go](../../internal/tui/image_broker.go#L1) — `ReadChatArtifact`, `answerPreview`, `finishImageJob`, `showPrepared`, `previewCache`, `endImagePane`, `flushImageDeletes`, `chatPaneSpace`; chat_artifact_host.go `readChatArtifactForPreview`; image_broker_test.go.
+5. <a id="source-5"></a> [preview_image.go](../../internal/chatui/preview_image.go#L1) — `canPreview` (truecolor, `connected`, `canSend`), `previewUpdate` collapse on disconnect or membership loss; preview_image_test.go.

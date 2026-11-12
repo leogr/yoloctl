@@ -34,6 +34,41 @@ packaging is covered by `smoke-image-ensure`, not this quick check. Initial VM i
 preparation can take longer on a cold cache. Failed fixtures stay at their
 original paths with an explicit cleanup command; do not move them.
 
+## Chat image previews (human-guided)
+
+From a candidate checkout on the host, after `make build`, run in the terminal
+under test (Ghostty or Kitty):
+
+```sh
+bash scripts/smoke/chat-images-live.sh
+```
+
+It always creates a new owned fixture root (inherited `SMOKE_ROOT` and
+`SMOKE_SPACE` are ignored) with space `chat-images-live`, a managed chat room
+and an agentless enrolled participant, which publishes four fixture PNGs to
+`#space` through the real `airc artifact upload` path: an alpha gradient, a
+wide image, a non-PNG named `.png` and a PNG over the 16 Mi-pixel decode
+bound. The operator then opens the TUI on the same terminal and answers finite
+rows: draw, aspect, chip copy, re-show, error notices, resize/tab switch and
+quit cleanup; the same with `COLORTERM` removed (no Show image); standalone
+`yoloctl chat` (no Show image); and, optionally, a terminal without Kitty
+graphics. Each launched UI's exit status is its own row. The Markdown report
+beside the fixture root records OS, terminal name/version, `COLORTERM`,
+yoloctl bundle and checkout, the fixture, every row, the cleanup outcome and a
+disposition: COMPLETE (exit 0) only when every required row passed, every UI
+exited normally and cleanup succeeded or was explicitly preserved; FAILED
+(exit 1) for a FAIL row, an abnormal UI exit, a setup error or failed cleanup;
+INCOMPLETE (exit 3) for a skipped, unanswered or interrupted required row, or
+a terminal other than Ghostty/Kitty. Cleanup is `space destroy --force`, whose
+acknowledged success is the only teardown evidence, then removal of the
+fixture root, checked absent; either failing makes the run FAILED and the
+report names the retained path. `SMOKE_PRESERVE_SPACE=1`
+keeps the space (recorded), and `SMOKE_KEEP_ON_FAILURE=1` keeps a failed one.
+A shown image proves the real controller read through the reserved chat
+runtime's relay and policy. The re-show row is visual only; nothing here
+measures timing, memory or download counts, and it covers only its named rows,
+not the full terminal, ACL, performance and forgery matrix.
+
 ## Lima container stack gate
 
 From a clean reviewed candidate checkout on the macOS host, run:
