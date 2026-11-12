@@ -16,7 +16,7 @@ const (
 )
 
 func preview() Frame {
-	return Frame{Op: OpPreview, Generation: 1, Request: 7, RoomID: idA, DiskID: idA, HumanID: idA,
+	return Frame{Op: OpPreview, Generation: 1, Request: 7, RoomID: idA, DiskID: idA, HumanID: idA, ChannelID: idA,
 		Channel: "#space", MessageID: uuid, Artifact: uuid, Bytes: 1024, SHA256: hash}
 }
 

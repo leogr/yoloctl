@@ -1,6 +1,6 @@
 # Chat image previews (host boundary)
 
-Verification: `484b52b6eb83b3bc03f30406d28110f262fb5179` and accompanying changes; image channel on `b96ffc26c67ed63006d0dfa55a1b9c228d8e18ba` and accompanying changes; host probe on `d8253d1809006bf3095a1215b7a9c1785523ddd1` and accompanying changes; broker on `56379f45f1d89b34015f180380ef9391a31760b0` and accompanying changes.
+Verification: `484b52b6eb83b3bc03f30406d28110f262fb5179` and accompanying changes; image channel on `b96ffc26c67ed63006d0dfa55a1b9c228d8e18ba` and accompanying changes; host probe on `d8253d1809006bf3095a1215b7a9c1785523ddd1` and accompanying changes; broker on `56379f45f1d89b34015f180380ef9391a31760b0` and accompanying changes; broker conditions and channel identity on `765d227c0610c02b4d68071cd34552086b32eab1` and accompanying changes.
 
 [FACT] Previews use Kitty Unicode placeholder cells: U+10EEEE with a row and a
 column diacritic, drawn in a 24-bit foreground colour that is the image ID.
@@ -28,8 +28,9 @@ socket-pair channel named by `YOLOCTL_TUI_IMAGE_FD`; other sessions get neither
 descriptor nor variable, which is removed even when the TUI's own environment
 has it. Frames are a 4-byte length plus strict JSON of at most
 16 KiB, version 1, with a closed set of operations: the host sends capability,
-ready and error; the child sends preview (validated room, disk and human
-identities, channel, message, artifact UUID, hash and 1 B–4 MiB size) and
+ready and error; the child sends preview (validated room, disk, human and
+channel identities, channel name, message, artifact UUID, hash and 1 B–4 MiB
+size) and
 release (a host-issued token). Fields of another operation, unknown keys,
 trailing data or the wrong direction close the channel; the session itself
 continues, and closing it never joins a blocked handler. The child claims the
@@ -50,9 +51,10 @@ counts, and a cell measurement re-checks the probe as soon as it arrives.
 [FACT] The TUI gives the channel only to native chat panes. Their frames
 wait in a 16-frame inbox until the event loop drains it; frames to panes
 leave through a 64-frame outbox written in order by one sender goroutine with
-a 1 s write deadline; overflow is dropped and the pane keeps its chip. The
+a 1 s write deadline; overflow is dropped and the pane keeps its chip, and a
+failed write closes that pane's channel so it cannot delay the others. The
 first chat pane starts the probe; each live pane is sent the capability once
-per generation, which changes when support changes. Preview requests wait
+per generation (counted only when the frame was queued), which changes when support changes. Preview requests wait
 (at most 8) for the probe, then get `stale` for an old generation,
 `unsupported`, or `unavailable`: no fetch or drawing exists yet. A release
 removes a preview only with its token, and a pane that ends releases its

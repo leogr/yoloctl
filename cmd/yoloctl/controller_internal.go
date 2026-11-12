@@ -37,6 +37,7 @@ import (
 // explicit entry and an explicit operator authorization decision.
 var controllerOperations = map[string]controller.Operation{
 	"chat.artifact.upload":  {Mutates: true, EffectGated: true, Footprint: controller.FootprintChat},
+	"chat.artifact.read":    {}, // host-only, read-only: one confined artifact download
 	"chat.channel.list":     {BoxAllowed: true},
 	"chat.channel.catalog":  {BoxAllowed: true},
 	"chat.channel.create":   {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintChat},
@@ -676,6 +677,9 @@ func executeControllerWorker(ctx context.Context, work controller.WorkerInput) e
 	}
 	if work.Request.Method == "chat.artifact.upload" {
 		return runControllerChatImage(ctx, work.Request, os.Stdin, os.Stdout)
+	}
+	if work.Request.Method == "chat.artifact.read" {
+		return runControllerChatArtifactRead(ctx, work.Request, os.Stdout)
 	}
 	if err := translateOperatorRequest(ctx, work.Principal, &work.Request); err != nil {
 		return err

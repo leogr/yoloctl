@@ -565,6 +565,14 @@ func (s *Session) SendImage(f chatimage.Frame) error {
 	return s.imageConn.Send(f)
 }
 
+// CloseImageChannel closes the session's image channel (the session goes on);
+// later sends fail at once.
+func (s *Session) CloseImageChannel() {
+	if s.imageConn != nil {
+		_ = s.imageConn.Close()
+	}
+}
+
 // HasImageChannel reports whether the session was given an image channel.
 func (s *Session) HasImageChannel() bool { return s.imageConn != nil }
 

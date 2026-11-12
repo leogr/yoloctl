@@ -67,6 +67,7 @@ type Frame struct {
 	RoomID    string `json:"room_id,omitempty"`
 	DiskID    string `json:"disk_id,omitempty"`
 	HumanID   string `json:"human_id,omitempty"`
+	ChannelID string `json:"channel_id,omitempty"`
 	Channel   string `json:"channel,omitempty"`
 	MessageID string `json:"message_id,omitempty"`
 	Artifact  string `json:"artifact,omitempty"`
@@ -100,13 +101,13 @@ func (f Frame) Validate() error {
 			return errors.New("invalid image capability")
 		}
 	case OpPreview:
-		allowed = set("Generation", "Request", "RoomID", "DiskID", "HumanID", "Channel", "MessageID", "Artifact", "Bytes", "SHA256")
+		allowed = set("Generation", "Request", "RoomID", "DiskID", "HumanID", "ChannelID", "Channel", "MessageID", "Artifact", "Bytes", "SHA256")
 		if f.Generation == 0 || f.Request == 0 {
 			return errors.New("image preview needs a generation and a request")
 		}
-		for _, id := range []string{f.RoomID, f.DiskID, f.HumanID} {
+		for _, id := range []string{f.RoomID, f.DiskID, f.HumanID, f.ChannelID} {
 			if layout.ValidateIdentity(id) != nil {
-				return errors.New("image preview needs valid room, disk and human identities")
+				return errors.New("image preview needs valid room, disk, human and channel identities")
 			}
 		}
 		if managedchat.ValidateChannelName(f.Channel) != nil || !chatstream.ValidArtifactID(f.MessageID) {
@@ -154,7 +155,7 @@ func (f Frame) present() map[string]bool {
 	return map[string]bool{
 		"Generation": f.Generation != 0, "Request": f.Request != 0,
 		"Supported": f.Supported, "MaxCols": f.MaxCols != 0, "MaxRows": f.MaxRows != 0,
-		"RoomID": f.RoomID != "", "DiskID": f.DiskID != "", "HumanID": f.HumanID != "",
+		"RoomID": f.RoomID != "", "DiskID": f.DiskID != "", "HumanID": f.HumanID != "", "ChannelID": f.ChannelID != "",
 		"Channel": f.Channel != "", "MessageID": f.MessageID != "", "Artifact": f.Artifact != "",
 		"Bytes": f.Bytes != 0, "SHA256": f.SHA256 != "",
 		"Token": f.Token != "", "ID": f.ID != 0, "Cols": f.Cols != 0, "Rows": f.Rows != 0,

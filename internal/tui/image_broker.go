@@ -58,19 +58,26 @@ func (m *model) imageHandler() func(*term.Session, chatimage.Frame) {
 
 // sendImage queues a host frame for a chat pane without blocking the event
 // loop. The single sender keeps per-pane order.
-func (m *model) sendImage(s *term.Session, f chatimage.Frame) {
+func (m *model) sendImage(s *term.Session, f chatimage.Frame) (queued bool) {
 	b := &m.images
 	if b.outbox == nil {
 		b.outbox = make(chan imageMsg, imageOutboxCap)
 		go func(out <-chan imageMsg) {
 			for msg := range out {
-				_ = msg.session.SendImage(msg.frame)
+				if err := msg.session.SendImage(msg.frame); err != nil {
+					// A failed or timed-out write may have left half a frame:
+					// the channel is unusable, and later frames to this pane
+					// must not wait in front of the others.
+					msg.session.CloseImageChannel()
+				}
 			}
 		}(b.outbox)
 	}
 	select {
 	case b.outbox <- imageMsg{s, f}:
+		return true
 	default: // full: the pane keeps its chip
+		return false
 	}
 }
 
@@ -116,8 +123,11 @@ func (m *model) syncImages() tea.Cmd {
 			if b.told == nil {
 				b.told = map[*term.Session]uint64{}
 			}
-			b.told[p.Session] = b.advertised.generation
-			m.sendImage(p.Session, m.capabilityFrame())
+			// Only a queued frame counts: a dropped one is sent again on a
+			// later update.
+			if m.sendImage(p.Session, m.capabilityFrame()) {
+				b.told[p.Session] = b.advertised.generation
+			}
 		}
 	})
 	for s := range b.told {

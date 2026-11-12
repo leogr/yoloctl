@@ -54,7 +54,7 @@ def parse_args(argv):
         for i, c in enumerate(artifact)
     ):
         raise Failure("invalid artifact id")
-    if not size.isdigit() or str(int(size)) != size or not 0 < int(size) <= MAX_BYTES:
+    if not (size.isascii() and size.isdigit()) or str(int(size)) != size or not 0 < int(size) <= MAX_BYTES:
         raise Failure("invalid size")
     if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
         raise Failure("invalid hash")
@@ -230,8 +230,11 @@ def main(argv):
         config, artifact, size, digest = parse_args(argv)
     except Failure as e:
         fail(str(e), 2)
-    directory = tempfile.mkdtemp(prefix="yolo-artifact-", dir="/tmp")
-    os.chmod(directory, 0o700)
+    try:
+        directory = tempfile.mkdtemp(prefix="yolo-artifact-", dir="/tmp")
+        os.chmod(directory, 0o700)
+    except OSError:
+        fail("cannot create a private download directory")
     path = os.path.join(directory, "artifact")
     try:
         reply = run_download(config, artifact, path, deadline)

@@ -1,6 +1,6 @@
 # Managed chat image publication
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Artifact read boundary on `765d227c0610c02b4d68071cd34552086b32eab1` and accompanying changes.
 
 [FACT] Host clipboard preparation and publication are separate callbacks.
 Clipboard-off, unavailable readers and operator endpoints install neither
@@ -52,7 +52,9 @@ valid set of reserved `airc-artifact`, `airc-artifact-name`,
 `airc-artifact-bytes` and `airc-artifact-sha256` tags on an authenticated
 `PRIVMSG`. Message text, URLs and client-only `+` tags confer no attachment
 authority. Metadata survives the driver's live/history paths; filenames do
-not prove media type. No host fetch or image preview is implied.
+not prove media type. Metadata alone never fetches anything: the host reads
+an artifact only through the separate host-only `chat.artifact.read`
+operation (see the chat image fetch digest).
 [6](#source-6) [10](#source-10)
 
 [FACT] Focused regressions cover malformed/oversized PNGs and frames, immutable

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"os"
@@ -84,7 +85,7 @@ func intString(n int) string { return strconv.Itoa(n) }
 func fakeDownload(data string, extra string) string {
 	sum := sha256.Sum256([]byte(data))
 	return `umask 077; [ "$1 $2 $3" = "artifact download --config" ] || exit 9
-printf '%s' '` + data + `' > "$6"
+printf '%s' '` + base64.StdEncoding.EncodeToString([]byte(data)) + `' | base64 -d > "$6"
 ` + extra + `
 printf '{"bytes":` + intString(len(data)) + `,"sha256":"` + hex.EncodeToString(sum[:]) + `","filename":"a.png"}\n'
 `
@@ -125,6 +126,7 @@ func TestRelayRefusesAndNeverWritesAFrame(t *testing.T) {
 		"canceled by input": {"sleep 30\n", relayArgs([]byte(data)), 200 * time.Millisecond},
 		"bad artifact id":   {fakeDownload(data, ""), []string{"/c", "https://x", "4", strings.Repeat("a", 64)}, -1},
 		"oversize request":  {fakeDownload(data, ""), []string{"/c", relayArtifact, intString(4<<20 + 1), strings.Repeat("a", 64)}, -1},
+		"unicode digit":     {fakeDownload(data, ""), []string{"/c", relayArtifact, "²", strings.Repeat("a", 64)}, -1},
 	} {
 		script := relayUnderTest(t, c.airc, "5.0")
 		run := runRelay(t, script, c.args, c.input)

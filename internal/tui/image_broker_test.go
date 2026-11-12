@@ -19,7 +19,7 @@ os.set_blocking(fd, True)
 f = os.fdopen(fd, "r+b", buffering=0)
 body = json.dumps({"v":1,"op":"preview","generation":1,"request":7,
     "room_id":"0123456789abcdef0123456789abcdef","disk_id":"0123456789abcdef0123456789abcdef",
-    "human_id":"0123456789abcdef0123456789abcdef","channel":"#space",
+    "human_id":"0123456789abcdef0123456789abcdef","channel_id":"0123456789abcdef0123456789abcdef","channel":"#space",
     "message_id":"01234567-89ab-cdef-0123-456789abcdef","artifact":"01234567-89ab-cdef-0123-456789abcdef",
     "bytes":1024,"sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}).encode()
 f.write(struct.pack(">I", len(body)) + body)
@@ -105,4 +105,54 @@ func TestBrokerReleasesOnExitAndBoundsItsInbox(t *testing.T) {
 	if n > imageInboxCap {
 		t.Fatalf("inbox holds %d frames", n)
 	}
+}
+
+// A pane whose capability frame could not be queued is told again on a
+// later update (review step 6 condition 2).
+func TestBrokerResendsADroppedCapability(t *testing.T) {
+	m, s := brokerModel(t)
+	m.imageHost.state = imageSupported
+	m.images.outbox = make(chan imageMsg) // no room: every send is dropped
+	_, _ = m.Update(wakeMsg{})
+	if m.images.told[s] != 0 {
+		t.Fatal("dropped capability counted as told")
+	}
+	m.images.outbox = nil // the next send starts a working sender
+	_, _ = m.Update(wakeMsg{})
+	if m.images.told[s] != m.images.advertised.generation {
+		t.Fatal("capability not resent")
+	}
+	pump(t, m, s, func() bool { return strings.Contains(s.GridText(), `"op":"capability"`) })
+}
+
+// A pane that stops reading costs one write deadline, then its channel is
+// closed so later frames fail at once (review step 6 condition 1).
+func TestBrokerClosesAChannelAfterAFailedSend(t *testing.T) {
+	m := newTestModel(t, 80, 8)
+	s, err := term.Start(term.Options{Rows: 4, Cols: 80,
+		Argv: []string{"sleep", "30"}, OnImage: m.imageHandler()}) // never reads
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	big := chatimage.Frame{Op: chatimage.OpReady, Generation: 1, Request: 1, Token: strings.Repeat("t", 64), ID: 1, Cols: 1, Rows: 1}
+	deadline := time.Now().Add(20 * time.Second)
+	// Fill the socket until a write hits its deadline.
+	for s.SendImage(big) == nil {
+		if time.Now().After(deadline) {
+			t.Fatal("socket never filled")
+		}
+	}
+	// The broker's sender meets the same full socket and closes the channel.
+	if !m.sendImage(s, big) {
+		t.Fatal("frame not queued")
+	}
+	for time.Now().Before(deadline) {
+		start := time.Now()
+		if err := s.SendImage(big); err != nil && time.Since(start) < 200*time.Millisecond {
+			return // closed: fails at once
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("channel of a non-reading pane was not closed")
 }
