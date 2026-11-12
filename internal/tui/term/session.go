@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
@@ -49,6 +50,12 @@ type Options struct {
 	// original command class. These classes cannot request new tabs; metadata
 	// never opens a tab or launches an action.
 	ResumeTargetKind termio.ResumeTargetKind
+	// OnImage gives a native chat session the private image control channel
+	// (chatimage.ChannelFDEnv) and receives its validated child frames
+	// (preview requests, releases). Called from a reader goroutine; it must
+	// only queue work. A malformed frame closes the channel: previews stop,
+	// the session continues. Close never joins a blocked callback.
+	OnImage func(*Session, chatimage.Frame)
 	// ImageCopy marks a native chat session: copying its local selection maps
 	// preview image cells back to attachment chips instead of exporting the
 	// placeholder characters. Other sessions copy plain native text.
@@ -80,6 +87,7 @@ type Session struct {
 	drainBy time.Time
 
 	requestFile *os.File
+	imageConn   *chatimage.Conn
 	requestDone chan struct{}
 	resumeMu    sync.Mutex
 	resume      *termio.TabRequest
@@ -141,7 +149,30 @@ func Start(opts Options) (*Session, error) {
 		cmd.ExtraFiles = append(cmd.ExtraFiles, requestChild)
 		cmd.Env = forceEnv(cmd.Env, fmt.Sprintf("%s=%d", termio.TabRequestFDEnv, 2+len(cmd.ExtraFiles)))
 	}
+	var imageParent, imageChild *os.File
+	if opts.OnImage == nil {
+		// Never pass on a channel name this session was not given: a chat child
+		// would otherwise claim whatever descriptor it happens to name.
+		cmd.Env = dropEnv(cmd.Env, chatimage.ChannelFDEnv)
+	} else {
+		var err error
+		imageParent, imageChild, err = chatimage.ChannelPair()
+		if err != nil {
+			for _, f := range []*os.File{viewParent, viewChild, requestParent, requestChild} {
+				if f != nil {
+					_ = f.Close()
+				}
+			}
+			_ = emu.Close()
+			return nil, err
+		}
+		cmd.ExtraFiles = append(cmd.ExtraFiles, imageChild)
+		cmd.Env = forceEnv(cmd.Env, fmt.Sprintf("%s=%d", chatimage.ChannelFDEnv, 2+len(cmd.ExtraFiles)))
+	}
 	ptmx, releaseSlave, err := startPTYGeometry(cmd, size)
+	if imageChild != nil {
+		_ = imageChild.Close()
+	}
 	if viewChild != nil {
 		_ = viewChild.Close()
 	}
@@ -154,6 +185,9 @@ func Start(opts Options) (*Session, error) {
 		}
 		if requestParent != nil {
 			_ = requestParent.Close()
+		}
+		if imageParent != nil {
+			_ = imageParent.Close()
 		}
 		_ = emu.Close()
 		return nil, fmt.Errorf("term: start %s: %w", opts.Argv[0], err)
@@ -200,6 +234,19 @@ func Start(opts Options) (*Session, error) {
 					opts.OnTabRequest(r)
 				}
 			})
+		}()
+	}
+	if imageParent != nil {
+		s.imageConn = chatimage.NewConn(imageParent, true)
+		go func() {
+			defer func() { _ = s.imageConn.Close() }()
+			for {
+				f, err := s.imageConn.Receive()
+				if err != nil {
+					return // EOF, close or a malformed frame: previews end here
+				}
+				opts.OnImage(s, f)
+			}
 		}()
 	}
 	s.SetOSC52Handler(opts.OnOSC52)
@@ -280,6 +327,10 @@ func (s *Session) pump(onData func()) {
 		// itself is closing this pane. Close its socket but never join that
 		// model callback from completion (the original asynchronous route).
 		_ = s.requestFile.Close()
+	}
+	if s.imageConn != nil {
+		// The same rule for the image channel: close, never join its reader.
+		_ = s.imageConn.Close()
 	}
 
 	if s.managed != nil {
@@ -466,6 +517,17 @@ func (s *Session) Close() {
 	_ = s.emulator.Close()
 }
 
+// dropEnv returns base without any KEY=... entry for key.
+func dropEnv(base []string, key string) []string {
+	out := make([]string, 0, len(base))
+	for _, kv := range base {
+		if !strings.HasPrefix(kv, key+"=") {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
 // forceEnv returns base with each KEY=VALUE in forced applied,
 // replacing any existing KEY entry.
 func forceEnv(base []string, forced ...string) []string {
@@ -488,3 +550,13 @@ func forceEnv(base []string, forced ...string) []string {
 // CopiesImages reports whether copying this session's selection maps preview
 // image cells to attachment chips (native chat sessions only).
 func (s *Session) CopiesImages() bool { return s.imageCopy }
+
+// SendImage sends a host frame (capability, ready, error) on the session's
+// image control channel. It fails when the session has no channel or the
+// channel has closed.
+func (s *Session) SendImage(f chatimage.Frame) error {
+	if s.imageConn == nil {
+		return errors.New("term: session has no image channel")
+	}
+	return s.imageConn.Send(f)
+}
