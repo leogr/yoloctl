@@ -174,6 +174,13 @@ func TestAuditRulesNativeTransaction(t *testing.T) {
 	}
 	switch scenario {
 	case "reject", "stale", "gate-denied", "cancel":
+		generations, scanErr := os.ReadDir(layout.AuditRulesDir(layout.AuditDiskDir(disk)))
+		if scanErr != nil && !os.IsNotExist(scanErr) {
+			t.Fatal(scanErr)
+		}
+		if len(generations) != 0 {
+			t.Fatal("rejected pre-publication attempt retained a prepared generation")
+		}
 		if err == nil || !bytes.Equal(after, raw) || starts != 0 || stops != 0 {
 			t.Fatalf("rejection changed authoritative state %v %v", events, err)
 		}
@@ -245,5 +252,60 @@ func TestAuditRulesNativeTransaction(t *testing.T) {
 		}
 	} else if complete < 0 || unlock < complete || slices.Contains(events, "complete-unlocked") {
 		t.Fatal("completion after unlock", events)
+	}
+}
+
+func TestAuditRuleRetirementRetainsServiceAndUnknownInventory(t *testing.T) {
+	if os.Getenv("YOLOCTL_TEST_RULE_RETIREMENT") == "" {
+		cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestAuditRuleRetirementRetainsServiceAndUnknownInventory$")
+		cmd.Env = append(os.Environ(), "YOLOCTL_TEST_RULE_RETIREMENT=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%s: %v", out, err)
+		}
+		return
+	}
+	disk := t.TempDir()
+	native := spaceenv.Context{Schema: 1, Space: "test", DiskID: strings.Repeat("a", 32), DiskUUID: "fixture", DiskMount: disk, ConfigDir: filepath.Join(disk, "config"), CatalogDir: spaceenv.CatalogRoot, HostConfigRoot: filepath.Join(disk, "host"), UID: 1000, GID: 1000, Bundle: "fixture", Generation: "fixture", Mounts: []spaceenv.Mount{{Source: "/projects", Writable: true}}}
+	if err := spaceenv.Configure(native); err != nil {
+		t.Fatal(err)
+	}
+	root := layout.AuditDiskDir(disk)
+	store := audit.RuleStore{Root: root}
+	var sets []audit.RuleSet
+	for _, text := range []string{"a", "b", "c", "d"} {
+		set, _, _, err := store.Prepare(t.Context(), "", audit.RuleChange{Kind: "edit", Body: strings.NewReader("rules: []\n#" + text)}, "/tools", "/metadata", func(context.Context, string, string) (audit.Validation, error) { return audit.Validation{}, nil })
+		if err != nil {
+			t.Fatal(err)
+		}
+		sets = append(sets, set)
+	}
+	service, _ := json.Marshal(audit.ServiceConfig{Epoch: "old-service", Version: audit.Version, RulesSHA256: audit.RulesDigest(), RulesGeneration: sets[0].Generation, EffectiveSHA256: sets[0].Fingerprint})
+	if err := safepath.WriteFile(root, "service.json", service, 0600); err != nil {
+		t.Fatal(err)
+	}
+	// This fixture owns the native audit guard; no service query/mutation occurs.
+	if err := retireNativeAuditRuleGenerations(t.Context(), sets[2].Generation, sets[3].Generation); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Read(sets[1].Generation); !os.IsNotExist(err) {
+		t.Fatal("unreferenced generation not retired", err)
+	}
+	for _, i := range []int{0, 2, 3} {
+		if _, err := store.Read(sets[i].Generation); err != nil {
+			t.Fatal("protected reference retired", i, err)
+		}
+	}
+	for _, bad := range [][]byte{[]byte("{}"), []byte("not-json"), []byte(strings.ReplaceAll(string(service), sets[0].Generation, strings.Repeat("f", 64)))} {
+		if err := safepath.WriteFile(root, "service.json", bad, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := retireNativeAuditRuleGenerations(t.Context(), "", sets[3].Generation); err == nil {
+			t.Fatal("uncertain service reference allowed retirement")
+		}
+		for _, i := range []int{0, 2, 3} {
+			if _, err := store.Read(sets[i].Generation); err != nil {
+				t.Fatal("uncertain inventory discarded data", err)
+			}
+		}
 	}
 }

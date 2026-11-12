@@ -49,6 +49,17 @@ type AuditSettings struct {
 	EffectiveSHA256 string `yaml:"effective_sha256,omitempty" json:"effective_sha256,omitempty"`
 }
 
+// DisabledForImport preserves retained rule identity while never inheriting
+// enablement. Legacy built-in-only state keeps the original omission behavior.
+func (a *AuditSettings) DisabledForImport() *AuditSettings {
+	if a == nil || a.RulesGeneration == "" {
+		return nil
+	}
+	copy := *a
+	copy.Enabled = false
+	return &copy
+}
+
 func (a *AuditSettings) Validate() error {
 	if a == nil {
 		return nil

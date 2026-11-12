@@ -1,6 +1,6 @@
 # Audit event output and following
 
-Verification: `bfc2e8addfd696da0629a8816c26cba6384d9ba7` and accompanying changes.
+Verification: `46da38583fa61bae0ff7138f03b557872d027e9e` and accompanying changes.
 
 [FACT] `audit logs --follow` prints the first bounded-history summary to stderr,
 then prints another only when collector drops, metadata gaps or retention-gap
@@ -66,6 +66,12 @@ pinned template from their older flattened fields. Missing process/user/name
 fields cannot be recovered from history. Updated rule outputs request the new
 fields for subsequent collection; explicit audit enable selects the updated
 rules digest. [4](#source-4) [5](#source-5) [6](#source-6) [7](#source-7)
+
+[FACT] For unknown rule names the same renderer uses a fixed selected-field
+message. It never interprets imported output templates; raw argv/environment,
+aggregate arguments and arbitrary fields remain excluded. A custom rule reusing
+a shipped name keeps that shipped name's template, potentially different from
+its changed semantics. [5](#source-5)
 
 ## Sources
 

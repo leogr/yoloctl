@@ -73,16 +73,17 @@ type RuleSummary struct {
 }
 
 type Status struct {
-	Rules         RuleSummary `json:"rules"`
-	ActualVersion string      `json:"actual_version,omitempty"`
-	Desired       Desired     `json:"desired"`
-	State         string      `json:"state"`
-	Architecture  string      `json:"architecture"`
-	Driver        string      `json:"driver"`
-	DriverDrops   *uint64     `json:"driver_drops"`
-	Error         string      `json:"error,omitempty"`
-	Drops         uint64      `json:"drops"`
-	MetadataGaps  uint64      `json:"metadata_gaps"`
+	RuleCleanupWarning string      `json:"rule_cleanup_warning,omitempty"`
+	Rules              RuleSummary `json:"rules"`
+	ActualVersion      string      `json:"actual_version,omitempty"`
+	Desired            Desired     `json:"desired"`
+	State              string      `json:"state"`
+	Architecture       string      `json:"architecture"`
+	Driver             string      `json:"driver"`
+	DriverDrops        *uint64     `json:"driver_drops"`
+	Error              string      `json:"error,omitempty"`
+	Drops              uint64      `json:"drops"`
+	MetadataGaps       uint64      `json:"metadata_gaps"`
 }
 
 type Query struct {

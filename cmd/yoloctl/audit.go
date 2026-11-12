@@ -123,6 +123,11 @@ func newAuditCmd() *cobra.Command {
 			if err := decodeBoundedJSON(&output, &status, 64<<10); err != nil {
 				return err
 			}
+			if status.RuleCleanupWarning != "" {
+				if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Warning: rule retirement deferred: "+audit.DiagnosticText(status.RuleCleanupWarning)); err != nil {
+					return err
+				}
+			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Audit %s: %s (%s)\n", action, audit.Clean(status.State), audit.Clean(status.Driver))
 			return err
 		}})

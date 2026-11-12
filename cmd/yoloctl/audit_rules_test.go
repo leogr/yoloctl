@@ -128,3 +128,15 @@ func TestAuditRulesHostStreamAndEditor(t *testing.T) {
 		t.Fatal("no-op editor changed native state", out, err)
 	}
 }
+
+func TestAuditRulesEditorHelpDoesNotAccumulate(t *testing.T) {
+	selection := []byte("rules:\n- disable: {rule: '*'}\n")
+	first := auditSelectionEditorDocument(selection)
+	second := auditSelectionEditorDocument(first)
+	if bytes.Count(second, []byte(auditSelectionHelp)) != 1 || !bytes.Equal(first, second) {
+		t.Fatal("help duplicated on reopening a saved selection")
+	}
+	if string(selection) != "rules:\n- disable: {rule: '*'}\n" {
+		t.Fatal("changed source buffer")
+	}
+}

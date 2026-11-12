@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -227,16 +228,26 @@ func runControllerAudit(ctx context.Context, req controller.Request, in io.Reade
 		if err != nil {
 			return true, err
 		}
+		priorGeneration := cfg.Audit.RulesGeneration
 		prepared, validation, _, err := (audit.RuleStore{Root: root}).Prepare(ctx, cfg.Audit.RulesGeneration, audit.RuleChange{Kind: "refresh"}, tools, layout.AuditMetadataPath(), auditRulesValidate)
 		if err != nil {
 			return true, describeAuditRuleValidation(validation, err)
 		}
+		published := false
+		defer func() {
+			if !published {
+				if err := (audit.RuleStore{Root: root}).Discard(prepared); err != nil {
+					slog.Warn("Audit rule attempt cleanup deferred", "err", err)
+				}
+			}
+		}()
 		if err := ctx.Err(); err != nil {
 			return true, err
 		}
 		if err := controller.BeginScopedEffects(ctx, controller.EffectIntent{Scope: &controller.Scope{Writes: []controller.Resource{{Kind: controller.ResourceAudit}}}}); err != nil {
 			return true, err
 		}
+		published = true
 		cfg.Audit.Enabled = true
 		if err := selectNativeAuditRules(ctx, req.ID, cfg, prepared); err != nil {
 			return true, err
@@ -244,6 +255,9 @@ func runControllerAudit(ctx context.Context, req controller.Request, in io.Reade
 		status, err := nativeAuditStatus(ctx)
 		if err != nil {
 			return true, err
+		}
+		if err := retireNativeAuditRuleGenerations(ctx, priorGeneration, prepared.Generation); err != nil {
+			status.RuleCleanupWarning = err.Error()
 		}
 		return true, json.NewEncoder(out).Encode(status)
 	}

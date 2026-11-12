@@ -1,6 +1,6 @@
 # Native rule generations and host management
 
-Verification: `2cb8f6e9efb3fccaea3f4c48cd2812dbac21f21d` and accompanying changes.
+Verification: `46da38583fa61bae0ff7138f03b557872d027e9e` and accompanying changes.
 
 [FACT] Host-only `audit rules list`, `import FILE`, `remove NAME --sha256 PREFIX`
 and `edit` use the running matching controller. List creates nothing and never
@@ -33,7 +33,8 @@ preparation leaves the previous native selection and service unchanged.
 waiting holds no native mutation lock. Save carries its original revision,
 including enablement and build dependencies; stale save refuses and keeps the
 host text for reconciliation. Unchanged text is a no-op. Blank/comment-only
-input resets to empty selection. Native selectors may disable built-ins or
+input resets to empty selection. The exact help prefix is added only when absent,
+so saved help does not accumulate on reopening. Native selectors may disable built-ins or
 activate shipped-disabled candidates; list/status expose selection count,
 validation warnings and compatibility, separately from runtime health.
 [2](#source-2) [3](#source-3) [6](#source-6)
@@ -55,6 +56,23 @@ collector. Existing real modern-eBPF readiness remains separate; the legacy
 built-in-only service retains its original preflight.
 [1](#source-1) [2](#source-2) [7](#source-7)
 
+[FACT] Before receipt completion, successful mutations retire verified,
+unreferenced generated directories. The current operation's prior selection,
+new selection and service reference survive; the prior can retire on the next
+admitted change. Unknown inventory is retained with a warning. Failed attempts
+before desired-state publication discard their own prepared generation.
+[2](#source-2) [9](#source-9)
+
+[FACT] Space backup includes selected rule bytes (including their shipped-file
+snapshot), order, original metadata and selection. Import retains that source
+with audit disabled; it excludes tools, logs, attempts, health and generated
+absolute configurations. Explicit enable prepares and validates a current
+configuration. Whole-archive format limits remain those of space backup, not a
+new rules count/total/selection capacity. Unknown events use a fixed template
+over the existing selected fields; raw custom output/argv/env stay excluded.
+Reusing a built-in name still uses its shipped name-keyed template, whose text
+may not describe the custom condition. [10](#source-10) [11](#source-11)
+
 ## Sources
 
 1. <a id="source-1"></a> [Immutable rule store](../../internal/audit/rule_store.go#L1) — `RuleStore.Read`, `Prepare`, `Configuration`, `RulesPinsDigest`.
@@ -65,3 +83,7 @@ built-in-only service retains its original preflight.
 6. <a id="source-6"></a> [Selection qualification](audit-rule-validation.md) — literal include, framing and warning/skip semantics.
 7. <a id="source-7"></a> [Collector](../../internal/audit/collector_linux.go#L1) — selected configuration verification and generation-bound health.
 8. <a id="source-8"></a> [Transaction regressions](../../cmd/yoloctl/controller_audit_rules_linux_test.go#L1) — disabled/enabled, rejection, conflict, gate, uncertain stop/start and stale readiness.
+
+9. <a id="source-9"></a> [Generation retirement](../../internal/audit/rule_retire.go#L1) — protected references, owned inventory and exact-path retirement.
+10. <a id="source-10"></a> [Archive adapter](../../internal/spacearchive/audit.go#L1) — selected-source inventory, hashes, disabled restoration; native publication in internal/audit/rule_restore.go.
+11. <a id="source-11"></a> [Fixed output adapter](../../internal/audit/output.go#L1) — `outputTemplate`, `RenderOutput`, `FormatPrettyOutput`; custom privacy regressions in custom_output_test.go.

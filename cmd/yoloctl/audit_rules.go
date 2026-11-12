@@ -149,6 +149,12 @@ func changeAuditRules(cmd *cobra.Command, target controllerTarget, kind string, 
 	if callErr != nil {
 		return callErr
 	}
+	if response.Status != nil && response.Status.RuleCleanupWarning != "" {
+		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Warning: rule retirement deferred: "+audit.DiagnosticText(response.Status.RuleCleanupWarning)); err != nil {
+			return err
+		}
+	}
+
 	if !response.Changed {
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "no changes")
 		return err
@@ -180,7 +186,7 @@ func editAuditRules(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	initial := append([]byte(auditSelectionHelp), snapshot.Rules.Selection...)
+	initial := auditSelectionEditorDocument(snapshot.Rules.Selection)
 	tmp, err := os.CreateTemp("", "yoloctl-audit-rules-*.yaml")
 	if err != nil {
 		return err
@@ -220,4 +226,11 @@ func editAuditRules(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("edits kept at %s: %w", path, err)
 	}
 	return nil
+}
+
+func auditSelectionEditorDocument(selection []byte) []byte {
+	if bytes.HasPrefix(selection, []byte(auditSelectionHelp)) {
+		return bytes.Clone(selection)
+	}
+	return append([]byte(auditSelectionHelp), selection...)
 }

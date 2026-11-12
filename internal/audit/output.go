@@ -33,6 +33,16 @@ var outputTemplates = sync.OnceValue(func() map[string]string {
 	return result
 })
 
+// Unknown names use only this fixed selected-field template. Imported output
+// strings are never evaluated or retained. A reused built-in name deliberately
+// keeps the existing name-keyed shipped template.
+func outputTemplate(rule string) string {
+	if template, ok := outputTemplates()[rule]; ok {
+		return template
+	}
+	return "Audit event process=%proc.exepath name=%proc.name user=%user.name uid=%user.uid container=%container.id container_name=%container.name file=%fd.name path=%fs.path.name source=%fs.path.source target=%fs.path.target remote=%fd.rip client=%fd.cip port=%fd.rport result=%evt.res uid_arg=%evt.arg.uid ruid=%evt.arg.ruid euid=%evt.arg.euid suid=%evt.arg.suid parent=%proc.pexepath box=%yolo.box space=%yolo.space account=%yolo.account agent=%yolo.agent runtime=%yolo.runtime_mode unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available"
+}
+
 var outputField = regexp.MustCompile(`%([a-z][a-z0-9_.]*)`)
 
 // SelectedFields also supports older records, which retained only flattened
@@ -73,7 +83,7 @@ func SelectedFields(e Event) map[string]string {
 // through an unfiltered second path. Older events show <NA> for unretained fields.
 func RenderOutput(e Event) string {
 	fields := SelectedFields(e)
-	return Clean(outputField.ReplaceAllStringFunc(outputTemplates()[e.Rule], func(token string) string {
+	return Clean(outputField.ReplaceAllStringFunc(outputTemplate(e.Rule), func(token string) string {
 		if value := fields[token[1:]]; value != "" {
 			return value
 		}
@@ -93,7 +103,7 @@ func FormatPrettyOutput(e Event, format func(string, string) string) string {
 	fields := SelectedFields(e)
 	var parts []string
 	remaining := 1024
-	for _, part := range strings.Fields(outputTemplates()[e.Rule]) {
+	for _, part := range strings.Fields(outputTemplate(e.Rule)) {
 		missing := false
 		part = outputField.ReplaceAllStringFunc(part, func(token string) string {
 			value := fields[token[1:]]

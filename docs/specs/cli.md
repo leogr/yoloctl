@@ -227,7 +227,10 @@ use the running controller. Host-only `audit rules import/list/remove/edit`
 manages native ordered files and Falco selection; one file is at most 2 MiB.
 Invalid changes preserve the prior selection; enabled accepted changes restart
 capture. Editor conflicts preserve the host text. Rules can be prepared while
-audit is disabled, without enabling it. Audit never starts a stopped space. Enable is
+audit is disabled, without enabling it. Space export/import preserves selected
+rule sources and selection but restores audit disabled. Custom events use fixed
+selected fields; imported output templates are not executed by yoloctl. Audit
+never starts a stopped space. Enable is
 explicit; viewing never installs tools. Old Firecracker images require explicit
 `space recreate NAME --update-vm-image`; audit never replaces media. Exports refuse overwrite and publish
 only completed privacy-filtered output. Pretty logs show the wrapped pinned rule

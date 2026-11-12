@@ -30,7 +30,9 @@ import (
 
 func newSpaceExportCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "export SPACE ARCHIVE.tar.gz", Short: "Back up declarations and native account state", Long: `Create a private, versioned tar.gz backup containing box/account declarations,
-account secrets, native agent files and declared managed chat data. Managed room
+account secrets, native agent files, selected audit rule sources/selection and
+ declared managed chat data. Audit tools/logs are excluded and restore stays disabled.
+Managed room
 credentials are regenerated on import. Host projects, global catalogs, VM images,
 container contents, ephemeral workdirs and sessions are excluded.
 Native sockets and profile-declared process artifacts are omitted; saved agent
@@ -50,6 +52,8 @@ func newSpaceImportCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "import SPACE ARCHIVE.tar.gz", Short: "Restore a backup into a new space", Long: `Validate a space archive, allocate a fresh native disk and restore declarations
 and account files. Managed chat data and desired membership are retained with
 new room identities and credentials; runtime application remains pending.
+Selected audit rule source/order/selection is retained, with auditing disabled;
+tools/logs are excluded and explicit audit enable revalidates the restored rules.
 SPACE must not exist and its name must use 1–16 ASCII characters.
 Choose the destination VM backend and current host's new-space Lima home;
 boxes stay stopped and their images are rebuilt/pulled on explicit box start.
@@ -355,7 +359,7 @@ func prepareImportedSpace(cmd *cobra.Command, name string, m spacearchive.Manife
 		}
 		boot.Mounts = append(boot.Mounts, mount)
 	}
-	seed.Settings.Audit = nil // Import never inherits audit enablement.
+	seed.Settings.Audit = seed.Settings.Audit.DisabledForImport() // Rule sources persist; enablement never does.
 	seed.Settings.Name = name
 	seed.Settings.DefaultWorkdir = workdir
 	imported, err := seed.Settings.Compose(boot)

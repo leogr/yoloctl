@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"os"
 	"runtime"
 	"strings"
 
@@ -143,6 +147,15 @@ func runControllerAuditRules(ctx context.Context, req controller.Request, input 
 	if !changed {
 		return json.NewEncoder(out).Encode(response)
 	}
+	published := false
+	defer func() {
+		if !published {
+			if err := (audit.RuleStore{Root: root}).Discard(prepared); err != nil {
+				slog.Warn("Audit rule attempt cleanup deferred", "err", err)
+			}
+		}
+	}()
+
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -157,6 +170,7 @@ func runControllerAuditRules(ctx context.Context, req controller.Request, input 
 	if err := controller.BeginScopedEffects(ctx, controller.EffectIntent{Scope: &controller.Scope{Writes: []controller.Resource{{Kind: controller.ResourceAudit}}}}); err != nil {
 		return err
 	}
+	published = true // cfg.Save may have committed even when publication reports an error.
 	if err := selectNativeAuditRules(ctx, req.ID, cfg, prepared); err != nil {
 		return err
 	}
@@ -164,6 +178,9 @@ func runControllerAuditRules(ctx context.Context, req controller.Request, input 
 	status, err := nativeAuditStatus(ctx)
 	if err != nil {
 		return err
+	}
+	if err := retireNativeAuditRuleGenerations(ctx, before.Rules.Generation, prepared.Generation); err != nil {
+		status.RuleCleanupWarning = err.Error()
 	}
 	response.Status = &status
 	return json.NewEncoder(out).Encode(response)
@@ -213,4 +230,43 @@ func describeAuditRuleValidation(validation audit.Validation, err error) error {
 	// Preserve the native diagnostic as ordinary escaped error text; no new
 	// feature diagnostic quota or storage path is introduced.
 	return fmt.Errorf("%w; Falco diagnostics: %s", err, audit.DiagnosticText(strings.TrimSpace(validation.Diagnostics)))
+}
+
+// Keep this operation's recovery input until a later admitted change, and
+// always protect the service reference even when it appears inactive. Cleanup
+// ends before completeBeforeUnlock records the existing receipt completion.
+func retireNativeAuditRuleGenerations(ctx context.Context, prior, selected string) error {
+	root, err := layout.AuditDir()
+	if err != nil {
+		return err
+	}
+	store := audit.RuleStore{Root: root}
+	keep := []string{prior, selected}
+	raw, err := safepath.ReadFile(root, "service.json", 4096)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err == nil {
+		var service audit.ServiceConfig
+		if err := decodeBoundedJSON(bytes.NewReader(raw), &service, 4096); err != nil {
+			return err
+		}
+		sum, err := hex.DecodeString(service.RulesSHA256)
+		if err != nil || len(sum) != 32 || service.Epoch == "" || service.Version == "" {
+			return errors.New("audit service reference is incomplete; retaining generations")
+		}
+		if service.RulesGeneration != "" {
+			set, err := store.Read(service.RulesGeneration)
+			if err != nil {
+				return err
+			}
+			if set.Fingerprint != service.EffectiveSHA256 {
+				return errors.New("service rule fingerprint differs from retained generation")
+			}
+			keep = append(keep, service.RulesGeneration)
+		} else if service.EffectiveSHA256 != "" {
+			return errors.New("service rule fingerprint has no generation")
+		}
+	}
+	return store.Retire(ctx, keep...)
 }

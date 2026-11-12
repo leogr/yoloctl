@@ -165,7 +165,8 @@ consent input. [20](#source-20)
 [FACT] Opt-in Falco runs as root VM infrastructure outside boxes. Audit control
 does not boot/recreate a VM or restart a box; failure is reported separately.
 The independent native disk retains audit state/logs through recreation, while
-space backup omits audit infrastructure and import starts disabled. [21](#source-21)
+space backup retains selected rule sources/selection, omits audit infrastructure,
+and import starts disabled. [21](#source-21)
 
 ## Sources
 

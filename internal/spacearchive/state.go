@@ -2,6 +2,7 @@ package spacearchive
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -79,7 +80,7 @@ func WriteState(ctx context.Context, w io.Writer, disk string, boot *spaceconfig
 		return err
 	}
 	// Audit tools/logs are infrastructure, and restored spaces start disabled.
-	b.Settings.Audit = nil
+	b.Settings.Audit = b.Settings.Audit.DisabledForImport()
 	raw, err := json.Marshal(b)
 	if err != nil {
 		return err
@@ -98,6 +99,9 @@ func WriteState(ctx context.Context, w io.Writer, disk string, boot *spaceconfig
 		return err
 	}
 	if err := writeChatState(ctx, tw, disk, boot, b.Chat); err != nil {
+		return err
+	}
+	if err := writeAuditRuleState(ctx, tw, disk, b.Settings.Audit); err != nil {
 		return err
 	}
 	return tw.Close()
@@ -305,7 +309,8 @@ func inspectState(ctx context.Context, r io.Reader, boot *spaceconfig.Bootstrap,
 			return nil, err
 		}
 	}
-	seen := map[string]byte{"accounts": tar.TypeDir, "chat": tar.TypeDir}
+	seen := map[string]byte{"accounts": tar.TypeDir, "chat": tar.TypeDir, "audit-rules": tar.TypeDir}
+	auditRules := auditArchiveReader{selected: b.Settings.Audit}
 	var total int64
 	for {
 		h, err = tr.Next()
@@ -315,7 +320,16 @@ func inspectState(ctx context.Context, r io.Reader, boot *spaceconfig.Bootstrap,
 		if err != nil {
 			return nil, err
 		}
+		data := io.Reader(tr)
 		validate := func() error {
+			if strings.HasPrefix(h.Name, "audit-rules/") {
+				raw, err := auditRules.consume(h, tr)
+				if err != nil {
+					return err
+				}
+				data = bytes.NewReader(raw)
+				return nil
+			}
 			if strings.HasPrefix(h.Name, "chat/") {
 				return validateChatEntry(h, room)
 			}
@@ -339,14 +353,17 @@ func inspectState(ctx context.Context, r io.Reader, boot *spaceconfig.Bootstrap,
 			return nil, errors.New("native archive inventory exceeds limit")
 		}
 		if extract != nil {
-			if err := extract(h, tr); err != nil {
+			if err := extract(h, data); err != nil {
 				return nil, err
 			}
 		} else {
-			if _, err := io.Copy(io.Discard, tr); err != nil {
+			if _, err := io.Copy(io.Discard, data); err != nil {
 				return nil, err
 			}
 		}
+	}
+	if err := auditRules.complete(); err != nil {
+		return nil, err
 	}
 	if err := zeroTail(r); err != nil {
 		return nil, err
@@ -389,6 +406,9 @@ func RestoreState(ctx context.Context, r io.Reader, disk string, boot *spaceconf
 		return err
 	}
 	if err := os.Mkdir(filepath.Join(stage, "chat"), 0700); err != nil {
+		return err
+	}
+	if err := os.Mkdir(filepath.Join(stage, "audit-rules"), 0700); err != nil {
 		return err
 	}
 	root, err := os.OpenRoot(stage)
@@ -480,6 +500,9 @@ func RestoreState(ctx context.Context, r io.Reader, disk string, boot *spaceconf
 	}
 	if state.Activated {
 		return errors.New("refusing to import into an activated space")
+	}
+	if err := restoreAuditRuleState(ctx, stage, disk, bundle.Settings.Audit); err != nil {
+		return err
 	}
 	if err := restoreChatState(ctx, stage, disk, boot, bundle.Chat); err != nil {
 		return err

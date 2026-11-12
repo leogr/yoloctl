@@ -146,20 +146,12 @@ func (store RuleStore) Read(generation string) (RuleSet, error) {
 	if err != nil {
 		return RuleSet{}, err
 	}
-	var set RuleSet
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&set); err != nil {
+	set, err := DecodeRuleSet(raw)
+	if err != nil {
 		return set, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return set, errors.New("trailing audit rule manifest data")
 	}
 	if set.Generation != generation {
 		return set, errors.New("audit rule generation mismatch")
-	}
-	if err := set.check(); err != nil {
-		return set, err
 	}
 	for _, file := range set.Files {
 		raw, err := safepath.ReadFile(dir, ruleFilePath(file), MaxRuleFile)
@@ -406,4 +398,38 @@ func ruleConfiguration(dir, tools, metadata string, set RuleSet) ([]byte, error)
 	config["rules"] = []any{}
 	config["config_files"] = []any{map[string]string{"path": filepath.Join(dir, "selection.yaml"), "strategy": "override"}}
 	return json.MarshalIndent(config, "", "  ")
+}
+
+// DecodeRuleSet checks only storage framing/integrity, never rule semantics.
+// Archive import uses it before any native publication and remains disabled.
+func DecodeRuleSet(raw []byte) (RuleSet, error) {
+	var set RuleSet
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&set); err != nil {
+		return set, err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return set, errors.New("trailing audit rule manifest data")
+	}
+	if _, err := layout.AuditRulesGeneration("/", set.Generation); err != nil {
+		return set, err
+	}
+	return set, set.check()
+}
+
+// FileBytes is a verified read from a previously read immutable set. Display
+// names never participate in paths, and callers cannot supply a digest path.
+func (store RuleStore) FileBytes(set RuleSet, file RuleFile) ([]byte, error) {
+	if !validDigest(file.SHA256) {
+		return nil, errors.New("invalid audit rule file digest")
+	}
+	raw, err := store.file(set, file)
+	if err != nil {
+		return nil, err
+	}
+	if Digest(raw) != file.SHA256 {
+		return nil, errors.New("audit rule file checksum mismatch")
+	}
+	return raw, nil
 }

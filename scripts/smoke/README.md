@@ -879,3 +879,76 @@ restart on a toggle. Do not infer driver support from rule validation, BTF
 section inspection or a simulated backend. Repeat the Lima checks against
 this final candidate. Audit logs/tools are omitted from ordinary space backup;
 an import must have auditing disabled.
+
+### Managed Falco rule-source qualification
+
+Use the same authorized disposable fixture and explicit fixture home above.
+These are runtime checks to run separately from dry-run/unit qualification,
+on native Linux and Lima; an unavailable backend is unsupported, not a PASS.
+Do not use the active team space. Start with audit disabled and a running
+ordinary confined fixture box named `rulebox` in `rules-smoke`.
+
+Prepare `a.yaml` and `b.yaml` under the owned `SMOKE_ROOT`:
+
+```yaml
+# a.yaml
+- macro: fixture_custom_command
+  condition: yolo_runtime_descendant and evt.type = execve and proc.name = cat
+```
+
+```yaml
+# b.yaml
+- rule: Custom controlled cat
+  desc: Benign disposable rule-management control
+  condition: fixture_custom_command
+  output: "custom process=%proc.exepath container=%container.id box=%yolo.box metadata=%yolo.metadata_available"
+  priority: NOTICE
+```
+
+```sh
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl audit rules list --space rules-smoke --json
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl audit rules import "$SMOKE_ROOT/a.yaml" --space rules-smoke
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl audit rules import "$SMOKE_ROOT/b.yaml" --space rules-smoke
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl audit status --space rules-smoke --json
+```
+
+Confirm built-in/A/B order, basename/SHA/date and that disabled preparation has
+not enabled capture. Duplicate A is a no-op; removing A while B depends on it
+must fail with Falco diagnostics and retain desired state. A malformed condition
+must likewise leave selection, enablement and loaded epoch unchanged.
+
+```sh
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl audit enable --space rules-smoke
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl box exec rulebox --space rules-smoke -- cat /etc/hostname
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl audit logs --space rules-smoke --json
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl audit rules edit --space rules-smoke
+```
+
+Require matching loaded modern-eBPF health and the custom event with only
+selected fields, not the imported raw message/argv/environment. In the editor
+use `rules: [{disable: {rule: 'Custom controlled cat'}}]`; repeat the command
+and check a fresh time interval for no new matching event. Re-enable through
+native selection syntax and confirm events return. Open the editor again: help
+appears once. While an editor waits, change rules from another terminal; its
+old save must refuse and retain the local edited text. Exercise same-basename
+imports and SHA-prefix removal. Valid removal restarts the enabled collector;
+a rejected dependency removal must not stop it. Existing drop/gap counters
+remain part of interpreting observations.
+
+Stop/start and explicitly recreate this disposable space with the same build;
+verify rule bytes/order/selection and enablement persist. Repeat a compatible
+explicit controller update. Incompatible retained-rule behavior is fail-closed,
+with no built-in-only substitution; source/fake coverage is not a live upgrade
+claim. Then export/import using new owned names/paths:
+
+```sh
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl space export rules-smoke "$SMOKE_ROOT/rules.tar.gz" --stop
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl space import rules-copy "$SMOKE_ROOT/rules.tar.gz"
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl audit rules list --space rules-copy --json
+YOLOCTL_HOME="$SMOKE_ROOT/home" yoloctl audit status --space rules-copy --json
+```
+
+Require identical imported source hashes/dates/order/selection and audit off.
+Explicit enable must validate before capture. Record backend/architecture/build,
+actual diagnostics/events/counters, tested lifecycle cases and any unrun cases;
+keep existing-source/fake, native dry-run and live event proof distinct.

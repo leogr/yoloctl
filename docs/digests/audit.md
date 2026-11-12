@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `2cb8f6e9efb3fccaea3f4c48cd2812dbac21f21d` and accompanying changes.
+Verification: `46da38583fa61bae0ff7138f03b557872d027e9e` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs`, `export` and
@@ -16,8 +16,8 @@ startup; no BPF/image capability probe or service start is required.
 settings. Tools/config/logs live in the root-only `audit` directory on the
 independent data disk, separate from account leaves and box binds. Runtime
 health lives under the controller's volatile run root. Native data survives
-space recreation; space backup omits audit logs/tools and audit enablement,
-and import clears enablement. [4](#source-4) [5](#source-5) [6](#source-6)
+space recreation; space backup retains selected rule source/order/selection while omitting
+audit logs/tools and enablement; import remains disabled. [4](#source-4) [5](#source-5) [6](#source-6)
 
 [FACT] Explicit enable downloads the architecture-specific official Falco
 0.45.2 tarball into an owned host cache, checks its fixed size/SHA256, and
@@ -74,7 +74,8 @@ qualification. [12](#source-12) [15](#source-15) [17](#source-17)
 [18](#source-18) [23](#source-23)
 
 [FACT] The collector persists bounded, selected process/user/container/path/result
-fields and a rendering of the pinned rule template. Arbitrary raw output,
+fields and a rendering of the pinned rule template (fixed selected fields for
+unknown rule names). Arbitrary raw output,
 argv, environment and buffers remain excluded. Unknown metadata stays unavailable;
 [output and follow contracts](audit-output.md) define JSON, pretty/TUI display,
 shared colour/levels, consecutive-repeat summaries, bounded first-owner details
@@ -107,7 +108,7 @@ health is bound to the selected generation. [24](#source-24)
 3. <a id="source-3"></a> [Read-only view](../../internal/auditui/view.go#L1) — `Model`, bounded requests, filters, pause and details.
 4. <a id="source-4"></a> [Native settings](../../internal/spaceconfig/native.go#L1) — `loadNative`, `saveNative`.
 5. <a id="source-5"></a> [Private paths](../../internal/layout/audit.go#L1) — native disk, run root and host cache selection.
-6. <a id="source-6"></a> [Archive selection](../../internal/spacearchive/state.go#L74) — `WriteState` excludes audit infrastructure/enablement.
+6. <a id="source-6"></a> [Archive selection](../../internal/spacearchive/state.go#L74) — `WriteState` includes selected rule sources, excluding infrastructure/enablement.
 7. <a id="source-7"></a> [Pinned artifacts](../../internal/audit/artifacts.go#L1) — `Pinned`, `Fetch`, `Install`, `VerifyInstalled`.
 8. <a id="source-8"></a> [Falco 0.45.2 release](https://github.com/falcosecurity/falco/releases/tag/0.45.2) — official architecture tarballs.
 9. <a id="source-9"></a> [Guest service adapter](../../internal/vmservice/service.go#L58) — `Start`, `StopAcknowledged`.

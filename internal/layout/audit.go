@@ -17,8 +17,11 @@ func AuditDir() (string, error) {
 	if c == nil {
 		return "", errors.New("audit storage requires a native controller")
 	}
-	return filepath.Join(c.DiskMount, "audit"), nil
+	return AuditDiskDir(c.DiskMount), nil
 }
+
+// AuditDiskDir also serves explicit offline archive operations on a verified disk.
+func AuditDiskDir(disk string) string { return filepath.Join(disk, "audit") }
 
 func AuditRunDir() string { return filepath.Join(spaceenv.RunRoot, "audit") }
 
