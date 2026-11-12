@@ -1756,6 +1756,12 @@ func effectiveFeatureNames(boxFeatures []string, agent string) []string {
 	return out
 }
 
+func noticeEphemeralWorkdir(cfg *agentbox.Config) {
+	if cfg.Workdir.Mode == agentbox.WorkdirModeEphemeral {
+		cliNotice(logging.Box, "box %s is --workdir-mode ephemeral; /workdir is VM-local at %s and `box destroy` will wipe it. Use --workdir PATH if the work isn't throwaway.", cfg.Name, cfg.Workdir.Source)
+	}
+}
+
 // createAgentbox launches an agentbox container per the supplied
 // options by building an agentbox.Config from the flags, saving it
 // to ~/.config/yoloctl/spaces/<space>/boxes/<name>.yaml, and routing
@@ -1784,14 +1790,6 @@ func createAgentbox(ctx context.Context, opts agentboxCreateOptions, notice io.W
 		return err
 	}
 
-	if opts.workdir.Mode == agentbox.WorkdirModeEphemeral {
-		// Ephemeral /workdir is VM-local. `box destroy` wipes it
-		// (no host copy); see the symmetric guard in
-		// newAgentboxDestroyCmd. Print a one-time notice so users don't
-		// discover this after losing work.
-		cliNotice(logging.Box, "box %s is --workdir-mode ephemeral; /workdir is VM-local at %s and `box destroy` will wipe it. Use --workdir PATH if the work isn't throwaway.", opts.Name, opts.workdir.Source)
-	}
-
 	// Resolve opts into the desired Config (policy, credentials, devcontainer
 	// forwards, template seeding and agent-state normalization).
 	cfg, stateMount, err := buildAgentboxConfig(ctx, opts)
@@ -1806,6 +1804,7 @@ func createAgentbox(ctx context.Context, opts agentboxCreateOptions, notice io.W
 				return err
 			}
 		}
+		noticeEphemeralWorkdir(cfg)
 		if err := persistBoxManifestWithAccount(cfg); err != nil {
 			return err
 		}
@@ -1824,6 +1823,9 @@ func createAgentbox(ctx context.Context, opts agentboxCreateOptions, notice io.W
 	if err := preflightAgentboxRuntime(ctx, c, cfg, false); err != nil {
 		return err
 	}
+
+	// Warming may unwind and re-enter create; only announce after it succeeds.
+	noticeEphemeralWorkdir(cfg)
 
 	// Persist under the account lock; the space guard covers runtime setup.
 	if err := persistBoxManifestWithAccount(cfg); err != nil {

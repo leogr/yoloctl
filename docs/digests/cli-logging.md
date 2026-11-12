@@ -1,6 +1,6 @@
 # CLI log routing and outcomes
 
-Verification: `3b9ae32812f449bb5d5f3f992e7820a6d6a778b2` and accompanying changes.
+Verification: `d0f086be331757cd4700188ce48a56d78c14ce89` and accompanying changes.
 
 [FACT] CLI warnings, notices and mutation-result prose use the process
 `internal/logging` Logger; worker processes send records and the host renders
@@ -10,6 +10,10 @@ Human account, copy, reconcile, mount and storage-result prose therefore goes
 to stderr. List/show tables, JSON, dry-run plans and generated instructions
 retain their data writers. Dry-run policy/image warnings are separate log
 records, including their continuation text. [1](#source-1) [2](#source-2)
+
+[FACT] Create emits the ephemeral-workdir notice after image warming and
+operation admission, including manifest-only admission. Preparation re-entry
+does not repeat it. [10](#source-10)
 
 [FACT] A routed mutation reports its final outcome only after its controller
 call returns, including receipt finalization. Intermediate worker prose is not
@@ -64,3 +68,5 @@ BuildKit run or native terminal. [4](#source-4)
 8. <a id="source-8"></a> [Authority warnings](../../cmd/yoloctl/privileged_operator.go#L65) — `guardPrivilegedLaunch`, `warnBoxAuthority`; controller_operator.go `warnBoxOperator`; CLI regression `TestCLIPrivilegedAuthoritySurvivesMessageCap`.
 
 9. <a id="source-9"></a> [Launcher capture](../../internal/lima/diagnostics.go#L213) — `WithProgress`, `runWithProgress`; lima.go lifecycle callers; diagnostics_test.go progress and daemon-FD fixtures.
+
+10. <a id="source-10"></a> [Ephemeral notice](../../cmd/yoloctl/agentbox.go#L1759) — `noticeEphemeralWorkdir`, `createAgentbox`; ephemeral_notice_test.go two-pass warm/admission regression.
