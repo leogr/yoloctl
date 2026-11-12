@@ -20,6 +20,7 @@ import (
 // code span stays in its table cell, --- draws a rule, list lines record
 // their item geometry). There is deliberately no regeneration switch: a
 // refactor must match it, and only an intended rendering change updates it.
+// STEP1 wide-table fallback intentionally updates only narrow table layouts.
 func TestMarkdownFrozenParity(t *testing.T) {
 	got := markdownParityBytes(t)
 	want, err := os.ReadFile("testdata/markdown-parity.json")
@@ -51,6 +52,12 @@ func markdownParityValue(v reflect.Value) any {
 	case reflect.Struct:
 		out := map[string]any{}
 		for i := range v.NumField() {
+			// Newly added refusal flags have no observable effect when false; retain
+			// the old snapshot shape for all unaffected Markdown cases.
+			name := v.Type().Field(i).Name
+			if (name == "Unpadded" || name == "TableLimit") && v.Field(i).IsZero() {
+				continue
+			}
 			out[strings.ToLower(v.Type().Field(i).Name)] = markdownParityValue(v.Field(i))
 		}
 		return out

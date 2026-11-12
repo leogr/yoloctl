@@ -1,6 +1,6 @@
 # Shared Markdown renderer
 
-Verification: `3bae6dd1d6ffa1356f7678850584fe6d9cf0fac8` and accompanying changes.
+Verification: `3bae6dd1d6ffa1356f7678850584fe6d9cf0fac8` and accompanying changes; table fallback re-read at `30465c54600a95835e23b2d554ea0325dcb27af3` and accompanying changes.
 
 [FACT] `internal/markdownview` owns the existing Markdown subset's pure parser,
 lexer, logical lines, layout, source maps and copy/hit geometry. `Parse` takes
@@ -32,6 +32,17 @@ the text; table delimiters win. `<http(s)://…>` shows without brackets as a
 URL intent that decorators never re-style. Padding, gutters and rules are
 never copied; source maps drop the brackets as markup.
 [2](#source-2) [5](#source-5) [14](#source-14)
+
+[FACT] Fitting tables keep alignment. Squeezed columns allocated
+under 16 cells use labelled records instead. Rejected padding keeps bounded
+unpadded logical cells; neither natural fit nor the final text route rebuilds
+padding beyond `2*source+4096` bytes. Labelled output counts repeated headers,
+notices, indentation and blank rows before emission. If it
+cannot fit, a limit notice precedes bounded text; over 32 columns/512 records
+keeps the existing literal route with a notice. Notices/labels are decorations;
+copy keeps logical cell ranges, Quote keeps TAB-separated cells and source mode
+is unchanged. The notice anchors to the first visible value, not a hidden
+header. Matched-mode tests do not establish native terminal parity. [15](#source-15)
 
 [FACT] Ordinary `Parse` omits per-byte source maps. `MapSource` explicitly
 requests `LineSource` mappings into sanitized source, including dropped markup
@@ -80,3 +91,5 @@ component parity, not native terminal, live-room or future file-view behavior.
 12. <a id="source-12"></a> [Frozen chat parity](../../internal/chatui/markdown_parity_test.go#L1) — `TestMarkdownFrozenParity`, testdata/markdown-parity.json; no regeneration path.
 13. <a id="source-13"></a> [Plain-consumer regressions](../../internal/markdownview/document_test.go#L15) — generic render/layout, explicit maps, replacement copy/refusal and limit metadata; highlight_test.go retains the lexer corpus.
 14. <a id="source-14"></a> [Subset additions](../../internal/markdownview/improvements_test.go#L64-L320) — list alignment/wrapping/coverage, rule, autolinks, headings, separators against a naive reference; code in body.go `parseLines` (L108), `HeadingColor`, `listRanges` (L435), `tableSeparators` (L903) and inline.go `autolinkEnd` (L152), `listItem`, `alignOrdered` (L229-L300).
+
+15. <a id="source-15"></a> [Counted table fallbacks](../../internal/markdownview/table_fallback.go#L10) — `TableFitReason`, `labelledTable`; body.go `TableLines`, `FitTableLayout`, `bodyRows`; table_fallback_test.go covers cutoffs, budgets, source/Quote and matched-mode screenshot-derived rendering.

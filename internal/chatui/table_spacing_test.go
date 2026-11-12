@@ -137,7 +137,11 @@ func TestTableSpacingKeepsEveryLayout(t *testing.T) {
 			t.Fatalf("width %d: spacing changed the table's rows", width)
 		}
 		last := len(got) - 1 - len(bodyRows(ansi.WcWidth, lines[4:], width, theme))
-		if len(at) != 2 || got[at[0]-1].Line != 0 || got[at[0]+1].Line != 1 || at[1] != last || got[at[1]].Line != 4 {
+		firstLine := 1
+		if len(at) > 0 && got[at[0]+1].Decor {
+			firstLine = 3
+		} // labelled notice anchors to the first visible value
+		if len(at) != 2 || got[at[0]-1].Line != 0 || got[at[0]+1].Line != firstLine || at[1] != last || got[at[1]].Line != 4 {
 			t.Fatalf("width %d: spacers at %v (outro starts after row %d): %+v", width, at, last, got)
 		}
 	}
@@ -296,9 +300,11 @@ func TestTableSpacingStaysWithinTheRowLimit(t *testing.T) {
 		name, text string
 		last       func(bodyRow) bool
 	}{
-		// k prose rows, the spacer before, three table rows: the spacer
-		// after is the row at the limit.
-		{"spacer after at the limit", prose(maxBodyRows-5) + spacedTable + "\noutro", spacer},
+		// The table cannot reserve its trailing spacer: the new refusal notice
+		// consumes a row, bounded text reaches the limit, then the global notice.
+		{"table fallback at the limit", prose(maxBodyRows-5) + spacedTable + "\noutro", func(r bodyRow) bool {
+			return !r.Decor && strings.Join(strings.Fields(ansiText(r.Runs)), " ") == "1 │ 2"
+		}},
 		{"spacer before at the limit", prose(maxBodyRows-1) + spacedTable + "\noutro", spacer},
 		{"table near the limit", prose(maxBodyRows-3) + spacedTable + "\noutro", nil},
 		{"fence frame at the limit", prose(maxBodyRows-1) + "```\ncode\n```", func(r bodyRow) bool { return r.Decor }},

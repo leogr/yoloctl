@@ -382,3 +382,32 @@ func TestClearingMidDragEndsTheGesture(t *testing.T) {
 		})
 	}
 }
+
+func TestLabelledTableDragCopiesCellWithoutLabels(t *testing.T) {
+	m, _ := fileModel(t, "| Name | Detail |\n|---|---|\n|alpha|"+strings.Repeat("detail ", 15)+"|", Markdown)
+	_, cmd := m.Update(tea.WindowSizeMsg{Width: 23, Height: 60})
+	applyWork(t, m, cmd)
+	m.top, m.following = 0, false
+	var copied string
+	m.opts.Copy = func(s string) tea.Cmd { copied = s; return nil }
+	row := -1
+	for y, s := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+		if strings.Contains(s, "Name: alpha") {
+			row = y
+			break
+		}
+	}
+	if row < 0 {
+		t.Fatal("missing labelled cell", ansi.Strip(m.View().Content))
+	}
+	for _, msg := range []tea.Msg{
+		tea.MouseClickMsg(tea.Mouse{X: 6, Y: row, Button: tea.MouseLeft}),
+		tea.MouseMotionMsg(tea.Mouse{X: 11, Y: row, Button: tea.MouseLeft}),
+		tea.MouseReleaseMsg(tea.Mouse{X: 11, Y: row, Button: tea.MouseLeft}),
+	} {
+		m.Update(msg)
+	}
+	if copied != "alpha" {
+		t.Fatalf("labelled drag copied %q", copied)
+	}
+}

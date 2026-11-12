@@ -149,8 +149,11 @@ func TestTablesAreBoundedBeforePadding(t *testing.T) {
 		var shown int
 		for _, dl := range displayLines(ansi.WcWidth, skewed, false, theme, "") {
 			shown += len(dl.Text)
-			if strings.Contains(dl.Text, "│") {
-				t.Fatalf("an over-budget table of %d rows must stay literal", n)
+			if n > maxTableRows && dl.Table != nil {
+				t.Fatal("row limit bypassed")
+			}
+			if n <= maxTableRows && dl.Table != nil && !dl.Table.Unpadded {
+				t.Fatal("rejected padding rebuilt")
 			}
 		}
 		if shown > 2*len(skewed)+tableSlack {
@@ -246,8 +249,8 @@ func TestOverBoundTablesAreScannedOnce(t *testing.T) {
 	// delimiter-like rows must not become a second table.
 	skewed := "| " + strings.Repeat("x", 64<<10) + " | b |\n|---|---|\n" + strings.Repeat("|-|-|\n", maxTableRows)
 	for _, dl := range displayLines(ansi.WcWidth, skewed, false, theme, "") {
-		if strings.Contains(dl.Text, "│") || strings.Contains(dl.Text, "┼") {
-			t.Fatalf("rows of a refused table rendered as a table: %q", dl.Text)
+		if dl.Table != nil && !dl.Table.Unpadded {
+			t.Fatal("rejected padding rebuilt")
 		}
 	}
 	// A valid table right after a rejected span still renders.

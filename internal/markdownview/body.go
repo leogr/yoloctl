@@ -42,16 +42,18 @@ type DisplayLine struct {
 	List ListItem
 	// Rule is a horizontal rule (a Decor line without text): bodyRows draws
 	// a thin line across the text width.
-	Rule bool
+	Rule       bool
+	TableLimit bool // rejected structural table: explain before literal text
 }
 
 // TableInfo is shared by the display lines of one rendered table: what
 // bodyRows needs to fit its columns to the view.
 type TableInfo struct {
-	Align   []byte
-	Natural []int // widest cell per column: the aligned layout
-	Floor   []int // narrowest a wrapped column may get
-	Source  int   // source bytes, for the wrapped layout's budget
+	Align    []byte
+	Natural  []int // widest cell per column: the aligned layout
+	Floor    []int // narrowest a wrapped column may get
+	Source   int   // source bytes, for the wrapped layout's budget
+	Unpadded bool  // aligned representation exceeded the same byte budget
 	// spaceBefore and spaceAfter ask bodyRows for an empty row between the
 	// table and a neighbouring source line that is not blank. They are
 	// display rows only: no logical line, source map or copied byte.
@@ -117,6 +119,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 	literal := 0 // lines of a rejected table: shown as text, never re-detected
 	for idx := 0; idx < len(lines); at, idx = at+len(lines[idx])+1, idx+1 {
 		line := lines[idx]
+		tableLimit := false
 		// A fence opener always wins over a table, even with pipes in it.
 		if !source && fence == "" && idx >= literal && FenceMarker(strings.TrimLeft(line, " ")) == "" {
 			table, n := TableLines(wm, lines[idx:], theme, decorate)
@@ -140,10 +143,11 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 				continue
 			}
 			literal = idx + n
+			tableLimit = n > 0
 		}
 		st := spaceview.Style{FG: theme.Text}
 		trim := strings.TrimLeft(line, " ")
-		dl := DisplayLine{}
+		dl := DisplayLine{TableLimit: tableLimit}
 		ls := LineSource{Start: at, End: at + len(line)}
 		var lead *SourceMap // line → lines[idx], when mapping
 		if srcs != nil {
@@ -329,6 +333,12 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 	}
 	for n, dl := range lines {
 		tbl := dl.Table
+		if dl.TableLimit {
+			rows = append(rows, tableNotice(wm, n, width, theme, "Table over the display limit; showing its text."))
+			if len(rows) >= rowLimit {
+				return limit(n, 0)
+			}
+		}
 		if tbl != nil && (n == 0 || lines[n-1].Table != tbl) {
 			if tbl.SpaceBefore {
 				rows = append(rows, BodyRow{Line: n, Decor: true})
@@ -340,9 +350,20 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 			if tbl.SpaceAfter {
 				after = 1 // the spacer after the table needs a row too
 			}
-			fitted, first = FitTable(wm, lines[n:], n, width, rowLimit-len(rows)-after, theme), n
+			var reason TableFitReason
+			fitted, reason = FitTableLayout(wm, lines[n:], n, width, rowLimit-len(rows)-after, theme)
+			first = n
+			if reason != TableFits && reason != TableLaidOut {
+				fitted = labelledTable(wm, lines[n:], n, width, rowLimit-len(rows)-after, theme, reason)
+				if fitted == nil {
+					rows = append(rows, tableNotice(wm, n, width, theme, "Table over the display limit; showing its text."))
+					if len(rows) >= rowLimit {
+						return limit(n, 0)
+					}
+				}
+			}
 			rowRule = nil
-			if n+1 < len(lines) && lines[n+1].Table == tbl && lines[n+1].Decor {
+			if (reason == TableFits || reason == TableLaidOut) && n+1 < len(lines) && lines[n+1].Table == tbl && lines[n+1].Decor {
 				rule := lines[n+1].Text
 				if fitted != nil {
 					rule = fitted[1][0].Runs[0].Text
@@ -599,10 +620,20 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 			total += len(cl.text) + widths[c] - wm.StringWidth(cl.text)
 		}
 	}
-	if total > 2*source+TableSlack {
-		return nil, n
+	unpadded := total > 2*source+TableSlack
+	if unpadded {
+		logical := len("─┼─") * (len(widths) - 1)
+		for _, cells := range shown {
+			logical += sep
+			for _, cl := range cells {
+				logical += len(cl.text)
+			}
+		}
+		if logical > 2*source+TableSlack {
+			return nil, n
+		}
 	}
-	tbl := &TableInfo{Align: align, Natural: widths, Floor: make([]int, len(widths)), Source: source}
+	tbl := &TableInfo{Align: align, Natural: widths, Floor: make([]int, len(widths)), Source: source, Unpadded: unpadded}
 	for c, w := range widths {
 		// A wrapped column keeps a few cells, and always its widest
 		// grapheme, which cannot break.
@@ -629,6 +660,9 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 				add(" │ ", Span{End: len(" │ "), Style: frame})
 			}
 			gap := widths[c] - wm.StringWidth(cl.text)
+			if unpadded {
+				gap = 0
+			}
 			left := 0
 			switch align[c] {
 			case 'r':
@@ -667,7 +701,9 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 		if r == 0 {
 			parts := make([]string, len(widths))
 			for c, w := range widths {
-				parts[c] = strings.Repeat("─", w)
+				if !unpadded {
+					parts[c] = strings.Repeat("─", w)
+				}
 			}
 			rule := strings.Join(parts, "─┼─")
 			out = append(out, DisplayLine{Text: rule, Decor: true, Pieces: []Piece{{End: len(rule), Style: frame}}, Table: tbl})
@@ -676,17 +712,17 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 	return out, n
 }
 
-// fitTable lays out the table whose display lines start lines when its
+// FitTableLayout lays out the table whose display lines start lines when its
 // aligned rows are wider than width: the columns share the view (waterFill)
 // and each cell wraps inside its column, so separators stay in place and the
 // rule matches. first is the index of lines[0] in the message. It returns
-// the rows of each of the table's lines, or nil to render the table as text
-// as before: when it fits, when its columns' floors do not, or when the
+// the rows of each table line and a reason. Natural fit remains unchanged;
+// squeezed columns below 16 cells request labelled output. Refusal also occurs when the
 // layout would exceed the table's budget (twice its source plus tableSlack
 // bytes) or the rows left. Everything is counted before a row is built. A
 // row's fragments keep their exact bytes, hanging spaces included, so copy,
 // selection and the reading position all see the same logical line.
-func FitTable(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft int, theme spaceview.Theme) [][]BodyRow {
+func FitTableLayout(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft int, theme spaceview.Theme) ([][]BodyRow, TableFitReason) {
 	tbl := lines[0].Table
 	k := 1
 	for k < len(lines) && lines[k].Table == tbl {
@@ -699,12 +735,20 @@ func FitTable(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft int, t
 	for _, w := range tbl.Natural {
 		natural += w
 	}
-	if natural <= avail {
-		return nil
+	if natural <= avail && !tbl.Unpadded {
+		if len(lines)+max(len(lines)-3, 0) >= rowsLeft {
+			return nil, TableNoRows
+		}
+		return nil, TableFits
 	}
 	alloc, ok := WaterFill(tbl.Natural, tbl.Floor, avail)
 	if !ok {
-		return nil
+		return nil, TableTooNarrow
+	}
+	for c, w := range alloc {
+		if w < tbl.Natural[c] && w < 16 {
+			return nil, TableTooNarrow
+		}
 	}
 	budget := 2*tbl.Source + TableSlack
 	used := len("─┼─") * (cols - 1)
@@ -741,18 +785,18 @@ func FitTable(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft int, t
 					e := DrawnEnd(wm, dl.Text, f, alloc[c])
 					shown := wm.StringWidth(dl.Text[f[0]:e])
 					if shown > alloc[c] {
-						return nil // never left to paint's truncation
+						return nil, TableTooNarrow // never left to paint's truncation
 					}
 					left, right := CellGaps(tbl.Align[c], alloc[c]-shown, c == cols-1)
 					used += e - f[0] + left + right
 				}
 				if used > budget {
-					return nil
+					return nil, TableOverBudget
 				}
 			}
 		}
 		if visual += heights[i]; visual >= rowsLeft {
-			return nil
+			return nil, TableNoRows
 		}
 	}
 
@@ -802,7 +846,7 @@ func FitTable(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft int, t
 			out[i] = append(out[i], row)
 		}
 	}
-	return out
+	return out, TableLaidOut
 }
 
 // waterFill divides avail cells among columns of the given natural widths

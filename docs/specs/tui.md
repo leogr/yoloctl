@@ -112,6 +112,10 @@ convention rather than non-reclaimable memory, and name the cap, pool or VM
 scale of their bar. Memory comes only from a current sample; a stopped,
 failed or stale reading shows its reason instead. [27](#source-27)
 
+[FACT] Wide Markdown tables use readable wrapped columns or labelled rows;
+a counted limit notice replaces an unexplainable rendering failure. Existing
+source/copy/Quote behavior and rendering limits remain. [43](#source-43)
+
 [FACT] Markdown parsing, layout, copy geometry and optional source maps live in
 `internal/markdownview`; chat retains identities, previews, model state and
 effects. The extraction preserved the existing syntax and bounds; the subset

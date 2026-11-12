@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/leogr/yoloctl/internal/tui/spaceview"
 )
 
 // stripped drops the table metadata from lines: what bodyRows rendered
@@ -143,7 +144,7 @@ func TestNarrowTablesWrapCellsInTheirColumns(t *testing.T) {
 		"| short | " + strings.Repeat("several words of detail ", 6) + "| ✓ |\n" +
 		"| a much longer item name |  | x |\n" +
 		"|  | one |  |"
-	for _, width := range []int{24, 31, 40, 57} {
+	for _, width := range []int{42, 48, 57} {
 		lines, rows := tableView(text, width)
 		checkWrappedTable(t, lines, rows, width)
 		for _, row := range rows {
@@ -163,7 +164,7 @@ func TestNarrowTablesWrapCellsInTheirColumns(t *testing.T) {
 func TestWrappedCellsKeepAlignment(t *testing.T) {
 	words := strings.Repeat("ab cdef g ", 5)
 	text := "| L | C | R |\n|:---|:---:|---:|\n| " + words + "| " + words + "| " + words + "|"
-	const width = 34
+	const width = 54
 	lines, rows := tableView(text, width)
 	checkWrappedTable(t, lines, rows, width)
 	var rule string
@@ -222,7 +223,7 @@ func TestWrappedCellsKeepAlignment(t *testing.T) {
 func TestWrappedCellsKeepGraphemesWhole(t *testing.T) {
 	text := "| 名前 | 内容 |\n|---|---|\n" +
 		"| 界界界界界界界界 éé | 👩‍💻👩‍💻 漢字かな交じり文 https://example.com/" + strings.Repeat("p", 60) + " |"
-	for _, width := range []int{15, 22, 30} {
+	for _, width := range []int{40, 48, 60} {
 		lines, rows := tableView(text, width)
 		checkWrappedTable(t, lines, rows, width)
 	}
@@ -290,15 +291,25 @@ func TestWaterFill(t *testing.T) {
 	}
 }
 
-// When even the columns' floors cannot fit, the table wraps as prose, as
-// before; no width panics.
-func TestTablesTooNarrowForTheirFloorsWrapAsProse(t *testing.T) {
+// A table below the readability/floor cutoff explains its fallback; every
+// width remains paintable and the original logical rows remain unchanged.
+func TestTablesTooNarrowForTheirFloorsExplainFallback(t *testing.T) {
 	text := "|" + strings.Repeat(" abcdef |", 12) + "\n|" + strings.Repeat("---|", 12) + "\n|" + strings.Repeat(" xyzzy plugh |", 12)
 	theme := New(Options{}).theme
 	lines := displayLines(ansi.WcWidth, text, false, theme, "")
+	original := lines[2].CopyText(0, len(lines[2].Text))
 	for width := 1; width <= 60; width++ {
-		if got, want := bodyRows(ansi.WcWidth, lines, width, theme), bodyRows(ansi.WcWidth, stripped(lines), width, theme); !reflect.DeepEqual(got, want) {
-			t.Fatalf("width %d: a table too narrow for its floors must wrap as prose", width)
+		rows := bodyRows(ansi.WcWidth, lines, width, theme)
+		if len(rows) == 0 || !rows[0].Decor {
+			t.Fatalf("width%d lacks a fallback notice", width)
+		}
+		for _, r := range rows {
+			if got := ansi.WcWidth.StringWidth(paint(ansi.WcWidth, r.Runs, width, 0, nil, spaceview.Style{})); got != width {
+				t.Fatalf("painted width%d want%d", got, width)
+			}
+		}
+		if lines[2].CopyText(0, len(lines[2].Text)) != original {
+			t.Fatal("logical copy changed")
 		}
 	}
 }
@@ -550,9 +561,9 @@ func TestWrappedTablesAreBounded(t *testing.T) {
 	header := "| h |" + strings.Repeat(" wxyz |", 7) + "\n|" + strings.Repeat("---|", 8) + "\n"
 	theme := New(Options{}).theme
 	small := displayLines(ansi.WcWidth, header+row(2), false, theme, "")
-	if fitted := fitTable(ansi.WcWidth, small, 0, 60, maxBodyRows, theme); fitted == nil {
+	if fitted := fitTable(ansi.WcWidth, small, 0, 100, maxBodyRows, theme); fitted == nil {
 		t.Fatal("a small skewed table within its budget must wrap in place")
-	} else if fitTable(ansi.WcWidth, small, 0, 60, 3, theme) != nil {
+	} else if fitTable(ansi.WcWidth, small, 0, 100, 3, theme) != nil {
 		t.Fatal("a table needing more rows than are left must wrap as prose")
 	}
 	large := displayLines(ansi.WcWidth, header+row(40), false, theme, "")
@@ -562,15 +573,19 @@ func TestWrappedTablesAreBounded(t *testing.T) {
 	if fitTable(ansi.WcWidth, large, 0, 60, maxBodyRows, theme) != nil {
 		t.Fatal("a wrapped layout over its byte budget must wrap as prose")
 	}
-	plain := stripped(large)
-	if got, want := bodyRows(ansi.WcWidth, large, 60, theme), bodyRows(ansi.WcWidth, plain, 60, theme); !reflect.DeepEqual(got, want) {
-		t.Fatal("the refused table must render exactly as prose")
+	got := bodyRows(ansi.WcWidth, large, 60, theme)
+	if len(got) == 0 || !got[0].Decor {
+		t.Fatal("refused table must explain its fallback")
+	}
+	if len(large[2].Cells) != 8 {
+		t.Fatal("bounded fallback lost logical cells")
 	}
 	cells := 0
 	for _, dl := range large {
 		cells += len(dl.Cells)
 	}
 	refused := testing.AllocsPerRun(5, func() { bodyRows(ansi.WcWidth, large, 60, theme) })
+	plain := stripped(large)
 	prose := testing.AllocsPerRun(5, func() { bodyRows(ansi.WcWidth, plain, 60, theme) })
 	if refused > prose+float64(8*cells+64) {
 		t.Fatalf("refusing the layout cost %.0f allocations, prose %.0f", refused, prose)

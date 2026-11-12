@@ -2,6 +2,10 @@
 
 Verification: `77a14b6864848cababd79a2d98e231f8c9575dd8` and accompanying changes; re-read affected cited symbols when changing behavior.
 
+[FACT] Chat uses the [Markdown fallback ladder](markdown-renderer.md): labelled
+records explain narrow tables; notices explain limits. Labels/notices preserve
+copy, TAB-separated Quote and source mode. [17](#source-17)
+
 See [reading and selection](chat-reading.md) for drag copy and scrolling (the
 follow view shares its copy-on-release policy and notices), and
 [participants, settings and attachment](chat-participants.md) for people and
@@ -89,3 +93,5 @@ the jump, padding and TUI guards. [5](#source-5) [4](#source-4)
 
 15. <a id="source-15"></a> [Reopen action](../../internal/chatui/reopen.go#L10) — `reopenOffered`, `reopen`, `reopenKey`, `reopenFooter`; `key`/`connection` in model.go, `footer` in view.go and `activate` in mouse.go; focused regressions in `reopen_test.go`.
 16. <a id="source-16"></a> [Existing stream owner](../../cmd/yoloctl/chat_view.go#L374) — `reconnect`.
+
+17. <a id="source-17"></a> [Labelled table actions](../../internal/chatui/table_fallback_test.go#L10) — `TestLabelledTableKeepsChatCopyAndQuote`; shared implementation in markdownview/table_fallback.go `labelledTable`.

@@ -48,7 +48,10 @@ selection.
 
 [FACT] Markdown parsing/layout/copy geometry comes from `markdownview`, with
 unlimited document rows for this caller; chat retains its default row bound.
-Ctrl+S toggles source below the size threshold. As in chat, releasing a drag
+Ctrl+S toggles source below the size threshold. Wide tables use the shared
+[counted fallback ladder](markdown-renderer.md): labelled rows when squeezed
+columns become unreadable, or an explicit limit notice with bounded text.
+Labels/notices do not enter drag-copy text. As in chat, releasing a drag
 (the pointer left the pressed cell) copies the selection's displayed text,
 table cells as laid out, through the host `seams.clipboard` callback, with chat's
 notices (copied characters/lines, clipboard off, over 1 MiB). A click alone copies

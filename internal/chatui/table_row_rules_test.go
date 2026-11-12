@@ -19,7 +19,7 @@ func tableRowRuleDecoration(row bodyRow) bool {
 func TestTableRowSeparatorsRenderInBothThemesAndWidths(t *testing.T) {
 	for _, dark := range []bool{true, false} {
 		for _, wm := range []ansi.Method{ansi.WcWidth, ansi.GraphemeWidth} {
-			for _, width := range []int{100, 24} {
+			for _, width := range []int{100, 40} {
 				t.Run(fmt.Sprintf("dark=%t/method=%d/width=%d", dark, wm, width), func(t *testing.T) {
 					theme := spaceview.NewTheme(dark, nil, nil)
 					lines := displayLines(wm, sampleTable, false, theme, "")
@@ -101,16 +101,17 @@ func TestTableRowSeparatorsDoNotEnterCopyQuoteOrSource(t *testing.T) {
 
 func TestTableRowSeparatorsRespectBodyAndWrappedRowLimits(t *testing.T) {
 	theme := New(Options{}).theme
-	lines := displayLines(ansi.WcWidth, sampleTable, false, theme, "")
-	fitted := fitTable(ansi.WcWidth, lines, 0, 24, maxBodyRows, theme)
+	source := sampleTable + "\n| Long | " + strings.Repeat("syntax words ", 8) + " | Supported |"
+	lines := displayLines(ansi.WcWidth, source, false, theme, "")
+	fitted := fitTable(ansi.WcWidth, lines, 0, 48, maxBodyRows, theme)
 	if fitted == nil {
 		t.Fatal("fixture table did not wrap")
 	}
-	visual := 2 // additional dividers between the three logical body rows
+	visual := 3 // additional dividers between the four logical body rows
 	for _, rows := range fitted {
 		visual += len(rows)
 	}
-	if fitTable(ansi.WcWidth, lines, 0, 24, visual, theme) != nil {
+	if fitTable(ansi.WcWidth, lines, 0, 48, visual, theme) != nil {
 		t.Fatal("wrapped layout ignored divider rows in its admission budget")
 	}
 	text := strings.Repeat("p\n", maxBodyRows-6) + sampleTable
