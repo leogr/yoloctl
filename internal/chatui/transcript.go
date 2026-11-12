@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/leogr/yoloctl/internal/markdownview"
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
 	"github.com/leogr/yoloctl/pkg/prettylog"
 )
@@ -144,9 +145,45 @@ func (m *Model) body(msg *Message, width int) cachedBody {
 			keys = nil
 		}
 		body = cachedBody{text: text, source: m.source, me: m.self, base: base, keys: keys, lines: lines, width: -1}
+		if !m.source && len(m.tableRows[key]) > 0 {
+			valid := map[markdownview.TableRowID]bool{}
+			for _, record := range markdownview.TableRecords(markdownview.Document{Lines: lines}) {
+				valid[record.ID] = true
+			}
+			for id := range m.tableRows[key] {
+				if !valid[id] {
+					delete(m.tableRows[key], id)
+				}
+			}
+			if len(m.tableRows[key]) == 0 {
+				delete(m.tableRows, key)
+			}
+		}
 	}
 	if body.width != width {
-		body.width, body.rows = width, bodyRows(m.widthMethod, body.lines, width, m.theme)
+		body.width = width
+		layout := markdownview.Layout(markdownview.Document{Lines: body.lines}, width, markdownview.LayoutOptions{Method: m.widthMethod, Theme: m.theme, CompactTables: true, OpenTableRows: m.tableRows[key]})
+		body.rows = layout.Rows
+		if len(layout.RefusedTableRows) > 0 {
+			for _, id := range layout.RefusedTableRows {
+				delete(m.tableRows[key], id)
+			}
+			if len(m.tableRows[key]) == 0 {
+				delete(m.tableRows, key)
+			}
+			m.say(levelWarn, "Table row exceeds display limits; kept closed")
+		}
+		body.closed = map[int]bool{}
+		for i := range body.rows {
+			if body.rows[i].Closed {
+				body.closed[body.rows[i].Line] = true
+			}
+			for j := range body.rows[i].Runs {
+				if body.rows[i].Runs[j].Act.Kind == markdownview.IntentToggleTableRow {
+					body.rows[i].Runs[j].Act.Extra = key
+				}
+			}
+		}
 	}
 	m.bodyCache[key] = body
 	return body

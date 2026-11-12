@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/leogr/yoloctl/internal/markdownview"
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
 )
 
@@ -55,7 +56,7 @@ func markdownParityValue(v reflect.Value) any {
 			// Newly added refusal flags have no observable effect when false; retain
 			// the old snapshot shape for all unaffected Markdown cases.
 			name := v.Type().Field(i).Name
-			if (name == "Unpadded" || name == "TableLimit") && v.Field(i).IsZero() {
+			if (name == "Unpadded" || name == "TableLimit" || name == "Tail" || name == "Closed") && v.Field(i).IsZero() {
 				continue
 			}
 			out[strings.ToLower(v.Type().Field(i).Name)] = markdownParityValue(v.Field(i))
@@ -97,6 +98,8 @@ func markdownParityBytes(t *testing.T) []byte {
 		{"unicode", "a\t▶️ flag 🇫🇷 👩‍💻 é\n> words wrap at narrow widths with hanging spaces and aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\t@me"},
 		{"inert-input", "bad\xffUTF8\r\n\x1b[31mred\x1b[0m\x00\a\x1b]52;c;YQ==\a\n<html>&amp;</html>\n---\n[^note]: literal\n![image](https://example.org/i.png)"},
 		{"empty", "\n\n"},
+		{"compact-closed", "|Name|Detail|\n|---|---|\n|alpha|" + strings.Repeat("long ▶️ words ", 20) + "|"},
+		{"compact-open", "|Name|Detail|\n|---|---|\n|alpha|" + strings.Repeat("long ▶️ words ", 20) + "|"},
 		{"preview", "intro " + ref + " end\n| reference |\n| --- |\n| " + ref + " |"},
 	}
 	var cases []any
@@ -115,6 +118,13 @@ func markdownParityBytes(t *testing.T) []byte {
 					}
 					for _, width := range []int{20, 80, 120} {
 						rows := bodyRows(method.wm, lines, width, theme)
+						if strings.HasPrefix(in.name, "compact-") {
+							opts := markdownview.LayoutOptions{Method: method.wm, Theme: theme, CompactTables: true}
+							if in.name == "compact-open" {
+								opts.OpenTableRows = map[markdownview.TableRowID]bool{{Table: 0, Row: 0}: true}
+							}
+							rows = markdownview.Layout(markdownview.Document{Lines: lines}, width, opts).Rows
+						}
 						var painted []string
 						var hits []any
 						for _, row := range rows {

@@ -20,6 +20,7 @@ type Action struct {
 // times, chips, frames and padding are decorations and are never copied.
 type Run struct {
 	Text  string
+	Tail  int // non-copyable ellipsis maps a hit to the full cell end
 	Style spaceview.Style
 	Copy  bool
 	Start int
@@ -134,6 +135,9 @@ func HitRun(wm ansi.Method, runs []Run, col, rowEnd int) (lo, hi int) {
 	x := 0
 	for _, r := range runs {
 		w := wm.StringWidth(r.Text)
+		if r.Tail > 0 && col >= x && col < x+w {
+			return r.Tail, r.Tail
+		}
 		if r.Copy {
 			if col < x {
 				return r.Start, r.Start

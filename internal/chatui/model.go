@@ -1597,6 +1597,7 @@ func (m *Model) evict(i int) {
 	evicted := messageKey(m.messages[i])
 	m.touch()
 	delete(m.bodyCache, evicted)
+	delete(m.tableRows, evicted)
 	m.messages = slices.Delete(m.messages, i, i+1)
 	if i < m.olderAt {
 		m.olderAt--

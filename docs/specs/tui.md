@@ -112,7 +112,10 @@ convention rather than non-reclaimable memory, and name the cap, pool or VM
 scale of their bar. Memory comes only from a current sample; a stopped,
 failed or stale reading shows its reason instead. [27](#source-27)
 
-[FACT] Wide Markdown tables use readable wrapped columns or labelled rows;
+[FACT] Clipped Markdown table rows start compact: ▸ expands, ▾ closes; follow
+also offers `w` for all rows. Copy includes hidden reached cells; within-cell
+partial drags stay partial. Expansion limits leave a visible notice.
+Wide Markdown tables use readable wrapped columns or labelled rows;
 a counted limit notice replaces an unexplainable rendering failure. Existing
 source/copy/Quote behavior and rendering limits remain. [43](#source-43)
 

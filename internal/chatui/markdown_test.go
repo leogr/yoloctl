@@ -120,6 +120,7 @@ func TestTableCellsKeepTargetsAndWrap(t *testing.T) {
 	m, _ := readyModel()
 	m.Update(IncomingMsg{Message: Message{ID: "w", Nick: "x", Text: "| who | where |\n|---|---|\n| @sol | https://example.com/" + strings.Repeat("p", 60) + " |"}})
 	m.View()
+	expandChatTableRows(m, "server:w")
 	var link, mention bool
 	rows := 0
 	for _, row := range m.lastTranscript {

@@ -12,9 +12,10 @@ import (
 // Action kinds other than the two shared intents are opaque caller IDs. The
 // payload strings are also opaque to layout; no action is executed here.
 const (
-	IntentNone     ActionKind = 0
-	IntentURL      ActionKind = 1
-	IntentCopyCode ActionKind = 7
+	IntentNone           ActionKind = 0
+	IntentURL            ActionKind = 1
+	IntentCopyCode       ActionKind = 7
+	IntentToggleTableRow ActionKind = 8
 )
 
 // Decorator supplies caller-specific styles and opaque action IDs. It is
@@ -49,16 +50,19 @@ type LayoutOptions struct {
 	Theme  spaceview.Theme
 	// UnlimitedRows is for complete file documents; chat keeps its default bound.
 	UnlimitedRows bool
+	CompactTables bool
+	OpenTableRows map[TableRowID]bool
 }
 
 type LayoutResult struct {
-	Rows    []BodyRow
-	Limited bool // the existing display-row-limit notice was emitted
+	Rows             []BodyRow
+	RefusedTableRows []TableRowID
+	Limited          bool // the existing display-row-limit notice was emitted
 }
 
 func Layout(doc Document, width int, options LayoutOptions) LayoutResult {
 	var result LayoutResult
-	result.Rows = bodyRows(options.Method, doc.Lines, width, options.Theme, &result.Limited, options.UnlimitedRows)
+	result.Rows = bodyRows(options.Method, doc.Lines, width, options.Theme, &result.Limited, options, &result.RefusedTableRows)
 	return result
 }
 

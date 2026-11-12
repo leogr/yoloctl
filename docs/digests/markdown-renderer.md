@@ -44,6 +44,12 @@ copy keeps logical cell ranges, Quote keeps TAB-separated cells and source mode
 is unchanged. The notice anchors to the first visible value, not a hidden
 header. Matched-mode tests do not establish native terminal parity. [15](#source-15)
 
+[FACT] Chat/follow opt into compact table rows: ▸ opens clipped cells, ▾ closes;
+expansion shares the table byte/row budget and refuses visibly. Controls and …
+are decorations. Ellipsis hits include the hidden tail; crossing compact cells
+copies whole reached cells, while within-cell partial drags stay partial.
+The pure renderer emits inert toggle intents; views own state. [16](#source-16)
+
 [FACT] Ordinary `Parse` omits per-byte source maps. `MapSource` explicitly
 requests `LineSource` mappings into sanitized source, including dropped markup
 and whole replacement units. `SourceSelection.Exact` tries the same bounded
@@ -93,3 +99,5 @@ component parity, not native terminal, live-room or future file-view behavior.
 14. <a id="source-14"></a> [Subset additions](../../internal/markdownview/improvements_test.go#L64-L320) — list alignment/wrapping/coverage, rule, autolinks, headings, separators against a naive reference; code in body.go `parseLines` (L108), `HeadingColor`, `listRanges` (L435), `tableSeparators` (L903) and inline.go `autolinkEnd` (L152), `listItem`, `alignOrdered` (L229-L300).
 
 15. <a id="source-15"></a> [Counted table fallbacks](../../internal/markdownview/table_fallback.go#L10) — `TableFitReason`, `labelledTable`; body.go `TableLines`, `FitTableLayout`, `bodyRows`; table_fallback_test.go covers cutoffs, budgets, source/Quote and matched-mode screenshot-derived rendering.
+
+16. <a id="source-16"></a> [Compact rows](../../internal/markdownview/table_compact.go#L1) — `compactTable`, `CompactSelection`; table_compact_test.go covers bounds, copy and matched width modes.

@@ -46,9 +46,16 @@ type rendered struct {
 	starts   []int
 	text     string
 	markdown bool
+	records  []markdownview.TableRecord
+	refused  []markdownview.TableRowID
+	compact  map[int]bool
+	controls map[markdownview.TableRowID]bool
 }
 
 func renderFile(raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme) *rendered {
+	return renderFileTables(raw, large, source, format, width, method, theme, nil)
+}
+func renderFileTables(raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme, opened map[followTableKey]bool) *rendered {
 	text := markdownview.Plain(string(raw))
 	isMarkdown := format == Markdown && !large
 	options := markdownview.ParseOptions{Method: method, Theme: theme, Source: source || !isMarkdown}
@@ -58,14 +65,36 @@ func renderFile(raw []byte, large, source bool, format Format, width int, method
 		}
 	}
 	doc := markdownview.Parse(text, options)
-	layout := markdownview.Layout(doc, max(1, width), markdownview.LayoutOptions{Method: method, Theme: theme, UnlimitedRows: true})
+	records := markdownview.TableRecords(doc)
+	open := map[markdownview.TableRowID]bool{}
+	for _, record := range records {
+		if opened[followKey(record)] {
+			open[record.ID] = true
+		}
+	}
+	layout := markdownview.Layout(doc, max(1, width), markdownview.LayoutOptions{Method: method, Theme: theme, UnlimitedRows: true, CompactTables: true, OpenTableRows: open})
+	compact := map[int]bool{}
+	controls := map[markdownview.TableRowID]bool{}
+	for _, row := range layout.Rows {
+		for _, run := range row.Runs {
+			if run.Act.Kind == markdownview.IntentToggleTableRow {
+				id, ok := markdownview.ParseTableRowID(run.Act.Value)
+				if ok {
+					controls[id] = true
+				}
+			}
+		}
+		if row.Closed {
+			compact[row.Line] = true
+		}
+	}
 	starts := []int{0}
 	for i, c := range text {
 		if c == '\n' {
 			starts = append(starts, i+1)
 		}
 	}
-	return &rendered{doc: doc, rows: layout.Rows, starts: starts, text: text, markdown: isMarkdown}
+	return &rendered{doc: doc, rows: layout.Rows, starts: starts, text: text, markdown: isMarkdown, records: records, refused: layout.RefusedTableRows, compact: compact, controls: controls}
 }
 
 // jobs joins owned reads/renders on exit. A queued Bubble Tea command that
@@ -117,6 +146,7 @@ type Model struct {
 	theme                           spaceview.Theme
 	bg                              color.Color
 	dark                            bool
+	openTables                      map[followTableKey]bool
 	source, following, busy, closed bool
 	gen                             uint64
 	pendingRead, pendingRender      bool
@@ -161,6 +191,10 @@ func (m *Model) work(read, render bool) tea.Cmd {
 	gen, q, raw, snapshot := m.gen, m.query, m.raw, m.snapshot
 	q.Previous = snapshot.Key
 	width, method, theme, source, format := m.width, m.method, m.theme, m.source, m.opts.Format
+	opened := map[followTableKey]bool{}
+	for key, value := range m.openTables {
+		opened[key] = value
+	}
 	return func() tea.Msg {
 		return m.jobs.run(func(ctx context.Context) tea.Msg {
 			result := resultMsg{gen: gen, read: read, snapshot: snapshot, raw: raw}
@@ -179,7 +213,7 @@ func (m *Model) work(read, render bool) tea.Cmd {
 				return resultMsg{gen: gen, read: read, err: ctx.Err()}
 			}
 			if render && (result.err == nil || snapshot.Key != "") {
-				result.view = renderFile(result.raw, result.snapshot.Large, source, format, width, method, theme)
+				result.view = renderFileTables(result.raw, result.snapshot.Large, source, format, width, method, theme, opened)
 			}
 			return result
 		})
@@ -232,6 +266,26 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.view != nil {
 			m.view = msg.view
+			if m.view.markdown && !m.source {
+				retained := map[followTableKey]bool{}
+				for _, record := range m.view.records {
+					key := followKey(record)
+					if m.openTables[key] {
+						retained[key] = true
+					}
+				}
+				for _, id := range m.view.refused {
+					for _, record := range m.view.records {
+						if record.ID == id {
+							delete(retained, followKey(record))
+						}
+					}
+				}
+				m.openTables = retained
+				if len(m.view.refused) > 0 {
+					m.notice = "Table row exceeds display limits; kept closed"
+				}
+			}
 			m.placeAnchor()
 		}
 		return m, m.work(false, false)
@@ -270,6 +324,8 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.scroll(-max(1, m.bodyHeight()-1))
 		case "pgdown", "ctrl+d":
 			return m, m.scroll(max(1, m.bodyHeight()-1))
+		case "w":
+			return m, m.toggleTableRows("", true)
 		case "y", "ctrl+shift+c":
 			return m, m.copySelection()
 		case "esc":
@@ -363,6 +419,9 @@ func (m *Model) selectedBounds() (point, point, bool) {
 	a, b := m.selection.anchor, m.selection.focus
 	if less(b, a) {
 		a, b = b, a
+	}
+	if m.view != nil {
+		a.offset, b.offset = markdownview.CompactSelection(m.view.doc.Lines, m.view.compact, a.line, a.offset, b.line, b.offset, false)
 	}
 	return a, b, a != b
 }
@@ -476,6 +535,9 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			if m.moved {
 				return m.copySelection()
 			}
+			if ok && act.Kind == markdownview.IntentToggleTableRow && act == m.pressed && m.selection.anchor == p {
+				return m.toggleTableRows(act.Value, false)
+			}
 			if ok && act.Kind == markdownview.IntentCopyCode && act == m.pressed && m.selection.anchor == p {
 				return m.copyText(act.Value)
 			}
@@ -534,6 +596,9 @@ func (m *Model) View() tea.View {
 		state = "following"
 	}
 	status := fmt.Sprintf("bytes %d–%d/%d · %s · %s · r refresh · f/End follow · Ctrl+S source · y copy · q quit", m.snapshot.Start, m.snapshot.End, m.snapshot.Size, state, mode)
+	if m.view != nil && len(m.view.controls) > 0 && !m.source {
+		status = "w expand/collapse · " + status
+	}
 	if m.snapshot.Large {
 		status = fmt.Sprintf("bytes %d–%d/%d · large file: plain 1 MiB window · other bytes omitted · %s · r refresh · f/End follow · y copy · q quit", m.snapshot.Start, m.snapshot.End, m.snapshot.Size, state)
 	}

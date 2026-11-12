@@ -51,6 +51,10 @@ unlimited document rows for this caller; chat retains its default row bound.
 Ctrl+S toggles source below the size threshold. Wide tables use the shared
 [counted fallback ladder](markdown-renderer.md): labelled rows when squeezed
 columns become unreadable, or an explicit limit notice with bounded text.
+Clipped rows start closed: ▸ toggles one, `w` toggles all. Refresh retains
+state by table/columns/first-cell/duplicate occurrence; source mode preserves it.
+Budget refusal is visible. Cross-cell copy includes hidden reached cells;
+within-cell drags stay partial. [11](#source-11)
 Labels/notices do not enter drag-copy text. As in chat, releasing a drag
 (the pointer left the pressed cell) copies the selection's displayed text,
 table cells as laid out, through the host `seams.clipboard` callback, with chat's
@@ -86,3 +90,5 @@ and light themes. [7](#source-7) [8](#source-8)
 8. <a id="source-8"></a> [Background regression](../../internal/followview/background_test.go#L18) — `TestBodyRowsKeepTerminalBackground`.
 9. <a id="source-9"></a> [Reopen classification](../../internal/tui/reopen_args.go#L24) — `parseReopenView` `follow` case, `pinReopenArgs`; `viewEndAction` in reattach.go; follow cases in reopen_args_test.go, reopen_test.go and reopen_launch_test.go.
 10. <a id="source-10"></a> [Copy on release](../../internal/followview/model.go#L394) — `copyText`, `clearSelection`, `mouse` (L433); `TestDragCopiesOnReleaseAndControlsStayInert`, `TestReleaseCopyFollowsChatPolicy`, `TestClearingMidDragEndsTheGesture` in model_test.go; host callback in cmd/yoloctl/follow.go applies `seams.clipboard` and OSC 52 evaluation.
+
+11. <a id="source-11"></a> [Compact follow rows](../../internal/followview/table_compact.go#L1) — `toggleTableRows`, `followKey`; table_compact_test.go.

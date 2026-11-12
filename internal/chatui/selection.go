@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/leogr/yoloctl/internal/markdownview"
 )
 
 // selPoint is one selection endpoint in logical coordinates: a message, one
@@ -64,7 +65,18 @@ func (m *Model) ordered(s selection) (ia, la, oa, ib, lb, ob int, ok bool) {
 	if ib < ia || ib == ia && (b.line < a.line || b.line == a.line && b.lo < a.lo) {
 		a, b, ia, ib = b, a, ib, ia
 	}
-	return ia, a.line, a.lo, ib, b.line, b.hi, true
+	la, oa, lb, ob = a.line, a.lo, b.line, b.hi
+	first := m.body(&m.messages[ia], max(m.lastTextWidth, 1))
+	if ia == ib {
+		oa, ob = markdownview.CompactSelection(first.lines, first.closed, la, oa, lb, ob, false)
+	} else {
+		if len(first.lines) > 0 {
+			oa, _ = markdownview.CompactSelection(first.lines, first.closed, la, oa, len(first.lines)-1, len(first.lines[len(first.lines)-1].Text), true)
+		}
+		last := m.body(&m.messages[ib], max(m.lastTextWidth, 1))
+		_, ob = markdownview.CompactSelection(last.lines, last.closed, 0, 0, lb, ob, true)
+	}
+	return ia, la, oa, ib, lb, ob, true
 }
 
 // selectedText assembles the selection from display-line byte ranges:

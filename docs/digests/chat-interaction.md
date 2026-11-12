@@ -4,7 +4,11 @@ Verification: `77a14b6864848cababd79a2d98e231f8c9575dd8` and accompanying change
 
 [FACT] Chat uses the [Markdown fallback ladder](markdown-renderer.md): labelled
 records explain narrow tables; notices explain limits. Labels/notices preserve
-copy, TAB-separated Quote and source mode. [17](#source-17)
+copy, TAB-separated Quote and source mode. Clipped rows start closed; clicking
+▸ expands without copying. State is channel/message-local and survives source
+mode and resize; eviction removes it. Budget refusal leaves the row closed
+with a notice. Copy includes hidden reached cells; within-cell drags stay partial.
+[17](#source-17) [18](#source-18)
 
 See [reading and selection](chat-reading.md) for drag copy and scrolling (the
 follow view shares its copy-on-release policy and notices), and
@@ -95,3 +99,5 @@ the jump, padding and TUI guards. [5](#source-5) [4](#source-4)
 16. <a id="source-16"></a> [Existing stream owner](../../cmd/yoloctl/chat_view.go#L374) — `reconnect`.
 
 17. <a id="source-17"></a> [Labelled table actions](../../internal/chatui/table_fallback_test.go#L10) — `TestLabelledTableKeepsChatCopyAndQuote`; shared implementation in markdownview/table_fallback.go `labelledTable`.
+
+18. <a id="source-18"></a> [Compact chat rows](../../internal/chatui/table_compact.go#L1) — `toggleTableRow`; transcript.go `body`; table_compact_test.go.

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/leogr/yoloctl/internal/markdownview"
 )
 
 // mouse routes one event of the last frame. A click is a press and release
@@ -321,6 +322,8 @@ func (m *Model) clickHit(h hit, mo tea.Mouse) tea.Cmd {
 // activate runs a clicked target inside message text or a header.
 func (m *Model) activate(act action) tea.Cmd {
 	switch act.Kind {
+	case markdownview.IntentToggleTableRow:
+		return m.toggleTableRow(act)
 	case actLink:
 		return m.openLink(act.Value)
 	case actAuthor:

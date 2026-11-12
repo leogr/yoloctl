@@ -94,6 +94,7 @@ type BodyRow struct {
 	Line, Start, End int
 	Runs             []Run
 	Decor            bool
+	Closed           bool // compact row: full cells remain available to logical copy
 	Frags            [][2]int
 }
 
@@ -315,13 +316,14 @@ func Overlay(pieces []Piece, start, end int, f func(Piece) Piece) []Piece {
 // Muted table dividers sit between logical body rows, after wrapped fragments.
 // Every added row counts toward maxBodyRows: the row that reaches it is
 // followed only by the limit notice.
-func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Theme, limited *bool, unlimited bool) []BodyRow {
+func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Theme, limited *bool, options LayoutOptions, refused *[]TableRowID) []BodyRow {
 	rowLimit := MaxBodyRows
-	if unlimited {
+	if options.UnlimitedRows {
 		rowLimit = int(^uint(0) >> 1)
 	}
 	var rows []BodyRow
 	cards, pad := CodeCards(wm, lines, width), CardPad(width)
+	tableIndex := -1
 	var fitted [][]BodyRow // the current table's rows, nil when it renders as text
 	var rowRule []Run      // shared decorative divider between logical body rows
 	first := 0
@@ -340,6 +342,7 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 			}
 		}
 		if tbl != nil && (n == 0 || lines[n-1].Table != tbl) {
+			tableIndex++
 			if tbl.SpaceBefore {
 				rows = append(rows, BodyRow{Line: n, Decor: true})
 				if len(rows) >= rowLimit {
@@ -351,7 +354,15 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 				after = 1 // the spacer after the table needs a row too
 			}
 			var reason TableFitReason
-			fitted, reason = FitTableLayout(wm, lines[n:], n, width, rowLimit-len(rows)-after, theme)
+			applied := false
+			if options.CompactTables {
+				var denied []TableRowID
+				fitted, reason, denied, applied = compactTable(wm, lines[n:], n, tableIndex, width, rowLimit-len(rows)-after, theme, options.OpenTableRows)
+				*refused = append(*refused, denied...)
+			}
+			if !applied {
+				fitted, reason = FitTableLayout(wm, lines[n:], n, width, rowLimit-len(rows)-after, theme)
+			}
 			first = n
 			if reason != TableFits && reason != TableLaidOut {
 				fitted = labelledTable(wm, lines[n:], n, width, rowLimit-len(rows)-after, theme, reason)
@@ -366,7 +377,10 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 			if (reason == TableFits || reason == TableLaidOut) && n+1 < len(lines) && lines[n+1].Table == tbl && lines[n+1].Decor {
 				rule := lines[n+1].Text
 				if fitted != nil {
-					rule = fitted[1][0].Runs[0].Text
+					rule = ""
+					for _, run := range fitted[1][0].Runs {
+						rule += run.Text
+					}
 				}
 				rowRule = TableRowRule(wm, rule, width, theme)
 			}

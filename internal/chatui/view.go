@@ -110,6 +110,15 @@ func (m *Model) View() tea.View {
 	}
 	top := len(lines)
 	draft, cursorRow, cursorCol := m.layoutDraft()
+	tw := w
+	if panel > 0 {
+		tw = w - panel - 1
+	}
+	m.lastTextWidth = max(tw-bodyIndent-1, 1)
+	if elsewhere := m.otherLoaded(); m.built.rows == nil || m.built.generation != m.generation || m.built.width != tw || m.built.elsewhere != elsewhere {
+		m.built.rows, m.built.generation, m.built.width, m.built.elsewhere = m.transcript(tw), m.generation, tw, elsewhere
+	}
+	transcript := m.built.rows
 	// boxRows are the composer's rows besides the draft: with room, a blank
 	// row above it; the reply being written; and always a blank row below
 	// its last visible line. statusRows keep a notice readable above a
@@ -130,15 +139,6 @@ func (m *Model) View() tea.View {
 	// does the transcript give up its last row rather than overflow.
 	bodyHeight := max(h-top-1-boxRows-statusRows-inputRows-1, 0)
 
-	tw := w
-	if panel > 0 {
-		tw = w - panel - 1
-	}
-	m.lastTextWidth = max(tw-bodyIndent-1, 1)
-	if elsewhere := m.otherLoaded(); m.built.rows == nil || m.built.generation != m.generation || m.built.width != tw || m.built.elsewhere != elsewhere {
-		m.built.rows, m.built.generation, m.built.width, m.built.elsewhere = m.transcript(tw), m.generation, tw, elsewhere
-	}
-	transcript := m.built.rows
 	m.lastRows, m.lastBodyHeight = len(transcript), bodyHeight
 	m.place(transcript, bodyHeight)
 	m.lastTranscript = transcript

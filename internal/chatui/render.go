@@ -86,11 +86,12 @@ type cachedBody struct {
 	source   bool
 	// base is the lines before reference previews; keys are the previews
 	// lines shows (see previewKeys).
-	base  []displayLine
-	keys  []string
-	lines []displayLine
-	width int
-	rows  []bodyRow
+	base   []displayLine
+	keys   []string
+	lines  []displayLine
+	width  int
+	rows   []bodyRow
+	closed map[int]bool
 }
 
 func messageKey(msg Message) string {

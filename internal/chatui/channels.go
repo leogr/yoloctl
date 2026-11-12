@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/leogr/yoloctl/internal/markdownview"
 )
 
 // channelView is one channel's view: its draft and reply, messages and
@@ -34,6 +35,7 @@ type channelView struct {
 	anchor         *viewAnchor
 	lastTranscript []transcriptRow
 	bodyCache      map[string]cachedBody
+	tableRows      map[string]map[markdownview.TableRowID]bool
 	members        []Member
 	loadingOlder   bool
 	olderRequest   string

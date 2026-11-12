@@ -356,6 +356,7 @@ func TestWrappedTableSelectionCopiesLogicalRows(t *testing.T) {
 	text := "| Name | Notes |\n|---|---|\n| alpha beta gamma delta epsilon | one two three four five six seven eight nine ten |"
 	m.Update(IncomingMsg{Message: Message{ID: "t", Nick: "x", Text: text}})
 	m.View()
+	expandChatTableRows(m, "server:t")
 	key := "server:t"
 	dl := m.body(&m.messages[0], m.lastTextWidth).lines[2]
 	var notes [][2]int
@@ -439,6 +440,7 @@ func TestWrappedTableKeepsTheReadingPosition(t *testing.T) {
 				m.Update(IncomingMsg{Message: Message{ID: fmt.Sprint("n", i), Nick: "x", Text: "newer"}})
 			}
 			m.View()
+			expandChatTableRows(m, "server:t")
 			dl := m.body(&m.messages[0], m.lastTextWidth).lines[2]
 			top := -1
 			for i, row := range m.lastTranscript {
@@ -504,6 +506,7 @@ func tableModel(width int, text string) *Model {
 		m.Update(IncomingMsg{Message: Message{ID: fmt.Sprint("n", i), Nick: "x", Text: "newer"}})
 	}
 	m.View()
+	expandChatTableRows(m, "server:t")
 	return m
 }
 
