@@ -1,6 +1,13 @@
 package tui
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"image"
+	"image/png"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -21,7 +28,7 @@ body = json.dumps({"v":1,"op":"preview","generation":1,"request":7,
     "room_id":"0123456789abcdef0123456789abcdef","disk_id":"0123456789abcdef0123456789abcdef",
     "human_id":"0123456789abcdef0123456789abcdef","channel_id":"0123456789abcdef0123456789abcdef","channel":"#space",
     "message_id":"01234567-89ab-cdef-0123-456789abcdef","artifact":"01234567-89ab-cdef-0123-456789abcdef",
-    "bytes":1024,"sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}).encode()
+    "bytes":1024,"sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","chip":"[file a.png]"}).encode()
 f.write(struct.pack(">I", len(body)) + body)
 while True:
     hdr = f.read(4)
@@ -88,7 +95,7 @@ func TestBrokerProbesOnFirstChatPaneAndAnswersHeldRequests(t *testing.T) {
 func TestBrokerReleasesOnExitAndBoundsItsInbox(t *testing.T) {
 	m, s := brokerModel(t)
 	m.imageRegistry.Activate(s, chatimage.Placement{ID: 5, Rows: 1, Cols: 1, Token: "t1"}, "chip")
-	if m.imageRegistry.ReleaseToken(s, "t2") {
+	if _, ok := m.imageRegistry.ReleaseToken(s, "t2"); ok {
 		t.Fatal("a stale token released the preview")
 	}
 	_, _ = m.Update(tabExitMsg{session: s})
@@ -155,4 +162,139 @@ func TestBrokerClosesAChannelAfterAFailedSend(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatal("channel of a non-reading pane was not closed")
+}
+
+// rawOutput runs cmd and every command it batches, collecting raw host output.
+func rawOutput(cmd tea.Cmd) string {
+	if cmd == nil {
+		return ""
+	}
+	switch msg := cmd().(type) {
+	case tea.RawMsg:
+		return fmt.Sprint(msg.Msg)
+	case tea.BatchMsg:
+		var out strings.Builder
+		for _, c := range msg {
+			out.WriteString(rawOutput(c))
+		}
+		return out.String()
+	}
+	return ""
+}
+
+func previewFrame(request uint64) chatimage.Frame {
+	return chatimage.Frame{V: 1, Op: chatimage.OpPreview, Generation: 1, Request: request,
+		RoomID: "0123456789abcdef0123456789abcdef", DiskID: "0123456789abcdef0123456789abcdef",
+		HumanID: "0123456789abcdef0123456789abcdef", ChannelID: "0123456789abcdef0123456789abcdef", Channel: "#space",
+		MessageID: "01234567-89ab-cdef-0123-456789abcdef", Artifact: "01234567-89ab-cdef-0123-456789abcdef",
+		Bytes: 1, SHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Chip: "[file cat.png · 1 KiB]"}
+}
+
+// supportedBroker is a broker whose host terminal supports previews and
+// whose child prints every frame it receives (it sends nothing itself).
+func supportedBroker(t *testing.T, read func(context.Context, string, chatimage.Frame) ([]byte, error)) (*model, *term.Session) {
+	t.Helper()
+	old := ReadChatArtifact
+	ReadChatArtifact = read
+	t.Cleanup(func() { ReadChatArtifact = old })
+	m := newTestModel(t, 200, 12)
+	m.hostGeometry.width, m.hostGeometry.height = 10, 20
+	m.imageHost.state = imageSupported
+	s, err := term.Start(term.Options{Rows: m.viewRows(), Cols: m.width,
+		Argv:    []string{"python3", "-c", strings.Replace(brokerChild, "f.write(struct.pack", "0 and f.write(struct.pack", 1)},
+		OnImage: m.imageHandler()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	m.tabs.Add(testTab(s, "chat", false))
+	m.focusPalette = false
+	_, _ = m.Update(wakeMsg{}) // advertise generation 1
+	return m, s
+}
+
+func smallPNG(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewNRGBA(image.Rect(0, 0, 40, 20))
+	var b bytes.Buffer
+	if err := png.Encode(&b, img); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+func TestBrokerFetchesPreparesTransmitsAndRegisters(t *testing.T) {
+	data := smallPNG(t)
+	var space string
+	m, s := supportedBroker(t, func(_ context.Context, sp string, _ chatimage.Frame) ([]byte, error) {
+		space = sp
+		return data, nil
+	})
+	m.imageHandler()(s, previewFrame(7))
+	var raw strings.Builder
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		raw.WriteString(rawOutput(m.syncImages())) // only here: no other path consumes the job
+		if _, ok := m.imageRegistry.Active(s); ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("preview never registered")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	p, _ := m.imageRegistry.Active(s)
+	if p.Cols != 4 || p.Rows != 1 || p.Token == "" || space != "" {
+		t.Fatalf("placement %+v space %q", p, space)
+	}
+	if !strings.Contains(raw.String(), "\x1b_Ga=T,f=100,t=d,q=2,U=1,i="+strconv.Itoa(int(p.ID))+",c=4,r=1,") {
+		t.Fatalf("no transmit for id %d: %q", p.ID, raw.String())
+	}
+	if m.imageLedger.Chip(p.ID) != "[file cat.png · 1 KiB]" {
+		t.Fatal("chip not recorded")
+	}
+	pump(t, m, s, func() bool {
+		return strings.Contains(s.GridText(), `"op":"ready"`) && strings.Contains(s.GridText(), p.Token)
+	})
+	// The pane's release deletes exactly that image.
+	m.imageHandler()(s, chatimage.Frame{V: 1, Op: chatimage.OpRelease, Token: p.Token})
+	if out := rawOutput(m.syncImages()); out != chatimage.DeleteSequence(p.ID) {
+		t.Fatalf("release output %q", out)
+	}
+}
+
+func TestBrokerAnswersBusyStaleAndFailures(t *testing.T) {
+	release := make(chan struct{})
+	m, s := supportedBroker(t, func(ctx context.Context, _ string, f chatimage.Frame) ([]byte, error) {
+		switch f.Request {
+		case 1:
+			<-release
+			return smallPNG(t), nil
+		case 3:
+			return []byte("GIF89a"), nil
+		}
+		return nil, errors.New("denied")
+	})
+	m.imageHandler()(s, previewFrame(1))
+	_ = m.syncImages()
+	m.imageHandler()(s, previewFrame(2)) // the slot is taken
+	_ = m.syncImages()
+	pump(t, m, s, func() bool { return strings.Contains(s.GridText(), `"request":2,"code":"busy"`) })
+	m.hostGeometry.width = 12 // the measurement changed while reading
+	close(release)
+	pump(t, m, s, func() bool { _ = m.syncImages(); return strings.Contains(s.GridText(), `"request":1,"code":"stale"`) })
+	m.hostGeometry.width = 10
+	for _, c := range []struct {
+		request uint64
+		code    string
+	}{{3, "not_png"}, {4, "failed"}} {
+		m.imageHandler()(s, previewFrame(c.request))
+		pump(t, m, s, func() bool {
+			_ = m.syncImages()
+			return strings.Contains(s.GridText(), `"request":`+strconv.Itoa(int(c.request))+`,"code":"`+c.code+`"`)
+		})
+	}
+	if _, ok := m.imageRegistry.Active(s); ok {
+		t.Fatal("a failed preview was registered")
+	}
 }

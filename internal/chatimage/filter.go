@@ -34,39 +34,44 @@ func NewRegistry(ledger *Ledger) *Registry {
 
 // Activate makes p the owner's one displayed preview, replacing any earlier
 // one, and records its chip for copy.
-func (r *Registry) Activate(owner any, p Placement, chip string) {
+// It returns the replaced preview, whose image the caller deletes.
+func (r *Registry) Activate(owner any, p Placement, chip string) (replaced Placement, ok bool) {
 	if r == nil || owner == nil || p.ID == 0 || p.ID > 0xffffff || p.Rows < 1 || p.Cols < 1 {
-		return
+		return Placement{}, false
 	}
 	r.mu.Lock()
+	replaced, ok = r.active[owner]
 	r.active[owner] = p
 	r.mu.Unlock()
 	r.ledger.Remember(p.ID, chip)
+	return replaced, ok
 }
 
 // ReleaseToken forgets the owner's preview only if token names it, so a
 // stale release cannot remove a newer preview.
-func (r *Registry) ReleaseToken(owner any, token string) bool {
+func (r *Registry) ReleaseToken(owner any, token string) (Placement, bool) {
 	if r == nil {
-		return false
+		return Placement{}, false
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if p, ok := r.active[owner]; ok && token != "" && p.Token == token {
 		delete(r.active, owner)
-		return true
+		return p, true
 	}
-	return false
+	return Placement{}, false
 }
 
-// Release forgets the owner's preview (close, access loss).
-func (r *Registry) Release(owner any) {
+// Release forgets the owner's preview (close, access loss) and returns it.
+func (r *Registry) Release(owner any) (Placement, bool) {
 	if r == nil {
-		return
+		return Placement{}, false
 	}
 	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.active[owner]
 	delete(r.active, owner)
-	r.mu.Unlock()
+	return p, ok
 }
 
 // Active returns the owner's displayed preview, if any.

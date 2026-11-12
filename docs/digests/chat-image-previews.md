@@ -1,6 +1,6 @@
 # Chat image previews (host boundary)
 
-Verification: `484b52b6eb83b3bc03f30406d28110f262fb5179` and accompanying changes; image channel on `b96ffc26c67ed63006d0dfa55a1b9c228d8e18ba` and accompanying changes; host probe on `d8253d1809006bf3095a1215b7a9c1785523ddd1` and accompanying changes; broker on `56379f45f1d89b34015f180380ef9391a31760b0` and accompanying changes; broker conditions and channel identity on `765d227c0610c02b4d68071cd34552086b32eab1` and accompanying changes.
+Verification: `484b52b6eb83b3bc03f30406d28110f262fb5179` and accompanying changes; image channel on `b96ffc26c67ed63006d0dfa55a1b9c228d8e18ba` and accompanying changes; host probe on `d8253d1809006bf3095a1215b7a9c1785523ddd1` and accompanying changes; broker on `56379f45f1d89b34015f180380ef9391a31760b0` and accompanying changes; broker conditions and channel identity on `765d227c0610c02b4d68071cd34552086b32eab1` and accompanying changes; fetch on `b464ce3b232a8a6f55bf3c1d60ddfd9761815ce3` and accompanying changes.
 
 [FACT] Previews use Kitty Unicode placeholder cells: U+10EEEE with a row and a
 column diacritic, drawn in a 24-bit foreground colour that is the image ID.
@@ -56,7 +56,7 @@ failed write closes that pane's channel so it cannot delay the others. The
 first chat pane starts the probe; each live pane is sent the capability once
 per generation (counted only when the frame was queued), which changes when support changes. Preview requests wait
 (at most 8) for the probe, then get `stale` for an old generation,
-`unsupported`, or `unavailable`: no fetch or drawing exists yet. A release
+`unsupported`, or are fetched (see the chat image fetch digest). A release
 removes a preview only with its token, and a pane that ends releases its
 registration. The chat child claims the channel before anything else and,
 for now, discards host frames. [9](#source-9)

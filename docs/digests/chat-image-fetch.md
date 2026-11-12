@@ -1,6 +1,6 @@
 # Chat image fetch
 
-Verification: `765d227c0610c02b4d68071cd34552086b32eab1` and accompanying changes.
+Verification: `b464ce3b232a8a6f55bf3c1d60ddfd9761815ce3` and accompanying changes.
 
 [FACT] A fixed, embedded Python relay reads one artifact inside the confined
 chat runtime: it runs only `airc artifact download --config CONFIG UUID PATH`
@@ -28,7 +28,31 @@ with nothing after it, is accepted; its bytes are the operation's output. A
 relay failure is reported with its one printable line. It never stages,
 uploads, joins or retries. [2](#source-2)
 
+[FACT] In the TUI, a preview request from a chat pane (which also carries its
+chip text, one printable line of at most 512 bytes) starts the single fetch
+job of the whole TUI when previews are supported; a second request meanwhile
+gets `busy`. The job (30 s) calls the reader that `cmd/yoloctl` installs: it
+resolves the pane's space like the CLI (its `--space`, else the TUI's pinned
+space, else the default) and runs `chat.artifact.read` with output bounded to
+the requested size, accepting only those exact bytes. `chatimage.Prepare`
+then checks the PNG dimensions (at most 16 Mi pixels) before one full decode,
+scales it by area averaging to fit 512×512 and the pane budget of 60×12 cells
+at the measured cell size, never enlarging, and re-encodes it (at most 2 MiB).
+[3](#source-3) [4](#source-4)
+
+[FACT] Back on the event loop a result is dropped if its pane is gone, and
+answered `stale` if the generation, support or cell size changed; decode
+failures answer `not_png` or `too_large`, others `failed`. Otherwise the host
+allocates an ID, registers the placement and chip for that pane (deleting a
+replaced one), writes one Kitty sequence through Bubble Tea's raw output
+(direct PNG, `a=T`, virtual placement `U=1`, quiet, 4 KiB base64 chunks) and
+answers `ready` with a fresh token, the ID and the cell size. A release with
+that token or the pane's end deletes exactly that ID. Nothing is cached yet:
+another request reads again. [3](#source-3) [4](#source-4)
+
 ## Sources
 
 1. <a id="source-1"></a> [chat_artifact_relay.py](../../cmd/yoloctl/chat_artifact_relay.py#L1) — relay program, embedded by chat_artifact_relay.go; chat_artifact_relay_test.go runs it against fake clients (success, mismatches, symlink, mode, failure, output flood, cancel, deadline with a TERM-ignoring child, invalid arguments).
 2. <a id="source-2"></a> [chat_artifact_read.go](../../cmd/yoloctl/chat_artifact_read.go#L1) — `chatArtifactReadRequest`, `decodeChatArtifactReadRequest`, `matchesRoom`, `runControllerChatArtifactRead`, `executeChatArtifactRead`, `runChatArtifactRelay`, `verifyChatArtifactFrame`; registry and dispatch in controller_internal.go; chat_artifact_read_test.go.
+3. <a id="source-3"></a> [prepare.go](../../internal/chatimage/prepare.go#L1) — `Prepare`, `downscale`, `TransmitSequence`, `DeleteSequence`; prepare_test.go.
+4. <a id="source-4"></a> [image_broker.go](../../internal/tui/image_broker.go#L1) — `ReadChatArtifact`, `answerPreview`, `finishImageJob`, `flushImageDeletes`, `chatPaneSpace`; chat_artifact_host.go `readChatArtifactForPreview`; image_broker_test.go.

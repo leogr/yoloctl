@@ -1059,7 +1059,9 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 			return m, nil // its view was closed first
 		}
 		p.Exited = true
-		m.imageRegistry.Release(msg.session) // an ended session shows no preview
+		if p, ok := m.imageRegistry.Release(msg.session); ok { // an ended session shows no preview
+			m.images.deletes = append(m.images.deletes, p.ID)
+		}
 		m.reportInputErrors()
 		if m.standalone {
 			return m, tea.Quit

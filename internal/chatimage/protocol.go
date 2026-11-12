@@ -10,6 +10,8 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/leogr/yoloctl/internal/chatstream"
 	"github.com/leogr/yoloctl/internal/layout"
@@ -73,6 +75,8 @@ type Frame struct {
 	Artifact  string `json:"artifact,omitempty"`
 	Bytes     int64  `json:"bytes,omitempty"`
 	SHA256    string `json:"sha256,omitempty"`
+	// Chip is the attachment chip text the pane shows, recorded for copy.
+	Chip string `json:"chip,omitempty"`
 
 	// ready / release
 	Token string `json:"token,omitempty"`
@@ -101,7 +105,7 @@ func (f Frame) Validate() error {
 			return errors.New("invalid image capability")
 		}
 	case OpPreview:
-		allowed = set("Generation", "Request", "RoomID", "DiskID", "HumanID", "ChannelID", "Channel", "MessageID", "Artifact", "Bytes", "SHA256")
+		allowed = set("Generation", "Request", "RoomID", "DiskID", "HumanID", "ChannelID", "Channel", "MessageID", "Artifact", "Bytes", "SHA256", "Chip")
 		if f.Generation == 0 || f.Request == 0 {
 			return errors.New("image preview needs a generation and a request")
 		}
@@ -115,6 +119,9 @@ func (f Frame) Validate() error {
 		}
 		if !chatstream.ValidArtifactID(f.Artifact) || !chatstream.ValidArtifactHash(f.SHA256) || f.Bytes < 1 || f.Bytes > MaxArtifactBytes {
 			return errors.New("image preview needs a valid artifact within the size limit")
+		}
+		if !validChip(f.Chip) {
+			return errors.New("image preview needs a printable chip of at most 512 bytes")
 		}
 	case OpReady:
 		allowed = set("Generation", "Request", "Token", "ID", "Cols", "Rows")
@@ -157,10 +164,23 @@ func (f Frame) present() map[string]bool {
 		"Supported": f.Supported, "MaxCols": f.MaxCols != 0, "MaxRows": f.MaxRows != 0,
 		"RoomID": f.RoomID != "", "DiskID": f.DiskID != "", "HumanID": f.HumanID != "", "ChannelID": f.ChannelID != "",
 		"Channel": f.Channel != "", "MessageID": f.MessageID != "", "Artifact": f.Artifact != "",
-		"Bytes": f.Bytes != 0, "SHA256": f.SHA256 != "",
+		"Bytes": f.Bytes != 0, "SHA256": f.SHA256 != "", "Chip": f.Chip != "",
 		"Token": f.Token != "", "ID": f.ID != 0, "Cols": f.Cols != 0, "Rows": f.Rows != 0,
 		"Code": f.Code != "",
 	}
+}
+
+// validChip accepts one printable line of 1–512 bytes without placeholders.
+func validChip(s string) bool {
+	if s == "" || len(s) > maxChipBytes || !utf8.ValidString(s) {
+		return false
+	}
+	for _, r := range s {
+		if unicode.IsControl(r) || r == Placeholder {
+			return false
+		}
+	}
+	return true
 }
 
 // validToken accepts a host-issued opaque token: 1–64 bytes of [A-Za-z0-9_-].

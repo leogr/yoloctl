@@ -17,7 +17,7 @@ const (
 
 func preview() Frame {
 	return Frame{Op: OpPreview, Generation: 1, Request: 7, RoomID: idA, DiskID: idA, HumanID: idA, ChannelID: idA,
-		Channel: "#space", MessageID: uuid, Artifact: uuid, Bytes: 1024, SHA256: hash}
+		Channel: "#space", MessageID: uuid, Artifact: uuid, Bytes: 1024, SHA256: hash, Chip: "[file a.png · 1 KiB]"}
 }
 
 func pair(t *testing.T) (host, child *Conn, hostFile, childFile *os.File) {
@@ -83,6 +83,9 @@ func TestControlFrameValidation(t *testing.T) {
 	bad["preview too big"] = mutate(func(f *Frame) { f.Bytes = MaxArtifactBytes + 1 })
 	bad["preview empty"] = mutate(func(f *Frame) { f.Bytes = 0 })
 	bad["preview token"] = mutate(func(f *Frame) { f.Token = "t" })
+	bad["preview no chip"] = mutate(func(f *Frame) { f.Chip = "" })
+	bad["preview chip control"] = mutate(func(f *Frame) { f.Chip = "a\x1b[31m" })
+	bad["preview chip placeholder"] = mutate(func(f *Frame) { f.Chip = "a\U0010EEEE" })
 	for name, f := range bad {
 		if f.Validate() == nil {
 			t.Errorf("%s accepted", name)
