@@ -165,8 +165,7 @@ func runOverlayCommand(t *testing.T, m *model, argv ...string) {
 
 // The overlay chain: command output overflowing the overlay buffer →
 // wheel-up while the palette has focus scrolls it; the live overlay
-// shows the output tail; unfocus hides the overlay and clears the
-// buffer (output is ephemeral).
+// shows the output tail; unfocus hides the overlay while preserving history.
 func TestOverlayWheelScrollAndHide(t *testing.T) {
 	m := newTestModel(t, 60, 20)
 	runOverlayCommand(t, m, "seq", "1", "40")
@@ -198,7 +197,7 @@ func TestOverlayWheelScrollAndHide(t *testing.T) {
 		t.Errorf("scrollOff after wheel-downs = %d, want 0", m.scrollOff)
 	}
 
-	// Esc hides the overlay and clears its buffer (output is ephemeral).
+	// Esc hides the overlay; refocusing shows the retained history.
 	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if m.focusPalette {
 		t.Fatal("Esc should unfocus the palette")
@@ -207,20 +206,25 @@ func TestOverlayWheelScrollAndHide(t *testing.T) {
 	if strings.Contains(hidden, "40") {
 		t.Errorf("overlay content still visible after unfocus:\n%s", hidden)
 	}
-	if len(m.console.Scrollback()) != 0 {
-		t.Error("overlay buffer not cleared on unfocus")
+	if len(m.console.Scrollback()) == 0 {
+		t.Error("history lost on unfocus")
+	}
+	_, _ = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+	if !m.focusPalette || !strings.Contains(m.View().Content, "40") {
+		t.Fatal("retained console did not reappear")
 	}
 }
 
-// The overlay buffer is per-command ephemeral: the next command
-// replaces the previous output entirely.
-func TestOverlayBufferReplacedPerCommand(t *testing.T) {
+// Direct sequential console runs retain native history. Explicit palette
+// dismissal/suggestion clears are covered separately below/above.
+func TestOverlayConsoleRunsRetainHistory(t *testing.T) {
 	m := newTestModel(t, 60, 20)
 	runOverlayCommand(t, m, "printf", "FIRST-RUN\\r\\n")
 	runOverlayCommand(t, m, "printf", "SECOND-RUN\\r\\n")
 	view := m.View().Content
-	if strings.Contains(view, "FIRST-RUN") {
-		t.Errorf("previous command output survived replacement:\n%s", view)
+	history := strings.Join(append(m.console.Scrollback(), m.console.GridText()), "\n")
+	if !strings.Contains(history, "FIRST-RUN") || !strings.Contains(history, "SECOND-RUN") {
+		t.Errorf("sequential console history lost:\n%s", history)
 	}
 	if !strings.Contains(view, "SECOND-RUN") {
 		t.Errorf("current command output missing:\n%s", view)
@@ -334,7 +338,7 @@ func TestBarRendersBrandAndTabs(t *testing.T) {
 		t.Errorf("tab strip not below the open overlay (row %d): %q", stripAt, lines[stripAt])
 	}
 
-	// Esc clears the overlay (output ephemeral) and drops the strip to row 1.
+	// Esc hides the overlay and drops the strip to row 1, retaining history.
 	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	lines = strings.Split(m.View().Content, "\n")
 	if !strings.Contains(lines[1], "(no tabs)") {
@@ -679,17 +683,25 @@ func TestTabStripLeadingMargin(t *testing.T) {
 	}
 }
 
-// Typing (suggestions take the overlay) wipes any shown command output,
-// so backspacing to an empty line doesn't resurface it.
-func TestTypingClearsOutput(t *testing.T) {
+// Typing lets suggestions take the display without erasing native history;
+// backspacing to an empty line resurfaces earlier command output.
+func TestTypingPreservesConsoleHistory(t *testing.T) {
 	m := newTestModel(t, 80, 20)
 	runOverlayCommand(t, m, "printf", "OUTPUT\\r\\n")
 	if !strings.Contains(m.console.GridText(), "OUTPUT") {
 		t.Fatal("precondition: output not in console")
 	}
 	_, _ = m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"}) // a printable key
-	if strings.Contains(m.console.GridText(), "OUTPUT") {
-		t.Errorf("typing did not clear the overlay output:\n%s", m.console.GridText())
+	if !strings.Contains(m.console.GridText(), "OUTPUT") {
+		t.Fatal("typing erased history")
+	}
+	m.sugg = candidates("candidate")
+	if strings.Contains(m.View().Content, "OUTPUT") || !strings.Contains(m.View().Content, "candidate") {
+		t.Fatal("suggestions did not replace the display")
+	}
+	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	if !strings.Contains(m.View().Content, "OUTPUT") {
+		t.Fatal("empty palette did not restore history")
 	}
 }
 
@@ -818,7 +830,7 @@ func TestRunningCommandDoubleCtrlCKills(t *testing.T) {
 }
 
 // Detaching (Ctrl+Y) from a running command keeps it running and
-// preserves its output (the ephemeral clear is suppressed while busy).
+// preserves its output while busy.
 func TestRunningCommandDetachPreservesOutput(t *testing.T) {
 	m := newTestModel(t, 80, 20)
 	startOverlayCommand(t, m, "sh", "-c", "echo live; read x")
@@ -1667,9 +1679,8 @@ func TestClickPaletteWhileFocusedKeepsOutput(t *testing.T) {
 	}
 }
 
-// TestClickTabIdleWipesOverlay: an idle palette click on a tab wipes the
-// ephemeral overlay (mirrors Esc).
-func TestClickTabIdleWipesOverlay(t *testing.T) {
+// Clicking a tab hides the palette without erasing its command history.
+func TestClickTabIdlePreservesConsoleHistory(t *testing.T) {
 	m := newTestModel(t, 80, 20)
 	addExitedTab(t, m, "t1")
 	runOverlayCommand(t, m, "echo", "hello-overlay")
@@ -1683,8 +1694,15 @@ func TestClickTabIdleWipesOverlay(t *testing.T) {
 	if m.focusPalette {
 		t.Error("clicking a tab should leave the palette")
 	}
-	if strings.TrimSpace(stripSGR(m.console.GridText())) != "" {
-		t.Errorf("idle tab-click did not wipe the overlay:\n%q", m.console.GridText())
+	if !strings.Contains(m.console.GridText(), "hello-overlay") {
+		t.Fatal("tab-click erased history")
+	}
+	if strings.Contains(m.View().Content, "hello-overlay") {
+		t.Fatal("hidden palette is still visible")
+	}
+	_, _ = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+	if !strings.Contains(m.View().Content, "hello-overlay") {
+		t.Fatal("refocus did not show history")
 	}
 }
 

@@ -55,3 +55,37 @@ func TestConsoleCloseJoinsCommandAndReleasesCore(t *testing.T) {
 		t.Fatal("core was not released")
 	}
 }
+
+func TestConsoleRunsKeepEarlierOutputAndResetInputModes(t *testing.T) {
+	c := NewConsole(5, 60, 32, nil)
+	t.Cleanup(func() { _ = c.Close() })
+	if started, err := c.Run(nil, "$ first", "printf", "FIRST_OUTPUT\r\n\033[?1;2004h\033[31m"); err != nil || !started {
+		t.Fatalf("first command: %t %v", started, err)
+	}
+	awaitInput(t, "first command completed", func() bool { return !c.Busy() })
+	if !c.ApplicationCursorKeys() || !c.BracketedPaste() {
+		t.Fatal("fixture did not leave input modes enabled")
+	}
+	if started, err := c.Run(nil, "$ second", "printf", "SECOND_OUTPUT"); err != nil || !started {
+		t.Fatalf("second command: %t %v", started, err)
+	}
+	awaitInput(t, "second command completed", func() bool { return !c.Busy() })
+	if c.ApplicationCursorKeys() || c.BracketedPaste() || c.IsAlt() {
+		t.Fatal("previous command's input modes leaked")
+	}
+	if !c.ShowError("LOCAL_FAILURE") {
+		t.Fatal("idle console refused diagnostic")
+	}
+	text := strings.Join(append(c.Scrollback(), c.GridText()), "\n")
+	last := -1
+	for _, marker := range []string{"$ first", "FIRST_OUTPUT", "$ second", "SECOND_OUTPUT", "LOCAL_FAILURE"} {
+		at := strings.Index(text, marker)
+		if at <= last {
+			t.Fatalf("retained command order/loss at %q: %q", marker, text)
+		}
+		last = at
+	}
+	if strings.Count(text, "exit 0") != 2 {
+		t.Fatalf("exit notices lost or duplicated: %q", text)
+	}
+}

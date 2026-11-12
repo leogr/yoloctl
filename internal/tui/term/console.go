@@ -55,9 +55,9 @@ func NewConsole(rows, cols int, scrollbackLines int, onData func()) *Console {
 
 // Run starts argv in the console, echoing the caller-styled display
 // line first (the TUI renders a shell-like `❯ yoloctl <command>`
-// prompt). The buffer is cleared: the palette overlay shows one
-// command's output at a time ("ephemeral" — the next command replaces
-// the previous). Returns false (and does nothing) while a previous
+// prompt). Earlier commands remain in the native screen/scrollback, under
+// its existing retention limit; transient terminal state is reset before the
+// next prompt. Returns false (and does nothing) while a previous
 // command is still running — the caller surfaces "busy".
 func (c *Console) Run(env []string, display string, argv ...string) (bool, error) {
 	c.mu.Lock()
@@ -71,7 +71,7 @@ func (c *Console) Run(env []string, display string, argv ...string) (bool, error
 	if c.cmd != nil {
 		return false, nil
 	}
-	c.Clear() // the embedded emulator's Clear
+	c.ClearKeepHistory() // old pumps have joined before c.cmd becomes nil
 	if display == "" {
 		display = "$ " + shellLine(argv)
 	}
@@ -109,7 +109,7 @@ func (c *Console) ShowError(message string) bool {
 		}
 		return r
 	}, ansi.Strip(message))
-	c.Clear()
+	c.ClearKeepHistory()
 	c.echo("\x18\x1b\\" + strings.ReplaceAll(c.logNotice(1, message), "\n", "\r\n") + "\r\n")
 	return true
 }

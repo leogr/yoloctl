@@ -795,7 +795,7 @@ func (m *model) openTab(args []string) {
 	m.tabs.Add(t)
 	m.layoutTab(t)
 	m.focusPalette = false
-	m.clearConsoleOutput() // opening a tab takes focus off the palette
+	m.resetConsoleView() // opening a tab takes focus off the palette
 	m.status = ""
 	m.watchPaneExit(p)
 }
@@ -1309,14 +1309,14 @@ func (m *model) enterPalette() {
 
 // leavePaletteForTab moves focus from the palette to the active tab. A
 // running console command detaches with its output preserved (mirrors Ctrl+Y
-// while busy); an idle palette wipes the ephemeral overlay (mirrors Esc).
+// while busy); an idle palette hides the overlay while retaining its history.
 // Callers ensure a tab exists.
 func (m *model) leavePaletteForTab() {
 	m.focusPalette = false
 	if m.console.Busy() {
 		m.scrollToLive()
 	} else {
-		m.clearConsoleOutput() // also resets scrollOff and suggNav
+		m.resetConsoleView() // also resets scrollOff and suggNav
 	}
 }
 
@@ -1412,12 +1412,12 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// An empty pane takes no key: the palette key hides the palette,
 		// and the next key typed opens it again.
 		m.focusPalette = false
-		m.clearConsoleOutput()
+		m.resetConsoleView()
 	case paletteKey: // double-tap: pass the literal key to the child
 		if cur != nil {
 			m.sendKey(cur.Session, k, false)
 			m.focusPalette = false
-			m.clearConsoleOutput() // focus left the palette: wipe output
+			m.resetConsoleView() // focus left the palette: hide output
 		}
 	case k.Code == tea.KeyEscape && m.newTab != nil:
 		m.cancelNewTab() // Esc ends prefix c; an empty pane stays
@@ -1428,11 +1428,11 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.detachPane(t, t.Focused())
 		if m.tabs.Current() != nil {
 			m.focusPalette = false
-			m.clearConsoleOutput()
+			m.resetConsoleView()
 		}
 	case k.Code == tea.KeyEscape:
 		m.focusPalette = false // hide the overlay
-		m.clearConsoleOutput() // focus left the palette: wipe output
+		m.resetConsoleView()   // focus left the palette: hide output
 	case k.Code == tea.KeyPgUp: // page the overlay's scrollback up
 		m.scrollBy(m.overlayPage())
 	case k.Code == tea.KeyPgDown:
@@ -1602,13 +1602,11 @@ func (m *model) handleExitedTabKey(k tea.Key) tea.Cmd {
 	return nil
 }
 
-// clearConsoleOutput drops the palette overlay's command buffer and any
-// scroll offset. The overlay output is ephemeral (decided 2026-06-15):
-// it's wiped when focus leaves the palette, or when other content (the
-// suggestion list) takes over the overlay — never lingering behind. A
-// running command is left running; only its rendered buffer is reset.
-func (m *model) clearConsoleOutput() {
-	m.console.Clear()
+// resetConsoleView returns the console to its live tail and clears palette
+// navigation state. Hiding output or replacing it with suggestions never
+// erases native history; refocusing the palette can show it again.
+func (m *model) resetConsoleView() {
+	m.console.ScrollToBottom()
 	m.scrollToLive()
 	m.suggNav = false // focus left the palette: forget menu-steering
 }
@@ -1631,10 +1629,10 @@ func (m *model) refreshSuggestions() {
 		m.sugg, m.suggSel = nil, 0
 		return
 	}
-	// Typing replaces any shown command output with suggestions: wipe the
-	// buffer so backspacing back to an empty line doesn't resurface it.
+	// Suggestions replace the display, not native history. Backspacing to
+	// an empty line can show the retained console again.
 	if !m.console.Busy() && m.consoleContentRows() > 0 {
-		m.clearConsoleOutput()
+		m.resetConsoleView()
 	}
 	if m.program == nil { // model under test
 		return

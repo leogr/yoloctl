@@ -1,6 +1,6 @@
 # TUI log notices
 
-Verification: `30465c54600a95835e23b2d554ea0325dcb27af3` and accompanying changes.
+Verification: `b464ce3b232a8a6f55bf3c1d60ddfd9761815ce3` and accompanying changes.
 
 [FACT] Host-owned TUI status messages, pane-menu refusals and terminal exit
 notices use `prettylog` kinds, glyphs and bounded message escaping. Errors use
@@ -21,8 +21,14 @@ and theme roles; a low-disk warning uses `Warn`, critical uses `Bad`.
 host does not parse rendered command output into another log stream. After
 the old command's I/O pumps join, the console cancels an unfinished parser
 string before appending its host exit notice; an uncoloured notice cannot
-be swallowed by an incomplete child OSC. A subsequent command still performs
-the existing full reset. [4](#source-4) [7](#source-7) [8](#source-8)
+be swallowed by an incomplete child OSC. Before the next prompt, `Console.Run`
+uses the qualified native history-preserving reset: earlier primary rows and
+scrollback remain under the existing retention limit, while terminal/parser
+and Go-side query/focus/clipboard state start fresh. No rows are exported or
+replayed and no disk log is added. Local errors also append through this reset.
+Palette dismissal, focus changes and suggestion replacement hide or replace
+the display without erasing history; showing the console again restores it. [4](#source-4) [7](#source-7) [8](#source-8)
+[12](#source-12) [13](#source-13) [14](#source-14)
 
 ## Sources
 
@@ -37,3 +43,6 @@ the existing full reset. [4](#source-4) [7](#source-7) [8](#source-8)
 9. <a id="source-9"></a> [Toast model](../../internal/tui/spaceview/model.go#L347) — `say` and event classification.
 10. <a id="source-10"></a> [Toast rendering](../../internal/tui/spaceview/layout.go#L328) — shared glyphs and semantic tone.
 11. <a id="source-11"></a> [Disk warnings](../../internal/tui/spaceview/disks.go#L204) — `diskEvents`.
+12. <a id="source-12"></a> [History-preserving reset](../../internal/tui/term/emulator.go#L226) — `ClearKeepHistory`, `reset`; native `Terminal.ResetKeepHistory`.
+13. <a id="source-13"></a> [Consecutive-command regression](../../internal/tui/term/console_test.go#L57) — retained prompts/output/exit notices and fresh input modes; lifecycle_test.go retains old direct-child text but rejects the late descendant's output and clipboard tail.
+14. <a id="source-14"></a> [History-preserving UI transitions](../../internal/tui/tui.go#L1603) — `resetConsoleView`, `leavePaletteForTab`, `refreshSuggestions`.

@@ -331,7 +331,10 @@ checks transport behavior; it does not measure graphical parity. [4](#source-4)
 
 [FACT] Host status, pane refusals and exit notices share the log glyphs and
 semantic theme roles. Direct-action feedback remains visible at every log
-level; command logs keep their own filter. [48](#source-48)
+level; command logs keep their own filter. Console reuse retains native history
+and resets transient terminal/input state before the next prompt. Palette
+dismissal, focus changes, suggestions and local errors retain that history;
+it reappears when the console is shown. No disk log or row replay is added. [48](#source-48)
 
 ## Sources
 

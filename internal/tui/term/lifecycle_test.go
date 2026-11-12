@@ -139,8 +139,9 @@ func TestConsoleReuseExcludesRetainedDescendantOutput(t *testing.T) {
 			})
 		}
 		awaitInput(t, "replacement complete", func() bool { return !c.Busy() })
-		if got := c.GridText(); !strings.Contains(got, marker) || strings.Contains(got, "OLD_") {
-			t.Fatalf("replacement display contaminated: %q", got)
+		got := strings.Join(append(c.Scrollback(), c.GridText()), "\n")
+		if !strings.Contains(got, marker) || !strings.Contains(got, "OLD_COMMAND") || strings.Contains(got, "OLD_TAIL") {
+			t.Fatalf("replacement lost retained history or accepted late output: %q", got)
 		}
 	}
 	effectsMu.Lock()

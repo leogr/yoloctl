@@ -332,7 +332,7 @@ func (m *model) acceptSpaceSwitch() {
 	m.attachPrefix = nil
 	m.selectionPointer = nil
 	m.pal.Restore(palette.Draft{}) // history belongs to the palette, not the draft
-	m.clearConsoleOutput()
+	m.resetConsoleView()
 	m.focusPalette = true
 	m.status = ""
 }
