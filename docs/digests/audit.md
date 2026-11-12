@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `da9b51000877e5178f47774f1a837e66ddcedd42` and accompanying changes.
+Verification: `3e04d2b43ab4c848462358f2cc74cc1845328f5f` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
@@ -53,7 +53,9 @@ media. The bundled kernel includes BTF/JIT/tracing; this is not live load proof.
 [FACT] Pinned rules cover runtime/admin sockets, infrastructure, workload
 BPF/modules, namespaces, process inspection, selected file denials and persistence.
 The noisy anonymous-executable rule is disabled; `yolo-audit-test` is the controlled
-signal. Results distinguish success/refusal, not policy mechanism. Fixed paths
+signal. The added escape family enables only successful UID-to-root requests
+and its separate `yolo-esc-test` ancestry control; six candidates stay disabled.
+Results distinguish success/refusal, not policy mechanism or escape proof. Fixed paths
 and explicit context narrow setup/debugger, successful broker-read and
 host-maintenance exceptions.
 [Rule paths and container recognition](audit-rules.md) explain symlink unpack

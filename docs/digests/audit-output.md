@@ -1,6 +1,6 @@
 # Audit event output and following
 
-Verification: `e078b4ee0cf92e680a4a5ce2f1e52c434e487227` and accompanying changes.
+Verification: `3e04d2b43ab4c848462358f2cc74cc1845328f5f` and accompanying changes.
 
 [FACT] `audit logs --follow` prints the first bounded-history summary to stderr,
 then prints another only when collector drops, metadata gaps or retention-gap
@@ -29,13 +29,16 @@ changes remain visible. [3](#source-3)
 
 [FACT] New records add `output` and `output_fields`. The latter allow-list keeps
 process name/executable, user name/UID, container ID/name, file/socket name,
-source/target, selected remote IP/result and supported `yolo.*` identity fields.
+source/target, selected client/remote IP, remote port, parent executable,
+UID syscall arguments/result and supported `yolo.*` identity fields. UID and
+remote-port fields accept bounded unsigned numeric JSON as well as strings;
+other fields do not gain numeric coercion.
 Selected values share a 4 KiB budget; individual strings are escaped and capped
 at 1024 bytes. The stored message is capped at 1024 bytes and reconstructed
 from the pinned template and selected fields. Arbitrary incoming `output`,
 argv, environment, aggregate labels and buffers are not persisted. Unavailable
 metadata clears identity claims rather than retaining stale plugin values.
-[4](#source-4) [5](#source-5)
+[4](#source-4) [5](#source-5) [8](#source-8)
 
 [FACT] Existing records remain readable: pretty messages reconstruct the current
 pinned template from their older flattened fields. Missing process/user/name
@@ -52,3 +55,4 @@ rules digest. [4](#source-4) [5](#source-5) [6](#source-6) [7](#source-7)
 5. <a id="source-5"></a> [Selected rendering](../../internal/audit/output.go#L1) — `retainedFields`, `SelectedFields`, `RenderOutput`, `FormatPrettyOutput`.
 6. <a id="source-6"></a> [Pinned rules](../../internal/audit/rules.yaml#L1) — rule output templates.
 7. <a id="source-7"></a> [Native toggle](../../cmd/yoloctl/controller_audit_linux.go#L1) — `audit.enable`.
+8. <a id="source-8"></a> [Escape output regressions](../../internal/audit/escape_output_test.go#L1) — selected UID/network round trips, invalid numeric types and private-field exclusions.

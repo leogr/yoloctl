@@ -200,11 +200,21 @@ func ParseEvent(raw []byte) (Event, error) {
 	remaining := 4096
 	for _, key := range retainedFields {
 		value := get(key)
-		if key == "user.uid" && value == "" {
-			var uid json.Number
-			if json.Unmarshal(input.Fields[key], &uid) == nil {
-				if _, err := strconv.ParseUint(uid.String(), 10, 32); err == nil {
-					value = uid.String()
+		// Falco JSON may encode UID arguments and ports as numbers rather
+		// than strings. Only these selected unsigned fields accept numbers;
+		// objects, arrays, booleans and arbitrary fields remain excluded.
+		bits := 0
+		switch key {
+		case "user.uid", "evt.arg.uid", "evt.arg.ruid", "evt.arg.euid", "evt.arg.suid":
+			bits = 32
+		case "fd.rport":
+			bits = 16
+		}
+		if bits != 0 && value == "" {
+			var number json.Number
+			if json.Unmarshal(input.Fields[key], &number) == nil {
+				if _, err := strconv.ParseUint(number.String(), 10, bits); err == nil {
+					value = number.String()
 				}
 			}
 		}

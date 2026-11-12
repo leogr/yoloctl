@@ -17,11 +17,16 @@ func TestRulesKeepPrivacyAndExplicitNoiseBoundaries(t *testing.T) {
 	if err := yaml.Unmarshal([]byte(Rules), &entries); err != nil {
 		t.Fatal(err)
 	}
-	allowed := map[string]bool{"proc.name": true, "proc.exepath": true, "user.name": true, "user.uid": true, "container.id": true, "container.name": true, "evt.res": true, "fd.name": true, "fs.path.name": true, "fs.path.source": true, "fs.path.target": true}
+	allowed := map[string]bool{"proc.name": true, "proc.exepath": true, "user.name": true, "user.uid": true, "container.id": true, "container.name": true, "evt.res": true, "fd.name": true, "fs.path.name": true, "fs.path.source": true, "fs.path.target": true, "fd.cip": true, "fd.rip": true, "fd.rport": true, "evt.arg.uid": true, "evt.arg.ruid": true, "evt.arg.euid": true, "evt.arg.suid": true, "proc.pexepath": true}
 	for _, key := range []string{"box", "space", "agent", "account", "runtime_mode", "network_unconfined", "metadata_available"} {
 		allowed["yolo."+key] = true
 	}
 	fields := regexp.MustCompile(`%([a-z][a-z0-9_.]*(?:\[[^]]+\])?)`)
+	disabledRules := map[string]bool{
+		"Yolo anonymous executable": true, "Yolo PATH directory write": true,
+		"Yolo unexpected confined write": true, "Yolo connect outside inner netns": true,
+		"Yolo root process": true, "Yolo container escape": true, "Yolo device access": true,
+	}
 	rules, disabled := 0, 0
 	for _, entry := range entries {
 		if entry.Rule == "" {
@@ -30,7 +35,7 @@ func TestRulesKeepPrivacyAndExplicitNoiseBoundaries(t *testing.T) {
 		rules++
 		if entry.Enabled != nil && !*entry.Enabled {
 			disabled++
-			if entry.Rule != "Yolo anonymous executable" {
+			if !disabledRules[entry.Rule] {
 				t.Fatal("unexpected disabled detection", entry.Rule)
 			}
 		}
@@ -39,7 +44,17 @@ func TestRulesKeepPrivacyAndExplicitNoiseBoundaries(t *testing.T) {
 				t.Fatal("unreviewed persisted field", entry.Rule, field[1])
 			}
 		}
-		if strings.Contains(entry.Condition, "metadata_available") || strings.Contains(entry.Condition, "network_unconfined") {
+		// Only the declared network-confined invariant may narrow by this
+		// positive label. Missing/unknown labels must not imply confinement.
+		condition := entry.Condition
+		if entry.Rule == "Yolo connect outside inner netns" {
+			const label = `container.label[yoloctl.audit.network_unconfined] = "false"`
+			if strings.Count(condition, label) != 1 {
+				t.Fatal("missing explicit network-confined declaration", condition)
+			}
+			condition = strings.Replace(condition, label, "", 1)
+		}
+		if strings.Contains(condition, "metadata_available") || strings.Contains(condition, "network_unconfined") {
 			t.Fatal("metadata/network setting suppressed rule", entry.Rule)
 		}
 		if !strings.Contains(entry.Output, "%evt.res") {
@@ -51,7 +66,7 @@ func TestRulesKeepPrivacyAndExplicitNoiseBoundaries(t *testing.T) {
 			}
 		}
 	}
-	if rules != 9 || disabled != 1 {
+	if rules != 17 || disabled != len(disabledRules) {
 		t.Fatal(rules, disabled)
 	}
 	if !strings.Contains(Rules, "not container.id exists") || !strings.Contains(Rules, "yolo_openshell_setup") {

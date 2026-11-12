@@ -805,6 +805,49 @@ space. Record actual metadata gaps, false positives and missing syscall evidence
 a rule-validation or synthetic event fixture PASS does not establish these hits.
 
 
+
+#### Escape-family qualification
+
+Keep this campaign separate from ordinary audit enable/event checks. On the
+final candidate, only **Yolo UID set to root** and **Yolo audit escape test**
+ship enabled; all six other escape candidates remain disabled. Do not enable
+candidates in the active team space or infer qualification from `-V`/nodriver.
+Run the non-skipped archive test on the authorized privileged executor with
+both `FALCO_TEST_ARCHIVES` (qualified official tarballs) and
+`FALCO_TEST_ENGINE=modern_ebpf`; save the actual result and architecture.
+
+In one disposable confined box, copy an ELF executable to the distinct
+13-byte basename `yolo-esc-test` and run it through the ordinary confined
+launch/session path. Require its selection-control event. The same executable
+run through outer maintenance (`nerdctl exec --user sandbox`) is the negative
+leg and must not emit that control. A control hit proves neither an escape nor
+coverage of another predicate. Record kernel, Falco/OpenShell versions, labels,
+collector health and available loss counters before/after every window.
+
+With the fixture's managed collector acknowledged stopped, an authorized
+read-only diagnostic capture should record connect/exec fields `fd.cip`,
+`fd.rip`, `fd.rport`, `evt.res`, `proc.aexepath[1]` through `[3]`,
+`proc.pvpid`, `user.uid`, UID arguments and their actual JSON types. Exercise
+ordinary agent traffic to different remotes, localhost and Unix sockets,
+outer-maintenance traffic, unconfined networking and box startup/root helpers.
+No absent tuple may be treated as an escape. SUCCESS and EINPROGRESS must be
+reported separately; source-address anomalies do not prove proxy bypass.
+Keep the network candidate disabled until that evidence is reviewed; root exec
+and host-classified exec remain disabled regardless of this diagnostic.
+
+The benign window is at least 20 minutes on a disposable confined PTY-capable
+box with writable mounts under `/srv` and `/usr/local/bin/project`: clone,
+build/test, npm install, agent work, agent update, box restart and new session.
+Require no enabled escape detections (count control events separately), healthy
+collection and unchanged loss counters, otherwise mark inconclusive. Record
+expected broader-prefix/device candidate activity rather than treating it as a
+violated invariant. Check PTY aliases, descriptor aliases, directory/O_PATH
+opens and `/dev/shm`. A writable single-file PATH-child bind remains a known
+counterexample to the PATH candidate. Any later candidate enablement requires
+the plan's evidence and a separately reviewed change. Lima arm64 and
+Firecracker amd64 require separate native baselines; one does not qualify the
+other. No exploit, grant widening or automatic remediation is needed.
+
 For Firecracker, begin with a separately owned old-image fixture. Audit enable
 must refuse before installing tools or changing desired state, with the explicit
 image-update hint. From the host run

@@ -1,6 +1,6 @@
 # Audit rule paths and container recognition
 
-Verification: `da9b51000877e5178f47774f1a837e66ddcedd42` and accompanying changes.
+Verification: `3e04d2b43ab4c848462358f2cc74cc1845328f5f` and accompanying changes.
 
 [FACT] Filesystem rules distinguish the path changed by a syscall from the
 payload of a new symbolic link. In pinned libs 0.26.1, `fs.path.source` for
@@ -51,6 +51,38 @@ recognized container ID. These source contracts require native event
 qualification; a no-driver engine or structural rule test does not prove live
 cgroup identity or noise rates. [5](#source-5) [6](#source-6) [8](#source-8)
 
+## Escape candidates
+
+[FACT] Seven added rules use schema-1/protocol-2 confined-container labels and
+OpenShell runtime ancestry, excluding the runtime executables and fixed helper.
+The eighth, disabled host-classification candidate, uses ancestry without labels.
+This selects descendants, including possible setup children; it does not prove
+which confinement stage a process reached. Only **UID set to root** (successful
+setuid/setreuid/setresuid requesting a zero UID, including saved UID) and
+**audit escape test** (`yolo-esc-test`) ship enabled. An already-root no-op can
+match; capabilities, setfsuid and GID transitions are outside scope. The control
+checks selection only, never the escape predicates. [1](#source-1) [12](#source-12)
+
+[FACT] Six candidates ship disabled: direct PATH-child mutation/write-open,
+broader protected-prefix writes, connects outside the inner address, root exec,
+host-classified exec and device opens. Writable directory mounts can permit
+prefix writes; writable single-file binds can permit direct PATH-child writes.
+The network predicate requires an explicit false network-unconfined label and a
+known client tuple; it excludes loopback and the inner `10.200.0.2` address.
+`EINPROGRESS` means an attempt in progress, not completed egress. A bypass
+retaining that inner address and unconnected UDP are not detected. Device
+exclusions include PTY and descriptor aliases. Host attribution alone cannot
+establish escape. These rules remain disabled pending separate qualification.
+[1](#source-1) [12](#source-12) [13](#source-13) [14](#source-14)
+
+[FACT] The shared label predicate excludes privileged runtime mode and absent
+labels. Unconfined-network descendants remain eligible for the enabled
+UID/control rules. Labels and ancestry remain selection heuristics; the rules
+provide alerts without remediation or tamper-proof guarantees.
+Existing rules and the broker exception are byte-identical. Structural tests
+and pinned engine compilation do not prove live selection or low noise.
+[1](#source-1) [12](#source-12)
+
 ## Sources
 
 1. <a id="source-1"></a> [Pinned rules](../../internal/audit/rules.yaml#L1) — `yolo_fs_target_mutation`, persistence/infrastructure and setup context.
@@ -64,3 +96,6 @@ cgroup identity or noise rates. [5](#source-5) [6](#source-6) [8](#source-8)
 9. <a id="source-9"></a> [Broker-read regressions](../../internal/audit/process_inspection_test.go#L1) — `TestOpenShellBrokerReadException`, positive/negative equality fixtures and unchanged inspection scope; not a Falco evaluator.
 10. <a id="source-10"></a> [Native audit handlers](../../cmd/yoloctl/controller_audit_linux.go#L1) — explicit enable installs the pinned `RulesDigest`.
 11. <a id="source-11"></a> [Configuration](../../internal/audit/config.go#L1) — automatic file reloads disabled.
+12. <a id="source-12"></a> [Escape regressions](../../internal/audit/escape_rules_test.go#L1) — enablement, selectors, original-rule hash, PATH parity and network/device boundaries.
+13. <a id="source-13"></a> [Composer](../../internal/agentbox/compose.go#L200) — extra mounts, `pathDirs`, `lintPathOverlap`.
+14. <a id="source-14"></a> [PTY capability](../../internal/capabilities/capabilities.go#L1) — permitted PTY aliases.

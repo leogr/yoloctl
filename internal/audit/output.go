@@ -14,6 +14,7 @@ import (
 var retainedFields = []string{
 	"proc.name", "proc.exepath", "user.name", "user.uid", "container.id", "container.name",
 	"fd.name", "fs.path.name", "fs.path.source", "fs.path.target", "fd.rip", "evt.res",
+	"fd.cip", "fd.rport", "evt.arg.uid", "evt.arg.ruid", "evt.arg.euid", "evt.arg.suid", "proc.pexepath",
 	"yolo.box", "yolo.space", "yolo.account", "yolo.agent", "yolo.runtime_mode",
 	"yolo.network_unconfined", "yolo.metadata_available",
 }

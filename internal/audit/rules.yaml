@@ -105,3 +105,84 @@
   output: "Yolo audit test  executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
   priority: NOTICE
   tags: [yoloctl]
+
+# Escape candidates: ancestry is a selector, not proof of completed confinement.
+# Only UID-to-root and the selection control ship enabled. See audit-rules.md.
+- macro: yolo_confined_box
+  condition: (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and container.label[yoloctl.openshell.protocol] = "2")
+
+- list: yolo_openshell_runtime_paths
+  items: [/.openshell/runtime/openshell-sandbox, /.openshell/runtime/openshell-supervisor]
+
+- macro: yolo_runtime_descendant
+  condition: (yolo_confined_box and proc.aexepath in (yolo_openshell_runtime_paths) and not proc.exepath in (yolo_openshell_runtime_paths) and not proc.exepath = /opt/yoloctl/openshell-helper/yoloctl-openshell-helper)
+
+- rule: Yolo PATH directory write
+  desc: Successful mutation or write-open of a direct PATH child; writable single-file binds are a known counterexample
+  condition: >-
+    yolo_runtime_descendant and yolo_fs_mutation and evt.res = SUCCESS and (fs.path.name regex "^(/bin|/sbin|/usr/bin|/usr/sbin|/usr/local/bin|/usr/local/sbin)/[^/]+$" or fs.path.source regex "^(/bin|/sbin|/usr/bin|/usr/sbin|/usr/local/bin|/usr/local/sbin)/[^/]+$" or (yolo_fs_target_mutation and fs.path.target regex "^(/bin|/sbin|/usr/bin|/usr/sbin|/usr/local/bin|/usr/local/sbin)/[^/]+$"))
+  output: "Yolo PATH directory write path=%fs.path.name source=%fs.path.source target=%fs.path.target executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
+  priority: CRITICAL
+  tags: [yoloctl]
+  enabled: false
+
+- rule: Yolo unexpected confined write
+  desc: Suspicious successful mutation, not an invariant because declared extra mounts may permit it
+  condition: >-
+    yolo_runtime_descendant and yolo_fs_mutation and evt.res = SUCCESS and (fs.path.name pmatch (/etc, /usr, /lib, /lib64, /boot, /root, /opt, /srv, /var/lib, /var/log, /app, /proc/sys, /sys, /.openshell) or fs.path.source pmatch (/etc, /usr, /lib, /lib64, /boot, /root, /opt, /srv, /var/lib, /var/log, /app, /proc/sys, /sys, /.openshell) or (yolo_fs_target_mutation and fs.path.target pmatch (/etc, /usr, /lib, /lib64, /boot, /root, /opt, /srv, /var/lib, /var/log, /app, /proc/sys, /sys, /.openshell)))
+  output: "Yolo unexpected confined write path=%fs.path.name source=%fs.path.source target=%fs.path.target executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
+  priority: NOTICE
+  tags: [yoloctl]
+  enabled: false
+
+- rule: Yolo connect outside inner netns
+  desc: Client address differs from the inner netns; tuple semantics require live qualification
+  condition: >-
+    yolo_runtime_descendant and evt.type = connect and evt.res in (SUCCESS, EINPROGRESS) and fd.type in (ipv4, ipv6) and container.label[yoloctl.audit.network_unconfined] = "false" and fd.cip exists and fd.cip != "10.200.0.2" and fd.rnet != "127.0.0.0/8" and fd.rip != "::1"
+  output: "Yolo connect outside inner netns client=%fd.cip remote=%fd.rip port=%fd.rport executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
+  priority: CRITICAL
+  tags: [yoloctl]
+  enabled: false
+
+- rule: Yolo UID set to root
+  desc: Successful selected UID-setting call requesting root; ancestry is not proof of confinement stage
+  condition: >-
+    yolo_runtime_descendant and evt.type in (setuid, setreuid, setresuid) and evt.res = SUCCESS and (evt.arg.uid = 0 or evt.arg.ruid = 0 or evt.arg.euid = 0 or evt.arg.suid = 0)
+  output: "Yolo UID set to root requested_uid=%evt.arg.uid requested_ruid=%evt.arg.ruid requested_euid=%evt.arg.euid requested_suid=%evt.arg.suid parent=%proc.pexepath executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
+  priority: CRITICAL
+  tags: [yoloctl]
+
+- rule: Yolo root process
+  desc: Successful root exec may also be legitimate runtime setup; disabled pending evidence
+  condition: >-
+    yolo_runtime_descendant and evt.type in (execve, execveat) and evt.res = SUCCESS and user.uid = 0
+  output: "Yolo root process parent=%proc.pexepath executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
+  priority: CRITICAL
+  tags: [yoloctl]
+  enabled: false
+
+- rule: Yolo container escape
+  desc: Host classification plus runtime ancestry is not sufficient to distinguish escape from missing attribution
+  condition: >-
+    evt.type in (execve, execveat) and evt.res = SUCCESS and container.id = host and proc.aexepath in (yolo_openshell_runtime_paths)
+  output: "Yolo container escape parent=%proc.pexepath executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
+  priority: CRITICAL
+  tags: [yoloctl]
+  enabled: false
+
+- rule: Yolo device access
+  desc: Successful device open; aliases, directory opens and shared memory need a PTY baseline
+  condition: >-
+    yolo_runtime_descendant and evt.type in (open, openat, openat2) and evt.res = SUCCESS and fs.path.name startswith /dev/ and not fs.path.name in (/dev/null, /dev/zero, /dev/urandom, /dev/random, /dev/tty, /dev/ptmx, /dev/stdin, /dev/stdout, /dev/stderr) and not fs.path.name startswith /dev/pts/ and not fs.path.name startswith /dev/fd/
+  output: "Yolo device access path=%fs.path.name executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
+  priority: WARNING
+  tags: [yoloctl]
+  enabled: false
+
+- rule: Yolo audit escape test
+  desc: Selection-macro control only; does not qualify an escape invariant
+  condition: >-
+    yolo_runtime_descendant and evt.type in (execve, execveat) and proc.name = yolo-esc-test
+  output: "Yolo audit escape test  executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
+  priority: NOTICE
+  tags: [yoloctl]
