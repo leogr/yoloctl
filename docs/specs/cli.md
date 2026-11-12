@@ -226,8 +226,10 @@ Lima/vendor and parsed marker formats retain their existing owners and bytes.
 use the running controller. Audit never starts a stopped space. Enable is
 explicit; viewing never installs tools. Old Firecracker images require explicit
 `space recreate NAME --update-vm-image`; audit never replaces media. Exports refuse overwrite and publish
-only completed privacy-filtered output. Pretty logs show the wrapped rule message;
-`--verbose` adds raw fields and JSON always retains them. The origin distinguishes
+only completed privacy-filtered output. Pretty logs show the wrapped pinned rule
+message, shared severity glyphs/tones and consecutive repeat summaries;
+`--verbose` adds aligned retained fields. Log-level filtering and folding never
+change JSON/export records. The origin distinguishes
 Falco-reported VM processes, unlabelled containers and missing IDs without
 inventing box metadata. Unavailable assignments stay hidden in pretty text. Follow
 summaries appear initially and when loss/gap state changes. Terminal colour

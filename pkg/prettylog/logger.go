@@ -127,6 +127,9 @@ type Options struct {
 	Limits     Limits
 	Fold       FoldOptions
 	Now        func() time.Time // nil uses time.Now
+	// Emit opts into structured presentation instead of the byte destination.
+	// FormatWire ignores this field. Sinks must not reenter this Logger.
+	Emit EmissionSink
 }
 
 // Logger owns one sink: its writer, its fold state and its step ids. It is
@@ -155,11 +158,12 @@ type Logger struct {
 
 // foldRun is the open run of identical records.
 type foldRun struct {
-	key  string
-	n    int
-	last time.Time
-	col  int
-	gen  uint64
+	key   string
+	n     int
+	last  time.Time
+	col   int
+	gen   uint64
+	owner uint64
 }
 
 // New returns a Logger writing to w.
@@ -280,7 +284,9 @@ func (l *Logger) Err() error {
 	return l.err
 }
 
-func (l *Logger) emit(r slog.Record) error {
+func (l *Logger) emit(r slog.Record) error { return l.emitOwned(r, 0) }
+
+func (l *Logger) emitOwned(r slog.Record, owner uint64) error {
 	st := StructureOf(r)
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -316,14 +322,14 @@ func (l *Logger) emit(r slog.Record) error {
 			}
 			l.endRun()
 			ln := l.render(r, st, l.depthOf(st))
-			l.write(ln.text)
-			l.run = &foldRun{key: key, last: r.Time, col: ln.col}
+			l.publish(Emission{Kind: EmissionRecord, Record: r.Clone(), Owner: owner, Text: ln.text})
+			l.run = &foldRun{key: key, last: r.Time, col: ln.col, owner: owner}
 			l.arm()
 			return l.err
 		}
 	}
 	l.endRun()
-	l.write(l.render(r, st, l.depthOf(st)).text)
+	l.publish(Emission{Kind: EmissionRecord, Record: r.Clone(), Owner: owner, Text: l.render(r, st, l.depthOf(st)).text})
 	return l.err
 }
 
@@ -356,7 +362,7 @@ func (l *Logger) endRun() {
 	if run == nil || run.n == 0 {
 		return
 	}
-	l.write(l.summary(run))
+	l.publish(Emission{Kind: EmissionRepeatSummary, Owner: run.owner, Repeat: run.n, Until: run.last, Text: l.summary(run)})
 }
 
 // depthOf is a step record's nesting depth, remembered per step id. The map

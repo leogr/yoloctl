@@ -2615,7 +2615,7 @@ func auditOpensLiveSurface(args []string) bool {
 		if a == "help" || a == "--help" || a == "-h" {
 			return false
 		}
-		if a == "--space" || a == "--box" || a == "--since" || a == "--until" || a == "--limit" || a == "--output" {
+		if a == "--space" || a == "--box" || a == "--since" || a == "--until" || a == "--limit" || a == "--output" || a == "--log-level" || a == "--color" {
 			i++
 			continue
 		}

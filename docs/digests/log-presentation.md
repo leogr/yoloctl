@@ -1,6 +1,6 @@
 # Log presentation
 
-Verification: `56a57bcd079bcc8733667b9890b6796f911c6fac` and accompanying changes.
+Verification: `bfc2e8addfd696da0629a8816c26cba6384d9ba7` and accompanying changes.
 
 [FACT] `pkg/prettylog` is a public package of the yoloctl module that renders
 `log/slog` records. It imports no yoloctl or UI package and reads no terminal.
@@ -32,6 +32,16 @@ a length-prefixed key) within the fold window print once, followed by
 timer, `Flush` or `Close`); outcomes, steps and details never fold. `Route`
 sends step records to a sink and other lines to another writer. [4](#source-4)
 [11](#source-11)
+
+[FACT] An optional `Options.Emit` sink receives tagged structured record or
+repeat-summary decisions from the same filter/fold engine instead of byte
+writes. `HandleOwned` associates an opaque local owner, retained only for the
+active run's first record; it never enters attributes, fold keys or wire data.
+Summary metadata carries that owner/count/time; the structured record requires
+consumer domain sanitization. Calls are synchronous under the logger mutex,
+including timer/close, so a sink must neither reenter it nor block on a UI event
+loop. Nil preserves existing bytes; wire framing and step routing are unchanged.
+[17](#source-17) [18](#source-18)
 
 [FACT] A step is records only: `running` once, then at most one end state, with
 `took`, `err` or `reason`; executor output lines are lossy detail records. A
@@ -107,3 +117,6 @@ and the theme's `Warn` tone. [10](#source-10)
 15. <a id="source-15"></a> [Steps block](../../pkg/prettylog/stepview/stepview.go#L1) — `Install`, `Apply`, `blockRows`, `summaryLocked`, `Writer`, `Suspend`, `Close`; failures.go `Failures`; cmd/yoloctl logflags.go `executeRoot` order; stepview_test.go screen regressions.
 
 16. <a id="source-16"></a> [CLI routing](cli-logging.md) — command outcomes, stderr/data separation and input handoffs.
+
+17. <a id="source-17"></a> [Structured emission](../../pkg/prettylog/emission.go#L9) — `Emission`, `EmissionSink`, `HandleOwned`, `publish`.
+18. <a id="source-18"></a> [Structured emission regressions](../../pkg/prettylog/emission_test.go#L1) — owner ordering, filter/timer/flush/close, errors, byte/wire/step parity and serialized callers.

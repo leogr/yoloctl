@@ -5,14 +5,15 @@ package auditui
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/audit"
+	"github.com/leogr/yoloctl/internal/logging/logtheme"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 type Batch struct {
@@ -27,13 +28,20 @@ type loaded struct {
 	Generation uint64
 }
 type tick struct{}
+type rowsReady struct{ sink *rowSink }
 
 type Model struct {
 	ctx                        context.Context
 	space                      string
 	fetch                      Fetch
 	width, height              int
-	events                     []audit.Event
+	sink                       *rowSink
+	stream                     *eventStream
+	active                     *atomic.Pointer[eventStream]
+	verbosity                  prettylog.Verbosity
+	renderer                   *eventRenderer
+	selectedOwner              uint64
+	selectedKind               prettylog.EmissionKind
 	status                     audit.Status
 	summary                    audit.Summary
 	after                      uint64
@@ -49,11 +57,50 @@ type Model struct {
 }
 
 func New(ctx context.Context, space string, fetch Fetch) Model {
-	return Model{ctx: ctx, space: audit.Clean(space), fetch: fetch, width: 80, height: 24, fetching: true}
+	m := Model{ctx: ctx, space: audit.Clean(space), fetch: fetch, width: 80, height: 24, fetching: true, verbosity: prettylog.Normal}
+	m.active = new(atomic.Pointer[eventStream])
+	m.renderer = newEventRenderer(EventOptions{})
+	m.resetStream()
+	return m
 }
 
-func (m Model) WithColor(enabled bool) Model { m.color = enabled; return m }
-func (m Model) Init() tea.Cmd                { return m.load() }
+func (m Model) WithColor(enabled bool) Model {
+	m.color = enabled
+	m.renderer = newEventRenderer(EventOptions{Color: enabled})
+	return m
+}
+
+// WithVerbosity must be applied before Init; health/refusal feedback remains
+// visible independently of the event log filter.
+func (m Model) WithVerbosity(v prettylog.Verbosity) Model {
+	_ = m.stream.close()
+	m.verbosity = v
+	m.resetStream()
+	return m
+}
+func (m *Model) resetStream() {
+	m.sink = newRowSink(retainedRows)
+	m.stream = newEventStream(m.ctx, m.verbosity, m.sink, m.sink.close)
+	m.active.Store(m.stream)
+	m.selectedOwner, m.selectedKind, m.selected, m.offset = 0, 0, 0, 0
+}
+
+// Close also works on the initial value retained by the program's caller:
+// filter changes replace value-model streams, but share this lifetime slot.
+func (m Model) Close() error  { return m.active.Load().close() }
+func (m Model) Init() tea.Cmd { return tea.Batch(tea.RequestBackgroundColor, m.load(), m.waitRows()) }
+func (m Model) waitRows() tea.Cmd {
+	sink, ctx := m.sink, m.ctx
+	return func() tea.Msg {
+		select {
+		case <-sink.wake:
+		case <-sink.done:
+		case <-ctx.Done():
+			return nil
+		}
+		return rowsReady{sink}
+	}
+}
 func (m Model) load() tea.Cmd {
 	generation, query := m.generation, audit.Query{After: m.after, Box: m.filter, Limit: 500, Tail: !m.loadedOnce}
 	return func() tea.Msg {
@@ -64,17 +111,49 @@ func (m Model) load() tea.Cmd {
 	}
 }
 func next() tea.Cmd { return tea.Tick(time.Second, func(time.Time) tea.Msg { return tick{} }) }
-func (m Model) visible() []audit.Event {
-	var result []audit.Event
-	for _, e := range m.events {
-		if m.severity == "" || strings.EqualFold(e.Severity, m.severity) {
-			result = append(result, e)
+func (m Model) visible() []alertRow {
+	var result []alertRow
+	for _, row := range m.sink.snapshot() {
+		if m.severity == "" || strings.EqualFold(row.event.Severity, m.severity) {
+			result = append(result, row)
 		}
 	}
 	return result
 }
+func (m Model) selectedIndex(rows []alertRow) int {
+	for i, row := range rows {
+		if row.owner == m.selectedOwner && row.kind == m.selectedKind {
+			return i
+		}
+	}
+	return min(m.selected, max(0, len(rows)-1))
+}
+func (m *Model) selectRow(rows []alertRow, index int) {
+	m.selected = min(max(0, index), max(0, len(rows)-1))
+	if len(rows) > 0 {
+		m.selectedOwner, m.selectedKind = rows[m.selected].owner, rows[m.selected].kind
+	}
+}
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		bg := prettylog.BackgroundFrom(msg.Color)
+		if bg.Known {
+			logtheme.SetBackground(msg.Color)
+			m.renderer = newEventRenderer(EventOptions{Color: m.color, Palette: logtheme.Palette(bg.Dark, msg.Color)})
+		}
+	case rowsReady:
+		if msg.sink != m.sink {
+			return m, m.waitRows()
+		}
+		rows := m.visible()
+		m.selectRow(rows, m.selectedIndex(rows))
+		select {
+		case <-m.sink.done:
+			return m, nil
+		default:
+		}
+		return m, m.waitRows()
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case loaded:
@@ -95,11 +174,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.after = msg.Batch.Summary.Last
 		m.loadedOnce = true
 		if len(msg.Batch.Events) != 0 {
-			m.events = append(m.events, msg.Batch.Events...)
-			if len(m.events) > 500 {
-				m.events = m.events[len(m.events)-500:]
+			for _, event := range msg.Batch.Events {
+				if err := m.stream.add(m.ctx, event); err != nil {
+					m.err = audit.Clean(err.Error())
+					break
+				}
 			}
-			m.selected = max(0, len(m.visible())-1)
+			m.selectRow(m.visible(), len(m.visible())-1)
 		}
 		return m, next()
 	case tick:
@@ -116,7 +197,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				m.filter = m.draft
 				m.filtering = false
-				m.events = nil
+				_ = m.stream.close()
+				m.sink.discard()
+				m.resetStream()
 				m.after = 0
 				m.loadedOnce = false
 				m.generation++
@@ -139,6 +222,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch key {
 		case "q", "esc", "ctrl+c":
+			_ = m.Close()
 			return m, tea.Quit
 		case " ", "space":
 			m.paused = !m.paused
@@ -150,13 +234,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.details = !m.details
 		case "up", "k":
-			if m.selected > 0 {
-				m.selected--
-			}
+			rows := m.visible()
+			m.selectRow(rows, m.selectedIndex(rows)-1)
 		case "down", "j":
-			if m.selected+1 < len(m.visible()) {
-				m.selected++
-			}
+			rows := m.visible()
+			m.selectRow(rows, m.selectedIndex(rows)+1)
 		case "b":
 			m.draft = m.filter
 			m.filtering = true
@@ -171,7 +253,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				m.severity = ""
 			}
-			m.selected, m.offset = 0, 0
+			m.selectRow(m.visible(), 0)
+			m.offset = 0
 		case "r":
 			if m.paused || m.fetching {
 				return m, nil
@@ -184,96 +267,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
-func eventLine(e audit.Event, color bool) string {
-	box := audit.Clean(e.Box)
-	if !e.MetadataAvailable {
-		switch e.Container {
-		case "host":
-			box = "(vm)"
-		case "":
-			box = "(unknown)"
-		default:
-			box = "(no box)"
-		}
-	}
-	severity := fmt.Sprintf("%-9s", audit.Clean(e.Severity))
-	if color {
-		code := "36"
-		switch strings.ToLower(e.Severity) {
-		case "emergency", "alert", "critical", "error":
-			code = "91"
-		case "warning":
-			code = "93"
-		case "debug":
-			code = "90"
-		}
-		severity = styled(severity, code, true)
-	}
-	return fmt.Sprintf("%s  %s  %-14s  %s", e.Time.UTC().Format("15:04:05"), severity, box, styled(audit.Clean(e.Rule), "1", color))
-}
-
-func styled(text, code string, color bool) string {
-	if !color {
-		return text
-	}
-	return "\x1b[" + code + "m" + text + "\x1b[0m"
-}
-
-// EventText is shared by finite and following pretty logs. JSON logs retain the
-// complete stored event instead of a projection of these human-readable lines.
-type EventOptions struct {
-	Color, Verbose bool
-	Width          int
-}
-
-func EventText(e audit.Event, options EventOptions) string {
-	width := options.Width
-	if width <= 0 {
-		width = 100
-	}
-	heading := strings.Split(ansi.Wrap(eventLine(e, options.Color), max(1, width-4), ""), "\n")
-	lines := []string{heading[0]}
-	for _, continuation := range heading[1:] {
-		lines = append(lines, "    "+continuation)
-	}
-	appendIndented := func(text string, indent string) {
-		for _, line := range strings.Split(ansi.Wrap(text, max(1, width-len(indent)), ""), "\n") {
-			lines = append(lines, indent+line)
-		}
-	}
-	if output := eventMessage(e, options.Color); output != "" {
-		appendIndented(output, "    ")
-	}
-	if options.Verbose {
-		for _, field := range eventFieldLines(e, options.Color) {
-			appendIndented(field, "        ")
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
-func eventMessage(e audit.Event, color bool) string {
-	return audit.FormatPrettyOutput(e, func(key, value string) string {
-		return styled(key+"=", "2", color) + styled(value, "1", color)
-	})
-}
-
-func eventFieldLines(e audit.Event, color bool) []string {
-	fields := audit.SelectedFields(e)
-	keys := make([]string, 0, len(fields))
-	for key := range fields {
-		if fields[key] != "<NA>" && fields[key] != "" {
-			keys = append(keys, key)
-		}
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, key := range keys {
-		parts = append(parts, styled(key+"=", "2", color)+styled(strconv.Quote(fields[key]), "1", color))
-	}
-	return parts
-}
-
 func (m Model) View() tea.View {
 	width, height := max(1, m.width), max(1, m.height)
 	mode := "FOLLOW"
@@ -288,13 +281,21 @@ func (m Model) View() tea.View {
 		fmt.Sprintf("desired=%t  service=%s  driver=%s  Falco=%s", m.status.Desired.Enabled, audit.Clean(m.status.State), audit.Clean(m.status.Driver), audit.Clean(m.status.Desired.Version)),
 		fmt.Sprintf("collector drops=%d  driver drops=%s  metadata-gaps=%d  retention-gap=%t", m.summary.Drops, driverDrops, m.summary.MetadataGaps, m.summary.Gap),
 		"Box: " + m.filter + "   Severity: " + m.severity}
+	healthKind := prettylog.KindInfo
+	if m.summary.Drops > 0 || m.summary.MetadataGaps > 0 || m.summary.Gap || (m.status.DriverDrops != nil && *m.status.DriverDrops > 0) {
+		healthKind = prettylog.KindWarn
+	}
+	if m.status.State == "failed" {
+		healthKind = prettylog.KindError
+	}
+	lines[2] = decorate(prettylog.DefaultGlyphs.For(healthKind)+" "+lines[2], m.renderer.roles[healthKind])
 	if m.filtering {
 		lines[3] = "Box filter: " + m.draft + "_  Enter applies · Esc cancels"
 	}
 	if m.err != "" {
-		lines = append(lines, "Unavailable: "+m.err)
+		lines = append(lines, decorate(prettylog.DefaultGlyphs.Error+" Unavailable: "+m.err, m.renderer.roles[prettylog.KindError]))
 	} else if m.status.Error != "" {
-		lines = append(lines, audit.Clean(m.status.Error))
+		lines = append(lines, decorate(prettylog.DefaultGlyphs.Error+" "+audit.Clean(m.status.Error), m.renderer.roles[prettylog.KindError]))
 	}
 	events := m.visible()
 	if len(events) == 0 {
@@ -303,13 +304,17 @@ func (m Model) View() tea.View {
 			lines = append(lines, "Enable with yoloctl audit enable.")
 		}
 	}
-	selected := min(m.selected, max(0, len(events)-1))
+	selected := m.selectedIndex(events)
 	var details []string
 	if len(events) > 0 {
-		e := events[selected]
-		text := eventMessage(e, m.color)
+		row := events[selected]
+		e := *row.event
+		text := m.renderer.message(e)
+		if row.kind == prettylog.EmissionRepeatSummary {
+			text = "First displayed event in this repeat run:\n" + text
+		}
 		if m.details {
-			text += "\n" + strings.Join(eventFieldLines(e, m.color), "\n")
+			text += "\n" + strings.Join(m.renderer.fields(e), "\n")
 		}
 		if text != "" {
 			details = strings.Split(ansi.Wrap(text, max(1, width-4), ""), "\n")
@@ -332,7 +337,12 @@ func (m Model) View() tea.View {
 		if i == selected {
 			prefix = "> "
 		}
-		lines = append(lines, prefix+eventLine(events[i], m.color))
+		row := events[i]
+		text := m.renderer.heading(*row.event)
+		if row.kind == prettylog.EmissionRepeatSummary {
+			text = "    " + m.renderer.summary(row.repeat, row.until)
+		}
+		lines = append(lines, prefix+text)
 	}
 	for _, detail := range details {
 		lines = append(lines, "    "+detail)

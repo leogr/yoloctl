@@ -27,7 +27,9 @@ func TestAuditViewIsBoundedAndReadOnly(t *testing.T) {
 		t.Fatal("constructor performed work")
 	}
 	for i := 0; i < 500; i++ {
-		m.events = append(m.events, audit.Event{Cursor: uint64(i + 1), Time: time.Now(), Rule: strings.Repeat("long rule ", 30), Severity: "Notice"})
+		if err := m.stream.add(t.Context(), audit.Event{Cursor: uint64(i + 1), Time: time.Now(), Rule: fmt.Sprint(i) + strings.Repeat("long rule ", 30), Severity: "Notice"}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	m.selected = 499
 	m.details = true
@@ -65,7 +67,7 @@ func TestAuditViewPauseAndFilterDoNotApplyStaleResponses(t *testing.T) {
 	}
 	stale := loaded{Batch: Batch{Events: []audit.Event{{Cursor: 1, Box: "old"}}, Summary: audit.Summary{Last: 1}}, Generation: 0}
 	m, cmd = apply(m, stale)
-	if len(m.events) != 0 || cmd == nil {
+	if len(m.sink.snapshot()) != 0 || cmd == nil {
 		t.Fatal("applied old filter response")
 	}
 	_ = cmd()
@@ -77,7 +79,7 @@ func TestAuditViewPauseAndFilterDoNotApplyStaleResponses(t *testing.T) {
 		t.Fatal("pause did not pause")
 	}
 	m, _ = apply(m, loaded{Generation: m.generation, Batch: Batch{Events: []audit.Event{{Cursor: 2}}}})
-	if len(m.events) != 0 {
+	if len(m.sink.snapshot()) != 0 {
 		t.Fatal("paused view changed")
 	}
 	m, _ = apply(m, key(tea.KeySpace))
@@ -95,7 +97,7 @@ func TestAuditViewFollowsAnInitiallyEmptyHistoryWithoutRepeatingTail(t *testing.
 		queries = append(queries, q)
 		return Batch{}, nil
 	})
-	m, _ = apply(m, m.Init()())
+	m, _ = apply(m, m.load()())
 	m, cmd := apply(m, tick{})
 	m, _ = apply(m, cmd())
 	if len(queries) != 2 || !queries[0].Tail || queries[1].Tail || queries[1].After != 0 {
@@ -121,13 +123,13 @@ func TestAuditViewIdlePollPreservesSelectionAndOnlyAppendsNewEvents(t *testing.T
 	summary.Count = 0
 	summary.Until = summary.Until.Add(time.Second)
 	m, _ = apply(m, loaded{Batch: Batch{Summary: summary, Status: status}})
-	if m.selected != 0 || m.after != 2 || len(m.events) != 2 || m.View().Content != before {
+	if m.selected != 0 || m.after != 2 || len(m.sink.snapshot()) != 2 || m.View().Content != before {
 		t.Fatal("idle poll churned the view", m.selected, m.View().Content)
 	}
 	summary.Last, summary.Upper, summary.Count = 3, 3, 1
 	m, _ = apply(m, loaded{Batch: Batch{Events: []audit.Event{{Cursor: 3, Rule: "three"}}, Summary: summary, Status: status}})
-	if len(m.events) != 3 || m.selected != 2 || m.after != 3 {
-		t.Fatal(m.events, m.selected, m.after)
+	if len(m.sink.snapshot()) != 3 || m.selected != 2 || m.after != 3 {
+		t.Fatal(m.sink.snapshot(), m.selected, m.after)
 	}
 	summary.Drops, summary.MetadataGaps, summary.Gap = 2, 3, true
 	m, _ = apply(m, loaded{Batch: Batch{Summary: summary, Status: status}})
@@ -160,7 +162,7 @@ func TestAuditPrettyMessageFieldsAndColor(t *testing.T) {
 		}
 	}
 	colored := EventText(event, EventOptions{Color: true})
-	if ansi.Strip(colored) != plain || !strings.Contains(colored, "\x1b[93m") || !strings.Contains(colored, "\x1b[1mYolo audit test") || !strings.Contains(colored, "\x1b[2mprocess=") {
+	if ansi.Strip(colored) != plain || !strings.Contains(colored, "\x1b[1;38;5;3m") || !strings.Contains(colored, "\x1b[1mYolo audit test") || !strings.Contains(colored, "\x1b[2mprocess=") {
 		t.Fatal("styles changed content or omitted severity/key/rule emphasis", colored)
 	}
 	m := New(t.Context(), "test", nil).WithColor(true)

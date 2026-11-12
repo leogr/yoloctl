@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,8 +20,10 @@ import (
 	"github.com/leogr/yoloctl/internal/auditui"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/termio"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -300,15 +303,36 @@ func runAuditLogs(cmd *cobra.Command, _ []string) error {
 	return streamAuditLogs(cmd, target, query, follow, waitAuditPoll)
 }
 
-func streamAuditLogs(cmd *cobra.Command, target controllerTarget, query audit.Query, follow bool, pause func(context.Context) error) error {
+func streamAuditLogs(cmd *cobra.Command, target controllerTarget, query audit.Query, follow bool, pause func(context.Context) error) (result error) {
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	verbose, _ := cmd.Flags().GetBool("verbose")
-	options := auditui.EventOptions{Color: auditColorEnabled(writerIsTerminal(cmd.OutOrStdout())), Verbose: verbose, Width: 100}
+	settings, err := logSettings(cmd.Flags(), os.Getenv)
+	if err != nil {
+		return err
+	}
+	_, color := prettylog.DecideColor(cmd.OutOrStdout(), settings.Color, os.Getenv, writerIsTerminal)
+	options := auditui.EventOptions{Color: color, Verbose: verbose, Width: 100}
 	if output, ok := cmd.OutOrStdout().(*os.File); ok && writerIsTerminal(output) {
 		if width, _, err := term.GetSize(int(output.Fd())); err == nil {
 			options.Width = width
 		}
 	}
+	var printer *auditui.LogPrinter
+	if !jsonOutput {
+		printer = auditui.NewLogPrinter(cmd.Context(), cmd.OutOrStdout(), settings.Verbosity, options)
+		defer func() {
+			if err := printer.Close(); result == nil {
+				result = err
+			}
+		}()
+	}
+	format, summaryColor := prettylog.DecideColor(cmd.ErrOrStderr(), settings.Color, os.Getenv, writerIsTerminal)
+	health := prettylog.New(cmd.ErrOrStderr(), prettylog.Options{Format: format, Color: summaryColor, Verbosity: settings.Verbosity})
+	defer func() {
+		if err := health.Close(); result == nil {
+			result = err
+		}
+	}()
 	var previous audit.Summary
 	first := true
 	for {
@@ -316,8 +340,7 @@ func streamAuditLogs(cmd *cobra.Command, target controllerTarget, query audit.Qu
 			if jsonOutput {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(event)
 			}
-			_, err := fmt.Fprintln(cmd.OutOrStdout(), auditui.EventText(event, options))
-			return err
+			return printer.Add(cmd.Context(), event)
 		})
 		if err != nil {
 			return err
@@ -325,7 +348,15 @@ func streamAuditLogs(cmd *cobra.Command, target controllerTarget, query audit.Qu
 		// Count, cursors and interval timestamps describe each bounded page.
 		// Only the initial page and changes in loss/gap state need a notice.
 		if first || summary.Drops != previous.Drops || summary.MetadataGaps != previous.MetadataGaps || summary.Gap != previous.Gap {
-			reportAuditSummary(cmd.ErrOrStderr(), summary)
+			level := prettylog.LevelInfo
+			if summary.Drops > 0 || summary.MetadataGaps > 0 || summary.Gap || !first {
+				level = prettylog.LevelWarn
+			}
+			record := slog.NewRecord(time.Time{}, level, auditSummaryText(summary), 0)
+			record.AddAttrs(prettylog.Actor(logging.Audit), prettylog.Executor(logging.Falco))
+			if err := health.Handle(cmd.Context(), record); err != nil {
+				return err
+			}
 		}
 		first, previous = false, summary
 		if !follow {
@@ -338,10 +369,6 @@ func streamAuditLogs(cmd *cobra.Command, target controllerTarget, query audit.Qu
 	}
 }
 
-func auditColorEnabled(tty bool) bool {
-	return tty && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
-}
-
 func waitAuditPoll(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -351,8 +378,11 @@ func waitAuditPoll(ctx context.Context) error {
 	}
 }
 
+func auditSummaryText(s audit.Summary) string {
+	return fmt.Sprintf("Audit interval %s – %s: %d events; drops=%d metadata-gaps=%d retention-gap=%t", s.Since.UTC().Format(time.RFC3339), s.Until.UTC().Format(time.RFC3339), s.Count, s.Drops, s.MetadataGaps, s.Gap)
+}
 func reportAuditSummary(out io.Writer, s audit.Summary) {
-	_, _ = fmt.Fprintf(out, "Audit interval %s – %s: %d events; drops=%d metadata-gaps=%d retention-gap=%t\n", s.Since.UTC().Format(time.RFC3339), s.Until.UTC().Format(time.RFC3339), s.Count, s.Drops, s.MetadataGaps, s.Gap)
+	_, _ = fmt.Fprintln(out, auditSummaryText(s))
 }
 
 func runAuditExport(cmd *cobra.Command, _ []string) error {
@@ -453,7 +483,13 @@ func runAuditView(cmd *cobra.Command, _ []string) error {
 		batch.Summary, err = scanAudit(ctx, target, "audit.logs", q, func(e audit.Event) error { batch.Events = append(batch.Events, e); return nil })
 		return batch, err
 	}
-	model := auditui.New(cmd.Context(), target.Space, fetch).WithColor(auditColorEnabled(writerIsTerminal(cmd.OutOrStdout())))
+	settings, err := logSettings(cmd.Flags(), os.Getenv)
+	if err != nil {
+		return err
+	}
+	_, color := prettylog.DecideColor(cmd.OutOrStdout(), settings.Color, os.Getenv, writerIsTerminal)
+	model := auditui.New(cmd.Context(), target.Space, fetch).WithColor(color).WithVerbosity(settings.Verbosity)
+	defer func() { _ = model.Close() }()
 	_, err = tea.NewProgram(model, tea.WithInput(cmd.InOrStdin()), tea.WithOutput(cmd.OutOrStdout())).Run()
 	return err
 }

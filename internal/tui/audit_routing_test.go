@@ -26,3 +26,35 @@ func TestAuditLiveSurfaceRouting(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditLiveSurfaceConsumesInheritedLogFlagValues(t *testing.T) {
+	for _, flags := range [][]string{
+		{"--log-level", "debug"}, {"--log-level=debug"},
+		{"--log-level", "error"}, {"--color", "never"}, {"--color=never"},
+		{"--color", "always", "--log-level", "warn"},
+	} {
+		for _, tc := range []struct {
+			command []string
+			live    bool
+		}{
+			{nil, true}, {[]string{"logs", "--follow"}, true},
+			{[]string{"logs", "--follow=false"}, false}, {[]string{"logs"}, false},
+			{[]string{"status"}, false}, {[]string{"enable"}, false},
+			{[]string{"--help"}, false}, {[]string{"logs", "--follow", "--help"}, false},
+		} {
+			for _, before := range []bool{false, true} {
+				args := []string{"audit"}
+				if before {
+					args = append(args, flags...)
+					args = append(args, tc.command...)
+				} else {
+					args = append(args, tc.command...)
+					args = append(args, flags...)
+				}
+				if got := opensLiveSurface(args); got != tc.live {
+					t.Fatalf("%v: got %v want %v", args, got, tc.live)
+				}
+			}
+		}
+	}
+}

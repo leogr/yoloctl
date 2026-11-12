@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `3e04d2b43ab4c848462358f2cc74cc1845328f5f` and accompanying changes.
+Verification: `bfc2e8addfd696da0629a8816c26cba6384d9ba7` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs` and `export` use
@@ -76,7 +76,8 @@ qualification. [12](#source-12) [15](#source-15) [17](#source-17)
 fields and a rendering of the pinned rule template. Arbitrary raw output,
 argv, environment and buffers remain excluded. Unknown metadata stays unavailable;
 [output and follow contracts](audit-output.md) define JSON, pretty/TUI display,
-colour and quiet polling. Terminal controls are escaped.
+shared colour/levels, consecutive-repeat summaries, bounded first-owner details
+and quiet polling. Terminal controls are escaped.
 Collector drops, driver drops (unknown until reported), metadata gaps and
 retention gaps are visible. This is best-effort detection, without remediation
 or a complete, VM-root-tamper-proof trail. [12](#source-12) [13](#source-13) [22](#source-22)

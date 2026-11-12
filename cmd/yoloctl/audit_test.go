@@ -93,27 +93,10 @@ func TestAuditFollowReportsOnlyInitialAndLossChanges(t *testing.T) {
 						t.Fatal("JSON lost retained fields", line, err)
 					}
 				}
-			} else if strings.Count(stdout.String(), "14:40:01  ") != 2 || !strings.Contains(stdout.String(), "(vm)") || strings.Contains(stdout.String(), "fs.path.target=") != verbose || strings.Contains(stdout.String(), "<NA>") {
+			} else if strings.Count(stdout.String(), "14:40:01  ") != 1 || strings.Count(stdout.String(), "repeated 1 more time") != 1 || !strings.Contains(stdout.String(), "(vm)") || strings.Contains(stdout.String(), "fs.path.target=") != verbose || strings.Contains(stdout.String(), "<NA>") {
 				t.Fatal(stdout.String())
 			}
 		})
-	}
-}
-
-func TestAuditColorHonorsTerminalAndNoColor(t *testing.T) {
-	t.Setenv("NO_COLOR", "")
-	t.Setenv("TERM", "xterm-256color")
-	if !auditColorEnabled(true) || auditColorEnabled(false) || writerIsTerminal(&bytes.Buffer{}) {
-		t.Fatal("wrong terminal color selection")
-	}
-	t.Setenv("NO_COLOR", "1")
-	if auditColorEnabled(true) {
-		t.Fatal("ignored NO_COLOR")
-	}
-	t.Setenv("NO_COLOR", "")
-	t.Setenv("TERM", "dumb")
-	if auditColorEnabled(true) {
-		t.Fatal("colored a dumb terminal")
 	}
 }
 

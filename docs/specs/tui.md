@@ -350,6 +350,12 @@ last, over any completion menu and keeping the draft. An editing key, Esc,
 focus changes and a new command return to the last command. No disk
 log or row replay is added. [48](#source-48)
 
+[FACT] The read-only audit view uses shared severity glyphs/theme roles and
+consecutive repeat-summary rows. Enter on a summary shows its first displayed
+event's retained fields, labelled explicitly; timer delivery cannot redirect it
+to the next alert. Filter changes fence stale loads and emissions. Health/loss
+state remains visible even when event verbosity hides alerts. [51](#source-51)
+
 ## Sources
 
 1. <a id="source-1"></a> [Routing, keys, mouse and paste evidence](../digests/tui-input.md).
@@ -412,3 +418,5 @@ log or row replay is added. [48](#source-48)
 49. <a id="source-49"></a> [Chat image panes](../digests/chat-image-panes.md).
 
 50. <a id="source-50"></a> [Chat image fetch](../digests/chat-image-fetch.md).
+
+51. <a id="source-51"></a> [Audit output and following](../digests/audit-output.md).
