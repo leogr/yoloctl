@@ -31,22 +31,24 @@ func (store RuleStore) Retire(ctx context.Context, keep ...string) error {
 	if err != nil {
 		return err
 	}
+	var failures []error
 	for _, entry := range entries {
 		if err := ctx.Err(); err != nil {
-			return err
+			return errors.Join(append(failures, err)...)
 		}
 		if !validDigest(entry.Name()) || retained[entry.Name()] {
 			continue
 		}
 		set, err := store.Read(entry.Name())
 		if err != nil {
-			return err
+			failures = append(failures, err)
+			continue
 		}
 		if err := store.Discard(set); err != nil {
-			return err
+			failures = append(failures, err)
 		}
 	}
-	return nil
+	return errors.Join(failures...)
 }
 
 // Discard is only for a caller-owned, proved-unselected generation, never an

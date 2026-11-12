@@ -1,6 +1,6 @@
 # Native rule generations and host management
 
-Verification: `46da38583fa61bae0ff7138f03b557872d027e9e` and accompanying changes.
+Verification: `c9d0b4fbcceecccd72f79e4cb4120fdb35912f2f` and accompanying changes.
 
 [FACT] Host-only `audit rules list`, `import FILE`, `remove NAME --sha256 PREFIX`
 and `edit` use the running matching controller. List creates nothing and never
@@ -59,7 +59,10 @@ built-in-only service retains its original preflight.
 [FACT] Before receipt completion, successful mutations retire verified,
 unreferenced generated directories. The current operation's prior selection,
 new selection and service reference survive; the prior can retire on the next
-admitted change. Unknown inventory is retained with a warning. Failed attempts
+admitted change. Unreadable or unlisted generation entries are retained and
+reported together after the pass, without blocking retirement of other verified
+unreferenced generations. Unknown service references still prevent the pass.
+Failed attempts
 before desired-state publication discard their own prepared generation.
 [2](#source-2) [9](#source-9)
 
