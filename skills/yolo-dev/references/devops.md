@@ -92,6 +92,11 @@ put an interactive controller update in a heredoc or add automatic restart flags
 Record recovery options when relevant, without automatically resetting/reverting
 history or restoring runtime state.
 
+When writing host test steps, distinguish the host terminal from the TUI
+palette. The palette runs only yoloctl subcommands, such as `space view`,
+without the `yoloctl` executable prefix. Shell commands and shell syntax belong
+in the host terminal.
+
 After completion and validation, clean only authorized task resources whose
 unique work, evidence and consumers have been checked. Remove an exact finished
 worktree from a namespace that can resolve its registration; do not prune all

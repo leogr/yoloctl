@@ -96,6 +96,9 @@ waiter as that recipe requires. Do not add a waiter beside a plugin consumer.
 Use the installed `yolo-box-operator` skill for authorized box/session work;
 if required tooling is absent, report the boundary rather than inventing it.
 
+Put every command you ask the human to run in chat in a fenced Markdown
+code block, including one-line commands.
+
 Dispatches and receipts identify the ticket/revision. Send one concise completion
 receipt with candidate, result, evidence path, limits and next owner; avoid
 acknowledgement chains and pasted reports. Inspect uncertain outcomes before
