@@ -68,6 +68,17 @@ process are in the [installation guide](docs/install.md).
 
 ## Getting started
 
+`install` sets up the binary only. Create your first space before anything
+else; both flags are required:
+
+```sh
+yoloctl space create --workdir ~/code --account personal
+```
+
+`--workdir` is the host project directory shared into the VM and `--account`
+names the space's first, empty account. The space is called `default` unless
+you pass a name.
+
 *Coming next: a dedicated getting-started experience. This section is a
 placeholder while that workflow is designed.*
 
