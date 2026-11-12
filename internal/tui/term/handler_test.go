@@ -196,3 +196,30 @@ func newTestEmulator(t *testing.T, rows, cols int, responses io.Writer, history 
 	t.Cleanup(func() { _ = e.Close() })
 	return e
 }
+
+// ClearKeepHistory gives the next command the same fresh modes, colour
+// responder and parser as Clear, but earlier rows stay and the new output
+// starts below them.
+func TestClearKeepHistoryKeepsRowsResetsState(t *testing.T) {
+	var replies bytes.Buffer
+	e := newTestEmulator(t, 4, 40, &replies, 0)
+	_, _ = e.Write([]byte("earlier command\r\n\x1b[?1;2004h\x1b]11;?\a\x1b[31m\x1b[?1049h\x1b]0;unfinished"))
+	e.ClearKeepHistory()
+	e.SetColors(color.White, color.Black)
+	if replies.Len() != 0 {
+		t.Fatal("replied to an old command's pending query")
+	}
+	if e.ApplicationCursorKeys() || e.BracketedPaste() || e.IsAlt() {
+		t.Fatal("old command modes leaked")
+	}
+	_, _ = e.Write([]byte("fresh\x1b]11;?\a"))
+	if replies.Len() == 0 {
+		t.Fatal("new command lost color responder")
+	}
+	if got := ansi.Strip(e.RenderLine(0)); !strings.HasPrefix(got, "earlier command") {
+		t.Fatalf("earlier row lost: %q", got)
+	}
+	if out := e.RenderLine(1); !strings.HasPrefix(ansi.Strip(out), "fresh") || strings.Contains(out, "31m") {
+		t.Fatalf("new output %q", out)
+	}
+}

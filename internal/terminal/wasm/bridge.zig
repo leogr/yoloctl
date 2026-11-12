@@ -49,7 +49,7 @@ fn size(t: c.terminal.Terminal, _: ?*anyopaque, out: *size_report.Size) callconv
     return true;
 }
 
-export fn yolo_vt_abi() u32 { return 7; }
+export fn yolo_vt_abi() u32 { return 8; }
 
 // Callbacks and the advertised identity are local to a C terminal wrapper;
 // the native snapshot deliberately does not serialize function pointers.
@@ -157,6 +157,15 @@ export fn yolo_vt_get(t: c.terminal.Terminal, key: u32) u32 {
         16 => @intCast(@intFromEnum(v.flags.mouse_shift_capture)),
         17 => v.width_px / v.cols,
         18 => v.height_px / v.rows,
+        // Semantic content (0 output, 1 input, 2 prompt) of the cursor and of
+        // the cell left of it; 3 when there is no such cell.
+        19 => @intFromEnum(v.screens.active.cursor.semantic_content),
+        20 => cell: {
+            const cur = v.screens.active.cursor;
+            if (cur.x == 0) break :cell 3;
+            const pin = v.screens.active.pages.pin(.{ .active = .{ .x = cur.x - 1, .y = cur.y } }) orelse break :cell 3;
+            break :cell @intFromEnum(pin.rowAndCell().cell.semantic_content);
+        },
         else => 0,
     };
 }
@@ -364,6 +373,15 @@ export fn yolo_vt_anchor_free(ref: tracked.CTrackedGridRef) void {
 
 // Host timeout/child exit release a hold without injecting input or a VT
 // sequence into an unfinished parser control.
+// A full reset that keeps the primary screen's rows and scrollback: the
+// native patch's resetKeepHistory (modes, colours, alternate screen, cursor
+// state, graphics, parser, OSC/APC/DCS state reset; cursor on a fresh line
+// below retained text). For running a new command in a console that shows
+// earlier ones.
+export fn yolo_vt_reset_keep_history(t: c.terminal.Terminal) void {
+    c.terminal.resetKeepHistory(t);
+}
+
 export fn yolo_vt_end_hold(t: c.terminal.Terminal) void {
     const v = c.terminal.zigTerminal(t) orelse return;
     v.modes.set(.synchronized_output, false);

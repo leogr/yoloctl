@@ -217,13 +217,29 @@ func (e *emulator) CursorPos() (int, int, bool) {
 	return e.vt.Get(3), e.vt.Get(4), e.vt.Get(7) != 0
 }
 func (e *emulator) Clear() {
+	e.reset(false)
+}
+
+// ClearKeepHistory is Clear for a console that keeps earlier commands' rows:
+// the native terminal resets everything but the primary rows and scrollback
+// (cursor on a fresh line below them), and the Go-side focus, color-query,
+// clipboard and keyboard scanners start over as for a new session.
+func (e *emulator) ClearKeepHistory() {
+	e.reset(true)
+}
+
+func (e *emulator) reset(keepHistory bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.err != nil {
 		return
 	}
 	e.vt.ScrollToBottom()
-	e.vt.Reset()
+	if keepHistory {
+		e.vt.ResetKeepHistory()
+	} else {
+		e.vt.Reset()
+	}
 	e.focusKnown, e.focusEnabled = false, false
 	e.queries = &terminal.ColorQueries{Terminal: e.vt, Known: e.colorMetadataLocked(), Send: func(p []byte) { _, _ = e.input.Write(p) }}
 	e.osc52 = termio.OSC52Scanner{}

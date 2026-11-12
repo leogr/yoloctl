@@ -73,6 +73,19 @@ cell's style, so an underline or background ran into cells that a renderer had
 erased with ECH. [`terminal_test.go`](../internal/terminal/terminal_test.go)
 checks both cases.
 
+Finally the patch adds `resetKeepHistory`, a reset that keeps the primary
+screen's rows: `Terminal.resetKeepHistory` repeats `fullReset` except
+`Screen.reset`'s page reset (it resets the same cursor pen, hyperlink, semantic
+content, charset, keyboard, protection, semantic-prompt, selection and Kitty
+graphics state, removes the
+alternate screen, and moves the cursor to a fresh line below the last text),
+`Handler.resetTransient` drops in-progress APC/DCS/Kitty clipboard state and
+grants, and the C wrapper's `resetKeepHistory` returns the stream to a new
+parser, UTF-8 decoder and continuation. The Go caller also ends the separate
+selection gesture first. Upstream has no such reset and DECSTR is
+unimplemented. [`reset_keep_history_test.go`](../internal/terminal/reset_keep_history_test.go)
+compares the next command against a fresh terminal after unfinished controls.
+
 Regeneration requires the pinned Zig toolchain and `patch`; normal builds need
 neither. The builder hashes the source archive, copied patch, bridge and
 artifact, then `--check` requires byte-identical reproduction. Review this

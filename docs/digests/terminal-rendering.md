@@ -1,6 +1,6 @@
 # VT rendering and PTY child lifecycle
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; slave retention on `0d2ab61` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; keep-history reset on `32da58cb24ffdbbc6258f6d94787d82e197529bd` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; slave retention on `0d2ab61` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Each terminal owns an isolated libghostty-vt WebAssembly instance under
 wazero. The embedded artifact pins Ghostty revision
@@ -8,7 +8,11 @@ wazero. The embedded artifact pins Ghostty revision
 and artifact have manifest hashes. The mouse patch handles buttons 10/11,
 UTF-8 fields and already-routed pixel coordinates. A formatter patch closes an
 open VT style before erased, unstyled cells, so exported rows do not extend an
-underline or background into them. [19](#source-19) [20](#source-20) Normal builds use Go alone.
+underline or background into them. [19](#source-19) [20](#source-20) A patched
+`resetKeepHistory` (bridge ABI 8, Go `ResetKeepHistory`, emulator
+`ClearKeepHistory`) resets like a full reset but keeps primary rows and
+scrollback and continues on a fresh line below them; it also ends any selection
+gesture and makes new cells output again (OSC 133 state). [25](#source-25) Normal builds use Go alone.
 The maintenance builder needs `patch`, verifies the source archive, rebuilds the private bridge and can require byte
 identity. Module memory is capped at 256 MiB, with only reply/row/event imports
 and no WASI, filesystem or network imports. Owners serialize calls and close
@@ -108,3 +112,4 @@ or native application parity. [12](#source-12)
 22. <a id="source-22"></a> [stray_backslash_test.go](../../internal/tui/stray_backslash_test.go#L159) — `TestSTReplySplitAtEveryPoint`, OSC/DCS/APC splits.
 23. <a id="source-23"></a> [pty.go](../../internal/tui/term/pty.go#L28-L90) — retained slave, bounded release.
 24. <a id="source-24"></a> [pty_output_test.go](../../internal/tui/term/pty_output_test.go#L23-L102) — late-read regression.
+25. <a id="source-25"></a> [native.patch](../../internal/terminal/wasm/native.patch#L87-L236) — `resetKeepHistory`, `resetTransient`; bridge `yolo_vt_reset_keep_history`; reset_keep_history_test.go and term handler_test.go `TestClearKeepHistoryKeepsRowsResetsState`.

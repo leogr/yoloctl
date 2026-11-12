@@ -26,7 +26,7 @@ var artifact, _ = assets.ReadFile("wasm/ghostty-vt.wasm")
 
 const (
 	scratchSize = 64 * 1024
-	bridgeABI   = 7
+	bridgeABI   = 8
 )
 
 type contextKey struct{}
@@ -242,6 +242,19 @@ func (t *Terminal) Resize(rows, cols int) error {
 func (t *Terminal) Reset() {
 	t.ScrollToBottom()
 	t.call("ghostty_terminal_reset", t.ptr)
+}
+
+// ResetKeepHistory resets the terminal like Reset (modes, colours, alternate
+// screen, cursor state, graphics, selection gesture and parser state,
+// including unfinished escape sequences) but keeps the primary screen's rows and scrollback. The
+// cursor continues on a fresh line below the last row with text, so new
+// output never overwrites retained rows.
+func (t *Terminal) ResetKeepHistory() {
+	t.ScrollToBottom()
+	// The selection gesture is separate from the screen's selection: end any
+	// drag in progress so a later motion cannot resume it across the reset.
+	t.ClearSelection()
+	t.call("yolo_vt_reset_keep_history", t.ptr)
 }
 func (t *Terminal) Get(key uint32) int {
 	value := int(t.call("yolo_vt_get", t.ptr, uint64(key)))
