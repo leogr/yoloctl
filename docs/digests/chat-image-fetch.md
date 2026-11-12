@@ -1,6 +1,6 @@
 # Chat image fetch
 
-Verification: `b464ce3b232a8a6f55bf3c1d60ddfd9761815ce3` and accompanying changes.
+Verification: `b3b2cf92659f79545ec4cc8d405d5f1b0a3c122e` and accompanying changes.
 
 [FACT] A fixed, embedded Python relay reads one artifact inside the confined
 chat runtime: it runs only `airc artifact download --config CONFIG UUID PATH`

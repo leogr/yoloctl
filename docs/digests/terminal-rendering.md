@@ -1,6 +1,6 @@
 # VT rendering and PTY child lifecycle
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; keep-history reset on `32da58cb24ffdbbc6258f6d94787d82e197529bd` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; slave retention on `0d2ab61` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; keep-history reset on `003c44131ad5ea54194391b96821ddf3cbfd0aba` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; slave retention on `0d2ab61` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Each terminal owns an isolated libghostty-vt WebAssembly instance under
 wazero. The embedded artifact pins Ghostty revision

@@ -1,6 +1,6 @@
 # Host and Lima diagnostics
 
-Verification: `8931e8df3abebc5c0fdd6f77bd473110a2e7d23b` and accompanying changes; log bound and failure semantics at `2060bcc8a46f0bfd1d6dcde7de8cdc9bb71a958d` and accompanying changes; open retry at `c1502bd5e70a6d7dee5e52e8b1ad28caf479ccbd` and accompanying changes; logs-directory check at `f15ce301325c25538cab3f7acaf88962827c38bc` and accompanying changes; stale-generation handling at `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; shared rotation extraction at `4fa6761c87967cc6191ec19130898e60f0a92720` and accompanying changes.
+Verification: `8931e8df3abebc5c0fdd6f77bd473110a2e7d23b` and accompanying changes; log bound and failure semantics at `2060bcc8a46f0bfd1d6dcde7de8cdc9bb71a958d` and accompanying changes; open retry at `c1502bd5e70a6d7dee5e52e8b1ad28caf479ccbd` and accompanying changes; logs-directory check at `f15ce301325c25538cab3f7acaf88962827c38bc` and accompanying changes; stale-generation handling at `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; shared rotation extraction at `ad96d0605c1f5d3bac1b075af4c399021ee86ad9` and accompanying changes.
 
 [FACT] The Lima Client’s inventory, VM create/start/stop/delete/copy and account-disk commands
 capture launcher stderr, including successful warnings and debug output. They

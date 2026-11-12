@@ -1,6 +1,6 @@
 # CLI log routing and outcomes
 
-Verification: `b63d673d39ee54202ea058b27e9e6f283e49cee2` and accompanying changes.
+Verification: `2baaa250e722a8e22013f7faf0816b77a4d3d472` and accompanying changes.
 
 [FACT] CLI warnings, notices and mutation-result prose use the process
 `internal/logging` Logger; worker processes send records and the host renders

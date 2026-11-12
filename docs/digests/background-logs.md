@@ -1,6 +1,6 @@
 # Background log storage and views
 
-Verification: `4fa6761c87967cc6191ec19130898e60f0a92720` and accompanying changes.
+Verification: `ad96d0605c1f5d3bac1b075af4c399021ee86ad9` and accompanying changes.
 
 [FACT] The controller service, managed holder and Firecracker guest init use the
 shared file Logger: plain UTC RFC3339 timestamps, levels and actor fields, no

@@ -1,6 +1,6 @@
 # Native selection and explicit copy
 
-Verification: `cd6a24374e95eed1a1029a6032522724603ab8bd` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `109759cec4212c4e92aba5374756d02facfc277f` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Plain left drag selects local text in tab content when the child does
 not request mouse reporting, when viewing history, or after the child exits.

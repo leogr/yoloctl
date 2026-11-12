@@ -1,6 +1,6 @@
 # Chat image previews (host boundary)
 
-Verification: `484b52b6eb83b3bc03f30406d28110f262fb5179` and accompanying changes; image channel on `b96ffc26c67ed63006d0dfa55a1b9c228d8e18ba` and accompanying changes; host probe on `d8253d1809006bf3095a1215b7a9c1785523ddd1` and accompanying changes; broker on `56379f45f1d89b34015f180380ef9391a31760b0` and accompanying changes; broker conditions and channel identity on `765d227c0610c02b4d68071cd34552086b32eab1` and accompanying changes; fetch on `b464ce3b232a8a6f55bf3c1d60ddfd9761815ce3` and accompanying changes.
+Verification: `e1f1d5e998638a327cbce30e2a9bca11ea9ee387` and accompanying changes; image channel on `09260f88375983bd8b64cdeb08e88e1e2709415f` and accompanying changes; host probe on `9db70c2a200005f0afdd9156e802f65974a56e72` and accompanying changes; broker on `39eb0a8673de8270a8b0a91d90b3400937549f2a` and accompanying changes; broker conditions and channel identity on `4c2527aa7013f10159edf27819bb572d1ce11be9` and accompanying changes; fetch on `b3b2cf92659f79545ec4cc8d405d5f1b0a3c122e` and accompanying changes.
 
 [FACT] Previews use Kitty Unicode placeholder cells: U+10EEEE with a row and a
 column diacritic, drawn in a 24-bit foreground colour that is the image ID.

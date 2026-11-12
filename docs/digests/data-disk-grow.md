@@ -1,6 +1,6 @@
 # Data disk size and offline grow
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; rotated-log search at `4fa6761c87967cc6191ec19130898e60f0a92720` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; rotated-log search at `ad96d0605c1f5d3bac1b075af4c399021ee86ad9` and accompanying changes.
 
 [FACT] `space create --data-disk SIZE` sets the data disk (accounts and
 declarations): whole GiB, at least 4 GiB, default 10 GiB; spaces saved before

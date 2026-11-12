@@ -1,6 +1,6 @@
 # Managed chat image publication
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Artifact read boundary on `765d227c0610c02b4d68071cd34552086b32eab1` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Artifact read boundary on `4c2527aa7013f10159edf27819bb572d1ce11be9` and accompanying changes.
 
 [FACT] Host clipboard preparation and publication are separate callbacks.
 Clipboard-off, unavailable readers and operator endpoints install neither
