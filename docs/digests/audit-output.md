@@ -1,6 +1,6 @@
 # Audit event output and following
 
-Verification: `46da38583fa61bae0ff7138f03b557872d027e9e` and accompanying changes.
+Verification: `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes.
 
 [FACT] `audit logs --follow` prints the first bounded-history summary to stderr,
 then prints another only when collector drops, metadata gaps or retention-gap
@@ -71,11 +71,11 @@ rules digest. [4](#source-4) [5](#source-5) [6](#source-6) [7](#source-7)
 message. It never interprets imported output templates; raw argv/environment,
 aggregate arguments and arbitrary fields remain excluded. A custom rule reusing
 a shipped name keeps that shipped name's template, potentially different from
-its changed semantics. [5](#source-5)
+its changed semantics. [5](#source-5) [17](#source-17)
 
 ## Sources
 
-1. <a id="source-1"></a> [Host audit commands](../../cmd/yoloctl/audit.go#L280) — `streamAuditLogs`, `auditSummaryText`, `runAuditView`.
+1. <a id="source-1"></a> [Host audit commands](../../cmd/yoloctl/audit.go#L315) — `streamAuditLogs`, `auditSummaryText`, `runAuditView`.
 2. <a id="source-2"></a> [Bounded history](../../internal/audit/logs.go#L101) — `Store.Scan`, filtered cursor advancement.
 3. <a id="source-3"></a> [Read-only view](../../internal/auditui/view.go#L1) — `Model.load`, `Model.Update`, `Model.visible`, `Model.View`, `Model.Close`.
 4. <a id="source-4"></a> [Event schema/privacy](../../internal/audit/types.go#L1) — `Event`, `ParseEvent`, `Clean`.
@@ -89,5 +89,6 @@ its changed semantics. [5](#source-5)
 12. <a id="source-12"></a> [Line presentation](../../internal/auditui/printer.go#L19) — `printSink.Emit`, `NewLogPrinter`.
 13. <a id="source-13"></a> [Display regressions](../../internal/auditui/display_test.go#L19) — summary ownership, filter/wake/close, theme, consecutive streams and writer errors.
 14. <a id="source-14"></a> [Theme bridge](../../internal/logging/logtheme/logtheme.go#L18) — `Palette`, `SetBackground`.
-15. <a id="source-15"></a> [Shared emission](../../pkg/prettylog/emission.go#L15) — typed record/summary decisions from `Logger.emitOwned`/`endRun`.
+15. <a id="source-15"></a> [Shared emission](../../pkg/prettylog/emission.go#L21) — typed record/summary decisions from `Logger.emitOwned`/`endRun`.
 16. <a id="source-16"></a> [CLI regressions](../../cmd/yoloctl/audit_logging_test.go#L46) — flags, unchanged JSON and failure drain.
+17. <a id="source-17"></a> [Composed presentation](../../internal/auditui/composition_test.go#L17) — custom and built-in names, selected numeric fields, privacy and shared final folding.

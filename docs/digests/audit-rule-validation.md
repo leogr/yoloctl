@@ -1,6 +1,6 @@
 # Rule-selection framing and pinned validator qualification
 
-Verification: `bfc2e8addfd696da0629a8816c26cba6384d9ba7` and accompanying changes.
+Verification: `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes.
 
 [FACT] `SelectionDocument` preserves the editor fragment's bytes for Falco to
 interpret. Its lexical framing requires the first content line to start with

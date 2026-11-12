@@ -1,6 +1,6 @@
 # Native rule generations and host management
 
-Verification: `c9d0b4fbcceecccd72f79e4cb4120fdb35912f2f` and accompanying changes.
+Verification: `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes.
 
 [FACT] Host-only `audit rules list`, `import FILE`, `remove NAME --sha256 PREFIX`
 and `edit` use the running matching controller. List creates nothing and never

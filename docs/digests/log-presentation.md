@@ -1,6 +1,6 @@
 # Log presentation
 
-Verification: `bfc2e8addfd696da0629a8816c26cba6384d9ba7` and accompanying changes.
+Verification: `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes.
 
 [FACT] `pkg/prettylog` is a public package of the yoloctl module that renders
 `log/slog` records. It imports no yoloctl or UI package and reads no terminal.
