@@ -54,6 +54,19 @@ func TestClipboardEnabledDefaultsOnWithExplicitOptOut(t *testing.T) {
 	}
 }
 
+func TestMermaidDefaultsOnWithExplicitOptOut(t *testing.T) {
+	var nilConfig *TUI
+	for _, cfg := range []*TUI{nilConfig, {}, {Markdown: TUIMarkdown{Mermaid: boolPointer(true)}}} {
+		if !cfg.MermaidEnabled() {
+			t.Fatal("markdown.mermaid unexpectedly off")
+		}
+	}
+	var cfg TUI
+	if err := yaml.Unmarshal([]byte("markdown:\n  mermaid: false\n"), &cfg); err != nil || cfg.MermaidEnabled() {
+		t.Fatalf("explicit markdown.mermaid opt-out was ignored: %v", err)
+	}
+}
+
 func TestTUISeamsAcceptDocumentedMixedValueBlock(t *testing.T) {
 	var cfg TUI
 	err := yaml.Unmarshal([]byte(`
@@ -224,6 +237,9 @@ func TestDefaultTUIYAMLMatchesDefaults(t *testing.T) {
 	}
 	if !parsed.ClipboardEnabled() {
 		t.Error("clipboard in the template is not the enabled default")
+	}
+	if !parsed.MermaidEnabled() || parsed.Markdown.Mermaid == nil || !zero.MermaidEnabled() {
+		t.Error("markdown.mermaid in the template is not the enabled default")
 	}
 	if !reflect.DeepEqual(parsed.AgentIcons, DefaultAgentIcons) {
 		t.Errorf("agent_icons %v != DefaultAgentIcons %v", parsed.AgentIcons, DefaultAgentIcons)

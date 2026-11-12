@@ -28,7 +28,26 @@ type ParseOptions struct {
 	Source    bool
 	MapSource bool
 	Decorate  Decorator
+	// Diagrams looks up a closed ```mermaid fence's drawing by its source
+	// (the opener's Block). It must not block or do I/O: the caller answers
+	// from its cache, for DiagramWidth of the layout width it will use.
+	Diagrams func(source string) (Diagram, bool)
 }
+
+// Diagram is what the caller has for a mermaid fence: drawing rows (shown in
+// place of its code, copyable, never re-wrapped), or none and a note shown as
+// one row after the fence (never copied): a fallback reason or "drawing…".
+type Diagram struct {
+	Lines []string
+	Note  string
+}
+
+// DiagramWidth is the inner width of a code card in a layout of width:
+// the width a drawing must be requested for so its rows never wrap.
+func DiagramWidth(width int) int { return max(width-2*CardPad(width), 1) }
+
+// IsMermaid reports whether a fence opener's info string selects Mermaid.
+func IsMermaid(info string) bool { return strings.EqualFold(strings.TrimSpace(info), "mermaid") }
 
 type Document struct {
 	Lines   []DisplayLine
@@ -41,7 +60,11 @@ func Parse(text string, options ParseOptions) Document {
 	if options.MapSource {
 		sources = &doc.Sources
 	}
-	doc.Lines = parseLines(options.Method, text, options.Source, options.Theme, options.Decorate, sources)
+	var diagrams func(string) (Diagram, bool)
+	if !options.Source {
+		diagrams = options.Diagrams
+	}
+	doc.Lines = parseLines(options.Method, text, options.Source, options.Theme, options.Decorate, sources, diagrams)
 	return doc
 }
 

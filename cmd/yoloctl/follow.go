@@ -16,6 +16,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/followview"
+	"github.com/leogr/yoloctl/internal/mermaid"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/termio"
@@ -163,6 +164,11 @@ and q closes the view. A failed read retains the last display marked stale.
 				}
 				return tea.Raw(sequence)
 			}
+		}
+		if prefs.MermaidEnabled() {
+			client := mermaid.Default()
+			defer client.Close()
+			opts.Mermaid = client
 		}
 		return followRun(cmd.Context(), opts)
 	}}

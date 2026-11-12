@@ -62,6 +62,19 @@ type TUI struct {
 	AgentIcons map[string]AgentIcon `yaml:"agent_icons,omitempty"`
 	Session    TUISession           `yaml:"session,omitempty"`
 	Seams      TUISeams             `yaml:"seams,omitempty"`
+	Markdown   TUIMarkdown          `yaml:"markdown,omitempty"`
+}
+
+// TUIMarkdown is how rendered Markdown views (chat, follow) draw content.
+type TUIMarkdown struct {
+	// Mermaid draws admitted ` + "```" + `mermaid fences as text diagrams on the
+	// host, defaulting on. Off keeps them as code cards.
+	Mermaid *bool `yaml:"mermaid,omitempty"`
+}
+
+// MermaidEnabled reports markdown.mermaid, on unless set false.
+func (t *TUI) MermaidEnabled() bool {
+	return t == nil || t.Markdown.Mermaid == nil || *t.Markdown.Mermaid
 }
 
 // AgentIcon is one agent_icons entry. Icon is plain text — terminal
@@ -343,6 +356,11 @@ seams:
   # downloads an image or sends graphics to your terminal; chats keep their
   # file chips. Applies when the TUI starts.
   images: true
+
+markdown:
+  # Draw admitted mermaid fences (flowcharts, sequence diagrams) as text
+  # diagrams in chat and follow, on this host only. Off keeps code cards.
+  mermaid: true
 `
 
 // LoadTUI reads tui.yaml. A missing file is materialized with explicit

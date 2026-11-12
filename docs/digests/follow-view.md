@@ -48,6 +48,7 @@ selection.
 
 [FACT] Markdown parsing/layout/copy geometry comes from `markdownview`, with
 unlimited document rows for this caller; chat retains its default row bound.
+Admitted `mermaid` fences are drawn as described in [Mermaid views](mermaid-views.md).
 Ctrl+S toggles source below the size threshold. Wide tables use the shared
 [counted fallback ladder](markdown-renderer.md): labelled rows when squeezed
 columns become unreadable, or an explicit limit notice with bounded text.

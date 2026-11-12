@@ -38,6 +38,9 @@ type Options struct {
 	Space  string               // empty is explicit host mode
 	Format Format               // auto has already been resolved from the selected name
 	Copy   func(string) tea.Cmd // caller applies the existing host clipboard policy
+	// Mermaid draws admitted mermaid fences of Markdown files; nil
+	// (markdown.mermaid off) keeps them as code cards.
+	Mermaid Renderer
 }
 
 type rendered struct {
@@ -50,12 +53,39 @@ type rendered struct {
 	refused  []markdownview.TableRowID
 	compact  map[int]bool
 	controls map[markdownview.TableRowID]bool
+	undrawn  int // mermaid fences left for a continuation
+	retry    int // mermaid fences r redraws: undrawn or a transient fallback
+	// lines maps each display line to its source line (an index of starts)
+	// when mermaid drawings or notes changed the line count; nil when they
+	// are the same lines.
+	lines []int
 }
 
-func renderFile(raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme) *rendered {
-	return renderFileTables(raw, large, source, format, width, method, theme, nil)
+// sourceLine is the source line display line d shows (or comes from).
+func (v *rendered) sourceLine(d int) int {
+	if v.lines == nil || d < 0 || d >= len(v.lines) {
+		return d
+	}
+	return v.lines[d]
 }
-func renderFileTables(raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme, opened map[followTableKey]bool) *rendered {
+
+// displayLine is the first display line of the last source line at or
+// before line that has one: the top of a drawing for a line inside its fence.
+func (v *rendered) displayLine(line int) int {
+	if v.lines == nil {
+		return line
+	}
+	d := max(0, sort.Search(len(v.lines), func(i int) bool { return v.lines[i] > line })-1)
+	for d > 0 && v.lines[d-1] == v.lines[d] {
+		d--
+	}
+	return d
+}
+
+func renderFile(ctx context.Context, raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme, draw drawing) *rendered {
+	return renderFileTables(ctx, raw, large, source, format, width, method, theme, draw, nil)
+}
+func renderFileTables(ctx context.Context, raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme, draw drawing, opened map[followTableKey]bool) *rendered {
 	text := markdownview.Plain(string(raw))
 	isMarkdown := format == Markdown && !large
 	options := markdownview.ParseOptions{Method: method, Theme: theme, Source: source || !isMarkdown}
@@ -64,7 +94,32 @@ func renderFileTables(raw []byte, large, source bool, format Format, width int, 
 			return pieces
 		}
 	}
+	var mermaidSources []string
+	if draw.renderer != nil && !options.Source {
+		// The parse collects the closed mermaid fences; only a document
+		// that has some is drawn and parsed again with their drawings.
+		options.Diagrams = func(source string) (markdownview.Diagram, bool) {
+			mermaidSources = append(mermaidSources, source)
+			return markdownview.Diagram{}, false
+		}
+	}
 	doc := markdownview.Parse(text, options)
+	var result drawResult
+	if len(mermaidSources) > 0 {
+		result = draw.draw(ctx, mermaidSources, max(1, width), method)
+		// The parse meets the fences in the same order: each occurrence
+		// gets its own outcome.
+		next := 0
+		options.Diagrams = func(string) (markdownview.Diagram, bool) {
+			if next >= len(result.diagrams) {
+				return markdownview.Diagram{}, false
+			}
+			next++
+			return result.diagrams[next-1], true
+		}
+		options.MapSource = true
+		doc = markdownview.Parse(text, options)
+	}
 	records := markdownview.TableRecords(doc)
 	open := map[markdownview.TableRowID]bool{}
 	for _, record := range records {
@@ -94,7 +149,14 @@ func renderFileTables(raw []byte, large, source bool, format Format, width int, 
 			starts = append(starts, i+1)
 		}
 	}
-	return &rendered{doc: doc, rows: layout.Rows, starts: starts, text: text, markdown: isMarkdown, records: records, refused: layout.RefusedTableRows, compact: compact, controls: controls}
+	view := &rendered{doc: doc, rows: layout.Rows, starts: starts, text: text, markdown: isMarkdown, records: records, refused: layout.RefusedTableRows, compact: compact, controls: controls, undrawn: result.undrawn, retry: result.retry}
+	if doc.Sources != nil {
+		view.lines = make([]int, len(doc.Sources))
+		for d, ls := range doc.Sources {
+			view.lines[d] = max(0, sort.Search(len(starts), func(i int) bool { return starts[i] > ls.Start })-1)
+		}
+	}
+	return view
 }
 
 // jobs joins owned reads/renders on exit. A queued Bubble Tea command that
@@ -133,6 +195,10 @@ type resultMsg struct {
 	raw      []byte
 	view     *rendered
 	err      error
+	// continued: a continuation job (see continueDrawing) whose view had
+	// before undrawn fences.
+	continued bool
+	before    int
 }
 type CopyResultMsg struct{ Err error }
 type point struct{ line, offset int }
@@ -150,24 +216,28 @@ type Model struct {
 	source, following, busy, closed bool
 	gen                             uint64
 	pendingRead, pendingRender      bool
-	query                           Query
-	snapshot                        Snapshot
-	raw                             []byte
-	view                            *rendered
-	top                             int
-	anchor                          int64
-	stale, notice                   string
-	selection                       *selection
-	drag                            bool
-	pressed                         markdownview.Action
+	// pendingContinue makes the next render a continuation: it draws the
+	// mermaid fences the current view left undrawn.
+	pendingContinue bool
+	query           Query
+	snapshot        Snapshot
+	raw             []byte
+	view            *rendered
+	top             int
+	anchor          int64
+	stale, notice   string
+	selection       *selection
+	drag            bool
+	pressed         markdownview.Action
 	// pressX/pressY locate the press; moved records that the pointer
 	// left that cell, which makes the release a drag selection.
 	pressX, pressY int
 	moved          bool
+	now            func() time.Time // the refresh budget's clock
 }
 
 func New(ctx context.Context, opts Options) *Model {
-	return &Model{opts: opts, jobs: newJobs(ctx), dark: true, theme: spaceview.NewTheme(true, nil, nil), following: true, pendingRead: true, query: Query{Tail: true}}
+	return &Model{opts: opts, jobs: newJobs(ctx), dark: true, theme: spaceview.NewTheme(true, nil, nil), following: true, pendingRead: true, query: Query{Tail: true}, now: time.Now}
 }
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(tea.RequestBackgroundColor, m.poll(), m.work(false, false))
@@ -180,6 +250,9 @@ func (m *Model) work(read, render bool) tea.Cmd {
 	if m.closed {
 		return nil
 	}
+	if read || render {
+		m.pendingContinue = false // an explicit read or render starts afresh
+	}
 	m.pendingRead = m.pendingRead || read
 	m.pendingRender = m.pendingRender || render
 	if m.busy || m.width <= 0 || (!m.pendingRead && !m.pendingRender) {
@@ -187,7 +260,12 @@ func (m *Model) work(read, render bool) tea.Cmd {
 	}
 	m.busy = true
 	read, render = m.pendingRead || m.snapshot.Key == "", m.pendingRender
-	m.pendingRead, m.pendingRender = false, false
+	draw := drawing{renderer: m.opts.Mermaid, now: m.now, budget: drawBudget}
+	continued := m.pendingContinue && m.view != nil
+	if continued {
+		draw.before = m.view.undrawn
+	}
+	m.pendingRead, m.pendingRender, m.pendingContinue = false, false, false
 	gen, q, raw, snapshot := m.gen, m.query, m.raw, m.snapshot
 	q.Previous = snapshot.Key
 	width, method, theme, source, format := m.width, m.method, m.theme, m.source, m.opts.Format
@@ -197,7 +275,7 @@ func (m *Model) work(read, render bool) tea.Cmd {
 	}
 	return func() tea.Msg {
 		return m.jobs.run(func(ctx context.Context) tea.Msg {
-			result := resultMsg{gen: gen, read: read, snapshot: snapshot, raw: raw}
+			result := resultMsg{gen: gen, read: read, snapshot: snapshot, raw: raw, continued: continued, before: draw.before}
 			if read {
 				next, err := m.opts.Reader.Read(ctx, q)
 				result.err = err
@@ -206,6 +284,8 @@ func (m *Model) work(read, render bool) tea.Cmd {
 					if next.Changed {
 						result.raw = next.Data
 						render = true
+						// New content: its fences are not a continuation.
+						result.continued, draw.before = false, 0
 					}
 				}
 			}
@@ -213,7 +293,7 @@ func (m *Model) work(read, render bool) tea.Cmd {
 				return resultMsg{gen: gen, read: read, err: ctx.Err()}
 			}
 			if render && (result.err == nil || snapshot.Key != "") {
-				result.view = renderFileTables(result.raw, result.snapshot.Large, source, format, width, method, theme, opened)
+				result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, draw, opened)
 			}
 			return result
 		})
@@ -265,6 +345,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if msg.view != nil {
+			if m.selection != nil && m.view != nil && !sameThrough(m.view.doc.Lines, msg.view.doc.Lines, max(m.selection.anchor.line, m.selection.focus.line)) {
+				m.clearSelection() // a drawing replaced rows at or above it
+			}
 			m.view = msg.view
 			if m.view.markdown && !m.source {
 				retained := map[followTableKey]bool{}
@@ -287,6 +370,12 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.placeAnchor()
+			// Mermaid fences left undrawn by the refresh budget: one
+			// render-only continuation on the retained bytes, repeated while
+			// each makes progress.
+			if msg.view.undrawn > 0 && (!msg.continued || msg.view.undrawn < msg.before) {
+				m.pendingContinue, m.pendingRender = true, true
+			}
 		}
 		return m, m.work(false, false)
 	case tea.KeyPressMsg:
@@ -296,7 +385,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.jobs.cancelWork()
 			return m, tea.Quit
 		case "r":
-			return m, m.work(true, false)
+			// A read, and a render when mermaid fences are undrawn or fell
+			// back for a transient reason.
+			return m, m.work(true, m.view != nil && m.view.retry > 0)
 		case "ctrl+s":
 			m.captureAnchor()
 			m.source = !m.source
@@ -354,9 +445,22 @@ func (m *Model) captureAnchor() {
 	if m.view == nil || len(m.view.rows) == 0 {
 		return
 	}
-	r := m.view.rows[min(m.top, len(m.view.rows)-1)]
-	if r.Line >= 0 && r.Line < len(m.view.starts) {
-		m.anchor = m.snapshot.Start + int64(m.view.starts[r.Line]+r.Start)
+	v := m.view
+	r := v.rows[min(m.top, len(v.rows)-1)]
+	line := v.sourceLine(r.Line)
+	if r.Line >= 0 && line < len(v.starts) {
+		offset := r.Start
+		if v.lines != nil {
+			if v.doc.Lines[r.Line].Diagram > 0 || v.doc.Lines[r.Line].Decor {
+				offset = 0 // a drawing or note row: its fence's line
+			}
+			end := len(v.text)
+			if line+1 < len(v.starts) {
+				end = v.starts[line+1] - 1
+			}
+			offset = min(offset, end-v.starts[line])
+		}
+		m.anchor = m.snapshot.Start + int64(v.starts[line]+offset)
 	}
 }
 func (m *Model) placeAnchor() {
@@ -367,15 +471,18 @@ func (m *Model) placeAnchor() {
 	if m.view == nil {
 		return
 	}
+	v := m.view
 	relative := max(0, m.anchor-m.snapshot.Start)
-	line := max(0, sort.Search(len(m.view.starts), func(i int) bool { return int64(m.view.starts[i]) > relative })-1)
+	line := max(0, sort.Search(len(v.starts), func(i int) bool { return int64(v.starts[i]) > relative })-1)
+	display := v.displayLine(line)
+	exact := v.sourceLine(display) == line && (v.lines == nil || v.doc.Lines[display].Diagram == 0)
 	target := 0
-	for i, row := range m.view.rows {
-		if row.Line > line {
+	for i, row := range v.rows {
+		if row.Line > display {
 			break
 		}
 		target = i
-		if row.Line == line && int64(m.view.starts[line]+row.End) >= relative {
+		if row.Line == display && (!exact || int64(v.starts[line]+row.End) >= relative) {
 			break
 		}
 	}
@@ -410,6 +517,21 @@ func (m *Model) scroll(delta int) tea.Cmd {
 		return m.work(true, false)
 	}
 	return nil
+}
+
+// sameThrough reports whether two renders show the same document lines up to
+// line last: a mermaid drawing that replaced code rows (or the reverse) at or
+// above a selection moves the lines its offsets point at.
+func sameThrough(a, b []markdownview.DisplayLine, last int) bool {
+	if last >= len(a) || last >= len(b) {
+		return false
+	}
+	for i := range last + 1 {
+		if a[i].Text != b[i].Text || a[i].Diagram != b[i].Diagram {
+			return false
+		}
+	}
+	return true
 }
 func less(a, b point) bool { return a.line < b.line || a.line == b.line && a.offset < b.offset }
 func (m *Model) selectedBounds() (point, point, bool) {

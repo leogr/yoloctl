@@ -130,7 +130,9 @@ hanging indents, `---` rules and angle autolinks, without new blocks. [43](#sour
 toggle, drag selection copied on release as in chat (plus explicit `y`) and inert links. It polls once per second,
 refreshes off the input loop, follows the end until scrolling up and retains a
 stale display on read failure. Page keys browse the active plain window for
-large files; the footer identifies omitted bytes. [45](#source-45)
+large files; the footer identifies omitted bytes. [45](#source-45) It draws admitted
+`mermaid` fences as text diagrams (default-on `markdown.mermaid`), with a reason
+row for any it does not draw. [52](#source-52)
 
 [FACT] The native chat component supplies multiline editing, bounded block and
 inline Markdown display, source/code copy, a sorted Participants panel with
@@ -421,3 +423,5 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 50. <a id="source-50"></a> [Chat image fetch](../digests/chat-image-fetch.md).
 
 51. <a id="source-51"></a> [Audit output and following](../digests/audit-output.md).
+
+52. <a id="source-52"></a> [Mermaid views](../digests/mermaid-views.md).

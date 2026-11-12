@@ -37,6 +37,11 @@ func TestMarkdownFrozenParity(t *testing.T) {
 	}
 }
 
+// mermaidFields are the DisplayLine/LineSource fields added for mermaid
+// drawings after the golden was frozen. The frozen inputs draw no diagram, so
+// they are left out while zero and the rendering stays compared byte for byte.
+var mermaidFields = map[string]bool{"Diagram": true, "DiagramFirst": true, "DiagramLast": true}
+
 // Snapshot field spelling is case-insensitive so exporting the same pure data
 // does not count as a rendering change. Numeric enums, nil/empty distinctions,
 // all geometry, styles, actions and source maps remain observable.
@@ -56,7 +61,7 @@ func markdownParityValue(v reflect.Value) any {
 			// Newly added refusal flags have no observable effect when false; retain
 			// the old snapshot shape for all unaffected Markdown cases.
 			name := v.Type().Field(i).Name
-			if (name == "Unpadded" || name == "TableLimit" || name == "Tail" || name == "Closed") && v.Field(i).IsZero() {
+			if (name == "Unpadded" || name == "TableLimit" || name == "Tail" || name == "Closed" || mermaidFields[name]) && v.Field(i).IsZero() {
 				continue
 			}
 			out[strings.ToLower(v.Type().Field(i).Name)] = markdownParityValue(v.Field(i))

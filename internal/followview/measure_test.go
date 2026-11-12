@@ -82,10 +82,10 @@ func BenchmarkFollow(b *testing.B) {
 					b.Fatal(err)
 				}
 				start = time.Now()
-				view := renderFile(snapshot.Data, snapshot.Large, false, tc.format, 80, ansi.GraphemeWidth, theme)
+				view := renderFile(context.Background(), snapshot.Data, snapshot.Large, false, tc.format, 80, ansi.GraphemeWidth, theme, drawing{})
 				renderLatency := time.Since(start)
 				start = time.Now()
-				narrow := renderFile(snapshot.Data, snapshot.Large, false, tc.format, 32, ansi.GraphemeWidth, theme)
+				narrow := renderFile(context.Background(), snapshot.Data, snapshot.Large, false, tc.format, 32, ansi.GraphemeWidth, theme, drawing{})
 				resizeLatency := time.Since(start)
 				if len(view.rows) == 0 || len(narrow.rows) == 0 {
 					b.Fatal("missing complete layout")
@@ -98,7 +98,7 @@ func BenchmarkFollow(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				changedView := renderFile(edited.Data, edited.Large, false, tc.format, 80, ansi.GraphemeWidth, theme)
+				changedView := renderFile(context.Background(), edited.Data, edited.Large, false, tc.format, 80, ansi.GraphemeWidth, theme, drawing{})
 				editLatency := time.Since(start)
 				runtime.KeepAlive(changedView)
 				// Actual finite guest script, locally: reports its own read/hash time and

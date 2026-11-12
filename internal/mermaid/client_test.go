@@ -373,3 +373,24 @@ func warm(t *testing.T, c *Client) {
 		t.Fatalf("warm-up: %+v", got)
 	}
 }
+
+// A caller that gives up while the worker renders (follow's refresh budget)
+// gets busy at once; the worker is replaced, and that is not a crash: the
+// next requests start a worker without the restart throttle.
+func TestClientCancelDuringRenderIsBusyAndNotThrottled(t *testing.T) {
+	c, starts, _ := testClient(t, func() *exec.Cmd {
+		return exec.Command("sh", "-c", "cat >/dev/null & sleep 5")
+	})
+	for n := range 3 {
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() { time.Sleep(30 * time.Millisecond); cancel() }()
+		start := time.Now()
+		got := c.Render(ctx, simple, 80+n, ansi.GraphemeWidth)
+		if got.Status != Busy || time.Since(start) > time.Second {
+			t.Fatalf("request %d: %+v after %s", n, got, time.Since(start))
+		}
+		if int(starts.Load()) != n+1 {
+			t.Fatalf("request %d: %d starts; a canceled render throttled the restart", n, starts.Load())
+		}
+	}
+}

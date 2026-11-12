@@ -245,12 +245,13 @@ func (c *Client) exchange(ctx context.Context, req request, deadline time.Time, 
 		done <- reply{resp, err}
 	}()
 	var got reply
+	canceled := false
 	select {
 	case got = <-done:
 	case <-timer.C:
 		got.err = errors.New("renderer did not answer within its guard")
 	case <-ctx.Done():
-		got.err = ctx.Err()
+		got.err, canceled = ctx.Err(), true
 	}
 	if got.err == nil && (got.resp.Version != protocol || got.resp.Artifact != req.Artifact || !got.resp.Result.valid(req.Width, method)) {
 		got.err = errProtocol
@@ -261,8 +262,16 @@ func (c *Client) exchange(ctx context.Context, req request, deadline time.Time, 
 		c.mu.Lock()
 		if c.proc == p {
 			c.killLocked()
+			if canceled {
+				// The caller gave up (a view's time budget, a close): not
+				// a worker failure, so no restart throttle follows.
+				c.crashed = false
+			}
 		}
 		c.mu.Unlock()
+		if canceled {
+			return Result{Status: Busy}
+		}
 		if errors.Is(got.err, errProtocol) {
 			return Result{Status: Internal}
 		}
@@ -270,6 +279,10 @@ func (c *Client) exchange(ctx context.Context, req request, deadline time.Time, 
 	}
 	return got.resp.Result
 }
+
+// Transient reports an outcome that is not kept (busy, unavailable, a broken
+// exchange): an explicit redraw may try it again.
+func (r Result) Transient() bool { return !r.cacheable() }
 
 // cacheable reports the outcomes kept for the session: deterministic ones,
 // and (as a no-retry policy, not a fact) timeout and renderer failure.

@@ -111,6 +111,10 @@ type LineSource struct {
 	Start, End int
 	Src        *SourceMap
 	Fence      int
+	// Diagram marks a drawing row: it shows the whole fence content
+	// [Start, End) as other text, so a highlight maps exactly only from the
+	// first row's start (DiagramFirst) or to the last row's end (DiagramLast).
+	Diagram, DiagramFirst, DiagramLast bool
 }
 
 // QuoteLine is one line Quote inserts: source, or the selected text of a
@@ -177,6 +181,12 @@ func TableText(lines []DisplayLine, from, to, lo, hi int) []QuoteLine {
 // lineStart maps a highlight starting at display offset o of a line to the
 // source offset of that point and the one before any markup touching it.
 func LineStart(ls LineSource, o int) (bare, wide int, ok bool) {
+	if ls.Diagram {
+		if o == 0 && ls.DiagramFirst {
+			return ls.Start, ls.Start, true
+		}
+		return 0, 0, false // inside a drawing
+	}
 	if ls.Src == nil {
 		return ls.Start, ls.Start, true // a fence frame, from its start
 	}
@@ -193,6 +203,12 @@ func LineStart(ls LineSource, o int) (bare, wide int, ok bool) {
 // lineEnd maps a highlight ending at display offset o of a line like
 // lineStart, with markup after it.
 func LineEnd(ls LineSource, o int) (bare, wide int, ok bool) {
+	if ls.Diagram {
+		if ls.DiagramLast && ls.Src != nil && o == len(ls.Src.At) {
+			return ls.End, ls.End, true
+		}
+		return 0, 0, false // inside a drawing
+	}
 	if ls.Src == nil {
 		return ls.End, ls.End, true
 	}

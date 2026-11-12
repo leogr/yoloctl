@@ -13,6 +13,7 @@ import (
 
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/followview"
+	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/spf13/cobra"
 )
 
@@ -96,6 +97,22 @@ func TestHostFollowNeverResolvesASpaceOrVM(t *testing.T) {
 	}
 	if !readOnlyStartup([]string{"follow", "--host", path}) {
 		t.Fatal("follow initialized VM home before host mode")
+	}
+	if selected.Mermaid == nil {
+		t.Fatal("markdown.mermaid defaults on, but follow draws no diagrams")
+	}
+	tuiPath, err := layout.TUIPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tuiPath, []byte("markdown:\n  mermaid: false\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := executeFollow(t, "--host", path); err != nil {
+		t.Fatal(err)
+	}
+	if selected.Mermaid != nil {
+		t.Fatal("markdown.mermaid: false still draws diagrams")
 	}
 }
 func TestFollowValidationPrecedesReaderAndHostEffects(t *testing.T) {

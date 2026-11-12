@@ -44,6 +44,35 @@ type DisplayLine struct {
 	// a thin line across the text width.
 	Rule       bool
 	TableLimit bool // rejected structural table: explain before literal text
+	// Diagram is the fence (1-based) whose drawing this Code line is a row
+	// of, 0 otherwise.
+	Diagram int
+}
+
+// drawDiagram replaces the code lines of the fence opened at out[opener]
+// with its drawing rows. Each row maps to the fence's whole content as one
+// unit: a Quote that covers the drawing from its first row's start to its
+// last row's end quotes the exact fence; anything partial is inexact.
+func drawDiagram(out []DisplayLine, opener, fence int, rows []string, theme spaceview.Theme, srcs *[]LineSource, openerSrcs, closerAt int) []DisplayLine {
+	out = out[:opener+1]
+	start, end := closerAt, closerAt
+	if srcs != nil {
+		*srcs = (*srcs)[:openerSrcs]
+		start = (*srcs)[openerSrcs-1].End + 1
+		end = max(start, closerAt-1)
+	}
+	style := spaceview.Style{FG: theme.Text, BG: CodeCard(theme)}
+	for k, row := range rows {
+		out = append(out, DisplayLine{Text: row, Code: true, Diagram: fence, Pieces: []Piece{{End: len(row), Style: style}}})
+		if srcs != nil {
+			m := &SourceMap{Units: [][2]int{{start, end}}, Lo: start, Hi: end, At: make([]int, len(row))}
+			for i := range m.At {
+				m.At[i] = -1
+			}
+			*srcs = append(*srcs, LineSource{Start: start, End: end, Src: m, Fence: fence, DiagramFirst: k == 0, DiagramLast: k == len(rows)-1, Diagram: true})
+		}
+	}
+	return out
 }
 
 // TableInfo is shared by the display lines of one rendered table: what
@@ -108,9 +137,10 @@ const MaxBodyRows = 16384
 
 // parseLines optionally records where each display line comes from in
 // Plain(text), one LineSource per display line. Display is identical either way.
-func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme, decorate Decorator, srcs *[]LineSource) []DisplayLine {
+func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme, decorate Decorator, srcs *[]LineSource, diagrams func(string) (Diagram, bool)) []DisplayLine {
 	var out []DisplayLine
 	fence, fences := "", 0
+	openerSrcs := 0 // len(*srcs) right after the open fence's opener
 	lines := strings.Split(Plain(text), "\n")
 	opener := -1 // the open fence's display line
 	var block strings.Builder
@@ -157,6 +187,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 		prose := false
 		if !source {
 			if marker := FenceMarker(trim); marker != "" && (fence == "" || ClosesFence(trim, fence)) {
+				var note string
 				if fence == "" {
 					fence, fences = marker, fences+1
 					dl.Text, dl.Fence = strings.TrimSpace(strings.TrimPrefix(trim, marker)), FenceOpen
@@ -166,6 +197,14 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 				} else {
 					dl.Text, dl.Fence, fence = "", FenceClose, ""
 					out[opener].Block = block.String()
+					if diagrams != nil && IsMermaid(out[opener].Text) {
+						if d, ok := diagrams(out[opener].Block); ok {
+							note = d.Note
+							if len(d.Lines) > 0 {
+								out = drawDiagram(out, opener, fences, d.Lines, theme, srcs, openerSrcs, at)
+							}
+						}
+					}
 				}
 				dl.Decor = true
 				dl.Pieces = []Piece{{End: len(dl.Text), Style: spaceview.Style{FG: theme.Dim, BG: CodeCard(theme)}}}
@@ -173,6 +212,16 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 				if srcs != nil {
 					ls.Fence = fences
 					*srcs = append(*srcs, ls)
+					if dl.Fence == FenceOpen {
+						openerSrcs = len(*srcs)
+					}
+				}
+				if note != "" {
+					// One reason row after the card: shown, never copied.
+					out = append(out, DisplayLine{Text: note, Decor: true, Pieces: []Piece{{End: len(note), Style: spaceview.Style{FG: theme.Dim, Italic: true}}}})
+					if srcs != nil {
+						*srcs = append(*srcs, LineSource{Start: ls.End, End: ls.End})
+					}
 				}
 				continue
 			}

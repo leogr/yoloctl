@@ -32,6 +32,8 @@ request still queued at its guard is `renderer busy`; a worker that goes away
 or does not answer in time is killed (process group) and reported `renderer
 unavailable`; a reply that breaks the framing, JSON, protocol or drawing checks
 is an internal error and also replaces the worker. A crashed or killed worker restarts at most once per 30 s.
+A caller whose context ends while the worker renders gets `renderer busy` at
+once; that worker is killed too, but as no failure: no restart throttle follows.
 No diagram is retried automatically. [4](#source-4) [5](#source-5)
 
 [FACT] A per-process LRU (64 entries, 4 MiB of drawing text, never on disk)
@@ -47,4 +49,4 @@ Under `-race` the tests that assert the real 2 s/4 s limits are skipped.
 2. <a id="source-2"></a> [Worker](../../internal/mermaid/worker.go#L31) — `runWorker`, `render` (L80).
 3. <a id="source-3"></a> [Protocol and checks](../../internal/mermaid/protocol.go#L177) — `verifyDrawing`, `Result.valid`, `request.valid`, frames.
 4. <a id="source-4"></a> [Client and cache](../../internal/mermaid/client.go#L147) — `Render`, `exchange`, `startLocked` (L82), `onHost`; cache.go `resultCache` (L36).
-5. <a id="source-5"></a> [Regressions](../../internal/mermaid/client_test.go#L1) — client cache/timeout/busy/hung-worker/protocol/host/too-tall/LRU tests; worker_test.go controlled trap, real-limit timeout, deadline and output bounds.
+5. <a id="source-5"></a> [Regressions](../../internal/mermaid/client_test.go#L1) — client cache/timeout/busy/hung-worker/protocol/host/too-tall/LRU and cancel-without-throttle tests; worker_test.go controlled trap, real-limit timeout, deadline and output bounds.
