@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi/kitty"
 
 	"github.com/leogr/yoloctl/internal/chatstream"
@@ -47,6 +48,7 @@ type PreviewRequest struct {
 // imagePreview is the pane's one requested or shown preview.
 type imagePreview struct {
 	key        string // the message's transcript key
+	channel    string
 	request    uint64
 	generation uint64
 	token      string // empty while pending
@@ -71,8 +73,13 @@ func previewArtifact(msg *Message) *ArtifactRef {
 }
 
 // canPreview reports whether a "Show image" action applies to msg now.
+// The pane must also draw truecolor: a placeholder's colour is its image ID,
+// and a reduced colour would leave the host filter nothing to show. It must be
+// connected with sending access to the channel, so a preview the host has
+// cached is never offered where a new read would be refused.
 func (m *Model) canPreview(msg *Message) bool {
-	return m.opts.PreviewImage != nil && m.previewCap.Supported && previewArtifact(msg) != nil
+	return m.opts.PreviewImage != nil && m.previewCap.Supported && m.trueColor &&
+		m.connected && m.canSend() && previewArtifact(msg) != nil
 }
 
 // previewShown reports whether msg's preview is requested or shown.
@@ -93,7 +100,7 @@ func (m *Model) togglePreview(msg *Message) tea.Cmd {
 	}
 	release := m.releasePreview()
 	m.previewSeq++
-	m.preview = &imagePreview{key: messageKey(*msg), request: m.previewSeq, generation: m.previewCap.Generation}
+	m.preview = &imagePreview{key: messageKey(*msg), channel: msg.Channel, request: m.previewSeq, generation: m.previewCap.Generation}
 	m.touch()
 	return tea.Batch(release, m.opts.PreviewImage(PreviewRequest{
 		Request: m.previewSeq, Generation: m.previewCap.Generation, Channel: msg.Channel,
@@ -116,9 +123,30 @@ func (m *Model) releasePreview() tea.Cmd {
 	return m.opts.ReleasePreview(p.token)
 }
 
-// previewUpdate handles the host's capability and replies.
+// previewUpdate handles the host's capability and replies. For a message the
+// rest of the model also needs it returns handled false, with any command to
+// run as well.
 func (m *Model) previewUpdate(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
+	// Observed, not consumed: the rest of the model sees these too. A
+	// reduced colour profile, a lost connection or lost membership of the
+	// image's channel collapses the preview to its chip.
+	case tea.ColorProfileMsg:
+		m.trueColor = msg.Profile == colorprofile.TrueColor
+		if !m.trueColor {
+			return m.releasePreview(), false
+		}
+		return nil, false
+	case ConnectionMsg:
+		if !msg.Connected {
+			return m.releasePreview(), false
+		}
+		return nil, false
+	case MembershipMsg:
+		if m.preview != nil && strings.EqualFold(msg.Channel, m.preview.channel) && msg.State != "joined" {
+			return m.releasePreview(), false
+		}
+		return nil, false
 	case PreviewCapabilityMsg:
 		changed := msg.Generation != m.previewCap.Generation || !msg.Supported
 		m.previewCap = msg

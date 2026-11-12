@@ -49,12 +49,20 @@ replaced one), writes one Kitty sequence through Bubble Tea's raw output
 answers `ready` with a fresh token, the ID and the cell size, only after the
 transmit has been written (the two are sequenced). A release with that token or
 the pane's end deletes exactly that ID; a pane's end also cancels its in-flight
-job, and the TUI deletes every image it still owns when it exits. Nothing is cached yet:
-another request reads again. [3](#source-3) [4](#source-4)
+job, and the TUI deletes every image it still owns when it exits.
+[3](#source-3) [4](#source-4)
+
+[FACT] Each prepared PNG is kept in an in-memory LRU of at most 8 entries and
+16 MiB, keyed by the artifact ID and hash, the room, disk, human and channel
+IDs, and the cell size. A later request with the same key, still current and
+supported, is transmitted again from the cache under a new ID and token without
+another read, even while a job runs. The end of any chat pane with an image
+channel and every new capability generation empty it; it lives only as long as
+the TUI. [4](#source-4)
 
 ## Sources
 
 1. <a id="source-1"></a> [chat_artifact_relay.py](../../cmd/yoloctl/chat_artifact_relay.py#L1) — relay program, embedded by chat_artifact_relay.go; chat_artifact_relay_test.go runs it against fake clients (success, mismatches, symlink, mode, failure, output flood, cancel, deadline with a TERM-ignoring child, invalid arguments).
 2. <a id="source-2"></a> [chat_artifact_read.go](../../cmd/yoloctl/chat_artifact_read.go#L1) — `chatArtifactReadRequest`, `decodeChatArtifactReadRequest`, `matchesRoom`, `runControllerChatArtifactRead`, `executeChatArtifactRead`, `runChatArtifactRelay`, `verifyChatArtifactFrame`; registry and dispatch in controller_internal.go; chat_artifact_read_test.go.
 3. <a id="source-3"></a> [prepare.go](../../internal/chatimage/prepare.go#L1) — `Prepare`, `downscale`, `TransmitSequence`, `DeleteSequence`; prepare_test.go.
-4. <a id="source-4"></a> [image_broker.go](../../internal/tui/image_broker.go#L1) — `ReadChatArtifact`, `answerPreview`, `finishImageJob`, `flushImageDeletes`, `chatPaneSpace`; chat_artifact_host.go `readChatArtifactForPreview`; image_broker_test.go.
+4. <a id="source-4"></a> [image_broker.go](../../internal/tui/image_broker.go#L1) — `ReadChatArtifact`, `answerPreview`, `finishImageJob`, `showPrepared`, `previewCache`, `endImagePane`, `flushImageDeletes`, `chatPaneSpace`; chat_artifact_host.go `readChatArtifactForPreview`; image_broker_test.go.

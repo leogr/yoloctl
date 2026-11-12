@@ -277,9 +277,12 @@ type Model struct {
 	opts              Options
 	// previewCap is the host's image capability; preview is the pane's one
 	// requested or shown image; previewSeq numbers requests.
-	previewCap    PreviewCapabilityMsg
-	preview       *imagePreview
-	previewSeq    uint64
+	previewCap PreviewCapabilityMsg
+	preview    *imagePreview
+	previewSeq uint64
+	// trueColor says the pane's colour profile keeps 24-bit colours, which a
+	// placeholder's image ID needs.
+	trueColor     bool
 	width, height int
 	// Zero is WcWidth, as in Bubble Tea before a supported mode-2027 report.
 	widthMethod       ansi.Method
@@ -411,10 +414,12 @@ func (m *Model) say(level noticeLevel, text string) {
 func (m *Model) touch() { m.generation++ }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if cmd, ok := m.previewUpdate(msg); ok {
-		return m, cmd
+	previewCmd, handled := m.previewUpdate(msg)
+	if handled {
+		return m, previewCmd
 	}
 	_, cmd := m.update(msg)
+	cmd = tea.Batch(previewCmd, cmd)
 	switch msg.(type) {
 	case MembersMsg, IncomingMsg, DeliveryMsg, CatalogMsg, SessionMsg, ConnectionMsg, GapMsg, MembershipMsg:
 		m.reconcile()

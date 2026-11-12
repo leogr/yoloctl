@@ -294,9 +294,13 @@ the one chat preview registered for that pane's session; any other placeholder
 in any pane or the palette console is shown as a space. A native chat pane's
 explicit copy turns preview cells into their attachment chip. On a host
 terminal that passes the image probe, a chat message's single image attachment
-offers Show image: the TUI reads it through the controller, scales it and
-places it under that message; elsewhere the chip stays.
-[7](#source-7) [47](#source-47) [49](#source-49)
+offers Show image while the pane draws truecolor: the TUI reads it through the
+controller, scales it and places it under that message; elsewhere the chip
+stays. A reduced colour profile, disconnect or lost channel membership
+collapses it. The TUI keeps up to 8 prepared previews (16 MiB) in memory and
+re-shows one without another read; a chat pane's end or a capability change
+empties that cache.
+[7](#source-7) [47](#source-47) [49](#source-49) [50](#source-50)
 
 [DERIVED] Passing these tests cannot establish native terminal equivalence.
 Claims must name the tested terminal versions/configurations and distinguish
@@ -404,3 +408,5 @@ log or row replay is added. [48](#source-48)
 48. <a id="source-48"></a> [TUI log notices](../digests/tui-log-notices.md).
 
 49. <a id="source-49"></a> [Chat image panes](../digests/chat-image-panes.md).
+
+50. <a id="source-50"></a> [Chat image fetch](../digests/chat-image-fetch.md).

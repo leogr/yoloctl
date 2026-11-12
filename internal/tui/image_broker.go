@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -68,6 +69,7 @@ type imageBroker struct {
 	// job is the single fetch/decode slot; deletes are image IDs to free.
 	job     *imageJob
 	deletes []uint32
+	cache   previewCache
 }
 
 // imageHandler is OnImage for native chat panes: it only queues the frame
@@ -133,11 +135,13 @@ func (m *model) syncImages() tea.Cmd {
 	b.mu.Unlock()
 
 	var cmd tea.Cmd
+	var shown []tea.Cmd
 	if known := m.imageHost.state == imageSupported || m.imageHost.state == imageUnsupported; known {
 		supported := m.imagesSupported()
 		if !b.advertised.known || b.advertised.supported != supported {
 			b.advertised.known, b.advertised.supported = true, supported
 			b.advertised.generation++
+			b.cache = previewCache{} // a host change clears the cache
 		}
 	}
 	// The first chat pane starts the probe; every live chat pane learns the
@@ -183,16 +187,17 @@ func (m *model) syncImages() tea.Cmd {
 				}
 				continue
 			}
-			m.answerPreview(msg)
+			shown = append(shown, m.answerPreview(msg))
 		}
 	}
 	if b.advertised.known && len(b.pending) > 0 {
 		for _, msg := range b.pending {
-			m.answerPreview(msg)
+			shown = append(shown, m.answerPreview(msg))
 		}
 		b.pending = nil
 	}
-	return tea.Batch(cmd, m.finishImageJob(live), m.flushImageDeletes())
+	shown = append(shown, cmd, m.finishImageJob(live), m.flushImageDeletes())
+	return tea.Batch(shown...)
 }
 
 // flushImageDeletes frees released images on the host terminal, by ID only.
@@ -211,15 +216,26 @@ func (m *model) flushImageDeletes() tea.Cmd {
 
 // answerPreview replies to one preview request: stale, unsupported or busy
 // at once, otherwise it starts the single fetch/decode job.
-func (m *model) answerPreview(msg imageMsg) {
+func (m *model) answerPreview(msg imageMsg) tea.Cmd {
 	b := &m.images
 	a := b.advertised
+	key := previewKey(msg.frame, m.hostGeometry.width, m.hostGeometry.height)
 	code := ""
 	switch {
 	case msg.frame.Generation != a.generation:
 		code = "stale"
 	case !a.supported || !m.imagesSupported():
 		code = "unsupported"
+	}
+	if code == "" {
+		// A preview shown before, at this cell size and under the same
+		// identities, is shown again without another read.
+		if p, ok := b.cache.get(key); ok {
+			return m.showPrepared(msg.session, msg.frame, a.generation, p)
+		}
+	}
+	switch {
+	case code != "":
 	case ReadChatArtifact == nil:
 		code = "unavailable"
 	case b.job != nil:
@@ -227,7 +243,7 @@ func (m *model) answerPreview(msg imageMsg) {
 	}
 	if code != "" {
 		m.sendImage(msg.session, chatimage.Frame{Op: chatimage.OpError, Generation: a.generation, Request: msg.frame.Request, Code: code})
-		return
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), imageJobTimeout)
 	job := &imageJob{msg: msg, generation: a.generation, cellW: m.hostGeometry.width, cellH: m.hostGeometry.height, cancel: cancel}
@@ -245,6 +261,7 @@ func (m *model) answerPreview(msg imageMsg) {
 		b.mu.Unlock()
 		m.wake()
 	}()
+	return nil
 }
 
 // imageJobTimeout bounds one fetch and decode on the host.
@@ -284,21 +301,29 @@ func (m *model) finishImageJob(live map[*term.Session]bool) tea.Cmd {
 		reply("failed")
 		return nil
 	}
+	b.cache.put(previewKey(f, job.cellW, job.cellH), job.prepared)
+	return m.showPrepared(s, f, job.generation, job.prepared)
+}
+
+// showPrepared transmits a prepared preview under a new ID, registers it for
+// the pane and announces it as ready after the transmit is written.
+func (m *model) showPrepared(s *term.Session, f chatimage.Frame, generation uint64, prepared chatimage.Prepared) tea.Cmd {
+	b := &m.images
 	id, ok := m.nextImageID()
 	if !ok {
-		reply("failed")
+		m.sendImage(s, chatimage.Frame{Op: chatimage.OpError, Generation: generation, Request: f.Request, Code: "failed"})
 		return nil
 	}
 	token := rand.Text()[:20]
-	placement := chatimage.Placement{ID: id, Rows: job.prepared.Rows, Cols: job.prepared.Cols, Token: token}
+	placement := chatimage.Placement{ID: id, Rows: prepared.Rows, Cols: prepared.Cols, Token: token}
 	if old, replaced := m.imageRegistry.Activate(s, placement, f.Chip); replaced {
 		b.deletes = append(b.deletes, old.ID)
 	}
-	ready := imageReadyMsg{session: s, frame: chatimage.Frame{Op: chatimage.OpReady, Generation: job.generation, Request: f.Request,
+	ready := imageReadyMsg{session: s, frame: chatimage.Frame{Op: chatimage.OpReady, Generation: generation, Request: f.Request,
 		Token: token, ID: id, Cols: placement.Cols, Rows: placement.Rows}}
 	// The pane learns "ready" only after the transmit is written, so it
 	// never draws placeholder cells for an image the terminal lacks.
-	return tea.Sequence(tea.Raw(chatimage.TransmitSequence(id, job.prepared)), func() tea.Msg { return ready })
+	return tea.Sequence(tea.Raw(chatimage.TransmitSequence(id, prepared)), func() tea.Msg { return ready })
 }
 
 // imageReadyMsg follows a preview's transmit write; the ready frame goes out
@@ -314,11 +339,15 @@ func (m *model) imageReady(msg imageReadyMsg) {
 	}
 }
 
-// cancelImageJob cancels the in-flight job of a pane that ended: its read
-// stops promptly and frees the single slot; its result is dropped.
-func (m *model) cancelImageJob(s *term.Session) {
+// endImagePane handles a pane that ended: its in-flight read stops promptly
+// and frees the single slot, its result is dropped, and an ended chat
+// connection clears the preview cache.
+func (m *model) endImagePane(s *term.Session) {
 	if job := m.images.job; job != nil && job.msg.session == s {
 		job.cancel()
+	}
+	if s.HasImageChannel() {
+		m.images.cache = previewCache{}
 	}
 }
 
@@ -354,4 +383,63 @@ func chatPaneSpace(args []string, pinned string) string {
 		}
 	}
 	return pinned
+}
+
+// Cache bounds (plan §3C): prepared previews kept in memory per host.
+const (
+	previewCacheEntries = 8
+	previewCacheBytes   = 16 << 20
+)
+
+// previewKey identifies a prepared preview: the artifact, the identities it
+// was read under and the cell size it was scaled for.
+func previewKey(f chatimage.Frame, cellW, cellH int) string {
+	return strings.Join([]string{f.Artifact, f.SHA256, f.RoomID, f.DiskID, f.HumanID, f.ChannelID, strconv.Itoa(cellW), strconv.Itoa(cellH)}, "|")
+}
+
+// previewCache is an in-memory LRU of host-made preview PNGs, bounded by
+// entries and bytes. It lives only as long as the TUI.
+type previewCache struct {
+	keys  []string // least recently used first
+	items map[string]chatimage.Prepared
+	bytes int
+}
+
+func (c *previewCache) get(key string) (chatimage.Prepared, bool) {
+	p, ok := c.items[key]
+	if ok {
+		c.touch(key)
+	}
+	return p, ok
+}
+
+func (c *previewCache) put(key string, p chatimage.Prepared) {
+	if len(p.PNG) > previewCacheBytes {
+		return
+	}
+	if c.items == nil {
+		c.items = map[string]chatimage.Prepared{}
+	}
+	if old, ok := c.items[key]; ok {
+		c.bytes -= len(old.PNG)
+	}
+	c.items[key] = p
+	c.bytes += len(p.PNG)
+	c.touch(key)
+	for len(c.keys) > previewCacheEntries || c.bytes > previewCacheBytes {
+		oldest := c.keys[0]
+		c.keys = c.keys[1:]
+		c.bytes -= len(c.items[oldest].PNG)
+		delete(c.items, oldest)
+	}
+}
+
+func (c *previewCache) touch(key string) {
+	for i, k := range c.keys {
+		if k == key {
+			c.keys = append(c.keys[:i], c.keys[i+1:]...)
+			break
+		}
+	}
+	c.keys = append(c.keys, key)
 }

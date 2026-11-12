@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -371,5 +372,84 @@ func TestImagesSeamOffGivesChatNoChannel(t *testing.T) {
 	}
 	if m.chatImageHandler([]string{"space", "view"}) != nil {
 		t.Fatal("a non-chat pane has an image channel")
+	}
+}
+
+func TestBrokerReshowsACachedPreviewWithoutAnotherRead(t *testing.T) {
+	data := smallPNG(t)
+	var reads atomic.Int32
+	m, s := supportedBroker(t, func(context.Context, string, chatimage.Frame) ([]byte, error) {
+		reads.Add(1)
+		return data, nil
+	})
+	show := func(request uint64) (chatimage.Placement, string) {
+		t.Helper()
+		m.imageHandler()(s, previewFrame(request))
+		var raw strings.Builder
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			raw.WriteString(rawOutput(m.syncImages(), m))
+			if p, ok := m.imageRegistry.Active(s); ok {
+				return p, raw.String()
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("preview never registered")
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	hide := func(p chatimage.Placement) {
+		t.Helper()
+		m.imageHandler()(s, chatimage.Frame{V: 1, Op: chatimage.OpRelease, Token: p.Token})
+		rawOutput(m.syncImages())
+	}
+	first, _ := show(7)
+	hide(first)
+	again, raw := show(8)
+	if reads.Load() != 1 {
+		t.Fatalf("%d reads, want 1: a cached preview was read again", reads.Load())
+	}
+	if again.ID == first.ID || again.Token == first.Token ||
+		!strings.Contains(raw, "\x1b_Ga=T,f=100,t=d,q=2,U=1,i="+strconv.Itoa(int(again.ID))+",c=4,r=1,") {
+		t.Fatalf("cached preview not transmitted under a new ID: %+v %q", again, raw)
+	}
+	// An ended chat pane clears the cache: the next show reads again.
+	hide(again)
+	m.endImagePane(s)
+	show(9)
+	if reads.Load() != 2 {
+		t.Fatalf("%d reads after a pane ended, want 2", reads.Load())
+	}
+}
+
+func TestPreviewCacheBoundsEntriesAndBytes(t *testing.T) {
+	var c previewCache
+	for i := 0; i < previewCacheEntries; i++ {
+		c.put(strconv.Itoa(i), chatimage.Prepared{PNG: []byte{1}})
+	}
+	c.get("0") // most recently used now
+	c.put("new", chatimage.Prepared{PNG: []byte{1}})
+	if _, ok := c.items["1"]; ok || len(c.items) != previewCacheEntries {
+		t.Fatalf("entries %d, least recently used kept", len(c.items))
+	}
+	if _, ok := c.items["0"]; !ok {
+		t.Fatal("a recently used entry was evicted")
+	}
+	big := chatimage.Prepared{PNG: make([]byte, 9<<20)}
+	c.put("big1", big)
+	c.put("big2", big)
+	if _, ok := c.items["big1"]; ok || c.bytes > previewCacheBytes {
+		t.Fatalf("bytes %d over the bound", c.bytes)
+	}
+	c.put("huge", chatimage.Prepared{PNG: make([]byte, previewCacheBytes+1)})
+	if _, ok := c.items["huge"]; ok {
+		t.Fatal("an entry larger than the cache was stored")
+	}
+	total := 0
+	for _, p := range c.items {
+		total += len(p.PNG)
+	}
+	if total != c.bytes || len(c.keys) != len(c.items) {
+		t.Fatalf("accounting: bytes %d/%d keys %d items %d", c.bytes, total, len(c.keys), len(c.items))
 	}
 }

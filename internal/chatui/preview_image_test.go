@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 )
 
 const previewMsgID = "66eb4b77-cfbd-4b90-aec6-538014c4108d"
@@ -26,6 +27,7 @@ func previewModel(t *testing.T) (*Model, *previewHost) {
 	msg.ID = previewMsgID
 	m.Update(IncomingMsg{Message: msg})
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m.Update(tea.ColorProfileMsg{Profile: colorprofile.TrueColor})
 	m.selected = len(m.messages) - 1
 	return m, h
 }
@@ -120,5 +122,73 @@ func TestLiteralPlaceholdersInMessagesDisplayAsSpaces(t *testing.T) {
 	}
 	if m.messages[len(m.messages)-1].Text != text {
 		t.Fatal("message text changed")
+	}
+}
+
+// shownPreview is previewModel with the selected message's image shown.
+func shownPreview(t *testing.T) (*Model, *previewHost) {
+	t.Helper()
+	m, h := previewModel(t)
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 60, MaxRows: 12})
+	m.runAction("image")
+	m.Update(PreviewReadyMsg{Request: h.requests[0].Request, Generation: 1, Token: "tok", ID: 9, Cols: 2, Rows: 1})
+	if !strings.Contains(m.View().Content, "\U0010EEEE") {
+		t.Fatal("preview not drawn")
+	}
+	return m, h
+}
+
+// runCmd runs cmd and every command it batches.
+func runCmd(cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	if batch, ok := cmd().(tea.BatchMsg); ok {
+		for _, c := range batch {
+			runCmd(c)
+		}
+	}
+}
+
+func TestReducedColourProfileOffersOnlyTheChip(t *testing.T) {
+	m, h := shownPreview(t)
+	_, cmd := m.Update(tea.ColorProfileMsg{Profile: colorprofile.ANSI256})
+	runCmd(cmd)
+	if len(h.released) != 1 || h.released[0] != "tok" || strings.Contains(m.View().Content, "\U0010EEEE") {
+		t.Fatalf("reduced profile kept the preview: released %v", h.released)
+	}
+	if strings.Contains(strings.Join(previewActions(m), ","), "image:") {
+		t.Fatalf("Show image offered without truecolor: %v", previewActions(m))
+	}
+	m.Update(tea.ColorProfileMsg{Profile: colorprofile.TrueColor})
+	if !strings.Contains(strings.Join(previewActions(m), ","), "image:Show image") {
+		t.Fatalf("actions %v", previewActions(m))
+	}
+}
+
+func TestLostConnectionOrMembershipCollapsesThePreview(t *testing.T) {
+	m, h := shownPreview(t)
+	m.Update(MembershipMsg{Channel: "#other", State: "left"})
+	m.Update(MembershipMsg{Channel: "#SPACE", State: "joined"})
+	if len(h.released) != 0 {
+		t.Fatalf("unrelated membership released %v", h.released)
+	}
+	_, cmd := m.Update(MembershipMsg{Channel: "#Space", State: "kicked"})
+	runCmd(cmd)
+	if len(h.released) != 1 || strings.Contains(m.View().Content, "\U0010EEEE") {
+		t.Fatalf("kick kept the preview: released %v", h.released)
+	}
+	if strings.Contains(strings.Join(previewActions(m), ","), "image:") {
+		t.Fatalf("Show image offered without membership: %v", previewActions(m))
+	}
+
+	m, h = shownPreview(t)
+	_, cmd = m.Update(ConnectionMsg{})
+	runCmd(cmd)
+	if len(h.released) != 1 || strings.Contains(m.View().Content, "\U0010EEEE") {
+		t.Fatalf("disconnect kept the preview: released %v", h.released)
+	}
+	if strings.Contains(strings.Join(previewActions(m), ","), "image:") {
+		t.Fatalf("Show image offered while disconnected: %v", previewActions(m))
 	}
 }

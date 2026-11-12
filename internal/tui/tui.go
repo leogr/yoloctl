@@ -1071,7 +1071,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 			return m, nil // its view was closed first
 		}
 		p.Exited = true
-		m.cancelImageJob(msg.session)
+		m.endImagePane(msg.session)
 		if p, ok := m.imageRegistry.Release(msg.session); ok { // an ended session shows no preview
 			m.images.deletes = append(m.images.deletes, p.ID)
 		}
