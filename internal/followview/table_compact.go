@@ -21,13 +21,13 @@ func (m *Model) toggleTableRows(value string, all bool) tea.Cmd {
 		m.openTables = map[followTableKey]bool{}
 	}
 	if all {
-		expand := false
+		expand := true
 		for _, record := range m.view.records {
 			if !m.view.controls[record.ID] {
 				continue
 			}
-			if !m.openTables[followKey(record)] {
-				expand = true
+			if m.openTables[followKey(record)] {
+				expand = false
 				break
 			}
 		}

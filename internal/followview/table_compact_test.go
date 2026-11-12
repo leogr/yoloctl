@@ -1,6 +1,7 @@
 package followview
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -114,5 +115,30 @@ func TestFollowTableToggleCancelsDragAndSourceStaysLiteral(t *testing.T) {
 	applyWork(t, m, key(m, 's', tea.ModCtrl))
 	if len(m.view.compact) != 0 {
 		t.Fatal("source round trip lost open rows")
+	}
+}
+
+func TestFollowWCollapsesPartiallyRefusedExpansion(t *testing.T) {
+	source := "|Name|Stage|Owner|Updated|Note|\n|---|---|---|---|---|\n"
+	for i := 0; i < 12; i++ {
+		source += fmt.Sprintf("|row-%02d-abcdefghijkl|abcdefghijklmnop|abcdefghijklmnop|abcdefghijklmnop|%s|\n", i, strings.Repeat("long note words ", 30))
+	}
+	m, _ := fileModel(t, source, Markdown)
+	_, cmd := m.Update(tea.WindowSizeMsg{Width: 100, Height: 60})
+	applyWork(t, m, cmd)
+	applyWork(t, m, key(m, 'w', 0))
+	if len(m.openTables) == 0 || len(m.view.refused) == 0 {
+		t.Fatalf("fixture needs partial admission: open=%d refused=%d", len(m.openTables), len(m.view.refused))
+	}
+	if !strings.Contains(m.notice, "kept closed") {
+		t.Fatal("missing refusal notice", m.notice)
+	}
+	applyWork(t, m, key(m, 'w', 0))
+	if len(m.openTables) != 0 || len(m.view.compact) != 12 {
+		t.Fatal("w did not close partially expanded table", len(m.openTables), len(m.view.compact))
+	}
+	applyWork(t, m, key(m, 'w', 0))
+	if len(m.openTables) == 0 || len(m.view.refused) == 0 {
+		t.Fatal("w could not expand again after collapse")
 	}
 }
