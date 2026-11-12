@@ -370,35 +370,116 @@ func TestCollectorNamesUnreadMemoryCounters(t *testing.T) {
 	}
 }
 
-// Holder reads share one bound per sample, however many holders stall, and
-// end as soon as the stream does.
+// Holder reads share one deadline. Observe that deadline and cancellation at
+// the holder boundary, rather than timing unrelated Sample filesystem work.
 func TestCollectorBoundsStalledHolderReads(t *testing.T) {
+	for _, cancelled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "shared_deadline", true: "parent_cancel"}[cancelled], func(t *testing.T) {
+			c := Collector{}
+			var targets []Target
+			for i := range 3 * ptyReaders {
+				targets = append(targets, Target{Name: fmt.Sprintf("b%d", i), Session: true})
+			}
+			observed := make(chan context.Context, len(targets))
+			c.PTYStats = func(ctx context.Context, _ string) (PTYCounters, error) {
+				observed <- ctx
+				<-ctx.Done()
+				return PTYCounters{}, ctx.Err()
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			result := make(chan map[string]ptyResult, 1)
+			before := time.Now()
+			go func() { result <- c.ptys(ctx, targets) }()
+			var first context.Context
+			select {
+			case first = <-observed:
+			case <-time.After(5 * time.Second):
+				t.Fatal("holder read never entered")
+			}
+			seen := time.Now()
+			deadline, ok := first.Deadline()
+			if !ok || deadline.Before(before.Add(PTYSampleTimeout)) || deadline.After(seen.Add(PTYSampleTimeout)) {
+				t.Fatalf("holder deadline %v outside timeout construction interval [%v,%v]", deadline, before, seen)
+			}
+			want := context.DeadlineExceeded
+			if cancelled {
+				want = context.Canceled
+				cancel()
+			}
+			var got map[string]ptyResult
+			select {
+			case got = <-result:
+			case <-time.After(5 * time.Second):
+				t.Fatal("holder reads ignored deadline/cancellation")
+			}
+			if !errors.Is(first.Err(), want) {
+				t.Fatal("holder ended for wrong reason", first.Err(), want)
+			}
+			close(observed) // ptys joins every callback before returning.
+			for next := range observed {
+				d, ok := next.Deadline()
+				if !ok || d != deadline || next.Done() != first.Done() {
+					t.Fatal("holder reads did not share one context/deadline")
+				}
+			}
+			if len(got) != len(targets) {
+				t.Fatal("missing stalled holder results", len(got))
+			}
+			for _, target := range targets {
+				if r := got[target.Name]; r.counters != nil || r.err == "" {
+					t.Fatalf("stalled holder %s = %+v", target.Name, r)
+				}
+			}
+		})
+	}
+}
+
+// Sample also reads disk/cgroup files. Delay an unrelated statfs read, cancel
+// during it, then prove every holder sees cancellation rather than a fresh wait.
+func TestCollectorCancelledSampleAfterUnrelatedIO(t *testing.T) {
 	c := testCollector(t)
 	id := strings.Repeat("ab", 32)
+	targets := []Target{{Name: "api", PID: 41, ID: id, Session: true}}
+	entered, release := make(chan struct{}), make(chan struct{})
+	unblock := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(unblock)
+	var once sync.Once
+	original := c.Statfs
+	c.Statfs = func(path string) (Usage, error) {
+		once.Do(func() { close(entered); <-release })
+		return original(path)
+	}
+	late := make(chan error, len(targets))
 	c.PTYStats = func(ctx context.Context, _ string) (PTYCounters, error) {
-		<-ctx.Done()
+		late <- ctx.Err()
 		return PTYCounters{}, ctx.Err()
 	}
-	var targets []Target
-	for i := range 3 * ptyReaders {
-		targets = append(targets, Target{Name: fmt.Sprintf("b%d", i), PID: 41, ID: id, Session: true})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	result := make(chan *Sample, 1)
+	go func() { result <- c.Sample(ctx, targets) }()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("unrelated IO never entered")
 	}
-	start := time.Now()
-	s := c.Sample(t.Context(), targets)
-	if elapsed := time.Since(start); elapsed > 2*PTYSampleTimeout {
-		t.Fatalf("%d stalled holders took %v, bound %v", len(targets), elapsed, PTYSampleTimeout)
+	cancel()
+	unblock()
+	var sample *Sample
+	select {
+	case sample = <-result:
+	case <-time.After(5 * time.Second):
+		t.Fatal("canceled sample did not finish")
 	}
-	for _, target := range targets {
-		if b := s.Boxes[target.Name]; b.PTY != nil || b.PTYError == "" {
-			t.Fatalf("stalled holder %s = %+v", target.Name, b)
+	close(late)
+	for err := range late {
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal("holder did not inherit cancellation", err)
 		}
 	}
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	start = time.Now()
-	c.Sample(ctx, targets)
-	if elapsed := time.Since(start); elapsed > PTYSampleTimeout/2 {
-		t.Fatalf("canceled sample waited %v for holders", elapsed)
+	if got := sample.Boxes["api"]; got.PTY != nil || got.PTYError == "" {
+		t.Fatal("canceled holder reported counters", got)
 	}
 }
 
