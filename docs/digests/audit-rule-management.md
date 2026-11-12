@@ -1,6 +1,6 @@
 # Native rule generations and host management
 
-Verification: `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes.
+Verification: `fc4ab58342732bf5234dacea479ec2e8ddf0d1b8` and accompanying changes.
 
 [FACT] Host-only `audit rules list`, `import FILE`, `remove NAME --sha256 PREFIX`
 and `edit` use the running matching controller. List creates nothing and never
@@ -10,6 +10,13 @@ Rule bytes/selection stream separately from the typed request envelope; their
 combined size is not the controller frame size. One rule file is at most 2 MiB;
 there is no feature count, total-size, selection-size or validation-time limit.
 [1](#source-1) [2](#source-2) [3](#source-3)
+
+[FACT] Import completes its first host-file positional. Remove completes literal
+custom-file basenames from the same running-controller read as list, prefix-filtered
+and deduplicated; built-ins are excluded. Unavailable or unauthorized reads offer
+no candidates or host-file fallback. Names containing completion control framing
+are omitted rather than rewritten into a different target; explicit removal still
+uses the stored name and existing hash disambiguation. [3](#source-3) [12](#source-12)
 
 [FACT] Imported basenames and UTC dates are display metadata. Files are stored
 under digest-derived names in private native generations. Built-ins load first;
@@ -80,7 +87,7 @@ may not describe the custom condition. [10](#source-10) [11](#source-11)
 
 1. <a id="source-1"></a> [Immutable rule store](../../internal/audit/rule_store.go#L1) — `RuleStore.Read`, `Prepare`, `Configuration`, `RulesPinsDigest`.
 2. <a id="source-2"></a> [Native transaction](../../cmd/yoloctl/controller_audit_rules_linux.go#L1) — host dispatch, revision check, tool reuse, effect gate and selected apply.
-3. <a id="source-3"></a> [Host commands](../../cmd/yoloctl/audit_rules.go#L1) — list/import/remove, streamed data, editor preservation and diagnostics.
+3. <a id="source-3"></a> [Host commands](../../cmd/yoloctl/audit_rules.go#L1) — list/import/remove, streamed data, editor preservation, diagnostics and `completeAuditRuleNames`.
 4. <a id="source-4"></a> [Store regressions](../../internal/audit/rule_store_test.go#L1) — order, duplicates, rejection, size boundary, selection, tampering and explicit upgrade.
 5. <a id="source-5"></a> [One native validator](../../internal/audit/rule_validate_linux.go#L1) — `ValidateRuleSet`, ordinary cancellation, native warning headers.
 6. <a id="source-6"></a> [Selection qualification](audit-rule-validation.md) — literal include, framing and warning/skip semantics.
@@ -90,3 +97,4 @@ may not describe the custom condition. [10](#source-10) [11](#source-11)
 9. <a id="source-9"></a> [Generation retirement](../../internal/audit/rule_retire.go#L1) — protected references, owned inventory and exact-path retirement.
 10. <a id="source-10"></a> [Archive adapter](../../internal/spacearchive/audit.go#L1) — selected-source inventory, hashes, disabled restoration; native publication in internal/audit/rule_restore.go.
 11. <a id="source-11"></a> [Fixed output adapter](../../internal/audit/output.go#L1) — `outputTemplate`, `RenderOutput`, `FormatPrettyOutput`; custom privacy regressions in custom_output_test.go.
+12. <a id="source-12"></a> [Host completion contracts](../../cmd/yoloctl/audit_rules_completion_test.go#L40) — file/name completion, literal framing, unavailable and operator refusal; forced-host positional walk in audit_host_contract_test.go.

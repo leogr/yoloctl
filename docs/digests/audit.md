@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes.
+Verification: `fc4ab58342732bf5234dacea479ec2e8ddf0d1b8` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs`, `export` and
@@ -97,7 +97,8 @@ Export also works with auditing disabled while the controller is running.
 [1](#source-1) [2](#source-2) [14](#source-14)
 
 [FACT] Host rule management retains ordered native generations and a rules-only
-editor, with conflict preservation. One dry-run validates before publication;
+editor, with conflict preservation. Removal completion reads stored custom names
+from the running controller and offers nothing if unavailable. One dry-run validates before publication;
 enabled accepted changes restart capture, disabled changes remain off. Loaded
 health is bound to the selected generation. [24](#source-24)
 

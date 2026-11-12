@@ -9,6 +9,9 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
+	"unicode"
 
 	"github.com/leogr/yoloctl/internal/audit"
 	"github.com/leogr/yoloctl/internal/layout"
@@ -56,7 +59,7 @@ func newAuditRulesCmd() *cobra.Command {
 		return err
 	}}
 	list.Flags().Bool("json", false, "Print stored rule-set metadata and selection as JSON")
-	imp := &cobra.Command{Use: "import FILE", Short: "Append a rule file after built-ins, validate and apply", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	imp := &cobra.Command{Use: "import FILE", Short: "Append a rule file after built-ins, validate and apply", ValidArgsFunction: firstArgOnly(completeHostFiles), Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		target, err := auditTarget(cmd)
 		if err != nil {
 			return err
@@ -71,7 +74,7 @@ func newAuditRulesCmd() *cobra.Command {
 		}
 		return changeAuditRules(cmd, target, "import", snapshot, auditRulesRequest{Name: filepath.Base(args[0])}, bytes.NewReader(raw))
 	}}
-	remove := &cobra.Command{Use: "remove NAME", Short: "Remove a custom file; disambiguate duplicate names by SHA256", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	remove := &cobra.Command{Use: "remove NAME", Short: "Remove a custom file; disambiguate duplicate names by SHA256", ValidArgsFunction: completeAuditRuleNames, Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		target, err := auditTarget(cmd)
 		if err != nil {
 			return err
@@ -238,4 +241,34 @@ func reportAuditRuleCleanup(status audit.Status) {
 	if status.RuleCleanupWarning != "" {
 		logging.L().Warn("Rule retirement deferred", "actor", logging.Audit, "err", status.RuleCleanupWarning)
 	}
+}
+
+// completeAuditRuleNames reads the same authoritative source as rules list.
+// Names are display metadata, not generation paths; never clean a name into
+// a different remove target or expose controls through completion framing.
+func completeAuditRuleNames(cmd *cobra.Command, args []string, prefix string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	const directive = cobra.ShellCompDirectiveNoFileComp
+	if len(args) != 0 {
+		return nil, directive
+	}
+	target, err := auditTarget(cmd)
+	if err != nil {
+		return nil, directive
+	}
+	snapshot, err := fetchAuditRules(cmd, target)
+	if err != nil {
+		return nil, directive
+	}
+	seen := make(map[string]bool)
+	var names []cobra.Completion
+	for _, file := range snapshot.Rules.Files {
+		name := file.Name
+		if file.Builtin || name == "" || !strings.HasPrefix(name, prefix) || seen[name] || strings.IndexFunc(name, unicode.IsControl) >= 0 {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, directive
 }

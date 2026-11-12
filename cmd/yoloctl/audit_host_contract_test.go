@@ -13,6 +13,7 @@ import (
 // Force the host registration path even when the repository gate runs inside
 // an OpenShell box. Environment-based hiding must not mask host CLI contracts.
 func TestAuditHostSurfacePreservesCLIContracts(t *testing.T) {
+	t.Logf("audit host surface before forcing registration: %t", auditHostAvailable())
 	t.Setenv("OPENSHELL_SANDBOX", "")
 	if err := os.Unsetenv("OPENSHELL_SANDBOX"); err != nil {
 		t.Fatal(err)
@@ -22,6 +23,7 @@ func TestAuditHostSurfacePreservesCLIContracts(t *testing.T) {
 	auditContainerSignal = func() string { return "" }
 	t.Cleanup(func() { auditContainerSignal = previous })
 	t.Run("entity-completers", TestEveryEntityFlagHasACompleter)
+	t.Run("positional-completers", TestEveryPositionalCommandHasACompleter)
 	t.Run("name-validation-before-selection", TestBoxNameRefusedBeforeControllerOrPersistence)
 }
 
