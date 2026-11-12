@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant H as Host CLI
+    participant C as Space controller
+    participant O as OpenShell supervisor
+    participant A as Agent session
+    H->>C: box start the worker with a fresh session and the team account
+    C->>O: create sandbox with the computed policy and mounts
+    O-->>C: sandbox ready and SSH endpoint published
+    C->>A: launch the agent through the supervisor endpoint
+    A-->>H: attach stream with resize and signals
+    Note over C,O: policy goldens must match byte for byte before launch

@@ -1,0 +1,8 @@
+flowchart TD
+    T[Ticket] --> P[Plan by architect]
+    P --> B[Build in worktree]
+    B --> R{Review}
+    R -->|changes requested| B
+    R -->|accepted| Q[QA gate on exact SHA]
+    Q -->|fail| B
+    Q -->|pass| M[ff-only merge]

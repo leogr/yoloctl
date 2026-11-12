@@ -1,0 +1,37 @@
+ ┌──────────┐  ┌────────────┐  ┌────────────┐  ┌─────────┐
+ │ Host CLI │  │   Space    │  │ OpenShell  │  │  Agent  │
+ │          │  │ controller │  │ supervisor │  │ session │
+ └──────────┘  └────────────┘  └────────────┘  └─────────┘
+       ┆ box start    ┆               ┆             ┆
+       ┆ the worker   ┆               ┆             ┆
+       ┆ with a fresh ┆               ┆             ┆
+       ┆ session and  ┆               ┆             ┆
+       ┆ the team     ┆               ┆             ┆
+       ┆ account      ┆               ┆             ┆
+       ───────────────▸               ┆             ┆
+       ┆              ┆ create        ┆             ┆
+       ┆              ┆ sandbox with  ┆             ┆
+       ┆              ┆ the computed  ┆             ┆
+       ┆              ┆ policy and    ┆             ┆
+       ┆              ┆ mounts        ┆             ┆
+       ┆              ────────────────▸             ┆
+       ┆              ┆ sandbox ready ┆             ┆
+       ┆              ┆ and SSH       ┆             ┆
+       ┆              ┆ endpoint      ┆             ┆
+       ┆              ┆ published     ┆             ┆
+       ┆              ◂┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄             ┆
+       ┆              ┆ launch the agent through    ┆
+       ┆              ┆ the supervisor endpoint     ┆
+       ┆              ──────────────────────────────▸
+       ┆ attach stream with resize and signals      ┆
+       ◂┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+       ┆              ┆               ┆             ┆
+       ┆ ╭─────────────────────────────────────────╮┆
+       ┆ │ policy goldens must match byte for byte │┆
+       ┆ │ before launch                           │┆
+       ┆ ╰─────────────────────────────────────────╯┆
+       ┆              ┆               ┆             ┆
+ ┌──────────┐  ┌────────────┐  ┌────────────┐  ┌─────────┐
+ │ Host CLI │  │   Space    │  │ OpenShell  │  │  Agent  │
+ │          │  │ controller │  │ supervisor │  │ session │
+ └──────────┘  └────────────┘  └────────────┘  └─────────┘

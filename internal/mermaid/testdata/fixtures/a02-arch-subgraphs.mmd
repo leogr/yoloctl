@@ -1,0 +1,10 @@
+flowchart LR
+    subgraph Host
+        CLI[yoloctl CLI] --> TUI[TUI]
+    end
+    subgraph VM
+        CTL[controller] --> BOX1[box coder]
+        CTL --> BOX2[box reviewer]
+    end
+    CLI --> CTL
+    TUI --> CTL

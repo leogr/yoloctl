@@ -1,0 +1,9 @@
+sequenceDiagram
+    participant Dev as opus-dev
+    participant Arch as astra-architect
+    participant QA as devOpSol
+    Dev->>Arch: candidate d331d71 ready for review
+    Arch-->>Dev: ACCEPT, no blockers
+    Dev->>QA: please run the exact SHA gate
+    Note over QA: make check with lint and tmpfs
+    QA-->>Dev: PASS

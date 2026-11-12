@@ -1,0 +1,5 @@
+graph TD
+    A[Request] -.-> B[Cache]
+    A ==> C[Origin]
+    B --- C
+    C -->|response| A

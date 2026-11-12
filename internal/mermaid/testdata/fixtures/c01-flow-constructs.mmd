@@ -1,0 +1,13 @@
+flowchart TD
+    %% every admitted flowchart construct
+    subgraph build[Build stage]
+        subgraph tests[Test suites]
+            U(unit) --> I(integration)
+        end
+        C[compile] --> U
+    end
+    S{ready?} -- yes --> C
+    S -.->|later| W[wait]
+    W ==> S
+    I & U --> R[report]
+    R --- S

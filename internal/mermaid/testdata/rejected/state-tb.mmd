@@ -1,0 +1,10 @@
+stateDiagram-v2
+    direction TB
+    [*] --> Plan
+    Plan --> Build : plan accepted by architect
+    Build --> Review : candidate ready with self-checks
+    Review --> Build : findings need a correction
+    Review --> QA : accepted
+    QA --> Build : gate failed
+    QA --> Merge : gate passed and leogr approved
+    Merge --> [*]

@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant U as User
+    participant C as Controller
+    participant B as Box
+    U->>C: box start coder
+    C->>B: launch holder
+    alt resume
+        B-->>C: SessionStart resume
+    else new
+        B-->>C: SessionStart startup
+    end
+    loop every report
+        B->>C: statusline
+    end
+    C-->>U: attached

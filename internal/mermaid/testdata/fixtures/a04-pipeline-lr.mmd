@@ -1,0 +1,4 @@
+graph LR
+    plan[Plan] --> build[Build] --> review[Review] --> qa[QA gate] --> merge[ff-only merge]
+    review -->|changes| build
+    qa -->|fail| build

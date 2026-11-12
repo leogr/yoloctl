@@ -1,0 +1,20 @@
+ ┌───────┐                                    ┌──────┐
+ │ Agent │                                    │ Tool │
+ └───────┘                                    └──────┘
+     ┆ read the whole configuration file and      ┆
+     ┆ report every field that differs from the   ┆
+     ┆ defaults                                   ┆
+     ─────────────────────────────────────────────▸
+     ┆ three fields differ, listed with their old ┆
+     ┆ and new values and the files that set them ┆
+     ◂┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+     ┆                                            ┆
+     ┆                                            ┆ ╭──────────────────╮
+     ┆                                            ┆ │ values are agent │
+     ┆                                            ┆ │ reported, never  │
+     ┆                                            ┆ │ authorization    │
+     ┆                                            ┆ ╰──────────────────╯
+     ┆                                            ┆
+ ┌───────┐                                    ┌──────┐
+ │ Agent │                                    │ Tool │
+ └───────┘                                    └──────┘

@@ -1,0 +1,38 @@
+ ┌──────────┐  ┌────────────┐  ┌────────────┐  ┌─────────┐
+ │ Host CLI │  │   Space    │  │ OpenShell  │  │  Agent  │
+ │          │  │ controller │  │ supervisor │  │ session │
+ └──────────┘  └────────────┘  └────────────┘  └─────────┘
+       ┆ box start    ┆               ┆             ┆
+       ┆ opus-dev2    ┆               ┆             ┆
+       ┆ --new-sessio ┆               ┆             ┆
+       ┆ n            ┆               ┆             ┆
+       ┆ with the     ┆               ┆             ┆
+       ┆ account      ┆               ┆             ┆
+       ┆ leogr        ┆               ┆             ┆
+       ───────────────▸               ┆             ┆
+       ┆              ┆ create        ┆             ┆
+       ┆              ┆ sandbox with  ┆             ┆
+       ┆              ┆ the computed  ┆             ┆
+       ┆              ┆ policy and    ┆             ┆
+       ┆              ┆ mounts        ┆             ┆
+       ┆              ────────────────▸             ┆
+       ┆              ┆ sandbox ready ┆             ┆
+       ┆              ┆ and SSH       ┆             ┆
+       ┆              ┆ endpoint      ┆             ┆
+       ┆              ┆ published     ┆             ┆
+       ┆              ◂┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄             ┆
+       ┆              ┆ launch the agent through    ┆
+       ┆              ┆ the supervisor endpoint     ┆
+       ┆              ──────────────────────────────▸
+       ┆ attach stream with resize and signals      ┆
+       ◂┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+       ┆              ┆               ┆             ┆
+       ┆ ╭─────────────────────────────────────────╮┆
+       ┆ │ policy goldens must match byte for byte │┆
+       ┆ │ before launch                           │┆
+       ┆ ╰─────────────────────────────────────────╯┆
+       ┆              ┆               ┆             ┆
+ ┌──────────┐  ┌────────────┐  ┌────────────┐  ┌─────────┐
+ │ Host CLI │  │   Space    │  │ OpenShell  │  │  Agent  │
+ │          │  │ controller │  │ supervisor │  │ session │
+ └──────────┘  └────────────┘  └────────────┘  └─────────┘

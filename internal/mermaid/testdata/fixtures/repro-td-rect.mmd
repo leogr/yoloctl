@@ -1,0 +1,7 @@
+flowchart TD
+ p[Plan] --> b[Build]
+ b --> r[Review]
+ r -->|findings| b
+ r --> q[QA]
+ q -->|fail| b
+ q --> m[Merge]

@@ -1,0 +1,24 @@
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant A as API
+    participant D as Database
+    U->>+A: request
+    A->>D: query
+    D-->>A: rows
+    Note over A,D: one transaction
+    par cache
+        A->>A: warm cache
+    and audit
+        A->D: log
+    end
+    critical commit
+        A->>D: write
+    end
+    opt slow path
+        A-->>U: progress
+    end
+    break failure
+        A-->U: error
+    end
+    A-->>-U: response

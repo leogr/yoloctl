@@ -1,0 +1,19 @@
+sequenceDiagram
+    autonumber
+    participant U as Operator
+    participant T as TUI client
+    participant S as Session holder
+    U->>T: open the follow view for the selected box
+    activate T
+    T->>S: attach with snapshot restore and resize events
+    activate S
+    S->>S: replay canonical VT state from the exact build
+    S-->>T: snapshot plus live output stream
+    deactivate S
+    alt the session is gone
+        T-->>U: show the reconnect banner with the last known status
+    else still running
+        T-->>U: render frames
+    end
+    Note right of S: holder answers terminal queries exactly once
+    deactivate T

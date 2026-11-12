@@ -1,0 +1,7 @@
+flowchart LR
+    plan[Architect writes the plan] --> build[Dev implements in its own worktree]
+    build --> review{Architect review}
+    review -->|findings| build
+    review -->|accept| qa[DevOps exact SHA gate]
+    qa -->|fail| build
+    qa -->|pass| merge[Fast-forward merge after leogr approval]

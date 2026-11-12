@@ -1,0 +1,8 @@
+graph TD
+    S[box start] --> H{holder running}
+    H -->|yes| A[attach]
+    H -->|no| K{record has a conversation}
+    K -->|yes| R[resume it]
+    K -->|no| L[learn a new one]
+    R --> A
+    L --> A
