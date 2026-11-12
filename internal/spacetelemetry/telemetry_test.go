@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -375,62 +376,64 @@ func TestCollectorNamesUnreadMemoryCounters(t *testing.T) {
 func TestCollectorBoundsStalledHolderReads(t *testing.T) {
 	for _, cancelled := range []bool{false, true} {
 		t.Run(map[bool]string{false: "shared_deadline", true: "parent_cancel"}[cancelled], func(t *testing.T) {
-			c := Collector{}
-			var targets []Target
-			for i := range 3 * ptyReaders {
-				targets = append(targets, Target{Name: fmt.Sprintf("b%d", i), Session: true})
-			}
-			observed := make(chan context.Context, len(targets))
-			c.PTYStats = func(ctx context.Context, _ string) (PTYCounters, error) {
-				observed <- ctx
-				<-ctx.Done()
-				return PTYCounters{}, ctx.Err()
-			}
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			result := make(chan map[string]ptyResult, 1)
-			before := time.Now()
-			go func() { result <- c.ptys(ctx, targets) }()
-			var first context.Context
-			select {
-			case first = <-observed:
-			case <-time.After(5 * time.Second):
-				t.Fatal("holder read never entered")
-			}
-			seen := time.Now()
-			deadline, ok := first.Deadline()
-			if !ok || deadline.Before(before.Add(PTYSampleTimeout)) || deadline.After(seen.Add(PTYSampleTimeout)) {
-				t.Fatalf("holder deadline %v outside timeout construction interval [%v,%v]", deadline, before, seen)
-			}
-			want := context.DeadlineExceeded
-			if cancelled {
-				want = context.Canceled
-				cancel()
-			}
-			var got map[string]ptyResult
-			select {
-			case got = <-result:
-			case <-time.After(5 * time.Second):
-				t.Fatal("holder reads ignored deadline/cancellation")
-			}
-			if !errors.Is(first.Err(), want) {
-				t.Fatal("holder ended for wrong reason", first.Err(), want)
-			}
-			close(observed) // ptys joins every callback before returning.
-			for next := range observed {
-				d, ok := next.Deadline()
-				if !ok || d != deadline || next.Done() != first.Done() {
-					t.Fatal("holder reads did not share one context/deadline")
+			synctest.Test(t, func(t *testing.T) {
+				c := Collector{}
+				var targets []Target
+				for i := range 3 * ptyReaders {
+					targets = append(targets, Target{Name: fmt.Sprintf("b%d", i), Session: true})
 				}
-			}
-			if len(got) != len(targets) {
-				t.Fatal("missing stalled holder results", len(got))
-			}
-			for _, target := range targets {
-				if r := got[target.Name]; r.counters != nil || r.err == "" {
-					t.Fatalf("stalled holder %s = %+v", target.Name, r)
+				observed := make(chan context.Context, len(targets))
+				c.PTYStats = func(ctx context.Context, _ string) (PTYCounters, error) {
+					observed <- ctx
+					<-ctx.Done()
+					return PTYCounters{}, ctx.Err()
 				}
-			}
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				result := make(chan map[string]ptyResult, 1)
+				before := time.Now()
+				go func() { result <- c.ptys(ctx, targets) }()
+				var first context.Context
+				select {
+				case first = <-observed:
+				case <-time.After(5 * time.Second):
+					t.Fatal("holder read never entered")
+				}
+				seen := time.Now()
+				deadline, ok := first.Deadline()
+				if !ok || deadline.Before(before.Add(PTYSampleTimeout)) || deadline.After(seen.Add(PTYSampleTimeout)) {
+					t.Fatalf("holder deadline %v outside timeout construction interval [%v,%v]", deadline, before, seen)
+				}
+				want := context.DeadlineExceeded
+				if cancelled {
+					want = context.Canceled
+					cancel()
+				}
+				var got map[string]ptyResult
+				select {
+				case got = <-result:
+				case <-time.After(5 * time.Second):
+					t.Fatal("holder reads ignored deadline/cancellation")
+				}
+				if !errors.Is(first.Err(), want) {
+					t.Fatal("holder ended for wrong reason", first.Err(), want)
+				}
+				close(observed) // ptys joins every callback before returning.
+				for next := range observed {
+					d, ok := next.Deadline()
+					if !ok || d != deadline || next.Done() != first.Done() {
+						t.Fatal("holder reads did not share one context/deadline")
+					}
+				}
+				if len(got) != len(targets) {
+					t.Fatal("missing stalled holder results", len(got))
+				}
+				for _, target := range targets {
+					if r := got[target.Name]; r.counters != nil || r.err == "" {
+						t.Fatalf("stalled holder %s = %+v", target.Name, r)
+					}
+				}
+			})
 		})
 	}
 }
