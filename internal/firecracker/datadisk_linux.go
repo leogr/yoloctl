@@ -6,11 +6,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
 	"github.com/leogr/yoloctl/internal/ext4sb"
+	"github.com/leogr/yoloctl/internal/rotatelog"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/vmapi"
 	"github.com/leogr/yoloctl/internal/vmwire"
@@ -192,20 +193,10 @@ func (d Driver) DataDiskGrowLogged(space, line string) (bool, error) {
 	if e != nil {
 		return false, e
 	}
-	f, e := os.Open(log)
+	tail, e := rotatelog.ReadTail(log, logTail)
 	if errors.Is(e, os.ErrNotExist) {
 		return false, nil
 	}
-	if e != nil {
-		return false, e
-	}
-	defer func() { _ = f.Close() }()
-	st, e := f.Stat()
-	if e != nil {
-		return false, e
-	}
-	off := max(st.Size()-logTail, 0)
-	tail, e := io.ReadAll(io.NewSectionReader(f, off, st.Size()-off))
 	if e != nil {
 		return false, e
 	}
@@ -230,7 +221,7 @@ func pendingDataDiskGrow(c Config) (*vmwire.DataDiskGrow, error) {
 	if e != nil {
 		// Booting without the grow is safe: the filesystem stays its old
 		// size in the larger disk, and the grow waits for a later start.
-		fmt.Fprintln(os.Stderr, "data disk grow not requested: read bootstrap:", e)
+		slog.Warn("Data disk grow not requested: read bootstrap", "actor", "vm", "err", e)
 		return nil, nil
 	}
 	g := boot.DataDiskGrow

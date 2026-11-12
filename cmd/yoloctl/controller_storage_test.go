@@ -13,12 +13,15 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 )
 
 func TestStorageSchedulerWakeAndCancellationLogging(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		defer bindCLITestLogger(t, io.Discard)()
 		var out bytes.Buffer
+		log := logging.NewFileLogger(&out)
+		defer func() { _ = log.Close() }()
 		server := &controller.Server{}
 		var runs atomic.Int32
 		stop := scheduleStorageGC(t.Context(), server, func(ctx context.Context) error {
@@ -33,7 +36,7 @@ func TestStorageSchedulerWakeAndCancellationLogging(t *testing.T) {
 				return context.DeadlineExceeded // its own budget is observable
 			}
 			return nil
-		}, &out)
+		}, log.Slog())
 		synctest.Wait()
 		time.Sleep(time.Second)
 		synctest.Wait()
@@ -48,7 +51,7 @@ func TestStorageSchedulerWakeAndCancellationLogging(t *testing.T) {
 		synctest.Wait()
 		time.Sleep(time.Second)
 		synctest.Wait()
-		if runs.Load() != 2 || !strings.Contains(out.String(), "deadline exceeded") {
+		if runs.Load() != 2 || !strings.Contains(out.String(), "deadline exceeded") || !strings.Contains(out.String(), "warning: controller: Storage maintenance deferred") {
 			t.Fatalf("completion: runs=%d log=%q", runs.Load(), out.String())
 		}
 		time.Sleep(10 * time.Minute)

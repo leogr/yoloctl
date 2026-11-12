@@ -15,6 +15,7 @@ import (
 	"unicode"
 
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/rotatelog"
 	"golang.org/x/sys/unix"
 )
 
@@ -104,67 +105,18 @@ func openLogsDirectory(root string) (int, error) {
 // holding the lock, that its descriptor is still the file at the name, so a
 // concurrent rotation is never repeated and no record goes to a rotated file.
 func appendHostLog(dir int, name, path, line string) error {
-	var openErr error
-	for range hostLogAttempts {
-		fd, err := openHostLog(dir, name)
-		if errors.Is(err, unix.ENOENT) {
-			// macOS can report ENOENT for O_CREAT while another writer
-			// renames the name away; the next attempt opens the new file.
-			openErr = err
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("open host diagnostics log %q: %w", path, err)
-		}
-		f := os.NewFile(uintptr(fd), path)
-		retry, err := appendLocked(f, fd, dir, name, path, line)
-		_ = f.Close()
-		if err != nil || !retry {
-			return err // includes a failed sync after rotation
-		}
-	}
-	if openErr != nil {
-		return fmt.Errorf("open host diagnostics log %q: %w", path, openErr)
-	}
-	return fmt.Errorf("host diagnostics log %q kept changing while appending", path)
+	return hostLogAppender().Append(dir, name, path, []byte(line))
 }
 
-// hostLogAttempts bounds the opens of one append across concurrent
-// rotations and spurious ENOENT from O_CREAT racing a rename.
-const hostLogAttempts = 4
+const hostLogAttempts = rotatelog.Attempts
 
 // openHostLog opens or creates host.log in the logs directory; tests replace it.
 var openHostLog = func(dir int, name string) (int, error) {
 	return unix.Openat(dir, name, unix.O_WRONLY|unix.O_CREAT|unix.O_APPEND|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0600)
 }
 
-func appendLocked(f *os.File, fd, dir int, name, path, line string) (bool, error) {
-	if err := unix.Flock(fd, unix.LOCK_EX); err != nil {
-		return false, err
-	}
-	var st, named unix.Stat_t
-	if err := unix.Fstat(fd, &st); err != nil {
-		return false, err
-	}
-	if err := unix.Fstatat(dir, name, &named, unix.AT_SYMLINK_NOFOLLOW); err != nil || named.Dev != st.Dev || named.Ino != st.Ino {
-		return true, nil // rotated or replaced meanwhile: reopen the current file
-	}
-	// Two rotations can unlink a waiting writer's old inode. Validate only
-	// the current named file; never append to that stale descriptor.
-	if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Uid != uint32(os.Getuid()) || st.Mode&0777 != 0600 || st.Nlink != 1 {
-		return false, fmt.Errorf("host diagnostics log %q must be an owned private regular file", path)
-	}
-	if st.Size > 0 && st.Size+int64(len(line)) > hostLogLimit {
-		// Keep one previous generation; renaming never follows a planted name.
-		if err := unix.Renameat(dir, name, dir, name+".1"); err != nil {
-			return false, fmt.Errorf("rotate host diagnostics log %q: %w", path, err)
-		}
-		return true, unix.Fsync(dir)
-	}
-	if _, err := io.WriteString(f, line); err != nil {
-		return false, err
-	}
-	return false, errors.Join(f.Sync(), unix.Fsync(dir))
+func hostLogAppender() rotatelog.Appender {
+	return rotatelog.Appender{Limit: hostLogLimit, Label: "host diagnostics log", Sync: true, Open: openHostLog}
 }
 
 // recordDiagnostics logs a capture and decides what the caller returns: a

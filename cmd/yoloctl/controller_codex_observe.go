@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strconv"
@@ -16,6 +16,7 @@ import (
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/features"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/sshtransport"
 	"golang.org/x/crypto/ssh"
@@ -39,13 +40,13 @@ const (
 var codexObserveBoxBudget = 3 * time.Second
 
 func startControllerCodexObserve(parent context.Context, server *controller.Server) func() {
-	return scheduleCodexObserve(parent, server, runCodexObserveProcess, codexObserveInterval, os.Stderr)
+	return scheduleCodexObserve(parent, server, runCodexObserveProcess, codexObserveInterval, logging.L())
 }
 
 // scheduleCodexObserve wakes on a finished inventory read and runs at most
 // once per interval, however many viewers read; reads during the wait join
 // that run. ReadFinished never blocks the read that calls it.
-func scheduleCodexObserve(parent context.Context, server *controller.Server, run func(context.Context) error, interval time.Duration, out io.Writer) func() {
+func scheduleCodexObserve(parent context.Context, server *controller.Server, run func(context.Context) error, interval time.Duration, log *slog.Logger) func() {
 	ctx, cancel := context.WithCancel(parent)
 	wake := make(chan struct{}, 1)
 	server.ReadFinished = func(method string) {
@@ -87,7 +88,7 @@ func scheduleCodexObserve(parent context.Context, server *controller.Server, run
 				return run(ctx)
 			})
 			if err != nil && ctx.Err() == nil && !errors.Is(err, context.Canceled) {
-				_, _ = fmt.Fprintf(out, "codex observation deferred: %v\n", err)
+				log.Warn("Codex observation deferred", "actor", logging.Controller, "err", err)
 			}
 		}
 	}()

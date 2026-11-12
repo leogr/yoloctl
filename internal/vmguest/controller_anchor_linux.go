@@ -3,7 +3,7 @@
 package vmguest
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 
@@ -17,7 +17,7 @@ var controllerBootSource *vmanchor.FirecrackerSource
 func captureControllerBootSource() {
 	source, err := vmanchor.CaptureFirecrackerSource()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "controller launch evidence unavailable:", err)
+		slog.Warn("Controller launch evidence unavailable", "actor", "controller", "err", err)
 		return
 	}
 	controllerBootSource = source
@@ -36,7 +36,7 @@ func startAnchoredController(cmd *exec.Cmd) (controllerProcess, error) {
 		if err == nil {
 			transfer = attempt
 		} else {
-			fmt.Fprintln(os.Stderr, "controller launch evidence unavailable:", err)
+			slog.Warn("Controller launch evidence unavailable", "actor", "controller", "err", err)
 		}
 	}
 	return startControllerAttempt(cmd, transfer, startOwned)
@@ -60,7 +60,7 @@ func startControllerAttempt(cmd *exec.Cmd, transfer controllerLaunchTransfer, st
 	if transfer != nil {
 		defer func() {
 			if err := transfer.Close(); err != nil {
-				fmt.Fprintln(os.Stderr, "controller launch evidence close failed:", err)
+				slog.Warn("Controller launch evidence close failed", "actor", "controller", "err", err)
 			}
 		}()
 	}
@@ -69,9 +69,9 @@ func startControllerAttempt(cmd *exec.Cmd, transfer controllerLaunchTransfer, st
 	}
 	if transfer != nil {
 		if err := transfer.PublishStarted(cmd.Process); err != nil {
-			fmt.Fprintln(os.Stderr, "controller launch evidence unavailable:", err)
+			slog.Warn("Controller launch evidence unavailable", "actor", "controller", "err", err)
 		}
 	}
-	fmt.Fprintln(os.Stderr, "controller started:", cmd.Process.Pid)
+	slog.Info("Controller started", "actor", "controller", "pid", cmd.Process.Pid)
 	return controllerChild{cmd}, nil
 }

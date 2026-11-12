@@ -93,7 +93,7 @@ func restoreOperatorEndpoints(ctx context.Context) error {
 			return ctxErr
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "notice: operator endpoint for box %s was not restored; in-box yoloctl is unavailable until the box is recreated: %v\n", box.Name, err)
+			logging.L().Warn("Operator endpoint was not restored; in-box yoloctl is unavailable until the box is recreated", "actor", logging.Controller, "box", box.Name, "err", err)
 		}
 	}
 	return nil
@@ -276,7 +276,7 @@ func serveOperatorEndpoints(ctx context.Context, server *controller.Server) erro
 		// Native listeners outlive the scan context; retire them on stop too.
 		stop, cancelStop := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := server.CloseNativeOperators(stop); err != nil {
-			fmt.Fprintf(os.Stderr, "native operator endpoints did not close cleanly: %v\n", err)
+			logging.L().Warn("Native operator endpoints did not close cleanly", "actor", logging.Controller, "err", err)
 		}
 		cancelStop()
 		clients.Wait()
@@ -326,11 +326,11 @@ func serveOperatorEndpoints(ctx context.Context, server *controller.Server) erro
 					// acknowledges the outcome; reported once.
 					if !held[entry.Name()] {
 						held[entry.Name()] = true
-						fmt.Fprintf(os.Stderr, "native operator endpoint for box %s not served yet: %v\n", endpoint.Box, err)
+						logging.L().Warn("Native operator endpoint not served yet", "actor", logging.Controller, "box", endpoint.Box, "err", err)
 					}
 					continue
 				} else if err != nil {
-					fmt.Fprintf(os.Stderr, "native operator endpoint for box %s not served: %v\n", endpoint.Box, err)
+					logging.L().Warn("Native operator endpoint not served", "actor", logging.Controller, "box", endpoint.Box, "err", err)
 				}
 				native[entry.Name()] = true
 				delete(held, entry.Name())

@@ -9,8 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
-	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -165,7 +165,7 @@ func forwardPorts(ctx context.Context, dir, runtime string, paused func() bool) 
 			closer, e := exposePort(ctx, runtime, p)
 			if e != nil {
 				if !warned[p] {
-					fmt.Fprintf(os.Stderr, "cannot forward guest %s/%d on host loopback: %v\n", p.Protocol, p.Number, e)
+					slog.Warn(fmt.Sprintf("Cannot forward guest %s/%d on host loopback", p.Protocol, p.Number), "actor", "vm", "executor", "firecracker", "err", e)
 					warned[p] = true
 				}
 				continue

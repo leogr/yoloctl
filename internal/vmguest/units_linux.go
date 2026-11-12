@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/port"
+	"github.com/leogr/yoloctl/internal/rotatelog"
 	"github.com/leogr/yoloctl/internal/vmwire"
 	"golang.org/x/sys/unix"
 )
@@ -25,6 +27,7 @@ type managedUnit struct {
 	mu       sync.Mutex
 	spec     vmwire.Unit
 	cmd      *exec.Cmd
+	logDone  <-chan struct{}
 	stop     chan struct{}
 	done     chan struct{}
 	stopping bool
@@ -138,33 +141,51 @@ func (u *managedUnit) start() error {
 	if e = os.MkdirAll(logDir, 0700); e != nil {
 		return e
 	}
-	log, e := os.OpenFile(filepath.Join(logDir, u.spec.Name+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	log, e := rotatelog.Open(filepath.Join(logDir, u.spec.Name+".log"), 1<<20)
 	if e != nil {
 		return e
 	}
-	defer func() { _ = log.Close() }()
+	output, drained, e := rotatelog.Pipe(log.BestEffort(), func() {
+		if err := log.Err(); err != nil {
+			slog.Warn("Service log write failed", "actor", "vm", "unit", u.spec.Name, "err", err)
+		}
+		_ = log.Close()
+	})
+	if e != nil {
+		_ = log.Close()
+		return e
+	}
+	// The supervisor closes only its own write descriptor after Start. The
+	// relay owns the sink until the final inherited writer closes it.
+	defer func() { _ = output.Close() }()
 	cmd := exec.Command(u.spec.Args[0], u.spec.Args[1:]...)
 	cmd.Env = append(os.Environ(), u.spec.Env...)
 	if strings.HasPrefix(u.spec.Name, port.OpenShellUnitPrefix) {
 		cmd.Env = append([]string{"PATH=" + vmwire.GuestSystemPath}, u.spec.Env...)
 	}
-	cmd.Stdout, cmd.Stderr = log, log
+	cmd.Stdout, cmd.Stderr = output, output
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, UseCgroupFD: true, CgroupFD: fd}
 	if e = startOwned(cmd); e != nil {
 		return e
 	}
-	u.cmd = cmd
+	u.cmd, u.logDone = cmd, drained
 	return nil
 }
 func (u *managedUnit) watch() {
 	defer close(u.done)
 	for {
 		u.mu.Lock()
-		cmd := u.cmd
+		cmd, drained := u.cmd, u.logDone
 		u.mu.Unlock()
 		e := cmd.Wait()
 		ownedChildren.Delete(cmd.Process.Pid)
 		cleanup := cleanGroup(unitGroup(u.spec.Name))
+		// A successful cgroup cleanup has retired the inherited writers: join
+		// the consumer before publishing final state. If cleanup failed, retain
+		// the relay instead of closing its reader and losing descendant output.
+		if cleanup == nil && drained != nil {
+			<-drained
+		}
 		u.mu.Lock()
 		u.cmd = nil
 		u.failed = errors.Join(e, cleanup)

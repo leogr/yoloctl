@@ -60,7 +60,9 @@ func newSpaceLogsCmd() *cobra.Command {
 		Use:   "logs [SPACE]",
 		Short: "Stream the VM boot/runtime log for a space",
 		Long: `Tails the selected adapter's boot/runtime log. --follow keeps the tail
-open as new lines arrive.
+open as new lines arrive, following the log name across rotations.
+The shared log renderer escapes controls and folds repeated lines.
+--log-level debug streams the original bytes instead.
 
   yoloctl space logs
   yoloctl space logs default --follow
@@ -109,9 +111,11 @@ func tailLimaLog(ctx context.Context, spaceName string, lines int, follow bool, 
 	}
 	tailArgs = append(tailArgs, logPath)
 	tail := exec.CommandContext(ctx, "tail", tailArgs...)
-	tail.Stdout = stdout
+	view := newSpaceLogOutput(stdout, logging.CurrentSettings())
+	tail.Stdout = view
 	tail.Stderr = stderr
-	return tail.Run()
+	err = tail.Run()
+	return errors.Join(err, view.Close())
 }
 
 func newSpaceCreateCmd() *cobra.Command {

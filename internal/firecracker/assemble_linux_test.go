@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -109,7 +108,7 @@ func TestPortableImageAssembly(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", t.TempDir())
-	if err = assembleLocalImage(context.Background(), output, cache, guestbinary.Artifact{Path: initPath, Sum: sum}, io.Discard); err != nil {
+	if err = assembleLocalImage(context.Background(), output, cache, guestbinary.Artifact{Path: initPath, Sum: sum}, func(string) {}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = os.Stat(filepath.Join(output, "image.json")); err != nil {

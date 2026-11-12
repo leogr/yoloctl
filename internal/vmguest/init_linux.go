@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/resources"
 	"github.com/leogr/yoloctl/internal/vmwire"
 	"golang.org/x/sys/unix"
@@ -58,8 +60,10 @@ func Run(args []string) error {
 	if os.Getpid() != 1 {
 		return errors.New("guest init requires PID 1")
 	}
+	fileLog := logging.InitFile(os.Stderr)
+	defer func() { _ = fileLog.Close() }()
 	if e := boot(); e != nil {
-		fmt.Fprintln(os.Stderr, "BOOT FAILED:", e)
+		slog.Error("BOOT FAILED", "actor", logging.VM, "err", e)
 		unix.Sync()
 		_ = unix.Reboot(unix.LINUX_REBOOT_CMD_POWER_OFF)
 		return e
@@ -98,7 +102,7 @@ func start(name string, args ...string) error {
 	go func() {
 		e := cmd.Wait()
 		ownedChildren.Delete(cmd.Process.Pid)
-		fmt.Fprintln(os.Stderr, "critical service exited:", name, e)
+		slog.Error("Critical service exited", "actor", logging.VM, "service", name, "err", e)
 		shutdown()
 	}()
 	return nil
@@ -409,7 +413,7 @@ func share(port uint32, source, dest string, writable bool) error {
 		if unix.Statfs(dest, &st) == nil && st.Type == unix.FUSE_SUPER_MAGIC {
 			go func() {
 				e := <-done
-				fmt.Fprintln(os.Stderr, "required host share exited:", e)
+				slog.Error("Required host share exited", "actor", logging.VM, "err", e)
 				shutdown()
 			}()
 			return nil

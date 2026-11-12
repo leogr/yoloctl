@@ -214,6 +214,13 @@ shows and whether it colours; they override `YOLOCTL_LOG` (same values) and
 `YOLOCTL_DEBUG=1` (`debug`). `-v` prints the version.
 Data output (`--json`, receipts, streams) is not rendered by it. [26](#source-26)
 
+[FACT] `space logs` renders the VM log with the shared logger, follows its name
+across rotation, and preserves raw stdout bytes with `--log-level debug`.
+Background logs we own use plain timestamped records and bounded
+current/previous generations;
+Lima/vendor and parsed marker formats retain their existing owners and bytes.
+[28](#source-28)
+
 ## Sources
 
 1. <a id="source-1"></a> [CLI, output and completion evidence](../digests/cli-state.md).
@@ -254,3 +261,5 @@ Data output (`--json`, receipts, streams) is not rendered by it. [26](#source-26
 26. <a id="source-26"></a> [Log presentation](../digests/log-presentation.md).
 
 27. <a id="source-27"></a> [CLI logging and outcomes](../digests/cli-logging.md).
+
+28. <a id="source-28"></a> [Background logs](../digests/background-logs.md).

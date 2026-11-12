@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/rotatelog"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/vmapi"
 	"golang.org/x/sys/unix"
@@ -275,7 +276,7 @@ func (d Driver) Start(ctx context.Context, name string) error {
 	if e = WriteConfig(dir, c); e != nil {
 		return e
 	}
-	log, e := os.OpenFile(filepath.Join(dir, "vm.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	log, e := rotatelog.OpenStartupFile(filepath.Join(dir, "vm.log"))
 	if e != nil {
 		return e
 	}

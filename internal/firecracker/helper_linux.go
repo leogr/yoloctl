@@ -26,10 +26,13 @@ import (
 	"github.com/containers/gvisor-tap-vsock/pkg/types"
 	"github.com/containers/gvisor-tap-vsock/pkg/virtualnetwork"
 	"github.com/leogr/yoloctl/internal/guestbinary"
+	"github.com/leogr/yoloctl/internal/logging"
+	"github.com/leogr/yoloctl/internal/rotatelog"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/vmshare"
 	"github.com/leogr/yoloctl/internal/vmwire"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/sys/unix"
 )
@@ -163,7 +166,7 @@ func Proxy(ctx context.Context, name string) error {
 
 // Helper owns exactly one VM, its private network and fixed host grants. It
 // has no declaration/controller API and never installs a service on the host.
-func Helper(parent context.Context, name string) error {
+func Helper(parent context.Context, name string) (result error) {
 	// Linux parent-death signals track the creating thread. Keep that thread
 	// alive until its VMM has exited, even if Go retires other runtime threads.
 	goruntime.LockOSThread()
@@ -209,6 +212,36 @@ func Helper(parent context.Context, name string) error {
 	if e = storage.require(hostStorageStartFree); e != nil {
 		return e
 	}
+	// This process lives with the VM. Redirect its inherited descriptors
+	// here, never through a copier in the short-lived Start caller. The cap
+	// preserves the existing four-MiB disk-grow search window across rolls.
+	logWriter, e := rotatelog.Open(filepath.Join(dir, "vm.log"), logTail)
+	if e != nil {
+		return e
+	}
+	closeLogOutput, logsDrained, e := rotatelog.CaptureStdio(logWriter.BestEffort())
+	if e != nil {
+		_ = logWriter.Close()
+		return e
+	}
+	producerRetired := true // before Firecracker starts
+	// Own records enter the same pipe as complete raw marker writes. A
+	// direct file path could splice a record between the relay's copy chunks.
+	fileLog := logging.InitFile(os.Stderr)
+	log := fileLog.Slog().With(prettylog.Actor(logging.VM), prettylog.Executor(logging.Firecracker))
+	finishLog := helperLogFinalizer(fileLog, log, &result)
+	defer func() {
+		finishLog() // fallback for returns before the VM starts
+		// Preserve the existing five-second retirement bound on unknown exit.
+		// Do not close the reader or its sink under an unretired producer.
+		closeLogOutput()
+		if producerRetired {
+			<-logsDrained
+			_ = logWriter.Close()
+		} else {
+			go func() { <-logsDrained; _ = logWriter.Close() }()
+		}
+	}()
 	if c.Spec.Format {
 		boot, e := spaceconfig.LoadBootstrap(name)
 		if e != nil {
@@ -271,7 +304,7 @@ func Helper(parent context.Context, name string) error {
 	}
 	if e = serve(vmwire.NetworkPort, func(conn net.Conn) {
 		if e := network.AcceptQemu(ctx, conn); ctx.Err() == nil {
-			fmt.Fprintln(os.Stderr, "VM network:", e)
+			log.Warn("VM network", prettylog.Err(e))
 			cancel()
 		}
 	}); e != nil {
@@ -285,7 +318,7 @@ func Helper(parent context.Context, name string) error {
 		defer func() { _ = share.Close() }()
 		if e = serve(vmwire.SharePort+i, func(conn net.Conn) {
 			if e := share.Serve(conn); e != nil && e != io.EOF && ctx.Err() == nil {
-				fmt.Fprintln(os.Stderr, "VM share:", e)
+				log.Warn("VM share", prettylog.Err(e))
 			}
 		}); e != nil {
 			return e
@@ -302,19 +335,24 @@ func Helper(parent context.Context, name string) error {
 		state.LaunchPending = false
 		return errors.Join(e, writeState(dir, state))
 	}
+	producerRetired = false
 	wait := make(chan error, 1)
 	go func() { wait <- fc.Wait() }()
 	defer func() {
 		_ = fc.Process.Kill()
 		select {
 		case <-wait:
+			producerRetired = true
 			state.LaunchPending = false
 			if e := writeState(dir, state); e != nil {
-				fmt.Fprintln(os.Stderr, "record VM termination:", e)
+				log.Warn("Record VM termination", prettylog.Err(e))
 			}
 		case <-time.After(5 * time.Second):
 		}
 	}()
+	// LIFO: enqueue/flush the final record before the existing kill/wait, not
+	// just before process exit when unknown retirement cannot join the relay.
+	defer finishLog()
 	state.VM, e = identity(fc.Process.Pid)
 	if e != nil {
 		return e
@@ -334,6 +372,7 @@ func Helper(parent context.Context, name string) error {
 		}
 		select {
 		case e := <-wait:
+			producerRetired = true
 			wait <- e
 			return fmt.Errorf("firecracker exited: %w", e)
 		case <-ctx.Done():
@@ -371,7 +410,7 @@ func Helper(parent context.Context, name string) error {
 			return e
 		}
 	}
-	guard := &hostStorageGuard{check: storage.require, signal: state.VM.signal, log: os.Stderr}
+	guard := &hostStorageGuard{check: storage.require, signal: state.VM.signal, log: log}
 	if e = guard.serve(ctx, runtime); e != nil {
 		return e
 	}
@@ -388,6 +427,7 @@ func Helper(parent context.Context, name string) error {
 	go forwardPorts(ctx, dir, runtime, func() bool { return guard.snapshot().Paused })
 	select {
 	case e := <-wait:
+		producerRetired = true
 		wait <- e
 		return e
 	case <-ctx.Done():

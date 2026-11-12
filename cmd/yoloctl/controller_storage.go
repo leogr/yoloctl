@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/resources"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/spacelock"
@@ -23,10 +25,10 @@ import (
 // its own catalog snapshot. It shares the native mutation lock, never a host
 // lock. Interrupted cache cleanup is safe to rescan; no user request is replayed.
 func startControllerStorageGC(parent context.Context, server *controller.Server) func() {
-	return scheduleStorageGC(parent, server, runStorageGCProcess, os.Stderr)
+	return scheduleStorageGC(parent, server, runStorageGCProcess, logging.L())
 }
 
-func scheduleStorageGC(parent context.Context, server *controller.Server, run func(context.Context) error, out io.Writer) func() {
+func scheduleStorageGC(parent context.Context, server *controller.Server, run func(context.Context) error, log *slog.Logger) func() {
 	ctx, cancel := context.WithCancel(parent)
 	wake := make(chan struct{}, 1)
 	// Every admitted mutation can interrupt maintenance, including exec setup
@@ -68,7 +70,7 @@ func scheduleStorageGC(parent context.Context, server *controller.Server, run fu
 				return run(ctx)
 			})
 			if err != nil && ctx.Err() == nil && !errors.Is(err, context.Canceled) {
-				_, _ = fmt.Fprintf(out, "storage maintenance deferred: %v\n", err)
+				log.Warn("Storage maintenance deferred", "actor", logging.Controller, "err", err)
 			}
 		}
 	}()

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -19,6 +20,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/vmapi"
 	"golang.org/x/sys/unix"
 )
@@ -105,7 +107,9 @@ func TestHostStorageGuardHysteresisAndErrors(t *testing.T) {
 	var measureErr, signalErr error
 	var signals []unix.Signal
 	var log bytes.Buffer
-	g := &hostStorageGuard{log: &log, check: func(minimum uint64) error {
+	fileLog := logging.NewFileLogger(&log)
+	t.Cleanup(func() { _ = fileLog.Close() })
+	g := &hostStorageGuard{log: fileLog.Slog().With("actor", "vm", "executor", "firecracker"), check: func(minimum uint64) error {
 		if measureErr != nil {
 			return measureErr
 		}
@@ -156,7 +160,7 @@ func TestHostStorageGuardHysteresisAndErrors(t *testing.T) {
 	if err := g.step(); !errors.Is(err, unix.EPERM) || g.snapshot().Paused {
 		t.Fatalf("failed stop reported paused: %v", err)
 	}
-	if !strings.Contains(log.String(), "resumes automatically") || !strings.Contains(log.String(), "not replayed") {
+	if !strings.Contains(log.String(), "warning: vm/firecracker: VM paused") || !strings.Contains(log.String(), "resumes automatically") || !strings.Contains(log.String(), "not replayed") {
 		t.Fatalf("missing recovery guidance: %s", log.String())
 	}
 }
@@ -166,7 +170,7 @@ func TestHostStorageGuardWatchStopsWithHelper(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var n atomic.Int64
-		g := &hostStorageGuard{log: io.Discard, check: func(uint64) error { n.Add(1); return nil }}
+		g := &hostStorageGuard{log: slog.New(slog.NewTextHandler(io.Discard, nil)), check: func(uint64) error { n.Add(1); return nil }}
 		done := make(chan struct{})
 		go func() { defer close(done); g.watch(ctx) }()
 		synctest.Wait()
@@ -302,7 +306,7 @@ func TestHostStoragePauseRetainsProcessAndBlocksForcedStop(t *testing.T) {
 	size := func() int64 { st, _ := os.Stat(progress); return st.Size() }
 	waitFor(func() bool { return size() > 0 })
 	low := true
-	g := &hostStorageGuard{log: io.Discard, check: func(uint64) error {
+	g := &hostStorageGuard{log: slog.New(slog.NewTextHandler(io.Discard, nil)), check: func(uint64) error {
 		if low {
 			return errors.New("fixture host filesystem is low")
 		}

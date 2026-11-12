@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"sync"
@@ -127,7 +128,7 @@ func (b *lazyBuilder) ensure(ctx context.Context, start func() (*exec.Cmd, error
 		go func() {
 			p.err = cmd.Wait()
 			ownedChildren.Delete(cmd.Process.Pid)
-			fmt.Fprintln(os.Stderr, "BuildKit exited; next build request may restart it:", p.err)
+			slog.Warn("BuildKit exited; next build request may restart it", "actor", "builder", "executor", "buildkit", "err", p.err)
 			close(p.done)
 		}()
 	}

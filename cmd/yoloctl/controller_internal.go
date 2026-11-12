@@ -29,6 +29,7 @@ import (
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/spacelock"
 	"github.com/leogr/yoloctl/internal/workercheckpoint"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"golang.org/x/sys/unix"
@@ -309,6 +310,9 @@ func connectController(ctx context.Context) error {
 }
 
 func serveController(ctx context.Context) (result error) {
+	fileLog := logging.InitFile(os.Stderr)
+	defer func() { _ = fileLog.Close() }()
+	log := fileLog.Slog().With(prettylog.Actor(logging.Controller))
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	c := spaceenv.Current()
@@ -409,7 +413,7 @@ func serveController(ctx context.Context) (result error) {
 			if _, err := newBoxStateResolver().ResolveSpace(ctx, c.Space, boxstate.RuntimeInventory); err != nil {
 				return fmt.Errorf("inspect interrupted controller operations: %w", err)
 			}
-			_, _ = fmt.Fprintln(os.Stderr, "Interrupted operations have uncertain outcomes; the controller checks their recorded evidence and holds what it cannot prove.")
+			log.Warn("Interrupted operations have uncertain outcomes; the controller checks their recorded evidence and holds what it cannot prove.")
 		}
 		key, err := controller.LoadRecoveryKey(meta)
 		if err != nil {
@@ -426,7 +430,7 @@ func serveController(ctx context.Context) (result error) {
 		return server.ActivateRecovery(key)
 	}
 	if err := prepareRecovery(ctx); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "Controller is read-only until receipt storage recovers:", err)
+		log.Warn("Controller is read-only until receipt storage recovers", prettylog.Err(err))
 		server.Degrade(err, prepareRecovery)
 	}
 	go server.RunRecovery(ctx)

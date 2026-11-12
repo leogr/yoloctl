@@ -1,6 +1,6 @@
 # Data disk size and offline grow
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; rotated-log search at `4fa6761c87967cc6191ec19130898e60f0a92720` and accompanying changes.
 
 [FACT] `space create --data-disk SIZE` sets the data disk (accounts and
 declarations): whole GiB, at least 4 GiB, default 10 GiB; spaces saved before
@@ -33,7 +33,8 @@ outcome leaves the disk unmounted and fails the boot with the reason, keeping
 
 [FACT] The host records completion only with the VM stopped: `space stop` and
 `space set`/`edit` check that the superblock shows the new size and UUID and
-that the VM log holds init's verified line, then drop the checkpoint and the
+that the VM log holds init's verified line within its last 4 MiB (across
+current and previous generations), then drop the checkpoint and the
 copy and print `data disk 10 GiB → 20 GiB, verified`. `space show` reports a
 pending phase or that a grow needs an image update; `--json` adds
 `data_disk_bytes` and `data_disk_grow`. Export refuses while a grow is
@@ -58,7 +59,7 @@ fallback, stopped-only reads and extends, the boot record and the log check.
 
 1. <a id="source-1"></a> [Sizes and checkpoint](../../internal/spaceconfig/disk.go#L50-L106) — `DataDiskBytes`, `DataDiskGrow`, `validate`; `Bootstrap.DataDiskGrow` and `VMSettings.DataDisk` in bootstrap.go.
 2. <a id="source-2"></a> [CLI](../../cmd/yoloctl/space_disk.go#L131-L280) — `selectSpaceDataDisk`, `growSpaceDataDisk`, `settleDataDiskGrow`, `dataDiskShown`; `changeSpaceResources` in space_resources.go; the stop case in controller_lifecycle.go; the export guard in space_archive.go.
-3. <a id="source-3"></a> [Host grow](../../internal/firecracker/datadisk_linux.go#L1-L244) — `stopped`, `DataDiskGrowSupported`, `DataDiskState`, `ExtendDataDisk`, `cloneDataDisk`, `DataDiskGrowLogged`, `RemoveDataDiskBackup`, `pendingDataDiskGrow`.
+3. <a id="source-3"></a> [Host grow](../../internal/firecracker/datadisk_linux.go#L1-L235) — `stopped`, `DataDiskGrowSupported`, `DataDiskState`, `ExtendDataDisk`, `cloneDataDisk`, `DataDiskGrowLogged`, `RemoveDataDiskBackup`, `pendingDataDiskGrow`.
 4. <a id="source-4"></a> [Superblock](../../internal/ext4sb/ext4sb.go#L1-L46) — `Read`; adapter interface `DataDiskGrower` and `ErrNoReflink` in internal/vmapi/storage.go; `CreateAccountDisk` sizes in internal/vm/vm.go.
 5. <a id="source-5"></a> [Guest grow](../../internal/vmguest/datadisk_linux.go#L1-L87) — `growDataDisk`; called before the data disk mount in init_linux.go `boot`.
 6. <a id="source-6"></a> [Boot record](../../internal/vmwire/boot.go#L18-L43) — `Boot.DataDiskGrow`, `GrownLine`; `bootImage` and the format guard in internal/firecracker/helper_linux.go.

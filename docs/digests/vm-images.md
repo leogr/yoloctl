@@ -37,7 +37,8 @@ before publishing an automatic default. Reused verification requires matching
 manifest and file identities/size/timestamps. Stable cancellable locks serialize
 installation and cached downloads; failed preparation cannot select partial
 media. Build inputs/logs live under cache-root `vm-build/firecracker`, separate
-from installed media. Host grants reject these managed paths.
+from installed media. Existing preparation logs retain a 1 MiB current generation
+and one previous generation; no new stored composed-image log is added. Host grants reject these managed paths.
 [1](#source-1) [4](#source-4) [6](#source-6) [7](#source-7)
 
 [FACT] Ordinary starts also require the artifact stamps recorded at VM creation

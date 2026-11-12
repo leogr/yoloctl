@@ -6,13 +6,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/leogr/yoloctl/internal/guestbinary"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
+	"github.com/leogr/yoloctl/internal/rotatelog"
 	"golang.org/x/sys/unix"
 )
 
@@ -43,7 +45,7 @@ func imageLock(ctx context.Context, root string) (func(), error) {
 		case <-ctx.Done():
 		case <-time.After(50 * time.Millisecond):
 		case <-waiting.C:
-			_, _ = fmt.Fprintln(os.Stderr, "Waiting for another local VM image preparation; Ctrl-C cancels.")
+			slog.Info("Waiting for another local VM image preparation; Ctrl-C cancels.", "actor", "vm", "executor", "firecracker")
 		}
 	}
 }
@@ -75,11 +77,25 @@ func prepareLocalImage(ctx context.Context, stage string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer func() { _ = log.Close() }()
+	logName := log.Name()
+	if err := log.Close(); err != nil {
+		return "", err
+	}
+	bounded, err := rotatelog.Open(logName, 1<<20)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = bounded.Close() }()
+	fileLog := logging.NewFileLogger(bounded)
+	defer func() { _ = fileLog.Close() }()
+	logMessage := func(message string) {
+		slog.Info(message, "actor", "vm", "executor", "firecracker")
+		fileLog.Slog().Info(message, "actor", "vm", "executor", "firecracker")
+	}
 	out := filepath.Join(stage, "image")
-	_, _ = fmt.Fprintf(os.Stderr, "Preparing a Firecracker image locally on first use. This can take several minutes; later spaces reuse it.\nBuild log: %s\n", log.Name())
-	if err := assembleLocalImage(ctx, out, cache, init, io.MultiWriter(os.Stderr, log)); err != nil {
-		return "", fmt.Errorf("prepare local Firecracker image: %w (log: %s)", err, log.Name())
+	slog.Info("Preparing a Firecracker image locally on first use. This can take several minutes; later spaces reuse it.\nBuild log: "+logName, "actor", "vm", "executor", "firecracker")
+	if err := assembleLocalImage(ctx, out, cache, init, logMessage); err != nil {
+		return "", fmt.Errorf("prepare local Firecracker image: %w (log: %s)", err, logName)
 	}
 	return out, nil
 }

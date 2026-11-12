@@ -614,7 +614,7 @@ func unpackPinnedKernel(ctx context.Context, out string) error {
 	return nil
 }
 
-func assembleLocalImage(ctx context.Context, out, cache string, init guestbinary.Artifact, log io.Writer) error {
+func assembleLocalImage(ctx context.Context, out, cache string, init guestbinary.Artifact, log func(string)) error {
 	if err := os.Mkdir(out, 0700); err != nil {
 		return err
 	}
@@ -642,14 +642,14 @@ func assembleLocalImage(ctx context.Context, out, cache string, init guestbinary
 	slices.Sort(names)
 	inputs := map[string]string{}
 	for _, name := range names {
-		_, _ = fmt.Fprintf(log, "Preparing pinned %s\n", name)
+		log(fmt.Sprintf("Preparing pinned %s", name))
 		p, err := fetchImageInput(ctx, filepath.Join(cache, "downloads"), pins[name])
 		if err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
 		inputs[name] = p
 	}
-	_, _ = fmt.Fprintln(log, "Assembling Ubuntu filesystem locally (no host tools).")
+	log("Assembling Ubuntu filesystem locally (no host tools).")
 	tree := imageTree{}
 	if err = tree.squash(ctx, inputs["ubuntu.squashfs"]); err != nil {
 		return fmt.Errorf("read Ubuntu squashfs: %w", err)
@@ -775,6 +775,6 @@ func assembleLocalImage(ctx context.Context, out, cache string, init guestbinary
 	if err = os.Chmod(filepath.Join(out, "rootfs.ext4"), 0444); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintln(log, "Local Firecracker image prepared.")
+	log("Local Firecracker image prepared.")
 	return nil
 }

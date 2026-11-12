@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -114,7 +115,7 @@ func (s hostStorageState) err() error {
 type hostStorageGuard struct {
 	check  func(uint64) error
 	signal func(unix.Signal) error
-	log    io.Writer
+	log    *slog.Logger
 	mu     sync.Mutex
 	state  hostStorageState
 }
@@ -146,7 +147,7 @@ func (g *hostStorageGuard) step() error {
 		g.state = next
 		g.mu.Unlock()
 		if !state.Paused {
-			_, _ = fmt.Fprintln(g.log, next.err())
+			g.log.Warn("VM paused for host storage pressure", "err", next.err())
 		}
 		return nil
 	}
@@ -157,7 +158,7 @@ func (g *hostStorageGuard) step() error {
 		g.mu.Lock()
 		g.state = hostStorageState{}
 		g.mu.Unlock()
-		_, _ = fmt.Fprintln(g.log, "host storage recovered: resumed VM; interrupted operations are not replayed")
+		g.log.Info("Host storage recovered: resumed VM; interrupted operations are not replayed")
 	}
 	return nil
 }
@@ -167,7 +168,7 @@ func (g *hostStorageGuard) watch(ctx context.Context) {
 	defer ticker.Stop()
 	for ctx.Err() == nil {
 		if err := g.step(); err != nil {
-			_, _ = fmt.Fprintln(g.log, "host storage guard:", err)
+			g.log.Warn("Host storage guard", "err", err)
 		}
 		select {
 		case <-ctx.Done():

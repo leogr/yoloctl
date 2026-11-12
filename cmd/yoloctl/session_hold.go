@@ -3,11 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
+
 	"time"
 
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/sandbox"
 	"github.com/leogr/yoloctl/internal/session"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"github.com/spf13/cobra"
 )
 
@@ -63,10 +65,12 @@ func newSessionHoldCmd() *cobra.Command {
 				tombstone = session.TombstonePath(agentbox)
 			}
 
-			// Logs land in the unit's journal
-			// (`journalctl -u yoloctl-session-<box>`).
-			log.SetFlags(log.Ltime | log.Lmicroseconds)
-			logf := func(format string, a ...any) { log.Printf("holder["+agentbox+"]: "+format, a...) }
+			// The journal or guest unit relay owns stderr; file records have
+			// timestamps/levels and never use a terminal palette or reader.
+			fileLog := logging.InitFile(cmd.ErrOrStderr())
+			defer func() { _ = fileLog.Close() }()
+			holderLog := fileLog.Slog().With(prettylog.Actor(logging.Session), logging.KeyBox, agentbox)
+			logf := func(format string, a ...any) { holderLog.Info(fmt.Sprintf(format, a...)) }
 
 			status, err := session.RunHolder(cmd.Context(), session.HolderOptions{
 				Agentbox:          agentbox,

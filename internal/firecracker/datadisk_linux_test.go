@@ -3,12 +3,14 @@
 package firecracker
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/ext4sb"
+	"github.com/leogr/yoloctl/internal/rotatelog"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/vmapi"
 	"github.com/leogr/yoloctl/internal/vmwire"
@@ -154,5 +156,38 @@ func TestDataDiskGrowReachesInitOnlyWhenExtended(t *testing.T) {
 	}
 	if ok, err := d.DataDiskGrowLogged("dev", line); err != nil || !ok {
 		t.Fatalf("logged: %v %v", ok, err)
+	}
+}
+
+// Rotation cannot narrow the existing last-four-MiB grow-marker window.
+func TestDataDiskGrowLoggedAcrossRotation(t *testing.T) {
+	t.Setenv("YOLOCTL_HOME", t.TempDir())
+	d := Driver{}
+	dir, err := d.InstanceDir("dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	w, err := rotatelog.Open(filepath.Join(dir, "vm.log"), logTail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = w.Close() }()
+	line := vmwire.DataDiskGrow{UUID: "11111111-2222-3333-4444-555555555555", From: 1 << 20, To: 2 << 20}.GrownLine()
+	for _, p := range [][]byte{bytes.Repeat([]byte("p"), logTail-256), []byte(line + "\n"), bytes.Repeat([]byte("n"), 512)} {
+		if _, err := w.Write(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ok, err := d.DataDiskGrowLogged("dev", line); err != nil || !ok {
+		t.Fatalf("grow marker lost at rotation: %v %v", ok, err)
+	}
+	if _, err := w.Write(bytes.Repeat([]byte("z"), logTail)); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := d.DataDiskGrowLogged("dev", line); err != nil || ok {
+		t.Fatalf("read beyond the existing suffix window: %v %v", ok, err)
 	}
 }

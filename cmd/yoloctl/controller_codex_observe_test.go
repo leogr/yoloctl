@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"io"
+	"log/slog"
 	"slices"
 	"strconv"
 	"sync/atomic"
@@ -31,7 +32,7 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 func TestCodexObserveCoalescesAnInventoryStorm(t *testing.T) {
 	s := &controller.Server{Receipts: controller.Receipts{Dir: t.TempDir()}}
 	var runs atomic.Int32
-	stop := scheduleCodexObserve(t.Context(), s, func(context.Context) error { runs.Add(1); return nil }, 300*time.Millisecond, io.Discard)
+	stop := scheduleCodexObserve(t.Context(), s, func(context.Context) error { runs.Add(1); return nil }, 300*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	defer stop()
 	s.ReadFinished("chat.status")
 	time.Sleep(50 * time.Millisecond)
@@ -61,7 +62,7 @@ func TestCodexObserveCoalescesAnInventoryStorm(t *testing.T) {
 func TestCodexObserveSkipsAnUncertainController(t *testing.T) {
 	s := &controller.Server{Receipts: controller.Receipts{Dir: t.TempDir()}, RecoveryRequired: true}
 	var runs atomic.Int32
-	stop := scheduleCodexObserve(t.Context(), s, func(context.Context) error { runs.Add(1); return nil }, 10*time.Millisecond, io.Discard)
+	stop := scheduleCodexObserve(t.Context(), s, func(context.Context) error { runs.Add(1); return nil }, 10*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	defer stop()
 	s.ReadFinished("box.inventory")
 	time.Sleep(100 * time.Millisecond)
@@ -82,7 +83,7 @@ func TestCodexObserveNeverBlocksTheRead(t *testing.T) {
 		case <-ctx.Done():
 		}
 		return nil
-	}, time.Millisecond, io.Discard)
+	}, time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	defer stop()
 	s.ReadFinished("box.inventory")
 	<-started
