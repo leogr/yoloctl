@@ -126,3 +126,35 @@ notices in [audit-plugin](audit-plugin/README.md). Ordinary Go builds embed the
 qualified Linux artifacts; maintenance regenerates with Zig 0.15.2 and checks
 both targets twice. See the [metadata digest](../docs/digests/audit-metadata.md)
 for the snapshot and qualification limits.
+
+## Pinned Mermaid text renderer
+
+`mermaid-text/` records the registry archive checksum, upstream revision, ordered
+patches, Rust 1.95.0 toolchain, WASI target, Cargo lock, wrapper/builder hashes and
+notices for the embedded `internal/mermaid/wasm/mermaid.wasm`. Normal builds need
+only Go. This artifact does not itself enable fenced diagrams in chat or follow.
+
+Maintenance requires Rust 1.95.0, its `wasm32-wasip1` target, Python and `patch`:
+
+```sh
+python3 scripts/build-mermaid.py --check
+```
+
+The source archive is fetched from the pinned registry URL and checked before
+extraction; `--source-archive PATH` reuses an already downloaded copy with the
+same check. Regeneration without `--check` writes the artifact/manifest and
+updates the output hash in `pins.json`. `--collect-licenses` additionally
+refreshes the selected transitive notices before building; retain the Rust
+standard-library notices when changing its pin. Intentionally update source,
+patch, wrapper and builder input hashes when maintaining the recipe, then
+regenerate, review the changes, and require byte-identical `--check`.
+
+Cargo's local crate identities can affect stripped LTO output even after source
+paths are remapped. The maintenance-only `rustc-repro.py` supplies stable crate
+metadata from this locked recipe and each package/version/target/cfg. Do not use
+it as a general Cargo wrapper. Its hash is part of the pinned inputs; any change
+requires regeneration and the independent-root reproducibility check.
+
+The two behavior patches should be dropped when upstream covers them, retaining
+the width/back-edge fixtures. Detailed artifact boundaries and source links:
+[Mermaid artifact](../docs/digests/mermaid-renderer.md).

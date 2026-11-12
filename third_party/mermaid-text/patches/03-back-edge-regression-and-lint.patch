@@ -1,0 +1,53 @@
+--- a/crates/mermaid-text/src/render/unicode.rs
++++ b/crates/mermaid-text/src/render/unicode.rs
+@@ -1664,7 +1664,7 @@
+         let side_attached = indices.iter().all(|&idx| {
+             let edge = &graph.edges[idx];
+             let dir = edge_effective_dirs[idx];
+-            let is_back = edge.from == edge.to
++            edge.from == edge.to
+                 || match (
+                     endpoint_pos(
+                         &edge.from,
+@@ -1676,8 +1676,7 @@
+                 ) {
+                     (Some(from), Some(to)) => is_back_edge(from, to, dir),
+                     _ => false,
+-                };
+-            is_back
++                }
+         });
+         let spread_dir = if side_attached {
+             perpendicular_direction(edge_effective_dirs[indices[0]])
+--- /dev/null
++++ b/crates/mermaid-text/tests/yolo_back_edges.rs
+@@ -0,0 +1,29 @@
++//! Regression for perpendicular back-edge ports with non-rectangle nodes.
++use mermaid_text::{RenderOptions, render_with_options};
++
++#[test]
++fn non_rectangle_back_edges_keep_their_labels() {
++    for direction in ["TD", "LR"] {
++        for review in ["r{Review}", "r([Review])"] {
++            let source = format!(
++                "flowchart {direction}\n p[Plan] --> b[Build]\n b --> {review}\n r -->|findings| b\n r --> q[QA]\n q -->|fail| b\n q --> m[Merge]\n"
++            );
++            for width in [None, Some(40), Some(60), Some(80), Some(120)] {
++                let drawing = render_with_options(
++                    &source,
++                    &RenderOptions {
++                        max_width: width,
++                        ..Default::default()
++                    },
++                )
++                .expect("valid flowchart");
++                for label in ["findings", "fail"] {
++                    assert!(
++                        drawing.contains(label),
++                        "{direction} {review} {width:?} lost {label}:\n{drawing}"
++                    );
++                }
++            }
++        }
++    }
++}

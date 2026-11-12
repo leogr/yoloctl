@@ -1,0 +1,40 @@
+{
+  "artifact_sha256": "96e47879560c829bfad6e59c60239e0b8e3c838f5b819389cfebfe0998dd2b81",
+  "inputs": {
+    "LICENSE": "5203d5cf8b80e46ea53ad08e47bc30c938cbf742757c15f6906ffa9d385c4cb5",
+    "licenses/ascii-dag-0.9.1/LICENSE-APACHE": "8761391f3a3280ef14c9ab74aa87063496a525c36f80f16ef653eeb2d6e8da0b",
+    "licenses/ascii-dag-0.9.1/LICENSE-MIT": "608117e574bb8e7554d666cd455e9cf634031d7d71be3406403700703640bbf9",
+    "licenses/autocfg-1.5.1/LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "licenses/autocfg-1.5.1/LICENSE-MIT": "27995d58ad5c1145c1a8cd86244ce844886958a35eb2b78c6b772748669999ac",
+    "licenses/chrono-0.4.45/LICENSE.txt": "946c9835d8034d24404f8cfec5f4654cee5dad17e944afc3d06d742cf2882831",
+    "licenses/manifest.json": "23a41181e432d77c0f1f1840f483f4c37f142967dd75d7e0144692e2f0aad63e",
+    "licenses/num-traits-0.2.19/LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "licenses/num-traits-0.2.19/LICENSE-MIT": "6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb",
+    "licenses/rust-1.95.0/COPYRIGHT-library.html": "90567e2718bf7fd65a71a3a43c5596488e80e5f51ed02bfea6fec54458b5f3d1",
+    "licenses/unicode-width-0.2.3/LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "licenses/unicode-width-0.2.3/LICENSE-MIT": "7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0",
+    "rustc-repro.py": "f7422cd28d24bd60a2275011434a888d1de1c8ce7182f1d2083ce0e1979d9411",
+    "worker/Cargo.lock": "ce6e711f85affa5c3a40d195df70af7c9dfbb6b59a73a4ff809ef3e57076e8f6",
+    "worker/Cargo.toml": "51a8c9f83d8e071d0a28c8ef177be35a1ac0c24c6c18847989b87a767f707029",
+    "worker/src/main.rs": "8ee680505df2f0ec045380a5c86f98f5f920dc626a22b6a3816c1c5fd31ef80f"
+  },
+  "patches": [
+    {
+      "file": "patches/01-sequence-width-budget.patch",
+      "sha256": "5c693264d8bf3f2174949e7a04e6d97c76dc4b9ee127ad42d4a5a58aeef66b93"
+    },
+    {
+      "file": "patches/02-back-edge-spread-any-shape.patch",
+      "sha256": "f931f992bac96d44cc7dd0aec26ee9fa0aaf8c00d7aeba775e15cb41f88c9b24"
+    },
+    {
+      "file": "patches/03-back-edge-regression-and-lint.patch",
+      "sha256": "a38d70d5f4daa4865368c7c08de9bfadb1ae58ba22f0788ceb72af87b6da90d5"
+    }
+  ],
+  "recipe_sha256": "364206361a4a252f5fb7af15f48292874f23d371afc7f957aa6c309466cee76e",
+  "rust": "1.95.0",
+  "schema": 1,
+  "source_sha256": "90fa78f1bb32963ed114d9c318d880901ee4fa7103e133c3c3e530ebe5a09090",
+  "target": "wasm32-wasip1"
+}

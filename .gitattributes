@@ -2,3 +2,6 @@
 *.patch whitespace=-blank-at-eol,-space-before-tab
 # Preserve original third-party payload bytes and INVENTORY.json byte offsets.
 /LICENSES/THIRD_PARTY_LICENSES.txt binary
+# Preserve upstream notice bytes, including CRLF and original trailing spaces.
+/third_party/mermaid-text/licenses/** binary
+/third_party/mermaid-text/patches/*.patch whitespace=-blank-at-eol,-space-before-tab,-blank-at-eof

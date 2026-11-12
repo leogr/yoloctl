@@ -1,0 +1,46 @@
+[
+  {
+    "files": {
+      "LICENSE-APACHE": "8761391f3a3280ef14c9ab74aa87063496a525c36f80f16ef653eeb2d6e8da0b",
+      "LICENSE-MIT": "608117e574bb8e7554d666cd455e9cf634031d7d71be3406403700703640bbf9"
+    },
+    "license": "MIT OR Apache-2.0",
+    "name": "ascii-dag",
+    "version": "0.9.1"
+  },
+  {
+    "files": {
+      "LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "LICENSE-MIT": "27995d58ad5c1145c1a8cd86244ce844886958a35eb2b78c6b772748669999ac"
+    },
+    "license": "Apache-2.0 OR MIT",
+    "name": "autocfg",
+    "version": "1.5.1"
+  },
+  {
+    "files": {
+      "LICENSE.txt": "946c9835d8034d24404f8cfec5f4654cee5dad17e944afc3d06d742cf2882831"
+    },
+    "license": "MIT OR Apache-2.0",
+    "name": "chrono",
+    "version": "0.4.45"
+  },
+  {
+    "files": {
+      "LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "LICENSE-MIT": "6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb"
+    },
+    "license": "MIT OR Apache-2.0",
+    "name": "num-traits",
+    "version": "0.2.19"
+  },
+  {
+    "files": {
+      "LICENSE-APACHE": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "LICENSE-MIT": "7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0"
+    },
+    "license": "MIT OR Apache-2.0",
+    "name": "unicode-width",
+    "version": "0.2.3"
+  }
+]

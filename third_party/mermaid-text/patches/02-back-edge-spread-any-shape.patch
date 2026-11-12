@@ -1,0 +1,35 @@
+diff --git a/crates/mermaid-text/src/render/unicode.rs b/crates/mermaid-text/src/render/unicode.rs
+index 16690f1..f07b8f0 100644
+--- a/crates/mermaid-text/src/render/unicode.rs
++++ b/crates/mermaid-text/src/render/unicode.rs
+@@ -1655,7 +1655,13 @@ fn compute_spread_attaches(
+         ) else {
+             continue;
+         };
+-        let side_attached_rectangles = indices.iter().all(|&idx| {
++        // Back edges (and self-loops) enter on the node's perpendicular
++        // side whatever the shapes involved (`entry_point_back_edge`), so
++        // their shared port must spread along that side. Spreading along the
++        // flow axis instead moves the ports into the destination's interior,
++        // where A* cannot reach them, and the edge degrades to a dangling
++        // stub with its label dropped.
++        let side_attached = indices.iter().all(|&idx| {
+             let edge = &graph.edges[idx];
+             let dir = edge_effective_dirs[idx];
+             let is_back = edge.from == edge.to
+@@ -1672,14 +1678,8 @@ fn compute_spread_attaches(
+                     _ => false,
+                 };
+             is_back
+-                && graph
+-                    .node(&edge.from)
+-                    .is_some_and(|node| node.shape == NodeShape::Rectangle)
+-                && graph
+-                    .node(&edge.to)
+-                    .is_some_and(|node| node.shape == NodeShape::Rectangle)
+         });
+-        let spread_dir = if side_attached_rectangles {
++        let spread_dir = if side_attached {
+             perpendicular_direction(edge_effective_dirs[indices[0]])
+         } else {
+             graph.direction

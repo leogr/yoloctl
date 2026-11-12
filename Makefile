@@ -150,6 +150,7 @@ host-renderer-check:
 	python3 scripts/vendor-ultraviolet.py --check
 
 test-scripts:
+	python3 -B -m unittest discover -s scripts -p test_mermaid_build.py
 	python3 -B -m unittest discover -s scripts -p test_vendor_openshell.py
 	python3 -B -m unittest discover -s scripts -p test_openshell_build.py
 	python3 -B -m unittest discover -s scripts -p test_helper_release.py

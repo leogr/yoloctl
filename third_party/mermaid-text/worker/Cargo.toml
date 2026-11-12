@@ -1,0 +1,18 @@
+[package]
+name = "yoloctl-mermaid-wasi"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.95"
+publish = false
+
+[dependencies]
+mermaid-text = { path = "../source/crates/mermaid-text" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[workspace]
