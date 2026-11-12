@@ -270,7 +270,7 @@ func TestRecipePinsPatchedCACertificates(t *testing.T) {
 		t.Fatal(err)
 	}
 	pin, ok := pins["ca-certificates.deb"]
-	if !ok || pin.URL != "https://archive.ubuntu.com/ubuntu/pool/main/c/ca-certificates/ca-certificates_20260816ubuntu0.24.04.1_all.deb" || pin.SHA256 != "8a0a754aaafed72cc8efb8c1731808133284a84fbfc76a4fcc73fce9e01b4187" {
+	if !ok || pin.URL != "https://launchpad.net/ubuntu/+archive/primary/+files/ca-certificates_20260816ubuntu0.24.04.1_all.deb" || pin.SHA256 != "8a0a754aaafed72cc8efb8c1731808133284a84fbfc76a4fcc73fce9e01b4187" {
 		t.Fatalf("patched CA package is not pinned: %+v", pin)
 	}
 	if imageRecipeVersion < 2 {
