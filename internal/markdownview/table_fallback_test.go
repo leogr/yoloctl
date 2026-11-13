@@ -88,8 +88,19 @@ func TestLabelledTableCountsHeadersAndAllRowsBeforeEmission(t *testing.T) {
 		t.Fatal("repeated labels exceeded original budget")
 	}
 	rows := Layout(doc, 60, LayoutOptions{Method: o.Method, Theme: o.Theme, UnlimitedRows: true}).Rows
-	if !strings.Contains(tableRowsText(rows[:1]), "display limit") {
-		t.Fatal("missing refusal notice")
+	// The natural padded representation and repeated-label route still fail,
+	// but the table already fits at a tighter width: use that allocation.
+	if strings.HasPrefix(tableRowsText(rows[:1]), "Table ") {
+		t.Fatal("lost tighter admitted table")
+	}
+	for _, row := range rows {
+		width := 0
+		for _, run := range row.Runs {
+			width += o.Method.StringWidth(run.Text)
+		}
+		if width > 60 {
+			t.Fatal("retry rebuilt the natural-width padding", width)
+		}
 	}
 	for _, dl := range doc.Lines {
 		if len(dl.Text) > 2100 {

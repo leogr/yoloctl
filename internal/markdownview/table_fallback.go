@@ -145,3 +145,38 @@ func FitTable(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft int, t
 	rows, _ := FitTableLayout(wm, lines, first, width, rowsLeft, theme)
 	return rows
 }
+
+// fitTableInView prefers the available width, but a wider allocation must not
+// replace a table that fits at a tighter width with labelled records. Padding
+// and rules count against the same source-sized budget at every attempt.
+func fitTableInView(wm ansi.Method, lines []DisplayLine, first, table, width, rowsLeft int, theme spaceview.Theme, options LayoutOptions) ([][]BodyRow, TableFitReason, []TableRowID) {
+	at := func(w int) ([][]BodyRow, TableFitReason, []TableRowID) {
+		if options.CompactTables {
+			rows, reason, denied, applied := compactTable(wm, lines, first, table, w, rowsLeft, theme, options.OpenTableRows)
+			if applied {
+				return rows, reason, denied
+			}
+		}
+		rows, reason := FitTableLayout(wm, lines, first, w, rowsLeft, theme)
+		return rows, reason, nil
+	}
+	rows, reason, denied := at(width)
+	if reason != TableOverBudget {
+		return rows, reason, denied
+	}
+	// Beyond the natural widths the allocation is unchanged; skip that range.
+	natural := 3*(len(lines[0].Table.Natural)-1) + 2
+	for _, w := range lines[0].Table.Natural {
+		natural += w
+	}
+	for w := min(width-1, natural); w > 0; w-- {
+		candidate, why, refused := at(w)
+		if why == TableFits || why == TableLaidOut {
+			return candidate, why, refused
+		}
+		if why == TableTooNarrow {
+			break
+		}
+	}
+	return rows, reason, denied
+}

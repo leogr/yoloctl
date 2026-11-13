@@ -354,15 +354,10 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 				after = 1 // the spacer after the table needs a row too
 			}
 			var reason TableFitReason
-			applied := false
-			if options.CompactTables {
-				var denied []TableRowID
-				fitted, reason, denied, applied = compactTable(wm, lines[n:], n, tableIndex, width, rowLimit-len(rows)-after, theme, options.OpenTableRows)
-				*refused = append(*refused, denied...)
-			}
-			if !applied {
-				fitted, reason = FitTableLayout(wm, lines[n:], n, width, rowLimit-len(rows)-after, theme)
-			}
+			var denied []TableRowID
+			fitted, reason, denied = fitTableInView(wm, lines[n:], n, tableIndex, width, rowLimit-len(rows)-after, theme, options)
+			*refused = append(*refused, denied...)
+
 			first = n
 			if reason != TableFits && reason != TableLaidOut {
 				fitted = labelledTable(wm, lines[n:], n, width, rowLimit-len(rows)-after, theme, reason)

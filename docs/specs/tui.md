@@ -115,6 +115,7 @@ failed or stale reading shows its reason instead. [27](#source-27)
 [FACT] Clipped Markdown table rows start compact: ▸ expands, ▾ closes; follow
 also offers `w` for all rows. Copy includes hidden reached cells; within-cell
 partial drags stay partial. Expansion limits leave a visible notice.
+A wider pane retains a tighter admitted table allocation when needed.
 Wide Markdown tables use readable wrapped columns or labelled rows;
 a counted limit notice replaces an unexplainable rendering failure. Existing
 source/copy/Quote behavior and rendering limits remain. [43](#source-43)

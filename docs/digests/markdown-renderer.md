@@ -1,6 +1,6 @@
 # Shared Markdown renderer
 
-Verification: `3bae6dd1d6ffa1356f7678850584fe6d9cf0fac8` and accompanying changes; table fallback re-read at `30465c54600a95835e23b2d554ea0325dcb27af3` and accompanying changes.
+Verification: `4a453938c50d7c0d79734d13e20f612a5262cecd` and accompanying changes.
 
 [FACT] `internal/markdownview` owns the existing Markdown subset's pure parser,
 lexer, logical lines, layout, source maps and copy/hit geometry. `Parse` takes
@@ -33,7 +33,9 @@ URL intent that decorators never re-style. Padding, gutters and rules are
 never copied; source maps drop the brackets as markup.
 [2](#source-2) [5](#source-5) [14](#source-14)
 
-[FACT] Fitting tables keep alignment. Squeezed columns allocated
+[FACT] Fitting tables keep alignment. If a viewport allocation exceeds the
+byte budget, layout tries tighter allocations and keeps the widest that fits
+before fallback: widening alone retains an admitted table. Squeezed columns allocated
 under 16 cells use labelled records instead. Rejected padding keeps bounded
 unpadded logical cells; neither natural fit nor the final text route rebuilds
 padding beyond `2*source+4096` bytes. Labelled output counts repeated headers,
@@ -98,6 +100,6 @@ component parity, not native terminal, live-room or future file-view behavior.
 13. <a id="source-13"></a> [Plain-consumer regressions](../../internal/markdownview/document_test.go#L15) — generic render/layout, explicit maps, replacement copy/refusal and limit metadata; highlight_test.go retains the lexer corpus.
 14. <a id="source-14"></a> [Subset additions](../../internal/markdownview/improvements_test.go#L64-L320) — list alignment/wrapping/coverage, rule, autolinks, headings, separators against a naive reference; code in body.go `parseLines` (L108), `HeadingColor`, `listRanges` (L435), `tableSeparators` (L903) and inline.go `autolinkEnd` (L152), `listItem`, `alignOrdered` (L229-L300).
 
-15. <a id="source-15"></a> [Counted table fallbacks](../../internal/markdownview/table_fallback.go#L10) — `TableFitReason`, `labelledTable`; body.go `TableLines`, `FitTableLayout`, `bodyRows`; table_fallback_test.go covers cutoffs, budgets, source/Quote and matched-mode screenshot-derived rendering.
+15. <a id="source-15"></a> [Counted table fallbacks](../../internal/markdownview/table_fallback.go#L10) — `TableFitReason`, `labelledTable`, `fitTableInView`; body.go `TableLines`, `FitTableLayout`, `bodyRows`; table_fallback_test.go covers cutoffs, budgets, source/Quote and matched modes; wide_window_test.go covers widening and the widest admitted allocation.
 
 16. <a id="source-16"></a> [Compact rows](../../internal/markdownview/table_compact.go#L1) — `compactTable`, `CompactSelection`; table_compact_test.go covers bounds, copy and matched width modes.
