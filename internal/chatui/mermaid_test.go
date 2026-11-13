@@ -511,3 +511,54 @@ func TestChatDiagramBesideAnImageChip(t *testing.T) {
 		})
 	}
 }
+
+// The keys a reader uses on a drawing: Alt+Q over the whole drawing puts its
+// fence source in the draft, and Ctrl+S shows the fence source in place of
+// the drawing and back, redrawing from the cache.
+func TestChatKeysQuoteADrawingAndToggleItsSource(t *testing.T) {
+	f := &fakeDiagrams{}
+	m := diagramChat(t, f, 80, 24)
+	m.opts.Clipboard, m.copyOnSelect = "off", false
+	arriveText(m, "a", "look:\n"+chatFence(1)+"\nok")
+	settle(t, m, nil)
+	body := m.bodyCache["server:a"]
+	first, last := -1, -1
+	for n, dl := range body.lines {
+		if dl.Diagram > 0 {
+			if first < 0 {
+				first = n
+			}
+			last = n
+		}
+	}
+	if first < 0 {
+		t.Fatal("no drawing")
+	}
+	highlight(m, "a", first, 0, last, len(body.lines[last].Text))
+	m.focus = focusMessages
+	press(m, 'q', tea.ModAlt)
+	want := "> " + strings.ReplaceAll(chatFence(1), "\n", "\n> ") + "\n\n"
+	if m.Draft() != want || m.replyTo != "a" || m.focus != focusComposer {
+		t.Fatalf("draft %q (want %q) reply %q focus %v", m.Draft(), want, m.replyTo, m.focus)
+	}
+
+	shownText := func() string {
+		var b strings.Builder
+		for _, row := range m.built.rows[min(m.scroll, len(m.built.rows)):min(m.scroll+m.lastBodyHeight, len(m.built.rows))] {
+			if lines := m.bodyCache[row.key].lines; row.line >= 0 && row.line < len(lines) && row.offset == 0 {
+				b.WriteString(lines[row.line].Text + "\n")
+			}
+		}
+		return b.String()
+	}
+	_, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: 's', Mod: tea.ModCtrl}))
+	settle(t, m, cmd)
+	if drawings, _ := shownDiagrams(m); len(drawings) != 0 || !strings.Contains(shownText(), "```mermaid") || !strings.Contains(shownText(), "n1 --> x") {
+		t.Fatalf("source view shows drawings %q and\n%s", drawings, shownText())
+	}
+	_, cmd = m.Update(tea.KeyPressMsg(tea.Key{Code: 's', Mod: tea.ModCtrl}))
+	settle(t, m, cmd)
+	if drawings, _ := shownDiagrams(m); len(drawings) != 1 || strings.Contains(shownText(), "```mermaid") || f.count() != 1 {
+		t.Fatalf("back from source: drawings %q renders %d\n%s", drawings, f.count(), shownText())
+	}
+}
