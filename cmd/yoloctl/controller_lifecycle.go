@@ -279,7 +279,7 @@ func createControllerSpace(cmd *cobra.Command, space string) error {
 		return asUserError(err)
 	}
 	boot.VM.NestedVirtualization, _ = cmd.Flags().GetString("nested-virtualization")
-	if err := vmapi.ValidateNestedPreference(boot.VM.NestedVirtualization); err != nil {
+	if err := validateNestedCreateRequest(boot.VM.NestedVirtualization, boot.VM.Backend, nestedHostFacts()); err != nil {
 		return err
 	}
 	boot.VM.Memory, err = selectSpaceMemory(cmd)

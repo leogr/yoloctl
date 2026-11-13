@@ -169,6 +169,10 @@ func requireResourceSpaceStopped(ctx context.Context, boot *spaceconfig.Bootstra
 	if boot.Initializing || boot.Import != nil || boot.ImageUpdate != nil {
 		return errors.New("finish pending space initialization, import or image recovery before changing resources")
 	}
+	return requireResourceVMStopped(ctx, boot)
+}
+
+func requireResourceVMStopped(ctx context.Context, boot *spaceconfig.Bootstrap) error {
 	probe, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	instance, found, err := lookupResourceSpace(probe, boot.Name)
@@ -193,6 +197,20 @@ func changeSpaceResources(cmd *cobra.Command, name string, expected *spaceResour
 	}
 	if expected != nil && (!os.SameFile(current.info, expected.info) || !bytes.Equal(current.data, expected.data)) {
 		return errors.New("space changed while editing; reopen space edit before saving")
+	}
+	// A rejected first boot can retain initialization/import checkpoints. The
+	// advertised off remedy changes only its boot preference, never resources,
+	// disk state, checkpoints or the instance file, and never starts the VM.
+	if (current.boot.Initializing || current.boot.Import != nil) && current.boot.ImageUpdate == nil && onlyNestedOffRequested(cmd) {
+		if err := requireResourceVMStopped(cmd.Context(), current.boot); err != nil {
+			return err
+		}
+		current.boot.VM.NestedVirtualization = "off"
+		if err := current.boot.Save(); err != nil {
+			return err
+		}
+		cliInfo(logging.Host, "space %s: nested virtualization off saved; initialization/import remains pending; start explicitly with yoloctl space start %s", name, name)
+		return nil
 	}
 	if err := requireResourceSpaceStopped(cmd.Context(), current.boot); err != nil {
 		return err
@@ -312,4 +330,20 @@ func editSpaceResources(cmd *cobra.Command, name string, editor func(context.Con
 		return fmt.Errorf("edits kept at %s: %w", path, err)
 	}
 	return nil
+}
+
+func onlyNestedOffRequested(cmd *cobra.Command) bool {
+	if !cmd.Flags().Changed("nested-virtualization") {
+		return false
+	}
+	value, err := cmd.Flags().GetString("nested-virtualization")
+	if err != nil || value != "off" {
+		return false
+	}
+	for _, flag := range []string{"cpus", "memory", "disk", "data-disk", "no-backup", "image-layer-compression"} {
+		if cmd.Flags().Changed(flag) {
+			return false
+		}
+	}
+	return true
 }

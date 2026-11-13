@@ -42,6 +42,10 @@ flat YAML containing only `cpus`, `memory` and `disk`; failed saves retain the e
 [VM system disk size](vm-disk-size.md)).
 They require an existing verified stopped VM, reject
 pending initialization/import/image updates, and never boot or stop it.
+The narrow `space set SPACE --nested-virtualization off` recovery exception
+accepts a stopped initialization/import checkpoint, saves only that preference,
+and leaves resources, disk/checkpoints and the instance file untouched; mixed
+resource flags and image recovery still refuse. [20](#source-20)
 The host lifecycle lock spans validation and publication; editor waits release
 it and saving rechecks bootstrap identity/content and stopped state.
 `auto` uses the existing RAM policy; CPU changes remain explicit integers.
@@ -59,7 +63,8 @@ and explicitly start NEW. Import first boots to restore, then stops.
 [FACT] Backends independently refuse live/paused/uncertain VMs. Firecracker
 updates only saved `spec.cpus`/`spec.memory` under its instance lock; CPUs must
 be 1–32 and RAM at least 128 MiB in whole MiB. Lima changes only the resolved
-YAML CPU/memory fields, retaining other keys/comments, with positive CPUs and
+YAML CPU/memory fields and the optional resolved nested-virtualization boolean,
+retaining other keys/comments, with positive CPUs and
 parseable positive RAM. Both preserve existing storage/identity and publish
 atomically; equal backend values need no rewrite. [13](#source-13)
 [14](#source-14) [15](#source-15)
@@ -98,3 +103,5 @@ Firecracker/Lima resizing or restart behavior. [16](#source-16) [17](#source-17)
 17. <a id="source-17"></a> [Firecracker regressions](../../internal/firecracker/resources_linux_test.go#L57) — narrow writes, stopped-state proof and temporary configurations.
 18. <a id="source-18"></a> [Lima regressions](../../internal/lima/resources_test.go#L46) — narrow writes, stopped-state proof and temporary configurations.
 19. <a id="source-19"></a> [Automatic VM CPUs](vm-cpus.md) — creation-time CPU selection digest.
+
+20. <a id="source-20"></a> [Nested preference recovery](../../cmd/yoloctl/space_resources.go#L1) — `changeSpaceResources`, `onlyNestedOffRequested`, verified with accompanying changes on fb374a73.

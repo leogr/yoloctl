@@ -81,3 +81,26 @@ func nestedBootNotice(name, preference string, result vmapi.NestedResolution) st
 	}
 	return fmt.Sprintf("nested virtualization is not enabled by yoloctl for space %s: %s. To silence this: yoloctl space set %s --nested-virtualization off", name, result.Reason, name)
 }
+
+// startSpaceVM retains the off remedy for Lima's runtime support rejection,
+// which cannot be predicted solely from host facts before first boot.
+func startSpaceVM(ctx context.Context, boot *spaceconfig.Bootstrap, vm controllerDeploymentVM) error {
+	if err := cliRunStep(ctx, "Booting VM", func(ctx context.Context) error { return vm.Start(ctx, boot.Name) }); err != nil {
+		if vmapi.NestedPreference(boot.VM.NestedVirtualization) == "on" {
+			return fmt.Errorf("%w; use yoloctl space set %s --nested-virtualization off to disable the requested setting", err, boot.Name)
+		}
+		return err
+	}
+	return nil
+}
+
+func validateNestedCreateRequest(preference, backend string, host vmapi.NestedHostFacts) error {
+	if err := vmapi.ValidateNestedPreference(preference); err != nil {
+		return err
+	}
+	if preference != "on" || (host.OS == "darwin" && backend != "firecracker") {
+		return nil
+	}
+	_, err := vmapi.ResolveNestedVirtualization(preference, backend, vmapi.Instance{}, host)
+	return fmt.Errorf("%w; create with --nested-virtualization off or auto", err)
+}

@@ -279,10 +279,7 @@ func startControllerSpaceImpl(ctx context.Context, boot *spaceconfig.Bootstrap, 
 		if err := applySpaceBootResources(ctx, boot, vm); err != nil {
 			return err
 		}
-		if err := cliRunStep(ctx, "Booting VM", func(ctx context.Context) error { return vm.Start(ctx, boot.Name) }); err != nil {
-			if vmapi.NestedPreference(boot.VM.NestedVirtualization) == "on" {
-				return fmt.Errorf("%w; use yoloctl space set %s --nested-virtualization off to disable the requested setting", err, boot.Name)
-			}
+		if err := startSpaceVM(ctx, boot, vm); err != nil {
 			return err
 		}
 	}

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -16,7 +18,9 @@ import (
 
 type nestedDeploymentVM struct {
 	controllerDeploymentVM
-	applied []vmapi.Resources
+	applied  []vmapi.Resources
+	starts   int
+	startErr error
 }
 
 func (v *nestedDeploymentVM) SetResources(_ context.Context, _ string, r vmapi.Resources) error {
@@ -154,5 +158,147 @@ func TestSpaceSetNestedPreferenceRefusesRunningVM(t *testing.T) {
 	}
 	if after.VM.NestedVirtualization != before.VM.NestedVirtualization || len(*applied) != 0 {
 		t.Fatal("changed running space")
+	}
+}
+
+func (v *nestedDeploymentVM) Start(context.Context, string) error { v.starts++; return v.startErr }
+
+func TestRejectedVZFirstBootOffRemedyPreservesPendingState(t *testing.T) {
+	for _, pendingImport := range []bool{false, true} {
+		t.Run(fmt.Sprintf("import=%v", pendingImport), func(t *testing.T) {
+			boot, applied := resourceSpaceFixture(t)
+			boot.Initializing = true
+			boot.DiskUUID = ""
+			boot.VM.Backend = "lima"
+			boot.VM.NestedVirtualization = "on"
+			if pendingImport {
+				boot.Import = &spaceconfig.ImportState{SHA256: strings.Repeat("ab", 32), Size: 100}
+			}
+			if err := boot.Save(); err != nil {
+				t.Fatal(err)
+			}
+			oldHost, oldLookup := nestedHostFacts, lookupDeploymentVM
+			t.Cleanup(func() { nestedHostFacts, lookupDeploymentVM = oldHost, oldLookup })
+			nestedHostFacts = func() vmapi.NestedHostFacts {
+				return vmapi.NestedHostFacts{OS: "darwin", Chip: "Apple M3 Max", Version: "26.7.1"}
+			}
+			lookupDeploymentVM = func(context.Context, string) (vmapi.Instance, bool, error) {
+				return vmapi.Instance{VMType: "vz", Arch: "aarch64", Status: "Stopped"}, true, nil
+			}
+			failure := errors.New("Lima VZ rejected nested virtualization")
+			vm := &nestedDeploymentVM{startErr: failure}
+			if err := applySpaceBootResources(t.Context(), boot, vm); err != nil {
+				t.Fatal(err)
+			}
+			err := startSpaceVM(t.Context(), boot, vm)
+			if !errors.Is(err, failure) || !strings.Contains(err.Error(), "space set dev --nested-virtualization off") {
+				t.Fatalf("missing runtime rejection remedy: %v", err)
+			}
+			if err := resourceCommand(t, "space", "set", "dev", "--nested-virtualization", "off"); err != nil {
+				t.Fatal(err)
+			}
+			after, err := spaceconfig.LoadBootstrap("dev")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := *boot
+			want.VM.NestedVirtualization = "off"
+			if !reflect.DeepEqual(&want, after) {
+				t.Fatalf("changed pending state: want %+v got %+v", want, after)
+			}
+			if len(*applied) != 0 || vm.starts != 1 {
+				t.Fatal("off remedy applied resources or restarted")
+			}
+			if err := applySpaceBootResources(t.Context(), after, vm); err != nil {
+				t.Fatal(err)
+			}
+			if len(vm.applied) != 2 || vm.applied[1].NestedVirtualization == nil || *vm.applied[1].NestedVirtualization {
+				t.Fatal("next explicit start did not resolve false")
+			}
+			vm.startErr = nil
+			if err := startSpaceVM(t.Context(), after, vm); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestPendingNestedOffRemedyDoesNotAdmitOtherMutations(t *testing.T) {
+	for _, extra := range [][]string{{"--cpus", "6"}, {"--memory", "8GiB"}, {"--disk", "50GiB"}, {"--data-disk", "20GiB"}, {"--image-layer-compression", "gzip"}, {"--no-backup"}, {"--nested-virtualization", "auto"}} {
+		t.Run(strings.Join(extra, "_"), func(t *testing.T) {
+			boot, applied := resourceSpaceFixture(t)
+			boot.Initializing = true
+			boot.DiskUUID = ""
+			boot.VM.NestedVirtualization = "on"
+			if err := boot.Save(); err != nil {
+				t.Fatal(err)
+			}
+			args := append([]string{"space", "set", "dev", "--nested-virtualization", "off"}, extra...)
+			if err := resourceCommand(t, args...); err == nil {
+				t.Fatal("admitted another mutation")
+			}
+			after, err := spaceconfig.LoadBootstrap("dev")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(boot, after) || len(*applied) != 0 {
+				t.Fatal("changed pending state")
+			}
+		})
+	}
+	for _, status := range []string{"Running", "Unknown"} {
+		t.Run(status, func(t *testing.T) {
+			boot, _ := resourceSpaceFixture(t)
+			boot.Initializing = true
+			boot.DiskUUID = ""
+			boot.VM.NestedVirtualization = "on"
+			if err := boot.Save(); err != nil {
+				t.Fatal(err)
+			}
+			lookupResourceSpace = func(context.Context, string) (vmapi.Instance, bool, error) {
+				return vmapi.Instance{Status: status}, true, nil
+			}
+			if err := resourceCommand(t, "space", "set", "dev", "--nested-virtualization", "off"); err == nil {
+				t.Fatal("accepted unsafe VM state")
+			}
+		})
+	}
+}
+
+func TestNestedCreateRejectsUnsupportedOnBeforeAllocation(t *testing.T) {
+	for _, route := range []struct{ backend, os string }{{"lima", "linux"}, {"firecracker", "darwin"}, {"firecracker", "linux"}} {
+		err := validateNestedCreateRequest("on", route.backend, vmapi.NestedHostFacts{OS: route.os})
+		if err == nil || !strings.Contains(err.Error(), "create with --nested-virtualization off or auto") {
+			t.Fatalf("%+v: %v", route, err)
+		}
+		for _, preference := range []string{"auto", "off", ""} {
+			if err := validateNestedCreateRequest(preference, route.backend, vmapi.NestedHostFacts{OS: route.os}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := validateNestedCreateRequest("on", "lima", vmapi.NestedHostFacts{OS: "darwin"}); err != nil {
+		t.Fatal("must defer actual-instance and VZ runtime checks", err)
+	}
+}
+
+func TestNestedOffDoesNotBypassImageRecoveryGuard(t *testing.T) {
+	boot, applied := resourceSpaceFixture(t)
+	boot.VM.Backend = "firecracker"
+	boot.VM.Image = filepath.Join(t.TempDir(), "old-image")
+	boot.VM.NestedVirtualization = "on"
+	boot.ImageUpdate = &spaceconfig.VMImageUpdate{Previous: boot.VM.Image, Target: filepath.Join(t.TempDir(), "new-image"), Bundle: boot.Bundle, Phase: "prepared"}
+	if err := boot.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if err := resourceCommand(t, "space", "set", "dev", "--nested-virtualization", "off"); err == nil {
+		t.Fatal("image recovery guard bypassed")
+	}
+	after, err := spaceconfig.LoadBootstrap("dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(boot, after) || len(*applied) != 0 {
+		t.Fatal("image checkpoint changed")
 	}
 }

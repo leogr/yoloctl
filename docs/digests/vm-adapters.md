@@ -35,7 +35,11 @@ selection are recorded separately in [Lima storage](lima-storage.md). [41](#sour
 stopped-space set expose `--nested-virtualization`; recreate and archives retain it.
 Before boot, macOS Lima writes an explicit boolean through the existing
 stopped-instance/no-follow resource update, including newly created instances.
-The creation template and confinement policy are unchanged. [43](#source-43)
+A stopped initialization/import checkpoint permits an off-only remedy after a
+rejected first boot: only the preference changes; no resources, checkpoints or
+instance file are changed and no boot is retried. Image recovery and mixed resource
+changes remain refused. Deterministically unsupported explicit-on creates fail
+before allocation. The creation template and confinement policy are unchanged. [43](#source-43)
 [44](#source-44)
 
 [FACT] Auto enables only a listed `vz` instance with an `aarch64` guest and
