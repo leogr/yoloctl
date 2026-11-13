@@ -111,7 +111,7 @@ func tailLimaLog(ctx context.Context, spaceName string, lines int, follow bool, 
 	}
 	tailArgs = append(tailArgs, logPath)
 	tail := exec.CommandContext(ctx, "tail", tailArgs...)
-	view := newSpaceLogOutput(stdout, logging.CurrentSettings())
+	view := newSpaceLogOutput(stdout, logging.CurrentSettings(), logPath)
 	tail.Stdout = view
 	tail.Stderr = stderr
 	err = tail.Run()

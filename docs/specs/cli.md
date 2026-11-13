@@ -224,6 +224,8 @@ Data output (`--json`, receipts, streams) is not rendered by it. [26](#source-26
 
 [FACT] `space logs` renders the VM log with the shared logger, follows its name
 across rotation, and preserves raw stdout bytes with `--log-level debug`.
+Lima host-agent status events show readable forwarding, vsock, cloud-init
+and VM status with original timestamps; unfamiliar records remain visible.
 Background logs we own use plain timestamped records and bounded
 current/previous generations;
 Lima/vendor and parsed marker formats retain their existing owners and bytes.

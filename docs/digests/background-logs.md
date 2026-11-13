@@ -1,6 +1,7 @@
 # Background log storage and views
 
-Verification: `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7` and accompanying changes.
+Verification: `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7`; Lima view:
+`e1386faff0f1db931b00d9305ec257173d38d365` and accompanying changes.
 
 [FACT] The controller service, managed holder and Firecracker guest init use the
 shared file Logger: plain UTC RFC3339 timestamps, levels and actor fields, no
@@ -66,6 +67,13 @@ logger remains an internal full-diagnostic sink. These views never drive
 lifecycle settlement.
 [9](#source-9)
 
+[FACT] For Lima's `ha.stdout.log`, the view decodes host-agent time/status
+records: original timestamps, port forwarding, vsock, cloud-init and VM status.
+Failed events/degradation display as warnings; status errors display as errors.
+Unknown fields/types and malformed/incomplete records retain their original
+text. Other VM logs keep the plain parser; debug still bypasses all parsing.
+[13](#source-13) [14](#source-14)
+
 [FACT] Regressions cover raw suffixes/two rotations, an oversized existing file,
 unsafe current/history files, sink recovery, a real external producer, marker
 interleaving with a bypass negative control, and
@@ -97,3 +105,5 @@ classification, durable evidence or existing admission/cancellation rules.
 11. <a id="source-11"></a> [View and grow regressions](../../cmd/yoloctl/space_log_render_test.go#L25) — view tests; `internal/firecracker/datadisk_linux_test.go` `TestDataDiskGrowLoggedAcrossRotation`; `internal/firecracker/helper_log_test.go` final-record ordering/early-return/once controls; `controller_storage_test.go` scheduled diagnostics.
 
 12. <a id="source-12"></a> [Initialized diagnostics](../../cmd/yoloctl/controller_audit_linux.go#L448) — `startAuditRetention`; controller_internal.go `recordWorkerCompletion`; internal/controller/image_orphans.go `SaveImageOrphan`; owned_diagnostics_linux_test.go and image_orphan_logging_test.go record/evidence/sink-failure controls.
+13. <a id="source-13"></a> [Lima adapter](../../cmd/yoloctl/lima_space_log_render.go#L56) — `limaSpaceLogRecord`; `lima_space_log_render_test.go` source isolation, controls and debug.
+14. <a id="source-14"></a> [Lima 2.2.1 event schema](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/hostagent/events/events.go) — host-agent event fields.

@@ -58,7 +58,7 @@ func TestSpaceLogRecordPresentationOnly(t *testing.T) {
 
 func TestSpaceLogViewRendersAndFlushes(t *testing.T) {
 	var out bytes.Buffer
-	view := newSpaceLogOutput(&out, spaceLogSettings(t, "info"))
+	view := newSpaceLogOutput(&out, spaceLogSettings(t, "info"), "")
 	for _, part := range []string{"2026-11-11T10:20:30.120Z warning: contr", "oller: Degraded\x1b[31m\n\npartial"} {
 		if _, err := view.Write([]byte(part)); err != nil {
 			t.Fatal(err)
@@ -77,7 +77,7 @@ func TestSpaceLogViewDebugKeepsBytes(t *testing.T) {
 	var out bytes.Buffer
 	settings := spaceLogSettings(t, "debug")
 	settings.Color = prettylog.ColorAlways
-	view := newSpaceLogOutput(&out, settings)
+	view := newSpaceLogOutput(&out, settings, "")
 	raw := []byte("raw\x00\x1b[31m\r\npartial")
 	if n, err := view.Write(raw); n != len(raw) || err != nil {
 		t.Fatal(n, err)
@@ -92,7 +92,7 @@ func TestSpaceLogViewDebugKeepsBytes(t *testing.T) {
 
 func TestSpaceLogViewFoldsAndBoundsPartialLines(t *testing.T) {
 	var out bytes.Buffer
-	view := newSpaceLogOutput(&out, spaceLogSettings(t, "info"))
+	view := newSpaceLogOutput(&out, spaceLogSettings(t, "info"), "")
 	for range 3 {
 		if _, err := view.Write([]byte("warning: vm: Repeated\n")); err != nil {
 			t.Fatal(err)
@@ -125,7 +125,7 @@ func TestSpaceLogViewFiltersUserLevels(t *testing.T) {
 	} {
 		t.Run(tc.level, func(t *testing.T) {
 			var out bytes.Buffer
-			view := newSpaceLogOutput(&out, spaceLogSettings(t, tc.level))
+			view := newSpaceLogOutput(&out, spaceLogSettings(t, tc.level), "")
 			if n, err := view.Write([]byte(input)); err != nil || n != len(input) {
 				t.Fatal(n, err)
 			}

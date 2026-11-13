@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,16 +22,21 @@ const spaceLogLineLimit = 64 << 10
 // Plain file headers carry presentation hints only: parsing them grants no
 // authority and does not participate in operation or disk-grow settlement.
 type spaceLogOutput struct {
-	target    io.Writer
-	logger    *prettylog.Logger
-	pending   []byte
-	showBlank bool
+	target      io.Writer
+	logger      *prettylog.Logger
+	pending     []byte
+	showBlank   bool
+	parseRecord func(string) slog.Record
 }
 
-func newSpaceLogOutput(w io.Writer, settings logging.Settings) *spaceLogOutput {
+func newSpaceLogOutput(w io.Writer, settings logging.Settings, logPath string) *spaceLogOutput {
 	out := &spaceLogOutput{
 		target:    w,
 		showBlank: settings.Verbosity.Allows(slog.NewRecord(time.Time{}, slog.LevelInfo, "", 0)),
+	}
+	out.parseRecord = spaceLogRecord
+	if filepath.Base(logPath) == "ha.stdout.log" {
+		out.parseRecord = limaSpaceLogRecord
 	}
 	if settings.Verbosity != prettylog.Trace {
 		out.logger = logging.NewFollowLogger(w, settings, nil)
@@ -88,7 +94,7 @@ func (w *spaceLogOutput) emit(line string) error {
 		_, err := io.WriteString(w.target, "\n")
 		return err
 	}
-	return w.logger.Handle(context.Background(), spaceLogRecord(line))
+	return w.logger.Handle(context.Background(), w.parseRecord(line))
 }
 
 func spaceLogRecord(line string) slog.Record {
