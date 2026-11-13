@@ -51,10 +51,22 @@ func TestBoxStartAndRestartPreserveExistingContainer(t *testing.T) {
 					t.Fatal(readErr)
 				}
 				calls := string(raw)
+				// box start rolls a late refusal back with box stop's
+				// policy (stop-box slice 2): one engine stop is expected.
+				rollback := operation == "start" && drift == "after start"
+				if rollback && !strings.HasPrefix(err.Error(), "start failed: ") {
+					t.Fatalf("late refusal was not decided by a read: %v", err)
+				}
+				if operation == "restart" && err != nil && strings.HasPrefix(err.Error(), "start failed: ") {
+					t.Fatalf("restart acquired box start's result policy: %v", err)
+				}
 				for _, forbidden := range []string{"nerdctl rm", "nerdctl run", "nerdctl build", "nerdctl stop", "npm install"} {
-					if strings.Contains(calls, forbidden) {
+					if strings.Contains(calls, forbidden) && (!rollback || forbidden != "nerdctl stop") {
 						t.Fatalf("start replaced or updated container: %s", calls)
 					}
+				}
+				if rollback && strings.Count(calls, "nerdctl stop") != 1 {
+					t.Fatalf("rollback did not stop exactly once: %s", calls)
 				}
 				if got, want := strings.Contains(calls, "nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), drift != "before start"; got != want {
 					t.Fatalf("started=%v want=%v; calls=%s", got, want, calls)
@@ -68,6 +80,10 @@ func TestBoxStartAndRestartPreserveExistingContainer(t *testing.T) {
 				if operation == "restart" && drift != "before start" {
 					if !slices.Equal(*stops, []string{"holder", "ports", "container", "session", "netns"}) {
 						t.Fatalf("lost session-aware stop ordering: %v", *stops)
+					}
+				} else if rollback {
+					if !slices.Equal(*stops, []string{"session", "netns"}) {
+						t.Fatalf("rollback cleanup: %v", *stops)
 					}
 				} else if len(*stops) != 0 {
 					t.Fatalf("refusal/start tore down live session: %v", *stops)
@@ -97,17 +113,25 @@ func setupExistingStartFixture(t *testing.T, drift string) string {
 	t.Setenv("START_TEST_FIXTURE", bin)
 	t.Setenv("START_TEST_DRIFT", drift)
 	command := sandbox.EntrypointArgs(cfg.Workdir.ContainerPath(), false, "sleep", "infinity")
-	for name, image := range map[string]string{"same.json": cfg.Image, "drift.json": "img:old"} {
-		raw, err := json.Marshal([]any{map[string]any{
-			"Id": strings.Repeat("f", 64), "Name": cfg.Name, "Path": command[0], "Args": command[1:],
-			"Config": map[string]any{"Image": image, "Labels": map[string]string{agentbox.LabelAgent: "none", resources.WorkloadLabel: resources.WorkloadVersion}},
-			"Mounts": []any{map[string]any{"Source": workdir, "Destination": cfg.Workdir.ContainerPath(), "RW": true}},
-		}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(bin, name), raw, 0600); err != nil {
-			t.Fatal(err)
+	// Each container reads as stopped before the fixture's start and as
+	// running after it (box start decides from that final read).
+	for name, image := range map[string]string{"same": cfg.Image, "drift": "img:old"} {
+		for suffix, running := range map[string]bool{".json": false, "-running.json": true} {
+			state := map[string]any{"Status": "exited", "Running": false}
+			if running {
+				state = map[string]any{"Status": "running", "Running": true, "Pid": 4242}
+			}
+			raw, err := json.Marshal([]any{map[string]any{
+				"Id": strings.Repeat("f", 64), "Name": cfg.Name, "Path": command[0], "Args": command[1:], "State": state,
+				"Config": map[string]any{"Image": image, "Labels": map[string]string{agentbox.LabelAgent: "none", resources.WorkloadLabel: resources.WorkloadVersion}},
+				"Mounts": []any{map[string]any{"Source": workdir, "Destination": cfg.Workdir.ContainerPath(), "RW": true}},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(bin, name+suffix), raw, 0600); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	policy, err := agentbox.ComposePolicy(cfg)
@@ -123,10 +147,12 @@ printf '%s\n' "$*" >> "$START_TEST_FIXTURE/calls"
 case "$*" in
   *'nerdctl ps'*) printf '{"Names":"coder","Status":"Exited (0)"}\n' ;;
   *'nerdctl inspect'*)
+    state=''
+    if [ -f "$START_TEST_FIXTURE/started" ]; then state='-running'; fi
     if [ "$START_TEST_DRIFT" = 'before start' ] || { [ "$START_TEST_DRIFT" = 'after start' ] && [ -f "$START_TEST_FIXTURE/started" ]; }; then
-      cat "$START_TEST_FIXTURE/drift.json"
+      cat "$START_TEST_FIXTURE/drift$state.json"
     else
-      cat "$START_TEST_FIXTURE/same.json"
+      cat "$START_TEST_FIXTURE/same$state.json"
     fi ;;
   *'sudo cat'*) cat "$START_TEST_FIXTURE/policy.yaml" ;;
   *'binary=/opt/openshell/bin/openshell-sandbox'*'sha256sum --check --status'*) exit 0 ;;

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/pkg/prettylog"
@@ -36,9 +37,17 @@ type ExitError struct {
 	// Step transitions never set it. Error and ExitCode are unchanged.
 	Rendered bool
 	// State is the controller's durable receipt state when the outcome is
-	// not known ("uncertain", or "command-uncertain" for a lost exec result);
-	// empty for a known result. Message keeps the existing wording.
+	// not known ("uncertain", or "command-uncertain" for a lost exec result),
+	// or "interrupted" for a box start or stop that did not finish (a plain
+	// failure that holds nothing); empty for a known result. Message keeps
+	// the existing wording.
 	State string
+}
+
+// InterruptedMessage is the failure a box start or stop that did not finish
+// reports: its result was not recorded and the box's state is read anew.
+func InterruptedMessage(method string) string {
+	return strings.ReplaceAll(method, ".", " ") + ` did not finish; run "box list" to read the box's state`
 }
 
 // clientLogStreams picks where relayed records go when the caller chose no
@@ -312,7 +321,7 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 			if f.Status == 0 && f.Error == "" {
 				return nil
 			}
-			if f.State != "" && f.State != "uncertain" && f.State != "command-uncertain" {
+			if f.State != "" && f.State != "uncertain" && f.State != "command-uncertain" && f.State != "interrupted" {
 				return &OutcomeUnknown{req.ID, errors.New("unexpected controller result state")}
 			}
 			return &ExitError{Status: f.Status, Message: f.Error, Rendered: rendered, State: f.State}

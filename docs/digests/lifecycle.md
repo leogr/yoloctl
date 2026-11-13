@@ -1,6 +1,6 @@
 # Reconcile, native locks and space lifecycle
 
-Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; runtime target selection at `9169119ca6b27e530064dc49b8b7a1d06c17397b` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior.
+Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; runtime target selection at `9169119ca6b27e530064dc49b8b7a1d06c17397b` and accompanying changes; box start/stop results at `19fe5134273d38642397a288132586b4e94dcd10` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior.
 
 [FACT] Explicit reconcile selects create, recreate, restart, then live port changes. Account,
 agent, mounts/workdir access, image, literal env and network mode can require
@@ -27,15 +27,17 @@ paths and confined SSH exec stay unchanged; raw log selectors are not covered.
 
 [FACT] Start on a running container is a no-op. Other starts/restarts refuse
 recreate-only drift with inspect/recreate guidance before runtime changes,
-and check again afterward. Post-start reconcile failures return errors while
-retaining the container. Missing containers still materialize; policy restarts and port updates
+and check again afterward. Post-start restart failures return errors while
+retaining the container; `box start` rolls a submitted start back with `box stop`'s
+steps and decides from a read ([box stop and start](box-stop-start.md)). Missing containers still materialize; policy restarts and port updates
 retain managed cleanup. Explicit reconcile/recreate retains replacement authority.
 [25](#source-25) [26](#source-26) [27](#source-27)
 
 [FACT] Managed appliers clean session holders/artifacts before restart/recreate;
 a cleanup that positively stopped the holder and removed its state then lets a
 managed reconcile record the launch's end before the container operation.
-Stop removes forwards and session state and reaps orphan netns. Socket readiness
+`box stop` takes its result from a final read, as [box stop and start](box-stop-start.md)
+says. Socket readiness
 requires an SSH banner, not just an inode, and reports a confirmed container exit
 with a logs hint. Native commands use the local sandbox SSH launch path.
 [3](#source-3) [4](#source-4)

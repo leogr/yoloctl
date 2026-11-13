@@ -270,6 +270,7 @@ func TestOutcomeExplanationsDistinguishEveryDisposition(t *testing.T) {
 		{recovered(DispositionApplied, ProofDocumentImage, func(r *Receipt) { r.Verifier = VerifierChatRevoke }), "applied it is not established"},
 		{Receipt{State: "acknowledged"}, "neither retried nor undone"},
 		{Receipt{State: "command-uncertain"}, "holds nothing"},
+		{Receipt{State: "interrupted"}, "holds nothing and needs no review"},
 	} {
 		if got := (&Server{}).explainOutcome(tc.r); !strings.Contains(got, tc.want) {
 			t.Errorf("%+v: %q lacks %q", tc.r, got, tc.want)

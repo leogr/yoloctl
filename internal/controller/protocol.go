@@ -76,7 +76,8 @@ type Frame struct {
 	// Owned marks a "detached" frame whose authorized setup continues.
 	Owned bool `json:"owned,omitempty"`
 	// State on an "exit" frame is the durable receipt state when the
-	// outcome is not known: "uncertain" or "command-uncertain".
+	// outcome is not known: "uncertain" or "command-uncertain"; or
+	// "interrupted" for a box start or stop that did not finish.
 	State string `json:"state,omitempty"`
 }
 

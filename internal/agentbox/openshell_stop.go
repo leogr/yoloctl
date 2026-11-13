@@ -24,6 +24,23 @@ func (a LiveApplier) Stop(ctx context.Context, name string) error {
 		func(ctx context.Context) error { return a.stopNativeRuntime(ctx, name, details.ID) },
 		func(ctx context.Context) error { return sandbox.StopContainerID(ctx, a.Client, name, details.ID) })
 }
+
+// StopRuntimeForResult is `box stop`'s result-mode engine stop: one stop of
+// the inspected container on its own route. On the native route the forward
+// precondition and the endpoint removal are left to the caller's steps.
+func (a LiveApplier) StopRuntimeForResult(ctx context.Context, name string) error {
+	if a.Client == nil {
+		return errors.New("runtime stop requires a container client")
+	}
+	details, err := a.Client.Inspect(ctx, name)
+	if err != nil {
+		return err
+	}
+	return stopInspectedRuntime(ctx, details,
+		func(ctx context.Context) error { return a.stopNativeRuntimeForResult(ctx, name, details.ID) },
+		func(ctx context.Context) error { return sandbox.StopContainerID(ctx, a.Client, name, details.ID) })
+}
+
 func stopInspectedRuntime(ctx context.Context, details *container.Details, native, legacy func(context.Context) error) error {
 	if details == nil || native == nil || legacy == nil {
 		return errors.New("runtime stop requires inspected route evidence")

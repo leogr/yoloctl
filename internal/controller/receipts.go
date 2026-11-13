@@ -73,7 +73,7 @@ func (s Receipts) Read(id string) (Receipt, error) {
 		return r, errors.New("operation receipt identity mismatch")
 	}
 	switch r.State {
-	case "pending", "complete", "uncertain", "setup-complete", "acknowledged", "command-uncertain", "recovered":
+	case "pending", "complete", "uncertain", "setup-complete", "acknowledged", "command-uncertain", "recovered", "interrupted":
 	default:
 		return r, errors.New("invalid operation receipt state")
 	}
@@ -89,7 +89,28 @@ func (s Receipts) Read(id string) (Receipt, error) {
 	if r.State == "command-uncertain" && !authorizedCommand(r) {
 		return r, errors.New("command outcome lacks authorized exec proof")
 	}
+	if r.State == "interrupted" && !authorizedStartStop(r) {
+		return r, errors.New("interrupted outcome lacks an authorized box start or stop")
+	}
 	return r, nil
+}
+
+// authorizedStartStop reports a box start or stop whose effects were durably
+// permitted. Neither leaves a pending intent: its result is the container
+// state a later read shows, so an unfinished one holds nothing. Legacy
+// records without the effect phase or a recorded scope prove nothing. A
+// scope that writes images (a start that published an image) keeps today's
+// classification: that controller state is not read from the container.
+func authorizedStartStop(r Receipt) bool {
+	if (r.Method != "box.start" && r.Method != "box.stop") || r.EffectPhase != EffectStarted || r.SetupComplete || r.Image != nil || r.Scope == nil {
+		return false
+	}
+	for _, w := range r.Scope.Writes {
+		if w.Kind == ResourceImages {
+			return false
+		}
+	}
+	return true
 }
 
 // authorizedCommand reports a box exec whose remote command was durably
@@ -123,6 +144,11 @@ func (r *Receipt) interrupt() {
 		// The command may have run. Its result stays unknown and is never
 		// replayed, but no controller state awaits review.
 		r.State = "command-uncertain"
+	case authorizedStartStop(*r):
+		// The command did not finish: no result is recorded and none is
+		// claimed. The box's state is what a read of its container shows;
+		// nothing is held, reviewed or replayed.
+		r.State = "interrupted"
 	default:
 		r.State = "uncertain"
 	}
@@ -150,7 +176,7 @@ func (r Receipt) terminal() bool {
 	}
 
 	switch r.State {
-	case "complete", "setup-complete", "acknowledged", "command-uncertain", "recovered":
+	case "complete", "setup-complete", "acknowledged", "command-uncertain", "recovered", "interrupted":
 		return true
 	}
 	return false

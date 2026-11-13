@@ -254,6 +254,8 @@ func (s *Server) explainOutcome(r Receipt) string {
 		return "A host accepted this unknown outcome after review; it was neither retried nor undone and is not known to have succeeded.\n"
 	case "command-uncertain":
 		return "A box exec command may have run but its result was lost; inspect its effects in the box. It holds nothing.\n"
+	case "interrupted":
+		return "It did not finish and no result was recorded; the box's state is what box list reads. It holds nothing and needs no review.\n"
 	case "recovered":
 		switch r.Recovery.Disposition {
 		case DispositionNotApplied:

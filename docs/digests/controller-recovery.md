@@ -33,7 +33,8 @@ failed result. [6](#source-6) [7](#source-7)
 [FACT] Interruption classification: a waiting gate becomes `recovered`
 `not-applied`, and a recorded completion becomes `recovered`
 `recorded-completion` with its status. Setup-complete and authorized exec keep
-their meanings; anything else stays `uncertain`. A worker that reports
+their meanings; an authorized `box.start`/`box.stop` becomes the final, non-holding
+`interrupted` ([box stop and start](box-stop-start.md)); anything else stays `uncertain`. A worker that reports
 uncertainty after completing loses its checkpoint, even when the controller
 then terminates it with a signal. Strict decoding rejects future versions,
 legacy records carrying evidence or `recovered`, mismatched dispositions and

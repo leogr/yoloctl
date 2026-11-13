@@ -724,10 +724,18 @@ the version baked into the image.
 // reports whether that refresh actually ran — the auto-attach correlation).
 // An already-running box is a notice + no-op. The lock is released when this
 // returns, BEFORE any caller's auto-attach takes the terminal.
+//
+// startAgentbox is `box start` itself: it alone uses the result policy
+// (stop-box slice 2). box restart's second leg calls the shared core with
+// today's policy.
 func startAgentbox(cmd *cobra.Command, spaceName, name string, noAutoupdate, noAttach, newSession bool, updated *bool) error {
-	return startAgentboxWithForwardIntent(cmd, spaceName, name, noAutoupdate, noAttach, newSession, updated, nil)
+	return startAgentboxWithForwardIntent(cmd, spaceName, name, noAutoupdate, noAttach, newSession, updated, nil, true)
 }
-func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, noAutoupdate, noAttach, newSession bool, updated *bool, forwardIntent *agentbox.Config) error {
+
+// resultPolicy, set only by `box start`, removes a previous run's leftovers
+// first and decides an existing container's start from a read of it after
+// one attempt, rolling back what this call started with box stop's policy.
+func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, noAutoupdate, noAttach, newSession bool, updated *bool, forwardIntent *agentbox.Config, resultPolicy bool) error {
 	lock, err := lockSessionBoxFn(spaceName, name)
 	if err != nil {
 		return fmt.Errorf("acquire reconcile lock: %w", err)
@@ -851,6 +859,16 @@ func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, 
 	if err := agentbox.CheckStart(cmd.Context(), cfg, inspector); err != nil {
 		return err
 	}
+	// box start's result policy: after the read-only refusals and before the
+	// engine start, remove what a previous run left (session holder unit,
+	// endpoint socket), each under its own checks.
+	var resultSteps boxStopSteps
+	if resultPolicy {
+		resultSteps = liveBoxStopSteps(c, spaceName, name, errw)
+		if err := removeStartLeftovers(cmd.Context(), resultSteps); err != nil {
+			return err
+		}
+	}
 	// Remove retained transports before starting a new container run. A lost
 	// native stop acknowledgement must reach the private uncertainty bridge;
 	// it cannot be downgraded to a warning followed by another runtime effect.
@@ -861,12 +879,20 @@ func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, 
 	}
 	// Existing stopped container: `nerdctl start` it, then reconcile
 	// port forwards against its fresh bridge IP.
-	if err := startAndReconcileExistingAgentbox(cmd.Context(), c, cfg, prepared, inspector, newManagedLiveApplierForStart(c, errw, forwardIntent)); err != nil {
-		return err
+	startCtx, submitted := cmd.Context(), false
+	if resultPolicy {
+		startCtx = withStartSubmitted(startCtx, &submitted)
 	}
-
-	if err := applySessionStart(lock, tracking, stopped, newSession, errw); err != nil {
-		return err
+	startErr := startAndReconcileExistingAgentbox(startCtx, c, cfg, prepared, inspector, newManagedLiveApplierForStart(c, errw, forwardIntent))
+	if startErr == nil {
+		startErr = applySessionStart(lock, tracking, stopped, newSession, errw)
+	}
+	if resultPolicy {
+		if err := settleStartForResult(cmd.Context(), name, startErr, submitted, resultSteps); err != nil {
+			return err
+		}
+	} else if startErr != nil {
+		return startErr
 	}
 
 	if !noAutoupdate {
@@ -2163,6 +2189,7 @@ func startExistingAgentboxContainerPrepared(ctx context.Context, c *container.Cl
 		return fmt.Errorf("clear stale session state for %s before start: %w", name, err)
 	}
 	if native {
+		markStartSubmitted(ctx)
 		return prepared.Start(ctx, cfg)
 	}
 	if err := container.ValidateContainerID(details.ID); err != nil {
@@ -2171,6 +2198,7 @@ func startExistingAgentboxContainerPrepared(ctx context.Context, c *container.Cl
 	if err := c.Shell(ctx, "sudo", "mkdir", "-p", sandbox.SocketDirHost(name)); err != nil {
 		return fmt.Errorf("recreate sandbox socket dir for %s before start: %w", name, err)
 	}
+	markStartSubmitted(ctx)
 	if err := c.Start(ctx, details.ID); err != nil {
 		return err
 	}
@@ -2216,7 +2244,10 @@ earlier ungraceful teardown left behind.
 			if err := validateAgentboxName(name); err != nil {
 				return err
 			}
-			return stopAgentboxRuntime(cmd.Context(), container.New(spaceName), spaceName, name, cmd.ErrOrStderr())
+			// box stop alone uses the result policy; every other caller of the
+			// stop route keeps today's (stopAgentboxRuntime).
+			c := container.New(spaceName)
+			return runBoxStop(cmd.Context(), name, liveBoxStopSteps(c, spaceName, name, cmd.ErrOrStderr()))
 		},
 	}
 	cmd.Flags().StringVar(&spaceName, "space", defaultSpaceName, "Space hosting the box")
@@ -2396,7 +2427,7 @@ After the restart the agent CLI is autoupdated to registry-latest
 			var agentUpdated bool
 			previous := cmd.Context()
 			cmd.SetContext(restartCtx)
-			err = startAgentboxWithForwardIntent(cmd, spaceName, name, noAutoupdate, noAttach, newSession, &agentUpdated, forwardIntent)
+			err = startAgentboxWithForwardIntent(cmd, spaceName, name, noAutoupdate, noAttach, newSession, &agentUpdated, forwardIntent, false)
 			cmd.SetContext(previous)
 			if err != nil {
 				return err

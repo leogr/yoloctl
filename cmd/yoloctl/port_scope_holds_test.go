@@ -70,7 +70,16 @@ func TestCopiedSourceAndForcedAccountConsumersRetainPortDomain(t *testing.T) {
 	}
 }
 
+// An interrupted restart's teardown keeps today's uncertain port hold; an
+// interrupted box stop (stop-box slice 2) is interrupted and holds nothing:
+// its leftovers are removed by the next start or stop.
 func TestInterruptedTeardownRetainsActualPortHold(t *testing.T) {
+	for _, c := range []struct{ path, method string }{{"box restart", "box.restart"}, {"box stop", "box.stop"}} {
+		t.Run(c.method, func(t *testing.T) { interruptedTeardownPortHold(t, c.path, c.method) })
+	}
+}
+
+func interruptedTeardownPortHold(t *testing.T, path, method string) {
 	_, ctr := runtimeAccountFixture(t)
 	newBoxStateResolver = runtimeAccountResolver(t, []container.Container{ctr}, nil)
 	footprintForwards = func(context.Context, string, string) ([]port.Spec, error) {
@@ -81,17 +90,21 @@ func TestInterruptedTeardownRetainsActualPortHold(t *testing.T) {
 	s.Execute = func(ctx context.Context, _ controller.Principal, req controller.Request, streams controller.Streams) (int, error) {
 		cmd := &cobra.Command{}
 		cmd.SetContext(ctx)
-		if err := streams.BeginEffects(ctx, spaceOperationIntent(cmd, "box stop", "work", req.Args)); err != nil {
+		if err := streams.BeginEffects(ctx, spaceOperationIntent(cmd, path, "work", req.Args)); err != nil {
 			return 2, err
 		}
 		return 2, &controller.WorkerInterrupted{Cause: errors.New("terminated during actual forward teardown")}
 	}
-	req := controller.Request{ID: "port-teardown-request-0123456789", Method: "box.stop", Space: "work", Args: []string{"dev"}, Dash: -1}
+	req := controller.Request{ID: "port-teardown-request-0123456789", Method: method, Space: "work", Args: []string{"dev"}, Dash: -1}
 	if err := callScopeFixture(t, s, req); err == nil {
 		t.Fatal("interruption reported success")
 	}
 	r, err := s.Receipts.Read(req.ID)
-	if err != nil || r.State != "uncertain" || !slices.Contains(r.Scope.Writes, portsDomain) {
+	if method == "box.stop" {
+		if err != nil || r.State != "interrupted" || !slices.Contains(r.Scope.Writes, portsDomain) {
+			t.Fatal("interrupted box stop", r, err)
+		}
+	} else if err != nil || r.State != "uncertain" || !slices.Contains(r.Scope.Writes, portsDomain) {
 		t.Fatal("interrupted teardown lost its actual-port hold", r, err)
 	}
 	// A future port writer intersects the durable hold even on another box.
@@ -102,7 +115,14 @@ func TestInterruptedTeardownRetainsActualPortHold(t *testing.T) {
 		return 0, nil
 	}
 	req.ID, req.Method = "port-next-request-0123456789", "port.forward"
-	if err := callScopeFixture(t, s, req); err == nil {
+	err = callScopeFixture(t, s, req)
+	if method == "box.stop" {
+		if err != nil {
+			t.Fatal("an interrupted box stop held the port domain", err)
+		}
+		return
+	}
+	if err == nil {
 		t.Fatal("a future writer bypassed the interrupted port hold")
 	}
 }

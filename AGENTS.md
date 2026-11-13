@@ -136,7 +136,9 @@ from workdir; entrypoint UID/GID alignment is not user-namespace remapping.
 
 Use session-aware teardown and `managedApplier` when restarting, recreating,
 rebuilding or destroying runtime. Holder, marker/tombstone, socket, port and
-orphan-netns cleanup are part of lifecycle correctness. Container liveness and
+orphan-netns cleanup are part of lifecycle correctness. Leftovers of an ended run
+are removed by the next start or stop with exact ownership checks; they never
+fail or hold a stop. Container liveness and
 agent-session liveness are distinct. A lost holder cannot adopt its old child.
 
 `space recreate` preserves disk/accounts/declarations and starts a fresh VM;
@@ -169,7 +171,9 @@ completion evidence, or a specifically reviewed read-only verifier of the
 complete affected transaction. Record the proof and preserve whether the
 command's result is known; present state alone is not proof of historical
 success. Unproved outcomes hold their verified affected resources and
-dependencies until explicit host review. Unknown scope, unavailable storage
+dependencies until explicit host review. Box start and stop are different: their
+only result is the container state read after one attempt; no pending intent, no
+replay, no unknown outcome, no hold. Unknown scope, unavailable storage
 identity or unreconciled receipt-storage failure retains a space-wide hold.
 Recovery never repairs application state, retries the original command or
 substitutes a timer for evidence. Repaired receipt storage may reopen admission

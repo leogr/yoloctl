@@ -14,6 +14,13 @@ without replacement; explicit reconcile/recreate applies replacement changes.
 Missing containers can still materialize on start/restart.
 [1](#source-1) [2](#source-2)
 
+[FACT] `box stop` and `box start` decide only from a read of the container after
+one attempt: stop runs each cleanup step once and reports leftovers without
+failing; a start that submitted an engine start rolls a failure back with stop's
+steps. Leftovers of an ended run are removed by the next start or stop under
+exact ownership checks. An interrupted start or stop is `interrupted`, holding
+nothing; restart, recreate and teardown keep today's mode. [22](#source-22)
+
 [FACT] Ordinary container start/stop/removal and maintenance/legacy-port execs
 use the exact inspected full ID, so a hex-like box name cannot select a peer's
 ID prefix. Names remain cleanup/endpoint keys; scoped native-ID ownership and
@@ -53,7 +60,8 @@ uncertain Firecracker launch cannot authorize disk deletion.
 
 [FACT] Interrupted commands are never replayed. The controller resolves only
 reviewed durable evidence or exact read-only postconditions; unknown outcomes
-hold their affected resources and dependencies for host review. Receipt-storage
+hold their affected resources and dependencies for host review, except box
+start/stop, which become `interrupted` and hold nothing. Receipt-storage
 failures hold all writes until reconciliation; maintenance stays explicit.
 [17](#source-17)
 
@@ -195,3 +203,5 @@ and import starts disabled. [21](#source-21)
 20. <a id="source-20"></a> [Installation and space advice](../digests/installation.md).
 
 21. <a id="source-21"></a> [VM-native audit contracts](../digests/audit.md).
+
+22. <a id="source-22"></a> [Box stop and start results](../digests/box-stop-start.md).

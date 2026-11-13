@@ -1093,6 +1093,14 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 	if runErr != nil {
 		exit.Error = runErr.Error()
 	}
+	if receipt != nil && receipt.State == "interrupted" {
+		// A plain failure: no unknown outcome, no hold, nothing to review.
+		exit.State = receipt.State
+		exit.Error = InterruptedMessage(receipt.Method)
+		if exit.Status == 0 {
+			exit.Status = 1
+		}
+	}
 	_ = wire.Write(exit)
 }
 

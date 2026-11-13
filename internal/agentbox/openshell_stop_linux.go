@@ -21,7 +21,20 @@ func (a LiveApplier) stopNativeRuntime(ctx context.Context, name, id string) err
 	return a.stopNativeRuntimeWithGeneration(ctx, name, id, nil)
 }
 
+// stopNativeRuntimeForResult is the engine stop of `box stop`'s result mode:
+// the same ownership checks and the one engine stop (on unconfined_network
+// performed by the namespace retirement), without the forward precondition
+// and without endpoint removal, which the caller's later step does under its
+// own checks (RemoveStoppedEndpoint).
+func (a LiveApplier) stopNativeRuntimeForResult(ctx context.Context, name, id string) error {
+	return a.stopNativeRuntimeMode(ctx, name, id, nil, true)
+}
+
 func (a LiveApplier) stopNativeRuntimeWithGeneration(ctx context.Context, name, id string, attempt *nativeStartedGeneration) error {
+	return a.stopNativeRuntimeMode(ctx, name, id, attempt, false)
+}
+
+func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string, attempt *nativeStartedGeneration, forResult bool) error {
 	if attempt != nil {
 		if err := attempt.cleanupIdentity(); err != nil {
 			return err
@@ -69,13 +82,15 @@ func (a LiveApplier) stopNativeRuntimeWithGeneration(ctx context.Context, name, 
 				return err
 			}
 		}
-		known, err := port.Inventory(check, a.Client, "")
-		if err != nil {
-			return err
-		}
-		for _, service := range known {
-			if service.Spec.Agentbox == name {
-				return errors.New("withdraw retained forwards before native container stop")
+		if !forResult {
+			known, err := port.Inventory(check, a.Client, "")
+			if err != nil {
+				return err
+			}
+			for _, service := range known {
+				if service.Spec.Agentbox == name {
+					return errors.New("withdraw retained forwards before native container stop")
+				}
 			}
 		}
 		current, err := openForwardSocketDirectory(name)
@@ -124,7 +139,7 @@ func (a LiveApplier) stopNativeRuntimeWithGeneration(ctx context.Context, name, 
 	}
 	stop := func(stop context.Context) error { return a.Client.Stop(stop, id) }
 	endpoint := func(check context.Context) error {
-		if directory == nil {
+		if directory == nil || forResult {
 			return nil
 		}
 		if err := resources(check); err != nil {
@@ -201,4 +216,81 @@ func validateNativeStopObservation(selected, current OpenShellRuntime, d *contai
 }
 func sameNativeStopBinding(a, b OpenShellRuntime) bool {
 	return a.ContainerID == b.ContainerID && a.ControlRoot == b.ControlRoot && a.RecordSHA256 == b.RecordSHA256 && a.Launch == b.Launch && a.Record.Generation == b.Record.Generation
+}
+
+// RemoveStoppedEndpoint removes the box's leftover endpoint socket: only when
+// its exact container exists and is not running, no forward of the box is
+// listed, and the socket directory, opened without following links and
+// verified, is the same file before and after. A missing directory or socket
+// is nothing to remove. Without a container nothing owns the directory's
+// content, so it is kept for recreate or destroy.
+func (a LiveApplier) RemoveStoppedEndpoint(ctx context.Context, name string) error {
+	if !spaceenv.Native() || os.Geteuid() != 0 || os.Getegid() != 0 || a.Client == nil {
+		return errors.New("native endpoint cleanup requires admitted VM-root infrastructure")
+	}
+	if err := spaceenv.RequireSpace(a.Client.Env()); err != nil {
+		return err
+	}
+	return removeStoppedEndpoint(ctx, func() (*os.File, error) { return openForwardSocketDirectory(name) },
+		func(ctx context.Context) (bool, error) {
+			details, err := a.Client.Inspect(ctx, name)
+			if err != nil {
+				return false, err
+			}
+			return details.Running, nil
+		},
+		func(ctx context.Context) (bool, error) {
+			known, err := port.Inventory(ctx, a.Client, "")
+			if err != nil {
+				return false, err
+			}
+			for _, service := range known {
+				if service.Spec.Agentbox == name {
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+}
+
+// removeStoppedEndpoint holds the checks of RemoveStoppedEndpoint in order;
+// any check that does not hold keeps the socket.
+func removeStoppedEndpoint(ctx context.Context, open func() (*os.File, error), running, forwardListed func(context.Context) (bool, error)) error {
+	directory, err := open()
+	if errors.Is(err, unix.ENOENT) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer func() { _ = directory.Close() }()
+	var stat unix.Stat_t
+	if err := unix.Fstatat(int(directory.Fd()), "ssh.sock", &stat, unix.AT_SYMLINK_NOFOLLOW); errors.Is(err, unix.ENOENT) {
+		return nil
+	}
+	if live, err := running(ctx); err != nil {
+		return errors.Join(err, errors.New("the endpoint socket is kept: its container could not be read"))
+	} else if live {
+		return errors.New("the endpoint socket is kept: its container is running")
+	}
+	if listed, err := forwardListed(ctx); err != nil {
+		return errors.Join(err, errors.New("the endpoint socket is kept: the forwards of the box could not be listed"))
+	} else if listed {
+		return errors.New("the endpoint socket is kept: a forward of the box is still listed")
+	}
+	current, err := open()
+	if err != nil {
+		return errors.Join(err, errors.New("the endpoint socket is kept: its directory could not be reopened"))
+	}
+	defer func() { _ = current.Close() }()
+	before, err := directory.Stat()
+	if err != nil {
+		return err
+	}
+	after, err := current.Stat()
+	if err != nil || !os.SameFile(before, after) {
+		return errors.Join(err, errors.New("the endpoint socket is kept: its directory was replaced"))
+	}
+	// removeOwnedNativeSSHSocket verifies the protected socket before unlinking.
+	return removeOwnedNativeSSHSocket(directory)
 }

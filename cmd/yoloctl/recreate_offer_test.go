@@ -415,7 +415,7 @@ func TestStartRefusesRecreateDriftBeforeImageWork(t *testing.T) {
 	cmd.SetContext(context.WithValue(held(t.Context()), warmKey{}, state))
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
-	err := startAgentboxWithForwardIntent(cmd, cfg.Space, cfg.Name, true, true, false, nil, nil)
+	err := startAgentboxWithForwardIntent(cmd, cfg.Space, cfg.Name, true, true, false, nil, nil, false)
 	want := agentbox.StartRecreateError(cfg, "image: yoloctl/agentbox-composed:old -> yoloctl/agentbox-composed:new").Error()
 	if err == nil || err.Error() != want || len(imageCalls) != 0 {
 		t.Fatalf("got %v (image calls %v), want %q", err, imageCalls, want)
