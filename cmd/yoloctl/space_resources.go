@@ -18,7 +18,6 @@ import (
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/leogr/yoloctl/internal/vmapi"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 // Resource changes are host lifecycle operations. They never start or replace
@@ -252,7 +251,7 @@ func editSpaceResources(cmd *cobra.Command, name string, editor func(context.Con
 	if err != nil {
 		return err
 	}
-	raw, err := yaml.Marshal(spaceResourceDocument{CPUs: before.boot.VM.CPUs, Memory: before.boot.VM.Memory, Disk: before.boot.VM.Disk, DataDisk: dataDiskSetting(before.boot)})
+	raw, err := strictyaml.Marshal(spaceResourceDocument{CPUs: before.boot.VM.CPUs, Memory: before.boot.VM.Memory, Disk: before.boot.VM.Disk, DataDisk: dataDiskSetting(before.boot)})
 	if err != nil {
 		return err
 	}

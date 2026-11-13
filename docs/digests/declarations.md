@@ -13,6 +13,12 @@ entity declarations. Normal clients never fall back to host entity files.
 Schema-2 records are rejected with a previous-build recovery hint. [1](#source-1)
 [2](#source-2) [3](#source-3)
 
+[FACT] Declarations, manifests and other YAML records are encoded by
+`strictyaml.Marshal`, which proves the bytes read back as the same YAML before
+any write. yaml.v3 v3.0.1 can emit a multi-line string starting with a newline or an
+indented line as a block scalar it cannot parse, so such strings are then written
+double-quoted; an encoding that still does not read back is an error. [28](#source-28)
+
 [FACT] Layout helpers scope VM workers to the verified native store and native
 lock paths. Global catalogs/context/TUI preferences remain host-owned; only
 three catalog directories are mounted read-only into the VM, then snapshotted
@@ -116,3 +122,4 @@ rejected. This does not delete native state or change credential import.
 25. <a id="source-25"></a> [internal/lima/provision_test.go](../../internal/lima/provision_test.go#L59) — `TestVMRuntimePackageProvisioning`, `TestCACertificatesProvisioningUpgrade` at L129 and `TestOpenShellProvisioningVerificationAndRecovery`, package reuse, CA upgrade, corruption and retry coverage.
 26. <a id="source-26"></a> [Canonical release checksums](https://cloud-images.ubuntu.com/minimal/releases/noble/release-20261001/SHA256SUMS) — pinned amd64/arm64 Minimal images.
 27. <a id="source-27"></a> [Lima stack](lima-stack.md) — archive selection and privilege evidence.
+28. <a id="source-28"></a> [internal/strictyaml/marshal.go](../../internal/strictyaml/marshal.go#L1) — `Marshal`; marshal_test.go and agentbox `TestSaveLoadsBackMultilineStrings`.

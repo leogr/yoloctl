@@ -10,6 +10,8 @@ import (
 	"github.com/leogr/yoloctl/internal/atomicfile"
 	"github.com/leogr/yoloctl/internal/layout"
 	"gopkg.in/yaml.v3"
+
+	"github.com/leogr/yoloctl/internal/strictyaml"
 )
 
 // DefaultSpaceName is the literal space-name fallback when neither a
@@ -93,7 +95,7 @@ func (c *Context) Save() error {
 	if err := os.MkdirAll(filepath.Dir(path), contextDirMode); err != nil {
 		return err
 	}
-	raw, err := yaml.Marshal(c)
+	raw, err := strictyaml.Marshal(c)
 	if err != nil {
 		return err
 	}

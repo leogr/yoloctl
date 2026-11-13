@@ -11,6 +11,8 @@ import (
 	"github.com/leogr/yoloctl/internal/atomicfile"
 	"github.com/leogr/yoloctl/internal/layout"
 	"gopkg.in/yaml.v3"
+
+	"github.com/leogr/yoloctl/internal/strictyaml"
 )
 
 // LoadUserFeatures discovers user-defined features under
@@ -122,7 +124,7 @@ func SaveUser(f Feature) error {
 	if err := validateUserFeature(f); err != nil {
 		return fmt.Errorf("feature %q: %w", f.Name, err)
 	}
-	raw, err := yaml.Marshal(f)
+	raw, err := strictyaml.Marshal(f)
 	if err != nil {
 		return err
 	}

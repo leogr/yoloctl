@@ -19,8 +19,8 @@ import (
 	"github.com/leogr/yoloctl/internal/managedchat"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
+	"github.com/leogr/yoloctl/internal/strictyaml"
 	"golang.org/x/sys/unix"
-	"gopkg.in/yaml.v3"
 )
 
 // StoreBundle is accepted only by the root infrastructure initializer, before
@@ -123,7 +123,7 @@ func (b StoreBundle) Documents(boot *spaceconfig.Bootstrap) (map[string][]byte, 
 		}
 		docs["boxes/"+name+".yaml"] = raw
 	}
-	raw, err := yaml.Marshal(b.Settings)
+	raw, err := strictyaml.Marshal(b.Settings)
 	if err != nil {
 		return nil, err
 	}

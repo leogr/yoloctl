@@ -13,6 +13,8 @@ import (
 	"github.com/leogr/yoloctl/internal/atomicfile"
 	"github.com/leogr/yoloctl/internal/layout"
 	"gopkg.in/yaml.v3"
+
+	"github.com/leogr/yoloctl/internal/strictyaml"
 )
 
 // Custom capability authoring schema. A user-authored capability YAML exposes
@@ -343,7 +345,7 @@ func SaveUser(c Capability) error {
 	}
 	// Round-trip through the parser to guarantee the file we write loads back
 	// into a valid capability (the file is the contract, not the in-memory form).
-	raw, err := yaml.Marshal(doc)
+	raw, err := strictyaml.Marshal(doc)
 	if err != nil {
 		return err
 	}

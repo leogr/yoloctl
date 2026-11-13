@@ -658,7 +658,7 @@ func (c *Config) Save() error {
 	if err := ValidateChatDeclaration(c); err != nil {
 		return err
 	}
-	raw, err := yaml.Marshal(c)
+	raw, err := strictyaml.Marshal(c)
 	if err != nil {
 		return err
 	}

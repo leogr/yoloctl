@@ -25,7 +25,6 @@ import (
 	"github.com/leogr/yoloctl/internal/manifestio"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/strictyaml"
-	"gopkg.in/yaml.v3"
 )
 
 // SchemaVersion is the only record schema this build reads or writes.
@@ -472,7 +471,7 @@ func save(space, box string, r *Record) error {
 	if err := r.Validate(); err != nil {
 		return err
 	}
-	raw, err := yaml.Marshal(r)
+	raw, err := strictyaml.Marshal(r)
 	if err != nil {
 		return err
 	}

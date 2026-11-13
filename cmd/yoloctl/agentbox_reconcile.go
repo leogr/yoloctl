@@ -19,6 +19,8 @@ import (
 	"github.com/leogr/yoloctl/internal/ocifeature"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+
+	"github.com/leogr/yoloctl/internal/strictyaml"
 )
 
 // newAgentboxReconcileCmd wires `yoloctl box reconcile NAME`. It loads the box
@@ -329,7 +331,7 @@ func runEdit(ctx context.Context, out io.Writer, spaceName, name string) error {
 	if err != nil {
 		return err
 	}
-	pre, err := yaml.Marshal(cfg)
+	pre, err := strictyaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal current config: %w", err)
 	}
@@ -430,7 +432,7 @@ func withCanonicalPath(c *agentbox.Config) *agentbox.Config {
 	// Re-marshal + Open from the canonical path's directory: easier
 	// to round-trip than to expose a setter. Performance is not an
 	// issue at agentbox-edit cadence.
-	raw, err := yaml.Marshal(c)
+	raw, err := strictyaml.Marshal(c)
 	if err != nil {
 		// Should not happen — c just came from Open. Fall through
 		// and let Save's Validate catch any latent issue.

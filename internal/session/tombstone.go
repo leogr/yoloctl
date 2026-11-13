@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/atomicfile"
-	"gopkg.in/yaml.v3"
+	"github.com/leogr/yoloctl/internal/strictyaml"
 )
 
 // Tombstone records the agent's exit when it happens with no client
@@ -81,7 +81,7 @@ func RemoveMarker(path string) error {
 // writeYAML atomically writes v as YAML at path, mode 0600, parent dirs
 // 0700 — session state is root-only on the VM.
 func writeYAML(path string, v any) error {
-	data, err := yaml.Marshal(v)
+	data, err := strictyaml.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("session: marshal %s: %w", path, err)
 	}

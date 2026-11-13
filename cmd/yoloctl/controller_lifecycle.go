@@ -16,10 +16,10 @@ import (
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spacelock"
+	"github.com/leogr/yoloctl/internal/strictyaml"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/leogr/yoloctl/internal/vmapi"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 // newClientRootCmd shares every public command definition with workers, then
@@ -325,7 +325,7 @@ func createControllerSpace(cmd *cobra.Command, space string) error {
 			return err
 		}
 	}
-	raw, err := yaml.Marshal(account.New(space, acct))
+	raw, err := strictyaml.Marshal(account.New(space, acct))
 	if err != nil {
 		return err
 	}

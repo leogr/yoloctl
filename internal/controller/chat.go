@@ -6,7 +6,7 @@ import (
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/managedchat"
 	"github.com/leogr/yoloctl/internal/spaceenv"
-	"gopkg.in/yaml.v3"
+	"github.com/leogr/yoloctl/internal/strictyaml"
 )
 
 // NativeChatStore is only available after LoadRuntime has verified the native
@@ -47,7 +47,7 @@ func (b *StoreBundle) ReidentifyImportedChat(diskID string) error {
 		if box.ID != "" {
 			box.ID = managedchat.ImportedID(diskID, box.ID)
 		}
-		b.Boxes[name], err = yaml.Marshal(box)
+		b.Boxes[name], err = strictyaml.Marshal(box)
 		if err != nil {
 			return err
 		}

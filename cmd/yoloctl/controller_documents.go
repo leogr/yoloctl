@@ -25,7 +25,7 @@ import (
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/spacelock"
-	"gopkg.in/yaml.v3"
+	"github.com/leogr/yoloctl/internal/strictyaml"
 )
 
 type editDocument struct {
@@ -119,7 +119,7 @@ func runControllerDocument(ctx context.Context, req controller.Request, catalogD
 		if err != nil {
 			return true, err
 		}
-		raw, err := yaml.Marshal(cfg)
+		raw, err := strictyaml.Marshal(cfg)
 		if err != nil {
 			return true, err
 		}
@@ -285,7 +285,7 @@ func applyControllerAuthImport(ctx context.Context, req controller.Request) (res
 	if err := decodeBoundedJSON(bytes.NewReader(req.Payload), &doc, 2*controller.MaxDocument); err != nil {
 		return err
 	}
-	raw, err := yaml.Marshal(target.profile)
+	raw, err := strictyaml.Marshal(target.profile)
 	if err != nil {
 		return err
 	}
@@ -355,7 +355,7 @@ func prepareAuthImport(args []string, file, anthropicDir, space string) (authImp
 	if err != nil {
 		return doc, err
 	}
-	profile, err := yaml.Marshal(target.profile)
+	profile, err := strictyaml.Marshal(target.profile)
 	if err != nil {
 		return doc, err
 	}

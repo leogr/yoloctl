@@ -238,7 +238,7 @@ func (b *Bootstrap) Save() error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	raw, err := yaml.Marshal(b)
+	raw, err := strictyaml.Marshal(b)
 	if err != nil {
 		return err
 	}

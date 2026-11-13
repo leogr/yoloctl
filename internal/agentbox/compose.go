@@ -8,7 +8,7 @@ import (
 	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/capabilities"
 	"github.com/leogr/yoloctl/internal/features"
-	"gopkg.in/yaml.v3"
+	"github.com/leogr/yoloctl/internal/strictyaml"
 )
 
 // workdirPath is the in-container workdir root. Its read-only vs
@@ -222,7 +222,7 @@ func compilePolicy(eff *capabilities.EffectiveSet, mounts []Mount) ([]byte, erro
 	if err := lintReadWriteDevSymlink(doc.FilesystemPolicy.ReadWrite); err != nil {
 		return nil, err
 	}
-	return yaml.Marshal(doc)
+	return strictyaml.Marshal(doc)
 }
 
 // devSymlinks are the /dev entries an OCI runtime (runc, which nerdctl drives

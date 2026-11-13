@@ -1,0 +1,71 @@
+
+import json,os,pathlib,signal,subprocess,sys,time
+cfg=json.loads(sys.argv[1]);os.chdir(cfg['workdir'])
+nonce=cfg['nonce'];root=pathlib.Path.cwd();trace=root/('.s0-'+nonce+'.jsonl')
+go=root/('.s0-'+nonce+'.go');release=root/('.s0-'+nonce+'.release')
+def event(kind,**kw):
+ data=dict(event=kind,mono=time.monotonic(),wall_ns=time.time_ns(),pid=os.getpid(),nonce=nonce,**kw)
+ raw=(json.dumps(data,sort_keys=True)+'\n').encode()
+ fd=os.open(trace,os.O_WRONLY|os.O_CREAT|os.O_APPEND,0o600)
+ try:os.write(fd,raw);os.fsync(fd)
+ finally:os.close(fd)
+ print('STEP0 '+json.dumps(data,sort_keys=True),flush=True)
+event('ready',mode=cfg['mode'],tty=os.isatty(1))
+deadline=time.monotonic()+cfg['watchdog']
+while not go.exists():
+ if time.monotonic()>deadline:event('fixture_watchdog',phase='before_go');sys.exit(97)
+ time.sleep(.02)
+if cfg['mode']=='control':event('main_exiting',exit=23);os._exit(23)
+parent=os.getpid();rd,wr=os.pipe();child=os.fork()
+if child==0:
+ os.close(rd)
+ if cfg['mode']!='ordinary':signal.signal(signal.SIGHUP,signal.SIG_IGN);os.setsid()
+ if cfg['mode']=='detached':
+  fd=os.open(os.devnull,os.O_RDWR)
+  for target in [0,1,2]:os.dup2(fd,target)
+  if fd>2:os.close(fd)
+ server=None
+ try:
+  if cfg['mode']=='codex':
+   home=root/('.codex-step0-'+nonce);home.mkdir(mode=0o700)
+   env=dict(os.environ,CODEX_HOME=str(home))
+   version=subprocess.run(['codex','--version'],env=env,capture_output=True,text=True)
+   event('codex_version',exit=version.returncode,version=version.stdout.strip())
+   endpoint='unix://'+str(root/('.s0-'+nonce+'.sock'))
+   server=subprocess.Popen(['codex','app-server','--listen',endpoint],env=env,
+     stdin=subprocess.DEVNULL,start_new_session=True)
+   event('appserver_started',server_pid=server.pid)
+   socket_path=pathlib.Path(endpoint.removeprefix('unix://'))
+   limit=time.monotonic()+cfg['watchdog']
+   while not socket_path.is_socket() and server.poll() is None and time.monotonic()<limit:time.sleep(.02)
+   event('appserver_readiness',socket_ready=socket_path.is_socket(),exit=server.poll())
+  own_stat=[]
+  if cfg['mode']=='ordinary':
+   try:own_stat=pathlib.Path('/proc/self/stat').read_text().rsplit(')',1)[1].split()
+   except OSError:pass
+  event('child_ready',parent=parent,tty=os.isatty(1),ppid=os.getppid(),
+    pgid=os.getpgrp(),sid=os.getsid(0),parent_pgid=os.getpgid(parent),parent_sid=os.getsid(parent),
+    sighup=str(signal.getsignal(signal.SIGHUP)),start_ticks=own_stat[19] if own_stat else None)
+  os.write(wr,b'1');os.close(wr)
+  deadline=time.monotonic()+cfg['watchdog']
+  while os.getppid()==parent and time.monotonic()<deadline:time.sleep(.01)
+  if os.getppid()==parent:
+   event('fixture_watchdog',phase='parent_reparenting')
+  else:
+   event('parent_gone',parent=parent,ppid=os.getppid(),tty=os.isatty(1),
+     appserver_exit=None if server is None else server.poll())
+   while not release.exists() and time.monotonic()<deadline:time.sleep(.02)
+   event('child_releasing',released=release.exists(),tty=os.isatty(1),
+     appserver_exit=None if server is None else server.poll())
+ finally:
+  if server is not None:
+   if server.poll() is None:
+    os.killpg(server.pid,signal.SIGTERM)
+    try:server.wait(timeout=5)
+    except subprocess.TimeoutExpired:os.killpg(server.pid,signal.SIGKILL);server.wait()
+   event('appserver_settled',exit=server.returncode)
+  event('child_exiting')
+ os._exit(0)
+os.close(wr)
+if os.read(rd,1)!=b'1':event('child_start_failed');sys.exit(96)
+os.close(rd);event('main_exiting',child=child,exit=23);os._exit(23)

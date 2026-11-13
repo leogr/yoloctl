@@ -40,7 +40,6 @@ import (
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/nativerelease"
 	"github.com/leogr/yoloctl/internal/strictyaml"
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -476,7 +475,7 @@ func (p *Profile) Save() error {
 	if IsBuiltin(p.Name) {
 		return fmt.Errorf("%q is a built-in agent; choose a different name for the custom copy", p.Name)
 	}
-	raw, err := yaml.Marshal(p)
+	raw, err := strictyaml.Marshal(p)
 	if err != nil {
 		return err
 	}

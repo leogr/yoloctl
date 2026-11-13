@@ -15,8 +15,8 @@ import (
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/port"
+	"github.com/leogr/yoloctl/internal/strictyaml"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 // newAgentboxInspectCmd is `yoloctl box inspect NAME` — the read-only
@@ -285,7 +285,7 @@ func buildInspectReport(ctx context.Context, space, name string, b boxstate.Box)
 		r.Identity.Agent = cfg.Agent
 		r.Identity.SchemaVersion = cfg.SchemaVersion
 		r.Identity.ConfigPath = cfg.Path()
-		if raw, err := yaml.Marshal(cfg); err == nil {
+		if raw, err := strictyaml.Marshal(cfg); err == nil {
 			r.Identity.ManifestHash = fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
 		}
 		r.Manifest = buildInspectManifest(cfg)

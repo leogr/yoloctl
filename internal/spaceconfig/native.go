@@ -8,7 +8,6 @@ import (
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/strictyaml"
-	"gopkg.in/yaml.v3"
 )
 
 func nativeBootstrap(c *spaceenv.Context) *Bootstrap {
@@ -54,7 +53,7 @@ func saveNative(c *Config) error {
 		return errors.New("controller cannot change host-owned disk or mount authority")
 	}
 	s := Settings{SchemaVersion: 1, Name: c.Name, DefaultAccount: c.DefaultAccount, DefaultWorkdir: c.DefaultWorkdir, Audit: c.Audit}
-	raw, err := yaml.Marshal(s)
+	raw, err := strictyaml.Marshal(s)
 	if err != nil {
 		return err
 	}

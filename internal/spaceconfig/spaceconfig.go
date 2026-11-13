@@ -19,7 +19,6 @@ import (
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/strictyaml"
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -285,7 +284,7 @@ func (c *Config) Save() error {
 	if err := os.MkdirAll(filepath.Dir(path), dirMode); err != nil {
 		return err
 	}
-	raw, err := yaml.Marshal(c)
+	raw, err := strictyaml.Marshal(c)
 	if err != nil {
 		return err
 	}

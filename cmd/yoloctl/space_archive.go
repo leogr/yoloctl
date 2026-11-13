@@ -23,9 +23,9 @@ import (
 	"github.com/leogr/yoloctl/internal/spacearchive"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
+	"github.com/leogr/yoloctl/internal/strictyaml"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 func newSpaceExportCmd() *cobra.Command {
@@ -388,7 +388,7 @@ func prepareImportedSpace(cmd *cobra.Command, name string, m spacearchive.Manife
 		if err := rejectAccountRootBinds(cfg); err != nil {
 			return nil, err
 		}
-		raw, err = yaml.Marshal(cfg)
+		raw, err = strictyaml.Marshal(cfg)
 		if err != nil {
 			return nil, err
 		}

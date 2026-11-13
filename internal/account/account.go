@@ -17,7 +17,6 @@ import (
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/manifestio"
 	"github.com/leogr/yoloctl/internal/strictyaml"
-	"gopkg.in/yaml.v3"
 )
 
 // SchemaVersion is the account manifest schema version.
@@ -241,7 +240,7 @@ func (c *Config) SaveRecorded(record func([]byte) error) error {
 	if err != nil {
 		return err
 	}
-	data, err := yaml.Marshal(c)
+	data, err := strictyaml.Marshal(c)
 	if err != nil {
 		return err
 	}
