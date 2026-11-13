@@ -2,12 +2,16 @@ package chatui
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/ansi/kitty"
 
+	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/chatstream"
+	"github.com/leogr/yoloctl/internal/markdownview"
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
 )
 
@@ -216,4 +220,184 @@ func (m *Model) previewRows(msg *Message, key string, line int, indent []run) []
 			runs: append(slicesCloneRuns(indent), run{Text: cells.String(), Style: style, Act: action{Kind: actPreview, Value: msg.ID}})})
 	}
 	return rows
+}
+
+// File chips are placed after Markdown parsing, so a file name shows
+// literally and only the generated chip carries an action: chipText puts one
+// token per chip into the text, each a private-use rune the message does not
+// contain, and placeChips replaces each token with its literal label.
+
+// chipText is the text the body parses: the message with each file chip as
+// its token, and the chips' labels in token order. A message without chips
+// keeps its text.
+func chipText(msg *Message) (string, []rune, []string) {
+	var labels []string
+	switch {
+	case msg.Artifact != nil:
+		labels = []string{artifactLabel(msg.Artifact)}
+	case len(msg.Attachments) > 0 && attachmentText(msg) != msg.Text:
+		for i := range msg.Attachments {
+			labels = append(labels, artifactLabel(&msg.Attachments[i].ArtifactRef))
+		}
+	default:
+		return msg.Text, nil, nil
+	}
+	tokens := make([]rune, 0, len(labels))
+	for r := rune(0x100000); len(tokens) < len(labels) && r <= 0x10fffd; r++ {
+		if r != kitty.Placeholder && !strings.ContainsRune(msg.Text, r) {
+			tokens = append(tokens, r)
+		}
+	}
+	if msg.Artifact != nil {
+		return string(tokens[0]), tokens, labels
+	}
+	return attachmentTextWith(msg, func(i int, _ *AttachmentRef) string { return string(tokens[i]) }), tokens, labels
+}
+
+// placeChips replaces each token with its chip label as literal text in the
+// surrounding style; the first chip toggles the preview of previewID, when
+// set. Copy yields the label. A token in a table, or one not seen exactly
+// once, reports false: the caller then shows the chips as plain text.
+func placeChips(lines []displayLine, tokens []rune, labels []string, previewID string) ([]displayLine, bool) {
+	index := map[rune]int{}
+	for k, r := range tokens {
+		index[r] = k
+	}
+	seen := make([]int, len(tokens))
+	replacements := make([][]markdownview.Replacement, len(lines))
+	for n, dl := range lines {
+		for at, r := range dl.Text {
+			k, ok := index[r]
+			if !ok {
+				continue
+			}
+			if dl.Table != nil {
+				return nil, false
+			}
+			seen[k]++
+			// The label passes the same placeholder filter as message text.
+			replacement := markdownview.Replacement{Start: at, End: at + utf8.RuneLen(r), Text: chatimage.NeutralizeText(labels[k])}
+			for _, p := range dl.Pieces {
+				if p.Start <= at && at < p.End {
+					replacement.Style = p.Style
+				}
+			}
+			if k == 0 && previewID != "" {
+				replacement.Act = action{Kind: actPreview, Value: previewID}
+			}
+			replacements[n] = append(replacements[n], replacement)
+		}
+	}
+	for _, c := range seen {
+		if c != 1 {
+			return nil, false
+		}
+	}
+	// Replacements take whole pieces: cut each piece at its tokens' edges.
+	for n := range lines {
+		for _, r := range replacements[n] {
+			lines[n].Pieces = cutPieces(lines[n].Pieces, r.Start)
+			lines[n].Pieces = cutPieces(lines[n].Pieces, r.End)
+		}
+	}
+	out := markdownview.ApplyReplacements(lines, replacements)
+	for n := range out {
+		for j := range out[n].Subs {
+			out[n].Subs[j].Copy = replacements[n][j].Text
+		}
+	}
+	return out, true
+}
+
+// cutPieces splits the piece spanning at, if any, into two at at.
+func cutPieces(pieces []piece, at int) []piece {
+	for i, p := range pieces {
+		if p.Start < at && at < p.End {
+			left, right := p, p
+			left.End, right.Start = at, at
+			return append(pieces[:i:i], append([]piece{left, right}, pieces[i+1:]...)...)
+		}
+	}
+	return pieces
+}
+
+// literalChipLines renders a message whose chips cannot be placed (a chip in
+// a table, whose column widths are fixed when parsed). Each chip enters the
+// parsed text as a run of its token as wide as its label, so the table is
+// laid out for the label; the run is then swapped for the literal label in
+// its line, shifting only later byte offsets. No Markdown sees the file name
+// and nothing is renamed. Such chips carry no action; the footer action
+// still applies. It reports false if a run is not seen exactly once.
+func literalChipLines(msg *Message, tokens []rune, labels []string, parse func(string) []displayLine, wm ansi.Method) ([]displayLine, bool) {
+	shown := make([]string, len(labels))
+	runs := make([]string, len(labels))
+	for k := range labels {
+		shown[k] = chatimage.NeutralizeText(labels[k])
+		runs[k] = strings.Repeat(string(tokens[k]), max(wm.StringWidth(shown[k]), 1))
+	}
+	text := runs[0]
+	if msg.Artifact == nil {
+		text = attachmentTextWith(msg, func(i int, _ *AttachmentRef) string { return runs[i] })
+	}
+	lines := parse(chatimage.NeutralizeText(text))
+	seen := make([]int, len(labels))
+	for n := range lines {
+		for k := range runs {
+			for {
+				s := strings.Index(lines[n].Text, runs[k])
+				if s < 0 {
+					break
+				}
+				seen[k]++
+				lines[n] = swapText(lines[n], s, s+len(runs[k]), shown[k])
+			}
+		}
+	}
+	for _, c := range seen {
+		if c != 1 {
+			return nil, false
+		}
+	}
+	return lines, true
+}
+
+// swapText replaces dl.Text[s:e] with text, moving pieces and cells after it
+// and stretching those around it.
+func swapText(dl displayLine, s, e int, text string) displayLine {
+	delta := len(text) - (e - s)
+	start := func(p int) int {
+		switch {
+		case p < s:
+			return p
+		case p >= e:
+			return p + delta
+		}
+		return s
+	}
+	end := func(p int) int {
+		switch {
+		case p <= s:
+			return p
+		case p >= e:
+			return p + delta
+		}
+		return s + len(text)
+	}
+	dl.Text = dl.Text[:s] + text + dl.Text[e:]
+	var pieces []piece
+	for _, p := range dl.Pieces {
+		p.Start, p.End = start(p.Start), end(p.End)
+		if p.End > p.Start && (len(pieces) == 0 || pieces[len(pieces)-1].Start != p.Start || pieces[len(pieces)-1].End != p.End) {
+			pieces = append(pieces, p)
+		}
+	}
+	dl.Pieces = pieces
+	cells := make([][2]int, len(dl.Cells))
+	for c, r := range dl.Cells {
+		cells[c] = [2]int{start(r[0]), end(r[1])}
+	}
+	if dl.Cells != nil {
+		dl.Cells = cells
+	}
+	return dl
 }

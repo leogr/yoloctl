@@ -263,15 +263,22 @@ func (m *Model) publishedAs(id string, submitted Message) bool {
 // spans whose text is exactly their marker are attachments; anything else
 // keeps the original text.
 func attachmentText(msg *Message) string {
+	return attachmentTextWith(msg, func(_ int, a *AttachmentRef) string { return artifactLabel(&a.ArtifactRef) })
+}
+
+// attachmentTextWith is attachmentText with chip(i, a) written for each
+// verified span.
+func attachmentTextWith(msg *Message, chip func(int, *AttachmentRef) string) string {
 	var b strings.Builder
 	last := 0
-	for i, a := range msg.Attachments {
+	for i := range msg.Attachments {
+		a := &msg.Attachments[i]
 		marker := imageLabel(i + 1)
 		if a.At < last || a.At > len(msg.Text) || !strings.HasPrefix(msg.Text[a.At:], marker) {
 			return msg.Text
 		}
 		b.WriteString(msg.Text[last:a.At])
-		b.WriteString(artifactLabel(&a.ArtifactRef))
+		b.WriteString(chip(i, a))
 		last = a.At + len(marker)
 	}
 	b.WriteString(msg.Text[last:])

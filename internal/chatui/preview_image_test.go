@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/ansi/kitty"
 )
 
 const previewMsgID = "66eb4b77-cfbd-4b90-aec6-538014c4108d"
@@ -190,5 +192,153 @@ func TestLostConnectionOrMembershipCollapsesThePreview(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(previewActions(m), ","), "image:") {
 		t.Fatalf("Show image offered while disconnected: %v", previewActions(m))
+	}
+}
+
+// chipActions are the preview actions on the transcript's runs: the texts
+// they cover, keyed by message ID.
+func chipActions(m *Model) map[string]string { return chipActionsAt(m, 100) }
+
+func chipActionsAt(m *Model, width int) map[string]string {
+	out := map[string]string{}
+	for _, row := range m.transcript(width) {
+		if row.kind != rowBody {
+			continue
+		}
+		for _, r := range row.runs {
+			if r.Act.Kind == actPreview {
+				out[r.Act.Value] += r.Text
+			}
+		}
+	}
+	return out
+}
+
+func TestClickingTheFileChipTogglesThePreview(t *testing.T) {
+	m, h := previewModel(t)
+	if got := chipActions(m); len(got) != 0 {
+		t.Fatalf("chip clickable before the host supports previews: %v", got)
+	}
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 60, MaxRows: 12})
+	got := chipActions(m)
+	if got[previewMsgID] != "[file cat.png · 7 B]" {
+		t.Fatalf("chip actions %q", got)
+	}
+	runCmd(m.activate(action{Kind: actPreview, Value: previewMsgID}))
+	if len(h.requests) != 1 || h.requests[0].MessageID != previewMsgID {
+		t.Fatalf("chip click requests %v", h.requests)
+	}
+	m.Update(PreviewReadyMsg{Request: h.requests[0].Request, Generation: 1, Token: "tok", ID: 9, Cols: 2, Rows: 1})
+	if chipActions(m)[previewMsgID] == "" {
+		t.Fatal("the chip of a shown preview is not clickable")
+	}
+	runCmd(m.activate(action{Kind: actPreview, Value: previewMsgID}))
+	if len(h.released) != 1 || h.released[0] != "tok" || strings.Contains(m.View().Content, "\U0010EEEE") {
+		t.Fatalf("second chip click: released %v", h.released)
+	}
+	// A reduced colour profile withdraws the button with the action.
+	m.Update(tea.ColorProfileMsg{Profile: colorprofile.ANSI256})
+	if got := chipActions(m); len(got) != 0 {
+		t.Fatalf("chip clickable without truecolor: %v", got)
+	}
+}
+
+// attachmentMessage is a message whose one published attachment sits at
+// the [Image #1] marker of text.
+func attachmentMessage(id, text, name string) Message {
+	return Message{ID: id, Channel: "#space", Account: "mother", Nick: "other", Text: text,
+		Attachments: []AttachmentRef{{ArtifactRef: ArtifactRef{ID: "00000000-0000-4000-8000-000000000001", Name: name, Bytes: 2048},
+			At: strings.Index(text, "[Image #1]")}}}
+}
+
+func TestOnlyTheGeneratedChipIsTheButton(t *testing.T) {
+	m, _ := previewModel(t)
+	const id = "77eb4b77-cfbd-4b90-aec6-538014c4108d"
+	// A typed look-alike of the chip stays text; only the attachment's own
+	// chip, at its marker, toggles the preview.
+	text := "typed [file dog.png · 2048 B] then [Image #1] here"
+	m.Update(IncomingMsg{Message: attachmentMessage(id, text, "dog.png")})
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 60, MaxRows: 12})
+	if got := chipActions(m)[id]; got != "[file dog.png · 2048 B]" {
+		t.Fatalf("attachment chip actions %q", got)
+	}
+	if out := m.View().Content; strings.Count(out, "[file dog.png · 2048 B]") != 2 {
+		t.Fatalf("look-alike or chip text changed:\n%s", out)
+	}
+}
+
+func TestChipShowsItsFileNameLiterally(t *testing.T) {
+	m, _ := previewModel(t)
+	const id = "88eb4b77-cfbd-4b90-aec6-538014c4108d"
+	name := "a`b`*c*.png"
+	m.Update(IncomingMsg{Message: attachmentMessage(id, "see [Image #1] here", name)})
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 60, MaxRows: 12})
+	label := "[file " + name + " · 2048 B]"
+	if got := chipActions(m)[id]; got != label {
+		t.Fatalf("chip actions %q, want %q", got, label)
+	}
+	lines := m.body(&m.messages[m.indexOf(messageKey(m.messages[len(m.messages)-1]))], 100).lines
+	if got := lines[0].CopyText(0, len(lines[0].Text)); got != "see "+label+" here" {
+		t.Fatalf("copy %q", got)
+	}
+	// Wrapped over several rows, every piece of the chip is the button.
+	if got := chipActionsAt(m, 16)[id]; strings.ReplaceAll(got, " ", "") != strings.ReplaceAll(label, " ", "") {
+		t.Fatalf("wrapped chip actions %q", got)
+	}
+	// Source view shows the original text, with no chip.
+	m.source = true
+	if got := chipActions(m); len(got) != 0 {
+		t.Fatalf("source view has chip actions %v", got)
+	}
+}
+
+func TestChipLabelsPassThePlaceholderFilter(t *testing.T) {
+	m, _ := previewModel(t)
+	const id = "99eb4b77-cfbd-4b90-aec6-538014c4108d"
+	m.Update(IncomingMsg{Message: attachmentMessage(id, "see [Image #1] here", "a\U0010EEEE.png")})
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 60, MaxRows: 12})
+	if strings.ContainsRune(m.View().Content, kitty.Placeholder) {
+		t.Fatal("a file name's placeholder reached the display")
+	}
+	if got := chipActions(m)[id]; got != "[file a .png · 2048 B]" {
+		t.Fatalf("chip actions %q", got)
+	}
+}
+
+func TestATableChipShowsItsFileNameLiterally(t *testing.T) {
+	name := "a`b`*c*|d.png"
+	label := "[file " + name + " · 2048 B]"
+	for _, cell := range []string{"[Image #1]", "`[Image #1]`", "x **[Image #1]** y"} {
+		t.Run(cell, func(t *testing.T) {
+			m, _ := previewModel(t)
+			const id = "aaeb4b77-cfbd-4b90-aec6-538014c4108d"
+			m.Update(IncomingMsg{Message: attachmentMessage(id, "| file | n |\n| --- | --- |\n| "+cell+" | 1 |\n| short | 2 |", name)})
+			m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 60, MaxRows: 12})
+			lines := m.body(&m.messages[len(m.messages)-1], 100).lines
+			var chipCell, otherCell string
+			for _, dl := range lines {
+				if dl.Table == nil || len(dl.Cells) < 2 {
+					continue
+				}
+				first := dl.Text[dl.Cells[0][0]:dl.Cells[0][1]]
+				switch {
+				case strings.Contains(first, label):
+					chipCell = dl.Text[:dl.Cells[1][0]]
+				case first == "short":
+					otherCell = dl.Text[:dl.Cells[1][0]]
+				}
+			}
+			// The column is laid out for the label: the second column starts
+			// at the same display column on every row.
+			if chipCell == "" || m.widthMethod.StringWidth(chipCell) != m.widthMethod.StringWidth(otherCell) {
+				t.Fatalf("table chip not literal or misaligned: %q / %q", chipCell, otherCell)
+			}
+			if !strings.Contains(ansi.Strip(m.View().Content), label) {
+				t.Fatalf("table chip not shown literally:\n%s", m.View().Content)
+			}
+			if got := chipActions(m)[id]; got != "" {
+				t.Fatalf("a table chip carries an action: %q", got)
+			}
+		})
 	}
 }

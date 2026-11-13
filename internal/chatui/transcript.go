@@ -125,32 +125,49 @@ func dayLabel(t time.Time) string {
 // body returns the message's display lines and rows for width, cached.
 func (m *Model) body(msg *Message, width int) cachedBody {
 	key := messageKey(*msg)
-	text := msg.Text
-	switch {
-	case m.source:
-	case msg.Artifact != nil:
-		// A server artifact shows as a file chip; its announcement URL is
-		// never a link. Source view and Alt+Y keep the original text.
-		text = artifactLabel(msg.Artifact)
-	case len(msg.Attachments) > 0:
-		// Images published with this message show inline where their
-		// markers are; a typed look-alike marker stays text.
-		text = attachmentText(msg)
+	// A server artifact shows as a file chip; its announcement URL is never
+	// a link. Images published with a message show as chips where their
+	// markers are; a typed look-alike marker stays text. Source view and
+	// Alt+Y keep the original text.
+	text, tokens, chips := msg.Text, []rune(nil), []string(nil)
+	if !m.source {
+		text, tokens, chips = chipText(msg)
 	}
 	// Literal image placeholder characters in message text are display only
 	// spaces: only this pane's own preview rows draw image cells. Copy,
 	// Quote and the source copy keep the original text.
 	text = chatimage.NeutralizeText(text)
+	cacheText := text + "\x00" + strings.Join(chips, "\x00")
 	body, ok := m.bodyCache[key]
-	if !ok || body.text != text || body.source != m.source || body.me != m.self {
+	if !ok || body.text != cacheText || body.source != m.source || body.me != m.self {
 		base := displayLines(m.widthMethod, text, m.source, m.theme, m.self)
+		if len(tokens) > 0 {
+			previewID := ""
+			if previewArtifact(msg) != nil {
+				previewID = msg.ID
+			}
+			if placed, ok := placeChips(base, tokens, chips, previewID); ok {
+				base = placed
+			} else if literal, ok := literalChipLines(msg, tokens, chips, func(text string) []displayLine {
+				return displayLines(m.widthMethod, text, m.source, m.theme, m.self)
+			}, m.widthMethod); ok {
+				base = literal
+			} else {
+				// Not reached for well-formed text: the chips as plain text.
+				plain := attachmentText(msg)
+				if msg.Artifact != nil {
+					plain = artifactLabel(msg.Artifact)
+				}
+				base = displayLines(m.widthMethod, chatimage.NeutralizeText(plain), m.source, m.theme, m.self)
+			}
+		}
 		lines, keys := base, body.keys
 		if len(keys) > 0 && len(keys) == len(m.previewKeys(-1, base, nil)) {
 			lines = substitute(base, keys, m.theme) // the same previews, restyled
 		} else {
 			keys = nil
 		}
-		body = cachedBody{text: text, source: m.source, me: m.self, base: base, keys: keys, lines: lines, width: -1}
+		body = cachedBody{text: cacheText, source: m.source, me: m.self, base: base, keys: keys, lines: lines, width: -1}
 		if !m.source && len(m.tableRows[key]) > 0 {
 			valid := map[markdownview.TableRowID]bool{}
 			for _, record := range markdownview.TableRecords(markdownview.Document{Lines: lines}) {
@@ -277,6 +294,14 @@ func (m *Model) transcript(width int) []transcriptRow {
 				row.kind = rowDecor
 			}
 			row.runs = append(slicesCloneRuns(indent), br.Runs...)
+			if !m.canPreview(msg) && !m.previewShown(msg) {
+				// The file chip toggles a preview only where one applies now.
+				for i := range row.runs {
+					if row.runs[i].Act.Kind == actPreview {
+						row.runs[i].Act = action{}
+					}
+				}
+			}
 			if msg.Artifact != nil {
 				// Even in source view an artifact's announcement URL is inert.
 				for i := range row.runs {
