@@ -472,3 +472,42 @@ func FuzzCarryLine(f *testing.F) {
 		}
 	})
 }
+
+// An image chip in the same message, in a paragraph or in a table (whose
+// chips fall back to a literal re-parse), never stops its mermaid fence from
+// drawing; the fence map follows the final lines through resize and source
+// toggles. (After astra-architect2's composition probe.)
+func TestChatDiagramBesideAnImageChip(t *testing.T) {
+	for name, prefix := range map[string]string{
+		"paragraph": "[Image #1]\n\n",
+		"table":     "| image |\n| --- |\n| [Image #1] |\n\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := &fakeDiagrams{}
+			m := diagramChat(t, f, 100, 40)
+			msg := attachmentMessage("88eb4b77-cfbd-4b90-aec6-538014c4108d", prefix+chatFence(1), "a`b`*c*|d.png")
+			m.Update(IncomingMsg{Message: msg})
+			settle(t, m, nil)
+			if drawings, notes := shownDiagrams(m); len(drawings) != 1 || len(notes) != 0 || f.count() != 1 {
+				t.Fatalf("drawings %q notes %q renders %d", drawings, notes, f.count())
+			}
+			key := messageKey(m.messages[len(m.messages)-1])
+			body := m.bodyCache[key]
+			if len(body.fenceAt) != len(body.lines) {
+				t.Fatalf("fence map has %d entries for %d lines", len(body.fenceAt), len(body.lines))
+			}
+			_, cmd := m.Update(tea.WindowSizeMsg{Width: 90, Height: 40})
+			settle(t, m, cmd)
+			if drawings, _ := shownDiagrams(m); len(drawings) != 1 {
+				t.Fatalf("after resize: drawings %q", drawings)
+			}
+			for range 2 { // source view and back
+				_, cmd = m.Update(tea.KeyPressMsg(tea.Key{Code: 's', Mod: tea.ModCtrl}))
+				settle(t, m, cmd)
+			}
+			if drawings, _ := shownDiagrams(m); len(drawings) != 1 {
+				t.Fatalf("after the source toggle: drawings %q", drawings)
+			}
+		})
+	}
+}

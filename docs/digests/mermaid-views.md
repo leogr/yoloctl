@@ -60,7 +60,10 @@ place among them, a fence's opener, closer or note stays that line, a content
 row its row. A highlight in a rebuilt body clears. One request runs at a time
 (`Render` off the UI goroutine), for the first pending fence on the screen at
 the body's card width; a result for an old width is not shown. Quote replays a
-body's outcomes, so a whole drawing quotes its fence. [9](#source-9) [10](#source-10)
+body's outcomes, so a whole drawing quotes its fence. Image chips in the same
+message are placed into the lines parsed with drawings; when a chip falls back
+to the literal re-parse (in a table), that parse draws too, so the fence map
+matches the lines shown. [9](#source-9) [10](#source-10)
 
 
 ## Sources
