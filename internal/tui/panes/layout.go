@@ -682,6 +682,7 @@ const (
 	BarClose                     // ✕: detaches the pane
 	BarSplitRight                // no longer on a bar; kept for its handlers
 	BarSplitBelow                // no longer on a bar; kept for its handlers
+	BarBreak                     // ↑: breaks the pane out into its own tab
 )
 
 // barSeg is one run of a bar: its part, first column and text.
@@ -697,13 +698,16 @@ type barButton struct {
 	text string
 }
 
-// barButtons are the button sets a bar tries, widest first: the zoom
-// button (not on an empty pane's) with ✕, then ✕ alone, then none.
+// barButtons are the button sets a bar tries, widest first: break-out, zoom
+// and ✕ (break-out and zoom not on an empty pane's: an empty pane neither
+// breaks out nor zooms), then zoom and ✕, then ✕ alone, then none. A bar
+// exists only on a divided tab, where breaking out applies.
 func barButtons(p *Pane) [][]barButton {
 	close := barButton{BarClose, "✕"}
 	var sets [][]barButton
 	if !p.Empty() {
-		sets = append(sets, []barButton{{BarZoom, "⤢"}, close})
+		zoom := barButton{BarZoom, "⤢"}
+		sets = append(sets, []barButton{{BarBreak, "↑"}, zoom, close}, []barButton{zoom, close})
 	}
 	return append(sets, []barButton{close}, nil)
 }
@@ -712,8 +716,9 @@ func barButtons(p *Pane) [][]barButton {
 // band cell, the focus marker ▸, the attention mark ●, the title with its
 // state word, the band, then the buttons, ✕ last. A button's segment is
 // its glyph with a space on each side; one band cell follows each button.
-// As columns run out the title truncates to …, then goes; then the zoom
-// button; then ✕; at two columns or fewer the bar is a plain band.
+// As columns run out the title truncates to …, then goes; then the break-out
+// button; then the zoom button; then ✕; at two columns or fewer the bar is a
+// plain band.
 // Everything not covered by a segment is band.
 func (l *Layout) barSegs(p *Pane, r Rect) []barSeg {
 	if r.W <= 2 {

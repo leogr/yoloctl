@@ -45,7 +45,8 @@ an attach from its tab or a whole tab fills; prefix `j` and a dock drag of a
 tab label move a tab's whole layout into the current tab, prefix `!` breaks a
 pane out, all-or-nothing against the 20×5 minimum. [37](#source-37) Every pane of a divided or zoomed tab has
 a bar below it: a band, orange with `▸` on the focused pane and blue on the
-others, with the title, its mark and the zoom and detach buttons. A bar above
+others, with the title, its mark and the break-out (`↑`, as prefix `!`), zoom
+and detach buttons. A bar above
 another pane is the horizontal border. Vertical borders are blue, orange
 beside the focused pane; where one crosses a bar row it stays off the band,
 as a half block leaning toward the focused bar or a `│`.

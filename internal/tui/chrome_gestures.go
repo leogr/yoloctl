@@ -21,6 +21,7 @@ const (
 	chromeBarSplitRight                   // │: an empty pane opens right, on release
 	chromeBarSplitBelow                   // ─: an empty pane opens below, on release
 	chromeDock                            // a tab label dragged: drops the tab on a pane
+	chromeBarBreak                        // ↑: breaks the pane out into its own tab on release
 )
 
 // dockStatus is the status line while a dock drag has no refused target.
@@ -80,6 +81,7 @@ func (m *model) chromeAt(mo tea.Mouse) (chromeGesture, bool) {
 			panes.BarNone: chromeInert, panes.BarTitle: chromeBarTitle,
 			panes.BarZoom: chromeBarZoom, panes.BarClose: chromeBarClose,
 			panes.BarSplitRight: chromeBarSplitRight, panes.BarSplitBelow: chromeBarSplitBelow,
+			panes.BarBreak: chromeBarBreak,
 		}[part]
 		return g, true
 	}
@@ -156,6 +158,10 @@ func (m *model) chromeRelease(mo tea.Mouse) {
 		m.layoutTab(g.tab)
 	case chromeBarClose:
 		m.requestDetachPane(g.tab, g.pane)
+	case chromeBarBreak:
+		// prefix !, for this pane: it moves to a new tab, which becomes active.
+		g.tab.Layout.SetFocus(g.pane)
+		m.breakPane()
 	case chromeBarSplitRight, chromeBarSplitBelow:
 		g.tab.Layout.SetFocus(g.pane)
 		m.openPlaceholder(g.tab, g.kind == chromeBarSplitRight)

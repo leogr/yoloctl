@@ -219,7 +219,8 @@ func TestComposeAttentionMarkAndState(t *testing.T) {
 }
 
 // A bar degrades as columns run out: the title truncates, then goes, then
-// the zoom button, then ✕; at two columns it is a plain band. The bar has
+// the break-out button, then the zoom button, then ✕; at two columns it is a
+// plain band. The bar has
 // no split buttons and no words on its buttons at any width.
 func TestBarDegradation(t *testing.T) {
 	var got []string
@@ -230,9 +231,9 @@ func TestBarDegradation(t *testing.T) {
 	}
 	golden(t, "bar-degradation", got)
 	want := []string{
-		"70| ▸ box attach coder --space dev                                ⤢   ✕  |",
-		"40| ▸ box attach coder --space d…   ⤢   ✕  |",
-		"20| ▸ box at…   ⤢   ✕  |",
+		"70| ▸ box attach coder --space dev                            ↑   ⤢   ✕  |",
+		"40| ▸ box attach coder --spa…   ↑   ⤢   ✕  |",
+		"20| ▸ bo…   ↑   ⤢   ✕  |",
 		"13| ▸    ⤢   ✕  |",
 		"12| ▸   ⤢   ✕  |",
 		" 7| ▸  ✕  |",
@@ -260,12 +261,12 @@ func barText(l *Layout, p *Pane, w int) string {
 // A wide and a combining-character title are measured, not counted in runes.
 func TestBarWideAndCombiningTitles(t *testing.T) {
 	for _, c := range []struct{ title, want string }{
-		{"漢字のタイトル", " ▸ 漢字の…   ⤢   ✕  "},
-		{"cafe\u0301 au lait", " ▸ cafe\u0301 a…   ⤢   ✕  "},
+		{"漢字のタイトル", " ▸ 漢字の…   ↑   ⤢   ✕  "},
+		{"cafe\u0301 au lait", " ▸ cafe\u0301 a…   ↑   ⤢   ✕  "},
 	} {
 		p := live(c.title)
 		l := &Layout{focus: p}
-		if got := barText(l, p, 20); got != c.want || ansi.StringWidth(got) != 20 {
+		if got := barText(l, p, 24); got != c.want || ansi.StringWidth(got) != 24 {
 			t.Errorf("%q: %q (%d columns)", c.title, got, ansi.StringWidth(got))
 		}
 	}

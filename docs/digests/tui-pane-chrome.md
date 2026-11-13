@@ -16,13 +16,14 @@ blue 67 (the inactive tab's) on the others. It reads, left to right:
 - `▸` on the focused pane's bar;
 - a bold orange `●` attention mark on an unfocused pane;
 - the title (`Pane.Title`, strip width method) with `· zoomed` or `· exited`;
-- band, then ` ⤢ ` (zoom) and ` ✕ ` (detach), each on its own background
-  (208 with dark 235 glyphs on the focused bar, 60 with light 255 glyphs on
-  the others) and followed by one band cell. No split buttons, no words. An empty pane's bar
-  reads `empty` with `✕` only.
+- band, then ` ↑ ` (break out into its own tab), ` ⤢ ` (zoom) and ` ✕ `
+  (detach), each on its own background (208 with dark 235 glyphs on the
+  focused bar, 60 with light 255 glyphs on the others) and followed by one
+  band cell. No split buttons, no words. An empty pane's bar reads `empty`
+  with `✕` only: an empty pane neither breaks out nor zooms.
 
-As columns run out, the title truncates with `…` and then goes; then `⤢`;
-then `✕`. At two columns the bar is plain band. Text is dark: 235 with a
+As columns run out, the title truncates with `…` and then goes; then `↑`;
+then `⤢`; then `✕`. At two columns the bar is plain band. Text is dark: 235 with a
 bold title on the focused bar, 232 on the others. No bar is underlined.
 [2](#source-2) [3](#source-3)
 
@@ -48,14 +49,15 @@ windowing counts its two columns. [6](#source-6)
 cell included) is a **chrome gesture**: a consumed owner no child receives,
 with its objects (`*Tab`, `*Pane`, split) captured at the press.
 - **Release activation:** a tab label activates its tab; a tab's ✕ closes
-  every pane's view without activating it; a bar's `⤢` zooms, its ✕ closes
+  every pane's view without activating it; a bar's `↑` breaks its pane out
+  into a new active tab (prefix `!` for that pane), its `⤢` zooms, its ✕ closes
   its pane (a running command that may end asks first, see
   [close confirmation](tui-close-confirm.md)). Each acts only when the release
   is over the same object's current button or label; anything else cancels.
 - **Title:** a press on a bar's title or marker focuses its pane at once.
 - **Dock:** a label moved by a cell docks its tab ([moves](tui-pane-moves.md)).
 - **Resize:** a press on a border, or on a bar between stacked panes except
-  `⤢`/`✕`, drags that split and focuses its pane (a click only focuses); a
+  its buttons, drags that split and focuses its pane (a click only focuses); a
   bottom-edge bar never resizes. The preview, in orange, takes the nearest
   position where a trial layout keeps every pane at the minimum; sizes commit
   once on release; the grab offset is kept; a host resize reruns the trial.

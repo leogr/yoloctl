@@ -97,6 +97,66 @@ func TestBarZoomButtonTogglesZoom(t *testing.T) {
 	}
 }
 
+// ↑ breaks its pane out into its own tab on release, as prefix ! does for
+// the focused pane; a release elsewhere cancels.
+func TestBarBreakButtonBreaksThePaneOut(t *testing.T) {
+	m := newTestModel(t, 100, 26)
+	tab, left, right := twoPanes(t, m)
+	tab.Layout.SetFocus(right)
+	before := len(m.tabs.Tabs)
+	x, y := barCell(t, m, tab, left, panes.BarBreak)
+	_, _ = m.Update(click(x, y))
+	_, _ = m.Update(releaseAt(x+5, y)) // dragged off the ↑
+	if len(m.tabs.Tabs) != before || len(tab.Layout.Panes()) != 2 {
+		t.Fatal("a release off the ↑ cancels")
+	}
+	_, _ = m.Update(click(x, y))
+	if len(m.tabs.Tabs) != before {
+		t.Fatal("↑ acts on release, not press")
+	}
+	_, _ = m.Update(releaseAt(x, y))
+	cur := m.tabs.Current()
+	if len(m.tabs.Tabs) != before+1 || cur == tab || !slices.Equal(cur.Layout.Panes(), []*panes.Pane{left}) || !slices.Equal(tab.Layout.Panes(), []*panes.Pane{right}) {
+		t.Fatalf("↑ moves its pane, not the focused one, to a new active tab: %d tabs", len(m.tabs.Tabs))
+	}
+	select {
+	case <-left.Session.Done():
+		t.Fatal("breaking out ended the pane's client")
+	default:
+	}
+	if _, ok := m.mouseOwners[tea.MouseLeft]; ok || m.chrome != nil {
+		t.Fatal("the release ends the gesture")
+	}
+}
+
+// ↑ appears only where breaking out applies: a divided tab's non-empty pane.
+func TestBarBreakButtonOnlyWhereBreakApplies(t *testing.T) {
+	m := newTestModel(t, 100, 26)
+	tab, left, _ := twoPanes(t, m)
+	m.openPlaceholder(tab, true)
+	empty := tab.Focused()
+	if !empty.Empty() {
+		t.Fatal("no empty pane")
+	}
+	has := func(p *panes.Pane) bool {
+		m.laidOut(tab)
+		bar := p.Bar()
+		for x := bar.X; x < bar.X+bar.W; x++ {
+			if q, part := tab.Layout.BarAt(x, bar.Y); q == p && part == panes.BarBreak {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(left) || has(empty) {
+		t.Fatalf("break-out button: running pane %v, empty pane %v", has(left), has(empty))
+	}
+	single := splitTab(t, m, paneSession(t, 20, 80, "sleep", "30"))
+	if single.Layout.Bars() {
+		t.Fatal("an undivided tab has a bar")
+	}
+}
+
 // R6: a tab activates on release; its ✕ detaches it without activating it,
 // only on a release over the same tab's ✕; a divided tab's ✕ detaches
 // every pane.
@@ -258,11 +318,11 @@ func TestSeparatorBarIsASplitHandle(t *testing.T) {
 	bar := upper.Bar()
 	y := m.tabTop() + bar.Y
 	titleX, _ := barCell(t, m, tab, upper, panes.BarTitle)
-	zoomX, _ := barCell(t, m, tab, upper, panes.BarZoom)
+	breakX, _ := barCell(t, m, tab, upper, panes.BarBreak)
 	for _, c := range []struct {
 		name string
 		x    int
-	}{{"line at the left edge", bar.X}, {"title", titleX}, {"line before the buttons", zoomX - 2}} {
+	}{{"line at the left edge", bar.X}, {"title", titleX}, {"line before the buttons", breakX - 2}} {
 		tab.Layout.SetFocus(lower)
 		gen := tab.Layout.Generation()
 		_, _ = m.Update(click(c.x, y))
