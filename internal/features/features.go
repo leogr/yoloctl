@@ -85,6 +85,11 @@ var registry = map[string]Feature{
 		Description: "Latest AWS CLI v2 at image build (official signed archive, Linux amd64/arm64 with glibc); requires user-selected network capabilities and credentials",
 		Install:     &Install{Kind: InstallDockerfile, Dockerfile: awsInstallDockerfile()},
 	},
+	"agentmon": {
+		Name:        "agentmon",
+		Description: "AgentMon Live plugin for Claude Code, writing session snapshots to /var/lib/agentmon-live/spool for the web view on the host; inert without a box mount at that path",
+		Install:     &Install{Kind: InstallDockerfile, Dockerfile: agentmonInstallDockerfile()},
+	},
 	"yolo.chat.skill": {
 		Name:        "yolo.chat.skill",
 		Description: "AIRC agent JSONL client, server binary and collaboration skill; endpoint access requires explicit policy",
