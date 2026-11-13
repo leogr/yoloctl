@@ -1,6 +1,7 @@
 package term
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -76,7 +77,13 @@ func TestConsoleRunsKeepEarlierOutputAndResetInputModes(t *testing.T) {
 	if !c.ShowError("LOCAL_FAILURE") {
 		t.Fatal("idle console refused diagnostic")
 	}
-	text := strings.Join(append(c.Scrollback(), c.GridText()), "\n")
+	// The console shows the last output alone; history keeps every command,
+	// in order, with one blank line before each later one.
+	if shown := strings.Join(append(c.Scrollback(), c.GridText()), "\n"); !strings.Contains(shown, "LOCAL_FAILURE") ||
+		strings.Contains(shown, "FIRST_OUTPUT") || strings.Contains(shown, "SECOND_OUTPUT") {
+		t.Fatalf("console shows more than the last output: %q", shown)
+	}
+	text := strings.Join(append(c.history.Scrollback(), c.history.GridText()), "\n")
 	last := -1
 	for _, marker := range []string{"$ first", "FIRST_OUTPUT", "$ second", "SECOND_OUTPUT", "LOCAL_FAILURE"} {
 		at := strings.Index(text, marker)
@@ -87,5 +94,29 @@ func TestConsoleRunsKeepEarlierOutputAndResetInputModes(t *testing.T) {
 	}
 	if strings.Count(text, "exit 0") != 2 {
 		t.Fatalf("exit notices lost or duplicated: %q", text)
+	}
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if (strings.HasPrefix(line, "$ second") || strings.Contains(line, "LOCAL_FAILURE")) && (i == 0 || lines[i-1] != "") {
+			t.Fatalf("no blank line before %q: %q", line, text)
+		}
+	}
+	if strings.HasPrefix(text, "\n") {
+		t.Fatalf("history starts with a blank line: %q", text)
+	}
+}
+
+func TestConsoleHistoryRotatesByLines(t *testing.T) {
+	c := NewConsole(5, 60, 8, nil)
+	t.Cleanup(func() { _ = c.Close() })
+	for i := range 6 {
+		if started, err := c.Run(nil, fmt.Sprintf("$ run %d", i), "printf", fmt.Sprintf("OUT_%d", i)); err != nil || !started {
+			t.Fatalf("command %d: %t %v", i, started, err)
+		}
+		awaitInput(t, "command completed", func() bool { return !c.Busy() })
+	}
+	text := strings.Join(append(c.history.Scrollback(), c.history.GridText()), "\n")
+	if len(c.history.Scrollback()) > 8 || strings.Contains(text, "OUT_0") || !strings.Contains(text, "OUT_5") {
+		t.Fatalf("history not bounded to 8 lines, oldest first out: %d %q", len(c.history.Scrollback()), text)
 	}
 }

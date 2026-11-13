@@ -34,7 +34,9 @@ raw input through Bubble Tea, including releases. [7](#source-7)
 [FACT] A live tab reserves the configured palette chord and explicit copy of an
 existing local selection. Enabled managed PNG paste can consume Ctrl+V and
 insert a guest path through the ordered queue. Other keys reach its terminal encoder; the palette
-owns tab selection/closing and history. A running
+owns tab selection/closing and history. In the idle palette Ctrl+R toggles
+the console history view; a running overlay command and a focused tab receive
+Ctrl+R themselves. A running
 overlay sends Ctrl+C to its command; a second within two seconds kills the local
 command group. Leaving the overlay does not stop that command. [4](#source-4)
 [15](#source-15)

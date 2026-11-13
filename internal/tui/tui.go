@@ -112,7 +112,8 @@ type model struct {
 
 	width, height    int
 	focusPalette     bool
-	scrollOff        int // lines back into the focused surface's scrollback; 0 = live
+	scrollOff        int  // lines back into the focused surface's scrollback; 0 = live
+	consoleHistory   bool // the palette shows every retained command (Ctrl+R), not the last one
 	status           string
 	statusKind       prettylog.Kind
 	osc52NoticeShown bool
@@ -351,7 +352,7 @@ func (m *model) desiredOverlayContent() int {
 		return len(prompt) - 1 // top border occupies the usual input row
 	}
 	var body int
-	if len(m.sugg) > 0 {
+	if m.menuShown() {
 		body = len(m.sugg)
 	} else {
 		body = m.consoleContentRows()
@@ -361,6 +362,11 @@ func (m *model) desiredOverlayContent() int {
 	}
 	return body + 1
 }
+
+// menuShown reports whether the completion menu owns the overlay. The console
+// history view (Ctrl+R) owns it while shown; suggestions that arrive
+// meanwhile wait until the person returns to editing.
+func (m *model) menuShown() bool { return len(m.sugg) > 0 && !m.consoleHistory }
 
 // consoleContentRows counts the rows the console's output occupies:
 // evicted scrollback plus the live grid rows down to the last non-blank
@@ -772,6 +778,7 @@ func (m *model) dispatch(args []string) tea.Cmd {
 		m.setStatus(prettylog.KindWarn, "a palette command is still running — wait for it")
 		return nil
 	}
+	m.showConsoleCommand() // a new command shows alone, also when Run echoed an error
 	if err != nil {
 		return nil // Run echoed the error; nothing is running to spin for
 	}
@@ -1214,6 +1221,7 @@ func (m *model) reportViewErrors() {
 		}
 	})
 	if len(messages) > 0 && m.console.ShowError(strings.Join(messages, "\n\n")) {
+		m.showConsoleCommand()
 		m.clearSuggestions()
 		m.status = ""
 		m.focusPalette = focus
@@ -1405,6 +1413,12 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.console.Busy() {
 		return m.handleRunningKey(k, paletteKey)
 	}
+	// The history view takes Ctrl+R, PgUp/PgDn, Esc and the palette key; any
+	// other key returns to editing the kept draft first, then acts as usual.
+	if m.consoleHistory && !paletteKey && k.Code != tea.KeyEscape && k.Code != tea.KeyPgUp && k.Code != tea.KeyPgDown &&
+		(k.Code != 'r' || k.Mod&tea.ModCtrl == 0) {
+		m.showConsoleCommand()
+	}
 
 	cur := m.tabs.Focused()
 	switch {
@@ -1474,6 +1488,13 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if line, _ := m.pal.Line(); line == "" {
 			return m, tea.Quit
 		}
+	case k.Code == 'r' && k.Mod&tea.ModCtrl != 0:
+		// Toggle the console between the last command and its history, both
+		// at their newest line. A running command gets Ctrl+R itself
+		// (handleRunningKey), and a focused tab never sees this key.
+		m.scrollToLive()
+		m.consoleHistory = !m.consoleHistory
+		m.scrollToLive()
 	// Up/Down behave like a shell: a single vertical axis running
 	// [older history … newer history] → [draft] → [suggestion menu]. Up
 	// walks toward older history and always advances while history remains
@@ -1607,8 +1628,16 @@ func (m *model) handleExitedTabKey(k tea.Key) tea.Cmd {
 // erases native history; refocusing the palette can show it again.
 func (m *model) resetConsoleView() {
 	m.console.ScrollToBottom()
+	m.showConsoleCommand()
 	m.scrollToLive()
 	m.suggNav = false // focus left the palette: forget menu-steering
+}
+
+// showConsoleCommand leaves the history view, at its newest line, for the
+// last command's output.
+func (m *model) showConsoleCommand() {
+	m.console.History().ScrollToBottom()
+	m.consoleHistory = false
 }
 
 // clearSuggestions drops the as-you-type menu and its steering state. Used
@@ -1882,7 +1911,7 @@ func (m *model) overlayContent(rows int) []string {
 	var content []string
 	if prompt := m.modalPopup(1 + rows); len(prompt) > 0 {
 		content = prompt[1:]
-	} else if len(m.sugg) > 0 {
+	} else if m.menuShown() {
 		content = m.renderSuggestions(rows, bg)
 	} else {
 		grid := m.consoleFrame().Lines
@@ -2214,10 +2243,12 @@ func (m *model) inputLine() string {
 	case m.status != "":
 		legend, legendStyle = m.statusLine(), ""
 	case m.focusPalette:
-		legend = "Esc hide palette · " + prefix + " panes · ^←/→ tabs · ^D quit"
+		legend = "Esc hide palette · ^R history · " + prefix + " panes · ^←/→ tabs · ^D quit"
 		switch {
 		case m.console.Busy(): // keys feed the running command, not the editor
 			legend = "running · ^C interrupt · ^Y detach · ^←/→ tabs"
+		case m.consoleHistory:
+			legend = "console history · ^R last command · PgUp/PgDn scroll · Esc hide"
 		case m.suggNav && len(m.sugg) > 0: // steering the menu: Enter picks
 			legend = "↑↓ move · Enter/TAB pick · Esc hide"
 		}

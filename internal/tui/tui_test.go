@@ -215,19 +215,40 @@ func TestOverlayWheelScrollAndHide(t *testing.T) {
 	}
 }
 
-// Direct sequential console runs retain native history. Explicit palette
-// dismissal/suggestion clears are covered separately below/above.
-func TestOverlayConsoleRunsRetainHistory(t *testing.T) {
+// The console shows the last command alone; Ctrl+R toggles the history of
+// every retained command, newest last, and Esc or a new command leaves it.
+func TestOverlayShowsOneCommandAndCtrlRShowsHistory(t *testing.T) {
 	m := newTestModel(t, 60, 20)
 	runOverlayCommand(t, m, "printf", "FIRST-RUN\\r\\n")
 	runOverlayCommand(t, m, "printf", "SECOND-RUN\\r\\n")
 	view := m.View().Content
-	history := strings.Join(append(m.console.Scrollback(), m.console.GridText()), "\n")
-	if !strings.Contains(history, "FIRST-RUN") || !strings.Contains(history, "SECOND-RUN") {
-		t.Errorf("sequential console history lost:\n%s", history)
+	if !strings.Contains(view, "SECOND-RUN") || strings.Contains(view, "FIRST-RUN") || !strings.Contains(view, "^R history") {
+		t.Fatalf("console does not show the last command alone:\n%s", view)
 	}
-	if !strings.Contains(view, "SECOND-RUN") {
-		t.Errorf("current command output missing:\n%s", view)
+	ctrlR := tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}
+	_, _ = m.Update(ctrlR)
+	view = m.View().Content
+	if !m.consoleHistory || !strings.Contains(view, "FIRST-RUN") || !strings.Contains(view, "SECOND-RUN") ||
+		strings.Index(view, "FIRST-RUN") > strings.Index(view, "SECOND-RUN") || !strings.Contains(view, "console history") {
+		t.Fatalf("Ctrl+R does not show the history, newest last:\n%s", view)
+	}
+	_, _ = m.Update(ctrlR)
+	if m.consoleHistory || strings.Contains(m.View().Content, "FIRST-RUN") {
+		t.Fatal("Ctrl+R again does not return to the last command")
+	}
+	_, _ = m.Update(ctrlR)
+	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.consoleHistory {
+		t.Fatal("Esc kept the history view")
+	}
+	_, _ = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+	_, _ = m.Update(ctrlR)
+	old := executable
+	t.Cleanup(func() { executable = old })
+	executable = func() (string, error) { return "/bin/echo", nil }
+	_ = m.dispatch([]string{"THIRD-RUN"})
+	if m.consoleHistory {
+		t.Fatal("a new command did not leave the history view")
 	}
 }
 
@@ -1938,5 +1959,52 @@ func TestOSC52PolicyAtHostTUIBoundary(t *testing.T) {
 	}
 	if got := fmt.Sprint(raw.Msg); got != event.Sequence() {
 		t.Fatalf("raw sequence = %q, want %q", got, event.Sequence())
+	}
+}
+
+// The history view owns the overlay over an open or late completion menu and
+// keeps the draft; the next editing key returns to the draft and its menu.
+func TestConsoleHistoryWinsOverCompletionMenu(t *testing.T) {
+	for _, late := range []bool{false, true} {
+		name := "existing"
+		if late {
+			name = "arrives_after_toggle"
+		}
+		t.Run(name, func(t *testing.T) {
+			m := newTestModel(t, 100, 32)
+			m.console.ShowError("EARLIER_OUTPUT")
+			m.console.ShowError("LATEST_OUTPUT")
+			m.pal.Insert("bo")
+			msg := suggestionsMsg{Generation: m.spaceGeneration, Line: "bo", Items: candidates("box"), Nav: true}
+			if !late {
+				_, _ = m.Update(msg)
+			}
+			_, _ = m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+			if late {
+				_, _ = m.Update(msg)
+			}
+			view := m.View().Content
+			if !m.consoleHistory || !strings.Contains(view, "EARLIER_OUTPUT") || !strings.Contains(view, "LATEST_OUTPUT") ||
+				!strings.Contains(view, "console history") {
+				t.Fatalf("Ctrl+R history hidden by completion (history=%t):\n%s", m.consoleHistory, view)
+			}
+			if line, _ := m.pal.Line(); line != "bo" {
+				t.Fatalf("draft changed: %q", line)
+			}
+			// Scrolling stays in the view; an editing key returns to the
+			// draft, which it edits, and to completion.
+			_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
+			if !m.consoleHistory {
+				t.Fatal("PgUp left the history view")
+			}
+			_, _ = m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+			if line, _ := m.pal.Line(); m.consoleHistory || line != "box" {
+				t.Fatalf("editing key: history=%t line %q", m.consoleHistory, line)
+			}
+			_, _ = m.Update(suggestionsMsg{Generation: m.spaceGeneration, Line: "box", Items: candidates("box"), Nav: true})
+			if view := m.View().Content; !m.menuShown() || strings.Contains(view, "EARLIER_OUTPUT") {
+				t.Fatalf("menu did not return after editing:\n%s", view)
+			}
+		})
 	}
 }

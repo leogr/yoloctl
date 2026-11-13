@@ -331,10 +331,13 @@ checks transport behavior; it does not measure graphical parity. [4](#source-4)
 
 [FACT] Host status, pane refusals and exit notices share the log glyphs and
 semantic theme roles. Direct-action feedback remains visible at every log
-level; command logs keep their own filter. Console reuse retains native history
-and resets transient terminal/input state before the next prompt. Palette
-dismissal, focus changes, suggestions and local errors retain that history;
-it reappears when the console is shown. No disk log or row replay is added. [48](#source-48)
+level; command logs keep their own filter. The console shows one command at a
+time and resets transient terminal/input state before the next prompt. Its
+history keeps every command, with a blank line between commands, under the
+`scrollback_lines` line ring; Ctrl+R in the idle palette toggles it, newest
+last, over any completion menu and keeping the draft. An editing key, Esc,
+focus changes and a new command return to the last command. No disk
+log or row replay is added. [48](#source-48)
 
 ## Sources
 

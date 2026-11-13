@@ -51,6 +51,9 @@ func (m *model) consoleFrame() terminal.Frame {
 // consoleDisplayFrame is the palette console's frame with every image
 // placeholder neutralized: the console never displays a preview.
 func (m *model) consoleDisplayFrame() terminal.Frame {
+	if m.consoleHistory {
+		return m.filterImages(nil, m.console.HistoryFrame())
+	}
 	return m.filterImages(nil, m.console.Frame())
 }
 
@@ -100,6 +103,9 @@ type scrollSurface interface {
 
 func (m *model) scroller() scrollSurface {
 	if m.focusPalette {
+		if m.consoleHistory {
+			return m.console.History()
+		}
 		return m.console
 	}
 	if p := m.tabs.Focused(); p != nil && !p.Empty() {

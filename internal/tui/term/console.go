@@ -3,6 +3,7 @@ package term
 import (
 	"errors"
 	"fmt"
+	"image/color"
 	"os"
 	"os/exec"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/terminal"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // ptyDrainGrace is the one post-reap budget: how long the pump waits, AFTER
@@ -25,13 +27,17 @@ import (
 const ptyDrainGrace = 200 * time.Millisecond
 
 // Console is the TUI's persistent index-0 view (eyeball finding E5):
-// one long-lived emulator that one-shot commands (`space ls`,
-// `port list`, ...) append into shell-style, instead of each spawning
-// a dead tab. Commands still run under a PTY (colors intact) and
-// sequentially — the console is a log, not a multiplexer.
+// one-shot commands (`space ls`, `port list`, ...) run in it shell-style,
+// instead of each spawning a dead tab. Commands still run under a PTY
+// (colors intact) and sequentially — the console is a log, not a
+// multiplexer. The embedded emulator shows one command at a time; history
+// receives the same bytes for every command, with a blank line between
+// commands, and keeps them under the native scrollback limit.
 type Console struct {
 	*emulator
-	onData func()
+	history     *emulator // answers no queries; its scrollback is the bound
+	historyUsed bool      // history holds an earlier command
+	onData      func()
 
 	mu         sync.Mutex
 	cmd        *exec.Cmd // running command, nil when idle
@@ -46,19 +52,34 @@ type Console struct {
 func NewConsole(rows, cols int, scrollbackLines int, onData func()) *Console {
 	emu := newEmulator(rows, cols, nil, scrollbackLines)
 	emu.trimFrame, emu.onFrame = true, onData
+	history := newEmulator(rows, cols, nil, scrollbackLines)
+	history.trimFrame, history.onFrame = true, onData
 	return &Console{
 		emulator: emu,
+		history:  history,
 		onData:   onData,
 		rows:     rows, cols: cols,
 	}
 }
 
+// begin starts a new command's or error's output: the shown emulator is
+// cleared, and history keeps earlier commands with one blank line before
+// the next. Old pumps have joined before c.cmd becomes nil.
+func (c *Console) begin() {
+	c.Clear()
+	c.history.ClearKeepHistory()
+	if c.historyUsed {
+		_, _ = c.history.Write([]byte("\r\n"))
+	}
+	c.historyUsed = true
+}
+
 // Run starts argv in the console, echoing the caller-styled display
 // line first (the TUI renders a shell-like `❯ yoloctl <command>`
-// prompt). Earlier commands remain in the native screen/scrollback, under
-// its existing retention limit; transient terminal state is reset before the
-// next prompt. Returns false (and does nothing) while a previous
-// command is still running — the caller surfaces "busy".
+// prompt). The console shows this command alone; earlier commands remain in
+// history under its native retention limit. Returns false (and does
+// nothing) while a previous command is still running — the caller surfaces
+// "busy".
 func (c *Console) Run(env []string, display string, argv ...string) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -71,7 +92,7 @@ func (c *Console) Run(env []string, display string, argv ...string) (bool, error
 	if c.cmd != nil {
 		return false, nil
 	}
-	c.ClearKeepHistory() // old pumps have joined before c.cmd becomes nil
+	c.begin()
 	if display == "" {
 		display = "$ " + shellLine(argv)
 	}
@@ -109,7 +130,7 @@ func (c *Console) ShowError(message string) bool {
 		}
 		return r
 	}, ansi.Strip(message))
-	c.ClearKeepHistory()
+	c.begin()
 	c.echo("\x18\x1b\\" + strings.ReplaceAll(c.logNotice(1, message), "\n", "\r\n") + "\r\n")
 	return true
 }
@@ -127,6 +148,7 @@ func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, releaseSlave func(time.Time
 			n, err := ptmx.Read(buf)
 			if n > 0 {
 				_, _ = c.Write(buf[:n])
+				_, _ = c.history.Write(buf[:n])
 				if c.onData != nil {
 					c.onData()
 				}
@@ -136,6 +158,7 @@ func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, releaseSlave func(time.Time
 			}
 		}
 		c.FlushOutputFilters()
+		c.history.FlushOutputFilters()
 		close(readDone)
 	}()
 
@@ -160,6 +183,7 @@ func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, releaseSlave func(time.Time
 	writer.Close()
 	<-readDone
 	c.EndRenderHold()
+	c.history.EndRenderHold()
 	// Always close with a status line — green ✓ on success, red ✗ on
 	// failure — so the overlay shows every command's exit code; a blank
 	// line after it (laid in by the overlay's content-fit padding)
@@ -229,7 +253,7 @@ func (c *Console) Close() error {
 	if done != nil {
 		<-done
 	}
-	return c.emulator.Close()
+	return errors.Join(c.emulator.Close(), c.history.Close())
 }
 
 // Busy reports whether a command is still running.
@@ -257,15 +281,17 @@ func (c *Console) ResizeGeometry(g terminal.Geometry) {
 	ptmx := c.ptmx
 	c.mu.Unlock()
 	_ = c.emulator.ResizeGeometry(g)
+	_ = c.history.ResizeGeometry(g)
 	if ptmx != nil {
 		_ = resizePTYGeometry(ptmx, g)
 	}
 }
 
-// echo writes presentation bytes straight into the emulator (caller
+// echo writes presentation bytes straight into both emulators (caller
 // holds c.mu or runs from the pump tail).
 func (c *Console) echo(s string) {
 	_, _ = c.Write([]byte(s))
+	_, _ = c.history.Write([]byte(s))
 	if c.onData != nil {
 		c.onData()
 	}
@@ -291,4 +317,31 @@ func exitCode(cmd *exec.Cmd, err error) int {
 		return 128 + int(ws.Signal())
 	}
 	return cmd.ProcessState.ExitCode()
+}
+
+// SetPalette, SetColors and SetLogPalette style both views alike.
+func (c *Console) SetPalette(palette [256]color.Color) {
+	c.emulator.SetPalette(palette)
+	c.history.SetPalette(palette)
+}
+
+func (c *Console) SetColors(foreground, background color.Color) {
+	c.emulator.SetColors(foreground, background)
+	c.history.SetColors(foreground, background)
+}
+
+func (c *Console) SetLogPalette(p prettylog.Palette) {
+	c.emulator.SetLogPalette(p)
+	c.history.SetLogPalette(p)
+}
+
+// HistoryFrame is every retained command, newest last.
+func (c *Console) HistoryFrame() terminal.Frame { return c.history.Frame() }
+
+// History is the history view's scrolling.
+func (c *Console) History() interface {
+	Scroll(int) int
+	ScrollToBottom()
+} {
+	return c.history
 }

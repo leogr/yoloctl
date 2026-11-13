@@ -21,13 +21,21 @@ and theme roles; a low-disk warning uses `Warn`, critical uses `Bad`.
 host does not parse rendered command output into another log stream. After
 the old command's I/O pumps join, the console cancels an unfinished parser
 string before appending its host exit notice; an uncoloured notice cannot
-be swallowed by an incomplete child OSC. Before the next prompt, `Console.Run`
-uses the qualified native history-preserving reset: earlier primary rows and
-scrollback remain under the existing retention limit, while terminal/parser
-and Go-side query/focus/clipboard state start fresh. No rows are exported or
-replayed and no disk log is added. Local errors also append through this reset.
-Palette dismissal, focus changes and suggestion replacement hide or replace
-the display without erasing history; showing the console again restores it. [4](#source-4) [7](#source-7) [8](#source-8)
+be swallowed by an incomplete child OSC. The console has two emulators fed
+the same bytes. Before each prompt or local error, `Console.begin` fully
+clears the shown one, so the palette shows one command at a time, and gives
+the reply-less history emulator the native history-preserving reset plus one
+blank line when it already holds a command. Earlier prompts, output and exit
+notices stay there, bounded by the native line ring (`scrollback_lines`,
+default 10,000, oldest lines first, within the 64 MiB budget). Terminal/parser
+and Go-side query/focus/clipboard state start fresh; only the shown emulator
+answers queries. No rows are exported or replayed and no disk log is added.
+With the palette idle, Ctrl+R toggles the display between the last command and
+the history, newest last, both scrollable; a running command receives Ctrl+R
+instead. While shown, history owns the overlay over an open or late completion
+menu and keeps the draft; Ctrl+R, PgUp/PgDn, Esc and the palette key act on
+the view, and any other key returns to editing first. Esc, focus changes and a
+new command or error return to the last command; hiding never erases history. [4](#source-4) [7](#source-7) [8](#source-8)
 [12](#source-12) [13](#source-13) [14](#source-14)
 
 ## Sources
@@ -43,6 +51,6 @@ the display without erasing history; showing the console again restores it. [4](
 9. <a id="source-9"></a> [Toast model](../../internal/tui/spaceview/model.go#L347) — `say` and event classification.
 10. <a id="source-10"></a> [Toast rendering](../../internal/tui/spaceview/layout.go#L328) — shared glyphs and semantic tone.
 11. <a id="source-11"></a> [Disk warnings](../../internal/tui/spaceview/disks.go#L204) — `diskEvents`.
-12. <a id="source-12"></a> [History-preserving reset](../../internal/tui/term/emulator.go#L226) — `ClearKeepHistory`, `reset`; native `Terminal.ResetKeepHistory`.
-13. <a id="source-13"></a> [Consecutive-command regression](../../internal/tui/term/console_test.go#L57) — retained prompts/output/exit notices and fresh input modes; lifecycle_test.go retains old direct-child text but rejects the late descendant's output and clipboard tail.
-14. <a id="source-14"></a> [History-preserving UI transitions](../../internal/tui/tui.go#L1603) — `resetConsoleView`, `leavePaletteForTab`, `refreshSuggestions`.
+12. <a id="source-12"></a> [Console history](../../internal/tui/term/console.go#L1) — `Console.history`, `begin`, `HistoryFrame`, `History`, the pump/echo writes to both; emulator.go `ClearKeepHistory`, `reset`; native `Terminal.ResetKeepHistory`.
+13. <a id="source-13"></a> [Consecutive-command regression](../../internal/tui/term/console_test.go#L57) — last output shown alone; history order, exit notices, blank lines and fresh input modes; `TestConsoleHistoryRotatesByLines`; lifecycle_test.go keeps old direct-child text in history only and rejects the late descendant's output and clipboard tail.
+14. <a id="source-14"></a> [History view and UI transitions](../../internal/tui/tui.go#L1) — the Ctrl+R case, `consoleHistory`, `showConsoleCommand`, `resetConsoleView`, `leavePaletteForTab`, `refreshSuggestions`, the palette legend; frames.go `consoleDisplayFrame`, `scroller`; `menuShown`; tui_test.go `TestOverlayShowsOneCommandAndCtrlRShowsHistory`, `TestConsoleHistoryWinsOverCompletionMenu`.
