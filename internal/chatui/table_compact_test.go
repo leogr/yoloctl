@@ -111,7 +111,7 @@ func TestChatCompactStateSurvivesModeAndIsEvictedWithMessage(t *testing.T) {
 }
 func TestChatCompactExpansionRefusalIsVisible(t *testing.T) {
 	m, _ := copyingModel(200, 60)
-	source := "|h|" + strings.Repeat("h|", 31) + "\n|" + strings.Repeat("---|", 32) + "\n|" + (strings.Repeat("w", 200) + " " + strings.Repeat("word ", 400)) + "|" + strings.Repeat("x|", 31)
+	source := "|heading|" + strings.Repeat("heading|", 31) + "\n|" + strings.Repeat("---|", 32) + "\n|" + (strings.Repeat("w", 200) + " " + strings.Repeat("word ", 8000)) + "|" + strings.Repeat("x|", 31)
 	m.Update(IncomingMsg{Message: Message{ID: "q", Nick: "x", Text: source}})
 	m.View()
 	compactChatClick(t, m, "0:0")

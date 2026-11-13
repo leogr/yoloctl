@@ -121,7 +121,7 @@ func TestFollowTableToggleCancelsDragAndSourceStaysLiteral(t *testing.T) {
 func TestFollowWCollapsesPartiallyRefusedExpansion(t *testing.T) {
 	source := "|Name|Stage|Owner|Updated|Note|\n|---|---|---|---|---|\n"
 	for i := 0; i < 12; i++ {
-		source += fmt.Sprintf("|row-%02d-abcdefghijkl|abcdefghijklmnop|abcdefghijklmnop|abcdefghijklmnop|%s|\n", i, strings.Repeat("long note words ", 30))
+		source += fmt.Sprintf("|row-%02d-abcdefghijkl|abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ|abcdefghijklmnop|abcdefghijklmnop|%s|\n", i, strings.Repeat("long note words ", 4000))
 	}
 	m, _ := fileModel(t, source, Markdown)
 	_, cmd := m.Update(tea.WindowSizeMsg{Width: 100, Height: 60})

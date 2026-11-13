@@ -1,6 +1,6 @@
 # Shared Markdown renderer
 
-Verification: `6eaae0184488765df1d718b4f2381e4dff228e6f` and accompanying changes.
+Verification: `cd7ed7ef2b2c16e0e362e0f9073b8f82fccd89c8` and accompanying changes.
 
 [FACT] `internal/markdownview` owns the existing Markdown subset's pure parser,
 lexer, logical lines, layout, source maps and copy/hit geometry. `Parse` takes
@@ -36,6 +36,10 @@ never copied; source maps drop the brackets as markup.
 [FACT] Fitting tables keep alignment. If a viewport allocation exceeds the
 byte budget, layout tries tighter allocations and keeps the widest that fits
 before fallback: widening alone retains an admitted table form.
+Aligned/natural-width padding keeps `2*source+4096`; genuinely narrowed table
+layouts use the larger of that allowance and 2 MiB (the existing whole-file
+follow size), so ordinary long wrapped tables stay open. Repeated labels keep
+the source-relative check. The allowance is never lower than before. [19](#source-19)
 Cached cell measurements reject impossible retry widths before full wrapping.
 [17](#source-17) Noncompact layouts retain their 16-cell readability cutoff. Rejected padding keeps bounded
 unpadded logical cells; neither natural fit nor the final text route rebuilds
@@ -116,3 +120,5 @@ component parity, not native terminal, live-room or future file-view behavior.
 17. <a id="source-17"></a> [Retry cost bound](../../internal/markdownview/table_budget.go#L1) — `measureTableBudget`, `couldFit`; table_budget_test.go checks conservative admission and benchmarks the guarded sparse case.
 
 18. <a id="source-18"></a> [Width-only table choices](../../internal/markdownview/table_words.go#L1) — `tableRunWidth`, `tableLayoutLines`; body.go `TableLines`, `fitTableColumns`; rows.go `tableWrapRanges`; table_compact.go `compactTable`; table_responsive_test.go and table_words_test.go cover shape, headers, width modes and table-only breaks.
+
+19. <a id="source-19"></a> [Pane-bounded allowance](../../internal/markdownview/table_limit.go#L1) — `tableLayoutBudget`; table_long_test.go covers ordinary45/120-row tables, width sweeps, expansion and generated sparse output; body.go `TableLines` keeps its aligned guard.

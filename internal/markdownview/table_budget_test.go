@@ -51,13 +51,13 @@ func TestSparseRetryRejectsImpossibleWidthsBeforeWrapping(t *testing.T) {
 	p := documentOptions()
 	doc := Parse("|"+strings.Repeat("h", 65536)+"|b|\n|---|---|\n"+strings.Repeat("|x|y|\n", 512), p)
 	m := measureTableBudget(p.Method, doc.Lines)
-	for _, width := range []int{240, 500, 1000} {
+	for _, width := range []int{5000, 6000, 8000} {
 		if m.couldFit(width, true) {
 			t.Fatalf("sparse width%d must be rejected without fragment allocation", width)
 		}
 	}
 	opts := LayoutOptions{Method: p.Method, Theme: p.Theme, CompactTables: true, UnlimitedRows: true}
-	rows, why, _ := fitTableInView(p.Method, doc.Lines, 0, 0, 1000, 100000, p.Theme, opts)
+	rows, why, _ := fitTableInView(p.Method, doc.Lines, 0, 0, 8000, 100000, p.Theme, opts)
 	if rows == nil || why != TableLaidOut {
 		t.Fatal("shortcut lost the fitting narrower table", why)
 	}
@@ -67,7 +67,7 @@ func BenchmarkSparseTableRetry(b *testing.B) {
 	p := documentOptions()
 	doc := Parse("|"+strings.Repeat("h", 65536)+"|b|\n|---|---|\n"+strings.Repeat("|x|y|\n", 512), p)
 	opts := LayoutOptions{Method: p.Method, Theme: p.Theme, CompactTables: true, UnlimitedRows: true}
-	for _, width := range []int{240, 1000} {
+	for _, width := range []int{5000, 8000} {
 		b.Run(fmt.Sprint(width), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {

@@ -255,7 +255,7 @@ func compactTable(wm ansi.Method, lines []DisplayLine, first, table, width, rows
 		bytes += (len(p.Text) + gutter) * max(len(lines)-3, 0)
 	}
 	count += max(len(lines)-3, 0)
-	budget := 2*tbl.Source + TableSlack
+	budget := tableLayoutBudget(tbl, width-gutter)
 	if bytes > budget {
 		return nil, TableOverBudget, nil, true
 	}

@@ -816,7 +816,7 @@ func fitTableColumns(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft
 			return nil, TableTooNarrow
 		}
 	}
-	budget := 2*tbl.Source + TableSlack
+	budget := tableLayoutBudget(tbl, width)
 	used := len("─┼─") * (cols - 1)
 	for _, w := range alloc {
 		used += w * len("─")

@@ -75,7 +75,7 @@ func (m tableBudgetMeasure) couldFit(width int, compact bool) bool {
 		// The compact admission counts body rules; FitTableLayout does not.
 		used += (len("─")*sum + len(" │ ")*(len(alloc)-1) + gutter) * max(len(m.rows)-2, 0)
 	}
-	budget := 2*m.table.Source + TableSlack
+	budget := tableLayoutBudget(m.table, width-gutter)
 	for i, row := range m.rows {
 		height := 1
 		if !compact {
