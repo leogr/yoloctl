@@ -831,25 +831,35 @@ func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, 
 		return err
 	}
 
-	if resolved.Runtime == boxstate.RuntimeMissing {
-		inspector := agentbox.LiveInspector{Client: c}
-		applier := newManagedLiveApplier(c, errw)
-		result, err := agentbox.ReconcileForStart(cmd.Context(), cfg, inspector, applier)
-		if err != nil {
-			return err
+	autoupdate := func(ctx context.Context) error {
+		if noAutoupdate {
+			return nil
 		}
-		if err := printReconcileResult(cmd.OutOrStdout(), name, result); err != nil {
-			return err
-		}
-		if err := applySessionStart(lock, tracking, true, newSession, errw); err != nil {
-			return err
-		}
-		if !noAutoupdate {
-			if err := autoupdateAgentboxIfNeeded(cmd.Context(), c, name, cfg.Agent, errw, updated); err != nil {
-				return fmt.Errorf("autoupdate %s: %w", name, err)
-			}
+		if err := autoupdateAgentboxIfNeeded(ctx, c, name, cfg.Agent, errw, updated); err != nil {
+			return fmt.Errorf("autoupdate %s: %w", name, err)
 		}
 		return nil
+	}
+	if resolved.Runtime == boxstate.RuntimeMissing {
+		create := func(ctx context.Context) error {
+			inspector := agentbox.LiveInspector{Client: c}
+			applier := newManagedLiveApplier(c, errw)
+			result, err := agentbox.ReconcileForStart(ctx, cfg, inspector, applier)
+			if err != nil {
+				return err
+			}
+			if err := printReconcileResult(cmd.OutOrStdout(), name, result); err != nil {
+				return err
+			}
+			if err := applySessionStart(lock, tracking, true, newSession, errw); err != nil {
+				return err
+			}
+			return autoupdate(ctx)
+		}
+		if resultPolicy {
+			return runStartForResult(cmd.Context(), name, liveBoxStopSteps(c, spaceName, name, errw), create)
+		}
+		return create(cmd.Context())
 	}
 
 	// Refuse replacement before starting the old container or clearing its
@@ -879,28 +889,21 @@ func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, 
 	}
 	// Existing stopped container: `nerdctl start` it, then reconcile
 	// port forwards against its fresh bridge IP.
-	startCtx, submitted := cmd.Context(), false
-	if resultPolicy {
-		startCtx = withStartSubmitted(startCtx, &submitted)
-	}
-	startErr := startAndReconcileExistingAgentbox(startCtx, c, cfg, prepared, inspector, newManagedLiveApplierForStart(c, errw, forwardIntent))
-	if startErr == nil {
-		startErr = applySessionStart(lock, tracking, stopped, newSession, errw)
-	}
-	if resultPolicy {
-		if err := settleStartForResult(cmd.Context(), name, startErr, submitted, resultSteps); err != nil {
+	start := func(ctx context.Context) error {
+		if err := startAndReconcileExistingAgentbox(ctx, c, cfg, prepared, inspector, newManagedLiveApplierForStart(c, errw, forwardIntent)); err != nil {
 			return err
 		}
-	} else if startErr != nil {
-		return startErr
-	}
-
-	if !noAutoupdate {
-		if err := autoupdateAgentboxIfNeeded(cmd.Context(), c, name, cfg.Agent, errw, updated); err != nil {
-			return fmt.Errorf("autoupdate %s: %w", name, err)
+		if err := applySessionStart(lock, tracking, stopped, newSession, errw); err != nil {
+			return err
 		}
+		return autoupdate(ctx)
 	}
-	return nil
+	if resultPolicy {
+		// The whole attempt, autoupdate included, is decided by one read and
+		// rolled back with box stop's policy when it fails after an engine start.
+		return runStartForResult(cmd.Context(), name, resultSteps, start)
+	}
+	return start(cmd.Context())
 }
 
 func newAgentboxCreateCmd() *cobra.Command {
@@ -2189,7 +2192,6 @@ func startExistingAgentboxContainerPrepared(ctx context.Context, c *container.Cl
 		return fmt.Errorf("clear stale session state for %s before start: %w", name, err)
 	}
 	if native {
-		markStartSubmitted(ctx)
 		return prepared.Start(ctx, cfg)
 	}
 	if err := container.ValidateContainerID(details.ID); err != nil {
@@ -2198,7 +2200,6 @@ func startExistingAgentboxContainerPrepared(ctx context.Context, c *container.Cl
 	if err := c.Shell(ctx, "sudo", "mkdir", "-p", sandbox.SocketDirHost(name)); err != nil {
 		return fmt.Errorf("recreate sandbox socket dir for %s before start: %w", name, err)
 	}
-	markStartSubmitted(ctx)
 	if err := c.Start(ctx, details.ID); err != nil {
 		return err
 	}

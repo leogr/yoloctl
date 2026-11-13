@@ -191,6 +191,9 @@ func (c *Client) createOrRun(ctx context.Context, opts RunOptions, start bool, s
 	args = append(args, opts.Command...)
 	cmd := c.command(ctx, append([]string{"sudo", "nerdctl"}, args...)...)
 	cmd.Stdout = stdout
+	if start {
+		markEngineStart(ctx)
+	}
 	return vmhost.RunWithFilteredStderr(cmd, c.stderr)
 }
 
@@ -200,6 +203,7 @@ func (c *Client) Start(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
+	markEngineStart(ctx)
 	return c.nerdctl(ctx, "start", id)
 }
 
@@ -219,6 +223,7 @@ func (c *Client) Stop(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
+	markEngineStop(ctx)
 	return c.nerdctl(ctx, "stop", "--time", stopGraceSeconds, id)
 }
 

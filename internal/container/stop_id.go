@@ -23,5 +23,6 @@ func (c *Client) StopContainerID(ctx context.Context, id string, immediate bool)
 	if immediate {
 		grace = "0"
 	}
+	markEngineStop(ctx)
 	return c.nerdctl(ctx, "stop", "--time", grace, id)
 }

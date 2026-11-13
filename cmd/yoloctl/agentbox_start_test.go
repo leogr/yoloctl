@@ -123,7 +123,7 @@ func setupExistingStartFixture(t *testing.T, drift string) string {
 			}
 			raw, err := json.Marshal([]any{map[string]any{
 				"Id": strings.Repeat("f", 64), "Name": cfg.Name, "Path": command[0], "Args": command[1:], "State": state,
-				"Config": map[string]any{"Image": image, "Labels": map[string]string{agentbox.LabelAgent: "none", resources.WorkloadLabel: resources.WorkloadVersion}},
+				"Config": map[string]any{"Image": image, "Labels": map[string]string{agentbox.LabelAgent: "none", agentbox.LabelAgentbox: cfg.Name, agentbox.LabelSpace: "default", resources.WorkloadLabel: resources.WorkloadVersion}},
 				"Mounts": []any{map[string]any{"Source": workdir, "Destination": cfg.Workdir.ContainerPath(), "RW": true}},
 			}})
 			if err != nil {

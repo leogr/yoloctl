@@ -26,19 +26,47 @@ func (a LiveApplier) Stop(ctx context.Context, name string) error {
 }
 
 // StopRuntimeForResult is `box stop`'s result-mode engine stop: one stop of
-// the inspected container on its own route. On the native route the forward
+// the container the caller's first read selected, by its full ID, on its own
+// route. The name is never resolved again, so a replacement that appeared
+// since that read is never the target. On the native route the forward
 // precondition and the endpoint removal are left to the caller's steps.
-func (a LiveApplier) StopRuntimeForResult(ctx context.Context, name string) error {
+func (a LiveApplier) StopRuntimeForResult(ctx context.Context, name, id string) error {
 	if a.Client == nil {
 		return errors.New("runtime stop requires a container client")
 	}
-	details, err := a.Client.Inspect(ctx, name)
+	if err := container.ValidateContainerID(id); err != nil {
+		return err
+	}
+	details, err := a.Client.Inspect(ctx, id)
 	if err != nil {
 		return err
 	}
+	if details.ID != id || details.Name != name || details.Labels[LabelAgentbox] != name || details.Labels[LabelSpace] != a.Client.Env() {
+		return fmt.Errorf("container %s is no longer box %s's container", shortContainerID(id), name)
+	}
+	if !details.Running {
+		return nil
+	}
 	return stopInspectedRuntime(ctx, details,
-		func(ctx context.Context) error { return a.stopNativeRuntimeForResult(ctx, name, details.ID) },
-		func(ctx context.Context) error { return sandbox.StopContainerID(ctx, a.Client, name, details.ID) })
+		func(ctx context.Context) error { return a.stopNativeRuntimeForResult(ctx, name, id) },
+		func(ctx context.Context) error { return sandbox.StopContainerID(ctx, a.Client, name, id) })
+}
+
+// ResultLeftover is a result-mode stop step that did its effect but left
+// part of its work, named by What, for the next stop or start.
+type ResultLeftover struct {
+	What  string
+	Cause error
+}
+
+func (e *ResultLeftover) Error() string { return e.What + ": " + e.Cause.Error() }
+func (e *ResultLeftover) Unwrap() error { return e.Cause }
+
+func shortContainerID(id string) string {
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
 }
 
 func stopInspectedRuntime(ctx context.Context, details *container.Details, native, legacy func(context.Context) error) error {

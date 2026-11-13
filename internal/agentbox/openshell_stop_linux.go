@@ -3,6 +3,7 @@ package agentbox
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -26,8 +27,46 @@ func (a LiveApplier) stopNativeRuntime(ctx context.Context, name, id string) err
 // performed by the namespace retirement), without the forward precondition
 // and without endpoint removal, which the caller's later step does under its
 // own checks (RemoveStoppedEndpoint).
+//
+// Storage verification guards what the stop reads and removes on the data
+// disk (the runtime record, the namespace retirement). When it fails, the
+// engine stop still runs: the exact container, checked by its engine
+// ownership labels, is stopped by ID, and the disk-dependent work is
+// returned as a ResultLeftover.
 func (a LiveApplier) stopNativeRuntimeForResult(ctx context.Context, name, id string) error {
+	if !spaceenv.Native() || os.Geteuid() != 0 || os.Getegid() != 0 || a.Client == nil || a.VerifyStorage == nil {
+		return errors.New("native runtime stop requires admitted VM-root infrastructure")
+	}
+	if err := spaceenv.RequireSpace(a.Client.Env()); err != nil {
+		return err
+	}
+	if cause := a.VerifyStorage(ctx); cause != nil {
+		return stopExactContainerWithoutStorage(ctx, a.Client, name, id, cause)
+	}
 	return a.stopNativeRuntimeMode(ctx, name, id, nil, true)
+}
+
+// stopExactContainerWithoutStorage is the engine-only stop of the result
+// mode: the container read by its full ID, still box name's by its engine
+// labels, stopped once by that ID.
+func stopExactContainerWithoutStorage(ctx context.Context, client *container.Client, name, id string, cause error) error {
+	details, err := client.Inspect(ctx, id)
+	if err != nil {
+		return err
+	}
+	if details.ID != id || details.Name != name || details.Labels[LabelAgentbox] != name || details.Labels[LabelSpace] != client.Env() {
+		return errors.New("the container read is no longer the box's container")
+	}
+	if details.Running {
+		if err := client.StopContainerID(ctx, id, false); err != nil {
+			return err
+		}
+	}
+	what := "runtime record checks"
+	if DecodeLabels(details.Labels).UnconfinedNetwork {
+		what = "network namespace retirement"
+	}
+	return &ResultLeftover{What: what, Cause: fmt.Errorf("storage verification failed: %w", cause)}
 }
 
 func (a LiveApplier) stopNativeRuntimeWithGeneration(ctx context.Context, name, id string, attempt *nativeStartedGeneration) error {
@@ -48,6 +87,12 @@ func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string,
 	}
 	if err := a.VerifyStorage(ctx); err != nil {
 		return err
+	}
+	// The result mode verified storage once on entry; a later failure of the
+	// same verifier must not stand between its checks and the one engine stop.
+	verify := a.VerifyStorage
+	if forResult {
+		verify = func(context.Context) error { return nil }
 	}
 	selected, err := inspectOpenShellRuntime(ctx, a.Client, name, id)
 	if err != nil {
@@ -74,7 +119,7 @@ func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string,
 	// This closure is read-only, including when called repeatedly around actual
 	// namespace effects. Endpoint deletion is the separate final callback below.
 	resources := func(check context.Context) error {
-		if err := a.VerifyStorage(check); err != nil {
+		if err := verify(check); err != nil {
 			return err
 		}
 		if attempt != nil {
@@ -120,7 +165,7 @@ func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string,
 	checks := nativeRuntimeStopChecks{
 		selected: selected, resources: resources,
 		read: func(check context.Context) (OpenShellRuntime, *container.Details, error) {
-			if err := a.VerifyStorage(check); err != nil {
+			if err := verify(check); err != nil {
 				return OpenShellRuntime{}, nil, err
 			}
 			current, err := inspectOpenShellRuntime(check, a.Client, name, id)
@@ -225,11 +270,16 @@ func sameNativeStopBinding(a, b OpenShellRuntime) bool {
 // is nothing to remove. Without a container nothing owns the directory's
 // content, so it is kept for recreate or destroy.
 func (a LiveApplier) RemoveStoppedEndpoint(ctx context.Context, name string) error {
-	if !spaceenv.Native() || os.Geteuid() != 0 || os.Getegid() != 0 || a.Client == nil {
+	if !spaceenv.Native() || os.Geteuid() != 0 || os.Getegid() != 0 || a.Client == nil || a.VerifyStorage == nil {
 		return errors.New("native endpoint cleanup requires admitted VM-root infrastructure")
 	}
 	if err := spaceenv.RequireSpace(a.Client.Env()); err != nil {
 		return err
+	}
+	// The same verification that guarded today's endpoint removal inside the
+	// stop: it is not inherited from the stop, whose errors no longer end it.
+	if err := a.VerifyStorage(ctx); err != nil {
+		return fmt.Errorf("storage verification failed: %w", err)
 	}
 	return removeStoppedEndpoint(ctx, func() (*os.File, error) { return openForwardSocketDirectory(name) },
 		func(ctx context.Context) (bool, error) {
