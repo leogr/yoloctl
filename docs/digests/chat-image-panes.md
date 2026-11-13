@@ -16,18 +16,19 @@ the advertised 256), which the preview fills. [1](#source-1) [2](#source-2)
 
 [FACT] A pane has at most one preview: showing another first releases the
 current one. On a ready reply for its own request and generation the pane
-draws the preview right under the last row of the line holding its chip (after
-the text when no line holds the chip's button) as decor rows of placeholder
-cells (U+10EEEE with row and column marks) in the image ID's 24-bit colour; a
-press on them snaps a selection to the end of that line. A click on the rows
+draws the preview right under the displayed row holding its chip (the chip's
+last row when it wraps; after the text when no line holds the chip's button) as
+decor rows of placeholder cells (U+10EEEE with row and column marks) in the
+image ID's 24-bit colour; a press on them snaps a selection to the end of that
+row. A click on the rows
 releases it by its token. While previews apply, each of the message's own
 `[file NAME · SIZE]` chips toggles its own image; the footer action, for the
 keyboard, shows the first image, then each next one ("Show image 2 of 3"),
 then hides it. A shown preview whose width is no longer the text width (a
-resize, the roster, a narrower capability) is requested again at the new width
+resize, the roster, a narrower capability) is requested again
 and the old image released; a pending request is not repeated, and its answer
-is checked in turn. The body cache key includes the chips' message ID, so an
-own message's chips become buttons when the room echoes it. File
+is checked in turn. The body cache key includes the chips' message ID, so own
+chips become buttons on the echo. File
 chips enter the parsed body as one-rune private-use tokens the message does
 not contain and are then replaced with their literal labels, filtered for
 placeholder characters like message text, so a file name is never read as
@@ -64,7 +65,7 @@ cells display. [4](#source-4)
 
 ## Sources
 
-1. <a id="source-1"></a> [preview_image.go](../../internal/chatui/preview_image.go#L1) — `PreviewCapabilityMsg`, `PreviewReadyMsg`, `PreviewErrorMsg`, `previewArtifacts`, `chipAction`, `previewWidth`, `canPreview`, `nextPreview`, `imageActionLabel`, `stepPreview`, `togglePreview`, `requestPreview`, `resizePreview`, `releasePreview`, `previewUpdate`, `previewLine`, `previewRows`, `chipText`, `placeChips`, `literalChipLines`, `swapText`; the `trueColor` field, message action, `actPreview`, the body cache key, preview placement in `transcript`, `pointAt` in selection.go, `transcriptWidth`/`textWidth` in view.go, model.go, mouse.go.
+1. <a id="source-1"></a> [preview_image.go](../../internal/chatui/preview_image.go#L1) — `PreviewCapabilityMsg`, `PreviewReadyMsg`, `PreviewErrorMsg`, `previewArtifacts`, `chipAction`, `previewWidth`, `canPreview`, `nextPreview`, `imageActionLabel`, `stepPreview`, `togglePreview`, `requestPreview`, `resizePreview`, `releasePreview`, `previewUpdate`, `previewChip`, `previewRow`, `previewRows`, `chipText`, `placeChips`, `literalChipLines`, `swapText`; the `trueColor` field, message action, `actPreview`, the body cache key, preview placement in `transcript`, `pointAt` in selection.go, `transcriptWidth`/`textWidth` in view.go, model.go, mouse.go.
 2. <a id="source-2"></a> [chat_image_preview.go](../../cmd/yoloctl/chat_image_preview.go#L1) — `claimChatPreviews`, `configure`, `relay`; chat_view.go wiring; chat_image_preview_test.go.
-3. <a id="source-3"></a> [preview_image_test.go](../../internal/chatui/preview_image_test.go#L1) — action gating, request fields, placeholder rows and colour, hide, errors, stray ready, capability change, reduced colour profile, lost connection or membership, chip click toggle and its absence where no preview applies, an own echoed message's chip clicked through SGR input in a running program, per-chip previews under their lines, footer stepping, width following, generated chip only (not a typed look-alike), literal file names, copy and wrapping, label placeholder filter, literal inert table chips (plain, code, emphasis; column alignment), literal placeholders.
+3. <a id="source-3"></a> [preview_image_test.go](../../internal/chatui/preview_image_test.go#L1) — action gating, request fields, placeholder rows and colour, hide, errors, stray ready, capability change, reduced colour profile, lost connection or membership, chip click toggle and its absence where no preview applies, an own echoed message's chip clicked through SGR input in a running program, per-chip previews under their chip rows (wrapped paragraphs and wrapped chips), footer stepping, width following, generated chip only (not a typed look-alike), literal file names, copy and wrapping, label placeholder filter, literal inert table chips (plain, code, emphasis; column alignment), literal placeholders.
 4. <a id="source-4"></a> [chat_image_standalone.go](../../cmd/yoloctl/chat_image_standalone.go#L1) — `ownsTerminalImages`, `standaloneImages` (`start`, `update`, `checkProbe`, `advertise`, `acceptCellSize`, `answer`, `finish`, `show`, `release`, `filter`, `close`), `standaloneChat`; chat_view.go wiring; chat_image_standalone_test.go.

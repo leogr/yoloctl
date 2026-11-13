@@ -305,11 +305,8 @@ func (m *Model) transcript(width int) []transcriptRow {
 				run{Text: truncate(m.widthMethod, label, textWidth, "…"), Style: spaceview.Style{FG: t.Dim}, Act: action{Kind: actReply, Value: msg.ReplyTo}})})
 		}
 		body := m.body(msg, textWidth)
-		// A shown image follows the last row of the line holding its chip.
-		previewAt := m.previewLine(msg, body.lines)
-		if previewAt < 0 {
-			previewAt = len(body.lines)
-		}
+		// A shown image follows the displayed row holding its chip.
+		previewAt := m.previewRow(msg, body.lines, body.rows)
 		previewed := false
 		for n, br := range body.rows {
 			row := transcriptRow{key: key, line: br.Line, offset: br.Start, end: br.End, kind: rowBody, frags: br.Frags}
@@ -334,7 +331,7 @@ func (m *Model) transcript(width int) []transcriptRow {
 				}
 			}
 			rows = append(rows, row)
-			if !previewed && br.Line == previewAt && (n+1 == len(body.rows) || body.rows[n+1].Line != previewAt) {
+			if !previewed && n == previewAt {
 				rows = append(rows, m.previewRows(msg, key, len(body.lines), indent)...)
 				previewed = true
 			}

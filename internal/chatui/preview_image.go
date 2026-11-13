@@ -279,23 +279,41 @@ func previewReason(code string) string {
 	return "the image could not be read"
 }
 
-// previewLine is the display line holding the chip of msg's shown preview,
-// or -1 when no line holds its button (a literal chip in a table): the
-// preview then follows the text.
-func (m *Model) previewLine(msg *Message, lines []displayLine) int {
+// previewChip is where the chip of msg's shown preview ends: its display
+// line and the byte offset after its label in that line. ok is false when no
+// line holds its button (a literal chip in a table): the preview then
+// follows the text.
+func (m *Model) previewChip(msg *Message, lines []displayLine) (line, end int, ok bool) {
 	p := m.preview
 	if p == nil || p.key != messageKey(*msg) {
-		return -1
+		return 0, 0, false
 	}
 	want := chipAction(msg.ID, p.chip)
 	for n, dl := range lines {
 		for _, piece := range dl.Pieces {
 			if piece.Act == want {
+				line, end, ok = n, piece.End, true
+			}
+		}
+		if ok {
+			return line, end, true
+		}
+	}
+	return 0, 0, false
+}
+
+// previewRow is the index in rows of the displayed row the preview follows:
+// the row holding the end of its chip (the chip's last row when it wraps),
+// or the last row when no row holds it.
+func (m *Model) previewRow(msg *Message, lines []displayLine, rows []bodyRow) int {
+	if line, end, ok := m.previewChip(msg, lines); ok {
+		for n, br := range rows {
+			if br.Line == line && br.Start < end && end <= br.End {
 				return n
 			}
 		}
 	}
-	return -1
+	return len(rows) - 1
 }
 
 // previewRows are the placeholder rows of msg's shown preview: each cell is

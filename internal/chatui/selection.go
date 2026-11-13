@@ -218,9 +218,11 @@ func (m *Model) pointAt(x, y int) (selPoint, bool) {
 	case row.line < len(lines): // a fence frame inside the body
 		return selPoint{key: row.key, line: row.line}, true
 	case row.line >= linePreview && row.line < lineSpacer:
-		// An image under its chip's line snaps to that line's end.
-		if n := m.previewLine(&m.messages[msg], lines); n >= 0 {
-			return selPoint{key: row.key, line: n, lo: len(lines[n].Text), hi: len(lines[n].Text)}, true
+		// An image snaps to the end of the displayed row it follows.
+		body := m.body(&m.messages[msg], max(m.lastTextWidth, 1))
+		if n := m.previewRow(&m.messages[msg], lines, body.rows); n >= 0 {
+			br := body.rows[n]
+			return selPoint{key: row.key, line: br.Line, lo: br.End, hi: br.End}, true
 		}
 	}
 	last := max(len(lines)-1, 0)

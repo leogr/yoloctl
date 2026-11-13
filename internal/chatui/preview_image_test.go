@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -471,14 +472,19 @@ func TestEachChipShowsItsImageUnderItsLine(t *testing.T) {
 	if got := shownRows(m, key); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("rows %q, want %q", got, want)
 	}
-	// A press on the image snaps a selection to the end of its chip's line.
+	// A press on the image snaps a selection to the end of its chip's row.
+	checked := 0
 	for i, row := range m.lastTranscript {
-		if row.key == key && row.line == linePreview {
+		if row.key == key && row.line >= linePreview && row.line < lineSpacer {
 			p, ok := m.pointAt(bodyIndent+1, i-m.scroll+m.layout.bodyTop)
 			if lines := m.body(&m.messages[m.indexOf(key)], m.lastTextWidth).lines; !ok || p.line != 0 || p.lo != len(lines[0].Text) {
 				t.Fatalf("point on the image %+v", p)
 			}
+			checked++
 		}
+	}
+	if checked != 1 {
+		t.Fatalf("%d image rows checked", checked)
 	}
 	runCmd(m.activate(chipAction(twoImagesID, 0)))
 	if len(h.released) != 2 || h.released[1] != "t1" || m.preview != nil {
@@ -552,5 +558,42 @@ func TestPreviewFollowsTheTextWidth(t *testing.T) {
 	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 20, MaxRows: 256})
 	if len(h.requests) != 4 || h.requests[3].Cols != 20 {
 		t.Fatalf("capped request %+v", h.requests)
+	}
+}
+
+// Two chips in one wrapped paragraph: each image follows the displayed row
+// holding its own chip, not the end of the paragraph, at every width.
+func TestPreviewFollowsItsChipsRowInAWrappedParagraph(t *testing.T) {
+	m, h := previewModel(t)
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 256, MaxRows: 256})
+	text := "first [Image #1] " + strings.Repeat("middle text ", 12) + "second [Image #2] " + strings.Repeat("tail text ", 8) + "end"
+	msg := twoImages()
+	msg.Text = text
+	msg.Attachments[0].At, msg.Attachments[1].At = strings.Index(text, "[Image #1]"), strings.Index(text, "[Image #2]")
+	m.Update(IncomingMsg{Message: msg})
+	key := "server:" + twoImagesID
+	// At 24 columns each chip itself wraps: the image follows its last row.
+	for _, width := range []int{24, 50, 70} {
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 80})
+		for k, chip := range []string{"2048 B]", "4096 B]"} {
+			m.preview = nil
+			runCmd(m.activate(chipAction(twoImagesID, k)))
+			r := h.requests[len(h.requests)-1]
+			m.Update(PreviewReadyMsg{Request: r.Request, Generation: 1, Token: fmt.Sprintf("t%d%d", width, k), ID: 7, Cols: 2, Rows: 1})
+			rows := shownRows(m, key)
+			at := slices.Index(rows, "image")
+			if at < 1 || !strings.HasSuffix(strings.Join(rows[:at], " "), chip) && !strings.Contains(rows[at-1], chip+" ") || at == len(rows)-1 {
+				t.Fatalf("width %d, %s: rows %q", width, chip, rows)
+			}
+			// A press on it snaps to the end of the chip's row.
+			for i, row := range m.lastTranscript {
+				if row.key == key && row.line >= linePreview && row.line < lineSpacer {
+					above := m.lastTranscript[i-1]
+					if p, ok := m.pointAt(bodyIndent+1, i-m.scroll+m.layout.bodyTop); !ok || p.line != above.line || p.lo != above.end {
+						t.Fatalf("width %d, %s: point %+v, chip row ends at %d", width, chip, p, above.end)
+					}
+				}
+			}
+		}
 	}
 }
