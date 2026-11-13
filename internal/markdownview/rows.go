@@ -93,13 +93,26 @@ func RunsWidth(wm ansi.Method, runs []Run) int {
 // breaks after spaces; a space at the edge hangs, staying in its row's bytes
 // without being drawn. Code and words wider than a row break per grapheme.
 func WrapRanges(wm ansi.Method, text string, width int, words bool) [][2]int {
+	return wrapRanges(wm, text, width, words, false)
+}
+
+func tableWrapRanges(wm ansi.Method, text string, width int) [][2]int {
+	return wrapRanges(wm, text, width, true, true)
+}
+
+func wrapRanges(wm ansi.Method, text string, width int, words, table bool) [][2]int {
 	width = max(width, 1)
 	var rows [][2]int
 	start, col, brk := 0, 0, -1
+	previousWide := false
 	for o := 0; o < len(text); {
 		g, w := ansi.FirstGraphemeCluster(text[o:], wm)
 		next := o + len(g)
 		space := g == " "
+		if table && previousWide && w == 2 {
+			brk = o
+		}
+		previousWide = w == 2
 		if space && col+w > width && col > 0 {
 			rows = append(rows, [2]int{start, next})
 			start, col, brk, o = next, 0, -1, next
@@ -116,7 +129,7 @@ func WrapRanges(wm ansi.Method, text string, width int, words bool) [][2]int {
 			brk = -1
 		}
 		col += w
-		if space {
+		if space || table && (g == "-" || g == "/" || g == "_") {
 			brk = next
 		}
 		o = next

@@ -27,7 +27,7 @@ func expandChatTableRows(m *Model, key string) {
 func compactChatFixture(t *testing.T) (*Model, *[]string) {
 	t.Helper()
 	m, copied := copyingModel(90, 60)
-	text := "|Name|Detail|\n|---|---|\n|alpha|" + strings.Repeat("first detail ", 25) + "|\n|beta|" + strings.Repeat("second detail ", 25) + "|"
+	text := "|Name|Detail|\n|---|---|\n|alpha|" + (strings.Repeat("first detail ", 25) + strings.Repeat("x", 200)) + "|\n|beta|" + (strings.Repeat("second detail ", 25) + strings.Repeat("x", 200)) + "|"
 	m.Update(IncomingMsg{Message: Message{ID: "q", Nick: "x", Text: text}})
 	m.View()
 	return m, copied
@@ -111,7 +111,7 @@ func TestChatCompactStateSurvivesModeAndIsEvictedWithMessage(t *testing.T) {
 }
 func TestChatCompactExpansionRefusalIsVisible(t *testing.T) {
 	m, _ := copyingModel(200, 60)
-	source := "|h|" + strings.Repeat("h|", 31) + "\n|" + strings.Repeat("---|", 32) + "\n|" + strings.Repeat("word ", 400) + "|" + strings.Repeat("x|", 31)
+	source := "|h|" + strings.Repeat("h|", 31) + "\n|" + strings.Repeat("---|", 32) + "\n|" + (strings.Repeat("w", 200) + " " + strings.Repeat("word ", 400)) + "|" + strings.Repeat("x|", 31)
 	m.Update(IncomingMsg{Message: Message{ID: "q", Nick: "x", Text: source}})
 	m.View()
 	compactChatClick(t, m, "0:0")
@@ -120,5 +120,38 @@ func TestChatCompactExpansionRefusalIsVisible(t *testing.T) {
 	}
 	if !m.body(&m.messages[m.indexOf("server:q")], m.lastTextWidth).closed[2] {
 		t.Fatal("refused row opened")
+	}
+}
+
+func TestChatBChoicesSurviveWrappedAResize(t *testing.T) {
+	m, _ := compactChatFixture(t)
+	compactChatClick(t, m, "0:0")
+	for _, open := range []bool{true, false} {
+		if !open {
+			compactChatClick(t, m, "0:0")
+		}
+		m.Update(tea.WindowSizeMsg{Width: 300, Height: 60})
+		m.View()
+		key := "server:q"
+		body := m.body(&m.messages[m.indexOf(key)], m.lastTextWidth)
+		for _, row := range body.rows {
+			for _, run := range row.Runs {
+				if run.Act.Kind == markdownview.IntentToggleTableRow {
+					t.Fatal("A has table action")
+				}
+			}
+		}
+		m.toggleTableRow(action{Kind: markdownview.IntentToggleTableRow, Value: "0:0", Extra: key})
+		if m.tableRows[key][markdownview.TableRowID{Table: 0, Row: 0}] != open {
+			t.Fatal("A changed dormant choice")
+		}
+		m.Update(tea.WindowSizeMsg{Width: 4, Height: 60})
+		m.View()
+		m.Update(tea.WindowSizeMsg{Width: 90, Height: 60})
+		m.View()
+		body = m.body(&m.messages[m.indexOf(key)], m.lastTextWidth)
+		if body.closed[2] == open {
+			t.Fatal("B choice lost after A resize", open)
+		}
 	}
 }

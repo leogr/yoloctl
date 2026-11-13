@@ -9,7 +9,7 @@ import (
 )
 
 func TestLabelledTableKeepsChatCopyAndQuote(t *testing.T) {
-	text := "| Name | Detail |\n|---|---|\n|alpha|" + strings.Repeat("detail ", 15) + "|"
+	text := "| Name | Detail | A | B | C |\n|---|---|---|---|---|\n|alpha|" + strings.Repeat("detail ", 15) + "|x|y|z|"
 	m := quoteModel(t, text)
 	m.Update(tea.WindowSizeMsg{Width: 23, Height: 60})
 	if !strings.Contains(ansi.Strip(m.View().Content), "Name: alpha") {
@@ -20,7 +20,7 @@ func TestLabelledTableKeepsChatCopyAndQuote(t *testing.T) {
 	if got, ok := m.selectedText(*m.sel); !ok || got != dl.CopyText(0, len(dl.Text)) {
 		t.Fatalf("display copy changed: %q", got)
 	}
-	if got := quoted(m); got != "> alpha\t"+strings.TrimSpace(strings.Repeat("detail ", 15))+"\n\n" {
+	if got := quoted(m); got != "> alpha\t"+strings.TrimSpace(strings.Repeat("detail ", 15))+"\tx\ty\tz\n\n" {
 		t.Fatalf("quote labels/notice leaked: %q", got)
 	}
 	if m.Messages()[m.indexOf("server:q")].Text != text {

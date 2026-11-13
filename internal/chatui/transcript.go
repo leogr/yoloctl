@@ -209,12 +209,6 @@ func (m *Model) body(msg *Message, width int) cachedBody {
 		layout := markdownview.Layout(markdownview.Document{Lines: body.lines}, width, markdownview.LayoutOptions{Method: m.widthMethod, Theme: m.theme, CompactTables: true, OpenTableRows: m.tableRows[key]})
 		body.rows = layout.Rows
 		if len(layout.RefusedTableRows) > 0 {
-			for _, id := range layout.RefusedTableRows {
-				delete(m.tableRows[key], id)
-			}
-			if len(m.tableRows[key]) == 0 {
-				delete(m.tableRows, key)
-			}
 			m.say(levelWarn, "Table row exceeds display limits; kept closed")
 		}
 		body.closed = map[int]bool{}

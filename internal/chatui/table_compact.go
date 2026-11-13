@@ -13,8 +13,14 @@ func (m *Model) toggleTableRow(act action) tea.Cmd {
 	}
 	body := m.body(&m.messages[index], max(m.lastTextWidth, 1))
 	valid := false
-	for _, r := range markdownview.TableRecords(markdownview.Document{Lines: body.lines}) {
-		valid = valid || r.ID == id
+	closed := false
+	for _, row := range body.rows {
+		for _, run := range row.Runs {
+			if run.Act.Kind == markdownview.IntentToggleTableRow && run.Act.Value == act.Value {
+				valid = true
+				closed = row.Closed
+			}
+		}
 	}
 	if !valid {
 		return nil
@@ -27,7 +33,7 @@ func (m *Model) toggleTableRow(act action) tea.Cmd {
 		m.tableRows[act.Extra] = map[markdownview.TableRowID]bool{}
 	}
 	state := m.tableRows[act.Extra]
-	if state[id] {
+	if !closed {
 		delete(state, id)
 	} else {
 		state[id] = true

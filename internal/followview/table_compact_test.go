@@ -11,7 +11,7 @@ import (
 
 func followCompactFixture(t *testing.T) *Model {
 	t.Helper()
-	m, _ := fileModel(t, "|Name|Detail|\n|---|---|\n|same|"+strings.Repeat("first words ", 25)+"|\n|same|"+strings.Repeat("second words ", 25)+"|", Markdown)
+	m, _ := fileModel(t, "|Name|Detail|\n|---|---|\n|same|"+(strings.Repeat("first words ", 25)+strings.Repeat("x", 200))+"|\n|same|"+(strings.Repeat("second words ", 25)+strings.Repeat("x", 200))+"|", Markdown)
 	_, cmd := m.Update(tea.WindowSizeMsg{Width: 60, Height: 60})
 	applyWork(t, m, cmd)
 	m.top, m.following = 0, false
@@ -80,16 +80,16 @@ func TestFollowCompactRefreshDuplicateKeysAndColumnReset(t *testing.T) {
 		_, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: 'r'}))
 		applyWork(t, m, cmd)
 	}
-	update("|Name|Detail|\n|---|---|\n|same|" + strings.Repeat("changed first ", 25) + "|\n|same|" + strings.Repeat("changed second ", 25) + "|")
+	update("|Name|Detail|\n|---|---|\n|same|" + (strings.Repeat("changed first ", 25) + strings.Repeat("x", 200)) + "|\n|same|" + (strings.Repeat("changed second ", 25) + strings.Repeat("x", 200)) + "|")
 	if !m.view.compact[2] || m.view.compact[3] {
 		t.Fatal("duplicate first cells shared or lost open state")
 	}
-	update("|Name|Detail|\n|---|---|\n|same|" + strings.Repeat("only occurrence ", 25) + "|")
+	update("|Name|Detail|\n|---|---|\n|same|" + (strings.Repeat("only occurrence ", 25) + strings.Repeat("x", 200)) + "|")
 	if len(m.openTables) != 0 || !m.view.compact[2] {
 		t.Fatal("missing occurrence kept stale expansion")
 	}
 	toggleFollowCell(t, m, "0:0")
-	update("|Name|Detail|Third|\n|---|---|---|\n|same|" + strings.Repeat("changed schema ", 25) + "|x|")
+	update("|Name|Detail|Third|\n|---|---|---|\n|same|" + (strings.Repeat("changed schema ", 25) + strings.Repeat("x", 200)) + "|x|")
 	if len(m.openTables) != 0 {
 		t.Fatal("column change retained old key")
 	}
@@ -140,5 +140,31 @@ func TestFollowWCollapsesPartiallyRefusedExpansion(t *testing.T) {
 	applyWork(t, m, key(m, 'w', 0))
 	if len(m.openTables) == 0 || len(m.view.refused) == 0 {
 		t.Fatal("w could not expand again after collapse")
+	}
+}
+
+func TestFollowBChoicesSurviveWrappedAResize(t *testing.T) {
+	m := followCompactFixture(t)
+	toggleFollowCell(t, m, "0:0")
+	for _, open := range []bool{true, false} {
+		if !open {
+			toggleFollowCell(t, m, "0:0")
+		}
+		_, cmd := m.Update(tea.WindowSizeMsg{Width: 260, Height: 60})
+		applyWork(t, m, cmd)
+		if len(m.view.controls) != 0 || len(m.view.compact) != 0 {
+			t.Fatal("A has controls/closed rows")
+		}
+		before := len(m.openTables)
+		if cmd := m.toggleTableRows("", true); cmd != nil || len(m.openTables) != before {
+			t.Fatal("A w changed dormant B choices")
+		}
+		_, cmd = m.Update(tea.WindowSizeMsg{Width: 4, Height: 60})
+		applyWork(t, m, cmd)
+		_, cmd = m.Update(tea.WindowSizeMsg{Width: 60, Height: 60})
+		applyWork(t, m, cmd)
+		if m.view.compact[2] == open {
+			t.Fatal("B choice lost after A resize", open)
+		}
 	}
 }

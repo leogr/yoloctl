@@ -38,39 +38,47 @@ func measureTableBudget(wm ansi.Method, lines []DisplayLine) tableBudgetMeasure 
 	return m
 }
 func (m tableBudgetMeasure) couldFit(width int, compact bool) bool {
-	alloc, _ := compactColumns(m.table, width)
-	if alloc == nil {
-		return true
-	} // The actual admission reports the geometry reason.
-	clipped := false
+	tbl := m.table
+	gutter := 0
+	alloc, _ := WaterFill(tbl.Natural, tbl.Floor, width-3*(len(tbl.Natural)-1))
 	if compact {
-		for _, row := range m.rows[1:] {
-			for c, cell := range row {
-				clipped = clipped || cell.width > alloc[c]
+		alloc, _ = WaterFill(tbl.Natural, tbl.WordFloor, width-3*(len(tbl.Natural)-1))
+		if alloc != nil {
+			compact = false // A has no control gutter or closed rows.
+		} else {
+			alloc, _ = compactColumns(tbl, width)
+			if alloc != nil {
+				for _, row := range m.rows[1:] {
+					for c, cell := range row {
+						if cell.width > alloc[c] {
+							gutter = 2
+						}
+					}
+				}
+			}
+			if gutter > 0 {
+				alloc, _ = compactColumns(tbl, width-gutter)
 			}
 		}
 	}
-	compact = compact && clipped
-	if compact {
-		alloc, _ = compactColumns(m.table, width-2)
-		if alloc == nil {
-			return true
-		}
-	}
+	if alloc == nil {
+		return true
+	} // Exact admission reports the geometry reason.
+
 	sum := 0
 	for _, w := range alloc {
 		sum += w
 	}
 	used := len("─")*sum + len("─┼─")*(len(alloc)-1) // header rule
 	if compact {
-		used += 2 // delimiter gutter
+		used += gutter // delimiter gutter
 		// The compact admission counts body rules; FitTableLayout does not.
-		used += (len("─")*sum + len(" │ ")*(len(alloc)-1) + 2) * max(len(m.rows)-2, 0)
+		used += (len("─")*sum + len(" │ ")*(len(alloc)-1) + gutter) * max(len(m.rows)-2, 0)
 	}
 	budget := 2*m.table.Source + TableSlack
 	for i, row := range m.rows {
 		height := 1
-		if !compact || i == 0 {
+		if !compact {
 			for c, cell := range row {
 				if alloc[c] > 0 {
 					height = max(height, (cell.minWidth+alloc[c]-1)/alloc[c])
@@ -79,13 +87,13 @@ func (m tableBudgetMeasure) couldFit(width int, compact bool) bool {
 		}
 		used += len(" │ ") * (len(alloc) - 1) * height
 		if compact {
-			used += 2 * height
+			used += gutter * height
 		} // minimum gutter; a toggle glyph can cost more
 		for c, cell := range row {
 			bytes := cell.minBytes
-			if compact && i > 0 {
+			if compact {
 				bytes = 0
-				if cell.width <= alloc[c] {
+				if i > 0 && cell.width <= alloc[c] {
 					bytes = cell.bytes
 				}
 			}

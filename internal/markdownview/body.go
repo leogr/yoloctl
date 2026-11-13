@@ -78,11 +78,13 @@ func drawDiagram(out []DisplayLine, opener, fence int, rows []string, theme spac
 // TableInfo is shared by the display lines of one rendered table: what
 // bodyRows needs to fit its columns to the view.
 type TableInfo struct {
-	Align    []byte
-	Natural  []int // widest cell per column: the aligned layout
-	Floor    []int // narrowest a wrapped column may get
-	Source   int   // source bytes, for the wrapped layout's budget
-	Unpadded bool  // aligned representation exceeded the same byte budget
+	Align        []byte
+	Natural      []int // widest cell per column: the aligned layout
+	Floor        []int // narrowest a wrapped column may get
+	WordFloor    []int // longest table-only unbreakable run
+	CompactFloor []int // widest grapheme plus an ellipsis, capped by natural
+	Source       int   // source bytes, for the wrapped layout's budget
+	Unpadded     bool  // aligned representation exceeded the same byte budget
 	// spaceBefore and spaceAfter ask bodyRows for an empty row between the
 	// table and a neighbouring source line that is not blank. They are
 	// display rows only: no logical line, source map or copied byte.
@@ -691,8 +693,13 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 			return nil, n
 		}
 	}
-	tbl := &TableInfo{Align: align, Natural: widths, Floor: make([]int, len(widths)), Source: source, Unpadded: unpadded}
+	tbl := &TableInfo{Align: align, Natural: widths, Floor: make([]int, len(widths)), WordFloor: make([]int, len(widths)), CompactFloor: make([]int, len(widths)), Source: source, Unpadded: unpadded}
 	for c, w := range widths {
+		for _, cells := range shown {
+			tbl.WordFloor[c] = max(tbl.WordFloor[c], tableRunWidth(wm, cells[c].text))
+			tbl.CompactFloor[c] = max(tbl.CompactFloor[c], WidestGrapheme(wm, cells[c].text)+wm.StringWidth("…"))
+		}
+		tbl.CompactFloor[c] = min(w, tbl.CompactFloor[c])
 		// A wrapped column keeps a few cells, and always its widest
 		// grapheme, which cannot break.
 		tbl.Floor[c] = min(w, TableFloor)
@@ -781,6 +788,10 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 // row's fragments keep their exact bytes, hanging spaces included, so copy,
 // selection and the reading position all see the same logical line.
 func FitTableLayout(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft int, theme spaceview.Theme) ([][]BodyRow, TableFitReason) {
+	return fitTableColumns(wm, lines, first, width, rowsLeft, theme, lines[0].Table.Floor, true, false)
+}
+
+func fitTableColumns(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft int, theme spaceview.Theme, floor []int, cutoff, clipHeader bool) ([][]BodyRow, TableFitReason) {
 	tbl := lines[0].Table
 	k := 1
 	for k < len(lines) && lines[k].Table == tbl {
@@ -796,12 +807,12 @@ func FitTableLayout(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft 
 	if natural <= avail && !tbl.Unpadded {
 		return nil, TableFits
 	}
-	alloc, ok := WaterFill(tbl.Natural, tbl.Floor, avail)
+	alloc, ok := WaterFill(tbl.Natural, floor, avail)
 	if !ok {
 		return nil, TableTooNarrow
 	}
 	for c, w := range alloc {
-		if w < tbl.Natural[c] && w < 16 {
+		if cutoff && w < tbl.Natural[c] && w < 16 {
 			return nil, TableTooNarrow
 		}
 	}
@@ -812,6 +823,7 @@ func FitTableLayout(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft 
 	}
 	frags := make([][][][2]int, len(lines)) // per line, cell and row
 	heights := make([]int, len(lines))
+	clippedHeader := make([]bool, cols)
 	visual := max(len(lines)-3, 0) // one divider between consecutive body rows
 	for i, dl := range lines {
 		heights[i] = 1
@@ -821,7 +833,15 @@ func FitTableLayout(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft 
 				if cr[0] == cr[1] {
 					continue
 				}
-				rs := WrapRanges(wm, dl.Text[cr[0]:cr[1]], alloc[c], true)
+				text := dl.Text[cr[0]:cr[1]]
+				var rs [][2]int
+				if clipHeader && i == 0 && tableRunWidth(wm, text) > alloc[c] {
+					end := len(Truncate(wm, text, max(alloc[c]-wm.StringWidth("…"), 0), ""))
+					rs = [][2]int{{0, end}}
+					clippedHeader[c] = true
+				} else {
+					rs = tableWrapRanges(wm, text, alloc[c])
+				}
 				for j := range rs {
 					rs[j][0], rs[j][1] = rs[j][0]+cr[0], rs[j][1]+cr[0]
 				}
@@ -839,6 +859,10 @@ func FitTableLayout(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft 
 					f := frags[i][c][v]
 					e := DrawnEnd(wm, dl.Text, f, alloc[c])
 					shown := wm.StringWidth(dl.Text[f[0]:e])
+					if i == 0 && clippedHeader[c] {
+						shown += wm.StringWidth("…")
+						used += len("…")
+					}
 					if shown > alloc[c] {
 						return nil, TableTooNarrow // never left to paint's truncation
 					}
@@ -880,7 +904,11 @@ func FitTableLayout(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft 
 				}
 				f := frags[i][c][v]
 				e := DrawnEnd(wm, dl.Text, f, alloc[c])
-				left, right := CellGaps(tbl.Align[c], alloc[c]-wm.StringWidth(dl.Text[f[0]:e]), c == cols-1)
+				shown := wm.StringWidth(dl.Text[f[0]:e])
+				if i == 0 && clippedHeader[c] {
+					shown += wm.StringWidth("…")
+				}
+				left, right := CellGaps(tbl.Align[c], alloc[c]-shown, c == cols-1)
 				if left > 0 {
 					row.Runs = append(row.Runs, Deco(strings.Repeat(" ", left), plainStyle))
 				}
@@ -888,6 +916,9 @@ func FitTableLayout(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft 
 					if s, pe := max(p.Start, f[0]), min(p.End, e); s < pe {
 						row.Runs = append(row.Runs, Run{Text: dl.Text[s:pe], Style: p.Style, Copy: true, Start: s, Act: p.Act, Strike: p.Strike})
 					}
+				}
+				if i == 0 && clippedHeader[c] {
+					row.Runs = append(row.Runs, Run{Text: "…", Style: spaceview.Style{FG: theme.Dim}, Tail: dl.Cells[c][1]})
 				}
 				if right > 0 {
 					row.Runs = append(row.Runs, Deco(strings.Repeat(" ", right), plainStyle))

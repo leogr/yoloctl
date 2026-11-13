@@ -1,6 +1,6 @@
 # Shared Markdown renderer
 
-Verification: `4a453938c50d7c0d79734d13e20f612a5262cecd` and accompanying changes.
+Verification: `6eaae0184488765df1d718b4f2381e4dff228e6f` and accompanying changes.
 
 [FACT] `internal/markdownview` owns the existing Markdown subset's pure parser,
 lexer, logical lines, layout, source maps and copy/hit geometry. `Parse` takes
@@ -37,8 +37,7 @@ never copied; source maps drop the brackets as markup.
 byte budget, layout tries tighter allocations and keeps the widest that fits
 before fallback: widening alone retains an admitted table form.
 Cached cell measurements reject impossible retry widths before full wrapping.
-[17](#source-17) Squeezed columns allocated
-under 16 cells use labelled records instead. Rejected padding keeps bounded
+[17](#source-17) Noncompact layouts retain their 16-cell readability cutoff. Rejected padding keeps bounded
 unpadded logical cells; neither natural fit nor the final text route rebuilds
 padding beyond `2*source+4096` bytes. Labelled output counts repeated headers,
 notices, indentation and blank rows before emission. If it
@@ -48,7 +47,15 @@ copy keeps logical cell ranges, Quote keeps TAB-separated cells and source mode
 is unchanged. The notice anchors to the first visible value, not a hidden
 header. Matched-mode tests do not establish native terminal parity. [15](#source-15)
 
-[FACT] Chat/follow opt into compact table rows: ▸ opens clipped cells, ▾ closes;
+[FACT] Chat/follow use width-only table choices. If columns can hold their
+longest unbreakable runs, headers/cells wrap with all rows open, no controls
+or reserved gutter. Table-only breaks follow spaces, `- / _`, or adjacent
+two-cell graphemes. Otherwise compact columns require their widest grapheme
+plus an ellipsis (capped by natural width); headers wrap whole runs or truncate
+with …, body rows start closed. Labelled rows follow only after compact refusal.
+Explicitly opened compact body cells may break long runs. [18](#source-18)
+
+[FACT] In compact tables ▸ opens clipped cells, ▾ closes;
 expansion shares the table byte/row budget and refuses visibly. Controls and …
 are decorations. Ellipsis hits include the hidden tail; crossing compact cells
 copies whole reached cells, while within-cell partial drags stay partial.
@@ -107,3 +114,5 @@ component parity, not native terminal, live-room or future file-view behavior.
 16. <a id="source-16"></a> [Compact rows](../../internal/markdownview/table_compact.go#L1) — `compactTable`, `CompactSelection`; table_compact_test.go covers bounds, copy and matched width modes.
 
 17. <a id="source-17"></a> [Retry cost bound](../../internal/markdownview/table_budget.go#L1) — `measureTableBudget`, `couldFit`; table_budget_test.go checks conservative admission and benchmarks the guarded sparse case.
+
+18. <a id="source-18"></a> [Width-only table choices](../../internal/markdownview/table_words.go#L1) — `tableRunWidth`, `tableLayoutLines`; body.go `TableLines`, `fitTableColumns`; rows.go `tableWrapRanges`; table_compact.go `compactTable`; table_responsive_test.go and table_words_test.go cover shape, headers, width modes and table-only breaks.

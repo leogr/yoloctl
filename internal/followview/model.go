@@ -357,13 +357,6 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 						retained[key] = true
 					}
 				}
-				for _, id := range m.view.refused {
-					for _, record := range m.view.records {
-						if record.ID == id {
-							delete(retained, followKey(record))
-						}
-					}
-				}
 				m.openTables = retained
 				if len(m.view.refused) > 0 {
 					m.notice = "Table row exceeds display limits; kept closed"

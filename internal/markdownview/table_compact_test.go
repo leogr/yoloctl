@@ -14,7 +14,7 @@ func compactFixture(t *testing.T, method ansi.Method) (Document, LayoutOptions) 
 	t.Helper()
 	p := documentOptions()
 	p.Method = method
-	doc := Parse("|Name|Detail|\n|---|---|\n|alpha|"+strings.Repeat("long ▶️ words ", 30)+"|\n|beta|"+strings.Repeat("second field ", 20)+"|", p)
+	doc := Parse("|Name|Detail|\n|---|---|\n|alpha|"+(strings.Repeat("long ▶️ words ", 30)+strings.Repeat("x", 200))+"|\n|beta|"+(strings.Repeat("second field ", 20)+strings.Repeat("x", 200))+"|", p)
 	return doc, LayoutOptions{Method: method, Theme: p.Theme, CompactTables: true}
 }
 func countLine(rows []BodyRow, line int) int {
@@ -123,7 +123,7 @@ func TestCompactExpansionRespectsRemainingRowsAndBytes(t *testing.T) {
 	if !applied || reason != TableLaidOut || len(refused) != 1 || countLine(flattenTable(rows), 2) != 1 {
 		t.Fatal("expansion escaped remaining-row bound", reason, refused)
 	}
-	source := "|h|" + strings.Repeat("h|", 31) + "\n|" + strings.Repeat("---|", 32) + "\n|" + strings.Repeat("word ", 400) + "|" + strings.Repeat("x|", 31)
+	source := "|h|" + strings.Repeat("h|", 31) + "\n|" + strings.Repeat("---|", 32) + "\n|" + (strings.Repeat("w", 200) + " " + strings.Repeat("word ", 400)) + "|" + strings.Repeat("x|", 31)
 	d := Parse(source, documentOptions())
 	if d.Lines[0].Table == nil {
 		t.Fatal("fixture must be admitted")

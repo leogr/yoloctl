@@ -218,6 +218,13 @@ func TestQuoteTableLayouts(t *testing.T) {
 	key := "server:t"
 	for _, width := range []int{200, 24, 6} {
 		m := tableModel(width, quoteTableExample)
+		// Choose B expansions before traversing A/C; the choices stay dormant.
+		m.Update(tea.WindowSizeMsg{Width: 24, Height: 60})
+		m.View()
+		expandChatTableRows(m, key)
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 16})
+		m.View()
+		expandChatTableRows(m, key)
 		lines := m.body(&m.messages[m.indexOf(key)], max(m.lastTextWidth, 1)).lines
 		for _, tc := range []struct {
 			la       int
@@ -236,6 +243,7 @@ func TestQuoteTableLayouts(t *testing.T) {
 			highlight(m, "t", tc.la, a, tc.lb, b+len(tc.to))
 			m.Update(tea.WindowSizeMsg{Width: 200 + 24 - width, Height: 16})
 			m.View()
+			expandChatTableRows(m, key)
 			if got := quoted(m); got != tc.want {
 				t.Fatalf("width %d resized: %q, want %q", width, got, tc.want)
 			}
@@ -246,6 +254,7 @@ func TestQuoteTableLayouts(t *testing.T) {
 	m, copied := copyingModel(24, 30)
 	m.Update(IncomingMsg{Message: Message{ID: "t", Nick: "x", Text: quoteTableExample}})
 	m.View()
+	expandChatTableRows(m, key)
 	lines := m.body(&m.messages[m.indexOf(key)], max(m.lastTextWidth, 1)).lines
 	if wrapped := bodyRows(ansi.WcWidth, lines, m.lastTextWidth, m.theme); len(wrapped) <= len(lines) {
 		t.Fatalf("the table should wrap at 24: %d rows", len(wrapped))

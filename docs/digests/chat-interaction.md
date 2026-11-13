@@ -1,13 +1,13 @@
 # Native chat input and message actions
 
-Verification: `77a14b6864848cababd79a2d98e231f8c9575dd8` and accompanying changes; re-read affected cited symbols when changing behavior.
+Verification: `6eaae0184488765df1d718b4f2381e4dff228e6f` and accompanying changes; re-read affected cited symbols when changing behavior.
 
 [FACT] Chat uses the [Markdown fallback ladder](markdown-renderer.md): labelled
 records explain narrow tables; notices explain limits. Labels/notices preserve
-copy, TAB-separated Quote and source mode. Clipped rows start closed; clicking
+copy, TAB-separated Quote and source mode. Wide-enough columns wrap open without controls. Otherwise clipped rows start closed; clicking
 ▸ expands without copying. State is channel/message-local and survives source
-mode and resize; eviction removes it. Budget refusal leaves the row closed
-with a notice. Copy includes hidden reached cells; within-cell drags stay partial.
+mode and resize, dormant while wrapping open; eviction removes it. Budget refusal leaves the row closed
+with a notice without forgetting the requested state. Copy includes hidden reached cells; within-cell drags stay partial.
 [17](#source-17) [18](#source-18)
 
 See [reading and selection](chat-reading.md) for drag copy and scrolling (the

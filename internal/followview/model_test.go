@@ -384,7 +384,7 @@ func TestClearingMidDragEndsTheGesture(t *testing.T) {
 }
 
 func TestLabelledTableDragCopiesCellWithoutLabels(t *testing.T) {
-	m, _ := fileModel(t, "| Name | Detail |\n|---|---|\n|alpha|"+strings.Repeat("detail ", 15)+"|", Markdown)
+	m, _ := fileModel(t, "| Name | Detail | A | B | C | D | E |\n|---|---|---|---|---|---|---|\n|alpha|"+strings.Repeat("detail ", 15)+"|x|y|z|v|w|", Markdown)
 	_, cmd := m.Update(tea.WindowSizeMsg{Width: 23, Height: 60})
 	applyWork(t, m, cmd)
 	m.top, m.following = 0, false

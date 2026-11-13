@@ -61,6 +61,9 @@ func markdownParityValue(v reflect.Value) any {
 			// Newly added refusal flags have no observable effect when false; retain
 			// the old snapshot shape for all unaffected Markdown cases.
 			name := v.Type().Field(i).Name
+			if name == "WordFloor" || name == "CompactFloor" {
+				continue
+			} // Derived allocation caches, not observable state.
 			if (name == "Unpadded" || name == "TableLimit" || name == "Tail" || name == "Closed" || mermaidFields[name]) && v.Field(i).IsZero() {
 				continue
 			}

@@ -51,7 +51,7 @@ func (m *Model) toggleTableRows(value string, all bool) tea.Cmd {
 		for _, record := range m.view.records {
 			if record.ID == id {
 				key := followKey(record)
-				if m.openTables[key] {
+				if !m.view.compact[record.Line] {
 					delete(m.openTables, key)
 				} else {
 					m.openTables[key] = true

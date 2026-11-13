@@ -150,6 +150,7 @@ func FitTable(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft int, t
 // replace a table that fits at a tighter width with labelled records. Padding
 // and rules count against the same source-sized budget at every attempt.
 func fitTableInView(wm ansi.Method, lines []DisplayLine, first, table, width, rowsLeft int, theme spaceview.Theme, options LayoutOptions) ([][]BodyRow, TableFitReason, []TableRowID) {
+	lines = tableLayoutLines(wm, lines)
 	at := func(w int) ([][]BodyRow, TableFitReason, []TableRowID) {
 		if options.CompactTables {
 			rows, reason, denied, applied := compactTable(wm, lines, first, table, w, rowsLeft, theme, options.OpenTableRows)

@@ -112,11 +112,14 @@ convention rather than non-reclaimable memory, and name the cap, pool or VM
 scale of their bar. Memory comes only from a current sample; a stopped,
 failed or stale reading shows its reason instead. [27](#source-27)
 
-[FACT] Clipped Markdown table rows start compact: ▸ expands, ▾ closes; follow
+[FACT] Markdown tables wrap open without an arrow column when each column can
+hold its longest unbreakable run (space, `- / _`, adjacent wide grapheme breaks).
+Otherwise clipped rows start compact: ▸ expands, ▾ closes; follow
 also offers `w` for all rows. Copy includes hidden reached cells; within-cell
-partial drags stay partial. Expansion limits leave a visible notice.
+partial drags stay partial. Explicit compact choices survive resize through the
+wrapped layout; its rows have no collapse action. Expansion limits leave a visible notice.
 A wider pane retains a tighter admitted table allocation when needed.
-Wide Markdown tables use readable wrapped columns or labelled rows;
+Labelled rows appear only when compact columns cannot fit;
 a counted limit notice replaces an unexplainable rendering failure. Existing
 source/copy/Quote behavior and rendering limits remain. [43](#source-43)
 

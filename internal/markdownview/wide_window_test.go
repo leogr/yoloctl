@@ -65,18 +65,18 @@ func TestWideningTableKeepsAnAdmittedLayout(t *testing.T) {
 
 func TestWideBudgetRetryUsesWidestAdmittedAllocation(t *testing.T) {
 	p := documentOptions()
-	doc := Parse(wideWindowTable(), p)
+	doc := Parse("|"+strings.Repeat("h", 65536)+"|b|\n|---|---|\n"+strings.Repeat("|x|y|\n", 512), p)
 	options := LayoutOptions{Method: p.Method, Theme: p.Theme, CompactTables: true, UnlimitedRows: true}
-	_, reason, _, _ := compactTable(p.Method, doc.Lines, 0, 0, 110, 10000, p.Theme, nil)
+	_, reason, _, _ := compactTable(p.Method, doc.Lines, 0, 0, 1000, 10000, p.Theme, nil)
 	if reason != TableOverBudget {
-		t.Fatal("fixture no longer crosses the budget at110", reason)
+		t.Fatal("fixture no longer crosses the budget at1000", reason)
 	}
-	rows, reason, _ := fitTableInView(p.Method, doc.Lines, 0, 0, 110, 10000, p.Theme, options)
+	rows, reason, _ := fitTableInView(p.Method, doc.Lines, 0, 0, 1000, 10000, p.Theme, options)
 	if rows == nil || reason != TableLaidOut {
 		t.Fatal("did not retain a table", reason)
 	}
 	used := 0
-	for _, row := range Layout(doc, 110, options).Rows {
+	for _, row := range Layout(doc, 1000, options).Rows {
 		for _, run := range row.Runs {
 			used += len(run.Text)
 		}
@@ -88,10 +88,10 @@ func TestWideBudgetRetryUsesWidestAdmittedAllocation(t *testing.T) {
 	for _, run := range rows[1][0].Runs {
 		actual += p.Method.StringWidth(run.Text)
 	}
-	if actual >= 110 {
+	if actual >= 1000 {
 		t.Fatal("retry did not tighten the allocation", actual)
 	}
-	for width := actual + 1; width <= 110; width++ {
+	for width := actual + 1; width <= 1000; width++ {
 		_, why, _, _ := compactTable(p.Method, doc.Lines, 0, 0, width, 10000, p.Theme, nil)
 		if why == TableLaidOut || why == TableFits {
 			t.Fatalf("skipped wider admitted allocation%d", width)

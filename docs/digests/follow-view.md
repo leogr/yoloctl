@@ -1,6 +1,6 @@
 # Live file view
 
-Verification: `d44b7e5ee21ea27b6f1b074972a0c9a07195dbe5` and accompanying changes.
+Verification: `6eaae0184488765df1d718b4f2381e4dff228e6f` and accompanying changes.
 
 [FACT] Host-only `yoloctl follow PATH [--space SPACE] [--format auto|text|markdown]`
 opens one live pane. Default mode pins the selected space and absolute VM path;
@@ -50,10 +50,9 @@ selection.
 unlimited document rows for this caller; chat retains its default row bound.
 Admitted `mermaid` fences are drawn as described in [Mermaid views](mermaid-views.md).
 Ctrl+S toggles source below the size threshold. Wide tables use the shared
-[counted fallback ladder](markdown-renderer.md): labelled rows when squeezed
-columns become unreadable, or an explicit limit notice with bounded text.
-Clipped rows start closed: ▸ toggles one, `w` toggles all. Refresh retains
-state by table/columns/first-cell/duplicate occurrence; source mode preserves it.
+[counted fallback ladder](markdown-renderer.md): labelled rows when even compact columns cannot fit, or an explicit limit notice with bounded text.
+Columns that hold their longest unbreakable runs wrap open without a gutter or controls. Otherwise clipped rows start closed: ▸ toggles one, `w` toggles all. Refresh retains
+state by table/columns/first-cell/duplicate occurrence; source mode and the control-free wrapped layout preserve it.
 Budget refusal is visible. Cross-cell copy includes hidden reached cells;
 within-cell drags stay partial. [11](#source-11)
 Labels/notices do not enter drag-copy text. As in chat, releasing a drag

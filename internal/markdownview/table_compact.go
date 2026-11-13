@@ -105,14 +105,9 @@ func CompactSelection(lines []DisplayLine, closed map[int]bool, from, lo, to, hi
 }
 
 func compactColumns(tbl *TableInfo, width int) ([]int, TableFitReason) {
-	alloc, ok := WaterFill(tbl.Natural, tbl.Floor, width-3*(len(tbl.Natural)-1))
+	alloc, ok := WaterFill(tbl.Natural, tbl.CompactFloor, width-3*(len(tbl.Natural)-1))
 	if !ok {
 		return nil, TableTooNarrow
-	}
-	for c, w := range alloc {
-		if w < tbl.Natural[c] && w < 16 {
-			return nil, TableTooNarrow
-		}
 	}
 	return alloc, TableLaidOut
 }
@@ -205,6 +200,12 @@ func tableCost(wm ansi.Method, rows [][]BodyRow, width int, theme spaceview.Them
 
 func compactTable(wm ansi.Method, lines []DisplayLine, first, table, width, rowsLeft int, theme spaceview.Theme, open map[TableRowID]bool) ([][]BodyRow, TableFitReason, []TableRowID, bool) {
 	tbl := lines[0].Table
+	// A uses the whole width without a control gutter. Saved B choices are
+	// dormant here; no table-row actions are emitted.
+	if _, ok := WaterFill(tbl.Natural, tbl.WordFloor, width-3*(len(tbl.Natural)-1)); ok {
+		rows, why := fitTableColumns(wm, lines, first, width, rowsLeft, theme, tbl.WordFloor, false, false)
+		return rows, why, nil, true
+	}
 	end := 1
 	for end < len(lines) && lines[end].Table == tbl {
 		end++
@@ -212,41 +213,46 @@ func compactTable(wm ansi.Method, lines []DisplayLine, first, table, width, rows
 	lines = lines[:end]
 	alloc, reason := compactColumns(tbl, width)
 	if alloc == nil {
-		return nil, reason, nil, false
+		return nil, reason, nil, true
 	}
-	any := false
-	for _, dl := range lines[2:] {
-		any = any || rowClipped(wm, dl, alloc)
+	gutter := 0
+	for _, line := range lines[2:] {
+		if rowClipped(wm, line, alloc) {
+			gutter = 2
+			break
+		}
 	}
-	if !any {
-		return nil, TableFits, nil, false
+	if gutter > 0 {
+		alloc, reason = compactColumns(tbl, width-gutter)
 	}
-	alloc, reason = compactColumns(tbl, width-2)
 	if alloc == nil {
 		return nil, reason, nil, true
 	}
-	header, reason := FitTableLayout(wm, lines[:2], first, width-2, rowsLeft, theme)
+	header, reason := fitTableColumns(wm, lines[:2], first, width-gutter, rowsLeft, theme, tbl.CompactFloor, false, true)
 	if header == nil {
 		return nil, reason, nil, true
 	}
+	headerRule := header[1][0].Runs[0].Text
 	for i := range header {
 		for j := range header[i] {
-			header[i][j].Runs = append([]Run{Deco("  ", spaceview.Style{})}, header[i][j].Runs...)
+			if gutter > 0 {
+				header[i][j].Runs = append([]Run{Deco("  ", spaceview.Style{})}, header[i][j].Runs...)
+			}
 		}
 	}
 	// Count all closed rows before building their padding. Header/rule output
 	// is already bounded by FitTableLayout; body rules are shared decorations.
 	base := make([][]BodyRow, len(lines))
 	copy(base, header)
-	bytes, count := tableCost(wm, header, width-2, theme)
+	bytes, count := tableCost(wm, header, width-gutter, theme)
 	for _, dl := range lines[2:] {
 		_, n := compactRecord(wm, dl, 0, alloc, theme, false)
-		bytes += n
+		bytes += n - 2 + gutter
 		count++
 	}
-	rule := TableRowRule(wm, header[1][0].Runs[1].Text, width-2, theme)
+	rule := TableRowRule(wm, headerRule, width-gutter, theme)
 	for _, p := range rule {
-		bytes += (len(p.Text) + 2) * max(len(lines)-3, 0)
+		bytes += (len(p.Text) + gutter) * max(len(lines)-3, 0)
 	}
 	count += max(len(lines)-3, 0)
 	budget := 2*tbl.Source + TableSlack
@@ -269,13 +275,15 @@ func compactTable(wm ansi.Method, lines []DisplayLine, first, table, width, rows
 			marker = "▸ "
 			act = Action{Kind: IntentToggleTableRow, Value: id.String()}
 		}
-		row.Runs = append([]Run{{Text: marker, Style: spaceview.Style{FG: theme.Label}, Act: act}}, row.Runs...)
+		if gutter > 0 {
+			row.Runs = append([]Run{{Text: marker, Style: spaceview.Style{FG: theme.Label}, Act: act}}, row.Runs...)
+		}
 		base[index] = []BodyRow{row}
 		if !clipped || !open[id] {
 			continue
 		}
 		subset := []DisplayLine{lines[0], lines[1], dl}
-		fitted, why := FitTableLayout(wm, subset, first, width-2, rowsLeft, theme)
+		fitted, why := fitTableColumns(wm, subset, first, width-gutter, rowsLeft, theme, tbl.CompactFloor, false, true)
 		if fitted == nil || why != TableLaidOut {
 			refused = append(refused, id)
 			continue
