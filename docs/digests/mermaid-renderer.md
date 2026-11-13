@@ -18,7 +18,15 @@ The manifest binds these inputs to the embedded bytes. [1](#source-1)
 - unshaded sequence block interiors;
 - solid lifelines joined to messages;
 - subgraph borders crossed perpendicularly, never followed;
-- a simple top-down fan-out drawn as one trunk. The crate archive's original Cargo manifest is restored during
+- a simple top-down fan-out drawn as one trunk;
+- decisions drawn as a shallow diamond, at least 17 columns wide.
+
+[FACT] The diamond outline uses one-eighth horizontal lines and verticals
+(`▁ 🭻…🭶 ▔ ▕ ▏`); the sloped ones are in the Unicode "Symbols for Legacy
+Computing" block. Terminals that draw that block themselves (Ghostty, Kitty,
+WezTerm, foot) or fonts that include it (Cascadia Code, Iosevka) show the shape;
+others, e.g. Terminal.app or iTerm2 with Menlo, substitute fallback or
+replacement glyphs. The crate archive's original Cargo manifest is restored during
 preparation so added integration tests are discoverable. Upstream and
 transitive notices, plus the pinned Rust standard-library notices, are retained
 beside the pins. [2](#source-2) [3](#source-3)

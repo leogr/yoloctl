@@ -1,4 +1,4 @@
-From 5abd5a985ed9e2a1a6a02c3052fcc118993e649a Mon Sep 17 00:00:00 2001
+From add6a77fa4bdc8b2d0da6d206fd9a6b2c3f0b9c2 Mon Sep 17 00:00:00 2001
 From: Leonardo Grasso <me@leonardograsso.com>
 Date: Fri, 13 Nov 2026 01:10:01 +0000
 Subject: [PATCH] feat(mermaid-text): cross subgraph borders, never follow them
@@ -6,7 +6,9 @@ Subject: [PATCH] feat(mermaid-text): cross subgraph borders, never follow them
 Subgraph borders were ordinary cells for edge routing, so an edge leaving a subgraph could travel along its border row or column, past its corners and through its title, which reads as part of the border. Border line cells now admit only a perpendicular move and must be left straight through; corners and title cells are closed. The Manhattan fallback still applies when no such route exists.
 ---
  crates/mermaid-text/CHANGELOG.md              |  3 +
- crates/mermaid-text/src/layout/grid.rs        | 37 ++++++++
+ crates/mermaid-text/src/layout/grid.rs        | 86 ++++++++++++++++++
+ crates/mermaid-text/src/layout/nudge.rs       |  6 ++
+ crates/mermaid-text/src/layout/router.rs      | 23 ++++-
  crates/mermaid-text/src/render/unicode.rs     | 24 ++++-
  .../flowchart_edge_crosses_subgraph.snap      | 12 +--
  ...owchart_edge_crosses_subgraph.width80.snap | 12 +--
@@ -15,7 +17,7 @@ Subgraph borders were ordinary cells for edge routing, so an edge leaving a subg
  ...ssings_edge_crosses_subgraph_boundary.snap |  2 +-
  ...shots__edge_crosses_subgraph_boundary.snap | 12 +--
  .../tests/subgraph_border_routing.rs          | 90 +++++++++++++++++++
- 10 files changed, 188 insertions(+), 36 deletions(-)
+ 12 files changed, 265 insertions(+), 37 deletions(-)
  create mode 100644 crates/mermaid-text/tests/subgraph_border_routing.rs
 
 diff --git a/crates/mermaid-text/CHANGELOG.md b/crates/mermaid-text/CHANGELOG.md
@@ -33,7 +35,7 @@ index 1934873..14fa508 100644
    of a message is a junction (`├`/`┤`), a lifeline it crosses becomes `┼`,
    and the arrowhead sits next to the target's lifeline, which stays drawn.
 diff --git a/crates/mermaid-text/src/layout/grid.rs b/crates/mermaid-text/src/layout/grid.rs
-index 7a667e6..9d5b951 100644
+index 7a667e6..c5cf8d9 100644
 --- a/crates/mermaid-text/src/layout/grid.rs
 +++ b/crates/mermaid-text/src/layout/grid.rs
 @@ -306,12 +306,23 @@ pub struct Grid {
@@ -60,7 +62,7 @@ index 7a667e6..9d5b951 100644
  impl Grid {
      /// Construct a new grid filled with spaces.
      ///
-@@ -331,11 +342,19 @@ impl Grid {
+@@ -331,11 +342,51 @@ impl Grid {
              bg: vec![vec![None; width]; height],
              hyperlink: vec![vec![None; width]; height],
              hyperlink_urls: Vec::new(),
@@ -70,6 +72,38 @@ index 7a667e6..9d5b951 100644
          }
      }
  
++    /// Whether a cell-by-cell `path` obeys the subgraph border rule that A*
++    /// applies: a border line cell is entered perpendicularly and left
++    /// straight through; corners and titles are never used. The first and
++    /// last cells (the attach points) are exempt.
++    pub(crate) fn path_respects_subgraph_borders(&self, path: &[(usize, usize)]) -> bool {
++        let last = path.len().saturating_sub(1);
++        for i in 1..last {
++            let (c, r) = path[i];
++            if r >= self.height || c >= self.width {
++                continue;
++            }
++            let kind = self.sg_border[r][c];
++            if kind == 0 {
++                continue;
++            }
++            let (pc, pr) = path[i - 1];
++            let (nc, nr) = path[i + 1];
++            let enters_vertically = pc == c && pr != r;
++            let leaves_straight = (nc as isize - c as isize, nr as isize - r as isize)
++                == (c as isize - pc as isize, r as isize - pr as isize);
++            let allowed = match kind {
++                SG_BORDER_H => enters_vertically,
++                SG_BORDER_V => !enters_vertically,
++                _ => false,
++            };
++            if !allowed || !leaves_straight {
++                return false;
++            }
++        }
++        true
++    }
++
 +    /// Mark `(col, row)` as a subgraph border cell of `kind` (`SG_BORDER_*`).
 +    pub fn mark_subgraph_border(&mut self, col: usize, row: usize, kind: u8) {
 +        if row < self.height && col < self.width {
@@ -80,7 +114,7 @@ index 7a667e6..9d5b951 100644
      /// Return the number of rows in this grid.
      pub(crate) fn rows(&self) -> usize {
          self.height
-@@ -1538,6 +1557,24 @@ impl Grid {
+@@ -1538,6 +1589,24 @@ impl Grid {
                          continue;
                      }
                  }
@@ -105,6 +139,95 @@ index 7a667e6..9d5b951 100644
  
                  // Base step cost.
                  let mut step = 1.0f32;
+@@ -1927,6 +1996,23 @@ fn neighbor_bit(c: usize, r: usize, nc: usize, nr: usize) -> u8 {
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn a_path_crosses_a_subgraph_border_and_never_follows_it() {
++        let mut g = Grid::new(10, 6);
++        for c in 1..9 {
++            g.mark_subgraph_border(c, 2, SG_BORDER_H);
++        }
++        g.mark_subgraph_border(0, 2, SG_BORDER_CLOSED);
++        // Straight across the border row.
++        assert!(g.path_respects_subgraph_borders(&[(4, 0), (4, 1), (4, 2), (4, 3), (4, 4)]));
++        // Along it.
++        assert!(!g.path_respects_subgraph_borders(&[(3, 1), (3, 2), (4, 2), (5, 2), (5, 3)]));
++        // Through a corner.
++        assert!(!g.path_respects_subgraph_borders(&[(0, 1), (0, 2), (0, 3)]));
++        // Turning on a border cell.
++        assert!(!g.path_respects_subgraph_borders(&[(4, 1), (4, 2), (5, 2), (6, 2)]));
++    }
++
+     #[test]
+     fn route_writers_release_replaced_wide_glyphs() {
+         for writer in 0..3 {
+diff --git a/crates/mermaid-text/src/layout/nudge.rs b/crates/mermaid-text/src/layout/nudge.rs
+index 3bbd335..cbdc7db 100644
+--- a/crates/mermaid-text/src/layout/nudge.rs
++++ b/crates/mermaid-text/src/layout/nudge.rs
+@@ -676,6 +676,9 @@ fn crossings_after_shift(
+     old_path: &[(usize, usize)],
+     new_path: &[(usize, usize)],
+ ) -> Option<usize> {
++    if !grid.path_respects_subgraph_borders(new_path) {
++        return None; // a shift never moves a route along a subgraph border
++    }
+     let mut scratch = grid.clone();
+     scratch.erase_path(old_path);
+     let &(tip_col, tip_row) = old_path.last()?;
+@@ -1066,6 +1069,9 @@ fn apply_shifts(
+         let Some(old_path) = paths[shift.edge_idx].clone() else {
+             continue;
+         };
++        if !grid.path_respects_subgraph_borders(&shift.new_path) {
++            continue; // keep the routed path rather than follow a border
++        }
+         grid.erase_path(&old_path);
+         let tip = tip_for(shift.edge_idx);
+         if let Some(drawn) = grid.draw_path(shift.new_path.clone(), tip) {
+diff --git a/crates/mermaid-text/src/layout/router.rs b/crates/mermaid-text/src/layout/router.rs
+index f5814cb..d73e3d2 100644
+--- a/crates/mermaid-text/src/layout/router.rs
++++ b/crates/mermaid-text/src/layout/router.rs
+@@ -352,7 +352,10 @@ fn try_u_route(
+         for turn_col in src.col.saturating_add(1)..dst.col {
+             if u_route_clear(grid, src, dst, turn_col, below_row) {
+                 let path = build_u_path(src, dst, turn_col, below_row);
+-                return grid.draw_path(path, tip);
++                // Same subgraph border rule as A*: cross, never follow.
++                if grid.path_respects_subgraph_borders(&path) {
++                    return grid.draw_path(path, tip);
++                }
+             }
+         }
+     }
+@@ -440,6 +443,24 @@ mod tests {
+     use super::*;
+     use crate::types::{Direction, Edge, Graph, Node, NodeShape};
+ 
++    /// A U-route is drawn without A*, so it checks the same subgraph border
++    /// rule: its bottom run never lies on a border row, it goes below it.
++    #[test]
++    fn u_route_never_runs_along_a_subgraph_border() {
++        let mut g = Grid::new(20, 10);
++        for c in 0..20 {
++            g.mark_subgraph_border(c, 3, crate::layout::grid::SG_BORDER_H);
++        }
++        let src = Attach { col: 2, row: 2 };
++        let dst = Attach { col: 10, row: 2 };
++        let path = try_u_route(&mut g, src, dst, '▸').expect("a U-route below the border");
++        assert!(
++            path.windows(2).all(|w| !(w[0].1 == 3 && w[1].1 == 3)),
++            "the U-route runs along the border row: {path:?}"
++        );
++        assert!(g.path_respects_subgraph_borders(&path), "{path:?}");
++    }
++
+     /// Construct a minimal two-node LR graph with one edge.
+     fn two_node_lr() -> (Graph, Vec<Option<(Attach, Attach)>>) {
+         let mut g = Graph::new(Direction::LeftToRight);
 diff --git a/crates/mermaid-text/src/render/unicode.rs b/crates/mermaid-text/src/render/unicode.rs
 index 57def12..f2943a3 100644
 --- a/crates/mermaid-text/src/render/unicode.rs

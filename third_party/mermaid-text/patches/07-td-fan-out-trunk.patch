@@ -1,4 +1,4 @@
-From bad7ab6902ffaf0aa55ed8b30f7aab7e0f486fbd Mon Sep 17 00:00:00 2001
+From 04cea5f27219318b8c89e6de521fb67dd74f20d6 Mon Sep 17 00:00:00 2001
 From: Leonardo Grasso <me@leonardograsso.com>
 Date: Fri, 13 Nov 2026 01:16:56 +0000
 Subject: [PATCH] feat(mermaid-text): draw a simple top-down fan-out as one
@@ -30,7 +30,7 @@ index 14fa508..783d2e8 100644
    travel along a border, past its corners or through its title. When no
    such route exists, the existing Manhattan fallback still applies.
 diff --git a/crates/mermaid-text/src/layout/router.rs b/crates/mermaid-text/src/layout/router.rs
-index f5814cb..b328ac2 100644
+index d73e3d2..d7f221f 100644
 --- a/crates/mermaid-text/src/layout/router.rs
 +++ b/crates/mermaid-text/src/layout/router.rs
 @@ -24,7 +24,7 @@

@@ -1,5 +1,5 @@
 {
-  "artifact_sha256": "c586094b3003667c519bfb7967173a0012921bd85cb9cbd527461f3a3c267db7",
+  "artifact_sha256": "724ddb51219746a7da186527088f8fdbfb26ecae39d2e34d91c876860e5fbbf9",
   "inputs": {
     "LICENSE": "5203d5cf8b80e46ea53ad08e47bc30c938cbf742757c15f6906ffa9d385c4cb5",
     "licenses/ascii-dag-0.9.1/LICENSE-APACHE": "8761391f3a3280ef14c9ab74aa87063496a525c36f80f16ef653eeb2d6e8da0b",
@@ -41,14 +41,18 @@
     },
     {
       "file": "patches/06-subgraph-border-crossing.patch",
-      "sha256": "43b0946219346273a6dc9b49c139d0bc0b0506c8043b16a5f202c2bcfaf5bdbe"
+      "sha256": "18236d315737eacd6e963bacd70a3ef411373d4d678620274dc45e2c4f67a84d"
     },
     {
       "file": "patches/07-td-fan-out-trunk.patch",
-      "sha256": "f0f1344690f40b39e3d0dc6c3cf8fac7c3c16c0c3d9d97fbf8c2f24b4c9a5840"
+      "sha256": "1389ec2909f4ebf6a3bb4631ea861db394e5cb03c016d7b75123612c8fac917d"
+    },
+    {
+      "file": "patches/08-shallow-decision-diamond.patch",
+      "sha256": "9d644a3dfffc1022b62ccb8ce88c7518b2dc71042b5e446d10d7fc94594763ef"
     }
   ],
-  "recipe_sha256": "6bea2b745f80cccb0e605b175fbf0c7325a34801a405641c2646b77c329573b8",
+  "recipe_sha256": "61c46bc766afce0f99a9ab36c6556dfec3173fa4a7003c656c5f69163e9fae5a",
   "rust": "1.95.0",
   "schema": 1,
   "source_sha256": "90fa78f1bb32963ed114d9c318d880901ee4fa7103e133c3c3e530ebe5a09090",

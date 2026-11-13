@@ -1,0 +1,898 @@
+From 56bc7fdeb48a923fef9416f36984e71597ff3fae Mon Sep 17 00:00:00 2001
+From: Leonardo Grasso <me@leonardograsso.com>
+Date: Fri, 13 Nov 2026 01:28:03 +0000
+Subject: [PATCH] feat(mermaid-text): draw decisions as a shallow diamond
+
+Box-drawing diagonals are as steep as a cell is tall, so a decision node read as a box with odd corners. Decisions are now drawn with one-eighth horizontal lines from the Symbols for Legacy Computing block, climbing from the row ends to the centre, with flat one-eighth vertical ends on the middle row. A diamond is at least 17 columns wide so its outline rises at most one eighth of a row per column; arrow tips on the outline survive the redraw.
+---
+ crates/mermaid-text/CHANGELOG.md              |  7 ++
+ crates/mermaid-text/src/layout/grid.rs        | 44 +++++++++----
+ crates/mermaid-text/src/layout/layered.rs     |  4 +-
+ crates/mermaid-text/src/lib.rs                | 18 +++--
+ crates/mermaid-text/src/render/unicode.rs     | 65 ++++++++++++-------
+ .../snapshots/flowchart_all_node_shapes.snap  |  8 +--
+ .../flowchart_all_node_shapes.width80.snap    |  8 +--
+ .../snapshots/flowchart_basic_decision.snap   | 18 ++---
+ .../flowchart_basic_decision.width80.snap     | 18 ++---
+ .../snapshots/flowchart_diamond_branches.snap |  6 +-
+ .../flowchart_diamond_branches.width80.snap   |  6 +-
+ .../snapshots/flowchart_md_tui_diagram.snap   |  6 +-
+ .../flowchart_md_tui_diagram.width80.snap     |  6 +-
+ .../snapshots/state_anonymous_choice.snap     | 42 ++++++------
+ .../state_anonymous_choice.width80.snap       | 42 ++++++------
+ .../snapshots/state_choice_fork_join.snap     | 18 ++---
+ .../state_choice_fork_join.width80.snap       | 18 ++---
+ .../snapshots/state_fork_join_full.snap       | 22 +++----
+ .../state_fork_join_full.width80.snap         | 22 +++----
+ crates/mermaid-text/tests/snapshots.rs        | 32 ++++-----
+ .../snapshots/snapshots__all_node_shapes.snap | 10 +--
+ .../snapshots__diamond_with_branches.snap     |  6 +-
+ ...ts__flowchart_all_node_shapes_phase_2.snap |  8 +--
+ ...pshots__flowchart_md_tui_test_diagram.snap |  6 +-
+ ...shots__state_diagram_anonymous_choice.snap | 42 ++++++------
+ ...apshots__state_diagram_special_shapes.snap | 22 +++----
+ 26 files changed, 274 insertions(+), 230 deletions(-)
+
+diff --git a/crates/mermaid-text/CHANGELOG.md b/crates/mermaid-text/CHANGELOG.md
+index 783d2e8..2bdc90f 100644
+--- a/crates/mermaid-text/CHANGELOG.md
++++ b/crates/mermaid-text/CHANGELOG.md
+@@ -20,6 +20,13 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+ 
+ ### Changed
+ 
++- Decision nodes (`{…}`, state `<<choice>>`) are drawn as a shallow diamond
++  instead of a box with steep `╱ ╲` corners: one-eighth horizontal lines
++  (`▁ 🭻…🭶 ▔`, the Symbols for Legacy Computing block) climb from the ends to
++  the centre, and the middle row ends in `▕ ▏`. Diamonds are at least 17
++  columns wide so the outline rises at most one eighth of a row per column.
++  Terminals or fonts without that block (e.g. Terminal.app or iTerm2 with
++  Menlo) show replacement glyphs; `--ascii` maps the outline to `- _ |`.
+ - A simple top-down fan-out (one node with two or more unlabelled
+   same-style edges to distinct nodes on one row, no other edge entering
+   them, in a flowchart without subgraphs whose nodes are rectangles or
+diff --git a/crates/mermaid-text/src/layout/grid.rs b/crates/mermaid-text/src/layout/grid.rs
+index c5cf8d9..ac99e29 100644
+--- a/crates/mermaid-text/src/layout/grid.rs
++++ b/crates/mermaid-text/src/layout/grid.rs
+@@ -316,6 +316,10 @@ pub struct Grid {
+     height: usize,
+ }
+ 
++/// Narrowest diamond: its outline climbs the 8 one-eighth levels at most one
++/// per column on each side of the centre.
++pub const DIAMOND_MIN_WIDTH: usize = 17;
++
+ /// A top or bottom border line cell: entered only by a vertical move.
+ pub const SG_BORDER_H: u8 = 1;
+ /// A side border line cell: entered only by a horizontal move.
+@@ -963,19 +967,37 @@ impl Grid {
+     ///
+     /// `w` and `h` are the total bounding-box dimensions.
+     pub fn draw_diamond(&mut self, col: usize, row: usize, w: usize, h: usize) {
+-        if w < 2 || h < 2 {
++        if w < 4 || h < 3 {
+             return;
+         }
+-        // Draw the standard rectangle skeleton first, then overwrite the four
+-        // corner characters with diagonal glyphs.
+-        self.draw_box(col, row, w, h);
+-
+-        // Top corners: ╱ top-left, ╲ top-right.
+-        self.set(col, row, '╱');
+-        self.set(col + w - 1, row, '╲');
+-        // Bottom corners: ╲ bottom-left, ╱ bottom-right.
+-        self.set(col, row + h - 1, '╲');
+-        self.set(col + w - 1, row + h - 1, '╱');
++        // A shallow diamond: box-drawing diagonals (`╱ ╲`) are as steep as a
++        // cell is tall, so the outline is drawn with one-eighth horizontal
++        // lines instead. Along the top row it climbs from the bottom of the
++        // row (`▁`) at the ends to its top (`▔`) at the centre; the bottom row
++        // mirrors it; the middle rows end in one-eighth verticals (`▕ ▏`)
++        // that join the two rows' ends.
++        const LEVELS: [char; 8] = ['▔', '🭶', '🭷', '🭸', '🭹', '🭺', '🭻', '▁'];
++        let span = w - 3; // twice the distance from an end cell to the centre
++        for x in 1..w - 1 {
++            let d = (2 * x).abs_diff(w - 1); // twice the distance to the centre
++            let level = ((14 * d + span) / (2 * span)).min(7);
++            // Protection-respecting, like `draw_box`: an arrow tip that
++            // ends on the outline survives the redraw after routing.
++            self.set_unless_protected(col + x, row, LEVELS[level]);
++            self.set_unless_protected(col + x, row + h - 1, LEVELS[7 - level]);
++        }
++        for y in (row + 1)..(row + h - 1) {
++            self.set_unless_protected(col, y, '▕');
++            self.set_unless_protected(col + w - 1, y, '▏');
++        }
++        for (x, y) in [
++            (col, row),
++            (col + w - 1, row),
++            (col, row + h - 1),
++            (col + w - 1, row + h - 1),
++        ] {
++            self.set(x, y, ' ');
++        }
+     }
+ 
+     /// Fill a `w × h` rectangular block at `(col, row)` with full-block `█`
+diff --git a/crates/mermaid-text/src/layout/layered.rs b/crates/mermaid-text/src/layout/layered.rs
+index 72e0151..83fed6c 100644
+--- a/crates/mermaid-text/src/layout/layered.rs
++++ b/crates/mermaid-text/src/layout/layered.rs
+@@ -887,8 +887,8 @@ pub(crate) fn node_box_width(graph: &Graph, id: &str) -> usize {
+         let label_width = node.label_width();
+         let inner = label_width + 4; // 2-char padding each side
+         match node.shape {
+-            // Diamond renders as a plain rectangle.
+-            NodeShape::Diamond => inner,
++            // Diamond: wide enough for its shallow outline (see `draw_diamond`).
++            NodeShape::Diamond => inner.max(crate::layout::grid::DIAMOND_MIN_WIDTH),
+             // Circle/Stadium/Hexagon/Asymmetric add 1 extra char on each side
+             // for their distinctive markers inside the border.
+             NodeShape::Circle | NodeShape::Stadium | NodeShape::Hexagon | NodeShape::Asymmetric => {
+diff --git a/crates/mermaid-text/src/lib.rs b/crates/mermaid-text/src/lib.rs
+index 5a6eb41..48a251b 100644
+--- a/crates/mermaid-text/src/lib.rs
++++ b/crates/mermaid-text/src/lib.rs
+@@ -949,6 +949,10 @@ pub fn to_ascii(s: &str) -> String {
+         let ascii_ch = match ch {
+             // ---- Horizontal lines ----
+             '─' | '━' | '┄' => '-',
++            // ---- Diamond outline: one-eighth lines and verticals ----
++            '▔' | '🭶' | '🭷' | '🭸' | '🭹' => '-',
++            '🭺' | '🭻' | '▁' => '_',
++            '▕' | '▏' => '|',
+             // ---- Vertical lines ----
+             '│' | '┃' | '┆' => '|',
+             // ---- Corners (all four styles → +) ----
+@@ -1283,10 +1287,16 @@ mod tests {
+     fn render_diamond_node() {
+         let out = render("graph LR; A{Decision} --> B[OK]").unwrap();
+         assert!(out.contains("Decision"), "missing 'Decision' in:\n{out}");
+-        // Diamond now renders with diagonal corner characters (╱ ╲) that
+-        // clearly distinguish a rhombus from a plain rectangle.
+-        assert!(out.contains('╱'), "no diagonal corner '╱' in:\n{out}");
+-        assert!(out.contains('╲'), "no diagonal corner '╲' in:\n{out}");
++        // Diamond renders as a shallow outline with flat ends (▕ ▏) that
++        // clearly distinguishes a rhombus from a plain rectangle.
++        assert!(
++            out.contains('▕') && out.contains('▏'),
++            "no diamond ends in:\n{out}"
++        );
++        assert!(
++            out.contains('▔') && out.contains('▁'),
++            "no diamond outline in:\n{out}"
++        );
+     }
+ 
+     #[test]
+diff --git a/crates/mermaid-text/src/render/unicode.rs b/crates/mermaid-text/src/render/unicode.rs
+index f2943a3..d616fa8 100644
+--- a/crates/mermaid-text/src/render/unicode.rs
++++ b/crates/mermaid-text/src/render/unicode.rs
+@@ -58,11 +58,18 @@ impl NodeGeom {
+         // `layout/layered.rs` — both functions encode the same shape dimensions.
+         match node.shape {
+             // Plain rectangle / rounded / diamond: standard 3-row box.
+-            NodeShape::Rectangle | NodeShape::Rounded | NodeShape::Diamond => NodeGeom {
++            NodeShape::Rectangle | NodeShape::Rounded => NodeGeom {
+                 width: inner_w,
+                 height: 3 + extra_lines,
+                 text_row: 1,
+             },
++            // Diamond: wide enough for its shallow outline to climb at most
++            // one eighth of a row per column.
++            NodeShape::Diamond => NodeGeom {
++                width: inner_w.max(crate::layout::grid::DIAMOND_MIN_WIDTH),
++                height: 3 + extra_lines,
++                text_row: 1,
++            },
+             // Circle, stadium, hexagon, asymmetric: +2 width for side markers.
+             NodeShape::Circle | NodeShape::Stadium | NodeShape::Hexagon | NodeShape::Asymmetric => {
+                 NodeGeom {
+@@ -3607,17 +3614,30 @@ mod tests {
+     /// Both a short label ("Hi") and a longer label are checked so the
+     /// diagonal-corner approach works across a range of box widths.
+     #[test]
+-    fn rhombus_uses_diagonal_corners() {
++    fn rhombus_uses_shallow_diamond_outline() {
+         for label in &["Hi", "Rhombus", "This is a long rhombus label"] {
+             let src = format!("graph LR\nD{{{label}}}");
+             let out = render_diagram(&src);
++            let lines: Vec<&str> = out.lines().collect();
++            let mid = lines
++                .iter()
++                .position(|l| l.contains('▕') && l.contains('▏'))
++                .unwrap_or_else(|| panic!("flat ends missing for label {label:?} in:\n{out}"));
++            // The outline climbs from the row ends (`▁`) to the centre (`▔`)
++            // above the label, and mirrors below it.
++            let top = lines[mid - 1].trim();
++            let bottom = lines[mid + 1].trim();
++            assert!(
++                top.starts_with('▁') && top.ends_with('▁') && top.contains('▔'),
++                "top outline for label {label:?} in:\n{out}"
++            );
+             assert!(
+-                out.contains('╱'),
+-                "diagonal corner '╱' missing for label {label:?} in:\n{out}"
++                bottom.starts_with('▔') && bottom.ends_with('▔') && bottom.contains('▁'),
++                "bottom outline for label {label:?} in:\n{out}"
+             );
+             assert!(
+-                out.contains('╲'),
+-                "diagonal corner '╲' missing for label {label:?} in:\n{out}"
++                !out.contains('╱') && !out.contains('╲'),
++                "steep diagonals in:\n{out}"
+             );
+             // The old rectangular markers must no longer appear.
+             assert!(
+@@ -3784,8 +3804,8 @@ if_state --> False: !condition";
+         let out = crate::render(src).expect("state diagram render must succeed");
+         // The diamond must be present (diagonal corners).
+         assert!(
+-            out.contains('╱'),
+-            "missing diagonal corner '╱' for named <<choice>> in:\n{out}"
++            out.contains('▕') && out.contains('▏'),
++            "missing diamond ends '▕ ▏' for named <<choice>> in:\n{out}"
+         );
+         // The user-supplied label must appear in the output.
+         assert!(
+@@ -3807,8 +3827,8 @@ if_state --> False: !condition";
+         let out = crate::render(src).expect("state diagram render must succeed");
+         // The diamond border must still be present.
+         assert!(
+-            out.contains('╱'),
+-            "missing diagonal corner '╱' for anonymous <<choice>> in:\n{out}"
++            out.contains('▕') && out.contains('▏'),
++            "missing diamond ends '▕ ▏' for anonymous <<choice>> in:\n{out}"
+         );
+         // No synthetic id should leak into the output.
+         assert!(
+@@ -4827,23 +4847,22 @@ if_state --> False: !condition";
+         let out = crate::render(src).expect("render must succeed");
+         let lines: Vec<Vec<char>> = out.lines().map(|l| l.chars().collect()).collect();
+ 
+-        // Diamond corners: top is `╱─...─╲`, mid is `│ Decision │`,
+-        // bottom is `╲─...─╱`. Find any line containing both `╱` and `╲`.
+-        let top_idx = lines
++        // Diamond: the middle row ends in `▕ … ▏`; the outline rows sit
++        // right above and below it.
++        let mid_idx = lines
+             .iter()
+-            .position(|l| l.contains(&'\u{2571}') && l.contains(&'\u{2572}'))
+-            .expect("diamond top corner row missing — `╱` and `╲` not both found");
+-        let bot_idx = (top_idx + 1..lines.len())
+-            .find(|&i| lines[i].contains(&'\u{2572}') && lines[i].contains(&'\u{2571}'))
+-            .expect("diamond bottom corner row missing");
+-        // Diamond's left and right column extents from the top row.
+-        let left = lines[top_idx]
++            .position(|l| l.contains(&'\u{2595}') && l.contains(&'\u{258F}'))
++            .expect("diamond middle row missing — `▕` and `▏` not both found");
++        let top_idx = mid_idx - 1;
++        let bot_idx = mid_idx + 1;
++        // Diamond's left and right column extents from the middle row.
++        let left = lines[mid_idx]
+             .iter()
+-            .position(|&c| c == '\u{2571}')
++            .position(|&c| c == '\u{2595}')
+             .unwrap();
+-        let right = lines[top_idx]
++        let right = lines[mid_idx]
+             .iter()
+-            .rposition(|&c| c == '\u{2572}')
++            .rposition(|&c| c == '\u{258F}')
+             .unwrap();
+ 
+         // Edges must exist somewhere outside the diamond — guard against a
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_all_node_shapes.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_all_node_shapes.snap
+index 5f31710..a010955 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_all_node_shapes.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_all_node_shapes.snap
+@@ -2,8 +2,6 @@
+ source: crates/mermaid-text/tests/regression_corpus.rs
+ expression: natural
+ ---
+-
+-
+ ┌────────┐
+ │ Square │
+ └────────┘
+@@ -22,9 +20,9 @@ expression: natural
+ 
+ 
+ 
+-╱─────────╲
+-│ Rhombus │
+-╲─────────╱
++ ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁
++▕    Rhombus    ▏
++ ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔
+ 
+ 
+ 
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_all_node_shapes.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_all_node_shapes.width80.snap
+index 0b1604e..c3047df 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_all_node_shapes.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_all_node_shapes.width80.snap
+@@ -2,8 +2,6 @@
+ source: crates/mermaid-text/tests/regression_corpus.rs
+ expression: constrained
+ ---
+-
+-
+ ┌────────┐
+ │ Square │
+ └────────┘
+@@ -22,9 +20,9 @@ expression: constrained
+ 
+ 
+ 
+-╱─────────╲
+-│ Rhombus │
+-╲─────────╱
++ ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁
++▕    Rhombus    ▏
++ ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔
+ 
+ 
+ 
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_basic_decision.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_basic_decision.snap
+index 3e9d32e..24f0c2f 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_basic_decision.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_basic_decision.snap
+@@ -2,12 +2,12 @@
+ source: crates/mermaid-text/tests/regression_corpus.rs
+ expression: natural
+ ---
+-                                   ┌───────┐
+-                                  ▸│ Build │──────┐
+-                               yes│└───────┘      │
+-┌───────┐       ╱──────────╲──────┘               ▸┌────────┐
+-│ Start │──────▸│ Decision │   no                  │ Deploy │
+-└───────┘       ╲──────────╱──────┐               ▸└────────┘
+-                                  │┌──────┐       │
+-                                  ▸│ Skip │───────┘
+-                                   └──────┘
++                                        ┌───────┐
++                                       ▸│ Build │──────┐
++                                    yes│└───────┘      │
++┌───────┐        ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┘               ▸┌────────┐
++│ Start │──────▸▕   Decision    ▏   no                  │ Deploy │
++└───────┘        ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ──────┐               ▸└────────┘
++                                       │┌──────┐       │
++                                       ▸│ Skip │───────┘
++                                        └──────┘
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_basic_decision.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_basic_decision.width80.snap
+index 8092a7f..15fe4a6 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_basic_decision.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_basic_decision.width80.snap
+@@ -2,12 +2,12 @@
+ source: crates/mermaid-text/tests/regression_corpus.rs
+ expression: constrained
+ ---
+-                                   ┌───────┐
+-                                  ▸│ Build │──────┐
+-                               yes│└───────┘      │
+-┌───────┐       ╱──────────╲──────┘               ▸┌────────┐
+-│ Start │──────▸│ Decision │   no                  │ Deploy │
+-└───────┘       ╲──────────╱──────┐               ▸└────────┘
+-                                  │┌──────┐       │
+-                                  ▸│ Skip │───────┘
+-                                   └──────┘
++                                        ┌───────┐
++                                       ▸│ Build │──────┐
++                                    yes│└───────┘      │
++┌───────┐        ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┘               ▸┌────────┐
++│ Start │──────▸▕   Decision    ▏   no                  │ Deploy │
++└───────┘        ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ──────┐               ▸└────────┘
++                                       │┌──────┐       │
++                                       ▸│ Skip │───────┘
++                                        └──────┘
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_diamond_branches.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_diamond_branches.snap
+index 5adbaf9..9af2572 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_diamond_branches.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_diamond_branches.snap
+@@ -13,9 +13,9 @@ expression: natural
+               │
+               │
+               │
+-           ╱──▾──╲
+-           │ Ok? │
+-           ╲─────╱
++       ▁🭻🭺🭹🭸🭷🭶▾🭶🭷🭸🭹🭺🭻▁
++      ▕      Ok?      ▏
++       ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔
+              │ └───┐
+              │     │
+              │     │
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_diamond_branches.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_diamond_branches.width80.snap
+index 7faa60e..3287b44 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_diamond_branches.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_diamond_branches.width80.snap
+@@ -13,9 +13,9 @@ expression: constrained
+               │
+               │
+               │
+-           ╱──▾──╲
+-           │ Ok? │
+-           ╲─────╱
++       ▁🭻🭺🭹🭸🭷🭶▾🭶🭷🭸🭹🭺🭻▁
++      ▕      Ok?      ▏
++       ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔
+              │ └───┐
+              │     │
+              │     │
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_md_tui_diagram.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_md_tui_diagram.snap
+index 761bea5..f267399 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_md_tui_diagram.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_md_tui_diagram.snap
+@@ -5,9 +5,9 @@ expression: natural
+                       ╭──────────╮
+                      ▸(  Circle  )────────┐
+                      │╰──────────╯        │
+-┌─────────────┐──────┘                    ▸╱─────────╲
+-│ Square Rect │   Link text                │ Rhombus │
+-└─────────────┘──────┐                    ▸╲─────────╱
++┌─────────────┐──────┘                    ▸ ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁
++│ Square Rect │   Link text                ▕    Rhombus    ▏
++└─────────────┘──────┐                    ▸ ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔
+                      │╭────────────╮      │
+                      ▸│ Round Rect │──────┘
+                       ╰────────────╯
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_md_tui_diagram.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_md_tui_diagram.width80.snap
+index 92eddb3..803b68b 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_md_tui_diagram.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_md_tui_diagram.width80.snap
+@@ -5,9 +5,9 @@ expression: constrained
+                       ╭──────────╮
+                      ▸(  Circle  )────────┐
+                      │╰──────────╯        │
+-┌─────────────┐──────┘                    ▸╱─────────╲
+-│ Square Rect │   Link text                │ Rhombus │
+-└─────────────┘──────┐                    ▸╲─────────╱
++┌─────────────┐──────┘                    ▸ ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁
++│ Square Rect │   Link text                ▕    Rhombus    ▏
++└─────────────┘──────┐                    ▸ ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔
+                      │╭────────────╮      │
+                      ▸│ Round Rect │──────┘
+                       ╰────────────╯
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.snap
+index cf9a43c..8244ffa 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.snap
+@@ -2,24 +2,24 @@
+ source: crates/mermaid-text/tests/regression_corpus.rs
+ expression: natural
+ ---
+-                                   ╭──────╮
+-                                  ▸│ Pass │─────────┐
+-                                  │╰──────╯         │
+-                                  │                 │
+-                                  │                 │
+-                               ok │                 │╭──────╮
+-              ╱────────────╲──────┘╭──────╮         ▸│ Done │────────┐
+-             ▸│ named_cond │      ▸│ Fail ││         ╰──────╯        │
+-             │╲────────────╱──────┘╰──────╯│                         │╭───────╮
+-╭─────╮──────┘                 error       └─────────────────────────▸│╭─────╮│
+-(  ●  )                                                             ┌▸││  ●  ││
+-╰─────╯──────┐            start                                     │▸│╰─────╯│
+-             │╱──╲────────────────┐╭──────╮                         ││╰───────╯
+-             ▸│  │        stop    ▸│ Open │─────────────────────────┘│
+-              ╲──╱────────────────┐╰──────╯                          │
+-                                  │                                  │
+-                                  │                                  │
+-                                  │                                  │
+-                                  │╭────────╮                        │
+-                                  ▸│ Closed │────────────────────────┘
+-                                   ╰────────╯
++                                      ╭──────╮
++                                     ▸│ Pass │─────────┐
++                                     │╰──────╯         │
++                                     │                 │
++                                     │                 │
++                                  ok │                 │╭──────╮
++               ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┘╭──────╮         ▸│ Done │────────┐
++             ▸▕  named_cond   ▏      ▸│ Fail ││         ╰──────╯        │
++             │ ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ──────┘╰──────╯│                         │╭───────╮
++╭─────╮──────┘                    error       └─────────────────────────▸│╭─────╮│
++(  ●  )                                                                ┌▸││  ●  ││
++╰─────╯──────┐                    start                                │▸│╰─────╯│
++             │ ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┐╭──────╮                         ││╰───────╯
++             ▸▕               ▏   stop│ Open │─────────────────────────┘│
++               ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ──────┐╰──────╯                          │
++                                     │                                  │
++                                     │                                  │
++                                     │                                  │
++                                     │╭────────╮                        │
++                                     ▸│ Closed │────────────────────────┘
++                                      ╰────────╯
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.width80.snap
+index 3024995..e585ddd 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.width80.snap
+@@ -2,24 +2,24 @@
+ source: crates/mermaid-text/tests/regression_corpus.rs
+ expression: constrained
+ ---
+-                                   ╭──────╮
+-                                  ▸│ Pass │─────────┐
+-                                  │╰──────╯         │
+-                                  │                 │
+-                                  │                 │
+-                               ok │                 │╭──────╮
+-              ╱────────────╲──────┘╭──────╮         ▸│ Done │────────┐
+-             ▸│ named_cond │      ▸│ Fail ││         ╰──────╯        │
+-             │╲────────────╱──────┘╰──────╯│                         │╭───────╮
+-╭─────╮──────┘                 error       └─────────────────────────▸│╭─────╮│
+-(  ●  )                                                             ┌▸││  ●  ││
+-╰─────╯──────┐            start                                     │▸│╰─────╯│
+-             │╱──╲────────────────┐╭──────╮                         ││╰───────╯
+-             ▸│  │        stop    ▸│ Open │─────────────────────────┘│
+-              ╲──╱────────────────┐╰──────╯                          │
+-                                  │                                  │
+-                                  │                                  │
+-                                  │                                  │
+-                                  │╭────────╮                        │
+-                                  ▸│ Closed │────────────────────────┘
+-                                   ╰────────╯
++                                  ╭──────╮
++                                 ▸│ Pass │───────┐
++                                 │╰──────╯       │
++                                 │               │
++                                 │               │
++                               ok│               │╭──────╮
++             ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ────┘╭──────╮       ▸│ Done │──────┐
++           ▸▕  named_cond   ▏    ▸│ Fail ││       ╰──────╯      │
++           │ ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ────┘╰──────╯│                     │╭───────╮
++╭─────╮────┘                   error      └─────────────────────▸│╭─────╮│
++(  ●  )                                                        ┌▸││  ●  ││
++╰─────╯────┐                   start                           │▸│╰─────╯│
++           │ ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ────┐╭──────╮                     ││╰───────╯
++           ▸▕               ▏    ▸│ Open │─────────────────────┘│
++             ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ────┐╰──────╯                      │
++                               stop                             │
++                                 │                              │
++                                 │                              │
++                                 │╭────────╮                    │
++                                 ▸│ Closed │────────────────────┘
++                                  ╰────────╯
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_choice_fork_join.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_choice_fork_join.snap
+index 1898929..9ed8e3e 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_choice_fork_join.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_choice_fork_join.snap
+@@ -2,12 +2,12 @@
+ source: crates/mermaid-text/tests/regression_corpus.rs
+ expression: natural
+ ---
+-                                    ╭────────╮
+-                                   ▸│ Cached │──────┐
+-                                hit│╰────────╯      │╭───────╮
+-╭─────╮       ╱─────────────╲──────┘                ▸│╭─────╮│
+-(  ●  )──────▸│ route_check │   miss                 ││  ●  ││
+-╰─────╯       ╲─────────────╱──────┐                ▸│╰─────╯│
+-                                   │╭────────╮      │╰───────╯
+-                                   ▸│ Origin │──────┘
+-                                    ╰────────╯
++                                      ╭────────╮
++                                     ▸│ Cached │──────┐
++                                  hit│╰────────╯      │╭───────╮
++╭─────╮        ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┘                ▸│╭─────╮│
++(  ●  )──────▸▕  route_check  ▏   miss                 ││  ●  ││
++╰─────╯        ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ──────┐                ▸│╰─────╯│
++                                     │╭────────╮      │╰───────╯
++                                     ▸│ Origin │──────┘
++                                      ╰────────╯
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_choice_fork_join.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_choice_fork_join.width80.snap
+index 467da04..3d49dd7 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_choice_fork_join.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_choice_fork_join.width80.snap
+@@ -2,12 +2,12 @@
+ source: crates/mermaid-text/tests/regression_corpus.rs
+ expression: constrained
+ ---
+-                                    ╭────────╮
+-                                   ▸│ Cached │──────┐
+-                                hit│╰────────╯      │╭───────╮
+-╭─────╮       ╱─────────────╲──────┘                ▸│╭─────╮│
+-(  ●  )──────▸│ route_check │   miss                 ││  ●  ││
+-╰─────╯       ╲─────────────╱──────┐                ▸│╰─────╯│
+-                                   │╭────────╮      │╰───────╯
+-                                   ▸│ Origin │──────┘
+-                                    ╰────────╯
++                                      ╭────────╮
++                                     ▸│ Cached │──────┐
++                                  hit│╰────────╯      │╭───────╮
++╭─────╮        ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┘                ▸│╭─────╮│
++(  ●  )──────▸▕  route_check  ▏   miss                 ││  ●  ││
++╰─────╯        ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ──────┐                ▸│╰─────╯│
++                                     │╭────────╮      │╰───────╯
++                                     ▸│ Origin │──────┘
++                                      ╰────────╯
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_fork_join_full.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_fork_join_full.snap
+index 0e6f8a9..0048c24 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_fork_join_full.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_fork_join_full.snap
+@@ -2,14 +2,14 @@
+ source: crates/mermaid-text/tests/regression_corpus.rs
+ expression: natural
+ ---
+-                                           ╭─────────╮
+-                                          ▸│ Branch1 │──────┐
+-                                          │╰─────────╯      │
+-                                          │                 │
+-                             positive     │                 │
+-                                 ███      │                 │███       ╭───────╮
+-╭─────╮       ╱──────────╲──────┐███──────┘╭─────────╮      ▸███      ▸│╭─────╮│
+-(  ●  )──────▸│ Decision │      ▸███      ▸│ Branch2 │──────┐███──────┤││  ●  ││
+-╰─────╯       ╲──────────╱─┐     ███──────┘╰─────────╯      ▸███      ▸│╰─────╯│
+-                           │     ███                         ███      │╰───────╯
+-                           └─────────────────────────────────negative─┘
++                                                ╭─────────╮
++                                               ▸│ Branch1 │──────┐
++                                               │╰─────────╯      │
++                                               │                 │
++                                  positive     │                 │
++                                      ███      │                 │███       ╭───────╮
++╭─────╮        ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┐███──────┘╭─────────╮      ▸███      ▸│╭─────╮│
++(  ●  )──────▸▕   Decision    ▏      ▸███      ▸│ Branch2 │──────┐███──────┤││  ●  ││
++╰─────╯        ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ─┐     ███──────┘╰─────────╯      ▸███      ▸│╰─────╯│
++                                │     ███                         ███      │╰───────╯
++                                └─────────────────────────────────negative─┘
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_fork_join_full.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_fork_join_full.width80.snap
+index 1faca50..224bbbf 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_fork_join_full.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_fork_join_full.width80.snap
+@@ -2,14 +2,14 @@
+ source: crates/mermaid-text/tests/regression_corpus.rs
+ expression: constrained
+ ---
+-                                           ╭─────────╮
+-                                          ▸│ Branch1 │──────┐
+-                                          │╰─────────╯      │
+-                                          │                 │
+-                             positive     │                 │
+-                                 ███      │                 │███       ╭───────╮
+-╭─────╮       ╱──────────╲──────┐███──────┘╭─────────╮      ▸███      ▸│╭─────╮│
+-(  ●  )──────▸│ Decision │      ▸███      ▸│ Branch2 │──────┐███──────┤││  ●  ││
+-╰─────╯       ╲──────────╱─┐     ███──────┘╰─────────╯      ▸███      ▸│╰─────╯│
+-                           │     ███                         ███      │╰───────╯
+-                           └─────────────────────────────────negative─┘
++                                          ╭─────────╮
++                                         ▸│ Branch1 │────┐
++                                         │╰─────────╯    │
++                                         │               │
++                               positive  │               │
++                                  ███    │               │███     ╭───────╮
++╭─────╮      ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ────┐███────┘╭─────────╮    ▸███    ▸│╭─────╮│
++(  ●  )────▸▕   Decision    ▏    ▸███    ▸│ Branch2 │────┐███────┤││  ●  ││
++╰─────╯      ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ─┐   ███────┘╰─────────╯    ▸███    ▸│╰─────╯│
++                              │   ███                     ███    │╰───────╯
++                              └─────────────────────────negative─┘
+diff --git a/crates/mermaid-text/tests/snapshots.rs b/crates/mermaid-text/tests/snapshots.rs
+index 34b4631..2ead73c 100644
+--- a/crates/mermaid-text/tests/snapshots.rs
++++ b/crates/mermaid-text/tests/snapshots.rs
+@@ -1007,15 +1007,11 @@ Branch2 --> Sync
+ state Sync <<join>>
+ Sync --> [*]";
+     let out = mermaid_text::render(src).unwrap();
+-    // <<choice>> now renders with diagonal corner characters (╱ ╲) instead of
+-    // the old ◇ markers, giving a clearer visual distinction from plain rects.
++    // <<choice>> renders as a shallow diamond with flat ends (▕ ▏), clearly
++    // distinct from plain rects.
+     assert!(
+-        out.contains('╱'),
+-        "missing diagonal corner '╱' for <<choice>>"
+-    );
+-    assert!(
+-        out.contains('╲'),
+-        "missing diagonal corner '╲' for <<choice>>"
++        out.contains('▕') && out.contains('▏'),
++        "missing diamond ends '▕ ▏' for <<choice>>"
+     );
+     assert!(
+         out.contains('█'),
+@@ -1047,10 +1043,10 @@ Done --> [*]
+ Open --> [*]
+ Closed --> [*]";
+     let out = mermaid_text::render(src).unwrap();
+-    // Both diamonds must have their diagonal corners rendered.
++    // Both diamonds must have their flat ends rendered.
+     assert!(
+-        out.contains('╱'),
+-        "missing diagonal corner '╱' for <<choice>> in:\n{out}"
++        out.contains('▕') && out.contains('▏'),
++        "missing diamond ends '▕ ▏' for <<choice>> in:\n{out}"
+     );
+     // Named choice label must be present.
+     assert!(
+@@ -2443,8 +2439,8 @@ fn git_graph_main_develop_merge() {
+ /// Expected properties after the fix:
+ /// - Node B is `((Circle))` — rendered with `(` / `)` ON the border, not
+ ///   embedded in the label text ("Circle", not "( Circle )").
+-/// - Node D is `{Rhombus}` — rendered with `╱` / `╲` diagonal corners, not
+-///   a rectangle with `◇` markers.
++/// - Node D is `{Rhombus}` — rendered as a shallow diamond with flat ends
++///   (`▕` / `▏`), not a rectangle with `◇` markers.
+ #[test]
+ fn flowchart_md_tui_test_diagram() {
+     let src = "graph LR
+@@ -2459,14 +2455,10 @@ fn flowchart_md_tui_test_diagram() {
+         !out.contains("( Circle )"),
+         "circle label still leaks parens — bug 1 not fixed:\n{out}"
+     );
+-    // Rhombus must use diagonal corners.
+-    assert!(
+-        out.contains('╱'),
+-        "diagonal corner '╱' missing for Rhombus:\n{out}"
+-    );
++    // Rhombus must use the shallow diamond outline with flat ends.
+     assert!(
+-        out.contains('╲'),
+-        "diagonal corner '╲' missing for Rhombus:\n{out}"
++        out.contains('▕') && out.contains('▏'),
++        "diamond ends '▕ ▏' missing for Rhombus:\n{out}"
+     );
+     assert!(!out.contains('◇'), "old '◇' marker still present:\n{out}");
+     assert_snapshot!("flowchart_md_tui_test_diagram", out);
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__all_node_shapes.snap b/crates/mermaid-text/tests/snapshots/snapshots__all_node_shapes.snap
+index e253b01..6fd7a52 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__all_node_shapes.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__all_node_shapes.snap
+@@ -2,8 +2,8 @@
+ source: crates/mermaid-text/tests/snapshots.rs
+ expression: out
+ ---
+-  ┌───────────┐   ╭─────────╮   ╱─────────╲   ╭──────────╮   ╭───────────╮   ┌──────────────┐   ╭──────────╮   ╱───────────╲   ┌──────────────┐   ╱─────────────────╱   ╱─────────────╲   ╭──────────────────╮
+-  │ Rectangle │   │ Rounded │   │ Diamond │   (  Circle  )   (  Stadium  )   ││ Subroutine ││   │ ──────── │   <  Hexagon  >   │  Asymmetric  ⟩   │  Parallelogram  │   │  Trapezoid  │   │╭────────────────╮│
+-  └───────────┘   ╰─────────╯   ╲─────────╱   ╰──────────╯   ╰───────────╯   └──────────────┘   │ Cylinder │   ╲───────────╱   └──────────────┘   ╱─────────────────╱   └─────────────┘   ││  DoubleCircle  ││
+-                                                                                                ╰──────────╯                                                                              │╰────────────────╯│
+-                                                                                                                                                                                          ╰──────────────────╯
++  ┌───────────┐   ╭─────────╮    ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁    ╭──────────╮   ╭───────────╮   ┌──────────────┐   ╭──────────╮   ╱───────────╲   ┌──────────────┐   ╱─────────────────╱   ╱─────────────╲   ╭──────────────────╮
++  │ Rectangle │   │ Rounded │   ▕    Diamond    ▏   (  Circle  )   (  Stadium  )   ││ Subroutine ││   │ ──────── │   <  Hexagon  >   │  Asymmetric  ⟩   │  Parallelogram  │   │  Trapezoid  │   │╭────────────────╮│
++  └───────────┘   ╰─────────╯    ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔    ╰──────────╯   ╰───────────╯   └──────────────┘   │ Cylinder │   ╲───────────╱   └──────────────┘   ╱─────────────────╱   └─────────────┘   ││  DoubleCircle  ││
++                                                                                                      ╰──────────╯                                                                              │╰────────────────╯│
++                                                                                                                                                                                                ╰──────────────────╯
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__diamond_with_branches.snap b/crates/mermaid-text/tests/snapshots/snapshots__diamond_with_branches.snap
+index bf197f6..0af5c7a 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__diamond_with_branches.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__diamond_with_branches.snap
+@@ -13,9 +13,9 @@ expression: out
+               │
+               │
+               │
+-           ╱──▾──╲
+-           │ Ok? │
+-           ╲─────╱
++       ▁🭻🭺🭹🭸🭷🭶▾🭶🭷🭸🭹🭺🭻▁
++      ▕      Ok?      ▏
++       ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔
+              │ └───┐
+              │     │
+              │     │
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__flowchart_all_node_shapes_phase_2.snap b/crates/mermaid-text/tests/snapshots/snapshots__flowchart_all_node_shapes_phase_2.snap
+index af3cf3c..db01336 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__flowchart_all_node_shapes_phase_2.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__flowchart_all_node_shapes_phase_2.snap
+@@ -2,8 +2,6 @@
+ source: crates/mermaid-text/tests/snapshots.rs
+ expression: out
+ ---
+-
+-
+ ┌────────┐
+ │ Square │
+ └────────┘
+@@ -22,9 +20,9 @@ expression: out
+ 
+ 
+ 
+-╱─────────╲
+-│ Rhombus │
+-╲─────────╱
++ ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁
++▕    Rhombus    ▏
++ ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔
+ 
+ 
+ 
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__flowchart_md_tui_test_diagram.snap b/crates/mermaid-text/tests/snapshots/snapshots__flowchart_md_tui_test_diagram.snap
+index bc2d53f..4e1d6c5 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__flowchart_md_tui_test_diagram.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__flowchart_md_tui_test_diagram.snap
+@@ -5,9 +5,9 @@ expression: out
+                       ╭──────────╮
+                      ▸(  Circle  )────────┐
+                      │╰──────────╯        │
+-┌─────────────┐──────┘                    ▸╱─────────╲
+-│ Square Rect │   Link text                │ Rhombus │
+-└─────────────┘──────┐                    ▸╲─────────╱
++┌─────────────┐──────┘                    ▸ ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁
++│ Square Rect │   Link text                ▕    Rhombus    ▏
++└─────────────┘──────┐                    ▸ ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔
+                      │╭────────────╮      │
+                      ▸│ Round Rect │──────┘
+                       ╰────────────╯
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_anonymous_choice.snap b/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_anonymous_choice.snap
+index c094a27..d7a7a1e 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_anonymous_choice.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_anonymous_choice.snap
+@@ -2,24 +2,24 @@
+ source: crates/mermaid-text/tests/snapshots.rs
+ expression: out
+ ---
+-                                   ╭──────╮
+-                                  ▸│ Pass │─────────┐
+-                                  │╰──────╯         │
+-                                  │                 │
+-                                  │                 │
+-                               ok │                 │╭──────╮
+-              ╱────────────╲──────┘╭──────╮         ▸│ Done │────────┐
+-             ▸│ named_cond │      ▸│ Fail ││         ╰──────╯        │
+-             │╲────────────╱──────┘╰──────╯│                         │╭───────╮
+-╭─────╮──────┘                 error       └─────────────────────────▸│╭─────╮│
+-(  ●  )                                                             ┌▸││  ●  ││
+-╰─────╯──────┐            start                                     │▸│╰─────╯│
+-             │╱──╲────────────────┐╭──────╮                         ││╰───────╯
+-             ▸│  │        stop    ▸│ Open │─────────────────────────┘│
+-              ╲──╱────────────────┐╰──────╯                          │
+-                                  │                                  │
+-                                  │                                  │
+-                                  │                                  │
+-                                  │╭────────╮                        │
+-                                  ▸│ Closed │────────────────────────┘
+-                                   ╰────────╯
++                                      ╭──────╮
++                                     ▸│ Pass │─────────┐
++                                     │╰──────╯         │
++                                     │                 │
++                                     │                 │
++                                  ok │                 │╭──────╮
++               ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┘╭──────╮         ▸│ Done │────────┐
++             ▸▕  named_cond   ▏      ▸│ Fail ││         ╰──────╯        │
++             │ ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ──────┘╰──────╯│                         │╭───────╮
++╭─────╮──────┘                    error       └─────────────────────────▸│╭─────╮│
++(  ●  )                                                                ┌▸││  ●  ││
++╰─────╯──────┐                    start                                │▸│╰─────╯│
++             │ ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┐╭──────╮                         ││╰───────╯
++             ▸▕               ▏   stop│ Open │─────────────────────────┘│
++               ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ──────┐╰──────╯                          │
++                                     │                                  │
++                                     │                                  │
++                                     │                                  │
++                                     │╭────────╮                        │
++                                     ▸│ Closed │────────────────────────┘
++                                      ╰────────╯
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_special_shapes.snap b/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_special_shapes.snap
+index 4adba5d..586cafb 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_special_shapes.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_special_shapes.snap
+@@ -2,14 +2,14 @@
+ source: crates/mermaid-text/tests/snapshots.rs
+ expression: out
+ ---
+-                                           ╭─────────╮
+-                                          ▸│ Branch1 │──────┐
+-                                          │╰─────────╯      │
+-                                          │                 │
+-                             positive     │                 │
+-                                 ███      │                 │███       ╭───────╮
+-╭─────╮       ╱──────────╲──────┐███──────┘╭─────────╮      ▸███      ▸│╭─────╮│
+-(  ●  )──────▸│ Decision │      ▸███      ▸│ Branch2 │──────┐███──────┤││  ●  ││
+-╰─────╯       ╲──────────╱─┐     ███──────┘╰─────────╯      ▸███      ▸│╰─────╯│
+-                           │     ███                         ███      │╰───────╯
+-                           └─────────────────────────────────negative─┘
++                                                ╭─────────╮
++                                               ▸│ Branch1 │──────┐
++                                               │╰─────────╯      │
++                                               │                 │
++                                  positive     │                 │
++                                      ███      │                 │███       ╭───────╮
++╭─────╮        ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┐███──────┘╭─────────╮      ▸███      ▸│╭─────╮│
++(  ●  )──────▸▕   Decision    ▏      ▸███      ▸│ Branch2 │──────┐███──────┤││  ●  ││
++╰─────╯        ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ─┐     ███──────┘╰─────────╯      ▸███      ▸│╰─────╯│
++                                │     ███                         ███      │╰───────╯
++                                └─────────────────────────────────negative─┘
+-- 
+2.43.0
+

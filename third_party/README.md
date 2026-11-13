@@ -161,7 +161,8 @@ The patches, in order:
 - 04: unshaded sequence block interiors;
 - 05: solid sequence lifelines joined to messages;
 - 06: subgraph borders crossed, never followed;
-- 07: a simple top-down fan-out drawn as one trunk.
+- 07: a simple top-down fan-out drawn as one trunk;
+- 08: decisions drawn as a shallow diamond (one-eighth lines, `▕ ▏` ends).
 
 Drop each when upstream covers it, keeping its fixtures and goldens. Detailed artifact boundaries and source links:
 [Mermaid artifact](../docs/digests/mermaid-renderer.md).
