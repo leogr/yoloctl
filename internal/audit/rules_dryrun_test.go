@@ -42,6 +42,7 @@ func TestPinnedRuleSetDryRun(t *testing.T) {
 		selectionTrace bool
 	}{
 		{name: "builtin-only"},
+		{name: "custom-without-context-output", files: []string{"- rule: Qualification minimal custom output\n  desc: Context must come from configured extra fields\n  condition: evt.type = execve\n  output: \"RAW_TEMPLATE_SENTINEL process=%proc.exepath container=%container.id\"\n  priority: NOTICE\n"}},
 		{name: "ordered-dependency", files: []string{macro, rule}},
 		{name: "missing-dependency", files: []string{rule}, wantError: true},
 		{name: "reversed-dependency", files: []string{rule, macro}, wantError: true},

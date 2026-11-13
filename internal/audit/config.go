@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 
 	"github.com/leogr/yoloctl/internal/auditplugin"
 	"github.com/leogr/yoloctl/internal/vmwire"
@@ -17,7 +18,12 @@ const ServiceName = vmwire.AuditUnitName
 //go:embed rules.yaml
 var Rules string
 
-func RulesDigest() string { return Digest(append([]byte(Rules), auditplugin.Manifest()...)) }
+func RulesDigest() string {
+	// Field extraction belongs to the loaded configuration, not imported
+	// output templates. Old generations must refresh before claiming it.
+	return Digest([]byte(Rules + string(auditplugin.Manifest()) +
+		"\nmandatory-syscall-output-v1\n" + strings.Join(retainedFields, "\n")))
+}
 
 func Configuration(root, tools, metadata string) ([]byte, error) {
 	return json.MarshalIndent(map[string]any{
@@ -27,6 +33,10 @@ func Configuration(root, tools, metadata string) ([]byte, error) {
 		"json_output":          true, "json_include_output_property": false,
 		"json_include_message_property": false, "json_include_output_fields_property": true,
 		"json_include_tags_property": false, "buffered_outputs": false,
+		"append_output": []any{map[string]any{
+			"match":        map[string]string{"source": "syscall"},
+			"extra_fields": retainedFields,
+		}},
 		"stdout_output":  map[string]bool{"enabled": true},
 		"file_output":    map[string]bool{"enabled": false},
 		"syslog_output":  map[string]bool{"enabled": false},

@@ -1,6 +1,6 @@
 # Audit event output and following
 
-Verification: `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes.
+Verification: `1f70a4ce74a6c3979ef7838f5748175f56c1bc0d` and accompanying changes.
 
 [FACT] `audit logs --follow` prints the first bounded-history summary to stderr,
 then prints another only when collector drops, metadata gaps or retention-gap
@@ -67,11 +67,13 @@ fields cannot be recovered from history. Updated rule outputs request the new
 fields for subsequent collection; explicit audit enable selects the updated
 rules digest. [4](#source-4) [5](#source-5) [6](#source-6) [7](#source-7)
 
-[FACT] For unknown rule names the same renderer uses a fixed selected-field
-message. It never interprets imported output templates; raw argv/environment,
-aggregate arguments and arbitrary fields remain excluded. A custom rule reusing
-a shipped name keeps that shipped name's template, potentially different from
-its changed semantics. [5](#source-5) [17](#source-17)
+[FACT] Every syscall rule requests the retained field allow-list through
+`append_output.extra_fields`, including custom rules whose output names no
+identity fields. `RulesDigest` binds extraction; explicit enable refreshes old
+generations. Native snapshot availability still governs attribution. Unknown
+names use a fixed message; yoloctl never renders imported templates. Reused
+shipped names retain the shipped template even when semantics differ. [5](#source-5) [17](#source-17)
+[18](#source-18)
 
 ## Sources
 
@@ -92,3 +94,4 @@ its changed semantics. [5](#source-5) [17](#source-17)
 15. <a id="source-15"></a> [Shared emission](../../pkg/prettylog/emission.go#L21) — typed record/summary decisions from `Logger.emitOwned`/`endRun`.
 16. <a id="source-16"></a> [CLI regressions](../../cmd/yoloctl/audit_logging_test.go#L46) — flags, unchanged JSON and failure drain.
 17. <a id="source-17"></a> [Composed presentation](../../internal/auditui/composition_test.go#L17) — custom and built-in names, selected numeric fields, privacy and shared final folding.
+18. <a id="source-18"></a> [Mandatory extraction](../../internal/audit/config.go#L1) — `Configuration`, `RulesDigest`.

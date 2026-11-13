@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `fc4ab58342732bf5234dacea479ec2e8ddf0d1b8` and accompanying changes.
+Verification: `1f70a4ce74a6c3979ef7838f5748175f56c1bc0d` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs`, `export` and
@@ -75,7 +75,8 @@ qualification. [12](#source-12) [15](#source-15) [17](#source-17)
 
 [FACT] The collector persists bounded, selected process/user/container/path/result
 fields and a rendering of the pinned rule template (fixed selected fields for
-unknown rule names). Arbitrary raw output,
+unknown rule names). All syscall rules request the same selected fields,
+independently of imported output placeholders. Arbitrary raw output,
 argv, environment and buffers remain excluded. Unknown metadata stays unavailable;
 [output and follow contracts](audit-output.md) define JSON, pretty/TUI display,
 shared colour/levels, consecutive-repeat summaries, bounded first-owner details
