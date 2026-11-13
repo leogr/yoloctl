@@ -69,7 +69,8 @@ inventories of the read-only host catalog directories. [9](#source-9)
 [10](#source-10) [11](#source-11)
 
 [FACT] A drain persists maintenance before waiting for admitted setup and a
-running recovery check; new work is refused. Host-only resume durably clears
+running recovery check; new work is refused except `box stop`, which is admitted
+and never waits at its gate ([box stop and start](box-stop-start.md)). Host-only resume durably clears
 maintenance after export without restarting workers or clearing uncertain
 outcomes or receipt failures. Independent session units survive controller
 restart. The guest supervisor terminates old controller workers before a new

@@ -36,8 +36,8 @@ retain managed cleanup. Explicit reconcile/recreate retains replacement authorit
 [FACT] Managed appliers clean session holders/artifacts before restart/recreate;
 a cleanup that positively stopped the holder and removed its state then lets a
 managed reconcile record the launch's end before the container operation.
-`box stop` takes its result from a final read, as [box stop and start](box-stop-start.md)
-says. Socket readiness
+`box stop` takes its result from a final read and, when another operation holds
+the space lock, stops beside it, as [box stop and start](box-stop-start.md) says. Socket readiness
 requires an SSH banner, not just an inode, and reports a confirmed container exit
 with a logs hint. Native commands use the local sandbox SSH launch path.
 [3](#source-3) [4](#source-4)

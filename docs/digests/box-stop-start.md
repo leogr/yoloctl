@@ -1,6 +1,6 @@
 # Box stop and start results
 
-Verification: `d6e7dd5b24fda4e6dc1fa18c598fb3a23ad82a57` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `d842b45512430e146b4cd25921721547b6f51580` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] `box stop` runs each step once, in order: read the box's exact container;
 withdraw the session holder; withdraw the box's forwards; one engine stop when the
@@ -10,8 +10,7 @@ generic route reap orphan network namespaces; read again. A failing step is
 recorded and the next one runs. The result comes from the last read only: not
 running or absent is `box NAME stopped` (exit 0) plus one warning per leftover;
 running is `stop failed: box NAME is still running` with the step notes. A failed
-first read changes nothing; a failed last read fails the command and never says
-stopped. No step's error, including a typed uncertainty marker, leaves it.
+first read changes nothing; a failed last read fails the command. No step's error, including a typed uncertainty marker, leaves it.
 [1](#source-1) [2](#source-2) [6](#source-6)
 
 [FACT] The engine stop targets the full ID of the first read: it inspects that ID,
@@ -59,8 +58,17 @@ not-applied proofs keep precedence; pending receipts still reserve; every other
 method, including restart and recreate, keeps `uncertain`.
 [9](#source-9) [10](#source-10) [11](#source-11)
 
-[FACT] Tests stub the engine and steps; they are not live VM validation.
-Admission of `box stop` under another operation's hold is unchanged.
+[FACT] `box stop` tries the space lock once. Free: the steps above. Held
+(contention only; other lock failures fail): a branch revalidates an operator,
+gates the named box only, selects the box's container once (T), stops T by ID
+if running, reads the box again and records its completion, with no cleanup or
+role sync. Absent, T or a replacement not running: stopped, leftovers named;
+running: failure saying "this stop targeted container T". Engine errors stay
+diagnostics; a failed read fails. The `box.stop` gate never waits for running
+executions and is admitted during drain; unresolved holds and receipt-storage
+failures still refuse it. [14](#source-14) [15](#source-15) [16](#source-16)
+
+[FACT] Tests stub the engine; they are not live VM validation.
 [6](#source-6) [7](#source-7) [11](#source-11)
 
 ## Sources
@@ -78,3 +86,6 @@ Admission of `box stop` under another operation's hold is unchanged.
 11. <a id="source-11"></a> [internal/controller/interrupted_test.go](../../internal/controller/interrupted_test.go#L20) — classification, holds and reservations.
 12. <a id="source-12"></a> [internal/agentbox/openshell_stop_result_test.go](../../internal/agentbox/openshell_stop_result_test.go#L65) — replacement never targeted; `openshell_stop_result_linux_test.go` storage failure and transaction accounting.
 13. <a id="source-13"></a> [internal/container/engine_calls.go](../../internal/container/engine_calls.go#L1-L71) — `EngineCalls`, marked in `Client.Start`, `createOrRun`, `Stop`, `StopContainerID`.
+14. <a id="source-14"></a> [cmd/yoloctl/box_stop_beside.go](../../cmd/yoloctl/box_stop_beside.go#L1) — `stopBoxBeside`, `stopTargetBeside`; wired in `registerSpaceOperations`.
+15. <a id="source-15"></a> [internal/controller/server.go](../../internal/controller/server.go#L186) — `Operation.Beside` in admission and the effect gate; `holds.unresolvedOnly`.
+16. <a id="source-16"></a> [cmd/yoloctl/box_stop_beside_test.go](../../cmd/yoloctl/box_stop_beside_test.go#L1) — results, wrapper; controller `beside_test.go`.

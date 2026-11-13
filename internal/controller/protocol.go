@@ -183,6 +183,11 @@ type Operation struct {
 	// Footprint is the method's policy for the resource kinds a worker may
 	// declare it writes. Zero accepts any kind; a global scope always fits.
 	Footprint Footprint
+	// Beside is box.stop's admission: a stop happens beside other operations.
+	// It is admitted while the controller drains and its gate never waits for
+	// running executions; it cancels and refuses nothing. Unresolved holds
+	// and receipt-storage failures still apply.
+	Beside bool
 }
 
 // Footprint is a set of resource kinds.

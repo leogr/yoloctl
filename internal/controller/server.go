@@ -186,7 +186,7 @@ func (s *Server) admit(req Request, principal Principal, mutates bool) (func(), 
 func (s *Server) admitOperation(req Request, principal Principal, operation Operation) (func(), *Receipt, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.draining {
+	if s.draining && !operation.Beside {
 		return nil, nil, errors.New("space controller is in maintenance; start the space to reopen it")
 	}
 	if !operation.Mutates {
@@ -796,9 +796,12 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 				scope = nil // a legacy receipt's footprint is the whole space
 			}
 			// Waiting happens outside the setup owner, so a departing client
-			// still cancels a gate that has not been granted.
-			if err := s.awaitReservations(effectCtx, receipt.ID, scope); err != nil {
-				return err
+			// still cancels a gate that has not been granted. A stop beside
+			// other operations never waits for them.
+			if !operation.Beside {
+				if err := s.awaitReservations(effectCtx, receipt.ID, scope); err != nil {
+					return err
+				}
 			}
 			err := owner.authorize(effectCtx, func() error {
 				s.mu.Lock()
@@ -820,6 +823,9 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 				current, err := s.loadHolds(receipt.ID)
 				if err != nil {
 					return err
+				}
+				if operation.Beside {
+					current = current.unresolvedOnly()
 				}
 				if resources, held, global := current.conflict(scope); len(held) != 0 {
 					return heldError(s.Hello.Space, principal.Admin(), global, resources, held)

@@ -17,7 +17,9 @@ Missing containers can still materialize on start/restart.
 [FACT] `box stop` and `box start` decide only from a read of the container after
 one attempt: stop runs each cleanup step once and reports leftovers without
 failing; a start that submitted an engine start rolls a failure back with stop's
-steps. Leftovers of an ended run are removed by the next start or stop under
+steps. When another operation holds the space lock, `box stop` stops the exact
+container beside it without waiting and leaves cleanup to the next stop or start.
+Leftovers of an ended run are removed by the next start or stop under
 exact ownership checks. An interrupted start or stop is `interrupted`, holding
 nothing; restart, recreate and teardown keep today's mode. [22](#source-22)
 

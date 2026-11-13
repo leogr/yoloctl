@@ -481,6 +481,17 @@ func chatIntent(verifier string, boxes ...string) controller.EffectIntent {
 	return f.intent(verifier)
 }
 
+// boxOnlyIntent is the footprint of a box stop beside another operation:
+// the named box and nothing else, built from the validated name alone.
+func boxOnlyIntent(name string) controller.EffectIntent {
+	if validateAgentboxName(name) != nil {
+		return globalIntent
+	}
+	var f footprint
+	f.write(boxResource(name))
+	return f.intent("")
+}
+
 // execIntent is an authorized exec's footprint: its box. The remote
 // command's own effects are untracked; a lost result stays command-uncertain.
 func execIntent(name string) controller.EffectIntent {

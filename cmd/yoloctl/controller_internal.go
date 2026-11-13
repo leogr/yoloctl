@@ -72,7 +72,7 @@ var controllerOperations = map[string]controller.Operation{
 	"box.create":            {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages},
 	"box.copy":              {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages},
 	"box.start":             {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages},
-	"box.stop":              {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages},
+	"box.stop":              {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages, Beside: true},
 	"box.restart":           {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages},
 	"box.destroy":           {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages},
 	"box.recreate":          {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages},

@@ -235,6 +235,25 @@ func registerSpaceOperations(root *cobra.Command) {
 			}
 		}()
 		for _, name := range spaces {
+			if path == "box stop" && len(args) == 1 {
+				// box stop never waits for another operation: it tries the
+				// lock once. Only real contention selects the busy path, which
+				// runs none of this wrapper's suffix and records its own
+				// completion; any other lock failure fails the command.
+				unlock, err := trySpaceOperationLockFn(cmd.Context(), name)
+				if errors.Is(err, spacelock.ErrBusy) {
+					gated, busyErr := stopBoxBesideFn(cmd, args[0], liveBesideSteps(container.New(name), name, args[0]))
+					if recordsCompletion && gated {
+						recordWorkerCompletion(cmd.Context(), busyErr)
+					}
+					return busyErr
+				}
+				if err != nil {
+					return err
+				}
+				releases = append(releases, unlock)
+				continue
+			}
 			unlock, err := acquireSpaceOperationLock(cmd.Context(), name)
 			if err != nil {
 				return err

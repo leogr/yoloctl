@@ -138,7 +138,10 @@ Use session-aware teardown and `managedApplier` when restarting, recreating,
 rebuilding or destroying runtime. Holder, marker/tombstone, socket, port and
 orphan-netns cleanup are part of lifecycle correctness. Leftovers of an ended run
 are removed by the next start or stop with exact ownership checks; they never
-fail or hold a stop. Container liveness and
+fail or hold a stop. `box stop` never waits for another operation, and no running
+operation or drain refuses it: when the space is busy it stops the exact container beside the
+running operation and leaves cleanup to the next stop or start. Stops are
+idempotent and never cancel each other or any other operation. Container liveness and
 agent-session liveness are distinct. A lost holder cannot adopt its old child.
 
 `space recreate` preserves disk/accounts/declarations and starts a fresh VM;

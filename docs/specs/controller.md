@@ -94,6 +94,12 @@ not replay commands, clear maintenance/holds or establish build termination.
 Existing spaces require an explicit VM-image recreate to install this policy.
 [17](#source-17)
 
+[FACT] Admission and effect gates serialize mutations, except `box stop`: it is
+admitted while the controller drains, its gate never waits for running
+executions, and when another operation holds the native space lock it stops the
+box's exact container beside it. Unresolved holds and receipt-storage failures
+still apply. [19](#source-19)
+
 [FACT] Two kinds of background work run as short-lived `controller-internal`
 workers on an idle, certain controller and yield to every admitted mutation:
 disposable storage cleanup and, while someone reads the box inventory, at most
@@ -191,3 +197,5 @@ image recreation. [18](#source-18)
 17. <a id="source-17"></a> [Controller process supervision](../digests/controller-supervision.md).
 
 18. <a id="source-18"></a> [VM-native audit contracts](../digests/audit.md).
+
+19. <a id="source-19"></a> [Box stop and start results](../digests/box-stop-start.md).

@@ -35,3 +35,31 @@ func TestExistingLifecycleLockDoesNotCreateStorage(t *testing.T) {
 		t.Fatal("read-only lock initialized storage")
 	}
 }
+
+func TestTryAcquireTakesOnceAndReportsOnlyContentionAsBusy(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	release, err := TryAcquire(t.Context(), "work", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	if _, err := TryAcquire(t.Context(), "work", true); !errors.Is(err, ErrBusy) || time.Since(started) > time.Second {
+		t.Fatalf("contention: %v after %v", err, time.Since(started))
+	}
+	release()
+	again, err := TryAcquire(t.Context(), "work", true)
+	if err != nil {
+		t.Fatalf("free again: %v", err)
+	}
+	again()
+	// Another failure (storage that cannot be opened) is not contention.
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", file)
+	t.Setenv("YOLOCTL_HOME", filepath.Join(file, "home"))
+	if _, err := TryAcquire(t.Context(), "work", true); err == nil || errors.Is(err, ErrBusy) {
+		t.Fatalf("open failure reported as %v", err)
+	}
+}

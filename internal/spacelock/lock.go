@@ -18,18 +18,27 @@ func Acquire(ctx context.Context, space string, exclusive bool) (func(), error) 
 	return AcquireWithWait(ctx, space, exclusive, nil)
 }
 
+// ErrBusy is TryAcquire's answer when another holder has the lock.
+var ErrBusy = errors.New("space lock is held by another operation")
+
+// TryAcquire takes the lock once without waiting. Only real contention
+// returns ErrBusy; any other failure is returned as it is.
+func TryAcquire(ctx context.Context, space string, exclusive bool) (func(), error) {
+	return lock(ctx, space, exclusive, nil, true, true)
+}
+
 // AcquireWithWait reports prolonged contention once and remains cancellable.
 func AcquireWithWait(ctx context.Context, space string, exclusive bool, waiting func()) (func(), error) {
-	return acquire(ctx, space, exclusive, waiting, true)
+	return lock(ctx, space, exclusive, waiting, true, false)
 }
 
 // AcquireExistingWithWait never creates storage: it uses the original stable
 // lock and fails when it is absent.
 func AcquireExistingWithWait(ctx context.Context, space string, exclusive bool, waiting func()) (func(), error) {
-	return acquire(ctx, space, exclusive, waiting, false)
+	return lock(ctx, space, exclusive, waiting, false, false)
 }
 
-func acquire(ctx context.Context, space string, exclusive bool, waiting func(), create bool) (func(), error) {
+func lock(ctx context.Context, space string, exclusive bool, waiting func(), create, try bool) (func(), error) {
 	path, err := layout.SpaceLockPath(space)
 	if err != nil {
 		return nil, err
@@ -64,6 +73,10 @@ func acquire(ctx context.Context, space string, exclusive bool, waiting func(), 
 		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
 			_ = syscall.Close(fd)
 			return nil, err
+		}
+		if try {
+			_ = syscall.Close(fd)
+			return nil, ErrBusy
 		}
 		if waiting != nil && time.Since(started) >= time.Second {
 			waiting()

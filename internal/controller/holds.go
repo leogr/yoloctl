@@ -78,6 +78,25 @@ func (h holds) unresolvedGlobal() []Receipt {
 	return out
 }
 
+// unresolvedOnly drops running reservations: what a stop beside other
+// operations still meets is a finished outcome awaiting review.
+func (h holds) unresolvedOnly() holds {
+	out := holds{writes: map[Resource][]Receipt{}}
+	for _, r := range h.global {
+		if r.unresolved() {
+			out.global = append(out.global, r)
+		}
+	}
+	for res, list := range h.writes {
+		for _, r := range list {
+			if r.unresolved() {
+				out.writes[res] = append(out.writes[res], r)
+			}
+		}
+	}
+	return out
+}
+
 func (h holds) any() bool {
 	if len(h.global) != 0 {
 		return true
