@@ -1,0 +1,391 @@
+From bad7ab6902ffaf0aa55ed8b30f7aab7e0f486fbd Mon Sep 17 00:00:00 2001
+From: Leonardo Grasso <me@leonardograsso.com>
+Date: Fri, 13 Nov 2026 01:16:56 +0000
+Subject: [PATCH] feat(mermaid-text): draw a simple top-down fan-out as one
+ trunk
+
+Each edge of a fan-out was routed on its own, so the edges shared the row under the source and turned down at different points, crossing each other. A simple TD fan-out (no subgraphs, rectangle or cylinder nodes, unlabelled same-style edges to distinct targets on one row, no other edge into them) is now drawn as one trunk under the source, a bar and a drop into each target, when that corridor is clear of node boxes and text and does not touch an unrelated node. Everything else routes as before.
+---
+ crates/mermaid-text/CHANGELOG.md           |   6 +
+ crates/mermaid-text/src/layout/router.rs   | 162 ++++++++++++++++++++-
+ crates/mermaid-text/tests/fan_out_trunk.rs | 158 ++++++++++++++++++++
+ 3 files changed, 325 insertions(+), 1 deletion(-)
+ create mode 100644 crates/mermaid-text/tests/fan_out_trunk.rs
+
+diff --git a/crates/mermaid-text/CHANGELOG.md b/crates/mermaid-text/CHANGELOG.md
+index 14fa508..783d2e8 100644
+--- a/crates/mermaid-text/CHANGELOG.md
++++ b/crates/mermaid-text/CHANGELOG.md
+@@ -20,6 +20,12 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+ 
+ ### Changed
+ 
++- A simple top-down fan-out (one node with two or more unlabelled
++  same-style edges to distinct nodes on one row, no other edge entering
++  them, in a flowchart without subgraphs whose nodes are rectangles or
++  cylinders) is drawn as one trunk, a bar and drops instead of separately
++  routed, crossing edges. When the corridor touches an unrelated node or
++  text, the fan-out keeps the ordinary routing.
+ - Edges cross a subgraph border perpendicularly at one cell and no longer
+   travel along a border, past its corners or through its title. When no
+   such route exists, the existing Manhattan fallback still applies.
+diff --git a/crates/mermaid-text/src/layout/router.rs b/crates/mermaid-text/src/layout/router.rs
+index f5814cb..b328ac2 100644
+--- a/crates/mermaid-text/src/layout/router.rs
++++ b/crates/mermaid-text/src/layout/router.rs
+@@ -24,7 +24,7 @@
+ 
+ use crate::layout::Grid;
+ use crate::layout::grid::{Attach, DIR_DOWN, DIR_UP};
+-use crate::types::{Direction, Graph};
++use crate::types::{Direction, Graph, NodeShape};
+ 
+ // ---------------------------------------------------------------------------
+ // Public API
+@@ -63,12 +63,31 @@ pub(crate) fn route_all(
+     let n = graph.edges.len();
+     let mut paths: Vec<Option<Vec<(usize, usize)>>> = vec![None; n];
+ 
++    // A simple TD fan-out is drawn as one trunk, a bar and drops before any
++    // other edge claims the corridor below its source.
++    let mut drawn = vec![false; n];
++    for (edge_idx, path) in fan_out_trunks(grid, graph, attach_points, &is_back) {
++        drawn[edge_idx] = true;
++        paths[edge_idx] = grid.draw_path(path, tip_for(edge_idx));
++    }
++    for (idx, path) in paths.iter().enumerate() {
++        if let Some(p) = path
++            && drawn[idx]
++            && !p.is_empty()
++        {
++            grid.add_dirs(p[0].0, p[0].1, DIR_UP); // the trunk leaves the source box
++        }
++    }
++
+     // Route shortest edges first: fewer cells between endpoints means fewer
+     // obstacles to compete with when claiming corridor space.
+     let order = order_edges(graph, attach_points);
+     let horizontal_first = graph.direction.is_horizontal();
+ 
+     for edge_idx in order {
++        if drawn[edge_idx] {
++            continue;
++        }
+         let Some(Some((src, dst))) = attach_points.get(edge_idx) else {
+             continue;
+         };
+@@ -201,6 +220,147 @@ fn try_straight_route(
+     None
+ }
+ 
++/// Paths for the simple TD fan-outs drawn as a shared trunk: from the
++/// source's exit row, a bar spanning the targets' columns, and a drop into
++/// each target. A fan-out qualifies when the graph is TD without subgraphs,
++/// its nodes are rectangles or cylinders, and the source has two or more
++/// forward edges to distinct targets on one row, all with the same style
++/// and endpoints and no label, while no other forward edge enters those
++/// targets. The trunk, bar and drops must be clear of node boxes and text;
++/// otherwise that fan-out keeps the ordinary routing.
++fn fan_out_trunks(
++    grid: &Grid,
++    graph: &Graph,
++    attach_points: &[Option<(Attach, Attach)>],
++    is_back: &impl Fn(usize) -> bool,
++) -> Vec<(usize, Vec<(usize, usize)>)> {
++    let simple = graph.direction == Direction::TopToBottom
++        && graph.subgraphs.is_empty()
++        && graph
++            .nodes
++            .iter()
++            .all(|node| matches!(node.shape, NodeShape::Rectangle | NodeShape::Cylinder));
++    if !simple {
++        return Vec::new();
++    }
++    let forward = |idx: usize| {
++        let edge = &graph.edges[idx];
++        edge.from != edge.to && !is_back(idx) && attach_points.get(idx).is_some_and(Option::is_some)
++    };
++    let mut groups: Vec<(&str, Vec<usize>)> = Vec::new();
++    for (idx, edge) in graph.edges.iter().enumerate() {
++        if !forward(idx) {
++            continue;
++        }
++        match groups.iter_mut().find(|(from, _)| *from == edge.from) {
++            Some((_, members)) => members.push(idx),
++            None => groups.push((edge.from.as_str(), vec![idx])),
++        }
++    }
++    let mut out = Vec::new();
++    for (_, members) in groups {
++        if members.len() < 2 {
++            continue;
++        }
++        let first = &graph.edges[members[0]];
++        let alike = members.iter().all(|&idx| {
++            let edge = &graph.edges[idx];
++            edge.label.is_none()
++                && edge.style == first.style
++                && edge.end == first.end
++                && edge.start == first.start
++        });
++        let mut targets: Vec<&str> = members
++            .iter()
++            .map(|&idx| graph.edges[idx].to.as_str())
++            .collect();
++        targets.sort_unstable();
++        let distinct = targets.windows(2).all(|w| w[0] != w[1]);
++        let others_enter = graph.edges.iter().enumerate().any(|(idx, edge)| {
++            !members.contains(&idx) && forward(idx) && targets.contains(&edge.to.as_str())
++        });
++        if !alike || !distinct || others_enter {
++            continue;
++        }
++        let ends: Vec<(Attach, Attach)> = members
++            .iter()
++            .filter_map(|&idx| attach_points[idx])
++            .collect();
++        let bar_row = ends[0].0.row;
++        let target_row = ends[0].1.row;
++        if ends
++            .iter()
++            .any(|(src, dst)| src.row != bar_row || dst.row != target_row)
++            || target_row <= bar_row
++        {
++            continue;
++        }
++        let lo = ends.iter().map(|(src, _)| src.col).min().unwrap_or(0);
++        let hi = ends.iter().map(|(src, _)| src.col).max().unwrap_or(0);
++        // Under the source's centre, or on the target column nearest to it
++        // when that column is also under the source, so a drop continues
++        // the trunk straight.
++        let centre = (lo + hi) / 2;
++        let trunk = ends
++            .iter()
++            .map(|(_, dst)| dst.col)
++            .filter(|col| (lo..=hi).contains(col))
++            .min_by_key(|col| col.abs_diff(centre))
++            .unwrap_or(centre);
++        let group: Vec<(usize, Vec<(usize, usize)>)> = members
++            .iter()
++            .zip(&ends)
++            .map(|(&idx, (_, dst))| {
++                // Every cell: along the bar to the target's column, then down.
++                let mut path: Vec<(usize, usize)> = if dst.col >= trunk {
++                    (trunk..=dst.col).map(|c| (c, bar_row)).collect()
++                } else {
++                    (dst.col..=trunk).rev().map(|c| (c, bar_row)).collect()
++                };
++                path.extend((bar_row + 1..=dst.row).map(|r| (dst.col, r)));
++                (idx, path)
++            })
++            .collect();
++        // The source box: the run of box cells right above the trunk.
++        let above = bar_row.checked_sub(1);
++        let mut source_lo = trunk;
++        let mut source_hi = trunk;
++        if let Some(row) = above {
++            while source_lo > 0 && grid.is_node_box(source_lo - 1, row) {
++                source_lo -= 1;
++            }
++            while grid.is_node_box(source_hi + 1, row) {
++                source_hi += 1;
++            }
++        }
++        let foreign_box = |c: usize, r: usize| {
++            grid.is_node_box(c, r) && !(Some(r) == above && (source_lo..=source_hi).contains(&c))
++        };
++        let clear = group.iter().all(|(_, path)| {
++            let goal = path.last().copied();
++            path.iter().all(|&(c, r)| {
++                if Some((c, r)) == goal {
++                    return true;
++                }
++                let free = !grid.is_node_box(c, r) && grid.get(c, r) == ' ';
++                // Not touching an unrelated node: above/below the bar, beside
++                // a drop (it would read as welded to that box).
++                let touching = if r == bar_row {
++                    above.is_some_and(|a| foreign_box(c, a))
++                        || foreign_box(c, r + 1) && Some((c, r + 1)) != goal
++                } else {
++                    c.checked_sub(1).is_some_and(|l| foreign_box(l, r)) || foreign_box(c + 1, r)
++                };
++                free && !touching
++            })
++        });
++        if clear {
++            out.extend(group);
++        }
++    }
++    out
++}
++
+ /// Attempt a single-bend L-shaped route between `src` and `dst`.
+ ///
+ /// Tries both bend orientations (H-then-V and V-then-H) and returns the
+diff --git a/crates/mermaid-text/tests/fan_out_trunk.rs b/crates/mermaid-text/tests/fan_out_trunk.rs
+new file mode 100644
+index 0000000..8d19648
+--- /dev/null
++++ b/crates/mermaid-text/tests/fan_out_trunk.rs
+@@ -0,0 +1,158 @@
++//! A simple TD fan-out is drawn as one trunk, a bar and drops; every other
++//! fan-out keeps the routing it had before (expected outputs below were
++//! rendered by the previous release of this patch stack).
++
++use mermaid_text::render;
++
++#[test]
++fn simple_fan_out_shares_one_trunk() {
++    let src = "graph TD\n    coord[Coordinator] --> a[astra] & s[sol-dev] & s2[sol-dev2] & o[opus-dev] & d[devOpSol]";
++    let out = render(src).unwrap();
++    assert_eq!(
++        out.trim_end(),
++        "                            ┌─────────────┐\n                            │ Coordinator │\n                            └─────────────┘\n      ┌────────────┬──────────────┼──────────────┬──────────────┐\n      │            │              │              │              │\n      │            │              │              │              │\n      │            │              │              │              │\n      │            │              │              │              │\n  ┌───▾───┐   ┌────▾────┐   ┌─────▾────┐   ┌─────▾────┐   ┌─────▾────┐\n  │ astra │   │ sol-dev │   │ sol-dev2 │   │ opus-dev │   │ devOpSol │\n  └───────┘   └─────────┘   └──────────┘   └──────────┘   └──────────┘",
++        "\n{out}"
++    );
++    assert_eq!(out.matches('┼').count(), 1, "one trunk junction:\n{out}");
++}
++
++#[test]
++fn labelled_fan_out_keeps_its_routing() {
++    let out = render(
++        "graph TD
++ A[Root] --> B[one]
++ A -->|x| C[two]
++ A --> D[three]",
++    )
++    .unwrap();
++    assert_eq!(
++        out.trim_end(),
++        "                ┌──────┐
++                │ Root │
++                └──────┘
++         ┌────────┘ │ └───────┐
++         │          │         │
++         │          │         │
++         │        x │         │
++         │          │         │
++         │          │         │
++         │         ┌┘         │
++      ┌──▾──┐   ┌──▾──┐   ┌───▾───┐
++      │ one │   │ two │   │ three │
++      └─────┘   └─────┘   └───────┘",
++        "\n{out}"
++    );
++}
++
++#[test]
++fn mixed_style_fan_out_keeps_its_routing() {
++    let out = render(
++        "graph TD
++ A[Root] --> B[one]
++ A -.-> C[two]
++ A --> D[three]",
++    )
++    .unwrap();
++    assert_eq!(
++        out.trim_end(),
++        "            ┌──────┐
++            │ Root │
++            └──────┘
++     ┌────────┘ ┆ └───────┐
++     │          ┆         │
++     │          ┆         │
++     │          ┆         │
++     │         ┌┘         │
++  ┌──▾──┐   ┌──▾──┐   ┌───▾───┐
++  │ one │   │ two │   │ three │
++  └─────┘   └─────┘   └───────┘",
++        "\n{out}"
++    );
++}
++
++#[test]
++fn cross_layer_fan_out_keeps_its_routing() {
++    let out = render(
++        "graph TD
++ A[Root] --> B[one]
++ B --> C[two]
++ A --> C
++ A --> D[three]",
++    )
++    .unwrap();
++    assert_eq!(
++        out.trim_end(),
++        "          ┌──────┐
++          │ Root │
++          └──────┘
++     ┌──────┘ └┐└─────┐
++     │         │      │
++     │         │      │
++     │         │      │
++     │         │      │
++  ┌──▾──┐      │  ┌───▾───┐
++  │ one │      │  │ three │
++  └─────┘      │  └───────┘
++     └───────┐ │
++             │ │
++             │ │
++             │ │
++             │ │
++           ┌─▾─▾─┐
++           │ two │
++           └─────┘",
++        "\n{out}"
++    );
++}
++
++#[test]
++fn fan_out_into_shared_targets_keeps_its_routing() {
++    let out = render(
++        "graph TD
++ A[Root] --> B[one]
++ A --> C[two]
++ X[other] --> B",
++    )
++    .unwrap();
++    assert_eq!(
++        out.trim_end(),
++        "  ┌──────┐   ┌───────┐
++  │ Root │   │ other │
++  └──────┘   └───────┘
++     └─┬───────┐ │
++       │       │ │
++       │       │ │
++       │       │ │
++      ┌┘       │ │
++   ┌──▾──┐   ┌─▾─▾─┐
++   │ two │   │ one │
++   └─────┘   └─────┘",
++        "\n{out}"
++    );
++}
++
++#[test]
++fn obstructed_corridor_keeps_its_routing() {
++    let out = render(
++        "graph TD
++ S[a wide sibling node with a long label] --> T[t]
++ A[Root] --> B[one]
++ A --> C[two]",
++    )
++    .unwrap();
++    assert_eq!(
++        out.trim_end(),
++        "  ┌───────────────────────────────────────┐   ┌──────┐
++  │ a wide sibling node with a long label │   │ Root │
++  └───────────────────────────────────────┘   └──────┘
++                 ┌────┘             ┌────────────┬─┘
++                 │                  │            │
++                 │                  │            │
++                 │             ┌────┼────┐       │
++                 │        ┌────┘    │    └───────┘
++               ┌─▾─┐   ┌──▾──┐   ┌──▾──┐
++               │ t │   │ one │   │ two │
++               └───┘   └─────┘   └─────┘",
++        "\n{out}"
++    );
++}
+-- 
+2.43.0
+

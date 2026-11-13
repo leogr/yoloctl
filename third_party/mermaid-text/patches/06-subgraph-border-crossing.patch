@@ -1,0 +1,388 @@
+From 5abd5a985ed9e2a1a6a02c3052fcc118993e649a Mon Sep 17 00:00:00 2001
+From: Leonardo Grasso <me@leonardograsso.com>
+Date: Fri, 13 Nov 2026 01:10:01 +0000
+Subject: [PATCH] feat(mermaid-text): cross subgraph borders, never follow them
+
+Subgraph borders were ordinary cells for edge routing, so an edge leaving a subgraph could travel along its border row or column, past its corners and through its title, which reads as part of the border. Border line cells now admit only a perpendicular move and must be left straight through; corners and title cells are closed. The Manhattan fallback still applies when no such route exists.
+---
+ crates/mermaid-text/CHANGELOG.md              |  3 +
+ crates/mermaid-text/src/layout/grid.rs        | 37 ++++++++
+ crates/mermaid-text/src/render/unicode.rs     | 24 ++++-
+ .../flowchart_edge_crosses_subgraph.snap      | 12 +--
+ ...owchart_edge_crosses_subgraph.width80.snap | 12 +--
+ .../snapshots/flowchart_subgraphs_tb.snap     | 16 ++--
+ .../flowchart_subgraphs_tb.width80.snap       | 16 ++--
+ ...ssings_edge_crosses_subgraph_boundary.snap |  2 +-
+ ...shots__edge_crosses_subgraph_boundary.snap | 12 +--
+ .../tests/subgraph_border_routing.rs          | 90 +++++++++++++++++++
+ 10 files changed, 188 insertions(+), 36 deletions(-)
+ create mode 100644 crates/mermaid-text/tests/subgraph_border_routing.rs
+
+diff --git a/crates/mermaid-text/CHANGELOG.md b/crates/mermaid-text/CHANGELOG.md
+index 1934873..14fa508 100644
+--- a/crates/mermaid-text/CHANGELOG.md
++++ b/crates/mermaid-text/CHANGELOG.md
+@@ -20,6 +20,9 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+ 
+ ### Changed
+ 
++- Edges cross a subgraph border perpendicularly at one cell and no longer
++  travel along a border, past its corners or through its title. When no
++  such route exists, the existing Manhattan fallback still applies.
+ - Sequence lifelines are solid (`│`) and joined to messages: the source end
+   of a message is a junction (`├`/`┤`), a lifeline it crosses becomes `┼`,
+   and the arrowhead sits next to the target's lifeline, which stays drawn.
+diff --git a/crates/mermaid-text/src/layout/grid.rs b/crates/mermaid-text/src/layout/grid.rs
+index 7a667e6..9d5b951 100644
+--- a/crates/mermaid-text/src/layout/grid.rs
++++ b/crates/mermaid-text/src/layout/grid.rs
+@@ -306,12 +306,23 @@ pub struct Grid {
+     /// [`Grid::hyperlink`]. Grows lazily as URLs are interned via
+     /// [`Grid::paint_hyperlink`].
+     hyperlink_urls: Vec<String>,
++    /// Subgraph border cells, for edge routing: `SG_BORDER_*` per cell, 0
++    /// elsewhere. An edge may cross a border only perpendicularly and never
++    /// travel along it.
++    sg_border: Vec<Vec<u8>>,
+     /// Total columns.
+     width: usize,
+     /// Total rows.
+     height: usize,
+ }
+ 
++/// A top or bottom border line cell: entered only by a vertical move.
++pub const SG_BORDER_H: u8 = 1;
++/// A side border line cell: entered only by a horizontal move.
++pub const SG_BORDER_V: u8 = 2;
++/// A corner or title cell: never part of an edge.
++pub const SG_BORDER_CLOSED: u8 = 3;
++
+ impl Grid {
+     /// Construct a new grid filled with spaces.
+     ///
+@@ -331,11 +342,19 @@ impl Grid {
+             bg: vec![vec![None; width]; height],
+             hyperlink: vec![vec![None; width]; height],
+             hyperlink_urls: Vec::new(),
++            sg_border: vec![vec![0u8; width]; height],
+             width,
+             height,
+         }
+     }
+ 
++    /// Mark `(col, row)` as a subgraph border cell of `kind` (`SG_BORDER_*`).
++    pub fn mark_subgraph_border(&mut self, col: usize, row: usize, kind: u8) {
++        if row < self.height && col < self.width {
++            self.sg_border[row][col] = kind;
++        }
++    }
++
+     /// Return the number of rows in this grid.
+     pub(crate) fn rows(&self) -> usize {
+         self.height
+@@ -1538,6 +1557,24 @@ impl Grid {
+                         continue;
+                     }
+                 }
++                // Subgraph borders: cross one cell perpendicularly, never
++                // travel along them, never through a corner or the title.
++                let goal = nc == col2 && nr == row2;
++                let vertical_move = dir_idx == 1 || dir_idx == 3;
++                if !goal {
++                    match self.sg_border[nr][nc] {
++                        SG_BORDER_H if !vertical_move => continue,
++                        SG_BORDER_V if vertical_move => continue,
++                        SG_BORDER_CLOSED => continue,
++                        _ => {}
++                    }
++                }
++                if self.sg_border[current.row][current.col] != 0
++                    && (current.col != col1 || current.row != row1)
++                    && dir_idx as u8 != current.dir
++                {
++                    continue; // leave a border cell straight through
++                }
+ 
+                 // Base step cost.
+                 let mut step = 1.0f32;
+diff --git a/crates/mermaid-text/src/render/unicode.rs b/crates/mermaid-text/src/render/unicode.rs
+index 57def12..f2943a3 100644
+--- a/crates/mermaid-text/src/render/unicode.rs
++++ b/crates/mermaid-text/src/render/unicode.rs
+@@ -2151,7 +2151,25 @@ fn draw_subgraph_border(grid: &mut Grid, bounds: &SubgraphBounds, style: Option<
+     // glyph at the crossing cell was suppressed by the border's `─`.
+     // Corners stay un-seeded so an edge that happens to land on `╭` /
+     // `╮` / `╰` / `╯` doesn't try to merge into a rounded corner glyph.
+-    use crate::layout::grid::{DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
++    use crate::layout::grid::{
++        DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP, SG_BORDER_CLOSED, SG_BORDER_H, SG_BORDER_V,
++    };
++    for x in (col + 1)..(col + w - 1) {
++        grid.mark_subgraph_border(x, row, SG_BORDER_H);
++        grid.mark_subgraph_border(x, row + h - 1, SG_BORDER_H);
++    }
++    for y in (row + 1)..(row + h - 1) {
++        grid.mark_subgraph_border(col, y, SG_BORDER_V);
++        grid.mark_subgraph_border(col + w - 1, y, SG_BORDER_V);
++    }
++    for (x, y) in [
++        (col, row),
++        (col + w - 1, row),
++        (col, row + h - 1),
++        (col + w - 1, row + h - 1),
++    ] {
++        grid.mark_subgraph_border(x, y, SG_BORDER_CLOSED);
++    }
+     for x in (col + 1)..(col + w - 1) {
+         grid.seed_border_dirs(x, row, DIR_LEFT | DIR_RIGHT);
+         grid.seed_border_dirs(x, row + h - 1, DIR_LEFT | DIR_RIGHT);
+@@ -2182,6 +2200,10 @@ fn draw_subgraph_border(grid: &mut Grid, bounds: &SubgraphBounds, style: Option<
+     let label = truncate_to_width(&bounds.label, max_label_w);
+     if !label.is_empty() {
+         grid.write_text_protected(label_col, label_row, &label);
++        // Edges never cross the title.
++        for x in label_col..label_col + UnicodeWidthStr::width(label.as_str()) {
++            grid.mark_subgraph_border(x, label_row, crate::layout::grid::SG_BORDER_CLOSED);
++        }
+     }
+     // Clear seeded dir-bits across BOTH the top AND bottom border lines
+     // (excluding corners). The G2 fix originally only cleared the top —
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_crosses_subgraph.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_crosses_subgraph.snap
+index e7937f1..39e0c8e 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_crosses_subgraph.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_crosses_subgraph.snap
+@@ -7,13 +7,13 @@ expression: natural
+                        │ ┌────────────┐─┼───────┼┐╭──────────╮ │
+                        │▸│ API Server │ │       │▸│ ──────── │ │
+                        ││└────────────┘─┼───────┼┐│ Postgres │ │
+-┌───────────────┐──────┼┘               │       ├▸╰──────────╯ │
+-│ Load Balancer │      │                │       ││             │
+-└───────────────┘──────┼┐               │       ││             │
+-                       ││┌────────┐─────┼───────┤│             │
++┌───────────────┐──────┼┘               │      ┌┼▸╰──────────╯ │
++│ Load Balancer │      │                │      │││             │
++└───────────────┘──────┼┐               │      │││             │
++                       ││┌────────┐─────┼──────┘││             │
+                        │▸│ Worker │     │       ││╭───────╮    │
+                        │ └────────┘│    │       │▸│ ───── │    │
+-                       │           │    │       │ │ Redis │    │
+-                       ╰────────────────╯───────┼▸╰───────╯    │
++                       │           └────┼───────┼┐│ Redis │    │
++                       ╰────────────────╯       │▸╰───────╯    │
+                                                 │              │
+                                                 ╰──────────────╯
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_crosses_subgraph.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_crosses_subgraph.width80.snap
+index d3da1c5..620fc14 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_crosses_subgraph.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_crosses_subgraph.width80.snap
+@@ -7,13 +7,13 @@ expression: constrained
+                        │ ┌────────────┐─┼───────┼┐╭──────────╮ │
+                        │▸│ API Server │ │       │▸│ ──────── │ │
+                        ││└────────────┘─┼───────┼┐│ Postgres │ │
+-┌───────────────┐──────┼┘               │       ├▸╰──────────╯ │
+-│ Load Balancer │      │                │       ││             │
+-└───────────────┘──────┼┐               │       ││             │
+-                       ││┌────────┐─────┼───────┤│             │
++┌───────────────┐──────┼┘               │      ┌┼▸╰──────────╯ │
++│ Load Balancer │      │                │      │││             │
++└───────────────┘──────┼┐               │      │││             │
++                       ││┌────────┐─────┼──────┘││             │
+                        │▸│ Worker │     │       ││╭───────╮    │
+                        │ └────────┘│    │       │▸│ ───── │    │
+-                       │           │    │       │ │ Redis │    │
+-                       ╰────────────────╯───────┼▸╰───────╯    │
++                       │           └────┼───────┼┐│ Redis │    │
++                       ╰────────────────╯       │▸╰───────╯    │
+                                                 │              │
+                                                 ╰──────────────╯
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_subgraphs_tb.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_subgraphs_tb.snap
+index cf0ef1d..ffbb1d9 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_subgraphs_tb.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_subgraphs_tb.snap
+@@ -8,16 +8,16 @@ expression: natural
+         │ ┌────────────┐   ┌────────────────┐ │
+         │ │ Browser UI │   │ Service Worker │ │
+         │ └────────────┘   └────────────────┘ │
+-        │        └─────┐ ┌──────────┘         │
++        │        │       ┌──────────┘         │
+         ╰─────────────────────────────────────╯
+-                       │ │
+-                       │ │
+-                       │ │
+-                       │ │
+-                       │ │
+-                       │ │
++                 │       │
++                 │       │
++                 │       │
++                 │       │
++                 │       │
++                 │       │
+                 ╭─Backend──────╮
+-                │      │ │     │
++                │└─────┐ │     │
+                 │ ┌────▾─▾───┐ │
+                 │ │ REST API │ │
+                 │ └──────────┘ │
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_subgraphs_tb.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_subgraphs_tb.width80.snap
+index bb5c0e4..5b4ecf1 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_subgraphs_tb.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_subgraphs_tb.width80.snap
+@@ -8,16 +8,16 @@ expression: constrained
+         │ ┌────────────┐   ┌────────────────┐ │
+         │ │ Browser UI │   │ Service Worker │ │
+         │ └────────────┘   └────────────────┘ │
+-        │        └─────┐ ┌──────────┘         │
++        │        │       ┌──────────┘         │
+         ╰─────────────────────────────────────╯
+-                       │ │
+-                       │ │
+-                       │ │
+-                       │ │
+-                       │ │
+-                       │ │
++                 │       │
++                 │       │
++                 │       │
++                 │       │
++                 │       │
++                 │       │
+                 ╭─Backend──────╮
+-                │      │ │     │
++                │└─────┐ │     │
+                 │ ┌────▾─▾───┐ │
+                 │ │ REST API │ │
+                 │ └──────────┘ │
+diff --git a/crates/mermaid-text/tests/snapshots/crossings__crossings_edge_crosses_subgraph_boundary.snap b/crates/mermaid-text/tests/snapshots/crossings__crossings_edge_crosses_subgraph_boundary.snap
+index e10354f..6184cdc 100644
+--- a/crates/mermaid-text/tests/snapshots/crossings__crossings_edge_crosses_subgraph_boundary.snap
++++ b/crates/mermaid-text/tests/snapshots/crossings__crossings_edge_crosses_subgraph_boundary.snap
+@@ -2,4 +2,4 @@
+ source: crates/mermaid-text/tests/crossings.rs
+ expression: "fmt_count(\"edge_crosses_subgraph_boundary\", n)"
+ ---
+-edge_crosses_subgraph_boundary: 8 crossing(s)
++edge_crosses_subgraph_boundary: 10 crossing(s)
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__edge_crosses_subgraph_boundary.snap b/crates/mermaid-text/tests/snapshots/snapshots__edge_crosses_subgraph_boundary.snap
+index b6ebf16..8b83e14 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__edge_crosses_subgraph_boundary.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__edge_crosses_subgraph_boundary.snap
+@@ -7,13 +7,13 @@ expression: out
+                        │ ┌────────────┐─┼───────┼┐╭──────────╮ │
+                        │▸│ API Server │ │       │▸│ ──────── │ │
+                        ││└────────────┘─┼───────┼┐│ Postgres │ │
+-┌───────────────┐──────┼┘               │       ├▸╰──────────╯ │
+-│ Load Balancer │      │                │       ││             │
+-└───────────────┘──────┼┐               │       ││             │
+-                       ││┌────────┐─────┼───────┤│             │
++┌───────────────┐──────┼┘               │      ┌┼▸╰──────────╯ │
++│ Load Balancer │      │                │      │││             │
++└───────────────┘──────┼┐               │      │││             │
++                       ││┌────────┐─────┼──────┘││             │
+                        │▸│ Worker │     │       ││╭───────╮    │
+                        │ └────────┘│    │       │▸│ ───── │    │
+-                       │           │    │       │ │ Redis │    │
+-                       ╰────────────────╯───────┼▸╰───────╯    │
++                       │           └────┼───────┼┐│ Redis │    │
++                       ╰────────────────╯       │▸╰───────╯    │
+                                                 │              │
+                                                 ╰──────────────╯
+diff --git a/crates/mermaid-text/tests/subgraph_border_routing.rs b/crates/mermaid-text/tests/subgraph_border_routing.rs
+new file mode 100644
+index 0000000..5eed19d
+--- /dev/null
++++ b/crates/mermaid-text/tests/subgraph_border_routing.rs
+@@ -0,0 +1,90 @@
++//! Edges cross subgraph borders perpendicularly at one cell and never run
++//! along a border, past its corners or through its title.
++
++use mermaid_text::{RenderOptions, render, render_with_options};
++
++/// An edge that travels along a border continues past the border's rounded
++/// corner on the same row: a line glyph right after `╮`/`╯` or right before
++/// `╭`/`╰`.
++fn assert_no_edge_follows_a_border(out: &str) {
++    for line in out.lines() {
++        let chars: Vec<char> = line.chars().collect();
++        for (i, &c) in chars.iter().enumerate() {
++            let next = chars.get(i + 1).copied();
++            let prev = i.checked_sub(1).map(|j| chars[j]);
++            let line_glyph = |g: Option<char>| matches!(g, Some('─' | '┄' | '━' | '┼' | '┬' | '┴'));
++            assert!(
++                !(matches!(c, '╮' | '╯') && line_glyph(next)),
++                "an edge continues past a subgraph corner:\n{out}"
++            );
++            assert!(
++                !(matches!(c, '╭' | '╰') && line_glyph(prev)),
++                "an edge continues past a subgraph corner:\n{out}"
++            );
++        }
++    }
++}
++
++const HOST_VM: &str = "flowchart LR
++    subgraph Host
++        CLI[yoloctl CLI] --> TUI[TUI]
++    end
++    subgraph VM
++        CTL[controller] --> BOX1[box coder]
++        CTL --> BOX2[box reviewer]
++    end
++    CLI --> CTL
++    TUI --> CTL";
++
++#[test]
++fn edges_leaving_a_subgraph_cross_its_border() {
++    let natural = render(HOST_VM).unwrap();
++    assert_no_edge_follows_a_border(&natural);
++    for width in [40, 60, 80] {
++        let opts = RenderOptions {
++            max_width: Some(width),
++            ..Default::default()
++        };
++        let out = render_with_options(HOST_VM, &opts).unwrap();
++        assert_no_edge_follows_a_border(&out);
++        assert!(out.contains("Host") && out.contains("VM"), "{out}");
++    }
++}
++
++#[test]
++fn edges_leaving_a_nested_subgraph_cross_both_borders() {
++    let src = "flowchart TD
++    subgraph Outer
++        subgraph Inner
++            A[inside] --> B[also inside]
++        end
++        C[outer node]
++    end
++    A --> D[outside]
++    B --> C
++    C --> D";
++    let out = render(src).unwrap();
++    assert_no_edge_follows_a_border(&out);
++    for label in ["inside", "also inside", "outer node", "outside"] {
++        assert!(out.contains(label), "{label} missing:\n{out}");
++    }
++}
++
++#[test]
++fn edges_never_cross_a_subgraph_title() {
++    let src = "flowchart TD
++    subgraph Frontend
++        UI[Browser UI]
++        SW[Service Worker]
++    end
++    subgraph Backend
++        API[REST API]
++    end
++    UI --> API
++    SW --> API";
++    let out = render(src).unwrap();
++    assert!(
++        out.contains("─Frontend─") && out.contains("─Backend─"),
++        "{out}"
++    );
++}
+-- 
+2.43.0
+

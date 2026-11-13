@@ -1,53 +1,53 @@
  ┌──────────┐  ┌────────────┐    ┌────────────────┐
  │ Operator │  │ TUI client │    │ Session holder │
  └──────────┘  └────────────┘    └────────────────┘
-       ┆ [1] open the ┆                   ┆
-       ┆ follow view  ┆                   ┆
-       ┆ for the      ┆                   ┆
-       ┆ selected box ┆                   ┆
-       ───────────────▸                   ┆
-       ┆              ┆   [2] attach with ┆
-       ┆              ┆   snapshot        ┆
-       ┆              ┆   restore and     ┆
-       ┆              ██  resize events   ┆
-       ┆              ██──────────────────▸
-       ┆              ██                  ██
-       ┆              ██                  ██├──────────────┐
-       ┆              ██                  ██ [3] replay    │
-       ┆              ██                  ██ canonical VT  │
-       ┆              ██                  ██ state from    │
-       ┆              ██                  ██ the exact     │
-       ┆              ██                  ██ build         │
-       ┆              ██                  ██├◂─────────────┘
-       ┆              ██  [4] snapshot    ██
-       ┆              ██  plus live       ██
-       ┆              ██  output stream   ██
-       ┆              ██◂┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄██
-       ┆              ██                  ┆
-       ┆              ██                  ┆   ╭──────────╮
-       ┆              ██                  ┆   │ holder   │
-       ┆              ██                  ┆   │ answers  │
-       ┆              ██                  ┆   │ terminal │
-       ┆              ██                  ┆   │ queries  │
-       ┆              ██                  ┆   │ exactly  │
-       ┆              ██                  ┆   │ once     │
-       ┆              ██                  ┆   ╰──────────╯
-       ┆              ██                  ┆
-╔═[alt]══[the session is gone]╗           ┆
-║░░░░░░┆░[5]░show░the░██░░░░░░║           ┆
-║░░░░░░┆░reconnect░░░░██░░░░░░║           ┆
-║░░░░░░┆░banner░with░░██░░░░░░║           ┆
-║░░░░░░┆░the░last░░░░░██░░░░░░║           ┆
-║░░░░░░┆░known░status░██░░░░░░║           ┆
-║░░░░░░◂┄┄┄┄┄┄┄┄┄┄┄┄┄┄██░░░░░░║           ┆
-║░░░░░░┆░░░░░░░░░░░░░░██░░░░░░║           ┆
-╠┄[still running]┄┄┄┄┄┄┄┄┄┄┄┄┄╣           ┆
-║░░░░░░┆░[6]░render░░░██░░░░░░║           ┆
-║░░░░░░┆░frames░░░░░░░██░░░░░░║           ┆
-║░░░░░░◂┄┄┄┄┄┄┄┄┄┄┄┄┄┄██░░░░░░║           ┆
-║░░░░░░┆░░░░░░░░░░░░░░┆░░░░░░░║           ┆
-╚═════════════════════════════╝           ┆
-       ┆              ┆                   ┆
+       │ [1] open the │                   │
+       │ follow view  │                   │
+       │ for the      │                   │
+       │ selected box │                   │
+       ├─────────────▸│                   │
+       │              │   [2] attach with │
+       │              │   snapshot        │
+       │              │   restore and     │
+       │              ██  resize events   │
+       │              ██─────────────────▸│
+       │              ██                  ██
+       │              ██                  ██├──────────────┐
+       │              ██                  ██ [3] replay    │
+       │              ██                  ██ canonical VT  │
+       │              ██                  ██ state from    │
+       │              ██                  ██ the exact     │
+       │              ██                  ██ build         │
+       │              ██                  ██├◂─────────────┘
+       │              ██  [4] snapshot    ██
+       │              ██  plus live       ██
+       │              ██  output stream   ██
+       │              ██◂┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄██
+       │              ██                  │
+       │              ██                  │   ╭──────────╮
+       │              ██                  │   │ holder   │
+       │              ██                  │   │ answers  │
+       │              ██                  │   │ terminal │
+       │              ██                  │   │ queries  │
+       │              ██                  │   │ exactly  │
+       │              ██                  │   │ once     │
+       │              ██                  │   ╰──────────╯
+       │              ██                  │
+╔═[alt]══[the session is gone]╗           │
+║      │ [5] show the ██      ║           │
+║      │ reconnect    ██      ║           │
+║      │ banner with  ██      ║           │
+║      │ the last     ██      ║           │
+║      │ known status ██      ║           │
+║      │◂┄┄┄┄┄┄┄┄┄┄┄┄┄██      ║           │
+║      │              ██      ║           │
+╠┄[still running]┄┄┄┄┄┄┄┄┄┄┄┄┄╣           │
+║      │ [6] render   ██      ║           │
+║      │ frames       ██      ║           │
+║      │◂┄┄┄┄┄┄┄┄┄┄┄┄┄██      ║           │
+║      │              │       ║           │
+╚═════════════════════════════╝           │
+       │              │                   │
  ┌──────────┐  ┌────────────┐    ┌────────────────┐
  │ Operator │  │ TUI client │    │ Session holder │
  └──────────┘  └────────────┘    └────────────────┘

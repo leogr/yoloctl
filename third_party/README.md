@@ -155,6 +155,13 @@ metadata from this locked recipe and each package/version/target/cfg. Do not use
 it as a general Cargo wrapper. Its hash is part of the pinned inputs; any change
 requires regeneration and the independent-root reproducibility check.
 
-The two behavior patches should be dropped when upstream covers them, retaining
-the width/back-edge fixtures. Detailed artifact boundaries and source links:
+The patches, in order:
+- 01: sequence width fitting (names and note words kept whole when they fit);
+- 02–03: non-rectangle back-edge port spreading, with its regression and lint fix;
+- 04: unshaded sequence block interiors;
+- 05: solid sequence lifelines joined to messages;
+- 06: subgraph borders crossed, never followed;
+- 07: a simple top-down fan-out drawn as one trunk.
+
+Drop each when upstream covers it, keeping its fixtures and goldens. Detailed artifact boundaries and source links:
 [Mermaid artifact](../docs/digests/mermaid-renderer.md).

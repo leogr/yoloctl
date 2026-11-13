@@ -1,30 +1,33 @@
-From 290714b929af5067a4088b2e9c15545f4a22b2f6 Mon Sep 17 00:00:00 2001
+From 4cb4701e1029970f17b39f57d1fd436d668977a4 Mon Sep 17 00:00:00 2001
 From: Leonardo Grasso <me@leonardograsso.com>
-Date: Tue, 10 Nov 2026 18:44:24 +0000
+Date: Fri, 13 Nov 2026 00:54:43 +0000
 Subject: [PATCH] feat(mermaid-text): fit sequence diagrams to the width budget
 
 Sequence diagrams ignored render_with_width / RenderOptions::max_width.
 Over budget, cap label-driven participant gaps at a shared level and wrap
 message labels to the room their arrow gets; further attempts reduce the
 participant box padding and wrap participant labels. Notes and self-message
-labels wrap to fit, and event rows grow per wrapped line. The fitting
-attempt with the fewest rows wins; otherwise the narrowest is returned.
+labels wrap to fit, and event rows grow per wrapped line. Participant names
+and note words stay whole whenever an attempt fits that way; only otherwise
+are they split. Among the fitting attempts of that kind the fewest rows win;
+otherwise the narrowest is returned. An attempt that block frames or notes
+push past the budget is planned again for the overshoot.
 Unbudgeted or already-fitting renders are byte-identical.
 ---
- crates/mermaid-text/CHANGELOG.md              |  17 +
+ crates/mermaid-text/CHANGELOG.md              |  20 +
  crates/mermaid-text/README.md                 |   5 +-
  crates/mermaid-text/src/lib.rs                |  14 +-
- crates/mermaid-text/src/render/sequence.rs    | 382 ++++++++++++++++--
- .../mermaid-text/tests/sequence_max_width.rs  | 179 ++++++++
+ crates/mermaid-text/src/render/sequence.rs    | 481 ++++++++++++++++--
+ .../mermaid-text/tests/sequence_max_width.rs  | 179 +++++++
  crates/mermaid-text/tests/strict_max_width.rs |  25 +-
- 6 files changed, 563 insertions(+), 59 deletions(-)
+ 6 files changed, 665 insertions(+), 59 deletions(-)
  create mode 100644 crates/mermaid-text/tests/sequence_max_width.rs
 
 diff --git a/crates/mermaid-text/CHANGELOG.md b/crates/mermaid-text/CHANGELOG.md
-index 0743f01..566359a 100644
+index 0743f01..7e689b2 100644
 --- a/crates/mermaid-text/CHANGELOG.md
 +++ b/crates/mermaid-text/CHANGELOG.md
-@@ -3,6 +3,23 @@
+@@ -3,6 +3,26 @@
  All notable changes to `mermaid-text` are documented in this file.
  This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
  
@@ -36,9 +39,12 @@ index 0743f01..566359a 100644
 +  (they previously ignored it). Over budget, label-driven gaps are capped at a
 +  shared level and message labels wrap to the room their arrow gets; further
 +  attempts reduce participant box padding and wrap participant labels. Notes
-+  and self-message labels wrap to fit, and rows grow for wrapped lines. The
-+  fitting attempt with the fewest rows wins. Renders without a budget, or
-+  that already fit, are byte-identical to before.
++  and self-message labels wrap to fit, and rows grow for wrapped lines.
++  Participant names and note words are kept whole whenever any attempt fits
++  that way, and only otherwise split; among the fitting attempts of that kind
++  the one with the fewest rows wins. An attempt that block frames or notes
++  push past the budget is planned again for the overshoot. Renders without a
++  budget, or that already fit, are byte-identical to before.
 +
 +### Changed
 +
@@ -106,10 +112,10 @@ index 26fd373..1c0672c 100644
          DiagramKind::Pie => {
              // Pie charts honour both `max_width` (bar columns scale to fit)
 diff --git a/crates/mermaid-text/src/render/sequence.rs b/crates/mermaid-text/src/render/sequence.rs
-index 81b81a1..11ccb4e 100644
+index 81b81a1..e54ef01 100644
 --- a/crates/mermaid-text/src/render/sequence.rs
 +++ b/crates/mermaid-text/src/render/sequence.rs
-@@ -62,6 +62,23 @@ const EVENT_ROW_H: usize = 2;
+@@ -62,6 +62,26 @@ const EVENT_ROW_H: usize = 2;
  /// label row, matching the spacing used for regular two-row messages.
  const SELF_MSG_ROW_H: usize = 4;
  
@@ -128,12 +134,15 @@ index 81b81a1..11ccb4e 100644
 +    box_pad: usize,
 +    /// Maximum display width of a participant label line before wrapping.
 +    participant_cap: usize,
++    /// Whether participant and note labels may be split inside a word.
++    /// Attempts that keep every word whole are tried first.
++    split_words: bool,
 +}
 +
  /// Right-pointing solid arrowhead.
  const ARROW_RIGHT: char = '▸';
  /// Left-pointing solid arrowhead.
-@@ -266,6 +283,8 @@ fn compute_layout(
+@@ -266,6 +286,8 @@ fn compute_layout(
      diag: &SequenceDiagram,
      lane_widths: &[usize],
      labels: &[Cow<'_, str>],
@@ -142,7 +151,7 @@ index 81b81a1..11ccb4e 100644
  ) -> Vec<ParticipantLayout> {
      let n = diag.participants.len();
      if n == 0 {
-@@ -273,13 +292,21 @@ fn compute_layout(
+@@ -273,13 +295,21 @@ fn compute_layout(
      }
  
      // Minimum box width = label display width + 2 * BOX_PAD + 2 (borders).
@@ -169,7 +178,7 @@ index 81b81a1..11ccb4e 100644
          })
          .collect();
  
-@@ -315,6 +342,28 @@ fn compute_layout(
+@@ -315,6 +345,28 @@ fn compute_layout(
          }
      }
  
@@ -198,7 +207,7 @@ index 81b81a1..11ccb4e 100644
      // Build centre positions cumulatively from the left.
      //
      // `gap_mins[i]` is the minimum *clearance* between the inner edges of
-@@ -368,13 +417,16 @@ fn draw_participant_box(
+@@ -368,13 +420,16 @@ fn draw_participant_box(
      canvas: &mut Canvas,
      cx: usize,
      box_width: usize,
@@ -217,7 +226,7 @@ index 81b81a1..11ccb4e 100644
  
      // Top border
      canvas.put(top_row, left, '┌');
-@@ -383,13 +435,16 @@ fn draw_participant_box(
+@@ -383,13 +438,16 @@ fn draw_participant_box(
      }
      canvas.put(top_row, right, '┐');
  
@@ -240,7 +249,7 @@ index 81b81a1..11ccb4e 100644
  
      // Bottom border
      canvas.put(bottom_row, left, '└');
-@@ -647,12 +702,17 @@ fn draw_message(
+@@ -647,12 +705,17 @@ fn draw_message(
          canvas.put(row, right, h_char);
      }
  
@@ -260,7 +269,7 @@ index 81b81a1..11ccb4e 100644
      }
  }
  
-@@ -673,8 +733,10 @@ fn draw_self_message(canvas: &mut Canvas, cx: usize, row: usize, text: &str, sty
+@@ -673,8 +736,10 @@ fn draw_self_message(canvas: &mut Canvas, cx: usize, row: usize, text: &str, sty
      // Width of the horizontal legs: wide enough to fit the label plus 2
      // cells of padding (one between the lifeline junction and the label,
      // one between the label and the right corner).
@@ -272,7 +281,7 @@ index 81b81a1..11ccb4e 100644
  
      // Top leg: `├──────┐`.
      canvas.put(row, cx, '├');
-@@ -685,22 +747,25 @@ fn draw_self_message(canvas: &mut Canvas, cx: usize, row: usize, text: &str, sty
+@@ -685,22 +750,25 @@ fn draw_self_message(canvas: &mut Canvas, cx: usize, row: usize, text: &str, sty
  
      // Middle row: right wall with label inside the U.
      // `│` at the right edge; label starts one cell after the lifeline junction.
@@ -306,7 +315,7 @@ index 81b81a1..11ccb4e 100644
  }
  
  /// Draw a participant group frame: a top-border line at `top_row` and a
-@@ -776,6 +841,112 @@ fn draw_participant_group_frame(
+@@ -776,6 +844,154 @@ fn draw_participant_group_frame(
  /// assert!(out.contains('┆'));
  /// ```
  pub fn render(diag: &SequenceDiagram) -> String {
@@ -355,35 +364,77 @@ index 81b81a1..11ccb4e 100644
 +        .max()
 +        .unwrap_or(0);
 +    // Attempts in order of decreasing fidelity: full padding first, then
-+    // padding 1 with progressively narrower participant labels.
-+    let mut attempts = vec![Fit {
-+        budget,
-+        box_pad: BOX_PAD,
-+        participant_cap: widest_participant,
-+    }];
-+    attempts.extend((MIN_WRAP..=widest_participant).rev().map(|cap| Fit {
-+        budget,
-+        box_pad: 1,
-+        participant_cap: cap,
-+    }));
-+    // Among the attempts that fit, keep the shortest one: every wrapped line
-+    // adds a row, so height measures how much the labels were broken up.
-+    // Ties keep the earlier, less altered attempt.
-+    let mut fitted: Option<(usize, String)> = None;
-+    for fit in attempts {
-+        let out = render_fitted(diag, Some(fit));
-+        let w = max_line_width(&out);
-+        if w <= budget {
-+            let h = out.lines().count();
-+            if fitted.as_ref().is_none_or(|(best_h, _)| h < *best_h) {
-+                fitted = Some((h, out));
++    // padding 1 with progressively narrower participant labels. Every word of
++    // participant and note labels is kept whole first; splitting words is
++    // the last resort, tried only when nothing fits otherwise.
++    for split_words in [false, true] {
++        let mut attempts = vec![Fit {
++            budget,
++            box_pad: BOX_PAD,
++            participant_cap: widest_participant,
++            split_words,
++        }];
++        attempts.extend((MIN_WRAP..=widest_participant).rev().map(|cap| Fit {
++            budget,
++            box_pad: 1,
++            participant_cap: cap,
++            split_words,
++        }));
++        // Among the attempts that fit, keep the shortest one: every wrapped
++        // line adds a row, so height measures how much the labels were broken
++        // up. Ties keep the earlier, less altered attempt.
++        let mut fitted: Option<(usize, String)> = None;
++        for fit in attempts {
++            let (out, w) = render_within(diag, fit);
++            if w <= budget {
++                let h = out.lines().count();
++                if fitted.as_ref().is_none_or(|(best_h, _)| h < *best_h) {
++                    fitted = Some((h, out));
++                }
++            } else if w < best_w {
++                best_w = w;
++                best = out;
 +            }
-+        } else if fitted.is_none() && w < best_w {
-+            best_w = w;
-+            best = out;
++        }
++        if let Some((_, out)) = fitted {
++            return out;
 +        }
 +    }
-+    fitted.map_or(best, |(_, out)| out)
++    best
++}
++
++/// Render one attempt within its budget. The layout plans the participant
++/// row to the budget, but block frames and notes may reach past that row;
++/// an attempt that comes out wider is planned again for a budget reduced by
++/// the overshoot, as long as that makes the output narrower.
++fn render_within(diag: &SequenceDiagram, fit: Fit) -> (String, usize) {
++    let mut out = render_fitted(diag, Some(fit));
++    let mut w = max_line_width(&out);
++    let mut target = fit.budget;
++    while w > fit.budget && target > MIN_WRAP {
++        let next = target.saturating_sub(w - fit.budget).max(MIN_WRAP);
++        let retry = render_fitted(
++            diag,
++            Some(Fit {
++                budget: next,
++                ..fit
++            }),
++        );
++        let retry_w = max_line_width(&retry);
++        if retry_w >= w {
++            break;
++        }
++        (out, w, target) = (retry, retry_w, next);
++    }
++    (out, w)
++}
++
++/// Display width of the widest word in `text`.
++fn widest_word(text: &str) -> usize {
++    text.split_whitespace()
++        .map(UnicodeWidthStr::width)
++        .max()
++        .unwrap_or(0)
 +}
 +
 +/// Word-wrap `text` to `cap` display columns, splitting words that are
@@ -419,7 +470,7 @@ index 81b81a1..11ccb4e 100644
      let n = diag.participants.len();
      if n == 0 {
          return String::new();
-@@ -789,7 +960,101 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -789,7 +1005,103 @@ pub fn render(diag: &SequenceDiagram) -> String {
      let lane_widths = activation_widths(diag, &depths);
      let active_lanes = active_lane_index(diag, &depths);
      let labels = message_labels(diag);
@@ -452,9 +503,11 @@ index 81b81a1..11ccb4e 100644
 +        .participants
 +        .iter()
 +        .map(|p| match fit {
-+            Some(f) if p.label.width() > f.participant_cap => {
-+                Cow::Owned(wrap_hard(&p.label, f.participant_cap))
-+            }
++            Some(f) if p.label.width() > f.participant_cap => Cow::Owned(if f.split_words {
++                wrap_hard(&p.label, f.participant_cap)
++            } else {
++                wrap_note_text(&p.label, f.participant_cap.max(MIN_WRAP))
++            }),
 +            _ => Cow::Borrowed(p.label.as_str()),
 +        })
 +        .collect();
@@ -522,7 +575,7 @@ index 81b81a1..11ccb4e 100644
  
      // Determine canvas dimensions.
      // Header: rows 0-2 (BOX_HEIGHT = 3).
-@@ -809,7 +1074,9 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -809,7 +1121,9 @@ pub fn render(diag: &SequenceDiagram) -> String {
          // row each for their loop's second leg.
          let self_msg_count = diag.messages.iter().filter(|m| m.from == m.to).count();
          let regular_count = num_messages - self_msg_count;
@@ -533,7 +586,7 @@ index 81b81a1..11ccb4e 100644
      };
  
      // Pre-compute wrapped note text for every note. Two-pass approach:
-@@ -822,7 +1089,24 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -822,7 +1136,30 @@ pub fn render(diag: &SequenceDiagram) -> String {
          .iter()
          .map(|note| {
              let budget = note_budget(&note.anchor, &layouts, diag);
@@ -541,25 +594,31 @@ index 81b81a1..11ccb4e 100644
 +            let Some(f) = fit else {
 +                return wrap_note_text(&note.text, budget);
 +            };
-+            // Budgeted: shrink the wrap width until the note box fits.
-+            let mut budget = budget.min(f.budget.saturating_sub(6)).max(MIN_WRAP);
++            // Budgeted: shrink the wrap width until the note box fits, but
++            // not below the widest word unless words may be split.
++            let floor = if f.split_words {
++                MIN_WRAP
++            } else {
++                widest_word(&note.text).max(MIN_WRAP)
++            };
++            let mut budget = budget.min(f.budget.saturating_sub(6)).max(floor);
 +            loop {
 +                let wrapped = wrap_hard(&note.text, budget);
 +                let text_w = max_line_width(&wrapped);
 +                let right = note_columns(&note.anchor, &layouts, diag, text_w, &lane_widths)
 +                    .map_or(0, |(_, r)| r);
-+                if right < f.budget || budget == MIN_WRAP {
++                if right < f.budget || budget == floor {
 +                    return wrapped;
 +                }
 +                budget = budget
 +                    .saturating_sub(right + 1 - f.budget)
-+                    .max(MIN_WRAP)
++                    .max(floor)
 +                    .min(budget - 1);
 +            }
          })
          .collect();
  
-@@ -855,11 +1139,11 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -855,11 +1192,11 @@ pub fn render(diag: &SequenceDiagram) -> String {
          1
      };
      let height = group_frame_rows
@@ -573,7 +632,7 @@ index 81b81a1..11ccb4e 100644
          + group_frame_rows;
  
      // Canvas width: rightmost participant box right edge + 1 margin.
-@@ -873,7 +1157,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -873,7 +1210,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
              diag.participant_index(&m.from) == diag.participant_index(&m.to)
                  && diag.participant_index(&m.from) == Some(n - 1)
          })
@@ -582,7 +641,7 @@ index 81b81a1..11ccb4e 100644
          .max()
          .unwrap_or(0);
      let participant_width =
-@@ -905,12 +1189,12 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -905,12 +1242,12 @@ pub fn render(diag: &SequenceDiagram) -> String {
      //    When participant groups exist, boxes are shifted down by group_frame_rows
      //    so there is room for the group top-border row above them.
      let header_top = group_frame_rows;
@@ -599,7 +658,7 @@ index 81b81a1..11ccb4e 100644
      }
  
      // 1a. Draw participant group frames above the header boxes and below the
-@@ -919,7 +1203,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -919,7 +1256,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
      //     `footer_top + BOX_HEIGHT` (the row right after the footer boxes).
      if group_frame_rows > 0 {
          let group_top_row = 0usize;
@@ -608,7 +667,7 @@ index 81b81a1..11ccb4e 100644
          for grp in &diag.participant_groups {
              draw_participant_group_frame(
                  &mut canvas,
-@@ -935,7 +1219,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -935,7 +1272,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
      //    must terminate one row above the footer's top border so the
      //    box outline reads as a clean bracket (lifeline glyphs would
      //    otherwise punch through the `┌────┐`).
@@ -617,7 +676,7 @@ index 81b81a1..11ccb4e 100644
      let lifeline_end = footer_top.saturating_sub(1);
      for layout in &layouts {
          draw_lifeline(&mut canvas, layout.center, lifeline_start, lifeline_end);
-@@ -948,7 +1232,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -948,7 +1285,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
      // Self-messages span `SELF_MSG_ROW_H` rows because their loop draws a
      // top leg and a bottom leg — placing the next message's label on
      // `row+1` would overlap the self-loop's bottom leg.
@@ -626,7 +685,7 @@ index 81b81a1..11ccb4e 100644
  
      // Captured arrow row for each message, indexed by message position.
      // Used by the activation-bar overlay pass to translate
-@@ -1064,6 +1348,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -1064,6 +1401,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
          }
  
          let label = labels[msg_idx].as_ref();
@@ -634,7 +693,7 @@ index 81b81a1..11ccb4e 100644
  
          let Some((si, ti)) = diag
              .participant_index(&msg.from)
-@@ -1075,6 +1360,11 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -1075,6 +1413,11 @@ pub fn render(diag: &SequenceDiagram) -> String {
              continue;
          };
  
@@ -646,7 +705,7 @@ index 81b81a1..11ccb4e 100644
          // Capture the arrow row for this message before advancing.
          message_arrow_rows[msg_idx] = Some(arrow_row);
  
-@@ -1082,7 +1372,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -1082,7 +1425,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
              let anchor =
                  message_anchor(&layouts[si], active_width(&active_lanes[si], msg_idx), true);
              draw_self_message(&mut canvas, anchor, arrow_row, label, msg.style);
@@ -655,7 +714,7 @@ index 81b81a1..11ccb4e 100644
          } else {
              draw_message(
                  &mut canvas,
-@@ -1134,7 +1424,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
+@@ -1134,7 +1477,7 @@ pub fn render(diag: &SequenceDiagram) -> String {
          };
          let self_tail = if diag.messages[act.end_message].from == diag.messages[act.end_message].to
          {
@@ -664,7 +723,7 @@ index 81b81a1..11ccb4e 100644
          } else {
              0
          };
-@@ -1618,6 +1908,20 @@ mod tests {
+@@ -1618,6 +1961,66 @@ mod tests {
          );
      }
  
@@ -674,6 +733,52 @@ index 81b81a1..11ccb4e 100644
 +        assert_eq!(wrap_hard("short", 10), "short");
 +        // Wide glyphs are never split across the cap.
 +        assert_eq!(wrap_hard("要件定義", 5), "要件\n定義");
++    }
++
++    const LAUNCH: &str = "sequenceDiagram\n    participant U as User\n    participant C as Controller\n\
++        participant B as Box\n    U->>C: box start coder\n    C->>B: launch holder\n    alt resume\n\
++        B-->>C: SessionStart resume\n    else new\n        B-->>C: SessionStart startup\n    end\n\
++        loop every report\n        B->>C: statusline\n    end\n    C-->>U: attached";
++
++    #[test]
++    fn budget_keeps_participant_names_whole_when_they_fit() {
++        let diag = parse(LAUNCH).unwrap();
++        for budget in [40, 60, 80] {
++            let out = render_with_width(&diag, Some(budget));
++            assert!(max_line_width(&out) <= budget, "budget {budget}:\n{out}");
++            for name in ["User", "Controller", "Box"] {
++                assert!(
++                    out.lines().any(|l| l.contains(name)),
++                    "{name} split at {budget}:\n{out}"
++                );
++            }
++        }
++    }
++
++    #[test]
++    fn budget_splits_a_participant_name_only_when_nothing_else_fits() {
++        let diag = parse("sequenceDiagram\n    participant O as Orchestrator\n    participant T as Tool\n    O->>T: run").unwrap();
++        let out = render_with_width(&diag, Some(20));
++        assert!(max_line_width(&out) <= 20, "{out}");
++        assert!(
++            !out.contains("Orchestrator") && out.contains("Orche"),
++            "{out}"
++        );
++    }
++
++    #[test]
++    fn budget_keeps_note_words_whole_when_they_fit() {
++        let src = "sequenceDiagram\n    participant A as Agent\n    participant T as Tool\n    A->>T: read\n\
++            Note right of T: values are agent reported, never authorization";
++        let diag = parse(src).unwrap();
++        for budget in [40, 60] {
++            let out = render_with_width(&diag, Some(budget));
++            assert!(max_line_width(&out) <= budget, "budget {budget}:\n{out}");
++            assert!(
++                out.contains("authorization"),
++                "note word split at {budget}:\n{out}"
++            );
++        }
 +    }
 +
 +    #[test]

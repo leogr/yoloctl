@@ -10,9 +10,15 @@ patch stack, locked dependencies, wrapper and builder hashes, and artifact hash.
 The manifest binds these inputs to the embedded bytes. [1](#source-1)
 [2](#source-2) [3](#source-3)
 
-[FACT] The patch stack contains sequence width fitting and non-rectangle
-back-edge port spreading, followed by the back-edge regression and its lint
-correction. The crate archive's original Cargo manifest is restored during
+[FACT] The patch stack contains:
+- sequence width fitting, keeping participant names and note words whole when
+  any layout fits;
+- non-rectangle back-edge port spreading, with its regression and lint
+  correction;
+- unshaded sequence block interiors;
+- solid lifelines joined to messages;
+- subgraph borders crossed perpendicularly, never followed;
+- a simple top-down fan-out drawn as one trunk. The crate archive's original Cargo manifest is restored during
 preparation so added integration tests are discoverable. Upstream and
 transitive notices, plus the pinned Rust standard-library notices, are retained
 beside the pins. [2](#source-2) [3](#source-3)

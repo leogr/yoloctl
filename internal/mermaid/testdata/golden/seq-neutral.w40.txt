@@ -4,49 +4,49 @@
  │      │  │ oller │ │ super │ │  on   │
  │      │  │       │ │ visor │ │       │
  └──────┘  └───────┘ └───────┘ └───────┘
-     ┆ box     ┆         ┆         ┆
-     ┆ start   ┆         ┆         ┆
-     ┆ the     ┆         ┆         ┆
-     ┆ worker  ┆         ┆         ┆
-     ┆ with a  ┆         ┆         ┆
-     ┆ fresh   ┆         ┆         ┆
-     ┆ session ┆         ┆         ┆
-     ┆ and the ┆         ┆         ┆
-     ┆ team    ┆         ┆         ┆
-     ┆ account ┆         ┆         ┆
-     ──────────▸         ┆         ┆
-     ┆         ┆ create  ┆         ┆
-     ┆         ┆ sandbox ┆         ┆
-     ┆         ┆ with    ┆         ┆
-     ┆         ┆ the     ┆         ┆
-     ┆         ┆ compute ┆         ┆
-     ┆         ┆ d       ┆         ┆
-     ┆         ┆ policy  ┆         ┆
-     ┆         ┆ and     ┆         ┆
-     ┆         ┆ mounts  ┆         ┆
-     ┆         ──────────▸         ┆
-     ┆         ┆ sandbox ┆         ┆
-     ┆         ┆ ready   ┆         ┆
-     ┆         ┆ and SSH ┆         ┆
-     ┆         ┆ endpoin ┆         ┆
-     ┆         ┆ t       ┆         ┆
-     ┆         ┆ publish ┆         ┆
-     ┆         ┆ ed      ┆         ┆
-     ┆         ◂┄┄┄┄┄┄┄┄┄┄         ┆
-     ┆         ┆ launch the agent  ┆
-     ┆         ┆ through the       ┆
-     ┆         ┆ supervisor        ┆
-     ┆         ┆ endpoint┆         ┆
-     ┆         ────────────────────▸
-     ┆ attach stream with resize   ┆
-     ┆ and signals       ┆         ┆
-     ◂┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-     ┆         ┆         ┆         ┆
+     │ box     │         │         │
+     │ start   │         │         │
+     │ the     │         │         │
+     │ worker  │         │         │
+     │ with a  │         │         │
+     │ fresh   │         │         │
+     │ session │         │         │
+     │ and the │         │         │
+     │ team    │         │         │
+     │ account │         │         │
+     ├────────▸│         │         │
+     │         │ create  │         │
+     │         │ sandbox │         │
+     │         │ with    │         │
+     │         │ the     │         │
+     │         │ compute │         │
+     │         │ d       │         │
+     │         │ policy  │         │
+     │         │ and     │         │
+     │         │ mounts  │         │
+     │         ├────────▸│         │
+     │         │ sandbox │         │
+     │         │ ready   │         │
+     │         │ and SSH │         │
+     │         │ endpoin │         │
+     │         │ t       │         │
+     │         │ publish │         │
+     │         │ ed      │         │
+     │         │◂┄┄┄┄┄┄┄┄┤         │
+     │         │ launch the agent  │
+     │         │ through the       │
+     │         │ supervisor        │
+     │         │ endpoint│         │
+     │         ├─────────┼────────▸│
+     │ attach stream with resize   │
+     │ and signals       │         │
+     │◂┄┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┄┄┼┄┄┄┄┄┄┄┄┄┤
+     │         │         │         │
  ╭────────────────────────────────────╮
  │ policy goldens must match byte for │
  │ byte before launch                 │
  ╰────────────────────────────────────╯
-     ┆         ┆         ┆         ┆
+     │         │         │         │
  ┌──────┐  ┌───────┐ ┌───────┐ ┌───────┐
  │ Host │  │ Space │ │ OpenS │ │ Agent │
  │ CLI  │  │ contr │ │ hell  │ │ sessi │

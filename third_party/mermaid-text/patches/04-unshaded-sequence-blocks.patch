@@ -1,0 +1,360 @@
+From 4f27c98b8d1fbf575da2508a4b7b7a615e7583f0 Mon Sep 17 00:00:00 2001
+From: Leonardo Grasso <me@leonardograsso.com>
+Date: Fri, 13 Nov 2026 01:01:10 +0000
+Subject: [PATCH] feat(mermaid-text): leave sequence block frames unshaded
+
+Block frames filled their interior with U+2591 after drawing, so the spaces between words of labels and messages inside a block became shade cells, which terminals draw as grey bands that break the text. Frame interiors now stay blank; rect blocks keep their shade.
+---
+ crates/mermaid-text/CHANGELOG.md              |  4 ++
+ crates/mermaid-text/src/render/sequence.rs    | 46 +++-----------
+ crates/mermaid-text/tests/snapshots.rs        | 63 +++++--------------
+ .../snapshots__rect_nested_inside_loop.snap   |  8 +--
+ ...apshots__sequence_with_alt_else_block.snap | 12 ++--
+ .../snapshots__sequence_with_loop_block.snap  |  6 +-
+ ...pshots__sequence_with_nested_loop_alt.snap | 16 ++---
+ .../snapshots__sequence_with_opt_block.snap   |  6 +-
+ ...sequence_with_par_and_critical_blocks.snap | 24 +++----
+ 9 files changed, 63 insertions(+), 122 deletions(-)
+
+diff --git a/crates/mermaid-text/CHANGELOG.md b/crates/mermaid-text/CHANGELOG.md
+index 7e689b2..76796f0 100644
+--- a/crates/mermaid-text/CHANGELOG.md
++++ b/crates/mermaid-text/CHANGELOG.md
+@@ -20,6 +20,10 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+ 
+ ### Changed
+ 
++- Sequence block frames (`loop`, `alt`, `opt`, `par`, `critical`, `break`)
++  no longer fill their interior with `░`: in terminals the shade reads as
++  grey bands that break the text of labels and messages inside. `rect`
++  blocks keep their shade.
+ - `tests/strict_max_width.rs` uses a class diagram as its fixed-width
+   fixture, since sequence diagrams now fit the budget.
+ 
+diff --git a/crates/mermaid-text/src/render/sequence.rs b/crates/mermaid-text/src/render/sequence.rs
+index e54ef01..7eabe42 100644
+--- a/crates/mermaid-text/src/render/sequence.rs
++++ b/crates/mermaid-text/src/render/sequence.rs
+@@ -1513,15 +1513,11 @@ fn render_fitted(diag: &SequenceDiagram, fit: Option<Fit>) -> String {
+     //    (still skipping arrow / junction glyphs to read as "behind"
+     //    arrows).
+     //
+-    //    Interior bounds are collected first; the shade fill is applied in a
+-    //    separate pass (step 6) AFTER all borders and labels are committed so
+-    //    that inner-frame labels are never overwritten by an outer-frame fill.
+-    //    Rect blocks skip draw_block_frame entirely and are collected into a
+-    //    separate vec for a post-fill pass (step 7).
+-    let mut frame_interiors: Vec<(usize, usize, usize, usize)> = Vec::new();
++    //    Frame interiors stay blank (step 6). Rect blocks skip
++    //    draw_block_frame entirely and are collected into a separate vec for
++    //    a post-fill pass (step 7).
+     // (top, bottom, left, right, shade_glyph)
+     let mut rect_interiors: Vec<(usize, usize, usize, usize, char)> = Vec::new();
+-    let mut label_rows: std::collections::HashSet<usize> = std::collections::HashSet::new();
+     for (i, b) in diag.blocks.iter().enumerate() {
+         // Empty block (no inner messages) — nothing to draw.
+         if b.start_message > b.end_message
+@@ -1568,13 +1564,6 @@ fn render_fitted(diag: &SequenceDiagram, fit: Option<Fit>) -> String {
+             .map(|(j, branch)| (branch_divider_rows[i][j], branch.label.as_str()))
+             .filter(|(row, _)| *row != 0)
+             .collect();
+-        // Record every row that carries label text so the fill pass can
+-        // skip them and avoid overwriting spaces embedded in labels.
+-        label_rows.insert(top);
+-        label_rows.insert(bottom);
+-        for &(dr, _) in &branches {
+-            label_rows.insert(dr);
+-        }
+         draw_block_frame(
+             &mut canvas,
+             top,
+@@ -1585,33 +1574,14 @@ fn render_fitted(diag: &SequenceDiagram, fit: Option<Fit>) -> String {
+             opener_label,
+             &branches,
+         );
+-        frame_interiors.push((top, bottom, left, right));
+     }
+ 
+-    // 6. Interior fill — applied after ALL block frames and labels are
+-    //    committed so that no outer-frame fill can overwrite an inner-frame
+-    //    label.  Only plain space cells (`' '`) are replaced; every other
+-    //    glyph (arrows, lifelines, activation bars, labels, borders) is
+-    //    already non-space and is left untouched.  Rows that carry frame
+-    //    labels (top borders and dividers of any frame) are skipped entirely
+-    //    so embedded spaces within label text stay as spaces.
+-    for (top, bottom, left, right) in frame_interiors {
+-        for r in (top + 1)..bottom {
+-            if label_rows.contains(&r) {
+-                continue;
+-            }
+-            for c in (left + 1)..right {
+-                if canvas.grid[r][c] == ' ' {
+-                    canvas.put(r, c, '\u{2591}');
+-                }
+-            }
+-        }
+-    }
++    // 6. Block frame interiors stay blank: a shade fill reads as grey bands
++    //    in terminals and breaks the text of labels and messages inside.
+ 
+-    // 7. Rect fill — applied after the frame-interior fill so that a rect
+-    //    nested inside a loop can overwrite the loop's `░` with a denser
+-    //    glyph.  Replace cell when: space, OR existing shade is lighter than
+-    //    the rect's shade (░ → ▒/▓, ▒ → ▓).
++    // 7. Rect fill. Replace cell when: space, OR existing shade is lighter
++    //    than the rect's shade (░ → ▒/▓, ▒ → ▓), so nested rects stay
++    //    distinct.
+     for (top, bottom, left, right, glyph) in rect_interiors {
+         for r in (top + 1)..bottom {
+             for c in (left + 1)..right {
+diff --git a/crates/mermaid-text/tests/snapshots.rs b/crates/mermaid-text/tests/snapshots.rs
+index 194a428..a6dd9c1 100644
+--- a/crates/mermaid-text/tests/snapshots.rs
++++ b/crates/mermaid-text/tests/snapshots.rs
+@@ -1641,10 +1641,10 @@ end";
+ // ---------------------------------------------------------------------------
+ 
+ #[test]
+-fn block_frame_interior_is_filled_with_shade() {
++fn block_frame_interior_stays_blank() {
+     // Reuses the same minimal loop fixture as `sequence_with_loop_block`.
+-    // The interior must be filled with '░' (U+2591) on formerly-blank cells.
+-    // Strong assertions — a no-op or deletion of the fill MUST fail all of them.
++    // A shade fill reads as grey bands in terminals and breaks the text of
++    // labels inside the block, so the interior keeps plain spaces.
+     let src = "sequenceDiagram
+ participant A
+ participant B
+@@ -1652,54 +1652,23 @@ loop forever
+ A->>B: tick
+ end";
+     let out = mermaid_text::render(src).unwrap();
+-
+-    // a. At least 6 shade cells must exist (conservative lower bound for a
+-    //    3-interior-row loop with padding on both sides of each lifeline).
+-    let shade_count = out.chars().filter(|&c| c == '\u{2591}').count();
+     assert!(
+-        shade_count >= 6,
+-        "expected >= 6 '░' cells in loop interior, got {shade_count}:\n{out}"
++        !out.contains('\u{2591}'),
++        "no '░' fill expected inside the loop frame:\n{out}"
+     );
+-
+-    // b. Every '░' glyph must appear on an INTERIOR row of the block frame,
+-    //    i.e. NOT on the top border line (contains '╔') or the bottom border
+-    //    line (contains '╚'). Collect which lines have shade vs. border corners.
+     let lines: Vec<&str> = out.lines().collect();
+-    for line in &lines {
+-        if line.contains('╔') || line.contains('╚') {
+-            assert!(
+-                !line.contains('\u{2591}'),
+-                "shade glyph leaked into border row: {line:?}"
+-            );
+-        }
+-    }
+-
+-    // c. No shade glyph appears on rows OUTSIDE the block frame entirely
+-    //    (rows before the '╔' line or after the '╚' line).
+-    let top_border_idx = lines
++    let top = lines
+         .iter()
+         .position(|l| l.contains('╔'))
+         .expect("no top border");
+-    let bot_border_idx = lines
++    let bottom = lines
+         .iter()
+         .position(|l| l.contains('╚'))
+-        .expect("no bot border");
+-    for (i, line) in lines.iter().enumerate() {
+-        if i < top_border_idx || i > bot_border_idx {
+-            assert!(
+-                !line.contains('\u{2591}'),
+-                "shade glyph outside block frame at line {i}: {line:?}"
+-            );
+-        }
+-    }
+-
+-    // d. The top-border corners survive — fill must not overwrite them.
+-    let top_border = lines[top_border_idx];
+-    assert!(top_border.contains('╔'), "top-left corner '╔' missing");
+-    assert!(top_border.contains('╗'), "top-right corner '╗' missing");
+-    let bot_border = lines[bot_border_idx];
+-    assert!(bot_border.contains('╚'), "bot-left corner '╚' missing");
+-    assert!(bot_border.contains('╝'), "bot-right corner '╝' missing");
++        .expect("no bottom border");
++    assert!(
++        lines[top + 1..bottom].iter().any(|l| l.contains("tick")),
++        "message label must stay inside the frame:\n{out}"
++    );
+ }
+ 
+ // ---------------------------------------------------------------------------
+@@ -3549,12 +3518,10 @@ end";
+         medium_count > 0,
+         "rect rgb(0,255,0) must produce medium-shade (\u{2592}) inside rect span:\n{out}"
+     );
+-    // The outer loop's frame_interiors fill produces light-shade cells OUTSIDE the rect.
+-    // Both glyphs must appear: light-shade from loop exterior, medium-shade from rect interior.
+-    let light_count = out.chars().filter(|&c| c == '\u{2591}').count();
++    // The outer loop's interior stays blank: only the rect is shaded.
+     assert!(
+-        light_count > 0,
+-        "outer loop fill must produce light-shade (\u{2591}) outside the rect span:\n{out}"
++        !out.contains('\u{2591}'),
++        "outer loop interior must not be filled with light shade (\u{2591}):\n{out}"
+     );
+     // No double-bordering: the output must not contain consecutive lines both starting with ╔.
+     let lines: Vec<&str> = out.lines().collect();
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__rect_nested_inside_loop.snap b/crates/mermaid-text/tests/snapshots/snapshots__rect_nested_inside_loop.snap
+index 0525359..2d07dec 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__rect_nested_inside_loop.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__rect_nested_inside_loop.snap
+@@ -7,13 +7,13 @@ expression: out
+  └──────┘      └──────┘
+      ┆             ┆
+ ╔═[loop]══[daily]═══════╗
+-║░░░░┆░░░░░░░░░░░░░┆░░░░║
+-║░░░░┆░░░░░░░░░░░░░┆░░░░║
++║    ┆             ┆    ║
++║    ┆             ┆    ║
+ ║▒▒▒▒┆▒tick▒▒▒▒▒▒▒▒┆▒▒▒▒║
+ ║▒▒▒▒──────────────▸▒▒▒▒║
+ ║▒▒▒▒┆▒▒▒▒▒▒▒▒▒▒▒▒▒┆▒▒▒▒║
+-║░░░░┆░░░░░░░░░░░░░┆░░░░║
+-║░░░░┆░░░░░░░░░░░░░┆░░░░║
++║    ┆             ┆    ║
++║    ┆             ┆    ║
+ ╚═══════════════════════╝
+      ┆             ┆
+  ┌──────┐      ┌──────┐
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_alt_else_block.snap b/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_alt_else_block.snap
+index 2d00b57..e5bb0ae 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_alt_else_block.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_alt_else_block.snap
+@@ -7,13 +7,13 @@ expression: out
+  └──────┘      └──────┘
+      ┆             ┆
+ ╔═[alt]══[success]══════╗
+-║░░░░┆░ok░░░░░░░░░░┆░░░░║
+-║░░░░──────────────▸░░░░║
+-║░░░░┆░░░░░░░░░░░░░┆░░░░║
++║    ┆ ok          ┆    ║
++║    ──────────────▸    ║
++║    ┆             ┆    ║
+ ╠┄[failure]┄┄┄┄┄┄┄┄┄┄┄┄┄╣
+-║░░░░┆░fail░░░░░░░░┆░░░░║
+-║░░░░──────────────▸░░░░║
+-║░░░░┆░░░░░░░░░░░░░┆░░░░║
++║    ┆ fail        ┆    ║
++║    ──────────────▸    ║
++║    ┆             ┆    ║
+ ╚═══════════════════════╝
+      ┆             ┆
+  ┌──────┐      ┌──────┐
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_loop_block.snap b/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_loop_block.snap
+index 2cd7ef2..961d34c 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_loop_block.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_loop_block.snap
+@@ -7,9 +7,9 @@ expression: out
+  └──────┘      └──────┘
+      ┆             ┆
+ ╔═[loop]══[forever]═════╗
+-║░░░░┆░tick░░░░░░░░┆░░░░║
+-║░░░░──────────────▸░░░░║
+-║░░░░┆░░░░░░░░░░░░░┆░░░░║
++║    ┆ tick        ┆    ║
++║    ──────────────▸    ║
++║    ┆             ┆    ║
+ ╚═══════════════════════╝
+      ┆             ┆
+  ┌──────┐      ┌──────┐
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_nested_loop_alt.snap b/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_nested_loop_alt.snap
+index d41011c..ad68354 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_nested_loop_alt.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_nested_loop_alt.snap
+@@ -7,17 +7,17 @@ expression: out
+  └──────┘   └──────┘
+      ┆          ┆
+ ╔═[loop]══[outer]════╗
+-║░░░░┆░░░░░░░░░░┆░░░░║
++║    ┆          ┆    ║
+ ╔═[alt]══[branch a]══╗
+-║░░░░┆░a░░░░░░░░┆░░░░║
+-║░░░░───────────▸░░░░║
+-║░░░░┆░░░░░░░░░░┆░░░░║
++║    ┆ a        ┆    ║
++║    ───────────▸    ║
++║    ┆          ┆    ║
+ ╠┄[branch b]┄┄┄┄┄┄┄┄┄╣
+-║░░░░┆░b░░░░░░░░┆░░░░║
+-║░░░░───────────▸░░░░║
+-║░░░░┆░░░░░░░░░░┆░░░░║
++║    ┆ b        ┆    ║
++║    ───────────▸    ║
++║    ┆          ┆    ║
+ ╚════════════════════╝
+-║░░░░┆░░░░░░░░░░┆░░░░║
++║    ┆          ┆    ║
+ ╚════════════════════╝
+      ┆          ┆
+  ┌──────┐   ┌──────┐
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_opt_block.snap b/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_opt_block.snap
+index 66db3c1..e2e4bea 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_opt_block.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_opt_block.snap
+@@ -9,9 +9,9 @@ expression: out
+      ────────────────▸
+      ┆               ┆
+ ╔═[opt]══[cache hit]══════╗
+-║░░░░┆░cached░░░░░░░░┆░░░░║
+-║░░░░◂────────────────░░░░║
+-║░░░░┆░░░░░░░░░░░░░░░┆░░░░║
++║    ┆ cached        ┆    ║
++║    ◂────────────────    ║
++║    ┆               ┆    ║
+ ╚═════════════════════════╝
+      ┆               ┆
+  ┌──────┐        ┌──────┐
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_par_and_critical_blocks.snap b/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_par_and_critical_blocks.snap
+index e52d707..dbc43ea 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_par_and_critical_blocks.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__sequence_with_par_and_critical_blocks.snap
+@@ -7,23 +7,23 @@ expression: out
+  └──────┘       └──────┘
+      ┆              ┆
+ ╔═[par]══[first]═════════╗
+-║░░░░┆░msg1░░░░░░░░░┆░░░░║
+-║░░░░───────────────▸░░░░║
+-║░░░░┆░░░░░░░░░░░░░░┆░░░░║
++║    ┆ msg1         ┆    ║
++║    ───────────────▸    ║
++║    ┆              ┆    ║
+ ╠┄[second]┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╣
+-║░░░░┆░msg2░░░░░░░░░┆░░░░║
+-║░░░░───────────────▸░░░░║
+-║░░░░┆░░░░░░░░░░░░░░┆░░░░║
++║    ┆ msg2         ┆    ║
++║    ───────────────▸    ║
++║    ┆              ┆    ║
+ ╚════════════════════════╝
+      ┆              ┆
+ ╔═[critical]══[primary]══╗
+-║░░░░┆░try░░░░░░░░░░┆░░░░║
+-║░░░░───────────────▸░░░░║
+-║░░░░┆░░░░░░░░░░░░░░┆░░░░║
++║    ┆ try          ┆    ║
++║    ───────────────▸    ║
++║    ┆              ┆    ║
+ ╠┄[failure]┄┄┄┄┄┄┄┄┄┄┄┄┄┄╣
+-║░░░░┆░retry░░░░░░░░┆░░░░║
+-║░░░░───────────────▸░░░░║
+-║░░░░┆░░░░░░░░░░░░░░┆░░░░║
++║    ┆ retry        ┆    ║
++║    ───────────────▸    ║
++║    ┆              ┆    ║
+ ╚════════════════════════╝
+      ┆              ┆
+  ┌──────┐       ┌──────┐
+-- 
+2.43.0
+

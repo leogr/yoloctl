@@ -1,5 +1,5 @@
 {
-  "artifact_sha256": "96e47879560c829bfad6e59c60239e0b8e3c838f5b819389cfebfe0998dd2b81",
+  "artifact_sha256": "c586094b3003667c519bfb7967173a0012921bd85cb9cbd527461f3a3c267db7",
   "inputs": {
     "LICENSE": "5203d5cf8b80e46ea53ad08e47bc30c938cbf742757c15f6906ffa9d385c4cb5",
     "licenses/ascii-dag-0.9.1/LICENSE-APACHE": "8761391f3a3280ef14c9ab74aa87063496a525c36f80f16ef653eeb2d6e8da0b",
@@ -21,7 +21,7 @@
   "patches": [
     {
       "file": "patches/01-sequence-width-budget.patch",
-      "sha256": "5c693264d8bf3f2174949e7a04e6d97c76dc4b9ee127ad42d4a5a58aeef66b93"
+      "sha256": "512a3658a8706103b6770fd436b4986a90307973550429ed2d15c25f764364d7"
     },
     {
       "file": "patches/02-back-edge-spread-any-shape.patch",
@@ -30,9 +30,25 @@
     {
       "file": "patches/03-back-edge-regression-and-lint.patch",
       "sha256": "a38d70d5f4daa4865368c7c08de9bfadb1ae58ba22f0788ceb72af87b6da90d5"
+    },
+    {
+      "file": "patches/04-unshaded-sequence-blocks.patch",
+      "sha256": "987038bdcb7985449dcead1708db27709ad8d44aee8316887490ea8234d49d0c"
+    },
+    {
+      "file": "patches/05-joined-sequence-lifelines.patch",
+      "sha256": "23d0f7aae36cf8a6104c44c79cf18c17d203d6b90e4299bb93d18f0688b8a42d"
+    },
+    {
+      "file": "patches/06-subgraph-border-crossing.patch",
+      "sha256": "43b0946219346273a6dc9b49c139d0bc0b0506c8043b16a5f202c2bcfaf5bdbe"
+    },
+    {
+      "file": "patches/07-td-fan-out-trunk.patch",
+      "sha256": "f0f1344690f40b39e3d0dc6c3cf8fac7c3c16c0c3d9d97fbf8c2f24b4c9a5840"
     }
   ],
-  "recipe_sha256": "364206361a4a252f5fb7af15f48292874f23d371afc7f957aa6c309466cee76e",
+  "recipe_sha256": "6bea2b745f80cccb0e605b175fbf0c7325a34801a405641c2646b77c329573b8",
   "rust": "1.95.0",
   "schema": 1,
   "source_sha256": "90fa78f1bb32963ed114d9c318d880901ee4fa7103e133c3c3e530ebe5a09090",
