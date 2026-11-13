@@ -195,6 +195,7 @@ func controllerSpaceShow(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	view.SavedDisk = boot.VM.Disk
+	fillNestedSpaceShow(&view, boot)
 	supported := false
 	if g, ok := dataDiskGrower(boot.VM.Backend); ok {
 		supported, _ = g.DataDiskGrowSupported(boot.Name, boot.VM.Image)

@@ -82,6 +82,7 @@ func TestImportRemapsGrantsAndCreatesIndependentIdentity(t *testing.T) {
 	source.VM.Backend = "firecracker"
 	source.VM.Image = filepath.Join(t.TempDir(), "source-image")
 	source.VM.CPUs = 7
+	source.VM.NestedVirtualization = "off"
 	cpuProbes := stubHostCPU(t, resources.HostCPU{Logical: 64}, nil)
 	opts := shellOpts("shell", "none")
 	opts.Space = "original"
@@ -111,6 +112,9 @@ func TestImportRemapsGrantsAndCreatesIndependentIdentity(t *testing.T) {
 	boot, err := prepareImportedSpace(cmd, "duplicate", spacearchive.Manifest{Bootstrap: *source}, seed)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if boot.VM.NestedVirtualization != "off" {
+		t.Fatal("nested preference was not retained")
 	}
 	if boot.DiskID == source.DiskID || boot.DiskUUID != "" || !boot.Initializing || boot.Generation == source.Generation {
 		t.Fatal("source disk or generation reused", boot)

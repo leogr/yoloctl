@@ -176,3 +176,33 @@ func TestNativeWorkerCannotReadHostBootstrap(t *testing.T) {
 		t.Fatalf("native settings: %+v %v", loaded, err)
 	}
 }
+
+func TestBootstrapNestedPreferenceCompatibility(t *testing.T) {
+	legacy, err := New("work", "/projects", "personal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy.AccountDiskUUID = "nested-preference-fixture"
+	b, _, err := Split(legacy, 1000, 20, "generation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"", "auto", "on", "off"} {
+		b.VM.NestedVirtualization = value
+		raw, err := yaml.Marshal(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := ParseBootstrap(raw)
+		if err != nil || got.VM.NestedVirtualization != value {
+			t.Fatalf("%q: %+v %v", value, got, err)
+		}
+		if value == "" && strings.Contains(string(raw), "nested_virtualization") {
+			t.Fatal("absent preference materialized")
+		}
+	}
+	b.VM.NestedVirtualization = "sometimes"
+	if err := b.Validate(); err == nil {
+		t.Fatal("invalid preference accepted")
+	}
+}

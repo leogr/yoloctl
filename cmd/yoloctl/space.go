@@ -225,6 +225,7 @@ This is not a reservation; VMs still share host CPUs. Use --cpus 4 explicitly.
 	cmd.Flags().String("backend", vmhost.DefaultBackend(), "VM backend: lima or firecracker (Linux amd64 with KVM)")
 	cmd.Flags().String("vm-image", "", "Optional prepared Firecracker image override (otherwise built locally on first use)")
 	cmd.Flags().String("memory", "auto", "VM RAM: auto (host-aware 4–16 GiB), or an explicit size such as 8GiB")
+	cmd.Flags().String("nested-virtualization", "auto", "Nested virtualization: auto, on or off (applies at VM boot)")
 	cmd.Flags().String("cpus", "auto", "VM CPUs: auto (available host CPUs, backend maximum), or an explicit count such as 4")
 	cmd.Flags().String("disk", "auto", diskFlagHelp)
 	cmd.Flags().String("data-disk", "10GiB", dataDiskFlagHelp)
@@ -1136,18 +1137,22 @@ type spaceShowRuntimeAgentbox struct {
 }
 
 type spaceShowData struct {
-	MetadataOnly         bool
-	DefaultAccount       string
-	AccountDiskID        string
-	AccountDiskUUID      string
-	Instance             vmhost.Instance
-	ConfigPath           string
-	HostAgentLogPath     string
-	Workdirs             []spaceShowWorkdir
-	ConfiguredAgentboxes []string
-	RuntimeAgentboxes    []spaceShowRuntimeAgentbox
-	RuntimeStatus        string
-	RuntimeError         string
+	NestedPreference      string
+	NestedConfigured      string
+	NestedHostEligibility string
+	NestedReason          string
+	MetadataOnly          bool
+	DefaultAccount        string
+	AccountDiskID         string
+	AccountDiskUUID       string
+	Instance              vmhost.Instance
+	ConfigPath            string
+	HostAgentLogPath      string
+	Workdirs              []spaceShowWorkdir
+	ConfiguredAgentboxes  []string
+	RuntimeAgentboxes     []spaceShowRuntimeAgentbox
+	RuntimeStatus         string
+	RuntimeError          string
 	// SavedDisk is the bootstrap's system disk setting and DataDisk the data
 	// disk's size and any pending grow, both set by the host.
 	SavedDisk     string
@@ -1304,6 +1309,12 @@ func writeSpaceShow(w io.Writer, data *spaceShowData) error {
 	}
 	_, _ = fmt.Fprintf(w, "CPUs:       %d\n", inst.CPUs)
 	_, _ = fmt.Fprintf(w, "Memory:     %s\n", humanBytes(inst.Memory))
+	if data.NestedPreference != "" {
+		_, _ = fmt.Fprintf(w, "Nested virtualization: %s (saved); %s (configured in instance file); %s (host eligibility)\n", data.NestedPreference, data.NestedConfigured, data.NestedHostEligibility)
+		if data.NestedReason != "" {
+			_, _ = fmt.Fprintf(w, "Nested virtualization reason: %s\n", data.NestedReason)
+		}
+	}
 	_, _ = fmt.Fprintf(w, "Disk:       %s\n", diskShown(inst.Disk, data.SavedDisk))
 	if data.DataDisk != "" {
 		_, _ = fmt.Fprintf(w, "Data disk:  %s\n", data.DataDisk)
@@ -1382,6 +1393,10 @@ func writeSpaceShowJSON(w io.Writer, data *spaceShowData) error {
 		RuntimeError    string        `json:"runtime_error,omitempty"`
 	}
 	type spaceJSON struct {
+		NestedPreference      string         `json:"nested_virtualization_preference,omitempty"`
+		NestedConfigured      string         `json:"nested_virtualization_configured,omitempty"`
+		NestedHostEligibility string         `json:"nested_virtualization_host_eligibility,omitempty"`
+		NestedReason          string         `json:"nested_virtualization_reason,omitempty"`
 		DeclarationsAvailable bool           `json:"declarations_available"`
 		DefaultAccount        string         `json:"default_account,omitempty"`
 		AccountDiskID         string         `json:"account_disk_id,omitempty"`
@@ -1426,6 +1441,7 @@ func writeSpaceShowJSON(w io.Writer, data *spaceShowData) error {
 		runtimeAgentboxes = append(runtimeAgentboxes, runtimeJSON(a))
 	}
 	out := spaceJSON{
+		NestedPreference: data.NestedPreference, NestedConfigured: data.NestedConfigured, NestedHostEligibility: data.NestedHostEligibility, NestedReason: data.NestedReason,
 		DeclarationsAvailable: !data.MetadataOnly,
 		DefaultAccount:        data.DefaultAccount, AccountDiskID: data.AccountDiskID, AccountDiskUUID: data.AccountDiskUUID,
 		AccountDiskName:  layout.AccountDiskName(data.AccountDiskID),

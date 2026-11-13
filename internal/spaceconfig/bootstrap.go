@@ -13,6 +13,7 @@ import (
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/strictyaml"
+	"github.com/leogr/yoloctl/internal/vmapi"
 	"gopkg.in/yaml.v3"
 )
 
@@ -60,6 +61,7 @@ type ImportState struct {
 }
 
 type VMSettings struct {
+	NestedVirtualization string `yaml:"nested_virtualization,omitempty" json:"nested_virtualization,omitempty"`
 	// LimaHome is fixed at new macOS space admission; empty retains legacy storage.
 	LimaHome string `yaml:"lima_home,omitempty" json:"lima_home,omitempty"`
 	Backend  string `yaml:"backend,omitempty" json:"backend,omitempty"`
@@ -82,6 +84,9 @@ type Settings struct {
 }
 
 func (b *Bootstrap) Validate() error {
+	if err := vmapi.ValidateNestedPreference(b.VM.NestedVirtualization); err != nil {
+		return err
+	}
 	if b.SchemaVersion != BootstrapVersion {
 		return fmt.Errorf("unsupported bootstrap schema %d", b.SchemaVersion)
 	}

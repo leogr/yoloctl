@@ -14,8 +14,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// SetInstanceResources changes only a stopped instance's cpus and memory in
-// its lima.yaml; Lima applies them on the next start. A running, starting,
+// SetInstanceResources changes a stopped instance's cpus, memory and optional
+// nestedVirtualization value in its lima.yaml; Lima applies them on the next start. A running, starting,
 // broken or unlisted state, or a surviving VM process, refuses the change
 // before anything is written.
 func (c *Client) SetInstanceResources(ctx context.Context, name string, r vmapi.Resources) error {
@@ -67,7 +67,7 @@ func (c *Client) SetInstanceResources(ctx context.Context, name string, r vmapi.
 	return safepath.WriteFile(dir, "lima.yaml", updated, 0o600)
 }
 
-// setResourcesInYAML sets the top-level cpus and memory keys, appending any
+// setResourcesInYAML sets top-level resources and the optional nested key, appending any
 // that is missing; other keys and comments survive the yaml.v3 round trip.
 // Equal values return raw unchanged. Only one document is accepted, since
 // yaml.Unmarshal would silently ignore later ones.
@@ -91,6 +91,11 @@ func setResourcesInYAML(raw []byte, r vmapi.Resources) ([]byte, error) {
 		"cpus":   {Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.Itoa(r.CPUs)},
 		"memory": {Kind: yaml.ScalarNode, Tag: "!!str", Value: r.Memory, Style: yaml.DoubleQuotedStyle},
 	}
+	keys := []string{"cpus", "memory"}
+	if r.NestedVirtualization != nil {
+		want["nestedVirtualization"] = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: strconv.FormatBool(*r.NestedVirtualization)}
+		keys = append(keys, "nestedVirtualization")
+	}
 	changed, seen := false, map[string]bool{}
 	for i := 0; i+1 < len(doc.Content); i += 2 {
 		key, value := doc.Content[i].Value, doc.Content[i+1]
@@ -112,7 +117,7 @@ func setResourcesInYAML(raw []byte, r vmapi.Resources) ([]byte, error) {
 		value.Value, value.Tag, value.Style = node.Value, node.Tag, node.Style
 		changed = true
 	}
-	for _, key := range []string{"cpus", "memory"} {
+	for _, key := range keys {
 		if node := want[key]; !seen[key] {
 			doc.Content = append(doc.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, node)
 			changed = true

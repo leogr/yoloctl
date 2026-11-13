@@ -137,7 +137,7 @@ func TestSpaceSetImageLayerCompressionChangesOnlyThatSetting(t *testing.T) {
 
 func TestSpaceEditKeepsImageLayerCompression(t *testing.T) {
 	resourceSpaceFixture(t)
-	if err := resourceCommand(t, "space", "set", "dev", "--image-layer-compression", "gzip"); err != nil {
+	if err := resourceCommand(t, "space", "set", "dev", "--image-layer-compression", "gzip", "--nested-virtualization", "off"); err != nil {
 		t.Fatal(err)
 	}
 	cmd := &cobra.Command{}
@@ -149,7 +149,7 @@ func TestSpaceEditKeepsImageLayerCompression(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if strings.Contains(string(raw), "compression") {
+		if strings.Contains(string(raw), "compression") || strings.Contains(string(raw), "nested_virtualization") {
 			t.Fatalf("editor document exposes layer compression:\n%s", raw)
 		}
 		return os.WriteFile(path, []byte(strings.Replace(string(raw), "cpus: 4", "cpus: 6", 1)), 0o600)
@@ -158,7 +158,7 @@ func TestSpaceEditKeepsImageLayerCompression(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, err := spaceconfig.LoadBootstrap("dev")
-	if err != nil || b.VM.CPUs != 6 || b.ImageLayerCompression != "gzip" {
+	if err != nil || b.VM.CPUs != 6 || b.ImageLayerCompression != "gzip" || b.VM.NestedVirtualization != "off" {
 		t.Fatalf("space edit lost the layer compression or the CPU edit: %+v, %v", b, err)
 	}
 }

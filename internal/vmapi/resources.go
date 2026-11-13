@@ -7,11 +7,13 @@ import (
 	"github.com/leogr/yoloctl/internal/resources"
 )
 
-// Resources are a VM's boot CPU count and memory size, such as "8GiB". They
-// are concrete values: callers resolve "auto" before validating or applying.
+// Resources are a VM's concrete boot CPU count, memory size and optional
+// Lima nested-virtualization value. Callers resolve "auto" before applying.
 type Resources struct {
 	CPUs   int
 	Memory string
+	// NestedVirtualization, when present, updates Lima's instance-file key.
+	NestedVirtualization *bool
 }
 
 // ErrNotStopped refuses a resource change while a VM is running, paused,

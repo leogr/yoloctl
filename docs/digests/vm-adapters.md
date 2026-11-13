@@ -28,6 +28,26 @@ This optional adapter check leaves Firecracker,
 reads and cleanup unchanged. New-space naming and per-space Lima storage
 selection are recorded separately in [Lima storage](lima-storage.md). [41](#source-41)
 
+## Nested virtualization
+
+[FACT] The saved per-space `nested_virtualization` preference is absent/`auto`,
+`on` or `off`. Absent means auto without rewriting older bootstraps. Create and
+stopped-space set expose `--nested-virtualization`; recreate and archives retain it.
+Before boot, macOS Lima writes an explicit boolean through the existing
+stopped-instance/no-follow resource update, including newly created instances.
+The creation template and confinement policy are unchanged. [43](#source-43)
+[44](#source-44)
+
+[FACT] Auto enables only a listed `vz` instance with an `aarch64` guest and
+host facts matching Apple M3+ and macOS 15+. This is a conservative heuristic,
+not Apple's capability query. Explicit on overrides host eligibility but refuses
+other driver/guest routes, non-macOS and Firecracker. Auto/off do not manage this
+key on non-macOS or Firecracker; off writes false on macOS Lima.
+An auto boot not enabled by yoloctl emits a reasoned notice; explicit off/on
+and already-running starts are silent. Show separates saved preference, current
+instance-file configuration and current host eligibility; it does not infer Lima
+overrides, a previous boot or guest KVM. [43](#source-43) [45](#source-45)
+
 ## Lima stack upgrades
 
 [FACT] Existing Lima spaces adopt the pinned full stack through an explicit
@@ -146,3 +166,7 @@ not Firecracker/KVM behavior. The adapter boots fresh; snapshots remain experime
 40. <a id="source-40"></a> [Deployment](../../cmd/yoloctl/controller_deploy.go#L167) — `startControllerSpaceImpl` before compatibility/disk work.
 41. <a id="source-41"></a> [Adapter dispatch](../../internal/vm/vm.go#L83) — optional `ValidateInstancePaths`.
 42. <a id="source-42"></a> [Lima entry points](../../internal/lima/lima.go#L41) — `Client.Create`, `Client.Start` before subprocesses.
+
+43. <a id="source-43"></a> [Nested resolution](../../internal/vmapi/nested_virtualization.go#L1) — `ResolveNestedVirtualization`, `NestedHostFacts.Eligible`; verified with accompanying changes on fc48bca3.
+44. <a id="source-44"></a> [Lima resource update](../../internal/lima/resources.go#L1) — `SetInstanceResources`, `setResourcesInYAML` guarded explicit boolean update.
+45. <a id="source-45"></a> [Host boot and display](../../cmd/yoloctl/space_nested_virtualization.go#L1) — `applySpaceBootResources`, `nestedBootNotice`, `fillNestedSpaceShow`.

@@ -16,6 +16,13 @@ controller reply; host lifecycle steps finish after cleanup. Typed unknown
 results retain their text/status without invented retry or hold guidance.
 [27](#source-27)
 
+[FACT] Host `space create` and stopped `space set` accept
+`--nested-virtualization auto|on|off`. Existing absent preferences mean auto.
+Before VM boot, eligible macOS Lima vz/aarch64 instances enable it automatically;
+other auto routes print why yoloctl did not enable it. Explicit off silences the
+notice. `space show` distinguishes preference, current instance-file value and
+current host eligibility, without claiming guest KVM. [31](#source-31)
+
 [FACT] New space names, including import destinations, use 1–16 ASCII
 characters: an alphanumeric first, then alphanumeric, dot, underscore or hyphen.
 Existing longer names remain usable. New macOS Lima spaces use
@@ -299,3 +306,5 @@ respects `NO_COLOR` and redirection. [29](#source-29)
 29. <a id="source-29"></a> [VM-native audit contracts](../digests/audit.md).
 
 30. <a id="source-30"></a> [Chat export](../digests/chat-export.md).
+
+31. <a id="source-31"></a> [Nested virtualization](../digests/vm-adapters.md#nested-virtualization).

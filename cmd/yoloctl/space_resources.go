@@ -31,9 +31,10 @@ var (
 )
 
 type spaceResourceDocument struct {
-	CPUs   int    `yaml:"cpus"`
-	Memory string `yaml:"memory"`
-	Disk   string `yaml:"disk"`
+	NestedVirtualization string `yaml:"-"`
+	CPUs                 int    `yaml:"cpus"`
+	Memory               string `yaml:"memory"`
+	Disk                 string `yaml:"disk"`
 	// DataDisk grows the data disk; NoBackup (set only) skips the copy.
 	DataDisk string `yaml:"data_disk"`
 	NoBackup bool   `yaml:"-"`
@@ -50,7 +51,7 @@ type spaceResourceSnapshot struct {
 func newSpaceSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set [SPACE]",
-		Short: "Change a stopped space's CPU, memory, disks or image layer compression",
+		Short: "Change a stopped space's VM settings",
 		Long: `Change VM boot resources without replacing its disks or containers.
 The space must already be stopped. Start it explicitly after the change.
 --memory auto recalculates RAM from current host headroom and saves a concrete
@@ -59,7 +60,9 @@ at the next space recreate, which replaces that disk (images, containers and
 box files) anyway. --image-layer-compression chooses how newly built image
 layers are stored inside the VM: none (default; faster builds and refreshes,
 more disk) or gzip (less disk); it applies from the next space start and does
-not recompress existing layers. An omitted flag preserves its current value.
+not recompress existing layers. --nested-virtualization auto|on|off applies at
+the next VM boot; off also silences auto's unsupported-system notice.
+An omitted flag preserves its current value.
 
   yoloctl space set default --memory auto --cpus 8
   yoloctl space start default
@@ -67,8 +70,8 @@ not recompress existing layers. An omitted flag preserves its current value.
   yoloctl space recreate default`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !cmd.Flags().Changed("cpus") && !cmd.Flags().Changed("memory") && !cmd.Flags().Changed("disk") && !cmd.Flags().Changed("data-disk") && !cmd.Flags().Changed("image-layer-compression") {
-				return asUserError(errors.New("specify --cpus, --memory, --disk, --data-disk or --image-layer-compression"))
+			if !cmd.Flags().Changed("cpus") && !cmd.Flags().Changed("memory") && !cmd.Flags().Changed("disk") && !cmd.Flags().Changed("data-disk") && !cmd.Flags().Changed("image-layer-compression") && !cmd.Flags().Changed("nested-virtualization") {
+				return asUserError(errors.New("specify --cpus, --memory, --disk, --data-disk, --image-layer-compression or --nested-virtualization"))
 			}
 			compression, _ := cmd.Flags().GetString("image-layer-compression")
 			if cmd.Flags().Changed("image-layer-compression") && compression != "none" && compression != spaceenv.ImageLayerGzip {
@@ -91,6 +94,9 @@ not recompress existing layers. An omitted flag preserves its current value.
 				if cmd.Flags().Changed("data-disk") {
 					d.DataDisk, _ = cmd.Flags().GetString("data-disk")
 				}
+				if cmd.Flags().Changed("nested-virtualization") {
+					d.NestedVirtualization, _ = cmd.Flags().GetString("nested-virtualization")
+				}
 				d.NoBackup, _ = cmd.Flags().GetBool("no-backup")
 				if cmd.Flags().Changed("image-layer-compression") {
 					d.LayerCompression = ""
@@ -105,6 +111,7 @@ not recompress existing layers. An omitted flag preserves its current value.
 	cmd.Flags().String("memory", "", "VM RAM: auto (host-aware 4–16 GiB) or an explicit size such as 8GiB")
 	cmd.Flags().String("disk", "", "VM system disk size in whole GiB, such as 50GiB; only grows, applies at the next space recreate")
 	cmd.Flags().String("data-disk", "", "Data disk size in whole GiB, such as 20GiB; only grows, offline at the next space start, after a cheap copy of the disk (Firecracker)")
+	cmd.Flags().String("nested-virtualization", "", "Nested virtualization: auto, on or off; applies at the next start")
 	cmd.Flags().Bool("no-backup", false, "With --data-disk, grow without the pre-grow copy when the host filesystem cannot make one; export the space first")
 	cmd.Flags().String("image-layer-compression", "", "Newly built image layers inside the VM: none (default; faster, more disk) or gzip (less disk); applies from the next space start")
 	wrapHostLogCommand(cmd, logging.Host)
@@ -194,8 +201,11 @@ func changeSpaceResources(cmd *cobra.Command, name string, expected *spaceResour
 	if err := settleDataDiskGrow(current.boot, cmd.OutOrStdout()); err != nil {
 		return err
 	}
-	doc := spaceResourceDocument{CPUs: current.boot.VM.CPUs, Memory: current.boot.VM.Memory, Disk: current.boot.VM.Disk, DataDisk: dataDiskSetting(current.boot), LayerCompression: current.boot.ImageLayerCompression}
+	doc := spaceResourceDocument{CPUs: current.boot.VM.CPUs, Memory: current.boot.VM.Memory, Disk: current.boot.VM.Disk, DataDisk: dataDiskSetting(current.boot), LayerCompression: current.boot.ImageLayerCompression, NestedVirtualization: current.boot.VM.NestedVirtualization}
 	edit(&doc)
+	if err := vmapi.ValidateNestedPreference(doc.NestedVirtualization); err != nil {
+		return asUserError(err)
+	}
 	disk, err := growSpaceDisk(current.boot, doc.Disk, cmd.ErrOrStderr())
 	if err != nil {
 		return err
@@ -210,8 +220,9 @@ func changeSpaceResources(cmd *cobra.Command, name string, expected *spaceResour
 	}
 	diskChanged := disk != current.boot.VM.Disk
 	compressionChanged := doc.LayerCompression != current.boot.ImageLayerCompression
-	if current.boot.VM.CPUs != r.CPUs || current.boot.VM.Memory != r.Memory || diskChanged || compressionChanged {
+	if current.boot.VM.CPUs != r.CPUs || current.boot.VM.Memory != r.Memory || diskChanged || compressionChanged || doc.NestedVirtualization != current.boot.VM.NestedVirtualization {
 		current.boot.VM.CPUs, current.boot.VM.Memory, current.boot.VM.Disk = r.CPUs, r.Memory, disk
+		current.boot.VM.NestedVirtualization = doc.NestedVirtualization
 		current.boot.ImageLayerCompression = doc.LayerCompression
 		// Desired settings are durable before the adapter is updated. Explicit
 		// start reapplies them before boot after an interrupted/failed update.
@@ -291,11 +302,11 @@ func editSpaceResources(cmd *cobra.Command, name string, editor func(context.Con
 		retain = true
 		return fmt.Errorf("edits kept at %s: %w", path, err)
 	}
-	// The editor document has only resource fields; keep the saved compression.
+	// The editor document has only resource fields; keep settings not exposed there.
 	if err := changeSpaceResources(cmd, name, &before, func(d *spaceResourceDocument) {
-		compression := d.LayerCompression
+		compression, nested := d.LayerCompression, d.NestedVirtualization
 		*d = doc
-		d.LayerCompression = compression
+		d.LayerCompression, d.NestedVirtualization = compression, nested
 	}); err != nil {
 		retain = true
 		return fmt.Errorf("edits kept at %s: %w", path, err)

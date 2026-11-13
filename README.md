@@ -344,6 +344,10 @@ Some infrastructure work needs more than an ordinary sandbox. An explicit
 itself, including running an inner space through nested virtualization when
 the host and outer VM expose working KVM support. This is an advanced workflow;
 `--privileged` alone does not make nested virtualization available everywhere.
+Spaces default to `--nested-virtualization auto`: eligible Apple M3+ Macs running
+macOS 15+ enable it for Lima vz/aarch64 VMs at boot. Use `space set SPACE
+--nested-virtualization off` to disable it; `space show` reports the saved and
+configured values.
 
 **A privileged box runs without OpenShell confinement and has root authority
 over the entire space VM**: its boxes, credentials, native state, controller

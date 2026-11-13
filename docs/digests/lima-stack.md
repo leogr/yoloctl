@@ -84,6 +84,12 @@ or version mismatch fails before build/VM work with actionable version details.
 Read-only observation does not select/download Go. [18](#source-18)
 [20](#source-20) [21](#source-21)
 
+[FACT] Nested virtualization is an instance-file boot setting, independent of
+the retained stack provisioning. The guarded resource update also sets its explicit
+boolean on macOS before starting new or stopped instances; it does not rewrite
+the creation template or install guest packages. The preference and eligibility
+contract is recorded in the adapter digest. [22](#source-22)
+
 ## Sources
 
 1. <a id="source-1"></a> [Template](../../assets/lima/yoloctl.yaml.tmpl#L31) — system modes, architecture archives.
@@ -107,3 +113,5 @@ Read-only observation does not select/download Go. [18](#source-18)
 19. <a id="source-19"></a> [Archives](space-archives.md) — explicit export boundary.
 20. <a id="source-20"></a> [Runner tests](../../scripts/test_lima_stack.py#L1) — hermetic routing/failure checks; `CommandGroupTests` at L518 covers denied null signals, live/zombie groups, invalid inventories and preserved timeout settlement.
 21. <a id="source-21"></a> [Go toolchains](https://go.dev/doc/toolchain#download) — exact toolchain names, module selection, private module-cache downloads and checksum verification.
+
+22. <a id="source-22"></a> [Boot resource application](../../cmd/yoloctl/space_nested_virtualization.go#L1) — `applySpaceBootResources`, verified with accompanying changes on fc48bca3.
