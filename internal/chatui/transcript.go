@@ -137,7 +137,13 @@ func (m *Model) body(msg *Message, width int) cachedBody {
 	// spaces: only this pane's own preview rows draw image cells. Copy,
 	// Quote and the source copy keep the original text.
 	text = chatimage.NeutralizeText(text)
-	cacheText := text + "\x00" + strings.Join(chips, "\x00")
+	// The chip's button names the message's server ID, which an own message
+	// gains only when the room echoes it: the body is parsed again then.
+	previewID := ""
+	if len(tokens) > 0 && previewArtifact(msg) != nil {
+		previewID = msg.ID
+	}
+	cacheText := text + "\x00" + strings.Join(chips, "\x00") + "\x00" + previewID
 	body, ok := m.bodyCache[key]
 	if !ok || body.stale || body.text != cacheText || body.source != m.source || body.me != m.self || len(body.fences) > 0 && body.drawWidth != width {
 		next := cachedBody{text: cacheText, source: m.source, me: m.self, width: -1}
@@ -151,10 +157,6 @@ func (m *Model) body(msg *Message, width int) cachedBody {
 		}
 		base := parse(text)
 		if len(tokens) > 0 {
-			previewID := ""
-			if previewArtifact(msg) != nil {
-				previewID = msg.ID
-			}
 			placed, placedOK := placeChips(base, tokens, chips, previewID)
 			switch {
 			case placedOK && len(placed) == len(base):

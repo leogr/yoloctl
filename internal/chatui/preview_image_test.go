@@ -1,8 +1,12 @@
 package chatui
 
 import (
+	"context"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
@@ -340,5 +344,56 @@ func TestATableChipShowsItsFileNameLiterally(t *testing.T) {
 				t.Fatalf("a table chip carries an action: %q", got)
 			}
 		})
+	}
+}
+
+// labelCell is the screen cell where label starts in key's rows.
+func labelCell(t *testing.T, m *Model, key, label string) (int, int) {
+	t.Helper()
+	m.View()
+	for y := m.layout.bodyTop; y < m.layout.bodyTop+m.layout.bodyHeight; y++ {
+		row, ok := m.rowAt(y)
+		if !ok || row.key != key {
+			continue
+		}
+		var text strings.Builder
+		for _, r := range row.runs {
+			text.WriteString(r.Text)
+		}
+		if at := strings.Index(text.String(), label); at >= 0 {
+			return m.widthMethod.StringWidth(text.String()[:at]), y
+		}
+	}
+	t.Fatalf("no %q in %s", label, key)
+	return 0, 0
+}
+
+// The chip of an image the user sent is a button once the room echoes the
+// message, as the footer action is, clicked with the SGR mouse reports a
+// terminal writes (hover, press, a held motion in the same cell, release),
+// decoded by a running program.
+func TestOwnImageChipClicksThroughTerminalInput(t *testing.T) {
+	m, h := previewModel(t)
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 60, MaxRows: 12})
+	own := attachmentMessage("", "[Image #1] wasn't it merged?", "paste-1.png")
+	own.ClientID, own.Account, own.Nick, own.Delivery = "c1", "", m.opts.Nick, Pending
+	m.append(own)
+	m.View() // the chip is drawn before the echo: no server ID, no button yet
+	echo := own
+	echo.ID, echo.Account = "99eb4b77-cfbd-4b90-aec6-538014c4108d", "mhuman"
+	m.Update(IncomingMsg{Message: echo})
+	x, y := labelCell(t, m, "client:c1", "[file paste-1.png")
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	m.opts.PreviewImage = func(r PreviewRequest) tea.Cmd { h.requests = append(h.requests, r); return tea.Quit }
+	at := fmt.Sprintf("%d;%d", x+2, y+1) // one-based, inside the chip
+	input := "\x1b[<35;" + at + "M" + "\x1b[<0;" + at + "M" + "\x1b[<32;" + at + "M" + "\x1b[<0;" + at + "m"
+	p := tea.NewProgram(m, tea.WithContext(ctx), tea.WithOutput(io.Discard), tea.WithInput(strings.NewReader(input)),
+		tea.WithWindowSize(100, 30), tea.WithColorProfile(colorprofile.TrueColor), tea.WithEnvironment([]string{"TERM=xterm-256color", "COLORTERM=truecolor"}), tea.WithoutSignals())
+	if _, err := p.Run(); err != nil {
+		t.Fatalf("the click never asked for the preview: %v", err)
+	}
+	if len(h.requests) != 1 || h.requests[0].MessageID != echo.ID {
+		t.Fatalf("requests %+v", h.requests)
 	}
 }
