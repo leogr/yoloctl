@@ -250,3 +250,20 @@ func TestMouseBusyConsole(t *testing.T) {
 		})
 	}
 }
+
+// A click on a pane whose application tracks all motion with SGR reports
+// (the chat pane) reaches it as the exact reports chatui's regression
+// TestOwnImageChipClicksThroughTerminalInput feeds a running chat program:
+// hover, press, a held motion in the same cell, release, at pane-relative
+// one-based cells.
+func TestAnyMotionPaneReceivesAClickAsSGRReports(t *testing.T) {
+	m := newTestModel(t, 40, 8)
+	_, capture := mouseCapture(t, m, "\x1b[?1003h\x1b[?1006h")
+	_, _ = m.Update(tea.MouseMotionMsg{X: 6, Y: 4})
+	_, _ = m.Update(click(6, 4))
+	_, _ = m.Update(tea.MouseMotionMsg{Button: tea.MouseLeft, X: 6, Y: 4})
+	_, _ = m.Update(releaseAt(6, 4))
+	if got, want := capture(), "\x1b[<35;7;3M\x1b[<0;7;3M\x1b[<32;7;3M\x1b[<0;7;3m"; got != want {
+		t.Fatalf("click = %q, want %q", got, want)
+	}
+}
