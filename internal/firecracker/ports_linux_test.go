@@ -319,6 +319,14 @@ func TestForwardRoundTripAndCancellation(t *testing.T) {
 			if _, err = io.ReadFull(client, response); err != nil || string(response) != "pong" {
 				t.Fatalf("response: %q %v", response, err)
 			}
+			if mode == "tcp-stream" {
+				// Receiving the payload does not prove the guest sent its EOF
+				// frame. Closing the binding first can break that pending write.
+				var tail [1]byte
+				if n, err := client.Read(tail[:]); n != 0 || err != io.EOF {
+					t.Fatalf("framed response EOF: %d bytes, %v", n, err)
+				}
+			}
 			_ = binding.Close()
 			if err = <-done; err != nil {
 				t.Fatal(err)

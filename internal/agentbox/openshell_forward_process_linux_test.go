@@ -121,6 +121,9 @@ func TestForwardProcessFixtureChild(t *testing.T) {
 	if os.Getenv("YOLOCTL_FORWARD_PROCESS_TEST_CHILD") != "1" {
 		t.Skip("ordinary local subprocess fixture only")
 	}
+	if _, err := io.WriteString(os.Stdout, "ready\n"); err != nil {
+		t.Fatal(err)
+	}
 	_, _ = io.Copy(io.Discard, os.Stdin)
 }
 
@@ -138,6 +141,10 @@ func TestForwardProcessPinnedDescriptorRejectsExitedChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -148,6 +155,12 @@ func TestForwardProcessPinnedDescriptorRejectsExitedChild(t *testing.T) {
 			_ = cmd.Wait()
 		}
 	}()
+	// Observe the fixture itself running with its final argv/executable before
+	// pinning procfs, rather than relying on the parent returning from Start.
+	ready := make([]byte, len("ready\n"))
+	if _, err := io.ReadFull(stdout, ready); err != nil || string(ready) != "ready\n" {
+		t.Fatalf("child readiness: %q %v", ready, err)
+	}
 	raw, err := os.ReadFile("/proc/" + strconv.Itoa(cmd.Process.Pid) + "/stat")
 	if err != nil {
 		t.Fatal(err)
