@@ -145,3 +145,52 @@ func rowText(row BodyRow) string {
 	}
 	return s.String()
 }
+
+// Contract4's concrete header edge: whole-word wrapping at50, one visibly
+// truncated line at30. Selecting a cut label through its ellipsis reaches
+// the original cell end, so both views copy the complete header.
+func TestProgressHeaderThirtyFiftyAndWholeCopy(t *testing.T) {
+	source, err := os.ReadFile("testdata/table-shapes/progress.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, wm := range []ansi.Method{ansi.WcWidth, ansi.GraphemeWidth} {
+		p := documentOptions()
+		p.Method = wm
+		doc := Parse(string(source), p)
+		o := LayoutOptions{Method: wm, Theme: p.Theme, CompactTables: true, UnlimitedRows: true}
+		for _, width := range []int{30, 50} {
+			rows := Layout(doc, width, o).Rows
+			want := 1
+			if width == 50 {
+				want = 2
+			}
+			if got := countLine(rows, 0); got != want {
+				t.Fatalf("method%d width%d header rows%d want%d", wm, width, got, want)
+			}
+			if width == 50 {
+				continue
+			}
+			header := rows[0]
+			x := 0
+			copied := 0
+			for _, run := range header.Runs {
+				if run.Tail > 0 {
+					_, end := HitRun(wm, header.Runs, x, header.End)
+					for _, cell := range doc.Lines[0].Cells {
+						if cell[1] == run.Tail {
+							if got := doc.Lines[0].CopyText(cell[0], end); got != doc.Lines[0].Text[cell[0]:cell[1]] {
+								t.Fatalf("cut header copy=%q", got)
+							}
+							copied++
+						}
+					}
+				}
+				x += wm.StringWidth(run.Text)
+			}
+			if copied != 5 {
+				t.Fatalf("method%d cut/copy header count%d", wm, copied)
+			}
+		}
+	}
+}
