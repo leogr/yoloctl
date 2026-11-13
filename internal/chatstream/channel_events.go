@@ -104,7 +104,7 @@ func (d *channelDriver) action(action Action) error {
 		return refuse("unsupported managed channel action")
 	}
 	if d.setupPending() {
-		return refuse("channel bootstrap/identity setup is pending; action was not sent")
+		return refuseCode(SetupPendingCode, "channel bootstrap/identity setup is pending; action was not sent")
 	}
 	raw, err := json.Marshal(request)
 	if err != nil {

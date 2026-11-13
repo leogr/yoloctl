@@ -23,40 +23,71 @@ func tempPattern(path string) string {
 // Its name (".<base>.<random>") never ends in the target's extension, so
 // directory listings that select manifests by suffix ignore a leftover.
 func Write(path string, data []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), tempPattern(path))
+	tmpPath, err := prepare(path, data, mode)
 	if err != nil {
 		return err
 	}
-	tmpPath := tmp.Name()
-	renamed := false
-	defer func() {
-		if !renamed {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
 	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(tmpPath)
 		return err
 	}
-	renamed = true
 	if err := SyncDir(filepath.Dir(path)); err != nil {
 		return &CommitError{Err: err}
 	}
 	return nil
+}
+
+// Create is Write for a path that must not exist yet: the prepared file is
+// published with a hard link, which fails with an error matching
+// os.ErrExist if anything exists at path, even if it appeared meanwhile.
+// Nothing at path is ever replaced. The filesystem must support hard links;
+// any other link failure is returned as is.
+func Create(path string, data []byte, mode os.FileMode) error {
+	tmpPath, err := prepare(path, data, mode)
+	if err != nil {
+		return err
+	}
+	linkErr := os.Link(tmpPath, path)
+	removeErr := os.Remove(tmpPath)
+	if linkErr != nil {
+		return linkErr
+	}
+	if removeErr != nil {
+		return removeErr
+	}
+	if err := SyncDir(filepath.Dir(path)); err != nil {
+		return &CommitError{Err: err}
+	}
+	return nil
+}
+
+// prepare writes data at mode to a flushed sibling temporary file of path
+// and returns its name; it removes the file on failure.
+func prepare(path string, data []byte, mode os.FileMode) (string, error) {
+	tmp, err := os.CreateTemp(filepath.Dir(path), tempPattern(path))
+	if err != nil {
+		return "", err
+	}
+	tmpPath := tmp.Name()
+	fail := func(err error) (string, error) {
+		_ = tmp.Close()
+		_ = os.Remove(tmpPath)
+		return "", err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		return fail(err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", err
+	}
+	return tmpPath, nil
 }
 
 // CommitError means replacement succeeded but its directory could not be

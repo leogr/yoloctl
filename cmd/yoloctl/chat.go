@@ -86,7 +86,7 @@ func newChatCmd() *cobra.Command {
 		}
 		return nil
 	}
-	cmd.AddCommand(ensure, status, enroll, revoke, nickname, newChatChannelCmd())
+	cmd.AddCommand(ensure, status, enroll, revoke, nickname, newChatChannelCmd(), newChatExportCmd())
 	addChatParticipationCommands(cmd)
 	return cmd
 }

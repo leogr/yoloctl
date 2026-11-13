@@ -177,6 +177,13 @@ before RPC. [9](#source-9)
 The server must support channel-addition reload; these commands never restart
 agents or auto-join clients. An interrupted result needs inspection. [9](#source-9)
 
+[FACT] Host-only `chat export` writes the history the chat server still keeps,
+one file per channel (`--format text|jsonl`, `--channel`, `--since`/`--until`,
+`-o`, `--force`), over the human's own stream: it joins only channels it needs
+and parts them again, pages each channel to its start and writes a channel only
+once complete. An open chat view must be closed or taken over (`--take-over`).
+[30](#source-30)
+
 [DERIVED] Review validation, space selection, controller authorization, resolver
 depth, writers and completion together. A correct host-only RunE change is
 incomplete if helper dispatch, unknown outcomes or server validation differ.
@@ -287,3 +294,5 @@ respects `NO_COLOR` and redirection. [29](#source-29)
 28. <a id="source-28"></a> [Background logs](../digests/background-logs.md).
 
 29. <a id="source-29"></a> [VM-native audit contracts](../digests/audit.md).
+
+30. <a id="source-30"></a> [Chat export](../digests/chat-export.md).

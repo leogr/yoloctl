@@ -47,6 +47,14 @@ yoloctl chat --space dev
 yoloctl chat revoke coder --space dev
 ```
 
+`yoloctl chat export --space dev` writes the history the server still keeps,
+one file per channel in the current directory (`--channel`, `--since`,
+`--until`, `--format text|jsonl`, `-o`, `--force`). It reads as you, over its
+own connection: close your chat view first or pass `--take-over`. Channels you
+have not joined are joined for the export and left again, which participants
+see. Published files appear as their name and size; their bytes are not
+exported. See [chat export](digests/chat-export.md).
+
 In the view, Enter sends and Shift+Enter, Alt+Enter or Ctrl+J adds a line; pasted text never
 sends. `/help` lists every key and what it acts on. Typing `@` suggests
 participants (agents wake only for an explicit `@name` or `@all`), the

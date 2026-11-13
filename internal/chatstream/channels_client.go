@@ -252,12 +252,13 @@ func (d *channelDriver) endPending(err error) {
 	if d.control != nil {
 		d.finishControl("uncertain", err)
 	}
-	if d.history != nil && !d.history.latest {
-		d.emit(Event{Kind: "history-page", Channel: d.history.Channel, ID: d.history.ID, Count: -1, Err: err})
-	}
-	for _, queued := range d.queue {
-		if !queued.latest {
-			d.emit(Event{Kind: "history-page", Channel: queued.Channel, ID: queued.ID, Count: -1, Err: err})
+	for _, request := range append([]*channelHistory{d.history}, d.queue...) {
+		switch {
+		case request == nil:
+		case request.latest:
+			d.emitLatest(request.Channel, request.ID, err)
+		default:
+			d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: err})
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package atomicfile
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -120,5 +121,27 @@ func TestTemporaryNameDoesNotMatchTargetSuffix(t *testing.T) {
 	defer func() { _ = tmp.Close() }()
 	if filepath.Ext(tmp.Name()) == ".yaml" {
 		t.Errorf("temporary name %q ends in .yaml", filepath.Base(tmp.Name()))
+	}
+}
+
+func TestCreatePublishesOnlyANewFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "export.txt")
+	if err := Create(path, []byte("first"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("created file %v %v", info, err)
+	}
+	if err := Create(path, []byte("second"), 0o600); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("existing file: %v, want os.ErrExist", err)
+	}
+	if data, _ := os.ReadFile(path); string(data) != "first" {
+		t.Fatalf("existing file replaced: %q", data)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("temporary files left: %v %v", entries, err)
 	}
 }

@@ -16,15 +16,26 @@ type channelHistory struct {
 	until  time.Time
 }
 
+// emitLatest reports how a channel's initial LATEST page ended: Err is nil
+// once its batch closed. The view ignores it; an export waits for it.
+func (d *channelDriver) emitLatest(channel, id string, err error) {
+	d.emit(Event{Kind: "history-latest", Channel: channel, ID: id, Err: err})
+}
+
 func (d *channelDriver) requestHistory(request HistoryRequest, latest bool) {
 	channel := d.channels[request.Channel]
 	refused := func() {
-		if !latest {
-			d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: errors.New("history request was not sent: membership, continuity or another page is pending")})
+		err := errors.New("history request was not sent: membership, continuity or another page is pending")
+		if latest {
+			d.emitLatest(request.Channel, request.ID, err)
+			return
 		}
+		d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: err})
 	}
 	if channel != nil && channel.deleted {
-		if !latest {
+		if latest {
+			d.emitLatest(request.Channel, request.ID, errChannelDeleted)
+		} else {
 			d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: errChannelDeleted})
 		}
 		return
@@ -113,7 +124,16 @@ func (d *channelDriver) finishHistory(success bool, err error) {
 		return
 	}
 	request := d.history
-	if !success && !request.latest {
+	switch {
+	case request.latest && success:
+		d.emitLatest(request.Channel, request.ID, nil)
+	case request.latest:
+		latestErr := err
+		if latestErr == nil {
+			latestErr = errors.New("history page ended without its batch; continuity is unknown")
+		}
+		d.emitLatest(request.Channel, request.ID, latestErr)
+	case !success:
 		d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: err})
 	}
 	if err != nil {
@@ -128,7 +148,9 @@ func (d *channelDriver) finishHistory(success bool, err error) {
 func (d *channelDriver) historyGap(err error) {
 	d.finishHistory(false, nil)
 	for _, request := range d.queue {
-		if !request.latest {
+		if request.latest {
+			d.emitLatest(request.Channel, request.ID, err)
+		} else {
 			d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: err})
 		}
 	}
@@ -152,9 +174,12 @@ func (d *channelDriver) cancelChannelHistory(channel string) {
 	}
 	kept := d.queue[:0]
 	for _, request := range d.queue {
-		if request.Channel != channel {
+		switch {
+		case request.Channel != channel:
 			kept = append(kept, request)
-		} else if !request.latest {
+		case request.latest:
+			d.emitLatest(channel, request.ID, errors.New("channel left before its history was read"))
+		default:
 			d.emit(Event{Kind: "history-page", Channel: channel, ID: request.ID, Count: -1})
 		}
 	}
