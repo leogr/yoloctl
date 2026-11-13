@@ -1,6 +1,7 @@
 package followview
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +24,7 @@ func TestSixTableWidthCases(t *testing.T) {
 		}
 		prior, priorClosed := 0, 10000
 		for width := 8; width <= 180; width++ {
-			view := renderFile(raw, false, false, Markdown, width, ansi.GraphemeWidth, spaceview.NewTheme(true, nil, nil))
+			view := renderFile(context.Background(), raw, false, false, Markdown, width, ansi.GraphemeWidth, spaceview.NewTheme(true, nil, nil), drawing{})
 			rows := view.rows
 			level := 2
 			closed := 0
