@@ -34,6 +34,38 @@ packaging is covered by `smoke-image-ensure`, not this quick check. Initial VM i
 preparation can take longer on a cold cache. Failed fixtures stay at their
 original paths with an explicit cleanup command; do not move them.
 
+## Mermaid drawings (human-guided)
+
+From a candidate checkout on the host, after `make build`, run in the terminal
+under test (Ghostty, Kitty or WezTerm draw the diamond glyphs; others may not):
+
+```sh
+bash scripts/smoke/mermaid-live.sh
+```
+
+It always creates a new owned fixture root (inherited `SMOKE_ROOT` and
+`SMOKE_SPACE` are ignored) with space `mermaid-live`, a managed chat room and an
+agentless enrolled participant, which posts six messages with mermaid fences to
+`#space` through the real `airc send` path:
+- a decision flowchart, subgraphs, a fan-out and a sequence diagram;
+- a class diagram and a misplaced sequence note, which fall back to source.
+
+The operator then answers finite rows in the TUI chat:
+- each drawing;
+- the two fallbacks;
+- the narrow-pane fallback and recovery;
+- drag copy versus the copy control;
+- Quote of a whole drawing;
+- the source toggle.
+
+Further rows cover standalone `yoloctl chat`, `yoloctl follow --host` on a Markdown
+file with the same diagrams (draw and resize), and `markdown.mermaid: false` (code
+cards only).
+
+The report beside the fixture root records host, terminal, yoloctl bundle and checkout, every row, the
+cleanup outcome and a disposition with the same exit codes as the chat image
+check below (0 complete, 1 failed, 3 incomplete).
+
 ## Chat image previews (human-guided)
 
 From a candidate checkout on the host, after `make build`, run in the terminal
