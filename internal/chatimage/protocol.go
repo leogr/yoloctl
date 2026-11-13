@@ -60,7 +60,8 @@ type Frame struct {
 	Generation uint64 `json:"generation,omitempty"`
 	Request    uint64 `json:"request,omitempty"`
 
-	// capability
+	// capability: the largest preview area; preview: MaxCols is the width
+	// the pane can show, which the preview fills.
 	Supported bool `json:"supported,omitempty"`
 	MaxCols   int  `json:"max_cols,omitempty"`
 	MaxRows   int  `json:"max_rows,omitempty"`
@@ -105,9 +106,12 @@ func (f Frame) Validate() error {
 			return errors.New("invalid image capability")
 		}
 	case OpPreview:
-		allowed = set("Generation", "Request", "RoomID", "DiskID", "HumanID", "ChannelID", "Channel", "MessageID", "Artifact", "Bytes", "SHA256", "Chip")
+		allowed = set("Generation", "Request", "RoomID", "DiskID", "HumanID", "ChannelID", "Channel", "MessageID", "Artifact", "Bytes", "SHA256", "Chip", "MaxCols")
 		if f.Generation == 0 || f.Request == 0 {
 			return errors.New("image preview needs a generation and a request")
+		}
+		if f.MaxCols < 1 || f.MaxCols > MaxPreviewCells {
+			return errors.New("image preview needs a width of 1 to 256 cells")
 		}
 		for _, id := range []string{f.RoomID, f.DiskID, f.HumanID, f.ChannelID} {
 			if layout.ValidateIdentity(id) != nil {

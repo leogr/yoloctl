@@ -300,11 +300,11 @@ their launch environment.
 the one chat preview registered for that pane's session; any other placeholder
 in any pane or the palette console is shown as a space. A native chat pane's
 explicit copy turns preview cells into their attachment chip. On a host
-terminal that passes the image probe, a chat message's single image attachment
-offers Show image, and a click on its file chip toggles the preview, while the
-pane draws truecolor: the TUI reads it through the
-controller, scales it and places it under that message; elsewhere the chip
-stays. A reduced colour profile, disconnect or lost channel membership
+terminal that passes the image probe, each image of a chat message offers a
+preview: a click on its file chip toggles it, and Show image steps through
+them, while the pane draws truecolor. The TUI reads it through the
+controller and scales it to the message text's width (aspect kept); the pane
+places it under the line holding its chip. Elsewhere the chip stays. A reduced colour profile, disconnect or lost channel membership
 collapses it. The TUI keeps up to 8 prepared previews (16 MiB) in memory and
 re-shows one without another read; a chat pane's end or a capability change
 empties that cache. Standalone `yoloctl chat` outside a TUI is its own image

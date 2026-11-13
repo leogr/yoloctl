@@ -228,7 +228,7 @@ func TestClickingTheFileChipTogglesThePreview(t *testing.T) {
 	if got[previewMsgID] != "[file cat.png · 7 B]" {
 		t.Fatalf("chip actions %q", got)
 	}
-	runCmd(m.activate(action{Kind: actPreview, Value: previewMsgID}))
+	runCmd(m.activate(chipAction(previewMsgID, 0)))
 	if len(h.requests) != 1 || h.requests[0].MessageID != previewMsgID {
 		t.Fatalf("chip click requests %v", h.requests)
 	}
@@ -236,7 +236,7 @@ func TestClickingTheFileChipTogglesThePreview(t *testing.T) {
 	if chipActions(m)[previewMsgID] == "" {
 		t.Fatal("the chip of a shown preview is not clickable")
 	}
-	runCmd(m.activate(action{Kind: actPreview, Value: previewMsgID}))
+	runCmd(m.activate(chipAction(previewMsgID, 0)))
 	if len(h.released) != 1 || h.released[0] != "tok" || strings.Contains(m.View().Content, "\U0010EEEE") {
 		t.Fatalf("second chip click: released %v", h.released)
 	}
@@ -395,5 +395,162 @@ func TestOwnImageChipClicksThroughTerminalInput(t *testing.T) {
 	}
 	if len(h.requests) != 1 || h.requests[0].MessageID != echo.ID {
 		t.Fatalf("requests %+v", h.requests)
+	}
+}
+
+const twoImagesID = "aaeb4b77-cfbd-4b90-aec6-538014c4108d"
+
+// twoImages is a message with two published images, each at its marker on
+// its own line, with text between and after them.
+func twoImages() Message {
+	text := "first [Image #1]\nbetween them\nsecond [Image #2]\nlast line"
+	return Message{ID: twoImagesID, Channel: "#space", Account: "mother", Nick: "other", Text: text,
+		Attachments: []AttachmentRef{
+			{ArtifactRef: ArtifactRef{ID: "00000000-0000-4000-8000-000000000001", Name: "one.png", Bytes: 2048}, At: strings.Index(text, "[Image #1]")},
+			{ArtifactRef: ArtifactRef{ID: "00000000-0000-4000-8000-000000000002", Name: "two.png", Bytes: 4096}, At: strings.Index(text, "[Image #2]")},
+		}}
+}
+
+// shownRows are the transcript rows of key as drawn, one string per row:
+// "image" for a preview row, otherwise the row's text.
+func shownRows(m *Model, key string) []string {
+	m.View()
+	var out []string
+	for _, row := range m.lastTranscript {
+		if row.key != key || row.kind != rowBody && row.line < linePreview {
+			continue
+		}
+		if row.line >= linePreview && row.line < lineSpacer {
+			out = append(out, "image")
+			continue
+		}
+		var text strings.Builder
+		for _, r := range row.runs {
+			text.WriteString(r.Text)
+		}
+		out = append(out, strings.TrimSpace(text.String()))
+	}
+	return out
+}
+
+// Each chip of a message with several images is its own button: it shows
+// that image right under the line holding the chip, at the width of the
+// message text, and a click on it again hides it.
+func TestEachChipShowsItsImageUnderItsLine(t *testing.T) {
+	m, h := previewModel(t)
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 256, MaxRows: 256})
+	m.Update(IncomingMsg{Message: twoImages()})
+	key := "server:" + twoImagesID
+	buttons := map[string]string{}
+	for _, row := range m.transcript(100) {
+		for _, r := range row.runs {
+			if row.key == key && r.Act.Kind == actPreview {
+				buttons[r.Act.Extra] += r.Text
+			}
+		}
+	}
+	if buttons["0"] != "[file one.png · 2048 B]" || buttons["1"] != "[file two.png · 4096 B]" {
+		t.Fatalf("chip buttons %q", buttons)
+	}
+	runCmd(m.activate(chipAction(twoImagesID, 1)))
+	if len(h.requests) != 1 || h.requests[0].Artifact.Name != "two.png" || h.requests[0].Cols != m.textWidth() {
+		t.Fatalf("requests %+v (text width %d)", h.requests, m.textWidth())
+	}
+	m.Update(PreviewReadyMsg{Request: h.requests[0].Request, Generation: 1, Token: "t2", ID: 7, Cols: 3, Rows: 2})
+	want := []string{"first [file one.png · 2048 B]", "between them", "second [file two.png · 4096 B]", "image", "image", "last line"}
+	if got := shownRows(m, key); strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("rows %q, want %q", got, want)
+	}
+	// The other chip replaces it, under its own line.
+	runCmd(m.activate(chipAction(twoImagesID, 0)))
+	if len(h.released) != 1 || h.released[0] != "t2" || len(h.requests) != 2 || h.requests[1].Artifact.Name != "one.png" {
+		t.Fatalf("released %v requests %+v", h.released, h.requests)
+	}
+	m.Update(PreviewReadyMsg{Request: h.requests[1].Request, Generation: 1, Token: "t1", ID: 8, Cols: 3, Rows: 1})
+	want = []string{"first [file one.png · 2048 B]", "image", "between them", "second [file two.png · 4096 B]", "last line"}
+	if got := shownRows(m, key); strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("rows %q, want %q", got, want)
+	}
+	// A press on the image snaps a selection to the end of its chip's line.
+	for i, row := range m.lastTranscript {
+		if row.key == key && row.line == linePreview {
+			p, ok := m.pointAt(bodyIndent+1, i-m.scroll+m.layout.bodyTop)
+			if lines := m.body(&m.messages[m.indexOf(key)], m.lastTextWidth).lines; !ok || p.line != 0 || p.lo != len(lines[0].Text) {
+				t.Fatalf("point on the image %+v", p)
+			}
+		}
+	}
+	runCmd(m.activate(chipAction(twoImagesID, 0)))
+	if len(h.released) != 2 || h.released[1] != "t1" || m.preview != nil {
+		t.Fatalf("second click: released %v preview %+v", h.released, m.preview)
+	}
+}
+
+// The footer action steps through a message's images and then hides them,
+// naming which one it shows next.
+func TestShowImageStepsThroughSeveralImages(t *testing.T) {
+	m, h := previewModel(t)
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 256, MaxRows: 256})
+	m.Update(IncomingMsg{Message: twoImages()})
+	m.selected = m.indexOf("server:" + twoImagesID)
+	label := func() string {
+		for _, a := range previewActions(m) {
+			if strings.HasPrefix(a, "image:") {
+				return strings.TrimPrefix(a, "image:")
+			}
+		}
+		return ""
+	}
+	for step, want := range []string{"Show image 1 of 2", "Show image 2 of 2", "Hide image"} {
+		if got := label(); got != want {
+			t.Fatalf("step %d: %q, want %q", step, got, want)
+		}
+		runCmd(m.runAction("image"))
+		if step < 2 {
+			r := h.requests[len(h.requests)-1]
+			m.Update(PreviewReadyMsg{Request: r.Request, Generation: 1, Token: fmt.Sprintf("t%d", step), ID: 9, Cols: 2, Rows: 1})
+		}
+	}
+	if len(h.requests) != 2 || h.requests[0].Artifact.Name != "one.png" || h.requests[1].Artifact.Name != "two.png" ||
+		strings.Join(h.released, ",") != "t0,t1" || m.preview != nil || label() != "Show image 1 of 2" {
+		t.Fatalf("requests %+v released %v", h.requests, h.released)
+	}
+	// Once no other image can be shown, the action hides the shown one.
+	runCmd(m.runAction("image"))
+	m.Update(PreviewReadyMsg{Request: h.requests[2].Request, Generation: 1, Token: "t2", ID: 9, Cols: 2, Rows: 1})
+	m.membership = "left"
+	if got := label(); got != "Hide image" {
+		t.Fatalf("without sending access: %q", got)
+	}
+}
+
+// A shown preview keeps filling the message width: a new width asks again
+// and frees the old image. A request still pending is not repeated; its
+// answer is checked when it arrives.
+func TestPreviewFollowsTheTextWidth(t *testing.T) {
+	m, h := previewModel(t)
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 256, MaxRows: 256})
+	m.runAction("image")
+	m.Update(PreviewReadyMsg{Request: h.requests[0].Request, Generation: 1, Token: "wide", ID: 3, Cols: 2, Rows: 1})
+	if h.requests[0].Cols != m.textWidth() {
+		t.Fatalf("asked for %d cells of %d", h.requests[0].Cols, m.textWidth())
+	}
+	m.Update(tea.WindowSizeMsg{Width: 70, Height: 30})
+	if len(h.requests) != 2 || h.requests[1].Cols != m.textWidth() || strings.Join(h.released, ",") != "wide" {
+		t.Fatalf("after a resize: requests %+v released %v", h.requests, h.released)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	if len(h.requests) != 2 {
+		t.Fatal("a pending request was repeated")
+	}
+	m.Update(PreviewReadyMsg{Request: h.requests[1].Request, Generation: 1, Token: "mid", ID: 4, Cols: 2, Rows: 1})
+	if len(h.requests) != 3 || h.requests[2].Cols != m.textWidth() || strings.Join(h.released, ",") != "wide,mid" {
+		t.Fatalf("answer at an old width: requests %+v released %v", h.requests, h.released)
+	}
+	// The host's widest preview bounds the request.
+	m.Update(PreviewReadyMsg{Request: h.requests[2].Request, Generation: 1, Token: "narrow", ID: 5, Cols: 2, Rows: 1})
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 20, MaxRows: 256})
+	if len(h.requests) != 4 || h.requests[3].Cols != 20 {
+		t.Fatalf("capped request %+v", h.requests)
 	}
 }

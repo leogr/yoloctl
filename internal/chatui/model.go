@@ -419,7 +419,7 @@ func (m *Model) touch() { m.generation++ }
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	previewCmd, handled := m.previewUpdate(msg)
 	if handled {
-		return m, previewCmd
+		return m, tea.Batch(previewCmd, m.resizePreview())
 	}
 	_, cmd := m.update(msg)
 	cmd = tea.Batch(previewCmd, cmd)
@@ -431,6 +431,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focus = focusComposer
 	}
 	m.settleImages()
+	if next := m.resizePreview(); next != nil {
+		cmd = tea.Batch(cmd, next)
+	}
 	if next := m.settleDiagrams(); next != nil {
 		cmd = tea.Batch(cmd, next)
 	}
@@ -1085,10 +1088,8 @@ func (m *Model) messageActions() []messageAction {
 	if _, ok := firstCode(msg.Text); ok {
 		out = append(out, messageAction{"code", "Copy code", "Alt+C"})
 	}
-	if m.previewShown(msg) {
-		out = append(out, messageAction{"image", "Hide image", ""})
-	} else if m.canPreview(msg) {
-		out = append(out, messageAction{"image", "Show image", ""})
+	if m.previewShown(msg) || m.canPreview(msg) {
+		out = append(out, messageAction{"image", m.imageActionLabel(msg), ""})
 	}
 	switch {
 	case msg.Artifact != nil:
@@ -1133,7 +1134,7 @@ func (m *Model) runAction(id string) tea.Cmd {
 	target := m.messageName(msg)
 	switch id {
 	case "image":
-		return m.togglePreview(msg)
+		return m.stepPreview(msg)
 	case "reply":
 		if msg.ID == "" {
 			m.say(levelWarn, "Not confirmed yet; you can reply once the room echoes it")

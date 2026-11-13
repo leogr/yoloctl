@@ -212,7 +212,7 @@ func (img *standaloneImages) advertise() tea.Cmd {
 	img.generation++
 	img.cache.Clear()
 	capability := chatui.PreviewCapabilityMsg{Supported: img.supported(), Generation: img.generation,
-		MaxCols: chatimage.PreviewCols, MaxRows: chatimage.PreviewRows}
+		MaxCols: chatimage.MaxPreviewCells, MaxRows: chatimage.MaxPreviewCells}
 	return func() tea.Msg { return capability }
 }
 
@@ -266,7 +266,7 @@ func (img *standaloneImages) answer(msg standalonePreviewMsg) tea.Cmd {
 		defer cancel()
 		data, err := read(ctx, space, job.frame)
 		if err == nil {
-			job.prepared, err = chatimage.Prepare(data, job.cellW, job.cellH, chatimage.PreviewCols, chatimage.PreviewRows)
+			job.prepared, err = chatimage.Prepare(data, job.cellW, job.cellH, job.frame.MaxCols)
 		}
 		job.err = err
 		if send != nil {

@@ -7,17 +7,17 @@ import (
 	"image"
 	"image/draw"
 	"image/png"
+	"math"
 	"strconv"
 	"strings"
 )
 
-// Preview bounds (plan §3C): a re-encoded PNG of at most 512×512 pixels and
-// 2 MiB, decoded from at most 16 Mi source pixels, filling at most
-// PreviewCols×PreviewRows cells.
+// Preview bounds: a preview spans at most MaxPreviewCells columns and rows,
+// since every placeholder cell names its row and column with one of the
+// Kitty diacritics and a ready frame carries at most that many rows. The
+// re-encoded PNG is at most 2 MiB, decoded from at most 16 Mi source pixels.
 const (
-	PreviewCols        = 60
-	PreviewRows        = 12
-	MaxPreviewPixels   = 512
+	MaxPreviewCells    = 256
 	MaxPreviewBytes    = 2 << 20
 	MaxDecodePixels    = 16 << 20
 	transmitChunkBytes = 4096 // base64 characters per graphics command
@@ -36,12 +36,15 @@ type Prepared struct {
 	Cols, Rows int
 }
 
-// Prepare checks the dimensions before a single full decode, scales the image
-// to fit both MaxPreviewPixels and the cell budget at the measured cell size
-// (preserving aspect, never enlarging) and re-encodes it with Go's encoder;
-// the uploader's bytes never reach the terminal.
-func Prepare(data []byte, cellW, cellH, maxCols, maxRows int) (Prepared, error) {
-	if cellW < 1 || cellH < 1 || maxCols < 1 || maxRows < 1 {
+// Prepare checks the dimensions before a single full decode and lays the
+// image out cols cells wide (at most MaxPreviewCells) at the measured cell
+// size, its height following the aspect ratio; a picture taller than
+// MaxPreviewCells rows is narrowed instead. It re-encodes the image with Go's
+// encoder at the pixel size of that area, never enlarged (the terminal scales
+// a smaller picture into its cells), and smaller still when the PNG would
+// exceed MaxPreviewBytes; the uploader's bytes never reach the terminal.
+func Prepare(data []byte, cellW, cellH, cols int) (Prepared, error) {
+	if cellW < 1 || cellH < 1 || cols < 1 {
 		return Prepared{}, errors.New("chatimage: unknown cell geometry")
 	}
 	cfg, err := png.DecodeConfig(bytes.NewReader(data))
@@ -56,34 +59,44 @@ func Prepare(data []byte, cellW, cellH, maxCols, maxRows int) (Prepared, error) 
 		return Prepared{}, ErrNotPNG
 	}
 	w, h := cfg.Width, cfg.Height
-	maxW, maxH := min(MaxPreviewPixels, maxCols*cellW), min(MaxPreviewPixels, maxRows*cellH)
+	cols = min(cols, MaxPreviewCells)
+	boxW := cols * cellW
+	boxH := max(1, h*boxW/w)
+	rows := (boxH + cellH - 1) / cellH
+	if rows > MaxPreviewCells {
+		rows = MaxPreviewCells
+		boxH = rows * cellH
+		boxW = max(1, w*boxH/h)
+		cols = (boxW + cellW - 1) / cellW
+	}
 	tw, th := w, h
-	if tw > maxW || th > maxH {
-		// Scale by the tighter bound, rounding down so both limits hold.
-		if w*maxH > h*maxW { // width-bound
-			tw, th = maxW, max(1, h*maxW/w)
-		} else {
-			tw, th = max(1, w*maxH/h), maxH
+	if w > boxW {
+		tw, th = boxW, max(1, h*boxW/w)
+	}
+	b := src.Bounds()
+	rgba := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(rgba, rgba.Bounds(), src, b.Min, draw.Src)
+	for {
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, downscale(rgba, tw, th)); err != nil {
+			return Prepared{}, err
 		}
+		if buf.Len() <= MaxPreviewBytes {
+			return Prepared{PNG: buf.Bytes(), Cols: cols, Rows: rows}, nil
+		}
+		if tw == 1 && th == 1 {
+			return Prepared{}, ErrTooLarge
+		}
+		// Fewer pixels in proportion to the excess, at least a tenth fewer.
+		f := math.Sqrt(float64(MaxPreviewBytes)/float64(buf.Len())) * 0.9
+		tw, th = max(1, int(float64(tw)*f)), max(1, int(float64(th)*f))
 	}
-	out := downscale(src, tw, th)
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, out); err != nil {
-		return Prepared{}, err
-	}
-	if buf.Len() > MaxPreviewBytes {
-		return Prepared{}, ErrTooLarge
-	}
-	return Prepared{PNG: buf.Bytes(), Cols: (tw + cellW - 1) / cellW, Rows: (th + cellH - 1) / cellH}, nil
 }
 
 // downscale averages each target pixel's source area (premultiplied), so
 // alpha edges do not darken. tw ≤ width and th ≤ height.
-func downscale(src image.Image, tw, th int) *image.NRGBA {
-	b := src.Bounds()
-	rgba := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
-	draw.Draw(rgba, rgba.Bounds(), src, b.Min, draw.Src)
-	w, h := b.Dx(), b.Dy()
+func downscale(rgba *image.RGBA, tw, th int) *image.NRGBA {
+	w, h := rgba.Rect.Dx(), rgba.Rect.Dy()
 	out := image.NewNRGBA(image.Rect(0, 0, tw, th))
 	for ty := 0; ty < th; ty++ {
 		y0, y1 := ty*h/th, max(ty*h/th+1, (ty+1)*h/th)

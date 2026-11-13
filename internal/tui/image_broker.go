@@ -116,7 +116,7 @@ func (m *model) capabilityFrame() chatimage.Frame {
 	a := m.images.advertised
 	f := chatimage.Frame{Op: chatimage.OpCapability, Generation: a.generation, Supported: a.supported}
 	if a.supported {
-		f.MaxCols, f.MaxRows = chatimage.PreviewCols, chatimage.PreviewRows
+		f.MaxCols, f.MaxRows = chatimage.MaxPreviewCells, chatimage.MaxPreviewCells
 	}
 	return f
 }
@@ -251,7 +251,7 @@ func (m *model) answerPreview(msg imageMsg) tea.Cmd {
 		data, err := read(ctx, msg.space, msg.frame)
 		var prepared chatimage.Prepared
 		if err == nil {
-			prepared, err = chatimage.Prepare(data, job.cellW, job.cellH, chatimage.PreviewCols, chatimage.PreviewRows)
+			prepared, err = chatimage.Prepare(data, job.cellW, job.cellH, msg.frame.MaxCols)
 		}
 		b.mu.Lock()
 		job.prepared, job.err, job.done = prepared, err, true

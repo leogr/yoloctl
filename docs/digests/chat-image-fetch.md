@@ -1,6 +1,6 @@
 # Chat image fetch
 
-Verification: `b3b2cf92659f79545ec4cc8d405d5f1b0a3c122e` and accompanying changes.
+Verification: `fc48bca38d7777c07e13bb1610611f9a15c8c17d` and accompanying changes.
 
 [FACT] A fixed, embedded Python relay reads one artifact inside the confined
 chat runtime: it runs only `airc artifact download --config CONFIG UUID PATH`
@@ -29,15 +29,20 @@ relay failure is reported with its one printable line. It never stages,
 uploads, joins or retries. [2](#source-2)
 
 [FACT] In the TUI, a preview request from a chat pane (which also carries its
-chip text, one printable line of at most 512 bytes) starts the single fetch
+chip text, one printable line of at most 512 bytes, and the width to fill,
+1–256 cells) starts the single fetch
 job of the whole TUI when previews are supported; a second request meanwhile
 gets `busy`. The job (30 s) calls the reader that `cmd/yoloctl` installs: it
 resolves the pane's space like the CLI (its `--space`, else the TUI's pinned
 space, else the default) and runs `chat.artifact.read` with output bounded to
 the requested size, accepting only those exact bytes. `chatimage.Prepare`
-then checks the PNG dimensions (at most 16 Mi pixels) before one full decode,
-scales it by area averaging to fit 512×512 and the pane budget of 60×12 cells
-at the measured cell size, never enlarging, and re-encodes it (at most 2 MiB).
+then checks the PNG dimensions (at most 16 Mi pixels) before one full decode
+and lays the image out on the requested width at the measured cell size, its
+height following the aspect ratio (a picture taller than 256 rows is narrowed:
+each placeholder cell names its row and column with a Kitty diacritic). It
+re-encodes it by area averaging at the pixels of that area, never more than
+the source's (the terminal scales a smaller picture into the cells), and with
+fewer pixels until the PNG is at most 2 MiB. The cache key includes the width.
 [3](#source-3) [4](#source-4)
 
 [FACT] Back on the event loop a result is dropped if its pane is gone, and

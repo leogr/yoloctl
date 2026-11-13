@@ -140,7 +140,7 @@ func (m *Model) body(msg *Message, width int) cachedBody {
 	// The chip's button names the message's server ID, which an own message
 	// gains only when the room echoes it: the body is parsed again then.
 	previewID := ""
-	if len(tokens) > 0 && previewArtifact(msg) != nil {
+	if len(tokens) > 0 && len(previewArtifacts(msg)) > 0 {
 		previewID = msg.ID
 	}
 	cacheText := text + "\x00" + strings.Join(chips, "\x00") + "\x00" + previewID
@@ -305,7 +305,13 @@ func (m *Model) transcript(width int) []transcriptRow {
 				run{Text: truncate(m.widthMethod, label, textWidth, "…"), Style: spaceview.Style{FG: t.Dim}, Act: action{Kind: actReply, Value: msg.ReplyTo}})})
 		}
 		body := m.body(msg, textWidth)
-		for _, br := range body.rows {
+		// A shown image follows the last row of the line holding its chip.
+		previewAt := m.previewLine(msg, body.lines)
+		if previewAt < 0 {
+			previewAt = len(body.lines)
+		}
+		previewed := false
+		for n, br := range body.rows {
 			row := transcriptRow{key: key, line: br.Line, offset: br.Start, end: br.End, kind: rowBody, frags: br.Frags}
 			if br.Decor {
 				row.kind = rowDecor
@@ -328,8 +334,14 @@ func (m *Model) transcript(width int) []transcriptRow {
 				}
 			}
 			rows = append(rows, row)
+			if !previewed && br.Line == previewAt && (n+1 == len(body.rows) || body.rows[n+1].Line != previewAt) {
+				rows = append(rows, m.previewRows(msg, key, len(body.lines), indent)...)
+				previewed = true
+			}
 		}
-		rows = append(rows, m.previewRows(msg, key, len(body.lines), indent)...)
+		if !previewed {
+			rows = append(rows, m.previewRows(msg, key, len(body.lines), indent)...)
+		}
 		if msg.Error != "" {
 			rows = append(rows, transcriptRow{key: key, line: len(body.lines) + lineError, kind: rowDecor,
 				runs: append(slicesCloneRuns(indent), deco(prettylog.DefaultGlyphs.Error+" "+oneLine(msg.Error), spaceview.Style{FG: t.Bad}))})

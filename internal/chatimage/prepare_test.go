@@ -25,18 +25,24 @@ func pngOf(t *testing.T, w, h int, fill color.NRGBA) []byte {
 	return b.Bytes()
 }
 
-func TestPrepareFitsThePixelAndCellBudgets(t *testing.T) {
+// A preview fills the requested width; its height follows the aspect ratio.
+// The PNG has the pixels of that area, never more than the source's, so a
+// small image is scaled up by the terminal, not resampled here.
+func TestPrepareFillsTheWidthKeepingTheAspect(t *testing.T) {
 	red := color.NRGBA{255, 0, 0, 255}
 	for name, c := range map[string]struct {
-		w, h, cellW, cellH, cols, rows int
-		wantW, wantH                   int
+		w, h, cellW, cellH, cols int
+		wantW, wantH             int
+		wantCols, wantRows       int
 	}{
-		"wide, pixel bound":   {1600, 400, 10, 20, 60, 12, 512, 128},
-		"tall, cell bound":    {300, 900, 10, 20, 60, 12, 80, 240},
-		"small, not enlarged": {30, 20, 10, 20, 60, 12, 30, 20},
-		"huge cells, 512 cap": {2000, 2000, 40, 80, 60, 12, 512, 512},
+		"wide screenshot":         {1750, 200, 10, 20, 120, 1200, 137, 120, 7},
+		"retina cells":            {1750, 200, 20, 40, 120, 1750, 200, 120, 7},
+		"tall, height follows":    {300, 900, 10, 20, 60, 300, 900, 60, 90},
+		"small, not resampled up": {30, 20, 10, 20, 80, 30, 20, 80, 27},
+		"wider than the cells":    {4000, 100, 10, 20, 300, 2560, 64, 256, 4},
+		"taller than the cells":   {100, 4000, 10, 20, 100, 100, 4000, 13, 256},
 	} {
-		p, err := Prepare(pngOf(t, c.w, c.h, red), c.cellW, c.cellH, c.cols, c.rows)
+		p, err := Prepare(pngOf(t, c.w, c.h, red), c.cellW, c.cellH, c.cols)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -44,17 +50,38 @@ func TestPrepareFitsThePixelAndCellBudgets(t *testing.T) {
 		if err != nil || cfg.Width != c.wantW || cfg.Height != c.wantH {
 			t.Errorf("%s: %dx%d, %v; want %dx%d", name, cfg.Width, cfg.Height, err, c.wantW, c.wantH)
 		}
-		if p.Cols != (c.wantW+c.cellW-1)/c.cellW || p.Rows != (c.wantH+c.cellH-1)/c.cellH || p.Cols > c.cols || p.Rows > c.rows {
-			t.Errorf("%s: %d×%d cells", name, p.Cols, p.Rows)
-		}
-		if len(p.PNG) > MaxPreviewBytes {
-			t.Errorf("%s: %d bytes", name, len(p.PNG))
+		if p.Cols != c.wantCols || p.Rows != c.wantRows {
+			t.Errorf("%s: %d×%d cells, want %d×%d", name, p.Cols, p.Rows, c.wantCols, c.wantRows)
 		}
 	}
 }
 
+// A picture whose PNG would exceed MaxPreviewBytes at the area's pixels is
+// sent with fewer pixels in the same cells, instead of being refused.
+func TestPrepareShrinksPixelsToTheByteBound(t *testing.T) {
+	const w, h = 2400, 1600
+	img := image.NewNRGBA(image.Rect(0, 0, w, h))
+	seed := uint32(1)
+	for i := range img.Pix {
+		seed = seed*1664525 + 1013904223 // noise does not compress
+		img.Pix[i] = uint8(seed >> 24)
+	}
+	var src bytes.Buffer
+	if err := png.Encode(&src, img); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Prepare(src.Bytes(), 10, 20, 240)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := png.DecodeConfig(bytes.NewReader(p.PNG))
+	if len(p.PNG) > MaxPreviewBytes || cfg.Width >= w || p.Cols != 240 || p.Rows != 80 {
+		t.Fatalf("%d bytes, %dx%d pixels on %d×%d cells", len(p.PNG), cfg.Width, cfg.Height, p.Cols, p.Rows)
+	}
+}
+
 func TestPrepareRefusesBadInputBeforeDecoding(t *testing.T) {
-	if _, err := Prepare([]byte("GIF89a not a png"), 10, 20, 60, 12); !errors.Is(err, ErrNotPNG) {
+	if _, err := Prepare([]byte("GIF89a not a png"), 10, 20, 60); !errors.Is(err, ErrNotPNG) {
 		t.Fatalf("non-PNG: %v", err)
 	}
 	// A header that claims 5000×5000 pixels is refused from its config.
@@ -63,10 +90,10 @@ func TestPrepareRefusesBadInputBeforeDecoding(t *testing.T) {
 	binary.BigEndian.PutUint32(ihdr[0:4], 5000)
 	binary.BigEndian.PutUint32(ihdr[4:8], 5000)
 	binary.BigEndian.PutUint32(small[8+8+13:], crc32.ChecksumIEEE(small[8+4:8+8+13]))
-	if _, err := Prepare(small, 10, 20, 60, 12); !errors.Is(err, ErrTooLarge) {
+	if _, err := Prepare(small, 10, 20, 60); !errors.Is(err, ErrTooLarge) {
 		t.Fatalf("oversized header: %v", err)
 	}
-	if _, err := Prepare(pngOf(t, 2, 2, color.NRGBA{A: 255}), 0, 20, 60, 12); err == nil {
+	if _, err := Prepare(pngOf(t, 2, 2, color.NRGBA{A: 255}), 0, 20, 60); err == nil {
 		t.Fatal("unknown cell size accepted")
 	}
 }
@@ -78,7 +105,7 @@ func TestPrepareAveragesAlphaWithoutDarkening(t *testing.T) {
 	img.Pix = []uint8{0, 0, 0, 0, 255, 255, 255, 255}
 	var b bytes.Buffer
 	_ = png.Encode(&b, img)
-	p, err := Prepare(b.Bytes(), 1, 1, 1, 1)
+	p, err := Prepare(b.Bytes(), 1, 1, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

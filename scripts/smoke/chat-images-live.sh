@@ -196,8 +196,8 @@ OPEN_CHAT="In the TUI palette type:  chat --space $SMOKE_SPACE   (Enter). In the
 select a message with Alt+Up/Down; its actions include Show image when previews apply."
 step "1. Draw, aspect, errors, copy, cache" "$OPEN_CHAT
 Then, in this order:
-  a) gradient.png → Show image: the gradient appears under the message, alpha
-     blending over the pane background.
+  a) gradient.png → Show image: the gradient appears under its chip's line, as
+     wide as the message text, alpha blending over the pane background.
   b) wide.png → Show image: gradient.png collapses to its chip; wide.png keeps
      its 8:1 aspect with crisp stripes.
   c) Drag-select across the wide image rows and copy; paste anywhere: the
@@ -207,7 +207,7 @@ Then, in this order:
   e) not-an-image.png → Show image: notice 'the file is not a PNG image'.
   f) too-many-pixels.png → Show image: notice 'the image is too large'.
   g) Resize the window, then switch to another tab and back: the image is
-     redrawn in place or collapsed to its chip; no image is left behind.
+     redrawn at the new width or collapsed to its chip; no image is left behind.
   h) Quit the TUI: no image remains on the terminal."
 run_ui ui-1 "the TUI" "$YOLOCTL"
 ask 1a "gradient.png draws under its message with alpha"

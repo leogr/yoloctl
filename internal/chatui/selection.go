@@ -217,6 +217,11 @@ func (m *Model) pointAt(x, y int) (selPoint, bool) {
 		return selPoint{key: row.key}, true
 	case row.line < len(lines): // a fence frame inside the body
 		return selPoint{key: row.key, line: row.line}, true
+	case row.line >= linePreview && row.line < lineSpacer:
+		// An image under its chip's line snaps to that line's end.
+		if n := m.previewLine(&m.messages[msg], lines); n >= 0 {
+			return selPoint{key: row.key, line: n, lo: len(lines[n].Text), hi: len(lines[n].Text)}, true
+		}
 	}
 	last := max(len(lines)-1, 0)
 	end := 0

@@ -331,9 +331,13 @@ func (m *Model) activate(act action) tea.Cmd {
 	case actReply, actRef:
 		return m.showMessage(act.Value)
 	case actPreview:
+		k, err := strconv.Atoi(act.Extra)
+		if err != nil {
+			return nil
+		}
 		for i := range m.messages {
 			if m.messages[i].ID == act.Value {
-				return m.togglePreview(&m.messages[i])
+				return m.togglePreview(&m.messages[i], k)
 			}
 		}
 		return nil

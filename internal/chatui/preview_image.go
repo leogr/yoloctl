@@ -1,6 +1,8 @@
 package chatui
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -47,33 +49,51 @@ type PreviewRequest struct {
 	Channel, MessageID  string
 	Artifact            ArtifactRef
 	Chip                string
+	// Cols is the width the pane shows the preview at, in cells: the
+	// preview fills it.
+	Cols int
 }
 
-// imagePreview is the pane's one requested or shown preview.
+// imagePreview is the pane's one requested or shown preview: the image of
+// one chip of one message, drawn under the line that holds the chip.
 type imagePreview struct {
 	key        string // the message's transcript key
+	chip       int    // the chip's index among the message's previewable files
 	channel    string
 	request    uint64
 	generation uint64
+	want       int    // the width in cells it was requested at
 	token      string // empty while pending
 	id         uint32
 	cols, rows int
 }
 
-// previewArtifact is the one artifact a message may preview, if any: a
-// server artifact or a single published attachment, of a message with a
-// server message ID.
-func previewArtifact(msg *Message) *ArtifactRef {
+// previewArtifacts are the files a message may preview, in chip order: a
+// server artifact or each published attachment, of a message with a server
+// message ID.
+func previewArtifacts(msg *Message) []ArtifactRef {
 	if msg == nil || !chatstream.ValidArtifactID(msg.ID) {
 		return nil
 	}
-	switch {
-	case msg.Artifact != nil:
-		return msg.Artifact
-	case len(msg.Attachments) == 1:
-		return &msg.Attachments[0].ArtifactRef
+	if msg.Artifact != nil {
+		return []ArtifactRef{*msg.Artifact}
 	}
-	return nil
+	arts := make([]ArtifactRef, 0, len(msg.Attachments))
+	for i := range msg.Attachments {
+		arts = append(arts, msg.Attachments[i].ArtifactRef)
+	}
+	return arts
+}
+
+// chipAction is the button of chip k of the message with server ID id.
+func chipAction(id string, k int) action {
+	return action{Kind: actPreview, Value: id, Extra: strconv.Itoa(k)}
+}
+
+// previewWidth is the width a preview fills: the message text's width, at
+// most the host's widest preview.
+func (m *Model) previewWidth() int {
+	return max(min(m.textWidth(), m.previewCap.MaxCols), 1)
 }
 
 // canPreview reports whether a "Show image" action applies to msg now.
@@ -83,33 +103,93 @@ func previewArtifact(msg *Message) *ArtifactRef {
 // cached is never offered where a new read would be refused.
 func (m *Model) canPreview(msg *Message) bool {
 	return m.opts.PreviewImage != nil && m.previewCap.Supported && m.trueColor &&
-		m.connected && m.canSend() && previewArtifact(msg) != nil
+		m.connected && m.canSend() && len(previewArtifacts(msg)) > 0
 }
 
-// previewShown reports whether msg's preview is requested or shown.
+// previewShown reports whether one of msg's previews is requested or shown.
 func (m *Model) previewShown(msg *Message) bool {
 	return m.preview != nil && msg != nil && m.preview.key == messageKey(*msg)
 }
 
-// togglePreview shows msg's image, or hides it when it is shown. Showing
-// another message's image first releases the current one.
-func (m *Model) togglePreview(msg *Message) tea.Cmd {
-	if m.previewShown(msg) {
+// nextPreview is the chip the footer action shows next for msg: the first
+// when none is shown, then each following one; -1 hides the last, or the
+// shown one once no other can be shown.
+func (m *Model) nextPreview(msg *Message) int {
+	if !m.previewShown(msg) {
+		return 0
+	}
+	if k := m.preview.chip + 1; k < len(previewArtifacts(msg)) && m.canPreview(msg) {
+		return k
+	}
+	return -1
+}
+
+// imageActionLabel names what the footer action does for msg.
+func (m *Model) imageActionLabel(msg *Message) string {
+	k, n := m.nextPreview(msg), len(previewArtifacts(msg))
+	switch {
+	case k < 0:
+		return "Hide image"
+	case n > 1:
+		return fmt.Sprintf("Show image %d of %d", k+1, n)
+	}
+	return "Show image"
+}
+
+// stepPreview runs the footer action: the next image of msg, or none.
+func (m *Model) stepPreview(msg *Message) tea.Cmd {
+	if k := m.nextPreview(msg); k >= 0 {
+		return m.showPreview(msg, k)
+	}
+	return m.releasePreview()
+}
+
+// togglePreview shows the image of msg's chip k, or hides it when it is
+// shown. Showing another image first releases the current one.
+func (m *Model) togglePreview(msg *Message, k int) tea.Cmd {
+	if m.previewShown(msg) && m.preview.chip == k {
 		return m.releasePreview()
 	}
-	art := previewArtifact(msg)
-	if art == nil || !m.canPreview(msg) {
+	return m.showPreview(msg, k)
+}
+
+func (m *Model) showPreview(msg *Message, k int) tea.Cmd {
+	arts := previewArtifacts(msg)
+	if k < 0 || k >= len(arts) || !m.canPreview(msg) {
 		m.say(levelInfo, "Image previews are not available in this terminal")
 		return nil
 	}
 	release := m.releasePreview()
+	return tea.Batch(release, m.requestPreview(msg, k))
+}
+
+// requestPreview asks the host for chip k of msg at the current width.
+func (m *Model) requestPreview(msg *Message, k int) tea.Cmd {
+	art := previewArtifacts(msg)[k]
 	m.previewSeq++
-	m.preview = &imagePreview{key: messageKey(*msg), channel: msg.Channel, request: m.previewSeq, generation: m.previewCap.Generation}
+	m.preview = &imagePreview{key: messageKey(*msg), chip: k, channel: msg.Channel, request: m.previewSeq,
+		generation: m.previewCap.Generation, want: m.previewWidth()}
 	m.touch()
-	return tea.Batch(release, m.opts.PreviewImage(PreviewRequest{
+	return m.opts.PreviewImage(PreviewRequest{
 		Request: m.previewSeq, Generation: m.previewCap.Generation, Channel: msg.Channel,
-		MessageID: msg.ID, Artifact: *art, Chip: artifactLabel(art),
-	}))
+		MessageID: msg.ID, Artifact: art, Chip: artifactLabel(&art), Cols: m.preview.want,
+	})
+}
+
+// resizePreview asks again for a shown preview whose width no longer is
+// the pane's, so it keeps filling it. A pending request is left to finish;
+// its answer is checked here in turn.
+func (m *Model) resizePreview() tea.Cmd {
+	p := m.preview
+	if p == nil || p.token == "" || p.want == m.previewWidth() || m.opts.PreviewImage == nil {
+		return nil
+	}
+	i := m.indexOf(p.key)
+	if i < 0 || !m.canPreview(&m.messages[i]) || p.chip >= len(previewArtifacts(&m.messages[i])) {
+		return nil
+	}
+	release := m.releasePreview()
+	return tea.Batch(release, m.requestPreview(&m.messages[i], p.chip))
 }
 
 // releasePreview collapses the pane's preview and tells the host to free a
@@ -199,6 +279,25 @@ func previewReason(code string) string {
 	return "the image could not be read"
 }
 
+// previewLine is the display line holding the chip of msg's shown preview,
+// or -1 when no line holds its button (a literal chip in a table): the
+// preview then follows the text.
+func (m *Model) previewLine(msg *Message, lines []displayLine) int {
+	p := m.preview
+	if p == nil || p.key != messageKey(*msg) {
+		return -1
+	}
+	want := chipAction(msg.ID, p.chip)
+	for n, dl := range lines {
+		for _, piece := range dl.Pieces {
+			if piece.Act == want {
+				return n
+			}
+		}
+	}
+	return -1
+}
+
 // previewRows are the placeholder rows of msg's shown preview: each cell is
 // U+10EEEE with its row and column marks, drawn in the image ID's colour, so
 // the host's image appears exactly there.
@@ -217,7 +316,7 @@ func (m *Model) previewRows(msg *Message, key string, line int, indent []run) []
 			cells.WriteRune(kitty.Diacritic(c))
 		}
 		rows = append(rows, transcriptRow{key: key, line: line + linePreview + r, kind: rowDecor,
-			runs: append(slicesCloneRuns(indent), run{Text: cells.String(), Style: style, Act: action{Kind: actPreview, Value: msg.ID}})})
+			runs: append(slicesCloneRuns(indent), run{Text: cells.String(), Style: style, Act: chipAction(msg.ID, p.chip)})})
 	}
 	return rows
 }
@@ -255,8 +354,8 @@ func chipText(msg *Message) (string, []rune, []string) {
 }
 
 // placeChips replaces each token with its chip label as literal text in the
-// surrounding style; the first chip toggles the preview of previewID, when
-// set. Copy yields the label. A token in a table, or one not seen exactly
+// surrounding style; each chip toggles its own preview of the message with
+// server ID previewID, when set. Copy yields the label. A token in a table, or one not seen exactly
 // once, reports false: the caller then shows the chips as plain text.
 func placeChips(lines []displayLine, tokens []rune, labels []string, previewID string) ([]displayLine, bool) {
 	index := map[rune]int{}
@@ -282,8 +381,8 @@ func placeChips(lines []displayLine, tokens []rune, labels []string, previewID s
 					replacement.Style = p.Style
 				}
 			}
-			if k == 0 && previewID != "" {
-				replacement.Act = action{Kind: actPreview, Value: previewID}
+			if previewID != "" {
+				replacement.Act = chipAction(previewID, k)
 			}
 			replacements[n] = append(replacements[n], replacement)
 		}

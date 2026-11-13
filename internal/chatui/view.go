@@ -77,6 +77,20 @@ func (m *Model) selectionStyle() spaceview.Style {
 	return spaceview.Style{FG: m.theme.Bright, BG: spaceview.PaletteColor(153)}
 }
 
+// transcriptWidth is the transcript's width at the current size: the pane,
+// less the participants panel and its divider when open.
+func (m *Model) transcriptWidth() int {
+	if m.rosterOpen {
+		if panel := panelWidth(m.width); panel > 0 {
+			return m.width - panel - 1
+		}
+	}
+	return m.width
+}
+
+// textWidth is the width of message text at the current size.
+func (m *Model) textWidth() int { return max(m.transcriptWidth()-bodyIndent-1, 1) }
+
 func (m *Model) View() tea.View {
 	w, h := m.width, m.height
 	if w == 0 || h == 0 {
@@ -110,11 +124,8 @@ func (m *Model) View() tea.View {
 	}
 	top := len(lines)
 	draft, cursorRow, cursorCol := m.layoutDraft()
-	tw := w
-	if panel > 0 {
-		tw = w - panel - 1
-	}
-	m.lastTextWidth = max(tw-bodyIndent-1, 1)
+	tw := m.transcriptWidth()
+	m.lastTextWidth = m.textWidth()
 	transcript := m.buildTranscript(tw)
 	// boxRows are the composer's rows besides the draft: with room, a blank
 	// row above it; the reply being written; and always a blank row below

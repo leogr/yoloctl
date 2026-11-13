@@ -96,5 +96,5 @@ func chatPreviewFrame(header chatstream.Header, req chatui.PreviewRequest) (chat
 	return chatimage.Frame{Op: chatimage.OpPreview, Generation: req.Generation, Request: req.Request,
 		RoomID: id.RoomID, DiskID: id.DiskID, HumanID: id.HumanID, ChannelID: id.ChannelID, Channel: req.Channel,
 		MessageID: req.MessageID, Artifact: req.Artifact.ID, Bytes: req.Artifact.Bytes, SHA256: req.Artifact.SHA256,
-		Chip: req.Chip}, nil
+		Chip: req.Chip, MaxCols: req.Cols}, nil
 }
