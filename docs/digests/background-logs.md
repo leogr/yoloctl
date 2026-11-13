@@ -1,6 +1,6 @@
 # Background log storage and views
 
-Verification: `ad96d0605c1f5d3bac1b075af4c399021ee86ad9` and accompanying changes.
+Verification: `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7` and accompanying changes.
 
 [FACT] The controller service, managed holder and Firecracker guest init use the
 shared file Logger: plain UTC RFC3339 timestamps, levels and actor fields, no
@@ -74,6 +74,14 @@ partial/control bytes, folding and exact trace output. These are isolated
 filesystem/process tests; native VM/daemon behaviour needs separate runtime QA.
 [10](#source-10) [11](#source-11)
 
+[FACT] Audit reconciliation/maintenance deferrals use audit warnings without
+adding their private error details. A worker's failed completion-record write
+is a controller error with the reserved error attribute; abandoned image work
+is a builder warning after its orphan evidence is saved. These diagnostics use
+the installed file/worker binding, carry no outcome, and do not alter operation
+classification, durable evidence or existing admission/cancellation rules.
+[12](#source-12)
+
 ## Sources
 
 1. <a id="source-1"></a> [Process bindings](../../cmd/yoloctl/controller_internal.go#L311) — `serveController`; `session_hold.go` `newSessionHoldCmd`; `internal/vmguest/init_linux.go` `Run`; `internal/logging/logging.go` `InitFile`, `NewFileLogger`.
@@ -87,3 +95,5 @@ filesystem/process tests; native VM/daemon behaviour needs separate runtime QA.
 9. <a id="source-9"></a> [Log view](../../cmd/yoloctl/space_log_render.go#L17) — `spaceLogOutput`, `spaceLogRecord`; `space.go` `tailLimaLog`.
 10. <a id="source-10"></a> [Rotation regressions](../../internal/rotatelog/writer_test.go#L35) — raw producer, bounds, privacy, marker; `stdio_linux_test.go` `TestCaptureStdioDrainsBeforeHelperExit`; `marker_test.go` shared ingress and sink-failure controls; `internal/lima/diagnostics_test.go` host concurrency/stale-generation cases.
 11. <a id="source-11"></a> [View and grow regressions](../../cmd/yoloctl/space_log_render_test.go#L25) — view tests; `internal/firecracker/datadisk_linux_test.go` `TestDataDiskGrowLoggedAcrossRotation`; `internal/firecracker/helper_log_test.go` final-record ordering/early-return/once controls; `controller_storage_test.go` scheduled diagnostics.
+
+12. <a id="source-12"></a> [Initialized diagnostics](../../cmd/yoloctl/controller_audit_linux.go#L448) — `startAuditRetention`; controller_internal.go `recordWorkerCompletion`; internal/controller/image_orphans.go `SaveImageOrphan`; owned_diagnostics_linux_test.go and image_orphan_logging_test.go record/evidence/sink-failure controls.

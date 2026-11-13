@@ -148,7 +148,7 @@ func attachToSession(ctx context.Context, space, name string) error {
 				return
 			}
 			writeNotice := func() {
-				_, _ = fmt.Fprintf(os.Stderr, "\r\n⚠ %s\r\n", notice)
+				cliWarn(logging.Session, "%s", notice)
 			}
 			if notice == termio.OSC52DisabledNotice {
 				disabledNotice.Do(writeNotice)
@@ -169,6 +169,12 @@ func attachToSession(ctx context.Context, space, name string) error {
 		oldState, rawErr := term.MakeRaw(fd)
 		if rawErr == nil {
 			defer func() { _ = term.Restore(fd, oldState) }()
+			if writerIsTerminal(os.Stderr) {
+				// A notice starts below the application's current line; MakeRaw
+				// also disables LF output processing. Route only diagnostics,
+				// never the session/clipboard bytes, through this adapter.
+				defer logging.Logger().Route(&attachLogWriter{rawTerminalStderr{out: os.Stderr}}, nil)()
+			}
 		}
 		resize := make(chan terminal.Geometry, 1)
 		aio.Resize = resize

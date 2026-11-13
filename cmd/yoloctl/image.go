@@ -115,7 +115,7 @@ composed image on the refreshed base and recreate it.`,
 			c := container.New(spaceName)
 			notice := cmd.ErrOrStderr()
 			ref := agentboximage.RefAgentbox
-			_, _ = fmt.Fprintf(notice, "refreshing %s\n", ref)
+			cliInfo(logging.Builder, "Refreshing %s", ref)
 			if cmd.Context().Value(warmKey{}) != nil {
 				prep, err := agentboximage.PrepareManagedBase(true)
 				if err != nil {
@@ -130,7 +130,7 @@ composed image on the refreshed base and recreate it.`,
 			}); err != nil {
 				return fmt.Errorf("refresh %s: %w", ref, err)
 			}
-			_, _ = fmt.Fprintln(notice,
+			cliNotice(logging.Builder,
 				"Existing boxes and composed images keep the previous base. "+
 					"Run `yoloctl box reconcile BOX --rebuild` for each affected box to rebuild its composed image on this base and recreate it; "+
 					"a plain `yoloctl box recreate BOX` reuses an existing composed image. "+

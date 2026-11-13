@@ -24,6 +24,7 @@ import (
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/termio"
 	"github.com/leogr/yoloctl/internal/tui"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"github.com/leogr/yoloctl/pkg/prettylog/stepview"
 	"github.com/muesli/cancelreader"
 	"github.com/spf13/cobra"
@@ -493,13 +494,19 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 		if err != nil {
 			return err
 		}
+		noticeLog := logging.Logger()
+		if !processStderr {
+			// Match relayed records: a caller-selected error writer gets
+			// plain records rather than the process terminal's formatting.
+			noticeLog = prettylog.New(errOut, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity()})
+		}
 		filter := termio.NewOSC52Filter(streams.Out, func(event termio.OSC52) {
 			sequence, notice := termio.EvaluateOSC52(event, prefs.ClipboardEnabled())
 			if sequence != "" {
 				_, _ = io.WriteString(cmd.OutOrStdout(), sequence)
 			}
 			if notice != "" {
-				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), notice)
+				noticeLog.Slog().Warn(notice, prettylog.Actor(logging.Session))
 			}
 		})
 		defer func() { _ = filter.Flush() }()

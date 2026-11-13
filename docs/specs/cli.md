@@ -10,7 +10,8 @@ unavailable; use named `box create`, `box attach` and `box list`. [1](#source-1)
 
 [FACT] Command warnings, notices and mutation-result prose go through the
 shared logger to stderr; data tables, JSON, dry-run plans and raw session
-streams keep their writers. Routed mutations report outcomes after the final
+streams keep their writers. Clipboard-policy attachment warnings use the same
+logger without rerouting application bytes. Routed mutations report outcomes after the final
 controller reply; host lifecycle steps finish after cleanup. Typed unknown
 results retain their text/status without invented retry or hold guidance.
 [27](#source-27)

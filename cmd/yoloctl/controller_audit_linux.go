@@ -18,6 +18,7 @@ import (
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -454,7 +455,7 @@ func startAuditRetention(parent context.Context, server *controller.Server) func
 		_, startupErr := server.RunMaintenance(startup, reconcileNativeAudit)
 		stopStartup()
 		if startupErr != nil && ctx.Err() == nil {
-			_, _ = fmt.Fprintln(os.Stderr, "audit reconciliation deferred")
+			cliWarn(logging.Audit, "Reconciliation deferred")
 		}
 		// One owner prevents metadata refresh from taking retention's admission.
 		// Keep expiry due after a busy/failed attempt instead of skipping a minute.
@@ -473,7 +474,7 @@ func startAuditRetention(parent context.Context, server *controller.Server) func
 				nextExpiry = time.Now().Add(time.Minute)
 			}
 			if err != nil && ctx.Err() == nil {
-				_, _ = fmt.Fprintln(os.Stderr, "audit maintenance deferred")
+				cliWarn(logging.Audit, "Maintenance deferred")
 			}
 			select {
 			case <-ctx.Done():

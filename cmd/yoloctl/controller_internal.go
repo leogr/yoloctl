@@ -629,7 +629,7 @@ func recordWorkerCompletion(ctx context.Context, err error) {
 		return
 	}
 	if recordErr := controller.CompleteEffects(ctx, classifyError(err)); recordErr != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "yoloctl: operation completion was not recorded:", recordErr)
+		logging.L().ErrorContext(ctx, "Operation completion was not recorded", prettylog.Actor(logging.Controller), prettylog.Err(recordErr))
 	}
 }
 

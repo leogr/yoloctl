@@ -10,7 +10,9 @@ import (
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/safepath"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 type ImageOrphan struct {
@@ -38,7 +40,7 @@ func (s Receipts) SaveImageOrphan(r Receipt) error {
 	if err = writeImageOrphan(dir, r.ID+".json", raw, 0600); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(os.Stderr, "image preparation %s abandoned: slot released; leftover build work may still use CPU, memory or disk; no acknowledgment required\n", r.ID)
+	logging.L().Warn(fmt.Sprintf("image preparation %s abandoned: slot released; leftover build work may still use CPU, memory or disk; no acknowledgment required", r.ID), prettylog.Actor(logging.Builder))
 	return nil
 }
 func (s Receipts) ImageOrphans() ([]ImageOrphan, error) {

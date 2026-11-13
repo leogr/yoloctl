@@ -13,6 +13,21 @@ type rawTerminalStderr struct {
 	lastCR bool
 }
 
+// attachLogWriter starts a rendered direct-attachment diagnostic on a fresh
+// line. The Logger calls it only for visible output, so filtered warnings do
+// not leave empty lines in the application. Payload stdout never uses it.
+type attachLogWriter struct{ rawTerminalStderr }
+
+func (w *attachLogWriter) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	if _, err := w.rawTerminalStderr.Write([]byte{'\n'}); err != nil {
+		return 0, err
+	}
+	return w.rawTerminalStderr.Write(p)
+}
+
 func (w *rawTerminalStderr) Write(p []byte) (int, error) {
 	total := 0
 	for len(p) > 0 {

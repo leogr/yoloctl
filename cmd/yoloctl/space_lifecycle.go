@@ -264,7 +264,7 @@ func deleteSpaceRuntime(ctx context.Context, space string, notice io.Writer) err
 			if pidErr != nil {
 				return fmt.Errorf("VM still reports %s and shutdown could not be verified; repair its Lima configuration and stop it before retrying (account disk and bundle retained): %w", inst.Status, pidErr)
 			}
-			_, _ = fmt.Fprintf(notice, "VM reports %s after shutdown; verified its processes exited, removing stale runtime metadata\n", inst.Status)
+			cliNotice(logging.Host, "VM reports %s after shutdown; verified its processes exited, removing stale runtime metadata", inst.Status)
 		}
 		if err := spaceDestroyDelete(ctx, space, force); err != nil {
 			return err

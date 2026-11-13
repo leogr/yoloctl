@@ -1,6 +1,6 @@
 # CLI log routing and outcomes
 
-Verification: `2baaa250e722a8e22013f7faf0816b77a4d3d472` and accompanying changes.
+Verification: `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7` and accompanying changes.
 
 [FACT] CLI warnings, notices and mutation-result prose use the process
 `internal/logging` Logger; worker processes send records and the host renders
@@ -61,6 +61,15 @@ receipts, raw/JSON bytes through the real command router and real dry-run
 warning separation. These simulated fixtures do not qualify a live VM,
 BuildKit run or native terminal. [4](#source-4)
 
+[FACT] Image refresh/remedy prose and verified stale-VM metadata cleanup use
+builder/host records. Clipboard-policy notices during direct attachments and
+controller terminal calls are session warnings. Only diagnostics pass through
+the raw-terminal line adapter; session/clipboard stdout retains its byte path.
+Suppressed warnings add no blank line. A caller-selected error writer receives
+plain notices instead of the process renderer. The OSC 52 policy and disabled
+notice's existing once-per-attachment rule are unchanged.
+[12](#source-12) [13](#source-13)
+
 ## Sources
 
 1. <a id="source-1"></a> [CLI logging helpers](../../cmd/yoloctl/cli_logging.go#L17) — `cliLog`, `renderLoggedCLIError`, `cliOperation`, `cliFinishOutcome`, `cliRoutedOutcome`, `wrapHostLogCommand`, `suspendCLISteps`.
@@ -77,3 +86,6 @@ BuildKit run or native terminal. [4](#source-4)
 10. <a id="source-10"></a> [Ephemeral notice](../../cmd/yoloctl/agentbox.go#L1759) — `noticeEphemeralWorkdir`, `createAgentbox`; ephemeral_notice_test.go two-pass warm/admission regression.
 
 11. <a id="source-11"></a> [Lock-wait progress](../../cmd/yoloctl/space_operation.go#L25) — `acquireSpaceOperationLock`; space_lock_progress_test.go exercises real lock acquisition, cancellation and uncontended silence.
+
+12. <a id="source-12"></a> [Remaining CLI notices](../../cmd/yoloctl/image.go#L115) — `newImageRefreshCmd`; space_lifecycle.go `deleteSpaceRuntime`, session_client.go `attachToSession`, controller_client.go `callControllerTerminal`.
+13. <a id="source-13"></a> [Terminal diagnostic boundary](../../cmd/yoloctl/controller_stderr.go#L16) — `attachLogWriter`, `rawTerminalStderr`; owned_notice_test.go raw PTY, wire and caller-writer/stream controls.
