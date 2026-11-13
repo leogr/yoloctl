@@ -164,12 +164,16 @@ func fitTableInView(wm ansi.Method, lines []DisplayLine, first, table, width, ro
 	if reason != TableOverBudget {
 		return rows, reason, denied
 	}
+	measure := measureTableBudget(wm, lines)
 	// Beyond the natural widths the allocation is unchanged; skip that range.
 	natural := 3*(len(lines[0].Table.Natural)-1) + 2
 	for _, w := range lines[0].Table.Natural {
 		natural += w
 	}
 	for w := min(width-1, natural); w > 0; w-- {
+		if !measure.couldFit(w, options.CompactTables) {
+			continue
+		}
 		candidate, why, refused := at(w)
 		if why == TableFits || why == TableLaidOut {
 			return candidate, why, refused

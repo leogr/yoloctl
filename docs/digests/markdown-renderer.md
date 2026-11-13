@@ -35,7 +35,9 @@ never copied; source maps drop the brackets as markup.
 
 [FACT] Fitting tables keep alignment. If a viewport allocation exceeds the
 byte budget, layout tries tighter allocations and keeps the widest that fits
-before fallback: widening alone retains an admitted table. Squeezed columns allocated
+before fallback: widening alone retains an admitted table form.
+Cached cell measurements reject impossible retry widths before full wrapping.
+[17](#source-17) Squeezed columns allocated
 under 16 cells use labelled records instead. Rejected padding keeps bounded
 unpadded logical cells; neither natural fit nor the final text route rebuilds
 padding beyond `2*source+4096` bytes. Labelled output counts repeated headers,
@@ -103,3 +105,5 @@ component parity, not native terminal, live-room or future file-view behavior.
 15. <a id="source-15"></a> [Counted table fallbacks](../../internal/markdownview/table_fallback.go#L10) — `TableFitReason`, `labelledTable`, `fitTableInView`; body.go `TableLines`, `FitTableLayout`, `bodyRows`; table_fallback_test.go covers cutoffs, budgets, source/Quote and matched modes; wide_window_test.go covers widening and the widest admitted allocation.
 
 16. <a id="source-16"></a> [Compact rows](../../internal/markdownview/table_compact.go#L1) — `compactTable`, `CompactSelection`; table_compact_test.go covers bounds, copy and matched width modes.
+
+17. <a id="source-17"></a> [Retry cost bound](../../internal/markdownview/table_budget.go#L1) — `measureTableBudget`, `couldFit`; table_budget_test.go checks conservative admission and benchmarks the guarded sparse case.
