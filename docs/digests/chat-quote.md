@@ -58,6 +58,13 @@ source view, an endpoint inside a unit or a slice that renders differently
 Two lines of a size-rejected table render as a table on their own, so they are
 refused. [1](#source-1)
 
+[FACT] Hidden lines (setext underlines, comments, tag-only lines) and `<br>`
+parts keep the contiguous source slice; a whole-line end takes a line's hidden
+tags and a setext heading's underline, a selection inside tagged text quotes it
+bare, and indented code quotes its indentation (see the
+[tolerant rules](markdown-tolerant.md)). A line that renders differently alone
+is refused by the unchanged exact-render check.
+
 [FACT] Limits: the view's Markdown subset has no nested blocks, so a quoted
 fence shows as quoted text lines and a quoted table's TABs display expanded;
 cells split at unescaped pipes outside a matched code span, and Markdown-looking cell

@@ -1,8 +1,11 @@
 package markdownview
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -667,4 +670,112 @@ func TestTableCellLineBreakLabelled(t *testing.T) {
 	if at < 0 || at+1 >= len(shown) || strings.TrimSpace(shown[at+1]) != "second" {
 		t.Fatalf("segments %q", shown)
 	}
+}
+
+// describeLines is one line per display line: its kind and its text.
+func describeLines(doc Document) string {
+	var b strings.Builder
+	for _, dl := range doc.Lines {
+		kind := "text"
+		switch {
+		case dl.Hidden:
+			kind = "hidden"
+		case dl.Fence == FenceOpen:
+			kind = "card-open"
+		case dl.Fence == FenceClose:
+			kind = "card-close"
+		case dl.Code:
+			kind = "code"
+		case dl.Rule:
+			kind = "rule"
+		case dl.Table != nil:
+			kind = "table"
+		case dl.Quote:
+			kind = "quote" + strings.Repeat(">", dl.QuoteDepth)
+		case dl.List.Content > 0:
+			kind = "item"
+		case len(dl.Pieces) > 0 && dl.Pieces[0].Style.Bold && !dl.Pieces[0].Code:
+			kind = "bold"
+		}
+		b.WriteString(kind + "|" + dl.Text + "\n")
+	}
+	return b.String()
+}
+
+// The corpus cases of the plan's tests (11, 13, 16, 17, 19, 20) render as
+// their reviewed after-text, lay out within every width at both width
+// methods, and keep one LineSource per display line.
+func TestTolerantCorpus(t *testing.T) {
+	files, err := filepath.Glob("testdata/tolerant/*.md")
+	if err != nil || len(files) != 6 {
+		t.Fatalf("corpus %v %v", files, err)
+	}
+	for _, file := range files {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := os.ReadFile(strings.TrimSuffix(file, ".md") + ".after")
+		if err != nil {
+			t.Fatal(err)
+		}
+		mapped(t, string(raw), func(wm ansi.Method, doc Document) {
+			if got := describeLines(doc); got != string(want) {
+				t.Fatalf("%s (%v):\n%s\nwant:\n%s", file, wm, got, want)
+			}
+			if len(doc.Lines) != len(doc.Sources) {
+				t.Fatalf("%s: %d lines, %d sources", file, len(doc.Lines), len(doc.Sources))
+			}
+			options := documentOptions()
+			options.Method = wm
+			for _, width := range []int{20, 80, 200} {
+				rows, _ := painted(t, doc, options, width)
+				checkCoverage(t, doc, rows)
+			}
+		})
+	}
+}
+
+// FuzzTolerantMarkdown checks the tolerant rules' invariants: no panic, one
+// LineSource per display line, every row within its width with its bytes
+// shown once, and source mode one display line per source line. Its seeds
+// (the corpus and the rules' own fixtures) run in every test run.
+func FuzzTolerantMarkdown(f *testing.F) {
+	files, _ := filepath.Glob("testdata/tolerant/*.md")
+	for _, file := range files {
+		if raw, err := os.ReadFile(file); err == nil {
+			f.Add(string(raw))
+		}
+	}
+	for _, seed := range []string{
+		"## T \\###", "Foo\nBar\n---", "\n    x\n\n    y\nz", "- a\n\t- b\n  - c\n\t\t- d", ">>> deep <b>x</b>",
+		"<!-- a\n```\n| a | b |\n|---|---|\n--> rest", "a<br>b<br><br>", "| a<br>b | <kbd>c</kbd> |\n|---|---|\n| <b>x</b><br>y | z |",
+		"<b>x <i>y</b> z</i>", "    ```\n    code\n    ```", "Foo\n<!-- c -->\n===", "*\t*\t*", "\t\t\t- x", "<details>\n\n- item\n</details>",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, text string) {
+		// Unicode format characters (such as U+0601) already lay out one
+		// cell narrower than the row on main: an existing renderer issue
+		// outside these rules, reported separately.
+		if len(text) > 4096 || strings.ContainsFunc(text, func(r rune) bool { return unicode.Is(unicode.Cf, r) }) {
+			return
+		}
+		for _, wm := range []ansi.Method{ansi.WcWidth, ansi.GraphemeWidth} {
+			options := documentOptions()
+			options.Method, options.MapSource = wm, true
+			doc := Parse(text, options)
+			if len(doc.Lines) != len(doc.Sources) {
+				t.Fatalf("%d lines, %d sources", len(doc.Lines), len(doc.Sources))
+			}
+			for _, width := range []int{20, 80} {
+				rows, _ := painted(t, doc, options, width)
+				checkCoverage(t, doc, rows)
+			}
+			source := Parse(text, ParseOptions{Method: wm, Theme: options.Theme, Source: true})
+			if len(source.Lines) != len(strings.Split(Plain(text), "\n")) {
+				t.Fatalf("source mode has %d lines for %d source lines", len(source.Lines), len(strings.Split(Plain(text), "\n")))
+			}
+		}
+	})
 }

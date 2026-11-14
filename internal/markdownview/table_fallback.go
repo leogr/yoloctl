@@ -87,7 +87,11 @@ func labelledTable(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft i
 		for c, cr := range dl.Cells {
 			text := labels[c] + dl.Text[cr[0]:cr[1]]
 			// Each forced break's segment starts its own line under the label.
-			segs := segments(text, cellBreaks(dl.Breaks, [2]int{cr[0] - len(labels[c]), cr[1]}))
+			breaks := cellBreaks(dl.Breaks, cr)
+			for i := range breaks {
+				breaks[i] += len(labels[c])
+			}
+			segs := segments(text, breaks)
 			var ranges [][2]int
 			for s, seg := range segs {
 				lineText := text[seg[0]:seg[1]]

@@ -1,0 +1,10 @@
+text|Output:
+text|
+card-open|
+code|$ yoloctl box list
+code|NAME   STATE
+code|dev    running
+card-close|
+text|
+text|End.
+text|

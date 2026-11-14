@@ -27,8 +27,10 @@ the accent, 2 in body text, 3 in the label colour, 4–6 in the accent. Ordered
 items keep their written numbers and delimiter; decorative padding right-aligns
 the numbers of a run of same-indentation items (deeper items continue it, other
 lines end it). Ordered and bullet items wrap under their text unless that column
-would be under 8 cells. A trimmed `---` line is a decorative rule as wide as
-the text; table delimiters win. `<http(s)://…>` shows without brackets as a
+would be under 8 cells. A rule line is a decorative rule as wide as the text;
+table delimiters win. Rule spellings, setext and closing-hash headings, nested
+quotes, TAB-indented items, indented code and a small HTML subset are in the
+[tolerant rules](markdown-tolerant.md). `<http(s)://…>` shows without brackets as a
 URL intent that decorators never re-style. Padding, gutters and rules are
 never copied; source maps drop the brackets as markup.
 [2](#source-2) [5](#source-5) [14](#source-14)

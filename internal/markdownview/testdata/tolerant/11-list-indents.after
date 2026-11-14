@@ -1,0 +1,13 @@
+text|-no space after dash
+item|• item
+item|  • two spaces
+item|   • three spaces
+item|    • four spaces
+item|    • tab nested
+item|• plus marker
+item|• star marker
+text|1.no space
+item|1. one
+item|3. three (skipped)
+item|2) paren
+text|

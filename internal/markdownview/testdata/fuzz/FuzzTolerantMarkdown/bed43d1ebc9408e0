@@ -1,0 +1,2 @@
+go test fuzz v1
+string("0|0000000\xb70000\n-|-\n00000<Br>0|0")

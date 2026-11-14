@@ -128,7 +128,10 @@ source/copy/Quote behavior and rendering limits remain. [43](#source-43)
 `internal/markdownview`; chat retains identities, previews, model state and
 effects. The extraction preserved the existing syntax and bounds; the subset
 since adds code-span table pipes, heading levels, aligned ordered items, list
-hanging indents, `---` rules and angle autolinks, without new blocks. [43](#source-43)
+hanging indents, rules and angle autolinks, then GitHub-aligned setext and
+closing-hash headings, rule spellings, nested quotes, TAB-indented items,
+indented code cards and a small HTML subset (`<br>` in table cells included),
+with recorded deviations; source view applies none. [43](#source-43) [53](#source-53)
 
 [FACT] `follow PATH` uses the shared renderer for a live file pane, with source
 toggle, drag selection copied on release as in chat (plus explicit `y`) and inert links. It polls once per second,
@@ -430,3 +433,5 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 51. <a id="source-51"></a> [Audit output and following](../digests/audit-output.md).
 
 52. <a id="source-52"></a> [Mermaid views](../digests/mermaid-views.md).
+
+53. <a id="source-53"></a> [Tolerant Markdown rules](../digests/markdown-tolerant.md).
