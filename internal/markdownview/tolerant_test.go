@@ -372,3 +372,68 @@ func TestIndentedCode(t *testing.T) {
 		t.Fatalf("%d lines, %d sources", len(doc.Lines), len(doc.Sources))
 	}
 }
+
+// C1 comment blocks: hidden lines; the text after "-->" on the last line is
+// literal; an unclosed comment is shown as it is; an open comment owns
+// fences, tables, rules and setext pairs; a fence or code block owns "<!--".
+func TestCommentBlocks(t *testing.T) {
+	shown := func(doc Document) string {
+		var parts []string
+		for _, dl := range doc.Lines {
+			switch {
+			case dl.Hidden:
+				parts = append(parts, "~")
+			case dl.Fence != FenceNone:
+				parts = append(parts, "|")
+			default:
+				parts = append(parts, dl.Text)
+			}
+		}
+		return strings.Join(parts, " / ")
+	}
+	for text, want := range map[string]string{
+		"<!-- foo -->*bar*":            "*bar*",
+		"<!-- only -->":                "~",
+		"   <!-- x -->":                "~",
+		"a\n<!-- n -->\nb":             "a / ~ / b",
+		"<!-- a\nb\nc --> after **x**": "~ / ~ / after **x**",
+		"<!-- open\n# not hidden":      "<!-- open / not hidden",
+		"<!--\n```\ncode\n```\n| a | b |\n|---|---|\n---\nFoo\n===\n-->": "~ / ~ / ~ / ~ / ~ / ~ / ~ / ~ / ~ / ~",
+		"```\n<!-- x -->\n```":          "| / <!-- x --> / |",
+		"\n    <!-- x -->":              " / | / <!-- x --> / |",
+		"\n    code\n<!-- c -->\nafter": " / | / code / | / ~ / after",
+		"    <!-- x -->\n":              "| / <!-- x --> / | / ",
+		"Foo\n<!-- c -->\n---":          "Foo / ~ / ",
+	} {
+		mapped(t, text, func(_ ansi.Method, doc Document) {
+			if got := shown(doc); got != want {
+				t.Fatalf("%q shows %q, want %q", text, got, want)
+			}
+			if len(doc.Lines) != len(doc.Sources) {
+				t.Fatalf("%q: %d lines, %d sources", text, len(doc.Lines), len(doc.Sources))
+			}
+		})
+	}
+	// Copy and Quote (plan section 6).
+	options := documentOptions()
+	options.MapSource = true
+	for _, tc := range []struct {
+		text           string
+		la, oa, lb, ob int
+		copy, quote    string
+	}{
+		{"a\n<!-- n -->\nb", 0, 0, 2, 1, "a\nb", "a\n<!-- n -->\nb"},
+		{"<!-- n -->\nb", 1, 0, 1, 1, "b", "b"},
+	} {
+		doc := Parse(tc.text, options)
+		if RenderText(doc) != tc.copy {
+			t.Fatalf("%q copies %q", tc.text, RenderText(doc))
+		}
+		selection := SourceSelection{Lines: doc.Lines, Sources: doc.Sources, Text: tc.text, Render: func(s string) string {
+			return RenderText(Parse(s, options))
+		}}
+		if got, ok := selection.Exact(tc.la, tc.oa, tc.lb, tc.ob, true, true); !ok || got != tc.quote {
+			t.Fatalf("%q quotes %q (%v)", tc.text, got, ok)
+		}
+	}
+}

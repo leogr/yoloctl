@@ -159,6 +159,18 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 	at := 0      // the source offset of lines[idx]
 	literal := 0 // lines of a rejected table: shown as text, never re-detected
 	var lists listContext
+	// Comment blocks (C1): closer[k] is the first line at or after k that
+	// holds "-->", from one backward pass, so no opener searches the rest of
+	// the message; commentEnd is the open block's closing line.
+	closer := make([]int, len(lines)+1)
+	closer[len(lines)] = -1
+	for k := len(lines) - 1; k >= 0; k-- {
+		closer[k] = closer[k+1]
+		if strings.Contains(lines[k], "-->") {
+			closer[k] = k
+		}
+	}
+	commentEnd := -1
 	// setext[k] is the heading level of paragraph line k when its run ends
 	// in an underline, -1 for line k being that underline, 0 when decided
 	// otherwise; a missing key is not decided yet.
@@ -166,7 +178,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 	noTable := 0 // lines before it are known not to start a table
 	paragraphLine := func(k int) bool {
 		l := lines[k]
-		if strings.TrimSpace(l) == "" || FenceMarker(strings.TrimLeft(l, " ")) != "" || thematicBreak(l) || atxHeading(l) ||
+		if strings.TrimSpace(l) == "" || FenceMarker(strings.TrimLeft(l, " ")) != "" || thematicBreak(l) || atxHeading(l) || commentBlockEnd(lines, closer, k) >= 0 ||
 			quoteDepth(l) > 0 || setextUnderline(l) > 0 {
 			return false
 		}
@@ -232,15 +244,28 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 		line := lines[idx]
 		textAbove := prevText
 		prevText = false
-		if !source && fence == "" {
+		col, _ := indentCols(line)
+		blank := strings.TrimSpace(line) == ""
+		if !source && fence == "" && idx > commentEnd {
 			if _, _, item := listMarker(line); !item {
 				lists.other(line)
 			}
-			col, _ := indentCols(line)
-			blank := strings.TrimSpace(line) == ""
 			if owned := col >= 4 || blank && codeContinues(idx); codeOpener >= 0 && !owned {
 				closeCode(at - 1)
 			}
+			if codeOpener < 0 {
+				if end := commentBlockEnd(lines, closer, idx); end >= 0 {
+					commentEnd = end
+				}
+			}
+		}
+		if !source && idx <= commentEnd {
+			// An open comment owns its lines: hidden, and the text after
+			// "-->" on its last line is shown literally.
+			out = append(out, commentLine(wm, lines[idx], idx == commentEnd, at, theme, srcs))
+			continue
+		}
+		if !source && fence == "" {
 			if codeOpener < 0 && !blank && col >= 4 && !lists.active() && !textAbove {
 				// A code block starts: a card like a fence without a language.
 				codeOpener = len(out)
@@ -519,6 +544,57 @@ func quoteMarkers(line string) (int, string) {
 func quoteDepth(line string) int {
 	depth, _ := quoteMarkers(line)
 	return depth
+}
+
+// commentBlockEnd is the closing line of a comment block opened at line k:
+// its first text, after up to 3 columns of indentation, is "<!--", and a
+// "-->" follows on that line or a later one. -1 when line k opens none: an
+// unclosed comment is shown as it is.
+func commentBlockEnd(lines []string, closer []int, k int) int {
+	col, at := indentCols(lines[k])
+	if col > 3 || !strings.HasPrefix(lines[k][at:], "<!--") {
+		return -1
+	}
+	if strings.Contains(lines[k][at+4:], "-->") {
+		return k
+	}
+	return closer[k+1]
+}
+
+// commentLine is a line of a comment block: hidden, unless it is the last
+// line and text follows its "-->", which is shown literally (no inline
+// Markdown, no tags). The hidden comment is a unit before that text.
+func commentLine(wm ansi.Method, line string, last bool, at int, theme spaceview.Theme, srcs *[]LineSource) DisplayLine {
+	suffix, from := "", len(line)
+	if last {
+		start := 0
+		if open := strings.Index(line, "<!--"); open >= 0 {
+			start = open + 4
+		}
+		from = start + strings.Index(line[start:], "-->") + 3
+		for from < len(line) && (line[from] == ' ' || line[from] == '\t') {
+			from++ // whitespace after the comment is not shown
+		}
+		suffix = line[from:]
+	}
+	if strings.TrimSpace(suffix) == "" {
+		if srcs != nil {
+			*srcs = append(*srcs, LineSource{Start: at, End: at + len(line)})
+		}
+		return DisplayLine{Decor: true, Hidden: true, Pieces: []Piece{{Style: spaceview.Style{FG: theme.Text}}}}
+	}
+	var tabs, lead *SourceMap
+	if srcs != nil {
+		tabs = &SourceMap{Hi: len(suffix)}
+		lead = &SourceMap{Hi: len(line)}
+		lead.Add(suffix, line, from, len(line))
+	}
+	dl := DisplayLine{Text: ExpandTabsMap(wm, suffix, tabs)}
+	dl.Pieces = []Piece{{End: len(dl.Text), Style: spaceview.Style{FG: theme.Text}}}
+	if srcs != nil {
+		*srcs = append(*srcs, LineSource{Start: at, End: at + len(line), Src: tabs.Then(lead).Shift(at)})
+	}
+	return dl
 }
 
 // fenceIndentOK reports whether a fence opener's indentation lets it open
