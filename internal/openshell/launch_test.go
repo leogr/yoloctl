@@ -2,12 +2,13 @@ package openshell
 
 import (
 	"encoding/json"
-	"github.com/leogr/yoloctl/internal/mainlaunch"
 	"os"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/leogr/yoloctl/internal/mainlaunch"
 )
 
 func TestReadOnlyLaunchIntentUsesRealCwdAndOnlyItsAuthoritativeBit(t *testing.T) {
