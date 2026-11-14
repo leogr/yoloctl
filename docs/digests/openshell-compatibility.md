@@ -116,6 +116,17 @@ read-only. The lease is recorded on the channel before any await, so a dropped
 handler releases it. Without the switch the behaviour is upstream's. Releases may carry it
 as an optional fifth patch. [34](#source-34)
 
+[FACT] Patch 6 (`0006-main-attachments-ended.patch`) leaves the main exit
+marker where it is and, once upstream's terminal-delivery wait completes, writes
+`main-attachments-ended` (owner-only, atomic, content `ended` and a newline) in
+the marker's directory. That wait ends when every `openshell-main` attachment
+present at the exit has ended, which in russh 0.64 is its SSH connection ending:
+the server closes the channel after the exit status, so a client's channel
+close alone does not end the attachment. With no attachment the file follows at
+once; a shutdown during the wait writes nothing. The file does not tell
+completion from abandonment and carries no timer. Releases may carry it as an
+optional sixth patch after the fifth. [35](#source-35)
+
 [FACT] Inside a box, a `kill` or `rt_sigqueueinfo` aimed at a positive PID is
 seccomp-notified to the sandbox broker, which checks that the notification is
 still live (`validate_id`), delivers the signal itself through
@@ -229,3 +240,4 @@ operator-box case was not rerun separately. [26](#source-26)
 32. <a id="source-32"></a> [Linux v6.12 seccomp_filter.rst](https://github.com/torvalds/linux/blob/v6.12/Documentation/userspace-api/seccomp_filter.rst#L276-L282) — `SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV` semantics.
 33. <a id="source-33"></a> [cmd/yoloctl/signals.go](../../cmd/yoloctl/signals.go#L17-L50) — `commandSignalContext`: first signal forwarded, a second cancels; `signalOnce` in `signal_once_linux_test.go` (`tgkill`), used by `attach_signal_test.go`, `signals_test.go` and `signals_tui_test.go`.
 34. <a id="source-34"></a> [Patch 5](../../third_party/openshell/patches/0005-main-raw-input.patch#L1-L480) — `filter_main_detach_sequence` bypass, `main_raw_input`, `refuse_raw_main` and its five tests; `internal/openshell/release.go` `qualifiedPatch5Name`, `qualifiedPatchStack`; release_test.go `TestQualifiedPatchStackAcceptsOptionalFifthPatch`.
+35. <a id="source-35"></a> [Patch 6](../../third_party/openshell/patches/0006-main-attachments-ended.patch#L1-L303) — `drain_then_mark_attachments_ended`, `persist_main_attachments_ended` and four tests in `openshell-supervisor/src/lib.rs`; ssh.rs `main_delivery_completes_*` pin the connection-end semantics; `internal/openshell/release.go` `qualifiedPatch6Name`; release_test.go `TestQualifiedPatchStackAcceptsOptionalSixthPatch`.

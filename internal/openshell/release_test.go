@@ -216,6 +216,37 @@ func TestQualifiedPatchStackAcceptsOptionalFifthPatch(t *testing.T) {
 	sixth.Patches = append(append([]SourcePatch(nil), p.Patches...), SourcePatch{"extra.patch", sha256Hex([]byte("6")), p.ForkTree, strings.Repeat("b", 40)})
 	sixth.ForkTree = strings.Repeat("b", 40)
 	if qualifiedPatchStack(sixth) {
-		t.Fatal("sixth patch accepted")
+		t.Fatal("unknown sixth patch accepted")
+	}
+}
+
+func TestQualifiedPatchStackAcceptsOptionalSixthPatch(t *testing.T) {
+	p := releaseFixture(t).Pins
+	fork := p.ForkTree
+	p.Patches[1].Tree = strings.Repeat("d", 40)
+	p.Patches = append(p.Patches,
+		SourcePatch{qualifiedPatch3Name, sha256Hex([]byte("patch3-fixture")), strings.Repeat("d", 40), strings.Repeat("e", 40)},
+		SourcePatch{qualifiedPatch4Name, sha256Hex([]byte("patch4-fixture")), strings.Repeat("e", 40), strings.Repeat("a", 40)},
+		SourcePatch{qualifiedPatch5Name, sha256Hex([]byte("patch5-fixture")), strings.Repeat("a", 40), strings.Repeat("b", 40)},
+		SourcePatch{qualifiedPatch6Name, sha256Hex([]byte("patch6-fixture")), strings.Repeat("b", 40), fork})
+	if !qualifiedPatchStack(p) {
+		t.Fatal("six-patch release refused")
+	}
+	broken := p
+	broken.Patches = append([]SourcePatch(nil), p.Patches...)
+	broken.Patches[5].ParentTree = strings.Repeat("c", 40)
+	if qualifiedPatchStack(broken) {
+		t.Fatal("sixth patch accepted off the chain")
+	}
+	skipped := p
+	skipped.Patches = append(append([]SourcePatch(nil), p.Patches[:4]...), SourcePatch{qualifiedPatch6Name, sha256Hex([]byte("patch6-fixture")), strings.Repeat("a", 40), fork})
+	if qualifiedPatchStack(skipped) {
+		t.Fatal("sixth patch accepted in the fifth position")
+	}
+	seventh := p
+	seventh.Patches = append(append([]SourcePatch(nil), p.Patches...), SourcePatch{"extra.patch", sha256Hex([]byte("7")), fork, strings.Repeat("f", 40)})
+	seventh.ForkTree = strings.Repeat("f", 40)
+	if qualifiedPatchStack(seventh) {
+		t.Fatal("seventh patch accepted")
 	}
 }

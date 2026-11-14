@@ -1,0 +1,303 @@
+yoloctl local patch 0006: an attachments-ended record beside the canonical main-process exit marker.
+
+After the canonical main process exits, the supervisor persists its exit
+marker, reports the exit, then waits for terminal delivery to drain
+(drain_main_terminal_delivery): every openshell-main attachment present at the
+exit has ended. In russh 0.64 that means its SSH connection has ended: the
+server closes the channel after the exit status, so a client's channel close
+alone does not end the attachment. None attached ends the wait at once.
+
+When that wait completes and an exit marker path is configured, the supervisor
+now also writes `main-attachments-ended` in the marker's directory,
+owner-only and atomically, with the content `ended` and a newline. It states
+only that no client is attached any more; it does not tell completion from
+abandonment. A wait cancelled by shutdown writes nothing; a write failure is
+logged and nothing else changes. The exit marker, its timing and attachment
+accounting are unchanged; there is no new flag and no timer. A reader that
+ends on this file needs its own bound.
+
+diff --git a/crates/openshell-supervisor-process/src/ssh.rs b/crates/openshell-supervisor-process/src/ssh.rs
+index 4e3cfd26..324e88b6 100644
+--- a/crates/openshell-supervisor-process/src/ssh.rs
++++ b/crates/openshell-supervisor-process/src/ssh.rs
+@@ -2497,6 +2497,115 @@ mod tests {
+         channel.close().await.unwrap();
+     }
+ 
++    // yoloctl patch 0006: terminal delivery (the drain behind `main-attachments-ended`)
++    // stays open while an attachment present at the exit is connected. The
++    // server closes the channel after the status, so russh drops the client's
++    // close reply: the attachment ends when its connection ends.
++    #[tokio::test]
++    async fn main_delivery_completes_after_attached_client_takes_status_and_disconnects() {
++        let main_session = MainSession::inert();
++        let client = main_test_client(Some(main_session.clone())).await;
++        let mut channel = client.channel_open_session().await.unwrap();
++        channel
++            .request_subsystem(true, "openshell-main")
++            .await
++            .unwrap();
++        assert!(matches!(
++            next_main_event(&mut channel).await,
++            russh::ChannelMsg::Success
++        ));
++        assert!(
++            tokio::time::timeout(Duration::from_secs(5), main_session.finish(5, false))
++                .await
++                .unwrap()
++        );
++        assert!(
++            tokio::time::timeout(
++                Duration::from_millis(100),
++                main_session.wait_for_terminal_attachments()
++            )
++            .await
++            .is_err(),
++            "an attached client keeps delivery open"
++        );
++        main_session.mark_terminal_reported();
++        loop {
++            match next_main_event(&mut channel).await {
++                russh::ChannelMsg::ExitStatus { exit_status } => {
++                    assert_eq!(exit_status, 5);
++                    break;
++                }
++                russh::ChannelMsg::Eof | russh::ChannelMsg::Data { .. } => {}
++                event => panic!("expected the exit status, got {event:?}"),
++            }
++        }
++        let _ = channel.close().await;
++        assert!(
++            tokio::time::timeout(
++                Duration::from_millis(200),
++                main_session.wait_for_terminal_attachments()
++            )
++            .await
++            .is_err(),
++            "a closed channel on a live connection still holds delivery"
++        );
++        client
++            .disconnect(russh::Disconnect::ByApplication, "", "")
++            .await
++            .unwrap();
++        drop(channel);
++        drop(client);
++        tokio::time::timeout(
++            Duration::from_secs(5),
++            main_session.wait_for_terminal_attachments(),
++        )
++        .await
++        .expect("delivery completes once the connection ends");
++    }
++
++    // yoloctl patch 0006: an attached client whose connection ends without
++    // taking the status also completes terminal delivery.
++    #[tokio::test]
++    async fn main_delivery_completes_when_attached_connection_ends() {
++        let main_session = MainSession::inert();
++        let client = main_test_client(Some(main_session.clone())).await;
++        let mut channel = client.channel_open_session().await.unwrap();
++        channel
++            .request_subsystem(true, "openshell-main")
++            .await
++            .unwrap();
++        assert!(matches!(
++            next_main_event(&mut channel).await,
++            russh::ChannelMsg::Success
++        ));
++        assert!(
++            tokio::time::timeout(Duration::from_secs(5), main_session.finish(5, false))
++                .await
++                .unwrap()
++        );
++        assert!(
++            tokio::time::timeout(
++                Duration::from_millis(100),
++                main_session.wait_for_terminal_attachments()
++            )
++            .await
++            .is_err(),
++            "an attached client keeps delivery open"
++        );
++        client
++            .disconnect(russh::Disconnect::ByApplication, "", "")
++            .await
++            .unwrap();
++        drop(channel);
++        drop(client);
++        tokio::time::timeout(
++            Duration::from_secs(5),
++            main_session.wait_for_terminal_attachments(),
++        )
++        .await
++        .expect("delivery completes once the connection ends");
++    }
++
+     #[tokio::test]
+     async fn main_attachment_accepts_declared_session_after_process_exit() {
+         let main_session = MainSession::inert();
+diff --git a/crates/openshell-supervisor/src/lib.rs b/crates/openshell-supervisor/src/lib.rs
+index 03f58524..64f5d7e1 100644
+--- a/crates/openshell-supervisor/src/lib.rs
++++ b/crates/openshell-supervisor/src/lib.rs
+@@ -1811,8 +1811,12 @@ pub async fn run_sandbox_instance(
+         }
+         if !completion_cancelled {
+             let drain = boundary_access.drain_main_terminal_delivery();
+-            completion_cancelled =
+-                completion_phase_or_shutdown(drain, shutdown_requested.as_mut()).await;
++            completion_cancelled = drain_then_mark_attachments_ended(
++                drain,
++                shutdown_requested.as_mut(),
++                main_exit_marker.as_deref(),
++            )
++            .await;
+         }
+         if !completion_cancelled
+             && let (Some(gateway), Some(id)) = (gateway.as_ref(), sandbox_id.as_deref())
+@@ -1880,6 +1884,42 @@ fn persist_main_exit_marker(path: &std::path::Path, exit_code: i32) -> std::io::
+     write_private_file_atomically(path, format!("exit_code={exit_code}\n").as_bytes())
+ }
+ 
++/// yoloctl patch 0006: the file beside the exit marker that records that no
++/// client is attached to the canonical main process any more.
++const MAIN_ATTACHMENTS_ENDED_FILE: &str = "main-attachments-ended";
++
++/// yoloctl patch 0006: waits for terminal delivery to drain (every attachment
++/// present at the exit has ended; in russh that is its connection ending),
++/// then publishes `main-attachments-ended` beside the exit marker. The file
++/// does not tell completion from abandonment. A drain cancelled by shutdown
++/// writes nothing. Returns whether shutdown cancelled the drain.
++async fn drain_then_mark_attachments_ended<F, S>(
++    drain: F,
++    shutdown: Pin<&mut S>,
++    main_exit_marker: Option<&std::path::Path>,
++) -> bool
++where
++    F: Future<Output = ()>,
++    S: Future<Output = ()> + ?Sized,
++{
++    let cancelled = completion_phase_or_shutdown(drain, shutdown).await;
++    if !cancelled
++        && let Some(marker) = main_exit_marker
++        && let Err(error) = persist_main_attachments_ended(marker)
++    {
++        // The reader's bound still ends the wait without this file.
++        warn!(error = %error, "failed to persist canonical-process attachments-ended marker");
++    }
++    cancelled
++}
++
++fn persist_main_attachments_ended(main_exit_marker: &std::path::Path) -> std::io::Result<()> {
++    write_private_file_atomically(
++        &main_exit_marker.with_file_name(MAIN_ATTACHMENTS_ENDED_FILE),
++        b"ended\n",
++    )
++}
++
+ /// Replace `path` with `contents` via an owner-only (0600) temporary file in
+ /// the same directory, fsync, rename, and directory fsync.
+ fn write_private_file_atomically(path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
+@@ -4876,6 +4916,102 @@ mod tests {
+         );
+     }
+ 
++    // yoloctl patch 0006: `main-attachments-ended` is written beside the exit marker
++    // once the drain completes, and never when shutdown cancels the drain; the
++    // exit marker is untouched in every case.
++    async fn delivery_case(
++        drain: impl Future<Output = ()>,
++        shutdown: impl Future<Output = ()>,
++    ) -> (bool, tempfile::TempDir) {
++        let directory = tempfile::tempdir().unwrap();
++        let marker = directory.path().join("main-exited");
++        persist_main_exit_marker(&marker, 7).unwrap();
++        tokio::pin!(shutdown);
++        let cancelled = drain_then_mark_attachments_ended(drain, shutdown, Some(&marker)).await;
++        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "exit_code=7\n");
++        (cancelled, directory)
++    }
++
++    fn attachments_ended(directory: &tempfile::TempDir) -> Option<String> {
++        std::fs::read_to_string(directory.path().join(MAIN_ATTACHMENTS_ENDED_FILE)).ok()
++    }
++
++    #[tokio::test]
++    async fn main_attachments_ended_is_written_at_once_without_attachments() {
++        let (cancelled, directory) =
++            delivery_case(std::future::ready(()), std::future::pending()).await;
++        assert!(!cancelled);
++        assert_eq!(attachments_ended(&directory).as_deref(), Some("ended\n"));
++        assert!(
++            !directory
++                .path()
++                .join(format!(
++                    ".main-attachments-ended.tmp-{}",
++                    std::process::id()
++                ))
++                .exists()
++        );
++        #[cfg(unix)]
++        {
++            use std::os::unix::fs::PermissionsExt as _;
++            let mode = std::fs::metadata(directory.path().join(MAIN_ATTACHMENTS_ENDED_FILE))
++                .unwrap()
++                .permissions()
++                .mode();
++            assert_eq!(mode & 0o777, 0o600);
++        }
++    }
++
++    #[tokio::test]
++    async fn main_attachments_ended_waits_for_the_drain() {
++        let directory = tempfile::tempdir().unwrap();
++        let marker = directory.path().join("main-exited");
++        let (release, released) = tokio::sync::oneshot::channel::<()>();
++        let drain = async move {
++            let _ = released.await;
++        };
++        let shutdown = std::future::pending::<()>();
++        tokio::pin!(shutdown);
++        let task = drain_then_mark_attachments_ended(drain, shutdown, Some(&marker));
++        tokio::pin!(task);
++        assert!(timeout(Duration::from_millis(20), &mut task).await.is_err());
++        assert!(!directory.path().join(MAIN_ATTACHMENTS_ENDED_FILE).exists());
++        release.send(()).unwrap();
++        assert!(!task.await);
++        assert_eq!(
++            std::fs::read_to_string(directory.path().join(MAIN_ATTACHMENTS_ENDED_FILE)).unwrap(),
++            "ended\n"
++        );
++    }
++
++    #[tokio::test]
++    async fn main_attachments_ended_is_not_written_when_shutdown_cancels_the_drain() {
++        let (cancelled, directory) =
++            delivery_case(std::future::pending(), std::future::ready(())).await;
++        assert!(cancelled);
++        assert_eq!(attachments_ended(&directory), None);
++    }
++
++    #[tokio::test]
++    async fn main_attachments_ended_replaces_a_stale_file_and_needs_a_marker() {
++        let directory = tempfile::tempdir().unwrap();
++        let marker = directory.path().join("main-exited");
++        std::fs::write(directory.path().join(MAIN_ATTACHMENTS_ENDED_FILE), b"stale").unwrap();
++        let shutdown = std::future::pending::<()>();
++        tokio::pin!(shutdown);
++        assert!(
++            !drain_then_mark_attachments_ended(std::future::ready(()), shutdown, Some(&marker))
++                .await
++        );
++        assert_eq!(
++            std::fs::read_to_string(directory.path().join(MAIN_ATTACHMENTS_ENDED_FILE)).unwrap(),
++            "ended\n"
++        );
++        let shutdown = std::future::pending::<()>();
++        tokio::pin!(shutdown);
++        assert!(!drain_then_mark_attachments_ended(std::future::ready(()), shutdown, None).await);
++    }
++
+     #[cfg(unix)]
+     #[test]
+     fn restore_reference_write_is_owner_only_and_replaces_stale_temporary() {

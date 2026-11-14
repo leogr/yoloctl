@@ -23,6 +23,7 @@ const (
 	qualifiedPatch3Name    = "v0072-syscall-parity.patch"
 	qualifiedPatch4Name    = "v0072-process-group-signals.patch"
 	qualifiedPatch5Name    = "main-raw-input.patch"
+	qualifiedPatch6Name    = "main-attachments-ended.patch"
 	protocolFixtureVersion = "workspace-read-only-v1"
 )
 
@@ -113,12 +114,12 @@ func LoadQualifiedRelease(raw []byte, reviewedSHA256 string) (QualifiedRelease, 
 // Callers cannot mutate the retained qualification or reconstruct another JSON
 // encoding that merely describes the same pins.
 // qualifiedPatchStack accepts the fixed first patch, the second, and the
-// optional third and fourth (v0.0.72 parity) and fifth (raw main input), each
-// parented on the previous tree
+// optional third and fourth (v0.0.72 parity), fifth (raw main input) and
+// sixth (main attachments-ended record), each parented on the previous tree
 // and the last ending at the fork tree. Two-patch releases stay valid, so
 // boxes created from them keep loading their recorded qualification.
 func qualifiedPatchStack(p ReleasePins) bool {
-	names := []string{"unmediated-network.patch", "workspace-read-only.patch", qualifiedPatch3Name, qualifiedPatch4Name, qualifiedPatch5Name}
+	names := []string{"unmediated-network.patch", "workspace-read-only.patch", qualifiedPatch3Name, qualifiedPatch4Name, qualifiedPatch5Name, qualifiedPatch6Name}
 	if len(p.Patches) < 2 || len(p.Patches) > len(names) {
 		return false
 	}
