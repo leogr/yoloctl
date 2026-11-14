@@ -176,7 +176,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 			closer[k] = k
 		}
 	}
-	commentEnd := -1
+	commentStart, commentEnd := -1, -1
 	// setext[k] is the heading level of paragraph line k when its run ends
 	// in an underline, -1 for line k being that underline, 0 when decided
 	// otherwise; a missing key is not decided yet.
@@ -264,14 +264,14 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 			}
 			if codeOpener < 0 {
 				if end := commentBlockEnd(lines, closer, idx); end >= 0 {
-					commentEnd = end
+					commentStart, commentEnd = idx, end
 				}
 			}
 		}
 		if !source && idx <= commentEnd {
 			// An open comment owns its lines: hidden, and the text after
 			// "-->" on its last line is shown literally.
-			out = append(out, commentLine(wm, lines[idx], idx == commentEnd, at, theme, srcs))
+			out = append(out, commentLine(wm, lines[idx], idx == commentStart, idx == commentEnd, at, theme, srcs))
 			continue
 		}
 		if !source && fence == "" {
@@ -391,7 +391,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 					*srcs = append(*srcs, ls)
 				}
 				continue
-			case strings.HasPrefix(trim, "#"):
+			case atxHeading(line):
 				prose = true
 				if n := len(trim) - len(strings.TrimLeft(trim, "#")); n <= 6 && strings.HasPrefix(trim[n:], " ") {
 					content := strings.TrimLeft(trim[n:], " ")
@@ -477,8 +477,10 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 				breaks = append(breaks, displayAt(inline, b))
 			}
 			if len(breaks) == 0 && strings.TrimSpace(dl.Text) == "" {
-				// Nothing left to show after hiding its tags or comment.
+				// Nothing left to show after hiding its tags or comment: a
+				// hidden line, not paragraph text a code block cannot follow.
 				dl.Decor, dl.Hidden = true, true
+				prevText = false
 			}
 		}
 		if srcs != nil {
@@ -734,12 +736,15 @@ func commentBlockEnd(lines []string, closer []int, k int) int {
 // commentLine is a line of a comment block: hidden, unless it is the last
 // line and text follows its "-->", which is shown literally (no inline
 // Markdown, no tags). The hidden comment is a unit before that text.
-func commentLine(wm ansi.Method, line string, last bool, at int, theme spaceview.Theme, srcs *[]LineSource) DisplayLine {
+func commentLine(wm ansi.Method, line string, first, last bool, at int, theme spaceview.Theme, srcs *[]LineSource) DisplayLine {
 	suffix, from := "", len(line)
 	if last {
+		// The block closes at the first "-->" after its opener: on the
+		// opening line after its "<!--", on a later line from its start.
 		start := 0
-		if open := strings.Index(line, "<!--"); open >= 0 {
-			start = open + 4
+		if first {
+			_, text := indentCols(line)
+			start = text + len("<!--")
 		}
 		from = start + strings.Index(line[start:], "-->") + 3
 		for from < len(line) && (line[from] == ' ' || line[from] == '\t') {

@@ -751,6 +751,7 @@ func FuzzTolerantMarkdown(f *testing.F) {
 		"## T \\###", "Foo\nBar\n---", "\n    x\n\n    y\nz", "- a\n\t- b\n  - c\n\t\t- d", ">>> deep <b>x</b>",
 		"<!-- a\n```\n| a | b |\n|---|---|\n--> rest", "a<br>b<br><br>", "| a<br>b | <kbd>c</kbd> |\n|---|---|\n| <b>x</b><br>y | z |",
 		"<b>x <i>y</b> z</i>", "    ```\n    code\n    ```", "Foo\n<!-- c -->\n===", "*\t*\t*", "\t\t\t- x", "<details>\n\n- item\n</details>",
+		"<!--\n--> <!--", "<details>\n    code", "#word\n---",
 	} {
 		f.Add(seed)
 	}
@@ -778,4 +779,24 @@ func FuzzTolerantMarkdown(f *testing.F) {
 			}
 		}
 	})
+}
+
+// Review build-1: a block closes at its first "-->" (F1), a tag-only hidden
+// line is not paragraph text (F2), and an invalid ATX line is paragraph text
+// a setext underline can follow (F3).
+func TestTolerantReviewFindings(t *testing.T) {
+	for text, want := range map[string]string{
+		"<!--\n--> <!--":                 "hidden|\ntext|<!--\n",
+		"<!--\n--> keep <!-- x --> tail": "hidden|\ntext|keep <!-- x --> tail\n",
+		"<!-- a --> b <!-- c -->":        "text|b <!-- c -->\n",
+		"<details>\n    code":            "hidden|\ncard-open|\ncode|code\ncard-close|\n",
+		"#word\n---":                     "bold|#word\nhidden|\n",
+		"#word":                          "text|#word\n",
+	} {
+		mapped(t, text, func(_ ansi.Method, doc Document) {
+			if got := describeLines(doc); got != want {
+				t.Fatalf("%q:\n%s\nwant:\n%s", text, got, want)
+			}
+		})
+	}
 }

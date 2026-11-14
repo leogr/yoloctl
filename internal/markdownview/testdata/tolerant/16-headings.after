@@ -1,5 +1,5 @@
-text|#No space heading
-text|####### seven hashes
+bold|#No space heading
+bold|####### seven hashes
 bold|Setext heading
 hidden|
 bold|Another
