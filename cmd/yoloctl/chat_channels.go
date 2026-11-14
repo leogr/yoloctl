@@ -245,9 +245,9 @@ func readChatChannelCatalogTarget(ctx context.Context, target controllerTarget) 
 	var snapshot chatChannelSnapshot
 	tail := &stderrTail{}
 	if err := callChatTargetInto(ctx, target, "chat.channel.list", chatChannelRequest{}, &snapshot, tail); err != nil {
-		return chatstream.Catalog{}, tail.finish("chat catalog", err)
+		return chatstream.Catalog{}, tail.finishSpace(target.Space, "chat catalog", err)
 	}
-	if err := tail.finish("chat catalog", nil); err != nil {
+	if err := tail.finishSpace(target.Space, "chat catalog", nil); err != nil {
 		return chatstream.Catalog{}, err
 	}
 	return chatChannelCatalog(snapshot), nil

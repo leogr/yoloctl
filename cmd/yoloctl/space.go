@@ -57,6 +57,7 @@ func newSpaceLogsCmd() *cobra.Command {
 		follow bool
 		lines  int
 		unit   string
+		host   bool
 	)
 	cmd := &cobra.Command{
 		Use:   "logs [SPACE]",
@@ -70,9 +71,14 @@ The shared log renderer escapes controls and folds repeated lines.
   yoloctl space logs default --follow
   yoloctl space logs prod-untrusted -n 500
 
-Host-side Lima and interactive bridge diagnostics are captured separately in
-logs/host.log under yoloctl's config root; they are not printed over live views.
-It is kept under about 1 MiB, plus one previous file, host.log.1.
+--host shows host-side Lima and interactive bridge diagnostics from
+logs/host.log and host.log.1 under yoloctl's config root. With SPACE it filters
+to that space; without SPACE it shows all records, including older records
+without space context. -n counts matching records across both files; -f follows
+host.log across rotation. It never contacts or starts a VM.
+
+  yoloctl space logs --host
+  yoloctl space logs default --host -f
 
 --unit NAME shows a guest service's log instead: a session holder
 (yoloctl-session-BOX.service, as named in a startup failure), a port forwarder,
@@ -85,6 +91,19 @@ instead. For other guest services, use 'space ssh --root'.
   yoloctl space logs default --unit yoloctl-session-coder.service -f`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if host {
+				if cmd.Flags().Changed("unit") {
+					return asUserError(errors.New("--host and --unit cannot be used together"))
+				}
+				space := ""
+				if len(args) != 0 {
+					space = args[0]
+					if err := layout.ValidateExistingSpaceName(space); err != nil {
+						return asUserError(err)
+					}
+				}
+				return tailHostLog(cmd.Context(), space, lines, follow, cmd.OutOrStdout())
+			}
 			name, err := resolveSpacePositional(args)
 			if err != nil {
 				return err
@@ -97,6 +116,7 @@ instead. For other guest services, use 'space ssh --root'.
 		},
 	}
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow new lines as they appear (tail -F)")
+	cmd.Flags().BoolVar(&host, "host", false, "Show host diagnostics; an explicit SPACE filters the shared log")
 	cmd.Flags().IntVarP(&lines, "lines", "n", 100, "Number of trailing lines to print before following")
 	cmd.Flags().StringVar(&unit, "unit", "", "Show this managed guest service's log instead of the VM log")
 	return cmd

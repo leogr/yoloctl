@@ -82,6 +82,11 @@ explicit start synchronizes them before booting. [10](#source-10)
 and telemetry callbacks retain private stderr captures and return failure
 context to the view. Empty/absent Lima homes are skipped before listing;
 foreground application streams retain their explicit destinations.
+`space logs --host` shows all host diagnostics; an explicit SPACE filters
+records by stored space context. Old/unattributed records appear only unfiltered.
+`-n` selects matching records across both files; `-f` follows rotation.
+The shared renderer shows the operation and complete unquoted body; debug keeps
+selected stored bytes. This view does not contact a VM.
 The log is bounded (1 MiB plus one previous generation), and a failure to
 write it never fails an operation that succeeded.
 [21](#source-21)

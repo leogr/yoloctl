@@ -10,6 +10,17 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// OpenRead opens an owned private log generation without following links. The
+// caller owns the descriptor, including when its pathname rotates afterwards.
+func OpenRead(path string) (*os.File, error) {
+	dir, err := unix.Open(filepath.Dir(path), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = unix.Close(dir) }()
+	return openReadLog(dir, filepath.Base(path))
+}
+
 // ReadTail reads a bounded suffix across the current and previous generation.
 // It preserves raw bytes, including a line split by rotation. This is for our
 // private files, not for Lima-owned logs. Concurrent replacement is retried

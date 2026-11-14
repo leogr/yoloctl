@@ -32,6 +32,13 @@ const hostLogLimit = 1 << 20
 // A returned error is about the log only: callers never turn it into the
 // failure of an operation that succeeded.
 func LogDiagnostics(operation string, raw []byte) error {
+	return LogSpaceDiagnostics("", operation, raw)
+}
+
+// LogSpaceDiagnostics retains the original quoted record fields and appends
+// explicit space context. Global observations use an empty space, never a guess
+// based on diagnostic text.
+func LogSpaceDiagnostics(space, operation string, raw []byte) error {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -52,7 +59,7 @@ func LogDiagnostics(operation string, raw []byte) error {
 	}
 	defer func() { _ = unix.Close(dir) }()
 	// Quote diagnostic bytes: explicitly reading the log cannot replay controls.
-	line := time.Now().UTC().Format(time.RFC3339Nano) + " " + strconv.Quote(operation) + " " + strconv.QuoteToASCII(string(raw)) + "\n"
+	line := time.Now().UTC().Format(time.RFC3339Nano) + " " + strconv.Quote(operation) + " " + strconv.QuoteToASCII(string(raw)) + " space=" + strconv.Quote(space) + "\n"
 	return appendHostLog(dir, filepath.Base(path), path, line)
 }
 
@@ -123,7 +130,12 @@ func hostLogAppender() rotatelog.Appender {
 // failure to log never turns a successful operation into an error; when the
 // operation already failed, the log problem is reported beside its error.
 func recordDiagnostics(operation string, raw []byte, err error) error {
-	logErr := LogDiagnostics(operation, raw)
+	return RecordSpaceDiagnostics("", operation, raw, err)
+}
+
+// RecordSpaceDiagnostics is RecordDiagnostics with explicit target context.
+func RecordSpaceDiagnostics(space, operation string, raw []byte, err error) error {
+	logErr := LogSpaceDiagnostics(space, operation, raw)
 	if err == nil || logErr == nil {
 		return err
 	}
@@ -192,6 +204,10 @@ func runWithDiagnostics(cmd *exec.Cmd) error { return runWithProgress(cmd, nil) 
 
 // Owned OS pipes avoid os/exec copier waits when daemon descendants retain FDs.
 func runWithProgress(cmd *exec.Cmd, progress io.Writer) error {
+	return runWithSpaceProgress(cmd, progress, "")
+}
+
+func runWithSpaceProgress(cmd *exec.Cmd, progress io.Writer, space string) error {
 	if progress != nil {
 		progress = &progressWriter{writer: progress}
 	}
@@ -259,10 +275,10 @@ func runWithProgress(cmd *exec.Cmd, progress io.Writer) error {
 		operation += " " + cmd.Args[1]
 	}
 	if output := stdoutTail.bytes(); len(output) != 0 {
-		err = recordDiagnostics(operation+" stdout", output, err)
+		err = RecordSpaceDiagnostics(space, operation+" stdout", output, err)
 		raw = append(output, raw...)
 	}
-	err = recordDiagnostics(operation, tail.bytes(), err)
+	err = RecordSpaceDiagnostics(space, operation, tail.bytes(), err)
 	if err == nil {
 		return nil
 	}

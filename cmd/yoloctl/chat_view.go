@@ -453,7 +453,7 @@ func (s *chatSession) agentsLoop() {
 		var view []controllerBoxView
 		tail := &stderrTail{}
 		err = controllerJSON(ctx, boot, "box.inventory", nil, nil, &view, tail)
-		return view, tail.finish("chat participants", err)
+		return view, tail.finishSpace(s.target.Space, "chat participants", err)
 	}, func(msg tea.Msg) { s.program.Send(msg) })
 }
 

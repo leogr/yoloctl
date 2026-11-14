@@ -53,7 +53,7 @@ func (c *Client) Create(ctx context.Context, name string, template []byte) error
 	cmd := c.spaceCommand(ctx, name, "create", "--name="+InstanceName(name), "--tty=false", "-")
 	cmd.Stdin = bytes.NewReader(template)
 	cmd.Stdout = c.stdout
-	return runWithProgress(cmd, progressFrom(ctx))
+	return runWithSpaceProgress(cmd, progressFrom(ctx), name)
 }
 
 // Start boots a previously-created instance and blocks until it is Running.
@@ -111,7 +111,7 @@ func (c *Client) CopyTo(ctx context.Context, space, localPath, remotePath string
 func (c *Client) runSpace(ctx context.Context, space string, args ...string) error {
 	cmd := c.spaceCommand(ctx, space, args...)
 	cmd.Stdout = c.stdout
-	return runWithProgress(cmd, progressFrom(ctx))
+	return runWithSpaceProgress(cmd, progressFrom(ctx), space)
 }
 
 func (c *Client) runDisk(ctx context.Context, id string, args ...string) error {

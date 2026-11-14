@@ -31,7 +31,7 @@ func callChatStream(ctx context.Context, target controllerTarget, takeOver bool,
 		req.Flags = map[string][]string{chatstream.TakeOverFlag: {"true"}}
 	}
 	err := target.Call(ctx, req, controller.ClientIO{In: in, Out: out, Err: tail})
-	return tail.finish("chat stream", err)
+	return tail.finishSpace(target.Space, "chat stream", err)
 }
 
 // stderrTail keeps the last chatStreamStderrLimit bytes written to it, in a
@@ -95,13 +95,13 @@ func callChatViewControllerInto(ctx context.Context, cmd *cobra.Command, method 
 func callChatViewTargetInto(ctx context.Context, target controllerTarget, method string, input, result any) error {
 	tail := &stderrTail{}
 	err := callChatTargetInto(ctx, target, method, input, result, tail)
-	return tail.finish("chat "+method, err)
+	return tail.finishSpace(target.Space, "chat "+method, err)
 }
 
-func (t *stderrTail) finish(operation string, err error) error {
+func (t *stderrTail) finishSpace(space, operation string, err error) error {
 	t.mu.Lock()
 	raw := append([]byte(nil), t.buf...)
 	t.mu.Unlock()
 	// A log failure never fails a call that succeeded.
-	return t.annotate(vmhost.RecordDiagnostics(operation, raw, err))
+	return t.annotate(vmhost.RecordSpaceDiagnostics(space, operation, raw, err))
 }
