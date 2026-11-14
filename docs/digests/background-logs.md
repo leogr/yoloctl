@@ -1,7 +1,7 @@
 # Background log storage and views
 
 Verification: `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7`; Lima view:
-`e1386faff0f1db931b00d9305ec257173d38d365` and accompanying changes.
+`e1386faff0f1db931b00d9305ec257173d38d365` and accompanying changes; Firecracker view: `1aceb626b9a21aacebda708a06e266205a2be704` and accompanying changes.
 
 [FACT] The controller service, managed holder and Firecracker guest init use the
 shared file Logger: plain UTC RFC3339 timestamps, levels and actor fields, no
@@ -71,8 +71,14 @@ lifecycle settlement.
 records: original timestamps, port forwarding, vsock, cloud-init and VM status.
 Failed events/degradation display as warnings; status errors display as errors.
 Unknown fields/types and malformed/incomplete records retain their original
-text. Other VM logs keep the plain parser; debug still bypasses all parsing.
-[13](#source-13) [14](#source-14)
+text. Debug still bypasses all parsing. [13](#source-13) [14](#source-14)
+
+[FACT] For Firecracker's `vm.log`, Firecracker v1.17 logger lines (local time,
+`[instance:thread[:LEVEL…]]`) show as `vm/firecracker` at their time and level,
+and kernel console lines (`[seconds] text`) as `vm/kernel`. yoloctl's own
+records keep the plain parser. Other lines, markers included, stay generic text;
+unstamped lines take the last stamped line's time and serial carriage returns
+are dropped for display. [15](#source-15) [16](#source-16)
 
 [FACT] Regressions cover raw suffixes/two rotations, an oversized existing file,
 unsafe current/history files, sink recovery, a real external producer, marker
@@ -107,3 +113,5 @@ classification, durable evidence or existing admission/cancellation rules.
 12. <a id="source-12"></a> [Initialized diagnostics](../../cmd/yoloctl/controller_audit_linux.go#L448) — `startAuditRetention`; controller_internal.go `recordWorkerCompletion`; internal/controller/image_orphans.go `SaveImageOrphan`; owned_diagnostics_linux_test.go and image_orphan_logging_test.go record/evidence/sink-failure controls.
 13. <a id="source-13"></a> [Lima adapter](../../cmd/yoloctl/lima_space_log_render.go#L56) — `limaSpaceLogRecord`; `lima_space_log_render_test.go` source isolation, controls and debug.
 14. <a id="source-14"></a> [Lima 2.2.1 event schema](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/hostagent/events/events.go) — host-agent event fields.
+15. <a id="source-15"></a> [Firecracker adapter](../../cmd/yoloctl/firecracker_space_log_render.go#L41) — `newFirecrackerSpaceLogRecord`, `firecrackerRecord`; `firecracker_space_log_render_test.go` with real v1.17.0 console lines in `testdata/firecracker-vm-console.log`.
+16. <a id="source-16"></a> [Firecracker v1.17.0 logger](https://github.com/firecracker-microvm/firecracker/blob/v1.17.0/src/vmm/src/logger/logging.rs) — line format, defaults and stdout target; `src/utils/src/time.rs` `LocalTime`.

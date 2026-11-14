@@ -35,8 +35,11 @@ func newSpaceLogOutput(w io.Writer, settings logging.Settings, logPath string) *
 		showBlank: settings.Verbosity.Allows(slog.NewRecord(time.Time{}, slog.LevelInfo, "", 0)),
 	}
 	out.parseRecord = spaceLogRecord
-	if filepath.Base(logPath) == "ha.stdout.log" {
+	switch filepath.Base(logPath) {
+	case "ha.stdout.log":
 		out.parseRecord = limaSpaceLogRecord
+	case "vm.log":
+		out.parseRecord = newFirecrackerSpaceLogRecord()
 	}
 	if settings.Verbosity != prettylog.Trace {
 		out.logger = logging.NewFollowLogger(w, settings, nil)
