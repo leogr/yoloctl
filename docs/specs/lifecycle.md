@@ -37,6 +37,9 @@ from runtime evidence, never a label alone. Only an explicit `box recreate`
 switches it; reconcile, set, edit, rebuild and start refuse. Policy-only changes
 never restart a proved privileged box because its policy is not enforced. A
 privileged endpoint hangs up a disconnected session instead of orphaning it.
+A channel explicitly marked as the managed main session additionally ends the
+endpoint after its process exits and bounded finish completes, including when
+its holder is gone; unmarked shell/exec exit does not stop the box.
 [14](#source-14)
 
 [FACT] Runtime teardown includes holder, session artifacts, ports and orphan

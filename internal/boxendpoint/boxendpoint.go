@@ -45,6 +45,10 @@ const (
 	Binary = BinaryDir + "/yoloctl"
 	// SandboxUser is the only SSH user name and the child identity.
 	SandboxUser = "sandbox"
+	// MainSessionRequest marks a session channel before shell/exec so its
+	// process exit ends this privileged box. An empty request without a
+	// process launch is only a capability probe and does not stop the box.
+	MainSessionRequest = "yoloctl-main-session"
 	// UserEnvironmentVariable carries the account-injected child environment
 	// (a JSON string map), exactly as for openshell-sandbox.
 	UserEnvironmentVariable = "OPENSHELL_USER_ENVIRONMENT"

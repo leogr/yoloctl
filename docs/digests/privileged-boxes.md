@@ -1,6 +1,6 @@
 # Privileged development boxes
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; managed endpoint shutdown `549d46495e13d1814aff3358c3a68fc7463211be` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Only the box's explicit `privileged: true` setting selects a privileged
 box: `--privileged` on create, copy and set (`=false` clears it), or an edit.
@@ -47,12 +47,22 @@ socket in an owner-only directory. [9](#source-9) [10](#source-10)
 [FACT] It serves the yoloctl clients' SSH subset: no-auth for user `sandbox`
 only, session channels, PTY requests with modes and measured pixels, resizes,
 shell, exec, EOF, separate stderr without a PTY, exit status or RFC signal, and
-keepalives. Every other request gets a negative reply. Connections, sessions,
+keepalives, and the empty `yoloctl-main-session` request before shell/exec.
+Every other request gets a negative reply. Connections, sessions,
 commands, terminal names and modes are bounded. Children get the confined
 launch's bash argv, workdir and HOME/USER/SHELL/PATH/TERM plus the injected map
 without `OPENSHELL_*` keys, raw JSON or supervisor variables, and no sandbox
 marker. [10](#source-10)
 [11](#source-11)
+
+[FACT] The optional main-session request marks only that channel; it starts
+nothing and mark-and-close is a capability probe. Nonempty payloads and marks
+after process start are refused. When a marked process exits, the endpoint
+completes its existing bounded finish, then wakes PID 1's ordinary `Shutdown`
+path, including listener close and namespace cleanup. A missing/disconnected
+holder does not prevent it. Unmarked shells/execs and failed launches do not
+request shutdown. Older endpoints refuse the unknown request. Protocol 1 and the launch argv are unchanged.
+[10](#source-10) [11](#source-11) [33](#source-33)
 
 [FACT] Each child leads its own session and process group with the mapped
 credentials. The reaper observes exits without reaping and reaps a leader
@@ -149,7 +159,7 @@ were not run. [28](#source-28)
 8. <a id="source-8"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1824-L1830) — runtime preflight.
 9. <a id="source-9"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L35-L39) — early dispatch.
 10. <a id="source-10"></a> [internal/boxendpoint/server_linux.go](../../internal/boxendpoint/server_linux.go#L89-L1174) — server, children, reaper, PID 1 and socket.
-11. <a id="source-11"></a> [internal/boxendpoint/boxendpoint.go](../../internal/boxendpoint/boxendpoint.go#L55-L215) — limits, argv and environment.
+11. <a id="source-11"></a> [internal/boxendpoint/boxendpoint.go](../../internal/boxendpoint/boxendpoint.go#L24-L219) — main-session request, limits, argv and environment.
 12. <a id="source-12"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L46-L130) — `ClassifyRuntime`.
 13. <a id="source-13"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L196-L248) — policy note and `runtimeModeReason`.
 14. <a id="source-14"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L185-L215) — explicit-recreate mode gate.
@@ -171,3 +181,5 @@ were not run. [28](#source-28)
 30. <a id="source-30"></a> [cmd/yoloctl/agentbox_reconcile.go](../../cmd/yoloctl/agentbox_reconcile.go#L636-L641) — `box set --privileged`; create/copy flag in `agentbox.go` at L989 and copy inheritance in `agentbox_copy.go` at L306.
 31. <a id="source-31"></a> [internal/features/privileged_test.go](../../internal/features/privileged_test.go#L1) — installer wording and its script run against fake package, account and sudo tools.
 32. <a id="source-32"></a> [Live space view](space-view.md) — inventory launch evidence and the privilege pill rule.
+
+33. <a id="source-33"></a> [internal/boxendpoint/main_session_linux_test.go](../../internal/boxendpoint/main_session_linux_test.go#L1-L227) — real serving/stop path with unprivileged isolated process groups; output/status, holder loss, probe, unmarked and failed-start controls.

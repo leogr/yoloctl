@@ -82,6 +82,9 @@ type Server struct {
 	mu      sync.Mutex
 	closing bool
 	conns   map[net.Conn]struct{}
+
+	mainExited   chan struct{}
+	mainExitOnce sync.Once
 }
 
 // NewServer prepares a server with a fresh in-memory host key. Clients reach
@@ -123,11 +126,12 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 	config.AddHostKey(signer)
 	return &Server{
-		cfg:    cfg,
-		ssh:    config,
-		reaper: newReaper(cfg.PID1),
-		slots:  make(chan struct{}, maxConnections),
-		conns:  map[net.Conn]struct{}{},
+		cfg:        cfg,
+		ssh:        config,
+		reaper:     newReaper(cfg.PID1),
+		slots:      make(chan struct{}, maxConnections),
+		conns:      map[net.Conn]struct{}{},
+		mainExited: make(chan struct{}),
 	}, nil
 }
 
@@ -630,6 +634,7 @@ type session struct {
 	pty     *ptyRequest
 	modes   []terminalMode
 	started bool
+	main    bool // marked before start; immutable once the process is launched
 	proc    *process
 	// peerClosed is closed once the channel is closed on both sides (the
 	// peer answered or sent close, or the connection ended).
@@ -682,6 +687,12 @@ func (ss *session) goWork(f func()) {
 
 func (ss *session) handle(req *ssh.Request) (bool, func()) {
 	switch req.Type {
+	case MainSessionRequest:
+		if ss.started || len(req.Payload) != 0 {
+			return false, nil
+		}
+		ss.main = true
+		return true, nil
 	case "pty-req":
 		if ss.started {
 			return false, nil
@@ -886,6 +897,12 @@ func (ss *session) finish(p *process, outputs []chan struct{}, closeOutputs func
 	// Both closing the channel and ending the connection release parked copies.
 	waitAll(outputs, 0)
 	<-sent
+	if ss.main {
+		// The process has exited and the existing bounded session finish is
+		// complete, even if its holder/transport disappeared. Wake PID 1; it
+		// owns listener/namespace shutdown, never the holder or this channel.
+		ss.srv.mainExitOnce.Do(func() { close(ss.srv.mainExited) })
+	}
 }
 
 // waitAll waits for every channel to close, up to timeout (zero: no limit).
@@ -1096,18 +1113,26 @@ func runPID1(args []string, logf func(string, ...any)) error {
 	if err != nil {
 		return err
 	}
+	srv.serveUntilStopped(ln, stop)
+	return nil
+}
+
+// PID 1's existing signal/listener stop path also owns managed-main exit.
+// Keeping Shutdown here avoids making a session's finish goroutine its own
+// shutdown supervisor. Isolated tests use the same path without PID1 mode.
+func (s *Server) serveUntilStopped(ln net.Listener, stop <-chan os.Signal) {
 	served := make(chan error, 1)
-	go func() { served <- srv.Serve(ln) }()
-	logf("ready (%s)", Launcher)
+	go func() { served <- s.Serve(ln) }()
+	s.cfg.Logf("ready (%s)", Launcher)
 	select {
 	case <-stop:
+	case <-s.mainExited:
 	case err := <-served:
 		if err != nil {
-			logf("listener failed: %v", err)
+			s.cfg.Logf("listener failed: %v", err)
 		}
 	}
-	srv.Shutdown([]net.Listener{ln}, shutdownGrace)
-	return nil
+	s.Shutdown([]net.Listener{ln}, shutdownGrace)
 }
 
 // lookupSandbox resolves the identity after the entrypoint shim's remap.
