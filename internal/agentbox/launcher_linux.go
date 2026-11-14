@@ -10,8 +10,9 @@ import (
 
 // PrivilegedMainSession asks a running privileged box's endpoint whether it
 // takes the main-session request (contract M-b section 7): one request, no
-// session runs. Nil until that request exists in this build.
-var PrivilegedMainSession func(ctx context.Context, name string) (bool, error)
+// session runs. The current endpoint serves it; use the read-only probe by
+// default. A nil hook keeps the transitional exec-only path.
+var PrivilegedMainSession func(ctx context.Context, name string) (bool, error) = ProbeMainSession
 
 // BoxLauncher reads how the inspected container of box name takes a managed
 // session. It never treats an unreadable record as "old": that is an error.

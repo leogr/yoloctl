@@ -6,6 +6,9 @@ import (
 	"net"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/leogr/yoloctl/internal/boxendpoint"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -49,7 +52,7 @@ func endpoint(t *testing.T, accept bool) (string, chan string) {
 			go func() {
 				for r := range chReqs {
 					seen <- r.Type
-					_ = r.Reply(accept && r.Type == MainSessionRequest, nil)
+					_ = r.Reply(accept && r.Type == boxendpoint.MainSessionRequest, nil)
 				}
 				_ = ch.Close()
 			}()
@@ -65,7 +68,7 @@ func TestProbeMainSessionAcceptedAndRefused(t *testing.T) {
 		if err != nil || ok != accept {
 			t.Fatalf("accept=%v: ok=%v err=%v", accept, ok, err)
 		}
-		if got := <-seen; got != MainSessionRequest {
+		if got := <-seen; got != boxendpoint.MainSessionRequest {
 			t.Fatalf("asked %q", got)
 		}
 		select {
@@ -79,5 +82,38 @@ func TestProbeMainSessionAcceptedAndRefused(t *testing.T) {
 func TestProbeMainSessionUnreachableIsAnError(t *testing.T) {
 	if _, err := probeMainSessionAt(t.Context(), "coder", filepath.Join(t.TempDir(), "none.sock")); err == nil {
 		t.Fatal("an unreachable endpoint was not an error")
+	}
+}
+
+// The real current endpoint must answer the exact request used by the probe,
+// with no process launch. A second probe must remain harmless and usable.
+func TestProbeMainSessionCurrentEndpoint(t *testing.T) {
+	dir := t.TempDir()
+	socket := filepath.Join(dir, "current.sock")
+	server, err := boxendpoint.NewServer(boxendpoint.Config{Workdir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := boxendpoint.ListenPrivate(socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- server.Serve(ln) }()
+	t.Cleanup(func() {
+		server.Shutdown([]net.Listener{ln}, time.Second)
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Error("current endpoint did not stop")
+		}
+	})
+	for i := 0; i < 2; i++ {
+		if ok, err := probeMainSessionAt(t.Context(), "current", socket); err != nil || !ok {
+			t.Fatalf("probe %d: accepted=%v err=%v", i, ok, err)
+		}
 	}
 }

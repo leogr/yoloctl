@@ -1,6 +1,6 @@
 # Stop-box: start modes, old boxes and the removed reaper
 
-Verification: `549d46495e13d1814aff3358c3a68fc7463211be` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `549d46495e13d1814aff3358c3a68fc7463211be` and accompanying changes; endpoint composition `fa98952c5e4b96e47b02211d14cfadaf76df66d0` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] The fresh reservation that creates a current-runtime box writes a
 `launcher` record (`1\n`, private) beside `origin.json`; an existing box is
@@ -14,12 +14,12 @@ before any unlink). [1](#source-1) [2](#source-2)
 box's start mode before the holder starts; a plain shell reads nothing.
 Confined box with the record: main-process start. Without it, or on the old
 upstream runtime: needs recreate, warned, exec start. Privileged box: exec
-start while this build has no main-session request
-(`agentbox.PrivilegedMainSession` is nil); with one, a running endpoint that
-refuses it needs a restart. `agentbox.ProbeMainSession` asks that request
-once (`yoloctl-main-session`, empty, reply required, on a fresh session
-channel that is then closed) but is not wired while the endpoint does not
-serve it. The holder still starts every session with exec:
+start, using `agentbox.ProbeMainSession` by default to ask a running endpoint
+once whether it accepts `boxendpoint.MainSessionRequest` (`yoloctl-main-session`,
+empty, reply required, on a fresh session channel that is then closed). An
+explicit refusal needs a restart; unavailable transport is an error. An accepted
+mark with no process starts and stops nothing. The holder still starts every
+session with exec:
 the main-process hand-over is route M-b's section 3, not built here.
 [3](#source-3) [4](#source-4)
 
@@ -30,8 +30,7 @@ the box keeps running after it, and how to stop it. [3](#source-3)
 [FACT] A privileged box that needs a restart is restarted once, with an info
 line, at its next managed session start when one complete read of the VM's
 /proc shows no process in its PID namespace besides PID 1 and the same run
-before and after; otherwise it warns and starts with exec. Inactive while
-`PrivilegedMainSession` is nil. [4](#source-4) [5](#source-5)
+before and after; otherwise it warns and starts with exec. [4](#source-4) [5](#source-5)
 
 [FACT] Directive 56's warning is a resolver reason (`launcher_recreate`,
 `main_session_restart`), never drift; every one-box command except recreate,
@@ -52,7 +51,8 @@ still declares it loads with a warning per load and loses it at its next
 save. Until boxes stop with their session, a Codex app-server can outlive a
 launch. [10](#source-10) [11](#source-11)
 
-[FACT] Tests use fakes; nothing here was run on a VM. [7](#source-7) [9](#source-9)
+[FACT] Tests use fakes and an isolated current endpoint with PID1 disabled;
+nothing here was run on a VM. [7](#source-7) [9](#source-9)
 
 ## Sources
 

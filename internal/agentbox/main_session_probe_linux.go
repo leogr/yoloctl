@@ -5,22 +5,17 @@ import (
 	"net"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/boxendpoint"
 	"github.com/leogr/yoloctl/internal/sandbox"
 	"golang.org/x/crypto/ssh"
 )
-
-// MainSessionRequest is the privileged endpoint's marking request (contract
-// M-b section 7): empty, reply required, on a session channel, before any
-// shell or exec. An accepted mark alone starts and stops nothing.
-const MainSessionRequest = "yoloctl-main-session"
 
 const mainSessionProbeTimeout = 10 * time.Second
 
 // ProbeMainSession sends the request once on a fresh session channel of box
 // name's endpoint and closes it: true when accepted, false when refused (an
 // endpoint from before), an error when the endpoint could not be asked. It
-// is PrivilegedMainSession's implementation once the endpoint serves the
-// request; nothing runs in the box.
+// is the default PrivilegedMainSession implementation; nothing runs in the box.
 func ProbeMainSession(ctx context.Context, name string) (bool, error) {
 	return probeMainSessionAt(ctx, name, sandbox.SocketDirHost(name)+"/ssh.sock")
 }
@@ -49,5 +44,5 @@ func probeMainSessionAt(ctx context.Context, name, socket string) (bool, error) 
 	}
 	go ssh.DiscardRequests(chReqs)
 	defer func() { _ = ch.Close() }()
-	return ch.SendRequest(MainSessionRequest, true, nil)
+	return ch.SendRequest(boxendpoint.MainSessionRequest, true, nil)
 }
