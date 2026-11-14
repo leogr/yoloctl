@@ -87,7 +87,12 @@ func TestWorkerRealLimitsTimeOutAComputeBoundDiagram(t *testing.T) {
 			t.Fatalf("reply %d: err=%v got=%+v want=%s", i, err, got, want)
 		}
 	}
-	if took := time.Since(start); took > 4*time.Second {
+	// Without a deadline this graph renders for more than two minutes
+	// (measured: still running at 120 s). Ending within 30 s therefore shows
+	// that the 2 s deadline stopped it, with room for a loaded machine: the
+	// time also covers compiling the module and the second render, which a
+	// 4 s bound did not survive under load.
+	if took := time.Since(start); took > 30*time.Second {
 		t.Fatalf("deadline not enforced: %s", took)
 	}
 }
