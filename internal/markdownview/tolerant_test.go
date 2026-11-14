@@ -207,3 +207,26 @@ func TestTabIndentedListItems(t *testing.T) {
 		t.Fatal("context continued past an unindented line")
 	}
 }
+
+// A hidden line keeps its place but gets no row and is never copied; a
+// message of only hidden lines has no row at all.
+func TestHiddenLinesHaveNoRows(t *testing.T) {
+	options := documentOptions()
+	options.MapSource = true
+	doc := Parse("a\nx\nb", options)
+	doc.Lines[1].Hidden, doc.Lines[1].Decor = true, true
+	for _, width := range []int{4, 20, 80} {
+		_, shown := painted(t, doc, options, width)
+		if strings.Join(shown, "|") != "a|b" {
+			t.Fatalf("width %d rows %q", width, shown)
+		}
+	}
+	if len(doc.Lines) != len(doc.Sources) || RenderText(doc) != "a\nb" {
+		t.Fatalf("lines %d sources %d copy %q", len(doc.Lines), len(doc.Sources), RenderText(doc))
+	}
+	only := Parse("x", options)
+	only.Lines[0].Hidden, only.Lines[0].Decor = true, true
+	if rows := Layout(only, 20, LayoutOptions{Method: options.Method, Theme: options.Theme}).Rows; len(rows) != 0 {
+		t.Fatalf("hidden-only message rows %+v", rows)
+	}
+}

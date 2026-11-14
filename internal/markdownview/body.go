@@ -47,6 +47,11 @@ type DisplayLine struct {
 	// a thin line across the text width.
 	Rule       bool
 	TableLimit bool // rejected structural table: explain before literal text
+	// Hidden is a line the view does not show (a setext underline, a
+	// comment): it keeps its place and LineSource so indexes stay aligned,
+	// is Decor so it is never copied, and gets no row, so it adds no blank
+	// row and cannot be selected.
+	Hidden bool
 	// Diagram is the fence (1-based) whose drawing this Code line is a row
 	// of, 0 otherwise.
 	Diagram int
@@ -520,6 +525,9 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 		return append(rows, BodyRow{Line: n, Start: at, End: at, Decor: true, Runs: []Run{Deco("[display row limit; Copy message retains the entire original]", spaceview.Style{FG: theme.Bad})}})
 	}
 	for n, dl := range lines {
+		if dl.Hidden {
+			continue
+		}
 		tbl := dl.Table
 		if dl.TableLimit {
 			rows = append(rows, tableNotice(wm, n, width, theme, "Table over the display limit; showing its text."))

@@ -42,7 +42,7 @@ func TestMarkdownFrozenParity(t *testing.T) {
 // mermaidFields are the DisplayLine/LineSource fields added for mermaid
 // drawings after the golden was frozen. The frozen inputs draw no diagram, so
 // they are left out while zero and the rendering stays compared byte for byte.
-var mermaidFields = map[string]bool{"Diagram": true, "DiagramFirst": true, "DiagramLast": true, "QuoteDepth": true}
+var mermaidFields = map[string]bool{"Diagram": true, "DiagramFirst": true, "DiagramLast": true, "QuoteDepth": true, "Hidden": true}
 
 // Snapshot field spelling is case-insensitive so exporting the same pure data
 // does not count as a rendering change. Numeric enums, nil/empty distinctions,
