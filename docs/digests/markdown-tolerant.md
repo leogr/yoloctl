@@ -58,8 +58,9 @@ display, reference links and entities. [1](#source-1)
 [FACT] Tests: `tolerant_test.go` covers each rule, the corpus cases in
 `testdata/tolerant` (reviewed after-text), Copy and Quote mapping and
 `FuzzTolerantMarkdown`, whose seeds run in every test run (no panic, one source
-per line, rows within width, source mode one line per source line; Unicode format
-characters skipped for an existing width issue). [6](#source-6)
+per line, rows within width, source mode one line per source line; texts with a
+Prepend character or a spacing mark skipped for the renderer's documented
+grapheme-width limit). [6](#source-6)
 
 ## Sources
 

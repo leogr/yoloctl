@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -756,10 +755,9 @@ func FuzzTolerantMarkdown(f *testing.F) {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, text string) {
-		// Unicode format characters (such as U+0601) already lay out one
-		// cell narrower than the row on main: an existing renderer issue
-		// outside these rules, reported separately.
-		if len(text) > 4096 || strings.ContainsFunc(text, func(r rune) bool { return unicode.Is(unicode.Cf, r) }) {
+		// Prepend characters and spacing marks hit the documented
+		// grapheme-width limit (TestGraphemeWidthLimits).
+		if len(text) > 4096 || knownWidthLimit(text) {
 			return
 		}
 		for _, wm := range []ansi.Method{ansi.WcWidth, ansi.GraphemeWidth} {

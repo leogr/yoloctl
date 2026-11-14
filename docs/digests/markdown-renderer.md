@@ -20,6 +20,15 @@ its complete admitted document; chat leaves that option unset. Code-card copy in
 are the existing subset and limits, not a CommonMark contract.
 [2](#source-2) [4](#source-4) [5](#source-5)
 
+[FACT] Grapheme-width limit: layout measures each styled run alone, but a
+Grapheme_Cluster_Break=Prepend character that ends a run (the prepended
+concatenation marks such as U+0601, U+06DD and U+070F, and letters such as
+U+0D4E) or a spacing mark that begins one (such as U+0DDA in a code line, a quote
+or bold text) joins the neighbouring character into one grapheme when the row is
+painted, so under the grapheme method that row paints one cell short. These
+characters remain visible text that parsing and copy keep.
+[20](#source-20)
+
 [FACT] Within that subset: a table pipe inside a code span on its line stays in
 its cell (`tableSeparators` pairs backtick runs as inline code does, in one
 pass with a binary search per run); headings stay bold at cell size, level 1 in
@@ -124,3 +133,5 @@ component parity, not native terminal, live-room or future file-view behavior.
 18. <a id="source-18"></a> [Width-only table choices](../../internal/markdownview/table_words.go#L1) — `tableRunWidth`, `tableLayoutLines`; body.go `TableLines`, `fitTableColumns`; rows.go `tableWrapRanges`; table_compact.go `compactTable`; table_responsive_test.go and table_words_test.go cover shape, headers, width modes and table-only breaks.
 
 19. <a id="source-19"></a> [Pane-bounded allowance](../../internal/markdownview/table_limit.go#L1) — `tableLayoutBudget`; table_long_test.go covers ordinary45/120-row tables, width sweeps, expansion and generated sparse output; body.go `TableLines` keeps its aligned guard.
+
+20. <a id="source-20"></a> [Grapheme-width limit](../../internal/markdownview/width_limit_test.go#L1) — `isPrepend`, `joinsPrevious`, `TestGraphemeWidthLimits` (each case paints one cell short), `TestPrependMarksArePreserved`; tolerant_test.go `FuzzTolerantMarkdown` skips `knownWidthLimit` texts.
