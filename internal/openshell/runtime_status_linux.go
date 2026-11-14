@@ -23,6 +23,7 @@ type RuntimeStatus struct {
 	BoundaryPID    int       `json:"boundary_pid"`
 	SupervisorExit *int      `json:"supervisor_exit"`
 	BoundaryExit   *int      `json:"boundary_exit"`
+	MainExit       *int      `json:"main_exit,omitempty"`
 	ObservedAt     time.Time `json:"observed_at"`
 }
 
@@ -41,6 +42,12 @@ func (s RuntimeStatus) validate(record RuntimeRecord) error {
 	if (s.SupervisorExit != nil && s.SupervisorPID == 0) || (s.BoundaryExit != nil && s.BoundaryPID == 0) {
 		return errors.New("runtime status reports an exit without a child")
 	}
+	if s.MainExit != nil && (*s.MainExit < 0 || *s.MainExit > 255 || s.Reason != "main-exited") {
+		return errors.New("runtime status has an invalid main exit")
+	}
+	if s.Reason == "main-exited" && s.Phase != "stopping" && s.Phase != "stopped" {
+		return errors.New("runtime main exit has an inconsistent phase")
+	}
 	switch s.Phase {
 	case "starting":
 		if s.Reason != "startup" || s.SupervisorExit != nil || s.BoundaryExit != nil {
@@ -58,11 +65,11 @@ func (s RuntimeStatus) validate(record RuntimeRecord) error {
 			return errors.New("runtime supervisor loss lacks its wait result")
 		}
 	case "stopped":
-		if s.Reason != "stopped" || (s.SupervisorPID != 0 && s.SupervisorExit == nil) || (s.BoundaryPID != 0 && s.BoundaryExit == nil) {
+		if (s.Reason != "stopped" && s.Reason != "main-exited") || (s.SupervisorPID != 0 && s.SupervisorExit == nil) || (s.BoundaryPID != 0 && s.BoundaryExit == nil) {
 			return errors.New("inconsistent stopped runtime status")
 		}
 	case "stopping":
-		if s.Reason != "cleanup-unproved" {
+		if s.Reason != "cleanup-unproved" && s.Reason != "main-exited" {
 			return errors.New("inconsistent unproved runtime cleanup status")
 		}
 	default:
@@ -120,4 +127,11 @@ func decodeRuntimeStatus(raw []byte, record RuntimeRecord) (RuntimeStatus, error
 		return RuntimeStatus{}, err
 	}
 	return status, status.validate(record)
+}
+
+// DecodeRuntimeStatus checks a bounded observation against the caller's exact
+// selected runtime record. It grants no I/O, ownership or container authority;
+// callers must independently verify the native storage and expected run.
+func DecodeRuntimeStatus(raw []byte, record RuntimeRecord) (RuntimeStatus, error) {
+	return decodeRuntimeStatus(raw, record)
 }

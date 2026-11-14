@@ -321,7 +321,12 @@ func runtimeReservationMember(path string) (runtimeReservationRule, bool) {
 				return directory, true
 			case "ready.sock":
 				return socket, true
+			case runtimeMainExitName:
+				return runtimeReservationRule{kind: unix.S_IFREG, permissions: 0o600, mask: 0o7777}, true
 			}
+		}
+		if len(rest) == 2 && runtimeMainExitTemporary(rest[1]) {
+			return runtimeReservationRule{kind: unix.S_IFREG, permissions: 0o600, mask: 0o7777}, true
 		}
 		if len(rest) == 3 {
 			switch rest[1] {

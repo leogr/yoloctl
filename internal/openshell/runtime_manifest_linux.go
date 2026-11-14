@@ -13,7 +13,20 @@ import (
 // The manifest is untrusted input until the selected root record and native
 // activation independently bind its bytes, helper, process and container.
 func ProjectedRuntimeMain(args []string) int {
-	if err := projectedRuntimeEntry(args); err != nil {
+	return projectedRuntimeResult(projectedRuntimeEntry(args))
+}
+
+func projectedRuntimeResult(err error) int {
+	var mainExit *runtimeMainExit
+	if errors.As(err, &mainExit) {
+		// A main exit is an outcome, not a helper failure. Preserve the code
+		// even when normal cleanup adds a diagnostic.
+		if diagnostic := runtimeMainExitDiagnostics(err); diagnostic != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "OpenShell helper:", diagnostic)
+		}
+		return mainExit.exitCode()
+	}
+	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "OpenShell helper:", err)
 		return 1
 	}

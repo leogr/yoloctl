@@ -9,6 +9,7 @@ or session history. Repository working rules are in [AGENTS.md](../AGENTS.md).
 
 | Question | Entry spec | Implementation evidence |
 |---|---|---|
+| How does native box PID 1 observe a main exit, retain its code and distinguish cleanup from SSH delivery? | [Confinement](specs/confinement.md) | [Native main-exit observation](digests/openshell-main-exit.md) |
 | How can the host enable Falco on Lima/Firecracker, inspect health/events and export an interval? | [CLI](specs/cli.md), [Controller](specs/controller.md) | [VM-native auditing](digests/audit.md), [concise event output/mandatory fields and folded presentation](digests/audit-output.md), [metadata extraction](digests/audit-metadata.md), [rule paths/escape candidates/container recognition](digests/audit-rules.md), [selection framing and validator qualification](digests/audit-rule-validation.md), [native rule management](digests/audit-rule-management.md) |
 | How is the pinned Mermaid WASI artifact regenerated and checked? | [TUI](specs/tui.md) | [Mermaid artifact](digests/mermaid-renderer.md) |
 | How does the host run Mermaid diagrams (worker process, limits, failure reasons, cache)? | [TUI](specs/tui.md) | [Mermaid worker](digests/mermaid-worker.md) |

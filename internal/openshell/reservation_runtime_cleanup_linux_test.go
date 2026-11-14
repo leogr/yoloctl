@@ -50,7 +50,7 @@ func populateSupervisorRuntimeContents(t *testing.T, status *os.File, shared run
 	runtimeReservationSocket(t, shared.control, "control.sock", 0o666)
 	runtimeReservationSocket(t, shared.supervisorRun, "ready.sock", 0o755) // inherited umask, no final chmod
 	runtimeReservationSocket(t, shared.supervisorRun, "ssh/ssh.sock", 0o600)
-	for name, mode := range map[string]os.FileMode{"proxy-tls/openshell-ca.pem": 0o600, "proxy-tls/ca-bundle.pem": 0o600, "proxy-tls/.tmpAb123Z": 0o600, "tmp/.tmp9a8B7c": 0o400} {
+	for name, mode := range map[string]os.FileMode{"proxy-tls/openshell-ca.pem": 0o600, "proxy-tls/ca-bundle.pem": 0o600, "proxy-tls/.tmpAb123Z": 0o600, "tmp/.tmp9a8B7c": 0o400, "main-exit": 0o600, ".main-exit.tmp-7": 0o600} {
 		path := fmt.Sprintf("/proc/self/fd/%d/%s", shared.supervisorRun.Fd(), name)
 		if err := os.WriteFile(path, []byte("project TLS fixture"), mode); err != nil {
 			t.Fatal(err)
@@ -163,6 +163,49 @@ func TestOwnedReservationRuntimeSchemaRefusesForeignLinksModesAndOwners(t *testi
 			}
 			if _, err := os.Stat(filepath.Join(tls, "ca-bundle.pem")); err != nil {
 				t.Fatal("schema refusal partially deleted contents", err)
+			}
+		})
+	}
+}
+
+func TestRuntimeMainExitCleanupRejectsSubstitutedMembers(t *testing.T) {
+	for _, kind := range []string{"link", "fifo", "directory", "mode", "lookalike"} {
+		t.Run(kind, func(t *testing.T) {
+			r := ownedReservationFixture(t)
+			statusPath, status, shared := runtimeReservationFixture(t, r)
+			name := runtimeMainExitName
+			if kind == "lookalike" {
+				name = ".main-exit.tmp-07"
+			}
+			path := filepath.Join(statusPath, "runtime-supervisor", name)
+			var err error
+			switch kind {
+			case "link":
+				err = os.Symlink("untouched", path)
+			case "fifo":
+				err = unix.Mkfifo(path, 0o600)
+			case "directory":
+				err = os.Mkdir(path, 0o700)
+			default:
+				err = os.WriteFile(path, []byte("exit_code=0\n"), 0o600)
+				if err == nil && kind == "mode" {
+					err = os.Chmod(path, 0o644)
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := shared.close(); err != nil {
+				t.Fatal(err)
+			}
+			if err := status.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.RemoveAfterContainerRemoval(t.Context()); err == nil {
+				t.Fatal("substituted marker admitted to cleanup")
+			}
+			if _, err := os.Lstat(path); err != nil {
+				t.Fatal("refused inventory deleted its member", err)
 			}
 		})
 	}

@@ -59,6 +59,9 @@ func runRuntimePID1(ctx context.Context, launch HelperLaunch, release QualifiedR
 		return err
 	}
 	defer func() { err = errors.Join(err, shared.close()) }()
+	if err := clearRuntimeMainExitAt(shared.supervisorRun, int(SupervisorUID), int(SupervisorGID)); err != nil {
+		return err
+	}
 	artifacts, err := openRuntimeInfrastructure(ArtifactProjection)
 	if err != nil {
 		return err
@@ -73,7 +76,7 @@ func runRuntimePID1(ctx context.Context, launch HelperLaunch, release QualifiedR
 				phase, reason = "stopping", "cleanup-unproved"
 			}
 		}
-		err = errors.Join(err, writeRuntimeStatus(record, observeRuntimeStatus(record, phase, reason, children, time.Now())))
+		err = errors.Join(err, writeRuntimeStatus(record, observeRuntimeEnd(record, phase, reason, children, err, time.Now())))
 	}()
 	for _, role := range []runtimeChildRole{runtimeSupervisor, runtimeBoundary} {
 		child, err := startRuntimeChild(material, role, shared, artifacts)
@@ -150,12 +153,27 @@ func monitorRuntime(ctx context.Context, record RuntimeRecord, shared runtimeSha
 	lastPhase, lastReason := "", ""
 	stored := false
 	statusErrorReported := false
+	mainExitReadErrorReported := false
 	var lastProbe, lastWrite time.Time
 	upstreamReady := false
 	var probeErr error
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
+		// This is the single main-exit decision point. Output/status ordering
+		// is separate from parsing and the normal relay/child cleanup below.
+		mainExit, readErr := readRuntimeMainExitAt(shared.supervisorRun, int(SupervisorUID), int(SupervisorGID))
+		if readErr != nil {
+			if !mainExitReadErrorReported {
+				_, _ = fmt.Fprintln(os.Stderr, "OpenShell main-exit marker unavailable:", readErr)
+				mainExitReadErrorReported = true
+			}
+		} else {
+			mainExitReadErrorReported = false
+		}
+		if mainExit != nil {
+			return stopForRuntimeMainExit(record, children, mainExit, &admission, writeRuntimeStatus)
+		}
 		if ctx.Err() != nil {
 			return nil
 		}

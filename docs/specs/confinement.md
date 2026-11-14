@@ -135,6 +135,11 @@ runtime, infrastructure and kernel signals, with explicit noise exceptions;
 unknown metadata remains visible. No syscall errno proves which policy denied it.
 [16](#source-16)
 
+[FACT] Native PID 1 can end on a supervisor-owned main-exit marker and retain
+the known code in its generation-bound final observation. Its cleanup phase
+still distinguishes stopped children from unproved cleanup; this mechanism
+does not establish delivery of final SSH output. [17](#source-17)
+
 ## Sources
 
 1. <a id="source-1"></a> [Policy, image and maintenance implementation](../digests/policy-images.md).
@@ -160,3 +165,5 @@ unknown metadata remains visible. No syscall errno proves which policy denied it
 15. <a id="source-15"></a> [OpenShell compatibility](../digests/openshell-compatibility.md) — inherited entrypoints, private proxy environment and pending integration limits.
 
 16. <a id="source-16"></a> [VM-native audit contracts](../digests/audit.md).
+
+17. <a id="source-17"></a> [Native main-exit observation](../digests/openshell-main-exit.md) — PID 1 marker, result and cleanup boundary.
