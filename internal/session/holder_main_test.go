@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/mainlaunch"
 )
@@ -158,4 +159,34 @@ func TestHolderMarkMain(t *testing.T) {
 	if _, _, _, execs, _, _, _ := fs.snapshot(); len(execs) != 0 {
 		t.Fatal("the session started after a refusal")
 	}
+}
+
+// Section 5's condition (coordinator, option a): the holder ends its whole
+// SSH connection right after it has the exit status, also with a viewer
+// attached, so the supervisor's delivery drain never waits for its bound.
+func TestHolderMainStartClosesItsConnectionAfterTheStatus(t *testing.T) {
+	opts, _ := testPaths(t)
+	opts.StartMain = true
+	fs := startFakeSandbox(t, opts.SSHSocket)
+	res := runHolderAsync(context.Background(), opts)
+	<-fs.started
+	a := attachWhenReady(t, opts.AttachSocket)
+	if _, err := a.stdinW.Write([]byte("typed")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the viewer", func() bool { _, _, _, _, _, _, stdin := fs.snapshot(); return stdin == "typed" })
+	start := time.Now()
+	fs.exit(5)
+	if r := <-res; r.err != nil || r.status != 5 {
+		t.Fatalf("RunHolder = %d, %v", r.status, r.err)
+	}
+	select {
+	case <-fs.connClosed:
+	case <-time.After(time.Second):
+		t.Fatal("the holder kept its SSH connection after the exit status")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("connection ended %v after the status", elapsed)
+	}
+	_ = a.wait(t)
 }

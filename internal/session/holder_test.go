@@ -67,6 +67,7 @@ type fakeSandbox struct {
 	handoverGate   chan struct{} // answer the hand-over only once closed (nil: at once)
 	handoverStdin  bytes.Buffer
 	handoverCmd    string
+	connClosed     chan struct{} // closed when the holder's SSH connection ends
 
 	started chan struct{} // closed when exec is accepted
 	ch      ssh.Channel   // the session channel, for the test to script
@@ -89,7 +90,7 @@ func startFakeSandbox(t *testing.T, sockPath string) *fakeSandbox {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fs := &fakeSandbox{t: t, ln: ln, started: make(chan struct{}), handoverStatus: 0}
+	fs := &fakeSandbox{t: t, ln: ln, started: make(chan struct{}), handoverStatus: 0, connClosed: make(chan struct{})}
 	t.Cleanup(func() { _ = ln.Close() })
 
 	go func() {
@@ -97,10 +98,11 @@ func startFakeSandbox(t *testing.T, sockPath string) *fakeSandbox {
 		if err != nil {
 			return
 		}
-		_, chans, reqs, err := ssh.NewServerConn(conn, cfg)
+		sconn, chans, reqs, err := ssh.NewServerConn(conn, cfg)
 		if err != nil {
 			return
 		}
+		go func() { _ = sconn.Wait(); close(fs.connClosed) }()
 		go func() {
 			for r := range reqs {
 				if r.Type == "keepalive@yoloctl.dev" {
