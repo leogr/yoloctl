@@ -490,3 +490,31 @@ func waitFIFO(t *testing.T, b *box) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// Every inherited value reaches the session byte for byte, whatever its name:
+// the launcher's own shell borrows no variable (review F2, second round).
+func TestLaunchKeepsInheritedValuesByteForByte(t *testing.T) {
+	for label, first := range firsts {
+		t.Run(label, func(t *testing.T) {
+			b := newBox(t)
+			value := "before\x01after'q\"x\n"
+			b.inherit = append(b.inherit, "__yoloctl_mb_term="+value, "__yoloctl_mb_nl="+value)
+			launcher, stderr := b.launch(first)
+			command := []byte("exec agent 'it''s' \"$HOME\"\n")
+			token, _ := NewToken(command)
+			record, _ := Record("xterm-'quoted'", token, command)
+			env := append(b.execEnv(), "__yoloctl_mb_term=x", "__yoloctl_mb_nl=y")
+			if status := b.handover(env, record); status != HandoverDelivered {
+				t.Fatalf("hand-over status %d", status)
+			}
+			if code := wait(t, launcher); code != 0 {
+				t.Fatalf("launcher exit %d: %s", code, stderr.String())
+			}
+			got := environNames(t, filepath.Join(b.out, "environ"))
+			cmd, _ := os.ReadFile(filepath.Join(b.out, "cmd"))
+			if got["__yoloctl_mb_term"] != value || got["__yoloctl_mb_nl"] != value || got["TERM"] != "xterm-'quoted'" || string(cmd) != string(command) {
+				t.Fatalf("values %q %q TERM %q cmd %q", got["__yoloctl_mb_term"], got["__yoloctl_mb_nl"], got["TERM"], cmd)
+			}
+		})
+	}
+}

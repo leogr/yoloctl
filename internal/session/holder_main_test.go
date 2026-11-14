@@ -162,8 +162,9 @@ func TestHolderMarkMain(t *testing.T) {
 }
 
 // Section 5's condition (coordinator, option a): the holder ends its whole
-// SSH connection right after it has the exit status, also with a viewer
-// attached, so the supervisor's delivery drain never waits for its bound.
+// SSH connection right after its output is drained and it has the exit
+// status, before local viewer finalization, also with a viewer attached, so
+// the supervisor's drain is expected to complete promptly.
 func TestHolderMainStartClosesItsConnectionAfterTheStatus(t *testing.T) {
 	opts, _ := testPaths(t)
 	opts.StartMain = true

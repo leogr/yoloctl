@@ -376,6 +376,10 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	}
 
 	status, werr := wait()
+	// Output drained and the status in hand: end the SSH connection now,
+	// before local viewer finalization, so the box's supervisor sees this
+	// attachment end promptly (section 5's main-attachments-ended).
+	_ = client.Close()
 	connLost := werr != nil
 	h.markDone()
 

@@ -118,102 +118,103 @@ case $__yoloctl_mb_names in *"$__yoloctl_mb_tok"*) exit 83 ;; esac
 exit 0
 `
 
-// The scripts' own variables carry the __yoloctl_mb_ prefix: an inherited
-// variable of that name would keep its export attribute and be changed.
-//
 // LauncherScript is the fixed main process of a confined box created by this
 // version, run by the supervisor as "<shell> [--posix] -c LauncherScript
-// <shell path>": $0 is the image shell selected in upstream's order, which
-// the launch then runs as the login shell (SHELL stays a value). It waits
-// for one record; a record it does not accept ends it non-zero and runs
-// nothing. It keeps the environment names the hand-over exec had, removes
-// the others by name (unset for shell identifiers, env -u for other names:
-// names only, never values), sets TERM and runs
-// the login shell once with the command: the command is the main process.
+// <shell path>": $0 is the image shell selected in upstream's order, which the
+// launch runs as the login shell (a declared SHELL stays a value).
+//
+// The launcher's own shell assigns no variable and changes no state: all its
+// work (the FIFO with umask 077, the record, the name sets) runs in a
+// subshell ($$ there is still this process's PID), which answers either
+// "exit N" (a refused record or a missing name: this process exits N, nothing
+// run) or "run" and a fully single-quoted script that this process evaluates:
+// unset the extra identifier names, set TERM, exec the login shell, through
+// "env -u NAME" for the other extra names. So every inherited variable,
+// whatever its name, reaches the session byte for byte unless removed, and the
+// file-creation mask is the one this process started with. It keeps the
+// environment names the hand-over exec had (names only, never values; names
+// with a control character are on neither side) and the command becomes the
+// main process.
 const LauncherScript = `command -v mkfifo >/dev/null 2>&1 || exec sleep infinity
-__yoloctl_mb_umask=$(umask)
+set -- "$( (
 __yoloctl_mb_nl='
 '
-` + namesFn + `__yoloctl_mb_d="$HOME/` + LauncherDir + `"
+` + namesFn + `__yoloctl_mb_q() {
+	__yoloctl_mb_s=$1
+	printf "'"
+	while :; do
+		case $__yoloctl_mb_s in
+		*"'"*)
+			printf '%s' "${__yoloctl_mb_s%%"'"*}'\\''"
+			__yoloctl_mb_s=${__yoloctl_mb_s#*"'"} ;;
+		*)
+			printf '%s' "$__yoloctl_mb_s"
+			break ;;
+		esac
+	done
+	printf "' "
+}
+__yoloctl_mb_d="$HOME/` + LauncherDir + `"
 __yoloctl_mb_f="$__yoloctl_mb_d/fifo"
 umask 077
 rm -f "$__yoloctl_mb_f" 2>/dev/null
 rmdir "$__yoloctl_mb_d" 2>/dev/null
-mkdir -m 700 "$__yoloctl_mb_d" || exit 90
-mkfifo -m 600 "$__yoloctl_mb_f" || exit 91
-__yoloctl_mb_r=$(cat "$__yoloctl_mb_f" && printf .) || exit 92
+mkdir -m 700 "$__yoloctl_mb_d" || { echo 'exit 90'; exit; }
+mkfifo -m 600 "$__yoloctl_mb_f" || { echo 'exit 91'; exit; }
+__yoloctl_mb_r=$(cat "$__yoloctl_mb_f" && printf .) || { echo 'exit 92'; exit; }
 __yoloctl_mb_r=${__yoloctl_mb_r%.}
 rm -f "$__yoloctl_mb_f"
 rmdir "$__yoloctl_mb_d"
-case $__yoloctl_mb_r in TERM=*"$__yoloctl_mb_nl"*"$__yoloctl_mb_nl"*) ;; *) exit 93 ;; esac
+case $__yoloctl_mb_r in TERM=*"$__yoloctl_mb_nl"*"$__yoloctl_mb_nl"*) ;; *) echo 'exit 93'; exit ;; esac
 __yoloctl_mb_term=${__yoloctl_mb_r%%"$__yoloctl_mb_nl"*}
 __yoloctl_mb_term=${__yoloctl_mb_term#TERM=}
 __yoloctl_mb_r=${__yoloctl_mb_r#*"$__yoloctl_mb_nl"}
 __yoloctl_mb_tok=${__yoloctl_mb_r%%"$__yoloctl_mb_nl"*}
 __yoloctl_mb_r=${__yoloctl_mb_r#*"$__yoloctl_mb_nl"}
-case $__yoloctl_mb_tok in ????????????????????????????????) ;; *) exit 93 ;; esac
-case $__yoloctl_mb_tok in *[!0-9a-f]*) exit 93 ;; esac
-case $__yoloctl_mb_r in *"$__yoloctl_mb_nl$__yoloctl_mb_tok$__yoloctl_mb_nl"*) ;; *) exit 93 ;; esac
+case $__yoloctl_mb_tok in ????????????????????????????????) ;; *) echo 'exit 93'; exit ;; esac
+case $__yoloctl_mb_tok in *[!0-9a-f]*) echo 'exit 93'; exit ;; esac
+case $__yoloctl_mb_r in *"$__yoloctl_mb_nl$__yoloctl_mb_tok$__yoloctl_mb_nl"*) ;; *) echo 'exit 93'; exit ;; esac
 __yoloctl_mb_cmd=${__yoloctl_mb_r%%"$__yoloctl_mb_nl$__yoloctl_mb_tok$__yoloctl_mb_nl"*}
 __yoloctl_mb_rest=${__yoloctl_mb_r#*"$__yoloctl_mb_nl$__yoloctl_mb_tok$__yoloctl_mb_nl"}
-case $__yoloctl_mb_rest in "$__yoloctl_mb_tok$__yoloctl_mb_nl"|*"$__yoloctl_mb_nl$__yoloctl_mb_tok$__yoloctl_mb_nl") ;; *) exit 93 ;; esac
+case $__yoloctl_mb_rest in "$__yoloctl_mb_tok$__yoloctl_mb_nl"|*"$__yoloctl_mb_nl$__yoloctl_mb_tok$__yoloctl_mb_nl") ;; *) echo 'exit 93'; exit ;; esac
 __yoloctl_mb_list=${__yoloctl_mb_rest%"$__yoloctl_mb_tok$__yoloctl_mb_nl"}
-case $__yoloctl_mb_cmd$__yoloctl_mb_list in *"$__yoloctl_mb_tok"*) exit 93 ;; esac
-__yoloctl_mb_have=$(__yoloctl_mb_names $$) || exit 93
+case $__yoloctl_mb_cmd$__yoloctl_mb_list in *"$__yoloctl_mb_tok"*) echo 'exit 93'; exit ;; esac
+__yoloctl_mb_have=$(__yoloctl_mb_names $$) || { echo 'exit 93'; exit; }
 set -f
-__yoloctl_mb_ifs=$IFS
 IFS=$__yoloctl_mb_nl
 for __yoloctl_mb_n in $__yoloctl_mb_list; do
 	case "$__yoloctl_mb_nl$__yoloctl_mb_have$__yoloctl_mb_nl" in *"$__yoloctl_mb_nl$__yoloctl_mb_n$__yoloctl_mb_nl"*) ;; *)
 		printf 'yoloctl: this box lacks the session variable %s\n' "$__yoloctl_mb_n" >&2
-		exit 94 ;;
+		echo 'exit 94'
+		exit ;;
 	esac
 done
+__yoloctl_mb_unset=
 set --
 for __yoloctl_mb_n in $__yoloctl_mb_have; do
 	case "$__yoloctl_mb_nl$__yoloctl_mb_list" in *"$__yoloctl_mb_nl$__yoloctl_mb_n$__yoloctl_mb_nl"*) continue ;; esac
 	[ "$__yoloctl_mb_n" != TERM ] || continue
 	case $__yoloctl_mb_n in
 	[!A-Za-z_]*|*[!A-Za-z0-9_]*) set -- "$@" -u "$__yoloctl_mb_n" ;;
-	*) unset "$__yoloctl_mb_n" ;;
+	*) __yoloctl_mb_unset="$__yoloctl_mb_unset $__yoloctl_mb_n" ;;
 	esac
 done
-IFS=$__yoloctl_mb_ifs
-set +f
-TERM=$__yoloctl_mb_term
-export TERM
 # An image whose env cannot remove by name keeps those variables (the
 # documented limit); the session still starts.
 if [ "$#" -gt 0 ] && ! env -u __yoloctl_mb_probe true >/dev/null 2>&1; then
 	set --
 fi
-# The exec's argv lives in the positional parameters (never the
-# environment) from here on. The login shell is "$0": the image shell the
-# supervisor selected in upstream's order; SHELL is only passed on as a value.
-if [ "$#" -gt 0 ]; then
-	set -- env "$@" "$0" -lc "$__yoloctl_mb_cmd"
-else
-	set -- "$0" -lc "$__yoloctl_mb_cmd"
-fi
-umask "$__yoloctl_mb_umask"
-# An inherited variable named like this script's own gets its inherited value
-# back, read from this process's initial environment by functions that keep
-# no variable of their own (arguments only), so the session sees it unchanged.
-__yoloctl_mb_value() {
-	tr '\n\000' '\001\n' < "/proc/$1/environ" | sed -n "s/^$2=//p" | tr '\001' '\n'
-	printf .
-}
-__yoloctl_mb_assign() {
-	set -- "$1" "${2%.}"
-	set -- "$1" "${2%?}"
-	eval "$1=\$2"
-}
-__yoloctl_mb_restore() {
-	[ "$#" -gt 1 ] || return 0
-	__yoloctl_mb_assign "$1" "$(__yoloctl_mb_value "$(eval "printf %s \"\${$#}\"")" "$1")"
-	shift
-	__yoloctl_mb_restore "$@"
-}
-__yoloctl_mb_restore $(tr '\n\000' '\001\n' < "/proc/$$/environ" | sed 's/=.*//' | grep -E '^__yoloctl_mb_[A-Za-z0-9_]*$') $$
-exec "$@"
+echo run
+[ -z "$__yoloctl_mb_unset" ] || printf 'unset%s\n' "$__yoloctl_mb_unset"
+printf 'TERM='; __yoloctl_mb_q "$__yoloctl_mb_term"; printf '\nexport TERM\nexec '
+[ "$#" -eq 0 ] || __yoloctl_mb_q env
+for __yoloctl_mb_a in "$@" "$0" -lc "$__yoloctl_mb_cmd"; do __yoloctl_mb_q "$__yoloctl_mb_a"; done
+printf '\n'
+) )"
+case $1 in
+'run
+'*) eval "${1#run?}" ;;
+'exit '9[0-4]) exit "${1#exit }" ;;
+esac
+exit 93
 `
