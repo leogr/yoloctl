@@ -22,6 +22,8 @@ import (
 // their item geometry). There is deliberately no regeneration switch: a
 // refactor must match it, and only an intended rendering change updates it.
 // STEP1 wide-table fallback intentionally updates only narrow table layouts.
+// feat-markdown-tolerant-tables records each quote line's QuoteDepth (1 for
+// every frozen quote, whose rendering is unchanged).
 func TestMarkdownFrozenParity(t *testing.T) {
 	got := markdownParityBytes(t)
 	want, err := os.ReadFile("testdata/markdown-parity.json")
@@ -40,7 +42,7 @@ func TestMarkdownFrozenParity(t *testing.T) {
 // mermaidFields are the DisplayLine/LineSource fields added for mermaid
 // drawings after the golden was frozen. The frozen inputs draw no diagram, so
 // they are left out while zero and the rendering stays compared byte for byte.
-var mermaidFields = map[string]bool{"Diagram": true, "DiagramFirst": true, "DiagramLast": true}
+var mermaidFields = map[string]bool{"Diagram": true, "DiagramFirst": true, "DiagramLast": true, "QuoteDepth": true}
 
 // Snapshot field spelling is case-insensitive so exporting the same pure data
 // does not count as a rendering change. Numeric enums, nil/empty distinctions,

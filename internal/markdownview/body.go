@@ -25,10 +25,13 @@ type Piece struct {
 type DisplayLine struct {
 	Text   string
 	Pieces []Piece
-	Quote  bool // a quote bar precedes every wrapped row
-	Decor  bool // a fence frame or table rule: shown, never copied
-	Code   bool // fenced code: hard-wrapped inside its block's card
-	Fence  FenceFrame
+	Quote  bool // quote bars precede every wrapped row
+	// QuoteDepth is a quote line's number of levels, one bar each (0
+	// outside a quote).
+	QuoteDepth int
+	Decor      bool // a fence frame or table rule: shown, never copied
+	Code       bool // fenced code: hard-wrapped inside its block's card
+	Fence      FenceFrame
 	// block is a fence opener's code, its source lines as its copy button
 	// copies them ("" for an empty block, which shows no button).
 	Block string
@@ -252,8 +255,9 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 					line, st.FG, st.Bold = withoutClosingHashes(content), HeadingColor(theme, n), true
 					lead.Add(line, lines[idx], from, from+len(line))
 				}
-			case strings.HasPrefix(trim, "> "):
-				line, st.FG, prose, dl.Quote = strings.TrimPrefix(trim, "> "), theme.Dim, true, true
+			case quoteDepth(line) > 0:
+				dl.QuoteDepth, line = quoteMarkers(line)
+				st.FG, prose, dl.Quote = theme.Dim, true, true
 			default:
 				line, dl.List = listItem(line, lead)
 				prose = true
@@ -304,6 +308,45 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 	}
 	alignOrdered(out)
 	return out
+}
+
+// quoteMarkers strips a quote line's markers: up to 3 columns of
+// indentation, then each '>' with one optional space after it, a further
+// level's '>' allowed after up to 3 more spaces. It returns the number of
+// levels (0 when line is no quote) and the text after them.
+func quoteMarkers(line string) (int, string) {
+	col, i := 0, 0
+	for ; i < len(line) && (line[i] == ' ' || line[i] == '\t'); i++ {
+		if line[i] == '\t' {
+			col += 4 - col%4
+		} else {
+			col++
+		}
+	}
+	if col > 3 || i == len(line) || line[i] != '>' {
+		return 0, line
+	}
+	depth := 0
+	for i < len(line) && line[i] == '>' {
+		depth++
+		i++
+		if i < len(line) && line[i] == ' ' {
+			i++
+		}
+		next := i
+		for next < len(line) && next-i < 3 && line[next] == ' ' {
+			next++
+		}
+		if next < len(line) && line[next] == '>' {
+			i = next
+		}
+	}
+	return depth, line[i:]
+}
+
+func quoteDepth(line string) int {
+	depth, _ := quoteMarkers(line)
+	return depth
 }
 
 // thematicBreak reports a rule line: up to 3 columns of indentation (TABs to
@@ -520,8 +563,11 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 			}
 		default:
 			if dl.Quote {
-				prefix = []Run{Deco("│ ", spaceview.Style{FG: theme.Frame})}
-				textWidth = max(width-2, 1)
+				// One bar per level, each two cells; at least one is drawn and
+				// the text keeps a cell: deeper levels than fit are not drawn.
+				bars := max(min(dl.QuoteDepth, (width-1)/2), 1)
+				prefix = []Run{Deco(strings.Repeat("│ ", bars), spaceview.Style{FG: theme.Frame})}
+				textWidth = max(width-2*bars, 1)
 			}
 			ranges, pad, hang := WrapRanges(wm, dl.Text, textWidth, !dl.Code), 0, 0
 			if r, p, h, ok := listRanges(wm, dl, textWidth); ok {
