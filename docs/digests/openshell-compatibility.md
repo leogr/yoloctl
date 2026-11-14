@@ -163,7 +163,7 @@ live custom-image startup or complete runtime parity. [7](#source-7)
 
 [FACT] `make build` obtains the OpenShell sandbox and supervisor by building
 them on the host with cargo-zigbuild for both musl targets from the pinned
-upstream commit plus the two checked-in patches; the script verifies every
+upstream commit plus the ordered checked-in patches; the script verifies every
 resulting Git tree and the stamped Cargo files against `pins.json`, pins the
 Rust toolchain through rustup, records zig/cargo-zigbuild versions, host and
 output hashes in the cache receipt, and caches the result by input hash under
