@@ -127,8 +127,17 @@ func prepareNative(ctx context.Context, in BootstrapInput, release QualifiedRele
 	if err != nil {
 		return prepared, err
 	}
-	if err = publishPrivateOnce(containerRoot, "origin.json", originRaw, 0, 0); err != nil && !errors.Is(err, os.ErrExist) {
+	err = publishPrivateOnce(containerRoot, "origin.json", originRaw, 0, 0)
+	if err != nil && !errors.Is(err, os.ErrExist) {
 		return prepared, err
+	}
+	if err == nil && strictSource {
+		// The creating build records that this box's supervisor runs the fixed
+		// launcher as its main process (stop-box route M-b, section 2). A box
+		// created before has no such record; later builds never add one.
+		if err = publishPrivateOnce(containerRoot, LauncherCapabilityName, []byte("1\n"), 0, 0); err != nil {
+			return prepared, err
+		}
 	}
 	previous, info, err := safepath.ReadFileInfo(containerRoot, "origin.json", 1<<20)
 	if err != nil {

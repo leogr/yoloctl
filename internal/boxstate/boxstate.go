@@ -112,6 +112,12 @@ const (
 	ReasonDriftNeedsRestart  ReasonCode = "drift_needs_restart"
 	ReasonDriftLiveOnly      ReasonCode = "drift_live_only"
 	ReasonDriftError         ReasonCode = "drift_error"
+	// The box was created before the session launcher (or runs the old
+	// upstream runtime): a warning, never drift or a refusal (directive 56).
+	ReasonLauncherRecreate ReasonCode = "launcher_recreate"
+	// A running privileged box whose endpoint predates the main-session
+	// request.
+	ReasonMainSessionRestart ReasonCode = "main_session_restart"
 )
 
 type Reason struct {
@@ -166,6 +172,9 @@ type Resolver struct {
 	// Conversation describes a declared agent box's conversation identity.
 	// Nil skips it.
 	Conversation func(Box) *agentsession.Status
+	// Launcher reads how a box's container takes a managed session. Nil
+	// skips it; a failed read adds nothing (it is a warning only).
+	Launcher func(ctx context.Context, space, name string) (agentbox.LauncherSupport, error)
 }
 
 func NewResolver() Resolver {
@@ -196,6 +205,18 @@ func NewResolver() Resolver {
 				return &agentsession.Status{Provider: b.Config.Agent, Policy: "unknown", Note: "agent profile unavailable: " + err.Error()}
 			}
 			return agentsession.Describe(b.Config, profile, b.Session.State == SessionRunning, b.Session.LaunchToken)
+		},
+		Launcher: func(ctx context.Context, space, name string) (agentbox.LauncherSupport, error) {
+			// Only a native worker can read the box's runtime record.
+			if !spaceenv.Native() {
+				return agentbox.LauncherSupport{}, nil
+			}
+			c := container.New(space)
+			d, err := c.Inspect(ctx, name)
+			if err != nil {
+				return agentbox.LauncherSupport{}, err
+			}
+			return agentbox.BoxLauncher(ctx, c, name, d)
 		},
 		InspectActual: func(ctx context.Context, cfg *agentbox.Config) (agentbox.ActualState, error) {
 			return agentbox.LiveInspector{Client: container.New(cfg.Space)}.Inspect(ctx, cfg)
@@ -414,6 +435,16 @@ func (r Resolver) resolveSpace(ctx context.Context, space string, depth Depth, s
 		if depth != RuntimeInventory && r.Conversation != nil && b.Config != nil {
 			b.Conversation = r.Conversation(*b)
 		}
+		if depth != RuntimeInventory && r.Launcher != nil && b.Declaration == DeclarationDeclared && (b.Runtime == RuntimeRunning || b.Runtime == RuntimeStopped) {
+			if support, err := r.Launcher(ctx, space, b.Name); err == nil {
+				switch {
+				case support.NeedsRecreate:
+					b.Reasons = append(b.Reasons, Reason{Code: ReasonLauncherRecreate, Message: agentbox.RecreateWarning(b.Name)})
+				case support.NeedsRestart:
+					b.Reasons = append(b.Reasons, Reason{Code: ReasonMainSessionRestart, Message: agentbox.RestartWarning(b.Name)})
+				}
+			}
+		}
 		b.State = deriveDisplay(*b)
 	}
 	sortBoxes(boxes)
@@ -528,7 +559,10 @@ func ProbeSession(ctx context.Context, c *container.Client, name string, contain
 	if ts, ok := session.ReadVMTombstone(ctx, c, name); ok {
 		return SessionInfo{State: SessionExited, ExitCode: ts.ExitCode, ExitedAt: ts.ExitedAt}
 	}
-	if containerRunning && c.ShellQuiet(ctx, "sudo", "test", "-f", session.MarkerPath(name)) == nil {
+	// A marker without a holder: on a running box a session still stopping
+	// or one that does not stop its box; on a stopped box a holder lost
+	// while the box stopped with its session (stop-box).
+	if c.ShellQuiet(ctx, "sudo", "test", "-f", session.MarkerPath(name)) == nil {
 		return SessionInfo{State: SessionLost}
 	}
 	return SessionInfo{State: SessionNone}
@@ -587,14 +621,17 @@ func deriveDisplay(b Box) DisplayState {
 	case b.Drift == DriftNeedsRecreate || b.Drift == DriftNeedsRestart ||
 		b.Drift == DriftLiveOnly || b.Drift == DriftError:
 		return DisplayDrifted
+	// The container decides first: a box that is not running is stopped,
+	// whatever session files exist; its last exit or lost session is shown
+	// beside it (stop-box).
+	case b.Runtime == RuntimeStopped:
+		return DisplayStopped
 	case b.Session.State == SessionLost:
 		return DisplayLost
 	case b.Session.State == SessionExited:
 		return DisplayExited
 	case b.Runtime == RuntimeRunning:
 		return DisplayRunning
-	case b.Runtime == RuntimeStopped:
-		return DisplayStopped
 	default:
 		return DisplayConfigured
 	}

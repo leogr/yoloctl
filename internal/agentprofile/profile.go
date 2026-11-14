@@ -31,7 +31,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -170,12 +169,12 @@ type SessionSpec struct {
 	// ResumeCarry declares values a resume carries over from the last
 	// observation of the same conversation (opt-in; see ResumeCarry).
 	ResumeCarry *ResumeCarry `yaml:"resume_carry,omitempty"`
-	// Daemons are the agent's own background servers that outlive its
-	// exit, each an argv prefix ("codex app-server") whose first word is
-	// the executable's base name. A managed launch is their lifetime: the
-	// session holder stops every same-user process matching one before the
-	// agent starts and after it exits (see session.ReapScript).
-	Daemons []string `yaml:"daemons,omitempty"`
+	// LegacyDaemons is the removed session.daemons key (the agent daemon
+	// reaper; stop-box slice 1: a box now stops with its session, and its
+	// processes with it). Decoded only so a custom profile still carrying it
+	// loads: each load warns once, the field is dropped in memory, and the
+	// profile loses it at its next save. Its content is never used.
+	LegacyDaemons []string `yaml:"daemons,omitempty"`
 	// LegacyObserveFeature is the removed observe_feature key, decoded only
 	// so a profile still carrying it fails with the rename instead of an
 	// unknown-field error.
@@ -610,11 +609,6 @@ func (p *Profile) validateSession() error {
 			return fmt.Errorf("agent-profile %q: session.reserved_args entry %q must be a literal argument", p.Name, a)
 		}
 	}
-	for _, d := range s.Daemons {
-		if _, err := DaemonArgv(d); err != nil {
-			return fmt.Errorf("agent-profile %q: session.daemons: %w", p.Name, err)
-		}
-	}
 	if c := s.ResumeCarry; c != nil {
 		if c.Effort == nil && c.Model == nil {
 			return fmt.Errorf("agent-profile %q: session.resume_carry declares nothing to carry", p.Name)
@@ -693,34 +687,6 @@ func (p *Profile) validateSession() error {
 		}
 	}
 	return nil
-}
-
-// daemonWord is one word of a declared daemon's argv prefix. Words are
-// embedded in the holder's reaper script, so only plain names are allowed.
-var daemonWord = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
-
-// DaemonArgv splits a session.daemons entry into its argv prefix: one to
-// eight plain words separated by single spaces, the first an executable's
-// base name.
-func DaemonArgv(entry string) ([]string, error) {
-	words := strings.Split(entry, " ")
-	if len(words) > 8 {
-		return nil, fmt.Errorf("daemon %q has more than 8 words", entry)
-	}
-	for _, w := range words {
-		if !daemonWord.MatchString(w) {
-			return nil, fmt.Errorf("daemon %q must be plain words separated by single spaces", entry)
-		}
-	}
-	return words, nil
-}
-
-// SessionDaemons is the profile's declared daemons, or nil.
-func (p *Profile) SessionDaemons() []string {
-	if p == nil || p.Session == nil {
-		return nil
-	}
-	return p.Session.Daemons
 }
 
 // Distribution identifies the version/update source, independently of profile names.
@@ -912,5 +878,15 @@ func parseProfile(raw []byte, source, expectedName string) (*Profile, error) {
 	if err := p.Validate(); err != nil {
 		return nil, fmt.Errorf("%s: %w", source, err)
 	}
+	if p.Session != nil && p.Session.LegacyDaemons != nil {
+		LegacyDaemonsNotice(p.Name)
+		p.Session.LegacyDaemons = nil
+	}
 	return &p, nil
+}
+
+// LegacyDaemonsNotice reports, on each load, a profile still declaring the
+// removed session.daemons; the CLI sets it to its logger, tests replace it.
+var LegacyDaemonsNotice = func(name string) {
+	fmt.Fprintf(os.Stderr, "warning: agent-profile %q: session.daemons is no longer used (a box now stops with its session); the field is dropped at the next save\n", name)
 }

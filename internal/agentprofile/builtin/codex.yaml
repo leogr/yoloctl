@@ -88,11 +88,6 @@ session:
   observe:
     push: yolo.agent.observe-codex
     selection: unknown
-  # The TUI starts a detached app-server daemon (and its pid-update-loop)
-  # that outlives `/quit`. A later TUI would reuse it, with the hooks still
-  # in the old launch's environment and its egress denied (its node ancestor
-  # is gone), so the holder stops both before each launch and after the exit.
-  daemons: ["codex app-server"]
 
 # Subscription / OAuth login is written in-box; import/status are account-scoped.
 # The auth.json login lives in the account's state dir

@@ -210,6 +210,7 @@ VM-local ephemeral) at /workdir.`,
 	registerCompletions(cmd)
 	rejectUnknownCommandGroups(cmd)
 	registerSpaceOperations(cmd)
+	registerStartModeWarnings(cmd)
 	return cmd
 }
 

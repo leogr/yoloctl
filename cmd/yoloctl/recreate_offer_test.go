@@ -421,3 +421,55 @@ func TestStartRefusesRecreateDriftBeforeImageWork(t *testing.T) {
 		t.Fatalf("got %v (image calls %v), want %q", err, imageCalls, want)
 	}
 }
+
+// Directive 56: a box created before the session launcher is offered its recreate
+// for a new interactive managed session only: yes sends one ordinary
+// recreate (no second question), no sends nothing; joining a running
+// session, a plain shell and the chat server ask nothing; a failed recreate
+// is the command's failure.
+func TestLauncherRecreateOfferForANewManagedSession(t *testing.T) {
+	previous := recreateOfferInteractive
+	t.Cleanup(func() { recreateOfferInteractive = previous })
+	recreateOfferInteractive = func(*cobra.Command) bool { return true }
+	report := func(runtime, session, agent, command string) string {
+		manifest := ""
+		if command != "" {
+			manifest = `,"manifest":{"session_command":["` + command + `"]}`
+		}
+		return `{"identity":{"runtime":"` + runtime + `","session":"` + session + `","agent":"` + agent + `"}` + manifest +
+			`,"drift":{"state":"none","reasons":["launcher_recreate: box api was created before this version; recreate it (box recreate api): data stored only inside the container is lost"]}}`
+	}
+	for _, tc := range []struct {
+		name, report, answer string
+		kind                 recreateOfferKind
+		recreate, asked      bool
+	}{
+		{"stopped agent attach yes", report("stopped", "none", "claude", ""), "y\n", offerAttach, true, true},
+		{"stopped agent attach no", report("stopped", "none", "claude", ""), "n\n", offerAttach, false, true},
+		{"running, no session, start", report("running", "none", "codex", ""), "y\n", offerStart, true, true},
+		{"session command box", report("stopped", "none", "none", "aircd"), "y\n", offerAttach, true, true},
+		{"joining a running session", report("running", "running", "claude", ""), "y\n", offerAttach, false, false},
+		{"restart ends the session", report("running", "running", "claude", ""), "y\n", offerRestart, true, true},
+		{"plain shell", report("stopped", "none", "none", ""), "y\n", offerAttach, false, false},
+		{"chat server", report("stopped", "none", "none", "aircd"), "y\n", offerChatServer, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls []offerCall
+			cmd, errw := offerCmd(tc.answer)
+			if err := offerRecreate(cmd, offerTarget(tc.report, &calls), "api", tc.kind, false); err != nil {
+				t.Fatal(err)
+			}
+			asked := strings.Contains(errw.String(), "Recreate now? [y/N]")
+			recreated := len(calls) == 2 && calls[1].method == "box.recreate"
+			if asked != tc.asked || recreated != tc.recreate || strings.Count(errw.String(), "[y/N]") > 1 || len(calls) > 2 {
+				t.Fatalf("asked %v recreated %v calls %+v\n%s", asked, recreated, calls, errw.String())
+			}
+		})
+	}
+	recreateOfferInteractive = func(*cobra.Command) bool { return false }
+	var calls []offerCall
+	cmd, errw := offerCmd("y\n")
+	if err := offerRecreate(cmd, offerTarget(report("stopped", "none", "claude", ""), &calls), "api", offerAttach, false); err != nil || len(calls) != 0 || errw.Len() != 0 {
+		t.Fatal("a non-interactive caller was asked", calls, errw.String(), err)
+	}
+}

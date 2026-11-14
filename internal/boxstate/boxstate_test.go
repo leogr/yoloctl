@@ -329,3 +329,34 @@ func TestResolveNamedLimitsPerBoxWorkToTheNamedBoxes(t *testing.T) {
 		}
 	}
 }
+
+// Section 7 of stop-box slice 1: the container decides first. A box that is
+// not running is stopped whatever session files exist (its last exit or
+// lost session stays in Session for the views); a running box keeps
+// running, exited and lost.
+func TestDisplayPutsTheContainerFirst(t *testing.T) {
+	for _, runtime := range []RuntimeState{RuntimeRunning, RuntimeStopped, RuntimeMissing} {
+		for _, session := range []SessionState{SessionNone, SessionRunning, SessionExited, SessionLost} {
+			b := Box{Declaration: DeclarationDeclared, Runtime: runtime, Session: SessionInfo{State: session}}
+			got := deriveDisplay(b)
+			want := DisplayConfigured
+			switch {
+			case runtime == RuntimeStopped:
+				want = DisplayStopped
+			case runtime == RuntimeRunning && session == SessionLost:
+				want = DisplayLost
+			case runtime == RuntimeRunning && session == SessionExited:
+				want = DisplayExited
+			case runtime == RuntimeRunning:
+				want = DisplayRunning
+			case session == SessionLost:
+				want = DisplayLost
+			case session == SessionExited:
+				want = DisplayExited
+			}
+			if got != want {
+				t.Errorf("runtime %s session %s: %s, want %s", runtime, session, got, want)
+			}
+		}
+	}
+}

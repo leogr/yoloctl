@@ -145,6 +145,13 @@ idempotent and never cancel each other or any other operation. An operation
 that finds its box's expected run gone performs no further effect on that box
 and never starts again a run it had started. Container liveness and
 agent-session liveness are distinct. A lost holder cannot adopt its old child.
+The agent daemon reaper is gone; an obsolete `session.daemons` in a custom
+profile is dropped with a warning when the profile loads. A box created before
+a runtime change is recognized from its record. One that needs recreation gets
+a warning on every operation and, for a new interactive agent session, the
+offer to recreate it; it is never recreated automatically, because that loses
+data stored only in the container. One that needs only a restart is restarted
+automatically at its next session start when nothing else runs in it.
 
 `space recreate` preserves disk/accounts/declarations and starts a fresh VM;
 boxes require explicit starts. Ephemeral workdirs and sessions are lost.

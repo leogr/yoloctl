@@ -76,7 +76,6 @@ func TestAgentProfiles_BuiltIns(t *testing.T) {
 				ResumeArgv:   []string{"{{command}}", "resume", "{{session_id}}"},
 				ReservedArgs: []string{"resume"},
 				Observe:      &agentprofile.ObserveSpec{Push: "yolo.agent.observe-codex", Selection: agentprofile.SelectionUnknown},
-				Daemons:      []string{"codex app-server"},
 			},
 		}},
 	}

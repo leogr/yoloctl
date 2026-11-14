@@ -19,7 +19,9 @@ missing, corrupt or substituted legacy binary before launch or teardown with
 "recreate this box to move it to the new OpenShell". Native and privileged
 starts skip that guard; privileged creation drops only its unused legacy
 interpreter/Rego binds. There is no automatic conversion and no return to the
-old runtime. [19](#source-19) [20](#source-20)
+old runtime. Such a box needs recreate for the session launcher: it warns on
+every one-box command and is offered recreation for a new interactive managed
+session (see [stop-box](stop-box.md)). [19](#source-19) [20](#source-20)
 
 [FACT] Safety model of the native path on the integration tree, as decided by
 the user: an operator-enabled box gets a native registration published at

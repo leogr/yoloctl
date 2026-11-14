@@ -166,10 +166,10 @@ account's own settings; its profile learns the conversation from that line and
 resumes it with `--conversation`, carrying the reported model label. A
 reported ID does not verify the resume [17](#source-17) [18](#source-18).
 
-[FACT] A managed launch is the lifetime of the background daemons its agent
-profile declares (`session.daemons`; Codex's app-server): the holder stops
-them before the agent starts and after an observed exit, never on a holder
-stop. A declared daemon a user started from `box exec` is stopped too.
+[FACT] A managed launch reads its box's start mode from the box's record; a
+box created before it warns and is offered recreation, and a stopped box with
+a marker and no holder records its lost launch before a fresh start. The
+agent daemon reaper is gone. Every session still starts with exec.
 [19](#source-19)
 
 ## Sources
@@ -194,7 +194,7 @@ stop. A declared daemon a user started from `box exec` is stopped too.
 16. <a id="source-16"></a> [Owned attach setup and client loss](../digests/attach-setup.md).
 17. <a id="source-17"></a> [Following agent conversation switches](../digests/conversation-following.md).
 18. <a id="source-18"></a> [Antigravity status line reporter](../digests/agy-observation.md).
-19. <a id="source-19"></a> [Agent daemon lifetime](../digests/agent-daemons.md).
+19. <a id="source-19"></a> [Stop-box start modes](../digests/stop-box.md).
 
 20. <a id="source-20"></a> [Session remedies](../digests/session-remedies.md) — fresh-session image guard.
 21. <a id="source-21"></a> [Tracked agent launches and settlement](../digests/agent-launches.md).

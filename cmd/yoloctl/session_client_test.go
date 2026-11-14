@@ -2,12 +2,9 @@ package main
 
 import (
 	"context"
-	"slices"
 	"strings"
 	"testing"
 
-	"github.com/leogr/yoloctl/internal/account"
-	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/termio"
 )
@@ -88,13 +85,10 @@ func TestPaintedWriterTracksFirstByte(t *testing.T) {
 	}
 }
 
-// A launch carries the declared daemons of the box's agent to the holder;
-// other agents and agentless boxes carry none.
-func TestSessionDaemonsFollowTheAgentProfile(t *testing.T) {
-	for agent, want := range map[string][]string{"codex": {"codex app-server"}, "claude": nil, account.None: nil} {
-		got, err := sessionDaemons(&agentbox.Config{Agent: agent})
-		if err != nil || !slices.Equal(got, want) {
-			t.Errorf("%q daemons = %q, %v; want %q", agent, got, err, want)
-		}
+// The plain-shell info line names the box and how to stop it.
+func TestPlainShellInfoNamesTheStop(t *testing.T) {
+	got := plainShellInfo("dev")
+	if !strings.Contains(got, "box dev has no session process") || !strings.Contains(got, "yoloctl box stop dev") {
+		t.Fatal(got)
 	}
 }

@@ -155,6 +155,9 @@ exit 93`,
 	// No real service tool is reachable even if the expected path regresses.
 	t.Setenv("PATH", bin)
 	c := container.NewWithOutput(cfg.Space, io.Discard, io.Discard)
+	previousMode := sessionStartModeFn
+	t.Cleanup(func() { sessionStartModeFn = previousMode })
+	sessionStartModeFn = func(context.Context, *container.Client, string) (sessionStartMode, error) { return startMain, nil }
 	var notice bytes.Buffer
 	t.Cleanup(bindCLITestLogger(t, &notice))
 	if _, err := ensureAgentSession(t.Context(), c, cfg.Space, cfg.Name, &notice, true, nil, sessionStartOptions{}); err == nil || !strings.Contains(err.Error(), "publication is pending") {

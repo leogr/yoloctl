@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/vmservice"
@@ -36,9 +35,6 @@ type UnitSpec struct {
 	// LaunchToken, when set, is written into the holder's marker and
 	// tombstone so the controller can tell which launch they belong to.
 	LaunchToken string
-	// Daemons are the agent profile's declared daemons, which the holder
-	// stops before the agent starts and after it exits.
-	Daemons []string
 }
 
 // StartHolderUnit starts the session holder for spec.Agentbox as a
@@ -90,12 +86,6 @@ func holderUnitArgs(spec UnitSpec) ([]string, error) {
 			return nil, fmt.Errorf("session: holder unit for %s has an invalid launch token", spec.Agentbox)
 		}
 		args = append(args, "--launch-token", spec.LaunchToken)
-	}
-	for _, d := range spec.Daemons {
-		if _, err := agentprofile.DaemonArgv(d); err != nil {
-			return nil, fmt.Errorf("session: holder unit for %s: %w", spec.Agentbox, err)
-		}
-		args = append(args, "--reap-daemon", d)
 	}
 	if spec.HostIntegration {
 		args = append(args, "--host-integration")

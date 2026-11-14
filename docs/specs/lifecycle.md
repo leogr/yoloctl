@@ -43,7 +43,9 @@ its holder is gone; unmarked shell/exec exit does not stop the box.
 [14](#source-14)
 
 [FACT] Runtime teardown includes holder, session artifacts, ports and orphan
-network cleanup. A running container does not prove a living agent session.
+network cleanup. A running container does not prove a living agent session;
+a box that is not running is listed as stopped, its last exit or lost session
+beside it ([stop-box](../digests/stop-box.md)).
 Graceful stop signals workloads through confined SSH before the runtime's
 bounded stop/escalation; it does not depend on PID 1 forwarding SIGTERM.
 A sandbox socket inode does not prove a listening SSH endpoint. Readiness

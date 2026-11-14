@@ -155,7 +155,6 @@ func TestBuiltinShape(t *testing.T) {
 		ResumeArgv:   []string{"{{command}}", "resume", "{{session_id}}"},
 		ReservedArgs: []string{"resume"},
 		Observe:      &ObserveSpec{Push: "yolo.agent.observe-codex", Selection: SelectionUnknown},
-		Daemons:      []string{"codex app-server"},
 	}
 	if !reflect.DeepEqual(codex.Session, wantCodex) || !slices.Contains(codex.RequiresFeatures, codex.PushFeature()) {
 		t.Errorf("codex built-in session = %+v (features %v), want %+v", codex.Session, codex.RequiresFeatures, wantCodex)
@@ -557,9 +556,11 @@ secret_injection:
 	}
 }
 
-// Only Codex declares a daemon; a declared daemon must be plain words, since
-// the holder embeds them in its reaper.
-func TestSessionDaemons(t *testing.T) {
+// The reaper is gone (stop-box slice 1): no built-in declares
+// session.daemons; a custom profile that still does loads, warns once per
+// load, is unchanged on disk by the load and loses the field at its next
+// save. Every other unknown field is still rejected.
+func TestLegacySessionDaemonsLoadWithAWarning(t *testing.T) {
 	setupTestConfig(t)
 	names, err := BuiltinNames()
 	if err != nil {
@@ -570,22 +571,46 @@ func TestSessionDaemons(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := []string(nil)
-		if name == "codex" {
-			want = []string{"codex app-server"}
-		}
-		if got := p.SessionDaemons(); !slices.Equal(got, want) {
-			t.Errorf("%s daemons = %q, want %q", name, got, want)
+		if p.Session != nil && p.Session.LegacyDaemons != nil {
+			t.Errorf("%s still declares session.daemons", name)
 		}
 	}
+	var warned []string
+	previous := LegacyDaemonsNotice
+	LegacyDaemonsNotice = func(name string) { warned = append(warned, name) }
+	t.Cleanup(func() { LegacyDaemonsNotice = previous })
 	base := "name: my-agent\nimage: img:1\ncommand: run\nsession:\n  id_format: uuid\n  resume_argv: [\"{{command}}\", \"{{session_id}}\"]\n"
-	if p, err := parseProfile([]byte(base+"  daemons: [\"run serve\", \"run-helper\"]\n"), "test.yaml", "my-agent"); err != nil ||
-		!slices.Equal(p.SessionDaemons(), []string{"run serve", "run-helper"}) {
-		t.Fatalf("valid daemons = %v, %v", p, err)
+	raw := base + "  daemons: [\"run serve\"]\n"
+	path, err := layout.AgentPath("my-agent")
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, bad := range []string{`""`, `"run  serve"`, `"/usr/bin/run serve"`, `"run;id"`, `"run $(id)"`, `"a b c d e f g h i"`} {
-		if _, err := parseProfile([]byte(base+"  daemons: ["+bad+"]\n"), "test.yaml", "my-agent"); err == nil || !strings.Contains(err.Error(), "session.daemons") {
-			t.Errorf("daemon %s = %v; want a refusal", bad, err)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		p, err := Lookup("my-agent")
+		if err != nil || p.Session.LegacyDaemons != nil {
+			t.Fatalf("load %d: %+v %v", i, p, err)
 		}
+	}
+	if len(warned) != 2 || warned[0] != "my-agent" {
+		t.Fatalf("warnings %v, want one per load", warned)
+	}
+	if onDisk, _ := os.ReadFile(path); string(onDisk) != raw {
+		t.Fatalf("the load rewrote the profile:\n%s", onDisk)
+	}
+	p, _ := Lookup("my-agent")
+	if err := p.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if onDisk, _ := os.ReadFile(path); strings.Contains(string(onDisk), "daemons") {
+		t.Fatalf("the save kept session.daemons:\n%s", onDisk)
+	}
+	if _, err := parseProfile([]byte(base+"  reap: [\"run\"]\n"), "test.yaml", "my-agent"); err == nil {
+		t.Fatal("another unknown session field was accepted")
 	}
 }

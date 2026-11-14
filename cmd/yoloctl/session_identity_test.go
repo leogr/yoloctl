@@ -910,3 +910,73 @@ func TestResumeCarriesTheConversationsLastEffortAndModel(t *testing.T) {
 		})
 	}
 }
+
+// A tracked agent whose box stopped with its holder lost (a
+// marker, no holder, no tombstone) records that launch as lost through the
+// marker probe and removes the marker before the fresh start; a marker probe
+// that fails refuses, removing nothing.
+func TestTrackedStoppedBoxRecordsItsLostHolder(t *testing.T) {
+	f := newIdentityFixture(t)
+	cfg := claudeBox()
+	cfg.SchemaVersion = agentbox.SchemaVersion
+	cfg.Image = defaultAgentboxImage
+	cfg.Workdir = agentbox.NewEphemeralWorkdir(cfg.Name)
+	manifest, _ := layout.BoxPath("work", "coder")
+	if err := os.MkdirAll(filepath.Dir(manifest), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifest, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.launchOnce(cfg, sessionStartOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	f.unit["coder"] = false // the holder is lost; its marker stays
+	previousResolver, previousGuard, previousRemove, previousBinary := newBoxStateResolver, guardFreshSessionImageFn, removeVMMarkerFn, ensureVMBinaryFn
+	t.Cleanup(func() {
+		newBoxStateResolver, guardFreshSessionImageFn, removeVMMarkerFn, ensureVMBinaryFn = previousResolver, previousGuard, previousRemove, previousBinary
+	})
+	newBoxStateResolver = func() boxstate.Resolver {
+		return boxstate.Resolver{
+			ListSpaces: func(context.Context) ([]vmhost.Instance, error) {
+				return []vmhost.Instance{{Name: "work", Status: "Running"}}, nil
+			},
+			ListContainers: func(context.Context, string) ([]container.Container, error) {
+				return []container.Container{{Name: "coder", Status: "Exited (0)"}}, nil
+			},
+			ProbeSession: func(context.Context, string, string, bool) boxstate.SessionInfo {
+				return boxstate.SessionInfo{State: boxstate.SessionLost}
+			},
+		}
+	}
+	guardFreshSessionImageFn = func(context.Context, string, string) error { return nil }
+	previousPrepare := prepareNativeExistingStart
+	t.Cleanup(func() { prepareNativeExistingStart = previousPrepare })
+	prepareNativeExistingStart = func(context.Context, *container.Client, *agentbox.Config, bool) (recordedNativeStart, bool, error) {
+		return nil, false, nil
+	}
+	removed := 0
+	removeVMMarkerFn = func(context.Context, *container.Client, string) error { removed++; return nil }
+	stop := errors.New("stop after the marker handling")
+	ensureVMBinaryFn = func(context.Context, *container.Client) error { return stop }
+
+	// A failed marker probe refuses and removes nothing.
+	f.markerErr["coder"] = errors.New("probe failed")
+	if _, err := ensureAgentSession(held(t.Context()), container.New("work"), "work", "coder", io.Discard, true, nil, sessionStartOptions{}); err == nil || !strings.Contains(err.Error(), "nothing was changed") || removed != 0 {
+		t.Fatalf("failed probe: %v removed %d", err, removed)
+	}
+	f.markerErr = map[string]error{}
+
+	_, err = ensureAgentSession(held(t.Context()), container.New("work"), "work", "coder", io.Discard, true, nil, sessionStartOptions{})
+	if !errors.Is(err, stop) || removed != 1 {
+		t.Fatalf("err %v removed %d", err, removed)
+	}
+	rec, _, err := agentsession.Load("work", "coder")
+	if err != nil || rec.Launch == nil || rec.Launch.State != agentsession.StateUncertain || !strings.Contains(rec.Launch.Detail, "holder died") {
+		t.Fatalf("the lost launch was not recorded: %+v %v", rec.Launch, err)
+	}
+}

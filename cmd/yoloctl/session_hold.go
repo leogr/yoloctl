@@ -33,7 +33,6 @@ func newSessionHoldCmd() *cobra.Command {
 		hostIntegration bool
 		hostWorkdir     string
 		launchToken     string
-		reapDaemons     []string
 		keepalive       time.Duration
 	)
 	cmd := &cobra.Command{
@@ -88,7 +87,6 @@ func newSessionHoldCmd() *cobra.Command {
 				TitleStrip:        titleStrip,
 				HostIntegration:   hostIntegration,
 				HostWorkdir:       hostWorkdir,
-				Daemons:           reapDaemons,
 				KeepaliveInterval: keepalive,
 				Logf:              logf,
 			})
@@ -122,7 +120,6 @@ func newSessionHoldCmd() *cobra.Command {
 	cmd.Flags().StringVar(&launchToken, "launch-token", "", "Launch correlation token written into the marker and tombstone (32 lowercase hex characters)")
 	cmd.Flags().BoolVar(&hostIntegration, "host-integration", false, "Enable session-scoped browser requests and sandbox image transfer")
 	cmd.Flags().StringVar(&hostWorkdir, "host-workdir", "", "Canonical host workdir for verified image reuse (empty for ephemeral boxes)")
-	cmd.Flags().StringArrayVar(&reapDaemons, "reap-daemon", nil, "Agent daemon argv prefix stopped before the agent starts and after it exits (repeatable)")
 	cmd.Flags().DurationVar(&keepalive, "keepalive", 0, "SSH keepalive interval (default 4m; must stay < 600s)")
 	return cmd
 }

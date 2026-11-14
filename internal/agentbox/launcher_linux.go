@@ -1,0 +1,51 @@
+package agentbox
+
+import (
+	"context"
+	"errors"
+
+	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/internal/openshell"
+)
+
+// PrivilegedMainSession asks a running privileged box's endpoint whether it
+// takes the main-session request (contract M-b section 7): one request, no
+// session runs. Nil until that request exists in this build.
+var PrivilegedMainSession func(ctx context.Context, name string) (bool, error)
+
+// BoxLauncher reads how the inspected container of box name takes a managed
+// session. It never treats an unreadable record as "old": that is an error.
+func BoxLauncher(ctx context.Context, client *container.Client, name string, details *container.Details) (LauncherSupport, error) {
+	if details == nil {
+		return LauncherSupport{}, errors.New("launcher: no container details")
+	}
+	ev := ClassifyRuntime(details)
+	switch {
+	case ev.Mode == RuntimeModePrivileged:
+		if !details.Running {
+			return LauncherSupport{}, nil // its next start runs the current endpoint
+		}
+		if PrivilegedMainSession == nil {
+			return LauncherSupport{Exec: true}, nil
+		}
+		ok, err := PrivilegedMainSession(ctx, name)
+		if err != nil {
+			return LauncherSupport{}, err
+		}
+		return LauncherSupport{NeedsRestart: !ok}, nil
+	case hasOpenShellRuntimeSignals(details):
+		runtime, err := inspectOpenShellRuntime(ctx, client, name, details.ID)
+		if err != nil {
+			return LauncherSupport{}, err
+		}
+		capable, err := openshell.ContainerLauncherCapable(runtime.ControlRoot)
+		if err != nil {
+			return LauncherSupport{}, err
+		}
+		return LauncherSupport{NeedsRecreate: !capable}, nil
+	case classifyLaunch(details.Command).confined:
+		// The old upstream runtime (legacy branch): never the launcher.
+		return LauncherSupport{NeedsRecreate: true}, nil
+	}
+	return LauncherSupport{}, errors.New("launcher: the box's runtime cannot be classified (" + ev.Reason + ")")
+}

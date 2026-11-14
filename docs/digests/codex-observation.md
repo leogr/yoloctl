@@ -77,10 +77,9 @@ The `thread/read` fields used are unchanged between Codex 0.164.0 and 0.165.0.
 [4](#source-4) [6](#source-6) [7](#source-7) [8](#source-8)
 
 [FACT] A later TUI reuses a running daemon without comparing its
-environment, so the holder stops `codex app-server` processes before each
-managed launch and after its exit, and each launch's TUI starts a daemon of
-its own. A stale socket file a killed daemon leaves is refused and skipped.
-[6](#source-6) [9](#source-9)
+environment. There is no daemon reaper: until a box stops with its session,
+a daemon can outlive its launch and a later TUI may reuse it ([stop-box](stop-box.md)).
+A stale socket file a killed daemon leaves is refused and skipped. [6](#source-6) [9](#source-9)
 
 [FACT] The controller also reads each box's daemon at refresh time, through
 the writer's `codex-query` mode [10](#source-10).
@@ -95,6 +94,6 @@ the writer's `codex-query` mode [10](#source-10).
 6. <a id="source-6"></a> [Writer regressions](../../scripts/test_agent_observe.py#L1) — `CodexWriterTests`: fields, vectors, the daemon read and its refusals, a stale socket skipped.
 7. <a id="source-7"></a> [Codex 0.165 daemon exclusion](https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/tui/src/daemon_startup.rs#L61) — overrides that run no daemon.
 8. <a id="source-8"></a> [Codex 0.165 `--no-daemon`](https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/tui/src/cli.rs#L87) — the explicit switch.
-9. <a id="source-9"></a> [Agent daemon lifetime](agent-daemons.md) — the holder's reaper and its limits.
+9. <a id="source-9"></a> [Stop-box start modes](stop-box.md) — the reaper is gone.
 10. <a id="source-10"></a> [Codex refresh read](codex-refresh-read.md) — the controller's scheduler, targets and writer mode.
 11. <a id="source-11"></a> [State fold](../../internal/agentsession/apply.go#L274-L288) — a completed model request clears only a matching failure; any other line with a state replaces the observed one.

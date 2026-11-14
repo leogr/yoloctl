@@ -374,6 +374,18 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 		}
 		container.ExpectedRunsFrom(ctx).ExpectIfUnset(name, container.RunOf(d))
 	}
+	// Directive 56: a running privileged box whose endpoint predates the
+	// main-session request is restarted by its next managed session start
+	// when nothing else runs in it, before this session takes the box's lock.
+	if running && !opts.NewSession && (cfg.HasAgent() || len(cfg.SessionCommand) > 0) {
+		restarted, err := restartPrivilegedForMainSessionFn(ctx, c, space, name, errw)
+		if err != nil {
+			return "", err
+		}
+		if restarted {
+			return ensureAgentSession(ctx, c, space, name, errw, noAutoupdate, updated, opts)
+		}
+	}
 
 	// A tracked box's conversation record changes only under its box lock,
 	// taken inside the command's space-operation lock and held until the
@@ -420,7 +432,10 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 			foldLiveLaunch(ctx, space, name)
 			return "", nil
 		}
-		if running {
+		// Running or stopped: a stopped box's marker is a holder lost while
+		// its box stopped with its session (stop-box), recorded below before
+		// it is removed.
+		if running || resolved.Runtime == boxstate.RuntimeStopped {
 			m, present, err := probeVMMarkerFn(ctx, c, name)
 			if err != nil {
 				return "", asUserError(fmt.Errorf("cannot tell whether a session of box %s survives (%v); nothing was changed — inspect it, or recover with yoloctl box recreate %s", name, err, name))
@@ -432,8 +447,8 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 	// stopped-container start or npm maintenance, classify recipe-image drift
 	// through the shared full resolver. A proven tracked marker still takes the
 	// existing lost-holder path rather than being treated as a fresh launch.
-	if !trackedMarkerPresent && (resolved.Runtime == boxstate.RuntimeRunning || resolved.Runtime == boxstate.RuntimeStopped) {
-		if err := guardFreshSessionImage(ctx, space, name); err != nil {
+	if (!trackedMarkerPresent || !running) && (resolved.Runtime == boxstate.RuntimeRunning || resolved.Runtime == boxstate.RuntimeStopped) {
+		if err := guardFreshSessionImageFn(ctx, space, name); err != nil {
 			return "", err
 		}
 	}
@@ -500,6 +515,19 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 				"Recreate the box to recover — workdir and account state survive: yoloctl box recreate %s",
 			name, name))
 	}
+	if !running && markerPresent {
+		// The holder was lost and the box stopped with its session
+		// (stop-box): record the lost launch, remove its stale marker, go on.
+		if tracked != nil {
+			if err := tracked.noteHolderLost(trackedMarker); err != nil {
+				return "", err
+			}
+		}
+		if err := removeVMMarkerFn(ctx, c, name); err != nil {
+			return "", fmt.Errorf("remove the lost session's marker of %s: %w", name, err)
+		}
+		cliNotice(logging.Session, "the previous session's holder was lost and the box stopped; starting a fresh one")
+	}
 
 	// A missing/mismatched bundle or incompatible Linux loader must fail
 	// before starting/rebuilding the container or running npm maintenance.
@@ -563,11 +591,20 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 	}
 	termName, cols, rows := sessionTermGeometry()
 	ringBytes, titleTemplate, titleStrip := sessionHolderTuning(ctx, errw, name, space, cfg.Agent, cfg.Account)
-	daemons, err := sessionDaemons(cfg)
-	if err != nil {
-		return "", err
-	}
+	// A managed launch (an agent or a declared session command) learns how
+	// its box starts a session (directive 56); a plain shell never asks.
+	managed := cfg.HasAgent() || len(cfg.SessionCommand) > 0
 	start := func(argv []string, token string) error {
+		if !managed {
+			cliInfo(logging.Session, "%s", plainShellInfo(name))
+		}
+		if managed {
+			// The start mode is consumed by the launch hand-over (contract
+			// M-b section 3); until then every session starts with exec.
+			if _, err := sessionStartModeFn(ctx, c, name); err != nil {
+				return err
+			}
+		}
 		return startSessionHolder(ctx, c, name, session.UnitSpec{
 			Agentbox:        name,
 			Argv:            sessionTerminalIdentity(ctx).Command(argv),
@@ -580,7 +617,6 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 			HostIntegration: true,
 			HostWorkdir:     sessionHostWorkdir(cfg.Workdir),
 			LaunchToken:     token,
-			Daemons:         daemons,
 		})
 	}
 	if tracked != nil {
@@ -600,19 +636,6 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 		return "", err
 	}
 	return cfg.Agent, start(argv, "")
-}
-
-// sessionDaemons is the declared daemons of the box's agent, which the holder
-// stops around every launch, manual ones included; agentless boxes have none.
-func sessionDaemons(cfg *agentbox.Config) ([]string, error) {
-	if !cfg.HasAgent() {
-		return nil, nil
-	}
-	profile, err := lookupAgentProfile(cfg.Agent)
-	if err != nil {
-		return nil, err
-	}
-	return profile.SessionDaemons(), nil
 }
 
 func sessionHostWorkdir(w agentbox.Workdir) string {
@@ -770,3 +793,122 @@ func startSessionHolder(ctx context.Context, c *container.Client, name string, s
 
 // startHolderUnitFn starts the holder unit; tests replace it.
 var startHolderUnitFn = session.StartHolderUnit
+
+// guardFreshSessionImageFn and removeVMMarkerFn are seams of the session
+// start; tests replace them.
+var guardFreshSessionImageFn = guardFreshSessionImage
+
+var removeVMMarkerFn = func(ctx context.Context, c *container.Client, name string) error {
+	return c.Shell(ctx, "sudo", "rm", "-f", session.MarkerPath(name))
+}
+
+// plainShellInfo is the info line of an attach that starts a box's plain
+// shell (no agent, no session_command): the box does not stop with it.
+func plainShellInfo(name string) string {
+	return fmt.Sprintf("box %s has no session process: this shell is temporary and the box keeps running after it (stop it with: yoloctl box stop %s)", name, name)
+}
+
+// sessionStartMode is how a managed session starts in a box's current run
+// (contract M-b sections 2, 7 and 8).
+type sessionStartMode int
+
+const (
+	// startMain: the box's main process takes the session (launcher or
+	// privileged main-session request); the box stops when it ends.
+	startMain sessionStartMode = iota + 1
+	// startExec: today's start; the box does not stop with the session.
+	startExec
+)
+
+// boxLauncherFn reads what a box offers a managed session; tests replace it.
+var boxLauncherFn = agentbox.BoxLauncher
+
+// sessionStartModeFn decides a managed launch's start mode; tests replace it.
+var sessionStartModeFn = sessionStartModeOf
+
+// sessionStartModeOf decides how a managed launch starts in box name's
+// current run: the main process when it offers one; exec, with the
+// directive-56 warning, for a box that needs recreate or a privileged box
+// that needs restart. An unreadable record is an error, never "old".
+func sessionStartModeOf(ctx context.Context, c *container.Client, name string) (sessionStartMode, error) {
+	d, err := c.Inspect(ctx, name)
+	if err != nil {
+		return 0, fmt.Errorf("read box %s before its session: %w", name, err)
+	}
+	support, err := boxLauncherFn(ctx, c, name, d)
+	if err != nil {
+		return 0, fmt.Errorf("read how box %s starts a session: %w", name, err)
+	}
+	switch {
+	case support.NeedsRecreate:
+		warnStartModeOnce(ctx, agentbox.RecreateWarning(name))
+		return startExec, nil
+	case support.NeedsRestart:
+		warnStartModeOnce(ctx, agentbox.RestartWarning(name))
+		return startExec, nil
+	case support.Exec:
+		return startExec, nil
+	}
+	return startMain, nil
+}
+
+// restartPrivilegedForMainSessionFn is the directive-56 automatic restart;
+// tests replace it.
+var restartPrivilegedForMainSessionFn = restartPrivilegedForMainSession
+
+// restartPrivilegedForMainSession restarts a running privileged box whose
+// endpoint predates the main-session request, with one info line, when
+// nothing else runs in it: no live holder (the caller checked) and no
+// process in the container besides its PID 1, from one complete read tied to
+// the same run. Any read failure or change is "something may run": the
+// warning only, no restart. It reports whether it restarted.
+func restartPrivilegedForMainSession(ctx context.Context, c *container.Client, space, name string, errw io.Writer) (bool, error) {
+	d, err := c.Inspect(ctx, name)
+	if err != nil {
+		return false, nil // the session's own reads decide
+	}
+	support, err := boxLauncherFn(ctx, c, name, d)
+	if err != nil || !support.NeedsRestart {
+		return false, nil
+	}
+	others, err := otherContainerProcessesFn(d.PID)
+	after, afterErr := c.Inspect(ctx, name)
+	sameRun := afterErr == nil && after.ID == d.ID && after.PID == d.PID && after.StartedAt == d.StartedAt && after.Running
+	if err != nil || !sameRun || others != 0 {
+		warnStartModeOnce(ctx, agentbox.RestartWarning(name))
+		return false, nil
+	}
+	cliInfo(logging.Box, "box %s was restarted to run this yoloctl version", name)
+	return true, restartForMainSessionFn(ctx, c, space, name, errw)
+}
+
+// otherContainerProcessesFn counts a container's other processes; tests
+// replace it.
+var otherContainerProcessesFn = agentbox.OtherContainerProcesses
+
+// restartForMainSessionFn is the ordinary box restart without attach; tests
+// replace it.
+var restartForMainSessionFn = restartForMainSession
+
+// restartForMainSession is the ordinary `box restart NAME --no-attach
+// --no-autoupdate`: the shared session-aware stop, then the shared start
+// core, under the same privileged-restart authorization.
+func restartForMainSession(ctx context.Context, c *container.Client, space, name string, errw io.Writer) error {
+	cmd := &cobra.Command{}
+	cmd.SetContext(ctx)
+	cmd.SetOut(errw)
+	cmd.SetErr(errw)
+	restartCtx, err := authorizePrivilegedRestart(ctx, c, space, name)
+	if err != nil {
+		return err
+	}
+	forwardIntent, err := preflightAgentboxRestartWithIntent(ctx, c, space, name)
+	if err != nil {
+		return err
+	}
+	if err := stopAgentboxRuntime(ctx, c, space, name, errw); err != nil && !isContainerGone(err) {
+		return err
+	}
+	cmd.SetContext(restartCtx)
+	return startAgentboxWithForwardIntent(cmd, space, name, true, true, false, nil, forwardIntent, false)
+}

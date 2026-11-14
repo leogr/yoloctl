@@ -157,3 +157,44 @@ func TestEnsureSessionDoesNotStartAnExpectedRunAgain(t *testing.T) {
 		t.Fatalf("a first start was refused: %v", err)
 	}
 }
+
+// Directive 56: a running privileged box whose endpoint predates the main-session request is
+// restarted (one info line) only when one complete process read shows
+// nothing besides its PID 1; otherwise, or when that read fails, the warning
+// only and no restart. A box that needs no restart is left alone.
+func TestPrivilegedMainSessionRestartOnlyWhenIdle(t *testing.T) {
+	previousLauncher, previousCount, previousRestart := boxLauncherFn, otherContainerProcessesFn, restartForMainSessionFn
+	t.Cleanup(func() {
+		boxLauncherFn, otherContainerProcessesFn, restartForMainSessionFn = previousLauncher, previousCount, previousRestart
+	})
+	for _, tc := range []struct {
+		name     string
+		needs    bool
+		others   int
+		countErr error
+		restart  bool
+		want     string
+	}{
+		{"idle", true, 0, nil, true, "box coder was restarted to run this yoloctl version"},
+		{"an exec runs", true, 1, nil, false, "restart it (box restart coder) when nothing runs in it"},
+		{"unreadable inventory", true, 0, errors.New("permission denied"), false, "restart it (box restart coder) when nothing runs in it"},
+		{"no restart needed", false, 0, nil, false, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, c, _ := expectingRun(t, `"Id":"`+expectedRunID+`","State":{"Status":"running","Running":true,"Pid":42,"StartedAt":"2026-11-14T10:00:00.1Z"}`)
+			var out strings.Builder
+			t.Cleanup(bindCLITestLogger(t, &out))
+			boxLauncherFn = func(context.Context, *container.Client, string, *container.Details) (agentbox.LauncherSupport, error) {
+				return agentbox.LauncherSupport{NeedsRestart: tc.needs}, nil
+			}
+			otherContainerProcessesFn = func(int) (int, error) { return tc.others, tc.countErr }
+			restarts := 0
+			restartForMainSessionFn = func(context.Context, *container.Client, string, string, io.Writer) error { restarts++; return nil }
+			restarted, err := restartPrivilegedForMainSession(t.Context(), c, "work", "coder", io.Discard)
+			if err != nil || restarted != tc.restart || restarts != map[bool]int{true: 1}[tc.restart] ||
+				tc.want != "" && !strings.Contains(out.String(), tc.want) || tc.want == "" && out.Len() != 0 {
+				t.Fatalf("restarted %v (%d) err %v\n%s", restarted, restarts, err, out.String())
+			}
+		})
+	}
+}

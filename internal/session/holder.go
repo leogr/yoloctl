@@ -54,9 +54,6 @@ type HolderOptions struct {
 	HostIntegration bool
 	// Canonical host workdir for optional image reuse; empty for ephemeral boxes.
 	HostWorkdir string
-	// Daemons are the agent profile's declared daemons (session.daemons),
-	// stopped before the agent starts and after it exits (see ReapScript).
-	Daemons []string
 
 	Logf func(format string, args ...any) // optional progress/diagnostic log
 }
@@ -104,10 +101,6 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	logf := opts.Logf
 	if logf == nil {
 		logf = func(string, ...any) {}
-	}
-	reaper, err := ReapScript(opts.Daemons)
-	if err != nil {
-		return -1, err
 	}
 
 	h := &holder{
@@ -220,7 +213,7 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	if err := WriteMarker(opts.MarkerPath, Marker{StartedAt: time.Now(), HolderPID: os.Getpid(), LaunchToken: opts.LaunchToken}); err != nil {
 		return -1, fmt.Errorf("session: write marker: %w", err)
 	}
-	if err := sess.Start(reapBefore(reaper, command)); err != nil {
+	if err := sess.Start(command); err != nil {
 		_ = RemoveMarker(opts.MarkerPath) // no agent was started
 		return -1, fmt.Errorf("session: start agent: %w", err)
 	}
@@ -359,10 +352,6 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	}
 
 	logf("agent exited with status %d", status)
-	// Before the tombstone: the next launch must not meet this launch's
-	// daemons. A holder stop never gets here, so a deliberately detached
-	// agent keeps its daemons.
-	reapAfterExit(ctx, client, reaper, logf)
 	if err := WriteTombstone(opts.TombstonePath, Tombstone{ExitCode: status, ExitedAt: time.Now(), LaunchToken: opts.LaunchToken}); err != nil {
 		logf("write tombstone: %v", err)
 	}

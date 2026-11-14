@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/spf13/cobra"
@@ -49,8 +51,9 @@ func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind
 		return nil
 	}
 	var report struct {
-		Identity inspectIdentity `json:"identity"`
-		Drift    inspectDrift    `json:"drift"`
+		Identity inspectIdentity  `json:"identity"`
+		Manifest *inspectManifest `json:"manifest"`
+		Drift    inspectDrift     `json:"drift"`
 	}
 	raw := boundedBuffer{Limit: 4 << 20}
 	ctx, cancel := context.WithTimeout(cmd.Context(), recreateOfferInspectTimeout)
@@ -61,13 +64,20 @@ func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind
 		return nil // not evidence: the worker's early refusal still applies
 	}
 	running := report.Identity.RuntimeState == string(boxstate.RuntimeRunning)
-	if running && (kind == offerStart || kind == offerAttach) {
-		return nil
-	}
 	strategy := report.Drift.Strategy
 	affirmative := strategy == "recreate" || (kind == offerChatServer && strategy == "restart")
-	if !affirmative {
-		return nil
+	if !affirmative || running && (kind == offerStart || kind == offerAttach) {
+		// Directive 56: a box created before the session launcher is offered its
+		// recreate when this request starts a new managed session. Its own
+		// rule, not the drift offer's running-box shortcut.
+		if !launcherRecreateOffered(report.Identity, report.Manifest, report.Drift, kind) {
+			return nil
+		}
+		ok, err := promptYesNo(agentbox.RecreateWarning(box)+".\nRecreate now? [y/N]: ", cmd.InOrStdin(), cmd.ErrOrStderr())
+		if err != nil || !ok {
+			return err
+		}
+		return sendOfferedRecreate(cmd, target, box, noAutoupdate)
 	}
 	extra := ""
 	if running {
@@ -81,6 +91,31 @@ func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind
 	if err != nil || !ok {
 		return err
 	}
+	return sendOfferedRecreate(cmd, target, box, noAutoupdate)
+}
+
+// launcherRecreateOffered: the box carries the launcher_recreate reason
+// (created before the session launcher, or the old upstream runtime), its session is
+// managed (an agent or a declared session command) and this request starts a
+// new one: a restart always does; a start or an attach does unless a session
+// already runs (joining asks nothing). The chat server is not asked here.
+func launcherRecreateOffered(id inspectIdentity, manifest *inspectManifest, drift inspectDrift, kind recreateOfferKind) bool {
+	if kind == offerChatServer {
+		return false
+	}
+	needs := false
+	for _, reason := range drift.Reasons {
+		needs = needs || strings.HasPrefix(reason, string(boxstate.ReasonLauncherRecreate)+":")
+	}
+	managed := id.Agent != "" && id.Agent != "none" || manifest != nil && len(manifest.SessionCommand) > 0
+	newSession := kind == offerRestart || id.SessionState != string(boxstate.SessionRunning)
+	return needs && managed && newSession
+}
+
+// sendOfferedRecreate sends the one ordinary recreate an affirmative answer
+// approved: `box recreate NAME --force --no-attach`; the caller then sends
+// its original request unchanged, only if this one succeeded.
+func sendOfferedRecreate(cmd *cobra.Command, target controllerTarget, box string, noAutoupdate bool) error {
 	flags := map[string][]string{"force": {"true"}, "no-attach": {"true"}}
 	if noAutoupdate {
 		flags["no-autoupdate"] = []string{"true"}

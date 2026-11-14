@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/lima"
 	"github.com/leogr/yoloctl/internal/logging"
@@ -186,3 +187,11 @@ func suspendCLISteps() func() {
 }
 
 func cliTerminalWriter(w io.Writer) io.Writer { return stepview.Current().Writer(w) }
+
+// A custom agent profile still declaring the removed session.daemons warns
+// through the CLI logger on each load.
+func init() {
+	agentprofile.LegacyDaemonsNotice = func(name string) {
+		cliWarn(logging.Session, "agent-profile %q: session.daemons is no longer used (a box now stops with its session); the field is dropped at the next save", name)
+	}
+}

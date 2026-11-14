@@ -108,7 +108,7 @@ fixtures. No AWS account was available for live provider testing.
 6. <a id="source-6"></a> [Secret input](../../cmd/yoloctl/account.go#L673) — `newAccountSecretSetCmd`, private stdin/from-env.
 7. <a id="source-7"></a> [Example validation](../../cmd/yoloctl/account_auth_aws_test.go#L1-L128) — actual Cobra flags, strict custom-grant loading and policy composition; implementations in `agentbox.go`, `internal/capabilities/user.go` and `internal/agentbox/compose.go`.
 8. <a id="source-8"></a> [Official OpenAI Bedrock guidance](https://learn.chatgpt.com/docs/amazon-bedrock) — documented provider/region configuration, checked 2026-11-06; not installed-provider execution proof.
-9. <a id="source-9"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1-L123) — four-key AWS declarations; OpenAI auth remains native.
+9. <a id="source-9"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1-L118) — four-key AWS declarations; OpenAI auth remains native.
 10. <a id="source-10"></a> [Claude Bedrock guidance](https://code.claude.com/docs/en/amazon-bedrock) — documented provider/region configuration, checked 2026-11-06.
 11. <a id="source-11"></a> [AWS installation reference](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) — official architectures, runtime requirements and signing key, checked 2026-11-06.
 12. <a id="source-12"></a> [Host wildcard rule](../../internal/agentbox/compose.go#L300-L331) — `lintHostPattern`.
