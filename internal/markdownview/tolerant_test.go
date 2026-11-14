@@ -569,3 +569,102 @@ func TestInlineTagQuote(t *testing.T) {
 		t.Fatalf("whole-line quote %q %v", got, ok)
 	}
 }
+
+// <br> in a table cell (8a): one space in the cell's text with a forced
+// break; the table always goes through the fit, so a row is as high as its
+// tallest cell's segments.
+func TestTableCellLineBreak(t *testing.T) {
+	options := documentOptions()
+	options.MapSource = true
+	text := "| k | v |\n|---|---|\n| a<br>b | c |"
+	doc := Parse(text, options)
+	row := doc.Lines[2]
+	if row.Table == nil || !row.Table.Breaks || len(row.Breaks) != 1 || row.Text[row.Breaks[0]] != ' ' {
+		t.Fatalf("row %q breaks %v", row.Text, row.Breaks)
+	}
+	if got := row.Text[row.Cells[0][0]:row.Cells[0][1]]; got != "a b" {
+		t.Fatalf("cell text %q", got)
+	}
+	_, shown := painted(t, doc, options, 40)
+	joined := strings.Join(shown, "\n")
+	if !strings.Contains(joined, "a ") || !strings.Contains(joined, "b") || len(shown) < 4 {
+		t.Fatalf("rows %q", shown)
+	}
+	var aRow, bRow = -1, -1
+	for i, line := range shown {
+		if strings.HasPrefix(strings.TrimSpace(line), "a") {
+			aRow = i
+		}
+		if strings.HasPrefix(strings.TrimSpace(line), "b") {
+			bRow = i
+		}
+	}
+	if aRow < 0 || bRow != aRow+1 {
+		t.Fatalf("a and b are not on consecutive rows: %q", shown)
+	}
+	for _, width := range []int{8, 12, 20, 80} {
+		rows, _ := painted(t, doc, options, width)
+		checkCoverage(t, doc, rows)
+	}
+	// Two breaks in a cell, breaks in two cells and in the header.
+	two := Parse("| h<br>i | x |\n|---|---|\n| a<br>b<br>c | d<br>e |", options)
+	if len(two.Lines[0].Breaks) != 1 || len(two.Lines[2].Breaks) != 3 {
+		t.Fatalf("breaks %v %v", two.Lines[0].Breaks, two.Lines[2].Breaks)
+	}
+	if two.Lines[0].Table.Natural[0] != 2 {
+		t.Fatalf("natural width is the widest segment, or the first line and its …: %v", two.Lines[0].Table.Natural)
+	}
+	// Collapsed: the row clips at its first line with the … mark.
+	// (A long unbreakable word in the other column makes the table collapse.)
+	collapsing := Parse("| k | v |\n|---|---|\n| a<br>b | "+strings.Repeat("x", 40)+" |", options)
+	compact := Layout(collapsing, 24, LayoutOptions{Method: options.Method, Theme: options.Theme, CompactTables: true}).Rows
+	found := false
+	for _, r := range compact {
+		var b strings.Builder
+		for _, run := range r.Runs {
+			b.WriteString(run.Text)
+		}
+		if strings.Contains(b.String(), "a…") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("collapsed row shows no first line with …")
+	}
+	// Quote and Copy of the cell read its text, "a b", as today's contract.
+	if got := TableText(doc.Lines, 2, 2, row.Cells[0][0], row.Cells[0][1]); len(got) != 1 || got[0].Text != "a b" {
+		t.Fatalf("cell quote %+v", got)
+	}
+	if got := TableText(doc.Lines, 2, 2, 0, len(row.Text)); len(got) != 1 || got[0].Text != "a b\tc" {
+		t.Fatalf("row quote %+v", got)
+	}
+	if got := TableText(doc.Lines, 2, 2, row.Breaks[0]+1, row.Cells[0][1]); len(got) != 1 || got[0].Text != "b" {
+		t.Fatalf("part quote %+v", got)
+	}
+}
+
+// Labelled rows: each forced break's segment starts its own line under the
+// label.
+func TestTableCellLineBreakLabelled(t *testing.T) {
+	options := documentOptions()
+	head := "| " + strings.Repeat("col | ", 7) + "\n|" + strings.Repeat("---|", 7) + "\n"
+	doc := Parse(head+"| first<br>second | b | c | d | e | f | g |", options)
+	rows := Layout(doc, 14, LayoutOptions{Method: options.Method, Theme: options.Theme}).Rows
+	var shown []string
+	for _, r := range rows {
+		var b strings.Builder
+		for _, run := range r.Runs {
+			b.WriteString(run.Text)
+		}
+		shown = append(shown, b.String())
+	}
+	at := -1
+	for i, line := range shown {
+		if line == "col: first" {
+			at = i
+		}
+	}
+	if at < 0 || at+1 >= len(shown) || strings.TrimSpace(shown[at+1]) != "second" {
+		t.Fatalf("segments %q", shown)
+	}
+}

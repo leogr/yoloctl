@@ -39,6 +39,9 @@ type DisplayLine struct {
 	// the byte ranges of a row's cell texts in text (nil on the rule).
 	Table *TableInfo
 	Cells [][2]int
+	// Breaks are a table row's forced line breaks: offsets in Text of the
+	// space a cell's <br> is shown as.
+	Breaks []int
 	// Subs record caller-supplied display replacements.
 	Subs []TextSub
 	// List is set on a list item's line (see ListItem).
@@ -93,6 +96,9 @@ type TableInfo struct {
 	CompactFloor []int // widest grapheme plus an ellipsis, capped by natural
 	Source       int   // source bytes, for the wrapped layout's budget
 	Unpadded     bool  // aligned representation exceeded the same byte budget
+	// Breaks is set when a cell holds a <br>: the table always goes through
+	// the fit, so its rows can be several lines high.
+	Breaks bool
 	// spaceBefore and spaceAfter ask bodyRows for an empty row between the
 	// table and a neighbouring source line that is not blank. They are
 	// display rows only: no logical line, source map or copied byte.
@@ -571,6 +577,92 @@ func quoteMarkers(line string) (int, string) {
 func quoteDepth(line string) int {
 	depth, _ := quoteMarkers(line)
 	return depth
+}
+
+// tableCell renders one table cell's text: inline Markdown and the inline
+// tags of C1, a <br> shown as one space recorded as a forced break.
+func tableCell(text string, st spaceview.Style, theme spaceview.Theme) struct {
+	text   string
+	pieces []Piece
+	breaks []int
+} {
+	var out struct {
+		text   string
+		pieces []Piece
+		breaks []int
+	}
+	strip := stripTags(text)
+	var m *SourceMap
+	var spaced []int // the breaks' spaces, in the text inline Markdown reads
+	if strip.tags {
+		var b strings.Builder
+		last := 0
+		for _, k := range strip.breaks {
+			b.WriteString(strip.text[last:k])
+			spaced = append(spaced, b.Len())
+			b.WriteByte(' ')
+			last = k
+		}
+		b.WriteString(strip.text[last:])
+		text = b.String()
+		m = &SourceMap{Hi: len(text)}
+	}
+	shown, spans := InlineMarkdownMap(text, st, theme, m)
+	out.text = shown
+	for _, sp := range spans {
+		p := Piece{Start: sp.Start, End: sp.End, Style: sp.Style, Code: sp.Code, Strike: sp.Strike, Auto: sp.Auto}
+		if sp.Link != "" {
+			p.Act = Action{Kind: IntentURL, Value: sp.Link}
+		}
+		out.pieces = append(out.pieces, p)
+	}
+	if strip.tags {
+		styles := make([]tagStyle, len(strip.styles))
+		for i, ts := range strip.styles {
+			ts.start += spacesBefore(strip.breaks, ts.start, true)
+			ts.end += spacesBefore(strip.breaks, ts.end, false)
+			styles[i] = ts
+		}
+		out.pieces = styleTags(out.pieces, m, styles, theme)
+		for _, k := range spaced {
+			out.breaks = append(out.breaks, displayAt(m, k))
+		}
+	}
+	return out
+}
+
+// spacesBefore counts the break spaces inserted before stripped offset o: at
+// a break exactly there, before it for a range start and not for an end.
+func spacesBefore(breaks []int, o int, start bool) int {
+	n := 0
+	for _, k := range breaks {
+		if k < o || start && k == o {
+			n++
+		}
+	}
+	return n
+}
+
+// segments splits text at its forced breaks, leaving out each break's space.
+func segments(text string, breaks []int) [][2]int {
+	var out [][2]int
+	from := 0
+	for _, k := range breaks {
+		out = append(out, [2]int{from, k})
+		from = k + 1
+	}
+	return append(out, [2]int{from, len(text)})
+}
+
+// cellBreaks are a row's forced breaks inside cell cr, relative to its start.
+func cellBreaks(breaks []int, cr [2]int) []int {
+	var out []int
+	for _, k := range breaks {
+		if k >= cr[0] && k < cr[1] {
+			out = append(out, k-cr[0])
+		}
+	}
+	return out
 }
 
 // splitAtBreaks splits a display line at the display offsets of its <br>
@@ -1147,17 +1239,26 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 		rows, source = append(rows, cells[:len(header)]), source+len(line)+1
 	}
 	type cell struct {
-		text  string
-		spans []Span
+		text   string
+		pieces []Piece
+		breaks []int // forced line breaks: offsets of their spaces in text
 	}
 	shown := make([][]cell, len(rows))
 	widths := make([]int, len(header))
+	breaks := false
 	for r, cells := range rows {
 		st := spaceview.Style{FG: theme.Text, Bold: r == 0}
 		for c, raw := range cells {
-			text, spans := InlineMarkdown(ExpandTabs(wm, raw), st, theme)
-			shown[r] = append(shown[r], cell{text, spans})
-			widths[c] = max(widths[c], wm.StringWidth(text))
+			cl := tableCell(ExpandTabs(wm, raw), st, theme)
+			shown[r] = append(shown[r], cell{cl.text, cl.pieces, cl.breaks})
+			breaks = breaks || len(cl.breaks) > 0
+			for _, seg := range segments(cl.text, cl.breaks) {
+				widths[c] = max(widths[c], wm.StringWidth(cl.text[seg[0]:seg[1]]))
+			}
+			if len(cl.breaks) > 0 {
+				// Room for the first line and the … of a collapsed row.
+				widths[c] = max(widths[c], wm.StringWidth(cl.text[:cl.breaks[0]])+wm.StringWidth("…"))
+			}
 		}
 	}
 	// The exact size of the aligned rows and rule, checked before any
@@ -1186,7 +1287,7 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 			return nil, n
 		}
 	}
-	tbl := &TableInfo{Align: align, Natural: widths, Floor: make([]int, len(widths)), WordFloor: make([]int, len(widths)), CompactFloor: make([]int, len(widths)), Source: source, Unpadded: unpadded}
+	tbl := &TableInfo{Align: align, Natural: widths, Floor: make([]int, len(widths)), WordFloor: make([]int, len(widths)), CompactFloor: make([]int, len(widths)), Source: source, Unpadded: unpadded, Breaks: breaks}
 	for c, w := range widths {
 		for _, cells := range shown {
 			tbl.WordFloor[c] = max(tbl.WordFloor[c], tableRunWidth(wm, cells[c].text))
@@ -1217,7 +1318,9 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 			if c > 0 {
 				add(" │ ", Span{End: len(" │ "), Style: frame})
 			}
-			gap := widths[c] - wm.StringWidth(cl.text)
+			// A cell with forced breaks is wider than its column's natural
+			// (widest segment) width; such a table is always fitted.
+			gap := max(widths[c]-wm.StringWidth(cl.text), 0)
 			if unpadded {
 				gap = 0
 			}
@@ -1232,12 +1335,12 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 			start := b.Len()
 			b.WriteString(cl.text)
 			dl.Cells[c] = [2]int{start, b.Len()}
-			for _, sp := range cl.spans {
-				p := Piece{Start: start + sp.Start, End: start + sp.End, Style: sp.Style, Code: sp.Code, Strike: sp.Strike, Auto: sp.Auto}
-				if sp.Link != "" {
-					p.Act = Action{Kind: IntentURL, Value: sp.Link}
-				}
+			for _, p := range cl.pieces {
+				p.Start, p.End = start+p.Start, start+p.End
 				dl.Pieces = append(dl.Pieces, p)
+			}
+			for _, k := range cl.breaks {
+				dl.Breaks = append(dl.Breaks, start+k)
 			}
 			add(strings.Repeat(" ", gap-left), Span{End: gap - left, Style: spaceview.Style{FG: theme.Text}})
 		}
@@ -1297,7 +1400,7 @@ func fitTableColumns(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft
 	for _, w := range tbl.Natural {
 		natural += w
 	}
-	if natural <= avail && !tbl.Unpadded {
+	if natural <= avail && !tbl.Unpadded && !tbl.Breaks {
 		return nil, TableFits
 	}
 	alloc, ok := WaterFill(tbl.Natural, floor, avail)
@@ -1333,7 +1436,12 @@ func fitTableColumns(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft
 					rs = [][2]int{{0, end}}
 					clippedHeader[c] = true
 				} else {
-					rs = tableWrapRanges(wm, text, alloc[c])
+					// Forced breaks first, then each segment wraps as before.
+					for _, seg := range segments(text, cellBreaks(dl.Breaks, cr)) {
+						for _, r := range tableWrapRanges(wm, text[seg[0]:seg[1]], alloc[c]) {
+							rs = append(rs, [2]int{r[0] + seg[0], r[1] + seg[0]})
+						}
+					}
 				}
 				for j := range rs {
 					rs[j][0], rs[j][1] = rs[j][0]+cr[0], rs[j][1]+cr[0]

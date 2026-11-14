@@ -86,12 +86,21 @@ func labelledTable(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft i
 	for i, dl := range lines[2:] {
 		for c, cr := range dl.Cells {
 			text := labels[c] + dl.Text[cr[0]:cr[1]]
-			ranges := WrapRanges(wm, text, max(width, 1), true)
-			firstEnd := ranges[0][1]
-			ranges = ranges[:1]
-			if firstEnd < len(text) {
-				for _, r := range WrapRanges(wm, text[firstEnd:], max(width-indent, 1), true) {
-					ranges = append(ranges, [2]int{r[0] + firstEnd, r[1] + firstEnd})
+			// Each forced break's segment starts its own line under the label.
+			segs := segments(text, cellBreaks(dl.Breaks, [2]int{cr[0] - len(labels[c]), cr[1]}))
+			var ranges [][2]int
+			for s, seg := range segs {
+				lineText := text[seg[0]:seg[1]]
+				first := WrapRanges(wm, lineText, max(width, 1), true)
+				if s > 0 {
+					first = WrapRanges(wm, lineText, max(width-indent, 1), true)
+				}
+				firstEnd := first[0][1]
+				ranges = append(ranges, [2]int{seg[0], seg[0] + firstEnd})
+				if firstEnd < len(lineText) {
+					for _, r := range WrapRanges(wm, lineText[firstEnd:], max(width-indent, 1), true) {
+						ranges = append(ranges, [2]int{r[0] + seg[0] + firstEnd, r[1] + seg[0] + firstEnd})
+					}
 				}
 			}
 			used += len(ranges) + indent*max(len(ranges)-1, 0)

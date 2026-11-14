@@ -112,6 +112,9 @@ func compactColumns(tbl *TableInfo, width int) ([]int, TableFitReason) {
 	return alloc, TableLaidOut
 }
 func rowClipped(wm ansi.Method, dl DisplayLine, alloc []int) bool {
+	if len(dl.Breaks) > 0 {
+		return true // a forced break: only its first line is shown
+	}
 	for c, r := range dl.Cells {
 		if wm.StringWidth(dl.Text[r[0]:r[1]]) > alloc[c] {
 			return true
@@ -135,13 +138,18 @@ func compactRecord(wm ansi.Method, dl DisplayLine, line int, alloc []int, theme 
 			}
 		}
 		text := dl.Text[cr[0]:cr[1]]
-		cut := wm.StringWidth(text) > alloc[c]
+		// A cell with a forced break shows its first line, clipped.
+		line := text
+		if bs := cellBreaks(dl.Breaks, cr); len(bs) > 0 {
+			line = text[:bs[0]]
+		}
+		cut := wm.StringWidth(text) > alloc[c] || len(line) < len(text)
 		hasClip = hasClip || cut
 		end := len(text)
 		if cut {
-			first := WrapRanges(wm, text, alloc[c], true)[0]
-			end = DrawnEnd(wm, text, first, alloc[c])
-			end = len(Truncate(wm, text[:end], max(alloc[c]-1, 0), ""))
+			first := WrapRanges(wm, line, alloc[c], true)[0]
+			end = DrawnEnd(wm, line, first, alloc[c])
+			end = len(Truncate(wm, line[:end], max(alloc[c]-1, 0), ""))
 		}
 		shown := wm.StringWidth(text[:end])
 		if cut {
