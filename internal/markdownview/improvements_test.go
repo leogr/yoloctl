@@ -149,16 +149,17 @@ func TestListWrapKeepsWideGraphemesAndTabs(t *testing.T) {
 func TestHorizontalRule(t *testing.T) {
 	options := documentOptions()
 	options.MapSource = true
-	text := "a\n  ---  \nb"
+	// After a blank line; under text a dash line is a setext underline (C3).
+	text := "a\n\n  ---  \nb"
 	doc := Parse(text, options)
-	if !doc.Lines[1].Rule || !doc.Lines[1].Decor || doc.Lines[1].Text != "" || doc.Sources[1].Src != nil {
-		t.Fatalf("rule line %+v", doc.Lines[1])
+	if !doc.Lines[2].Rule || !doc.Lines[2].Decor || doc.Lines[2].Text != "" || doc.Sources[2].Src != nil {
+		t.Fatalf("rule line %+v", doc.Lines[2])
 	}
 	_, got := painted(t, doc, options, 12)
-	if !slices.Equal(got, []string{"a", strings.Repeat("─", 12), "b"}) {
+	if !slices.Equal(got, []string{"a", "", strings.Repeat("─", 12), "b"}) {
 		t.Fatalf("rule rows %q", got)
 	}
-	if RenderText(doc) != "a\nb" {
+	if RenderText(doc) != "a\n\nb" {
 		t.Fatalf("a rule is never copied: %q", RenderText(doc))
 	}
 	// Quote over the rule takes its original source; only the rule holds
@@ -166,10 +167,9 @@ func TestHorizontalRule(t *testing.T) {
 	selection := SourceSelection{Lines: doc.Lines, Sources: doc.Sources, Text: text, Render: func(s string) string {
 		return RenderText(Parse(s, options))
 	}}
-	if got, ok := selection.Exact(0, 0, 2, 1, true, true); !ok || got != text {
+	if got, ok := selection.Exact(0, 0, 3, 1, true, true); !ok || got != text {
 		t.Fatal("quote across a rule", got, ok)
 	}
-	// Every rule spelling is a rule (B4); anything else stays text.
 	for _, spelling := range []string{"----", "- - -", "***", "___"} {
 		if d := Parse(spelling, options); !d.Lines[0].Rule {
 			t.Fatalf("%q is not a rule", spelling)

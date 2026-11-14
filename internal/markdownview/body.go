@@ -159,6 +159,49 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 	at := 0      // the source offset of lines[idx]
 	literal := 0 // lines of a rejected table: shown as text, never re-detected
 	var lists listContext
+	// setext[k] is the heading level of paragraph line k when its run ends
+	// in an underline, -1 for line k being that underline, 0 when decided
+	// otherwise; a missing key is not decided yet.
+	setext := map[int]int{}
+	noTable := 0 // lines before it are known not to start a table
+	paragraphLine := func(k int) bool {
+		l := lines[k]
+		if strings.TrimSpace(l) == "" || FenceMarker(strings.TrimLeft(l, " ")) != "" || thematicBreak(l) || atxHeading(l) ||
+			quoteDepth(l) > 0 || setextUnderline(l) > 0 {
+			return false
+		}
+		if _, _, item := listMarker(l); item {
+			return false
+		}
+		if k < noTable {
+			return true
+		}
+		// A rejected table's lines are text: scan them once, as the main
+		// loop does.
+		table, n := TableLines(wm, lines[k:], theme, decorate)
+		if table == nil && n > 0 {
+			noTable = k + n
+		}
+		return table == nil
+	}
+	// decideSetext looks ahead from paragraph line k over its run: when the
+	// run ends in an underline, all its lines are that heading.
+	decideSetext := func(k int) {
+		j := k + 1
+		for j < len(lines) && paragraphLine(j) {
+			j++
+		}
+		level := 0
+		if j < len(lines) {
+			level = setextUnderline(lines[j])
+		}
+		for r := k; r < j; r++ {
+			setext[r] = level
+		}
+		if level > 0 {
+			setext[j] = -1
+		}
+	}
 	for idx := 0; idx < len(lines); at, idx = at+len(lines[idx])+1, idx+1 {
 		line := lines[idx]
 		tableLimit := false
@@ -245,6 +288,15 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 				}
 				st = spaceview.Style{FG: theme.Text, BG: CodeCard(theme)}
 				ls.Fence = fences
+			case setext[idx] == -1:
+				// A setext underline: hidden; its heading's last line maps over it.
+				dl.Decor, dl.Hidden = true, true
+				dl.Pieces = []Piece{{Style: st}}
+				out = append(out, dl)
+				if srcs != nil {
+					*srcs = append(*srcs, ls)
+				}
+				continue
 			case thematicBreak(line):
 				dl.Decor, dl.Rule = true, true
 				dl.Pieces = []Piece{{Style: spaceview.Style{FG: theme.Frame}}}
@@ -267,6 +319,26 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 			default:
 				line, dl.List, lead = tolerantListItem(line, lead, lists.active())
 				prose = true
+				if dl.List.Content == 0 && !lists.active() && strings.TrimSpace(lines[idx]) != "" {
+					if _, known := setext[idx]; !known {
+						decideSetext(idx)
+					}
+					if level := setext[idx]; level > 0 {
+						content := strings.TrimLeft(lines[idx], " \t")
+						from := len(lines[idx]) - len(content)
+						line, st.FG, st.Bold = strings.TrimRight(content, " \t"), HeadingColor(theme, level), true
+						lead = nil
+						if srcs != nil {
+							lead = &SourceMap{Hi: len(lines[idx])}
+							if setext[idx+1] == -1 {
+								// A whole-line end of the heading's last line takes
+								// its underline too.
+								lead.Hi = len(lines[idx]) + 1 + len(lines[idx+1])
+							}
+							lead.Add(line, lines[idx], from, from+len(line))
+						}
+					}
+				}
 			}
 			if dl.List.Content > 0 {
 				marker, content, _ := listMarker(lines[idx])
@@ -392,6 +464,35 @@ func quoteMarkers(line string) (int, string) {
 func quoteDepth(line string) int {
 	depth, _ := quoteMarkers(line)
 	return depth
+}
+
+// setextUnderline is the level of a setext underline line: up to 3 columns
+// of indentation, then one or more '=' (1) or '-' (2), then only spaces or
+// TABs; 0 for any other line.
+func setextUnderline(line string) int {
+	col, at := indentCols(line)
+	if col > 3 || at == len(line) || line[at] != '=' && line[at] != '-' {
+		return 0
+	}
+	mark := line[at]
+	end := at
+	for end < len(line) && line[end] == mark {
+		end++
+	}
+	if strings.Trim(line[end:], " \t") != "" {
+		return 0
+	}
+	if mark == '=' {
+		return 1
+	}
+	return 2
+}
+
+// atxHeading reports a '#' heading line as parseLines reads one.
+func atxHeading(line string) bool {
+	trim := strings.TrimLeft(line, " ")
+	n := len(trim) - len(strings.TrimLeft(trim, "#"))
+	return n > 0 && n <= 6 && strings.HasPrefix(trim[n:], " ")
 }
 
 // thematicBreak reports a rule line: up to 3 columns of indentation (TABs to

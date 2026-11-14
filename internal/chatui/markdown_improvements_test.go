@@ -65,16 +65,45 @@ func TestAutolinkInChat(t *testing.T) {
 
 // A rule is drawn, never copied, and Quote across it keeps the source line.
 func TestRuleInChat(t *testing.T) {
-	m := quoteModel(t, "above\n---\nbelow")
+	m := quoteModel(t, "above\n***\nbelow")
 	lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
 	if !lines[1].Rule || !lines[1].Decor {
 		t.Fatalf("rule %+v", lines[1])
 	}
 	highlight(m, "q", 0, 0, 2, len("below"))
-	if got := quoted(m); got != "> above\n> ---\n> below\n\n" {
+	if got := quoted(m); got != "> above\n> ***\n> below\n\n" {
 		t.Fatalf("quote %q (%q)", got, m.notice)
 	}
 	if view := m.View().Content; !strings.Contains(view, "────") {
 		t.Fatal("the rule is not drawn")
+	}
+}
+
+// Text followed by a dash line is a setext heading (C3): the underline is
+// hidden, a whole-line Quote of the heading takes it, a selection inside the
+// heading does not, and a selection across it keeps the source.
+func TestSetextHeadingInChat(t *testing.T) {
+	m := quoteModel(t, "above\n---\nbelow")
+	lines := m.body(&m.messages[m.indexOf("server:q")], 80).lines
+	if len(lines) != 3 || !lines[0].Pieces[0].Style.Bold || !lines[1].Hidden || lines[2].Text != "below" {
+		t.Fatalf("lines %+v", lines)
+	}
+	for _, row := range m.body(&m.messages[m.indexOf("server:q")], 80).rows {
+		if row.Line == 1 {
+			t.Fatalf("the underline has a row %+v", row)
+		}
+	}
+	for _, tc := range []struct {
+		la, oa, lb, ob int
+		want           string
+	}{
+		{0, 0, 0, len("above"), "> above\n> ---\n\n"},
+		{0, 1, 0, 4, "> bov\n\n"},
+		{0, 0, 2, len("below"), "> above\n> ---\n> below\n\n"},
+	} {
+		highlight(m, "q", tc.la, tc.oa, tc.lb, tc.ob)
+		if got := quoted(m); got != tc.want {
+			t.Fatalf("%+v: quote %q (%q)", tc, got, m.notice)
+		}
 	}
 }

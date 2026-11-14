@@ -230,3 +230,68 @@ func TestHiddenLinesHaveNoRows(t *testing.T) {
 		t.Fatalf("hidden-only message rows %+v", rows)
 	}
 }
+
+// C3: every row of the plan's setext table. Each display line is described
+// as h<level>, hidden, rule, list, quote, table or text.
+func TestSetextHeadings(t *testing.T) {
+	kind := func(doc Document, n int) string {
+		dl := doc.Lines[n]
+		theme := documentOptions().Theme
+		switch {
+		case dl.Hidden:
+			return "hidden"
+		case dl.Rule:
+			return "rule"
+		case dl.Table != nil:
+			return "table"
+		case dl.Quote:
+			return "quote"
+		case dl.List.Content > 0:
+			return "list"
+		case len(dl.Pieces) > 0 && dl.Pieces[0].Style.Bold && dl.Pieces[0].Style.FG == HeadingColor(theme, 1):
+			return "h1"
+		case len(dl.Pieces) > 0 && dl.Pieces[0].Style.Bold && dl.Pieces[0].Style.FG == HeadingColor(theme, 2):
+			return "h2"
+		}
+		return "text"
+	}
+	for text, want := range map[string]string{
+		"Foo\n===":         "h1 hidden",
+		"Foo\n=":           "h1 hidden",
+		"Foo\n---":         "h2 hidden",
+		"Foo\n-":           "h2 hidden",
+		"  Foo  \n  ---  ": "h2 hidden",
+		"Foo\nBar\n---":    "h2 h2 hidden",
+		"\n---":            "text rule",
+		"\n-":              "text text",
+		"- Foo\n---":       "list rule",
+		"> Foo\n---":       "quote rule",
+		"Foo\n- - -":       "text rule",
+		"Foo\n***":         "text rule",
+		"Foo\n=== x":       "text text",
+		"Foo\n= =":         "text text",
+		"# Foo\n---":       "h1 rule",
+		"a | b\n---|---":   "table table",
+		"Foo\n    ---":     "text text",
+		"Foo\n\nBar\n===":  "text text h1 hidden",
+	} {
+		mapped(t, text, func(_ ansi.Method, doc Document) {
+			var got []string
+			for n := range doc.Lines {
+				got = append(got, kind(doc, n))
+			}
+			if strings.Join(got, " ") != want {
+				t.Fatalf("%q: %v, want %s", text, got, want)
+			}
+		})
+	}
+	// The heading's text is shown trimmed and maps to its source.
+	mapped(t, "  Foo  \n  ---  ", func(_ ansi.Method, doc Document) {
+		if doc.Lines[0].Text != "Foo" {
+			t.Fatalf("heading text %q", doc.Lines[0].Text)
+		}
+		if bare, _, ok := LineStart(doc.Sources[0], 0); !ok || bare != 2 {
+			t.Fatalf("heading starts at %d", bare)
+		}
+	})
+}

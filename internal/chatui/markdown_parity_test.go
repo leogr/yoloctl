@@ -23,7 +23,9 @@ import (
 // refactor must match it, and only an intended rendering change updates it.
 // STEP1 wide-table fallback intentionally updates only narrow table layouts.
 // feat-markdown-tolerant-tables records each quote line's QuoteDepth (1 for
-// every frozen quote, whose rendering is unchanged).
+// every frozen quote, whose rendering is unchanged), and its setext rule
+// makes inert-input's text lines followed by "---" a level-2 heading over a
+// hidden underline (plan section 7); source mode is unchanged.
 func TestMarkdownFrozenParity(t *testing.T) {
 	got := markdownParityBytes(t)
 	want, err := os.ReadFile("testdata/markdown-parity.json")
