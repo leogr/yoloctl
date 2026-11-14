@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -145,5 +146,17 @@ func TestTCPBridgeCancellation(t *testing.T) {
 	_, err := client.Read(make([]byte, 1))
 	if err == nil {
 		t.Fatal("client not closed")
+	}
+}
+
+func TestManagedUnitName(t *testing.T) {
+	for name, want := range map[string]bool{
+		AuditUnitName: true, "yoloctl-session-coder.service": true, "yoloctl-port-a.service": true, "yoloctl-openshell-port-a.service": true,
+		"yoloctl-session-coder": false, "containerd.service": false, "yoloctl-session-a/b.service": false, "yoloctl-session-a\n.service": false,
+		"yoloctl-session-" + strings.Repeat("a", 170) + ".service": false,
+	} {
+		if got := ManagedUnitName(name); got != want {
+			t.Fatalf("%q: %v", name, got)
+		}
 	}
 }

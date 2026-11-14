@@ -47,7 +47,7 @@ func validateUnit(u vmwire.Unit, start bool) error {
 		}
 		return nil
 	}
-	if len(u.Name) > 180 || !strings.HasSuffix(u.Name, ".service") || strings.ContainsAny(u.Name, "/\\\x00\r\n") || (!strings.HasPrefix(u.Name, "yoloctl-session-") && !strings.HasPrefix(u.Name, "yoloctl-port-") && !strings.HasPrefix(u.Name, port.OpenShellUnitPrefix)) {
+	if !vmwire.ManagedUnitName(u.Name) {
 		return errors.New("invalid managed service identity")
 	}
 	if !start {

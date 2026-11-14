@@ -1,5 +1,7 @@
 package vmwire
 
+import "strings"
+
 const (
 	AuditUnitName           = "yoloctl-audit"
 	AuditCapabilityAction   = "audit-capability"
@@ -40,4 +42,15 @@ type ControlReply struct {
 // AuditUnit is a fixed root-infrastructure launcher, never a general exec seam.
 func AuditUnit() Unit {
 	return Unit{Name: AuditUnitName, Description: "yoloctl Falco audit", Args: []string{GuestBinary, "controller-internal", "audit-collect"}, Env: []string{"HOME=/root", "YOLOCTL_CONTROLLER_CONTEXT=/etc/yoloctl/controller.json"}}
+}
+
+// ManagedUnitName reports whether name is a managed guest service: the fixed
+// audit unit, or a session holder or port forwarder `.service` under its
+// prefix, at most 180 bytes and without path or line characters.
+func ManagedUnitName(name string) bool {
+	if name == AuditUnitName {
+		return true
+	}
+	return len(name) <= 180 && strings.HasSuffix(name, ".service") && !strings.ContainsAny(name, "/\\\x00\r\n") &&
+		(strings.HasPrefix(name, "yoloctl-session-") || strings.HasPrefix(name, LegacyPortUnitPrefix) || strings.HasPrefix(name, OpenShellPortUnitPrefix))
 }

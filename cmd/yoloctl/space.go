@@ -24,6 +24,7 @@ import (
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
+	"github.com/leogr/yoloctl/internal/vmservice"
 	"github.com/spf13/cobra"
 )
 
@@ -55,6 +56,7 @@ func newSpaceLogsCmd() *cobra.Command {
 	var (
 		follow bool
 		lines  int
+		unit   string
 	)
 	cmd := &cobra.Command{
 		Use:   "logs [SPACE]",
@@ -72,14 +74,21 @@ Host-side Lima and interactive bridge diagnostics are captured separately in
 logs/host.log under yoloctl's config root; they are not printed over live views.
 It is kept under about 1 MiB, plus one previous file, host.log.1.
 
-For guest service diagnostics, use 'space ssh --root'. Lima guests use
-journalctl; Firecracker guests keep managed service logs under
-/var/log/yoloctl-units and controller/runtime output in the VM log.`,
+--unit NAME shows a managed guest service's log instead: a session holder
+(yoloctl-session-BOX.service, as named in a startup failure), a port forwarder
+or yoloctl-audit. It reads the unit's file under /var/log/yoloctl-units in a
+Firecracker guest, or its journal in a Lima guest, from the running VM, and
+renders it the same way. For other guest services, use 'space ssh --root'.
+
+  yoloctl space logs default --unit yoloctl-session-coder.service -f`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, err := resolveSpacePositional(args)
 			if err != nil {
 				return err
+			}
+			if unit != "" {
+				return tailUnitLog(cmd.Context(), name, unit, lines, follow, cmd.OutOrStdout(), cmd.ErrOrStderr())
 			}
 			return tailLimaLog(cmd.Context(), name, lines, follow,
 				cmd.OutOrStdout(), cmd.ErrOrStderr())
@@ -87,7 +96,24 @@ journalctl; Firecracker guests keep managed service logs under
 	}
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow new lines as they appear (tail -F)")
 	cmd.Flags().IntVarP(&lines, "lines", "n", 100, "Number of trailing lines to print before following")
+	cmd.Flags().StringVar(&unit, "unit", "", "Show this managed guest service's log instead of the VM log")
 	return cmd
+}
+
+// tailUnitLog prints a managed guest service's log from the running VM
+// through the same view as the VM log; debug keeps its bytes. It reads only:
+// it never starts the VM or the service.
+func tailUnitLog(ctx context.Context, spaceName, unit string, lines int, follow bool, stdout, stderr io.Writer) error {
+	argv, err := vmservice.LogCommand(container.New(spaceName), unit, lines, follow)
+	if err != nil {
+		return asUserError(err)
+	}
+	read := vmhost.ShellCommand(ctx, spaceName, argv...)
+	view := newSpaceLogOutput(stdout, logging.CurrentSettings(), unit)
+	read.Stdout = view
+	read.Stderr = stderr
+	err = read.Run()
+	return errors.Join(err, view.Close())
 }
 
 // tailLimaLog wraps `tail` on the Lima host-agent log file. We shell

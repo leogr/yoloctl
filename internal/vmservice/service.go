@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +28,40 @@ func LogHint(c *container.Client, name string) string {
 		return "cat /var/log/yoloctl-units/" + name + ".log"
 	}
 	return "journalctl -u " + name
+}
+
+// LogCommand is the guest argv that prints the last lines of managed service
+// name's log, following it when follow is set: its unit file in a microVM
+// (followed by name across rotation), its journal otherwise, message text
+// only so both read alike. name must be a managed unit name.
+func LogCommand(c *container.Client, name string, lines int, follow bool) ([]string, error) {
+	if !vmwire.ManagedUnitName(name) || strings.ContainsFunc(name, func(r rune) bool {
+		plain := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("._@-", r)
+		return !plain
+	}) {
+		return nil, fmt.Errorf("%q is not a managed service: expected yoloctl-audit or a yoloctl-session-, yoloctl-port- or yoloctl-openshell-port- unit ending in .service", name)
+	}
+	native, e := microvm(c)
+	if e != nil {
+		return nil, e
+	}
+	return logArgv(native, name, lines, follow), nil
+}
+
+func logArgv(native bool, name string, lines int, follow bool) []string {
+	n := strconv.Itoa(max(lines, 0))
+	if native {
+		argv := []string{"sudo", "tail", "-n", n}
+		if follow {
+			argv = append(argv, "-F")
+		}
+		return append(argv, "/var/log/yoloctl-units/"+name+".log")
+	}
+	argv := []string{"sudo", "journalctl", "--no-pager", "-o", "cat", "-u", name, "-n", n}
+	if follow {
+		argv = append(argv, "-f")
+	}
+	return argv
 }
 
 func microvm(c *container.Client) (bool, error) {
