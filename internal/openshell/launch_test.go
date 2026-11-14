@@ -173,7 +173,7 @@ func TestLaunchMainLauncherArgs(t *testing.T) {
 		}
 		i := slices.Index(args, "--")
 		want := append([]string{"-i", "--main-exit-marker", SupervisorMainExitMarker}, "--")
-		if i < 3 || !reflect.DeepEqual(args[i-3:i+1], want) || !reflect.DeepEqual(args[i+1:len(args)-1], shell) || args[len(args)-1] != mainlaunch.LauncherScript {
+		if i < 3 || !reflect.DeepEqual(args[i-3:i+1], want) || !reflect.DeepEqual(args[i+1:len(args)-2], shell) || args[len(args)-2] != mainlaunch.LauncherScript || args[len(args)-1] != shell[0] {
 			t.Fatalf("main launcher argv %q", args)
 		}
 		if strings.Contains(strings.Join(args, " "), "test-secret") {

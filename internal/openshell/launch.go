@@ -97,7 +97,8 @@ func (c LaunchConfig) SupervisorArgs(shell []string) ([]string, error) {
 		return nil, errors.New("invalid launcher shell")
 	}
 	args = append(args, "-i", "--main-exit-marker", SupervisorMainExitMarker, "--")
-	return append(append(args, shell...), mainlaunch.LauncherScript), nil
+	// $0 of the launcher: the selected shell, run later as the login shell.
+	return append(append(args, shell...), mainlaunch.LauncherScript, shell[0]), nil
 }
 
 // LauncherShells are the three fixed ways the launcher is run, in upstream's

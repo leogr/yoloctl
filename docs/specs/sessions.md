@@ -166,11 +166,14 @@ account's own settings; its profile learns the conversation from that line and
 resumes it with `--conversation`, carrying the reported model label. A
 reported ID does not verify the resume [17](#source-17) [18](#source-18).
 
-[FACT] A managed launch reads its box's start mode from the box's record; a
-box created before it warns and is offered recreation, and a stopped box with
-a marker and no holder records its lost launch before a fresh start. The
-agent daemon reaper is gone. Every session still starts with exec.
-[19](#source-19)
+[FACT] A managed launch reads its box's start mode from the box's record. A
+box created by this version runs a fixed launcher as its supervisor's main
+process; the holder attaches to it and hands it the launch once, and the
+launched command becomes the main process (its exit is the box's). A
+privileged box's main session is marked on its endpoint. A box created before
+warns and is offered recreation; a stopped box with a marker and no holder
+records its lost launch before a fresh start. The agent daemon reaper is
+gone. [19](#source-19)
 
 ## Sources
 

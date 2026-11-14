@@ -1,4 +1,4 @@
-# Stop-box: start modes, old boxes and the removed reaper
+# Stop-box: start modes, the main-process launch and old boxes
 
 Verification: `549d46495e13d1814aff3358c3a68fc7463211be` and accompanying changes; endpoint composition `fa98952c5e4b96e47b02211d14cfadaf76df66d0` and accompanying changes; re-read cited sources when changing behavior.
 
@@ -12,16 +12,45 @@ before any unlink). [1](#source-1) [2](#source-2)
 
 [FACT] A managed launch (an agent or a declared `session_command`) reads its
 box's start mode before the holder starts; a plain shell reads nothing.
-Confined box with the record: main-process start. Without it, or on the old
-upstream runtime: needs recreate, warned, exec start. Privileged box: exec
-start, using `agentbox.ProbeMainSession` by default to ask a running endpoint
-once whether it accepts `boxendpoint.MainSessionRequest` (`yoloctl-main-session`,
-empty, reply required, on a fresh session channel that is then closed). An
-explicit refusal needs a restart; unavailable transport is an error. An accepted
-mark with no process starts and stops nothing. The holder still starts every
-session with exec:
-the main-process hand-over is route M-b's section 3, not built here.
-[3](#source-3) [4](#source-4)
+Confined box with the record: **main** (the holder's `--start-main`). Without
+it, or on the old upstream runtime: needs recreate, warned, **exec**. A
+privileged box: **marked** (`--mark-main`) when `agentbox.ProbeMainSession`
+(`yoloctl-main-session`, empty, reply required, on a fresh channel then
+closed) is accepted; an explicit refusal needs a restart; unavailable
+transport is an error. [3](#source-3) [4](#source-4)
+
+[FACT] A box whose launch config says `main_launcher` (set at preparation from
+its record) runs the supervisor with `-i --main-exit-marker
+/.openshell/supervisor/run/main-exit --` and the fixed `LauncherScript`, run
+by the first of `/bin/bash --posix -c`, `/usr/bin/bash --posix -c`, `/bin/sh
+-c` that is an executable regular file in the container (upstream's shell
+order); others keep `sleep infinity`. The helper's source closure embeds
+`internal/mainlaunch`. [12](#source-12) [13](#source-13)
+
+[FACT] The launcher (no `mkfifo` → `sleep infinity`) makes a 0700 directory
+and a 0600 FIFO in the box user's home, reads one record and removes both. It
+accepts only `TERM=…`, a 32-hex token, the command, the token line, a name
+list and the token as last line (exactly two token lines after the header);
+otherwise it exits 93 and runs nothing. A listed name it lacks: one line
+naming it, exit 94. It removes inherited names not listed (shell identifiers
+by `unset`, others by `env -u`, skipped if that `env` cannot), keeps `TERM`
+from the record, then `exec "$SHELL" -lc` the command: the command is the
+main process. Names with a control character are on neither side; values
+are never copied or put in argv. Its variables carry `__yoloctl_mb_`.
+[14](#source-14)
+
+[FACT] The holder's main start opens a raw session channel (ssh.Session
+cannot wait on a subsystem), requests the terminal, `OPENSHELL_MAIN_RAW_INPUT=1`
+(patch 0005) and the `openshell-main` subsystem (a refusal: startup failure,
+no marker), then the browser bridge, its marker and one hand-over: an exec of
+the fixed `HandoverScript` with `OPENSHELL_NO_LOGIN_SHELL=1` and the record
+(`TERM`, token, `exec` + today's command) on stdin; the script appends its own
+environment's names and the token. Status 0: delivered, input opens. 81 (no
+`mkfifo`: directive 61's refusal), 82 (no FIFO), 83 (a name holds the
+token): proven not delivered, marker removed. Anything else: not known,
+marker kept, ends as a lost connection. Never sent twice. A marked start
+sends `yoloctl-main-session` before today's exec; a refusal starts nothing.
+[15](#source-15)
 
 [FACT] An attach that starts a plain shell (no agent, no `session_command`)
 prints one info line: the box has no session process, the shell is temporary,
@@ -51,8 +80,10 @@ still declares it loads with a warning per load and loses it at its next
 save. Until boxes stop with their session, a Codex app-server can outlive a
 launch. [10](#source-10) [11](#source-11)
 
-[FACT] Tests use fakes and an isolated current endpoint with PID1 disabled;
-nothing here was run on a VM. [7](#source-7) [9](#source-9)
+[FACT] Tests use fakes, real shells for the launcher and hand-over (under
+`/bin/sh` and `bash --posix`, including the `BASH_ENV` hook seen once as by
+today's `bash -lc`) and an isolated current endpoint with PID1 disabled;
+nothing here was run on a VM. [7](#source-7) [9](#source-9) [14](#source-14) [15](#source-15)
 
 ## Sources
 
@@ -67,3 +98,7 @@ nothing here was run on a VM. [7](#source-7) [9](#source-9)
 9. <a id="source-9"></a> [cmd/yoloctl/session_identity_test.go](../../cmd/yoloctl/session_identity_test.go#L1) — `TestTrackedStoppedBoxRecordsItsLostHolder`.
 10. <a id="source-10"></a> [internal/agentprofile/profile.go](../../internal/agentprofile/profile.go#L1) — `LegacyDaemons`, `LegacyDaemonsNotice`.
 11. <a id="source-11"></a> [cmd/yoloctl/cli_logging.go](../../cmd/yoloctl/cli_logging.go#L1) — the per-load warning.
+12. <a id="source-12"></a> [internal/openshell/launch.go](../../internal/openshell/launch.go#L1) — `MainLauncher`, `SupervisorArgs`, `LauncherShells`, `SupervisorMainExitMarker`; `launch_test.go`.
+13. <a id="source-13"></a> [internal/openshell/launcher_shell_linux.go](../../internal/openshell/launcher_shell_linux.go#L1) — `launcherShell`; `runtime_exec_linux.go`, `prepare_linux.go`; `helperinputs.go`.
+14. <a id="source-14"></a> [internal/mainlaunch/mainlaunch.go](../../internal/mainlaunch/mainlaunch.go#L1) — `LauncherScript`, `HandoverScript`, `Record`, `NewToken`, statuses; `mainlaunch_linux_test.go`.
+15. <a id="source-15"></a> [internal/session/handover.go](../../internal/session/handover.go#L1) — `openMainChannel`, `handOver`, `markMainSession`, `mainChannel.wait`; `holder.go` `RunHolder`; `holder_main_test.go`.

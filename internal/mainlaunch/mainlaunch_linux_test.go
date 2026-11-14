@@ -28,6 +28,8 @@ type box struct {
 	bin     string
 	out     string
 	inherit []string // the main process's inherited environment
+	// loginShell is the launcher's $0: the stand-in login shell.
+	loginShell string
 }
 
 func newBox(t *testing.T) *box {
@@ -49,7 +51,8 @@ func newBox(t *testing.T) *box {
 	}
 	// Bash scripts: dash would drop non-identifier names on the way.
 	b.script("env", "#!"+bash+"\nprintf '%s\\n' \"$@\" > \""+b.out+"/env-argv\"\nexec "+realEnv+" \"$@\"\n")
-	b.script("login-shell", "#!"+bash+"\nprintf '%s' \"$2\" > \""+b.out+"/cmd\"\nprintf '%s\\n' \"$1\" > \""+b.out+"/flag\"\necho $$ > \""+b.out+"/pid\"\n"+realEnv+" -0 > \""+b.out+"/environ\"\n")
+	b.loginShell = filepath.Join(b.bin, "login-shell")
+	b.script("login-shell", "#!"+bash+"\numask > \""+b.out+"/umask\"\nprintf '%s' \"$2\" > \""+b.out+"/cmd\"\nprintf '%s\\n' \"$1\" > \""+b.out+"/flag\"\necho $$ > \""+b.out+"/pid\"\n"+realEnv+" -0 > \""+b.out+"/environ\"\n")
 	path := b.bin + ":/usr/bin:/bin"
 	b.inherit = []string{"PATH=" + path, "HOME=" + b.home, "SHELL=" + filepath.Join(b.bin, "login-shell"), "TERM=xterm-256color",
 		"KEEP=kept", "SECRET=" + secret, "IMAGE_ONLY=extra", "IMG.ONLY=extra", "MY.VAR=dotted", "my-var=dashed"}
@@ -69,7 +72,8 @@ func (b *box) launch(first []string) (*exec.Cmd, *bytes.Buffer) {
 	if _, err := exec.LookPath(first[0]); err != nil {
 		b.t.Skip("no " + first[0])
 	}
-	cmd := exec.Command(first[0], append(first[1:], "-c", LauncherScript)...)
+	// $0 is the login shell, as the supervisor's argv supplies it.
+	cmd := exec.Command(first[0], append(first[1:], "-c", LauncherScript, b.loginShell)...)
 	cmd.Env = b.inherit
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -370,5 +374,119 @@ func TestEnvWithoutUnsetKeepsTheExtra(t *testing.T) {
 	}
 	if _, ok := env["IMAGE_ONLY"]; ok {
 		t.Fatal("an identifier extra was not unset by the shell")
+	}
+}
+
+// The BASH_ENV control (addendum 1, acceptance 4a): with a hook that appends
+// x to MARK, the launched command sees what today's single login launch
+// (bash -lc from the exec's environment) sees, under either first step.
+func TestBashEnvHookRunsAsToday(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("no bash")
+	}
+	dir := t.TempDir()
+	hook := filepath.Join(dir, "hook")
+	if err := os.WriteFile(hook, []byte("export MARK=\"${MARK}x\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mark := func(out string) string { return "printf %s \"$MARK\" > " + out }
+	// Today: the server's login shell on the exec's environment.
+	today := filepath.Join(dir, "today")
+	base := []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "SHELL=" + bash, "BASH_ENV=" + hook, "ENV=" + hook}
+	cmd := exec.Command(bash, "-lc", mark(today))
+	cmd.Env = base
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatal(err, string(out))
+	}
+	want, _ := os.ReadFile(today)
+	t.Logf("today's login launch sees MARK=%q", want)
+	for label, first := range firsts {
+		t.Run(label, func(t *testing.T) {
+			b := newBox(t)
+			b.inherit = []string{"PATH=" + b.bin + ":/usr/bin:/bin", "HOME=" + b.home, "SHELL=" + bash, "TERM=dumb", "BASH_ENV=" + hook, "ENV=" + hook}
+			b.loginShell = bash
+			launcher, stderr := b.launch(first)
+			out := filepath.Join(b.out, "mark")
+			command := []byte(mark(out)) // evaluated by the login shell itself
+			token, _ := NewToken(command)
+			record, _ := Record("xterm", token, command)
+			env := []string{"PATH=" + b.bin + ":/usr/bin:/bin", "HOME=" + b.home, "SHELL=" + bash, "TERM=dumb", "BASH_ENV=" + hook, "ENV=" + hook}
+			if status := b.handover(env, record); status != HandoverDelivered {
+				t.Fatalf("hand-over status %d", status)
+			}
+			if code := wait(t, launcher); code != 0 {
+				t.Fatalf("launcher exit %d: %s", code, stderr.String())
+			}
+			got, _ := os.ReadFile(out)
+			if string(got) != string(want) {
+				t.Fatalf("MARK %q, today %q", got, want)
+			}
+		})
+	}
+}
+
+// Review F1–F3 (fd919692): the session keeps the launcher's original umask;
+// an inherited variable named like the script's own keeps its value; a
+// declared SHELL is passed on as a value and never picks the executable.
+func TestLaunchParityUmaskPrefixAndShell(t *testing.T) {
+	for label, first := range firsts {
+		t.Run(label, func(t *testing.T) {
+			b := newBox(t)
+			b.inherit = append(b.inherit, "__yoloctl_mb_term=public-original", "__yoloctl_mb_cmd=line1\nline2")
+			for i, e := range b.inherit {
+				if strings.HasPrefix(e, "SHELL=") {
+					b.inherit[i] = "SHELL=/bin/false"
+				}
+			}
+			cmd := exec.Command(first[0], append(first[1:], "-c", LauncherScript, b.loginShell)...)
+			cmd.Env = b.inherit
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
+			oldMask := syscallUmask(0o022)
+			err := cmd.Start()
+			syscallUmask(oldMask)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() })
+			waitFIFO(t, b)
+			token, _ := NewToken([]byte("exec agent"))
+			record, _ := Record("xterm", token, []byte("exec agent"))
+			env := append(b.execEnv(), "__yoloctl_mb_term=public-original", "__yoloctl_mb_cmd=line1\nline2")
+			for i, e := range env {
+				if strings.HasPrefix(e, "SHELL=") {
+					env[i] = "SHELL=/bin/false"
+				}
+			}
+			if status := b.handover(env, record); status != HandoverDelivered {
+				t.Fatalf("hand-over status %d", status)
+			}
+			if code := wait(t, cmd); code != 0 {
+				t.Fatalf("launcher exit %d: %s", code, stderr.String())
+			}
+			mask, _ := os.ReadFile(filepath.Join(b.out, "umask"))
+			got := environNames(t, filepath.Join(b.out, "environ"))
+			if strings.TrimSpace(string(mask)) != "0022" {
+				t.Fatalf("session umask %q, want 0022", mask)
+			}
+			if got["__yoloctl_mb_term"] != "public-original" || got["__yoloctl_mb_cmd"] != "line1\nline2" || got["SHELL"] != "/bin/false" || got["TERM"] != "xterm" {
+				t.Fatalf("environment %q", got)
+			}
+		})
+	}
+}
+
+func waitFIFO(t *testing.T, b *box) {
+	t.Helper()
+	fifo := filepath.Join(b.home, LauncherDir, "fifo")
+	for i := 0; ; i++ {
+		if info, err := os.Lstat(fifo); err == nil && info.Mode()&os.ModeNamedPipe != 0 {
+			return
+		}
+		if i > 500 {
+			t.Fatal("the launcher made no FIFO")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

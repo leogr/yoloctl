@@ -122,13 +122,16 @@ exit 0
 // variable of that name would keep its export attribute and be changed.
 //
 // LauncherScript is the fixed main process of a confined box created by this
-// version (run by the supervisor as "<shell> -c LauncherScript"). It waits
+// version, run by the supervisor as "<shell> [--posix] -c LauncherScript
+// <shell path>": $0 is the image shell selected in upstream's order, which
+// the launch then runs as the login shell (SHELL stays a value). It waits
 // for one record; a record it does not accept ends it non-zero and runs
 // nothing. It keeps the environment names the hand-over exec had, removes
 // the others by name (unset for shell identifiers, env -u for other names:
 // names only, never values), sets TERM and runs
 // the login shell once with the command: the command is the main process.
 const LauncherScript = `command -v mkfifo >/dev/null 2>&1 || exec sleep infinity
+__yoloctl_mb_umask=$(umask)
 __yoloctl_mb_nl='
 '
 ` + namesFn + `__yoloctl_mb_d="$HOME/` + LauncherDir + `"
@@ -184,8 +187,33 @@ export TERM
 if [ "$#" -gt 0 ] && ! env -u __yoloctl_mb_probe true >/dev/null 2>&1; then
 	set --
 fi
+# The exec's argv lives in the positional parameters (never the
+# environment) from here on. The login shell is "$0": the image shell the
+# supervisor selected in upstream's order; SHELL is only passed on as a value.
 if [ "$#" -gt 0 ]; then
-	exec env "$@" "$SHELL" -lc "$__yoloctl_mb_cmd"
+	set -- env "$@" "$0" -lc "$__yoloctl_mb_cmd"
+else
+	set -- "$0" -lc "$__yoloctl_mb_cmd"
 fi
-exec "$SHELL" -lc "$__yoloctl_mb_cmd"
+umask "$__yoloctl_mb_umask"
+# An inherited variable named like this script's own gets its inherited value
+# back, read from this process's initial environment by functions that keep
+# no variable of their own (arguments only), so the session sees it unchanged.
+__yoloctl_mb_value() {
+	tr '\n\000' '\001\n' < "/proc/$1/environ" | sed -n "s/^$2=//p" | tr '\001' '\n'
+	printf .
+}
+__yoloctl_mb_assign() {
+	set -- "$1" "${2%.}"
+	set -- "$1" "${2%?}"
+	eval "$1=\$2"
+}
+__yoloctl_mb_restore() {
+	[ "$#" -gt 1 ] || return 0
+	__yoloctl_mb_assign "$1" "$(__yoloctl_mb_value "$(eval "printf %s \"\${$#}\"")" "$1")"
+	shift
+	__yoloctl_mb_restore "$@"
+}
+__yoloctl_mb_restore $(tr '\n\000' '\001\n' < "/proc/$$/environ" | sed 's/=.*//' | grep -E '^__yoloctl_mb_[A-Za-z0-9_]*$') $$
+exec "$@"
 `
