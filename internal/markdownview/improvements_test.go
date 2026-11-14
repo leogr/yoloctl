@@ -169,7 +169,13 @@ func TestHorizontalRule(t *testing.T) {
 	if got, ok := selection.Exact(0, 0, 2, 1, true, true); !ok || got != text {
 		t.Fatal("quote across a rule", got, ok)
 	}
-	for _, other := range []string{"----", "- - -", "***", "___", "--", "--- x"} {
+	// Every rule spelling is a rule (B4); anything else stays text.
+	for _, spelling := range []string{"----", "- - -", "***", "___"} {
+		if d := Parse(spelling, options); !d.Lines[0].Rule {
+			t.Fatalf("%q is not a rule", spelling)
+		}
+	}
+	for _, other := range []string{"--", "--- x"} {
 		if d := Parse(other, options); d.Lines[0].Rule || d.Lines[0].Decor {
 			t.Fatalf("%q became a rule", other)
 		}

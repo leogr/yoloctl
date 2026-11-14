@@ -51,3 +51,27 @@ func TestHeadingClosingHashes(t *testing.T) {
 		})
 	}
 }
+
+// B4: every rule spelling with up to 3 columns of indentation is a rule;
+// anything else stays what it was.
+func TestRuleSpellings(t *testing.T) {
+	for input, rule := range map[string]bool{
+		"---": true, "***": true, "___": true, "- - -": true, "* * *": true, "_ _ _": true, "-----": true,
+		"   ---": true, "\t---": false, "    ***": false, " -\t-\t-": true,
+		"- - - x": false, "--": false, "**": false, "-*-": false, "---a": false,
+	} {
+		mapped(t, input, func(_ ansi.Method, doc Document) {
+			if got := len(doc.Lines) == 1 && doc.Lines[0].Rule; got != rule {
+				t.Fatalf("%q: rule %v, want %v (%+v)", input, got, rule, doc.Lines)
+			}
+		})
+	}
+	// A table's delimiter line stays the table's.
+	mapped(t, "| a | b |\n| --- | --- |\n| 1 | 2 |", func(_ ansi.Method, doc Document) {
+		for _, dl := range doc.Lines {
+			if dl.Table == nil {
+				t.Fatalf("table line %q is not part of the table", dl.Text)
+			}
+		}
+	})
+}

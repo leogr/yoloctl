@@ -236,7 +236,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 				}
 				st = spaceview.Style{FG: theme.Text, BG: CodeCard(theme)}
 				ls.Fence = fences
-			case strings.TrimSpace(line) == "---":
+			case thematicBreak(line):
 				dl.Decor, dl.Rule = true, true
 				dl.Pieces = []Piece{{Style: spaceview.Style{FG: theme.Frame}}}
 				out = append(out, dl)
@@ -304,6 +304,35 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 	}
 	alignOrdered(out)
 	return out
+}
+
+// thematicBreak reports a rule line: up to 3 columns of indentation (TABs to
+// the next multiple of 4), then 3 or more of one of '-', '*' or '_',
+// optionally separated by spaces or TABs, and nothing else.
+func thematicBreak(line string) bool {
+	col, i := 0, 0
+	for ; i < len(line) && (line[i] == ' ' || line[i] == '\t'); i++ {
+		if line[i] == '\t' {
+			col += 4 - col%4
+		} else {
+			col++
+		}
+	}
+	if col > 3 {
+		return false
+	}
+	var mark byte
+	n := 0
+	for ; i < len(line); i++ {
+		switch c := line[i]; {
+		case c == ' ' || c == '\t':
+		case (c == '-' || c == '*' || c == '_') && (mark == 0 || c == mark):
+			mark, n = c, n+1
+		default:
+			return false
+		}
+	}
+	return n >= 3
 }
 
 // withoutClosingHashes drops an ATX heading's closing sequence: the final run
