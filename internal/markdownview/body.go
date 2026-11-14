@@ -153,6 +153,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 	var hl hlState
 	at := 0      // the source offset of lines[idx]
 	literal := 0 // lines of a rejected table: shown as text, never re-detected
+	var lists listContext
 	for idx := 0; idx < len(lines); at, idx = at+len(lines[idx])+1, idx+1 {
 		line := lines[idx]
 		tableLimit := false
@@ -259,8 +260,14 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 				dl.QuoteDepth, line = quoteMarkers(line)
 				st.FG, prose, dl.Quote = theme.Dim, true, true
 			default:
-				line, dl.List = listItem(line, lead)
+				line, dl.List, lead = tolerantListItem(line, lead, lists.active())
 				prose = true
+			}
+			if dl.List.Content > 0 {
+				marker, content, _ := listMarker(lines[idx])
+				lists.item(marker, content)
+			} else {
+				lists.other(lines[idx])
 			}
 		}
 		if lead != nil && len(lead.At) == 0 {
@@ -308,6 +315,39 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 	}
 	alignOrdered(out)
 	return out
+}
+
+// tolerantListItem is listItem for a line under the list context: a marker
+// line whose indentation holds a TAB is an item only inside a list (B1), its
+// indentation then shown as the spaces it expands to; outside one it stays
+// text. lead maps the returned line to the source line.
+func tolerantListItem(line string, lead *SourceMap, inList bool) (string, ListItem, *SourceMap) {
+	col, at := indentCols(line)
+	if !inList || !strings.Contains(line[:at], "\t") {
+		text, item := listItem(line, lead)
+		return text, item, lead
+	}
+	if _, _, ok := listMarker(line); !ok {
+		text, item := listItem(line, lead)
+		return text, item, lead
+	}
+	spaces := strings.Repeat(" ", col)
+	norm := spaces + line[at:]
+	var normMap, itemMap *SourceMap
+	if lead != nil {
+		normMap = &SourceMap{Hi: len(line)}
+		normMap.Add(spaces, line, 0, at)
+		normMap.Add(line[at:], line, at, len(line))
+		itemMap = &SourceMap{Hi: len(norm)}
+	}
+	text, item := listItem(norm, itemMap)
+	if lead == nil {
+		return text, item, nil
+	}
+	if len(itemMap.At) == 0 {
+		itemMap.Add(text, norm, 0, len(norm))
+	}
+	return text, item, itemMap.Then(normMap)
 }
 
 // quoteMarkers strips a quote line's markers: up to 3 columns of

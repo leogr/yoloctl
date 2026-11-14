@@ -125,3 +125,85 @@ func TestNestedQuoteBarsAtNarrowWidths(t *testing.T) {
 		}
 	}
 }
+
+// The list context's content columns are source columns: the marker column
+// (TABs expanded), the marker's width and the spaces after it (1 to 4, else 1).
+func TestListMarkerColumns(t *testing.T) {
+	for line, want := range map[string][2]int{
+		"- a": {0, 2}, "-  a": {0, 3}, "-    a": {0, 5}, "-     a": {0, 2}, "* a": {0, 2}, "+ a": {0, 2},
+		"1. a": {0, 3}, "10. a": {0, 4}, "3) a": {0, 3}, "  - b": {2, 4}, "\t- c": {4, 6}, " \t- c": {4, 6}, "- é": {0, 2},
+	} {
+		marker, content, ok := listMarker(line)
+		if !ok || marker != want[0] || content != want[1] {
+			t.Fatalf("%q: marker %d content %d ok %v, want %v", line, marker, content, ok, want)
+		}
+	}
+	for _, line := range []string{"-a", "1.a", "x", "", "1234567890. a"} {
+		if _, _, ok := listMarker(line); ok {
+			t.Fatalf("%q read as a marker", line)
+		}
+	}
+}
+
+// B1: inside a list a TAB-indented marker line is a nested item, its
+// indentation shown as the spaces it expands to; outside a list it stays text.
+func TestTabIndentedListItems(t *testing.T) {
+	for _, tc := range []struct {
+		text   string
+		line   int
+		item   bool
+		marker int
+	}{
+		{"- a\n\t- b", 1, true, 4},
+		{"- a\n  - b\n\t- c", 2, true, 4},
+		{"1. a\n\t- b", 1, true, 4},
+		{"- é\n\t- b", 1, true, 4},
+		{"- a\n\n\t- b", 2, true, 4},
+		{"- a\n    more\n\t- b", 2, true, 4},
+		{"text\n\t- b", 1, false, 0},
+		{"\n\t- b", 1, false, 0},
+		{"- a\nplain\n\t- b", 2, false, 0},
+	} {
+		mapped(t, tc.text, func(_ ansi.Method, doc Document) {
+			dl := doc.Lines[tc.line]
+			if (dl.List.Content > 0) != tc.item || tc.item && (dl.List.Marker != tc.marker || !strings.HasPrefix(dl.Text, "    • ")) {
+				t.Fatalf("%q line %d: %q list %+v", tc.text, tc.line, dl.Text, dl.List)
+			}
+			// A whole-line Quote still takes the source line, TAB included.
+			src := doc.Sources[tc.line]
+			if _, wide, ok := LineEnd(src, len(dl.Text)); !ok || wide != src.End {
+				t.Fatalf("%q line %d: end maps to %d, not %d", tc.text, tc.line, wide, src.End)
+			}
+			if bare, _, ok := LineStart(src, 0); !ok || bare != src.Start {
+				t.Fatalf("%q line %d: start maps to %d, not %d", tc.text, tc.line, bare, src.Start)
+			}
+		})
+	}
+	// The context's nesting follows source columns: 10. opens content
+	// column 4, so a 3-column item does not nest and a 4-column one does.
+	var c listContext
+	c.item(0, 4)
+	c.item(3, 5)
+	if len(c.open) != 2 || c.open[1].marker != 3 {
+		t.Fatalf("3-column item %+v", c.open)
+	}
+	c = listContext{}
+	c.item(0, 4)
+	c.item(4, 6)
+	if len(c.open) != 2 {
+		t.Fatalf("4-column item %+v", c.open)
+	}
+	c.item(0, 2)
+	if len(c.open) != 1 || c.open[0] != (listOpen{0, 2}) {
+		t.Fatalf("a sibling closes the nested items: %+v", c.open)
+	}
+	c.other("    deeper text")
+	c.other("")
+	if !c.active() {
+		t.Fatal("context ended at an indented or blank line")
+	}
+	c.other("x")
+	if c.active() {
+		t.Fatal("context continued past an unindented line")
+	}
+}
