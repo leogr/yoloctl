@@ -1,6 +1,6 @@
 # Native data disk and integrity
 
-Verification: `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes; re-read cited sources when changing behavior. Native bind startup re-read at `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes.
 
 [FACT] Native account state and controller configuration share a dedicated
 space-owned native ext4 data disk. Layout
@@ -8,8 +8,9 @@ helpers derive the disk mount and `/var/lib/yoloctl/account-state/<account>/<age
 leaf. The guest helper verifies filesystem type, recorded UUID, ownership marker,
 and the live root bind's device/inode identity. Account access does not fall
 back to an empty directory when those checks fail. Controller workers and
-recovery use read-only verification; explicit initialization/deployment/restoration
-owns preparation of a missing native bind. [14](#source-14) [1](#source-1) [2](#source-2)
+recovery use read-only verification. Fixed root controller service startup,
+explicit initialization/deployment and archive restoration prepare a missing
+native bind only from the verified disk; service startup then verifies it again. [14](#source-14) [1](#source-1) [2](#source-2)
 
 [FACT] `ExecuteForDisk` validates requests and sends JSON on stdin to the guest
 Python helper (locally for native workers); file contents are not passed in argv. Guest operations use directory
@@ -79,6 +80,6 @@ account disk's preservation contract does not cover it. [9](#source-9)
 
 13. <a id="source-13"></a> [Firecracker disks](../../internal/firecracker/disk_linux.go#L1) — `AccountDiskBlank`, `blank`, `formatDisk`.
 
-14. <a id="source-14"></a> [internal/controller/runtime.go](../../internal/controller/runtime.go#L19) — `LoadRuntime`, `VerifyRuntimeStorage`, `PrepareRuntimeForLifecycle`; deployController and restoreNativeSpace select preparation explicitly.
+14. <a id="source-14"></a> [internal/controller/runtime.go](../../internal/controller/runtime.go#L19) — `LoadRuntime`, `VerifyRuntimeStorage`, `PrepareRuntimeForLifecycle`; `runControllerInternal` selects preparation only for `serve` at its shared loader; deployController and restoreNativeSpace retain their explicit preparation paths. Runtime and guest helper tests cover sequencing, absent/present binds and refused identities.
 
 15. <a id="source-15"></a> [Claude profile relocation](claude-auth.md) — launch paths, native helper, import and manual-exec boundary.

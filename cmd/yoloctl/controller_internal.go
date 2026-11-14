@@ -196,7 +196,7 @@ func runControllerInternal(ctx context.Context, args []string) error {
 	if args[0] == "worker" {
 		return runControllerWorker(ctx)
 	}
-	if err := controller.LoadRuntime(ctx); err != nil {
+	if err := loadControllerActionRuntime(ctx, args[0], controller.LoadRuntime, controller.PrepareRuntimeForLifecycle); err != nil {
 		return err
 	}
 	switch args[0] {
@@ -274,6 +274,16 @@ func runControllerInternal(ctx context.Context, args []string) error {
 	default:
 		return errors.New("unknown controller infrastructure action")
 	}
+}
+
+// Only the fixed root service start repairs the account-state bind after a
+// guest reboot. Other actions verify it; worker intake keeps its own early
+// descriptor claims and verify-only loader above.
+func loadControllerActionRuntime(ctx context.Context, action string, verify, prepare func(context.Context) error) error {
+	if action == "serve" {
+		return prepare(ctx)
+	}
+	return verify(ctx)
 }
 
 func decodeBoundedJSON(r io.Reader, dst any, limit int64) error {

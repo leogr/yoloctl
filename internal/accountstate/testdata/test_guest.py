@@ -152,6 +152,60 @@ class NativeStorage(unittest.TestCase):
             mount.assert_not_called()
         self.assertEqual(list(wrong.iterdir()), [])
 
+    def test_prepare_restores_only_the_verified_disk_bind(self):
+        target = self.disk / 'reboot-empty-bind'
+        bound = False
+        original_stat = os.stat
+        def stat(path, *args, **kw):
+            if bound and os.fspath(path) == str(target):
+                return original_stat(self.root, *args, **kw)
+            return original_stat(path, *args, **kw)
+        def mount(argv, **kw):
+            nonlocal bound
+            if argv == ['mountpoint', '-q', str(target)]:
+                return guest.subprocess.CompletedProcess(argv, 1)
+            self.assertEqual(argv, ['mount', '--bind', str(self.root), str(target)])
+            self.assertEqual(kw, {'check': True})
+            bound = True
+            return guest.subprocess.CompletedProcess(argv, 0)
+        # Only mount execution/stat of its resulting bind is simulated. Disk,
+        # UUID/owner checks and source/target creation use the actual helper.
+        with patch.object(guest.subprocess, 'run', side_effect=mount) as calls, \
+             patch.object(guest.os, 'stat', side_effect=stat):
+            self.assertEqual(self.runop('prepare', root=str(target)), {'uuid': 'native-uuid'})
+            self.assertEqual(calls.call_count, 2)
+            self.assertTrue(os.path.samestat(os.stat(target), os.stat(self.root)))
+            self.assertEqual(self.runop('verify', root=str(target)), {'uuid': 'native-uuid'})
+            self.runop('prepare', root=str(target))
+            self.assertEqual(calls.call_count, 2, 'existing exact bind must not mount again')
+
+    def test_prepare_present_bind_never_mounts(self):
+        before = os.stat(self.root)
+        with patch.object(guest.subprocess, 'run') as mount:
+            self.assertEqual(self.runop('prepare'), {'uuid': 'native-uuid'})
+            mount.assert_not_called()
+        self.assertTrue(os.path.samestat(before, os.stat(self.root)))
+
+    def test_prepare_refuses_wrong_storage_before_mounting(self):
+        target = self.disk / 'other-mount'
+        target.mkdir()
+        with patch.object(guest.subprocess, 'run') as mount:
+            mount.return_value.returncode = 0
+            with self.assertRaisesRegex(ValueError, 'already mounts different storage'):
+                self.runop('prepare', root=str(target))
+            mount.assert_called_once_with(['mountpoint', '-q', str(target)])
+        for changes in [dict(uuid='wrong'), dict(id='b' * 32)]:
+            with self.subTest(changes=changes), patch.object(guest.subprocess, 'run') as mount:
+                with self.assertRaises(ValueError):
+                    self.runop('prepare', root=str(target), **changes)
+                mount.assert_not_called()
+        (self.disk / '.yoloctl-owner').unlink()
+        with patch.object(guest.subprocess, 'run') as mount:
+            with self.assertRaisesRegex(ValueError, 'ownership marker is missing'):
+                self.runop('prepare', root=str(target))
+            mount.assert_not_called()
+        self.assertEqual(list(target.iterdir()), [])
+
     def test_import_status_remove(self):
         self.assertFalse(self.runop('exists', path='auth.json')['present'])
         payload = b'{"token":"never-log-this"}'

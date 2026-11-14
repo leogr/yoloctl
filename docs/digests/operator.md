@@ -1,6 +1,6 @@
 # Opt-in space operator authority
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Native bind startup re-read at `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes.
 
 [FACT] Feature `yolo.space.operator` installs a `yoloctl` PATH symlink and requires the
 same-name positive capability. That grant provides helper read access and the
@@ -49,8 +49,9 @@ them at the effect gate. Availability never grants authority. Operator
 refusals omit other receipts and principals; only host administration can
 acknowledge unknown outcomes. [25](#source-25) [5](#source-5)
 
-[FACT] Replacement/removal retires old registrations. On VM reboot the controller
-reconstructs volatile endpoints from container labels, native boxes from their
+[FACT] Replacement/removal retires old registrations. Fixed root controller startup
+first restores the verified native account bind, including after a guest reboot;
+workers and recovery verification never mount it. [26](#source-26) It reconstructs volatile endpoints from container labels, native boxes from their
 incarnation and qualification labels; a box it cannot restore gets a notice and
 never stops controller startup. Helpers are directory
 binds, allowing an atomic executable replacement to appear in an existing box;
@@ -133,3 +134,5 @@ continues to come from the controller grant. [17](#source-17)
 24. <a id="source-24"></a> [cmd/yoloctl/controller_operator.go](../../cmd/yoloctl/controller_operator.go#L253-L265) — `revalidateOperator`, called under the lock by `registerSpaceOperations` and box edit apply.
 
 25. <a id="source-25"></a> [internal/controller/holds.go](../../internal/controller/holds.go#L1) — `heldError`, `loadHolds` and dependency intersections.
+
+26. <a id="source-26"></a> [Controller entry](../../cmd/yoloctl/controller_internal.go#L136) — `runControllerInternal`, `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle` and `prepareRuntimeStorage`.

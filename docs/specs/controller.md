@@ -58,7 +58,8 @@ document. An outcome it cannot prove holds only its recorded boxes, accounts
 and shared domains until a host reviews it; an unbounded one holds the space.
 Receipt-storage recovery rechecks current UUID, ownership and live bind
 read-only before reopening; workers and verifiers never prepare that bind.
-[15](#source-15)
+[15](#source-15) Fixed root service startup prepares the verified disk’s bind
+before serving, including after a guest reboot. [17](#source-17)
 An authorized `box exec` command whose result is lost is instead
 `command-uncertain`: queryable and never replayed, without a hold.
 Interrupting a `box attach`/`box use` client never creates that hold: before

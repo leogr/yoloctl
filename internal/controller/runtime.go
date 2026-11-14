@@ -23,19 +23,23 @@ func LoadRuntime(ctx context.Context) error {
 	return VerifyRuntimeStorage(ctx)
 }
 
-// PrepareRuntimeForLifecycle is reserved for fixed host-authorized deployment
-// and archive restoration after stopping the old controller. Ordinary workers
-// and recovery verifiers must use LoadRuntime, which never repairs a bind.
+// PrepareRuntimeForLifecycle is reserved for fixed root service startup,
+// host-authorized deployment and archive restoration. It restores the verified
+// disk's account-state bind after a guest reboot. Ordinary workers and recovery
+// verifiers must use LoadRuntime, which never repairs a bind.
 func PrepareRuntimeForLifecycle(ctx context.Context) error {
 	if err := configureRuntime(); err != nil {
 		return err
 	}
-	c := spaceenv.Current()
+	return prepareRuntimeStorage(ctx, spaceenv.Current())
+}
+
+func prepareRuntimeStorage(ctx context.Context, c *spaceenv.Context) error {
 	_, err := executeRuntimeDisk(ctx, c.Space, c.DiskID, c.DiskUUID, c.UID, c.GID, accountstate.Request{Action: "prepare"})
 	if err != nil {
 		return err
 	}
-	return VerifyRuntimeStorage(ctx)
+	return verifyRuntimeStorage(ctx, c)
 }
 
 func configureRuntime() error {

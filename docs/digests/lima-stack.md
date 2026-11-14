@@ -1,6 +1,6 @@
 # Lima container stack and upgrades
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Native bind startup re-read at `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes.
 
 [FACT] New/recreated Lima VMs use system containerd, disable user containerd,
 and select nerdctl-full 2.3.5 by **guest** architecture. No Go build-architecture,
@@ -90,6 +90,10 @@ boolean on macOS before starting new or stopped instances; it does not rewrite
 the creation template or install guest packages. The preference and eligibility
 contract is recorded in the adapter digest. [22](#source-22)
 
+[FACT] Fixed root service startup restores and verifies the native account bind
+before serving, including after a guest reboot. Workers/recovery remain verify-only.
+Disk/owner/target errors fail startup; systemd retries are unchanged. [23](#source-23)
+
 ## Sources
 
 1. <a id="source-1"></a> [Template](../../assets/lima/yoloctl.yaml.tmpl#L31) — system modes, architecture archives.
@@ -115,3 +119,5 @@ contract is recorded in the adapter digest. [22](#source-22)
 21. <a id="source-21"></a> [Go toolchains](https://go.dev/doc/toolchain#download) — exact toolchain names, module selection, private module-cache downloads and checksum verification.
 
 22. <a id="source-22"></a> [Boot resource application](../../cmd/yoloctl/space_nested_virtualization.go#L1) — `applySpaceBootResources`, verified with accompanying changes on fc48bca3.
+
+23. <a id="source-23"></a> [Controller startup](../../cmd/yoloctl/controller_internal.go#L136) — `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle`; internal/controller/service.go:`ServiceUnit`.

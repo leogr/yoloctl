@@ -1,6 +1,6 @@
 # Controller process supervision
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Native bind startup re-read at `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes.
 
 [FACT] Firecracker PID 1 supervises the fixed root controller launcher separately
 from session holders, port units and lazy BuildKit. An unrequested nonzero or
@@ -49,7 +49,11 @@ host deployment only on positively `inactive`/`failed` service state; backoff
 and stopping cannot be mistaken for permission to replace unavailable work.
 [1](#source-1) [5](#source-5) [12](#source-12)
 
-[FACT] Replacement invokes ordinary controller startup: singleton, verified
+[FACT] Every fixed root service start prepares the verified disk’s native account
+bind before serving, restoring the nonpersistent bind after a guest reboot. A
+wrong disk, ownership marker or different mounted target still refuses startup;
+worker/recovery verification stays read-only. [16](#source-16) Replacement then
+invokes ordinary controller startup: singleton, verified
 store, receipt recovery, maintenance and endpoint restoration. It queues or
 replays no requests, clears no receipt/image holds, changes no VM incarnation,
 and proves no BuildKit solve/export termination. Independent holders can survive;
@@ -85,3 +89,5 @@ VM restart, or recovery guarantee for PID 1/VM death or unkillable workers.
 13. <a id="source-13"></a> [Receipt startup](../../internal/controller/receipts.go#L145) — `Recover`.
 14. <a id="source-14"></a> [Lazy BuildKit](../../internal/vmguest/buildkit_linux.go#L77) — independent service ownership.
 15. <a id="source-15"></a> [Image recipe](../../internal/firecracker/recipe_linux.go#L18) — `defaultRecipe` hashes init bytes.
+
+16. <a id="source-16"></a> [Service entry](../../cmd/yoloctl/controller_internal.go#L136) — `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle`, internal/accountstate/guest.py:`run` and testdata/test_guest.py absent/present/identity controls.
