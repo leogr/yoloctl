@@ -93,9 +93,11 @@ func TestQuoteRefusesWhatItCannotQuoteExactly(t *testing.T) {
 // Line markers stay when the highlight starts at the line's start; several
 // lines quote as several > lines, inserted on a line of their own.
 func TestQuoteKeepsLineMarkersAndPlacesTheBlock(t *testing.T) {
+	// The TAB-indented line after the heading is an indented code block
+	// (line 4, inside its card's frames); its quote keeps the indentation.
 	m := quoteModel(t, "- item one\n> quoted\n## Title\n\tindented")
 	_ = m.SetDraft("hello")
-	highlight(m, "q", 0, 0, 3, len(m.body(&m.messages[m.indexOf("server:q")], 80).lines[3].Text))
+	highlight(m, "q", 0, 0, 4, len(m.body(&m.messages[m.indexOf("server:q")], 80).lines[4].Text))
 	m.quoteSelection()
 	want := "hello\n> - item one\n> > quoted\n> ## Title\n> \tindented\n\n"
 	if m.Draft() != want {

@@ -101,7 +101,8 @@ func TestListItemsWrapUnderTheirText(t *testing.T) {
 		{"  - alpha beta gamma delta", 14, []string{"  • alpha beta", "    gamma", "    delta"}},
 		{"1. top item text\n   * nested words wrap here", 18, []string{"1. top item text", "   • nested words", "     wrap here"}},
 		// Too narrow for a gutter: the item wraps from the row start, as before.
-		{"    - alpha beta gamma", 12, []string{"    • alpha", "beta gamma"}},
+		// (Under a list; alone, a 4-column line is indented code.)
+		{"- a\n    - alpha beta gamma", 12, []string{"• a", "    • alpha", "beta gamma"}},
 	} {
 		doc := Parse(tc.text, options)
 		rows, got := painted(t, doc, options, tc.width)

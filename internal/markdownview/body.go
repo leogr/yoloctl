@@ -202,8 +202,60 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 			setext[j] = -1
 		}
 	}
+	// An open indented code block (C2): its opener display line and the
+	// code it copies; prevText is whether the previous line was paragraph or
+	// quote text, which a code block cannot start under.
+	codeOpener, prevText := -1, false
+	var code strings.Builder
+	closeCode := func(end int) {
+		out[codeOpener].Block = strings.TrimSuffix(code.String(), "\n")
+		closer := DisplayLine{Decor: true, Fence: FenceClose, Pieces: []Piece{{Style: spaceview.Style{FG: theme.Dim, BG: CodeCard(theme)}}}}
+		out = append(out, closer)
+		if srcs != nil {
+			*srcs = append(*srcs, LineSource{Start: end, End: end})
+		}
+		codeOpener = -1
+	}
+	// codeContinues reports whether the blank line k is inside the open code
+	// block: a later line indented by 4 or more comes before any line
+	// indented by less.
+	codeContinues := func(k int) bool {
+		for ; k < len(lines); k++ {
+			if strings.TrimSpace(lines[k]) != "" {
+				col, _ := indentCols(lines[k])
+				return col >= 4
+			}
+		}
+		return false
+	}
 	for idx := 0; idx < len(lines); at, idx = at+len(lines[idx])+1, idx+1 {
 		line := lines[idx]
+		textAbove := prevText
+		prevText = false
+		if !source && fence == "" {
+			if _, _, item := listMarker(line); !item {
+				lists.other(line)
+			}
+			col, _ := indentCols(line)
+			blank := strings.TrimSpace(line) == ""
+			if owned := col >= 4 || blank && codeContinues(idx); codeOpener >= 0 && !owned {
+				closeCode(at - 1)
+			}
+			if codeOpener < 0 && !blank && col >= 4 && !lists.active() && !textAbove {
+				// A code block starts: a card like a fence without a language.
+				codeOpener = len(out)
+				code.Reset()
+				out = append(out, DisplayLine{Decor: true, Fence: FenceOpen, Pieces: []Piece{{Style: spaceview.Style{FG: theme.Dim, BG: CodeCard(theme)}}}})
+				if srcs != nil {
+					*srcs = append(*srcs, LineSource{Start: at, End: at})
+				}
+			}
+			if codeOpener >= 0 {
+				out = append(out, indentedCodeLine(wm, line, at, theme, srcs))
+				code.WriteString(out[len(out)-1].Text + "\n")
+				continue
+			}
+		}
 		tableLimit := false
 		// A fence opener always wins over a table, even with pipes in it.
 		if !source && fence == "" && idx >= literal && FenceMarker(strings.TrimLeft(line, " ")) == "" {
@@ -240,7 +292,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 		}
 		prose := false
 		if !source {
-			if marker := FenceMarker(trim); marker != "" && (fence == "" || ClosesFence(trim, fence)) {
+			if marker := FenceMarker(trim); marker != "" && (fence != "" && ClosesFence(trim, fence) || fence == "" && fenceIndentOK(line, lists.active())) {
 				var note string
 				if fence == "" {
 					fence, fences = marker, fences+1
@@ -316,6 +368,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 			case quoteDepth(line) > 0:
 				dl.QuoteDepth, line = quoteMarkers(line)
 				st.FG, prose, dl.Quote = theme.Dim, true, true
+				prevText = true
 			default:
 				line, dl.List, lead = tolerantListItem(line, lead, lists.active())
 				prose = true
@@ -323,6 +376,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 					if _, known := setext[idx]; !known {
 						decideSetext(idx)
 					}
+					prevText = setext[idx] == 0
 					if level := setext[idx]; level > 0 {
 						content := strings.TrimLeft(lines[idx], " \t")
 						from := len(lines[idx]) - len(content)
@@ -343,8 +397,6 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 			if dl.List.Content > 0 {
 				marker, content, _ := listMarker(lines[idx])
 				lists.item(marker, content)
-			} else {
-				lists.other(lines[idx])
 			}
 		}
 		if lead != nil && len(lead.At) == 0 {
@@ -389,6 +441,9 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 	}
 	if fence != "" {
 		out[opener].Block = block.String() // an unclosed fence runs to the end
+	}
+	if codeOpener >= 0 {
+		closeCode(len(Plain(text)))
 	}
 	alignOrdered(out)
 	return out
@@ -464,6 +519,43 @@ func quoteMarkers(line string) (int, string) {
 func quoteDepth(line string) int {
 	depth, _ := quoteMarkers(line)
 	return depth
+}
+
+// fenceIndentOK reports whether a fence opener's indentation lets it open
+// one: up to 3 columns, or any inside a list, where items are not containers
+// in this parser (today's leniency).
+func fenceIndentOK(line string, inList bool) bool {
+	col, _ := indentCols(line)
+	return col <= 3 || inList
+}
+
+// indentedCodeLine is one line of an indented code block: its text without
+// the first 4 columns of indentation (TABs expanded), unwrapped and not
+// highlighted. A whole-line Quote takes its source line, indentation
+// included, so the quotation stays code.
+func indentedCodeLine(wm ansi.Method, line string, at int, theme spaceview.Theme, srcs *[]LineSource) DisplayLine {
+	cut, col := 0, 0
+	for cut < len(line) && col < 4 && (line[cut] == ' ' || line[cut] == '\t') {
+		if line[cut] == '\t' {
+			col += 4 - col%4
+		} else {
+			col++
+		}
+		cut++
+	}
+	var tabs, lead *SourceMap
+	if srcs != nil {
+		tabs = &SourceMap{Hi: len(line) - cut}
+		lead = &SourceMap{Hi: len(line)}
+		lead.Add(line[cut:], line, cut, len(line))
+	}
+	dl := DisplayLine{Code: true}
+	dl.Text = ExpandTabsMap(wm, line[cut:], tabs)
+	dl.Pieces = []Piece{{End: len(dl.Text), Style: spaceview.Style{FG: theme.Text, BG: CodeCard(theme)}}}
+	if srcs != nil {
+		*srcs = append(*srcs, LineSource{Start: at, End: at + len(line), Src: tabs.Then(lead).Shift(at)})
+	}
+	return dl
 }
 
 // setextUnderline is the level of a setext underline line: up to 3 columns

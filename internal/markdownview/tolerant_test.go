@@ -295,3 +295,80 @@ func TestSetextHeadings(t *testing.T) {
 		}
 	})
 }
+
+// C2: where an indented code block may start, what it owns and where it ends.
+// Each display line is c (code), f (a card frame) or another kind's letter.
+func TestIndentedCode(t *testing.T) {
+	kind := func(dl DisplayLine) string {
+		switch {
+		case dl.Hidden:
+			return "h"
+		case dl.Fence != FenceNone:
+			return "f"
+		case dl.Code:
+			return "c"
+		case dl.Rule:
+			return "r"
+		case dl.Table != nil:
+			return "T"
+		case dl.Quote:
+			return "q"
+		case dl.List.Content > 0:
+			return "l"
+		}
+		return "t"
+	}
+	for text, want := range map[string]string{
+		"    x = 1":                    "f c f",
+		"\n    x = 1":                  "t f c f",
+		"# H\n    x":                   "t f c f",
+		"***\n    x":                   "r f c f",
+		"```\ny\n```\n    x":           "f c f f c f",
+		"a | b\n---|---\n    x":        "T T f c f",
+		"Foo\n===\n    x":              "t h f c f",
+		"    a\n    b":                 "f c c f",
+		"    a\n\n    b":               "f c c c f",
+		"    a\n\nb":                   "f c f t t",
+		"    a\nb":                     "f c f t",
+		"text\n    x":                  "t t",
+		"> q\n    x":                   "q t",
+		"- a\n    x":                   "l t",
+		"- a\n\n    x":                 "l t t",
+		"    ```\n    y\n    ```":      "f c c c f",
+		"    | a | b |\n    |---|---|": "f c c f",
+		"- a\n    ```\n    y\n    ```": "l f c f",
+		"\n\t- item":                   "t f c f",
+		"- a\n\t- b":                   "l l",
+		"    ***":                      "f c f",
+		"   ***":                       "r",
+		"    # x\n    > y\n    <b>":    "f c c c f",
+	} {
+		mapped(t, text, func(_ ansi.Method, doc Document) {
+			var got []string
+			for _, dl := range doc.Lines {
+				got = append(got, kind(dl))
+			}
+			if strings.Join(got, " ") != want {
+				t.Fatalf("%q: %v, want %s", text, got, want)
+			}
+		})
+	}
+	// The card shows each line without its first 4 columns, copies that
+	// code, and a whole-line Quote keeps the indentation.
+	options := documentOptions()
+	options.MapSource = true
+	text := "\n    x = 1\n\t\ty"
+	doc := Parse(text, options)
+	if doc.Lines[2].Text != "x = 1" || doc.Lines[3].Text != "    y" || doc.Lines[1].Block != "x = 1\n    y" {
+		t.Fatalf("code lines %q %q block %q", doc.Lines[2].Text, doc.Lines[3].Text, doc.Lines[1].Block)
+	}
+	if RenderText(doc) != "\nx = 1\n    y" {
+		t.Fatalf("copy %q", RenderText(doc))
+	}
+	if _, wide, ok := LineStart(doc.Sources[2], 0); !ok || text[wide:doc.Sources[2].End] != "    x = 1" {
+		t.Fatalf("a whole code line quotes %q", text[wide:doc.Sources[2].End])
+	}
+	if len(doc.Lines) != len(doc.Sources) {
+		t.Fatalf("%d lines, %d sources", len(doc.Lines), len(doc.Sources))
+	}
+}
