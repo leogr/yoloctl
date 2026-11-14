@@ -598,10 +598,10 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 		if !managed {
 			cliInfo(logging.Session, "%s", plainShellInfo(name))
 		}
+		mode := startExec
 		if managed {
-			// The start mode is consumed by the launch hand-over (contract
-			// M-b section 3); until then every session starts with exec.
-			if _, err := sessionStartModeFn(ctx, c, name); err != nil {
+			var err error
+			if mode, err = sessionStartModeFn(ctx, c, name); err != nil {
 				return err
 			}
 		}
@@ -617,6 +617,8 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 			HostIntegration: true,
 			HostWorkdir:     sessionHostWorkdir(cfg.Workdir),
 			LaunchToken:     token,
+			StartMain:       mode == startMain,
+			MarkMain:        mode == startMarked,
 		})
 	}
 	if tracked != nil {
@@ -818,6 +820,9 @@ const (
 	startMain sessionStartMode = iota + 1
 	// startExec: today's start; the box does not stop with the session.
 	startExec
+	// startMarked: a privileged box's main session: today's exec after the
+	// endpoint's main-session request; the endpoint stops the box after it.
+	startMarked
 )
 
 // boxLauncherFn reads what a box offers a managed session; tests replace it.
@@ -848,6 +853,8 @@ func sessionStartModeOf(ctx context.Context, c *container.Client, name string) (
 		return startExec, nil
 	case support.Exec:
 		return startExec, nil
+	case support.Privileged:
+		return startMarked, nil
 	}
 	return startMain, nil
 }

@@ -33,7 +33,7 @@ func BoxLauncher(ctx context.Context, client *container.Client, name string, det
 		if err != nil {
 			return LauncherSupport{}, err
 		}
-		return LauncherSupport{NeedsRestart: !ok}, nil
+		return LauncherSupport{NeedsRestart: !ok, Privileged: true}, nil
 	case hasOpenShellRuntimeSignals(details):
 		runtime, err := inspectOpenShellRuntime(ctx, client, name, details.ID)
 		if err != nil {

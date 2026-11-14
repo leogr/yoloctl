@@ -156,8 +156,8 @@ func (h *holder) resizeView(size terminal.Geometry) error {
 	dropped = h.emitLocked(frameResize, payload)
 	// Release the parser lock before SSH I/O, retaining resize ordering.
 	h.mu.Unlock()
-	if h.sess != nil {
-		err = resizePTY(h.sess, size)
+	if h.pty != nil {
+		err = resizePTY(h.pty, size)
 	}
 	h.mu.Lock()
 	return errors.Join(err, h.viewErr)

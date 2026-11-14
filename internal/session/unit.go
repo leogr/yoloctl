@@ -35,6 +35,10 @@ type UnitSpec struct {
 	// LaunchToken, when set, is written into the holder's marker and
 	// tombstone so the controller can tell which launch they belong to.
 	LaunchToken string
+	// StartMain starts the session as the box's main process (route M-b).
+	StartMain bool
+	// MarkMain marks a privileged box's session as its main session.
+	MarkMain bool
 }
 
 // StartHolderUnit starts the session holder for spec.Agentbox as a
@@ -86,6 +90,15 @@ func holderUnitArgs(spec UnitSpec) ([]string, error) {
 			return nil, fmt.Errorf("session: holder unit for %s has an invalid launch token", spec.Agentbox)
 		}
 		args = append(args, "--launch-token", spec.LaunchToken)
+	}
+	if spec.StartMain && spec.MarkMain {
+		return nil, fmt.Errorf("session: holder unit for %s has two start modes", spec.Agentbox)
+	}
+	if spec.StartMain {
+		args = append(args, "--start-main")
+	}
+	if spec.MarkMain {
+		args = append(args, "--mark-main")
 	}
 	if spec.HostIntegration {
 		args = append(args, "--host-integration")

@@ -54,6 +54,14 @@ type HolderOptions struct {
 	HostIntegration bool
 	// Canonical host workdir for optional image reuse; empty for ephemeral boxes.
 	HostWorkdir string
+	// StartMain starts the session as the box's main process (stop-box
+	// route M-b, section 3): attach to openshell-main with every key
+	// forwarded, then hand the launch to the box's launcher. Otherwise the
+	// session starts with today's exec.
+	StartMain bool
+	// MarkMain marks a privileged box's session as its main session (contract
+	// section 7) before today's exec; its endpoint stops the box after it.
+	MarkMain bool
 
 	Logf func(format string, args ...any) // optional progress/diagnostic log
 }
@@ -156,6 +164,9 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	client := ssh.NewClient(cc, chans, reqs)
 	defer func() { _ = client.Close() }()
 	command := shellJoin(opts.Argv)
+	// The main process's command is today's command made to replace the
+	// login shell; the browser launch already ends in exec.
+	mainCommand := "exec " + command
 	if opts.HostIntegration {
 		opening := make(chan struct{}, 2)
 		h.upload = func(ctx context.Context, data []byte) (string, error) { return uploadImage(ctx, client, opening, data) }
@@ -168,32 +179,60 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 		} else {
 			defer func() { _ = bridge.session.Close() }()
 			command = browserLaunch(opts.Argv, bridge.dir)
+			mainCommand = command
 		}
 	}
 
-	sess, err := client.NewSession()
-	if err != nil {
-		return -1, fmt.Errorf("session: open channel: %w", err)
-	}
-	defer func() { _ = sess.Close() }()
-	if err := requestPTY(sess, opts.Term, terminal.Geometry{Rows: opts.Rows, Cols: opts.Cols}); err != nil {
-		return -1, fmt.Errorf("session: request pty: %w", err)
-	}
-	stdin, err := sess.StdinPipe()
-	if err != nil {
-		return -1, fmt.Errorf("session: stdin pipe: %w", err)
-	}
 	// With a PTY the agent's stderr is merged into the PTY stream, so
 	// stdout is the whole story.
-	stdout, err := sess.StdoutPipe()
-	if err != nil {
-		return -1, fmt.Errorf("session: stdout pipe: %w", err)
+	var (
+		sess   *ssh.Session
+		main   *mainChannel
+		stdin  io.WriteCloser
+		stdout io.Reader
+		wait   func() (status int, lost error)
+	)
+	if opts.StartMain {
+		// The box's main process, on a raw session channel: ssh.Session
+		// cannot wait for a subsystem. Every key reaches it (patch 0005);
+		// a refused switch or attachment means nothing else is done.
+		if main, err = openMainChannel(client, opts.Term, terminal.Geometry{Rows: opts.Rows, Cols: opts.Cols}); err != nil {
+			return -1, err
+		}
+		defer func() { _ = main.ch.Close() }()
+		stdin, stdout, wait = main.ch, main.ch, main.wait
+		h.pty = main.ch
+	} else {
+		sess, err = client.NewSession()
+		if err != nil {
+			return -1, fmt.Errorf("session: open channel: %w", err)
+		}
+		defer func() { _ = sess.Close() }()
+		if err := requestPTY(sess, opts.Term, terminal.Geometry{Rows: opts.Rows, Cols: opts.Cols}); err != nil {
+			return -1, fmt.Errorf("session: request pty: %w", err)
+		}
+		if stdin, err = sess.StdinPipe(); err != nil {
+			return -1, fmt.Errorf("session: stdin pipe: %w", err)
+		}
+		if stdout, err = sess.StdoutPipe(); err != nil {
+			return -1, fmt.Errorf("session: stdout pipe: %w", err)
+		}
+		wait = func() (int, error) { return sessionWait(sess.Wait()) }
+		h.pty = sess
 	}
-	h.sess = sess
 	h.stdin = stdin
+	// Client input reaches the session only once it has started: with a
+	// main start, after the hand-over was delivered. Input typed before
+	// waits here, in order, on the one input path.
+	inputOpen := make(chan struct{})
 	inputCtx, inputCancel := context.WithCancel(ctx)
 	defer inputCancel()
 	go func() {
+		select {
+		case <-inputCtx.Done():
+			return
+		case <-inputOpen:
+		}
 		for {
 			select {
 			case <-inputCtx.Done():
@@ -213,10 +252,21 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	if err := WriteMarker(opts.MarkerPath, Marker{StartedAt: time.Now(), HolderPID: os.Getpid(), LaunchToken: opts.LaunchToken}); err != nil {
 		return -1, fmt.Errorf("session: write marker: %w", err)
 	}
-	if err := sess.Start(command); err != nil {
+	if opts.StartMain {
+		if err := handOver(client, opts, []byte(mainCommand)); err != nil {
+			if !errors.Is(err, ErrHolderConnLost) {
+				_ = RemoveMarker(opts.MarkerPath) // proven: nothing was delivered
+			}
+			return -1, err
+		}
+	} else if err := markMainSession(sess, opts.MarkMain); err != nil {
+		_ = RemoveMarker(opts.MarkerPath) // refused before any start
+		return -1, err
+	} else if err := sess.Start(command); err != nil {
 		_ = RemoveMarker(opts.MarkerPath) // no agent was started
 		return -1, fmt.Errorf("session: start agent: %w", err)
 	}
+	close(inputOpen)
 	// Never log the argv itself: agent arguments may carry prompts or
 	// tokens. The program name and the argument count identify the launch.
 	logf("agent started: %s", agentLaunchSummary(opts.Argv))
@@ -325,22 +375,8 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	default:
 	}
 
-	werr := sess.Wait()
-	status := 0
-	var connLost bool
-	if werr != nil {
-		var ee *ssh.ExitError
-		var em *ssh.ExitMissingError
-		switch {
-		case errors.As(werr, &ee):
-			status = ee.ExitStatus()
-		case errors.As(werr, &em):
-			// Channel closed without an exit-status message: statusless.
-			connLost = true
-		default:
-			connLost = true
-		}
-	}
+	status, werr := wait()
+	connLost := werr != nil
 	h.markDone()
 
 	if connLost {
@@ -375,9 +411,9 @@ type holder struct {
 	ringFilter          termio.OSC52Scanner
 	terminalInput       *terminalInputState
 	clients             []*holderClient
-	closed              bool   // closeClients ran: acceptLoop must not register anyone
-	exitPayload         []byte // what closeClients sent, owed to clients accepted later
-	sess                *ssh.Session
+	closed              bool      // closeClients ran: acceptLoop must not register anyone
+	exitPayload         []byte    // what closeClients sent, owed to clients accepted later
+	pty                 requester // the session channel: window changes
 	stdin               io.WriteCloser
 	doneCh              chan struct{}
 	once                sync.Once

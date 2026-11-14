@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -55,6 +56,18 @@ type fakeSandbox struct {
 	sessions     int
 	later        func() // optional, run when a later session's exec arrives
 
+	// Route M-b (contract sections 3 and 7).
+	envs           []string      // "session:NAME=value" for every env request
+	subsystem      string        // the agent session's subsystem
+	mainMarked     bool          // the agent session's main-session request
+	refuseRaw      bool          // refuse OPENSHELL_MAIN_RAW_INPUT
+	refuseMain     bool          // refuse the subsystem
+	refuseMark     bool          // refuse the main-session request
+	handoverStatus int           // -1: close without a status
+	handoverGate   chan struct{} // answer the hand-over only once closed (nil: at once)
+	handoverStdin  bytes.Buffer
+	handoverCmd    string
+
 	started chan struct{} // closed when exec is accepted
 	ch      ssh.Channel   // the session channel, for the test to script
 }
@@ -76,7 +89,7 @@ func startFakeSandbox(t *testing.T, sockPath string) *fakeSandbox {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fs := &fakeSandbox{t: t, ln: ln, started: make(chan struct{})}
+	fs := &fakeSandbox{t: t, ln: ln, started: make(chan struct{}), handoverStatus: 0}
 	t.Cleanup(func() { _ = ln.Close() })
 
 	go func() {
@@ -118,29 +131,60 @@ func startFakeSandbox(t *testing.T, sockPath string) *fakeSandbox {
 				fs.ch = ch
 			}
 			fs.mu.Unlock()
-			go fs.handleRequests(ch, n, chReqs)
-			go func() {
+			stdinDone := make(chan struct{})
+			go fs.handleRequests(ch, n, chReqs, stdinDone)
+			go func(session int) {
+				defer close(stdinDone)
 				buf := make([]byte, 4096)
 				for {
-					n, err := ch.Read(buf)
-					if n > 0 {
+					k, err := ch.Read(buf)
+					if k > 0 {
 						fs.mu.Lock()
-						fs.stdin.Write(buf[:n])
+						if session == 0 {
+							fs.stdin.Write(buf[:k])
+						} else {
+							fs.handoverStdin.Write(buf[:k])
+						}
 						fs.mu.Unlock()
 					}
 					if err != nil {
 						return
 					}
 				}
-			}()
+			}(n)
 		}
 	}()
 	return fs
 }
 
-func (fs *fakeSandbox) handleRequests(ch ssh.Channel, n int, reqs <-chan *ssh.Request) {
+func (fs *fakeSandbox) handleRequests(ch ssh.Channel, n int, reqs <-chan *ssh.Request, stdinDone <-chan struct{}) {
 	for req := range reqs {
 		switch req.Type {
+		case "env":
+			var p struct{ Name, Value string }
+			_ = ssh.Unmarshal(req.Payload, &p)
+			fs.mu.Lock()
+			fs.envs = append(fs.envs, fmt.Sprintf("%d:%s=%s", n, p.Name, p.Value))
+			refuse := fs.refuseRaw && p.Name == "OPENSHELL_MAIN_RAW_INPUT"
+			fs.mu.Unlock()
+			_ = req.Reply(!refuse, nil)
+		case "subsystem":
+			var p struct{ Name string }
+			_ = ssh.Unmarshal(req.Payload, &p)
+			fs.mu.Lock()
+			fs.subsystem = p.Name
+			refuse := fs.refuseMain
+			fs.mu.Unlock()
+			_ = req.Reply(!refuse, nil)
+			if !refuse && n == 0 {
+				close(fs.started)
+			}
+		case "yoloctl-main-session":
+			fs.mu.Lock()
+			fs.mainMarked = true
+			refuse := fs.refuseMark
+			fs.mu.Unlock()
+			_ = req.Reply(!refuse, nil)
 		case "pty-req":
 			var p struct {
 				Term          string
@@ -166,13 +210,22 @@ func (fs *fakeSandbox) handleRequests(ch ssh.Channel, n int, reqs <-chan *ssh.Re
 			_ = req.Reply(true, nil)
 			if n > 0 {
 				fs.mu.Lock()
-				later := fs.later
+				later, gate, status := fs.later, fs.handoverGate, fs.handoverStatus
+				fs.handoverCmd = p.Command
 				fs.mu.Unlock()
 				if later != nil {
 					later()
 				}
-				_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
-				_ = ch.Close()
+				go func() {
+					<-stdinDone
+					if gate != nil {
+						<-gate
+					}
+					if status >= 0 {
+						_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{uint32(status)}))
+					}
+					_ = ch.Close()
+				}()
 				continue
 			}
 			close(fs.started)

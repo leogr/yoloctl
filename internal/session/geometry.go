@@ -15,7 +15,12 @@ func sshSize(g terminal.Geometry) sshGeometry {
 	return sshGeometry{uint32(g.Cols), uint32(g.Rows), uint32(g.Cols * g.CellWidth), uint32(g.Rows * g.CellHeight)}
 }
 
-func requestPTY(s *ssh.Session, term string, g terminal.Geometry) error {
+// requester sends channel requests: an ssh.Session or a raw ssh.Channel.
+type requester interface {
+	SendRequest(name string, wantReply bool, payload []byte) (bool, error)
+}
+
+func requestPTY(s requester, term string, g terminal.Geometry) error {
 	if !g.Valid() {
 		return errors.New("invalid PTY geometry")
 	}
@@ -32,7 +37,7 @@ func requestPTY(s *ssh.Session, term string, g terminal.Geometry) error {
 	return err
 }
 
-func resizePTY(s *ssh.Session, g terminal.Geometry) error {
+func resizePTY(s requester, g terminal.Geometry) error {
 	if !g.Valid() {
 		return errors.New("invalid PTY geometry")
 	}

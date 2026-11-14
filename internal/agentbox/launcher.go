@@ -13,6 +13,9 @@ type LauncherSupport struct {
 	// Exec: the session starts with today's exec and no warning (a privileged
 	// box while its main-session request is not available in this build).
 	Exec bool
+	// Privileged: the box's own endpoint takes the session; a main session
+	// starts with exec after the endpoint's main-session request.
+	Privileged bool
 }
 
 // RecreateWarning is the directive-56 warning for a box that needs recreate.
