@@ -34,8 +34,8 @@
     },
     {
       "file": "patches/0005-main-raw-input.patch",
-      "sha256": "7fadc58bebdfe7b8e00a1f270e4ebba4050448fae63f12012f446cf5b020c289",
-      "result_tree": "881554d3baa2e95cf12575b42652ff67c04ffcca"
+      "sha256": "1ba679a6fa8bd4dc39e9921215ba27afb61db88385e0d1b17b0baac0541de42c",
+      "result_tree": "967174fb268870191ce550bfb96a48aff96fa5fd"
     }
   ],
   "source_dir": "OpenShell-patch2-signed",

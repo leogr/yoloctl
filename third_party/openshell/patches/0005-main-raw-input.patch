@@ -14,11 +14,12 @@ owns stdin, the main process is unavailable, or OPENSHELL_MAIN_READ_ONLY=1 is
 also requested, the request itself fails, followed by the existing "cannot
 connect to the canonical main process" diagnostic and status 1. A client that
 asked for raw input therefore never mistakes a refusal for an owned attachment
-and is never a silent viewer. Without the switch the behaviour is upstream's,
-unchanged.
+and is never a silent viewer. The lease's owner token is recorded on the
+channel before any await, so dropping the connection's handler mid-request
+releases it. Without the switch the behaviour is upstream's, unchanged.
 
 diff --git a/crates/openshell-supervisor-process/src/ssh.rs b/crates/openshell-supervisor-process/src/ssh.rs
-index 8b7361d7..49c3731c 100644
+index 8b7361d7..4e3cfd26 100644
 --- a/crates/openshell-supervisor-process/src/ssh.rs
 +++ b/crates/openshell-supervisor-process/src/ssh.rs
 @@ -47,6 +47,28 @@ mod peer_stream;
@@ -89,15 +90,20 @@ index 8b7361d7..49c3731c 100644
                      // The subsystem is supported, but its terminal is unavailable.
                      // A bare request failure hides this reason in OpenSSH clients.
                      session.channel_success(channel)?;
-@@ -789,6 +829,19 @@ impl russh::server::Handler for SshHandler {
+@@ -789,6 +829,24 @@ impl russh::server::Handler for SshHandler {
                  .channels
                  .get_mut(&channel)
                  .expect("main channel existence checked above");
 +            // A raw-input attachment must own stdin: when another attachment
 +            // owns it, refuse instead of attaching read-only.
-+            let raw_lease = if raw_input {
++            // The owner token is recorded before any await, so the handler's
++            // drop releases the lease even if this request is cancelled.
++            let raw_input_sender = if raw_input {
 +                match main_session.acquire_input() {
-+                    Ok(lease) => Some(lease),
++                    Ok((owner, input)) => {
++                        state.main_input_owner = Some(owner);
++                        Some(input)
++                    }
 +                    Err(error) => {
 +                        main_session.end_terminal_attachment();
 +                        return refuse_raw_main(session, channel, error, line_ending);
@@ -109,17 +115,16 @@ index 8b7361d7..49c3731c 100644
              state.main_attached = true;
              if let Some(pty) = state.pty_request.take() {
                  main_session
-@@ -802,6 +855,9 @@ impl russh::server::Handler for SshHandler {
+@@ -802,6 +860,8 @@ impl russh::server::Handler for SshHandler {
              }
              let (input, warning) = if state.main_read_only {
                  (None, None)
-+            } else if let Some((owner, input)) = raw_lease {
-+                state.main_input_owner = Some(owner);
++            } else if let Some(input) = raw_input_sender {
 +                (Some(InputSender::Main(input)), None)
              } else {
                  match main_session.acquire_input() {
                      Ok((owner, input)) => {
-@@ -918,6 +974,12 @@ impl russh::server::Handler for SshHandler {
+@@ -918,6 +978,12 @@ impl russh::server::Handler for SshHandler {
          {
              state.main_read_only = true;
          }
@@ -132,7 +137,7 @@ index 8b7361d7..49c3731c 100644
          session.channel_success(channel)?;
          Ok(())
      }
-@@ -958,7 +1020,7 @@ impl russh::server::Handler for SshHandler {
+@@ -958,7 +1024,7 @@ impl russh::server::Handler for SshHandler {
              return Ok(());
          }
          let denied_prefix = state.main_input_pending && state.main_detach_prefix_pending;
@@ -141,7 +146,40 @@ index 8b7361d7..49c3731c 100644
              filter_main_detach_sequence(&mut state.main_detach_prefix_pending, data)
          } else {
              (data.to_vec(), false)
-@@ -2080,6 +2142,184 @@ mod tests {
+@@ -1718,6 +1784,23 @@ mod tests {
+         main_session: Option<Arc<MainSession>>,
+         boundary_exec: Arc<openshell_sandbox_backend::BoundaryExec>,
+         client_config: russh::client::Config,
++    ) -> russh::client::Handle<AcceptAnyServerKey> {
++        test_client_on(
++            &tokio::runtime::Handle::current(),
++            main_session,
++            boundary_exec,
++            client_config,
++        )
++        .await
++    }
++
++    // Like test_client, with the server spawned on `server_runtime`, so a test
++    // can drop the connection's handler mid-request by shutting it down.
++    async fn test_client_on(
++        server_runtime: &tokio::runtime::Handle,
++        main_session: Option<Arc<MainSession>>,
++        boundary_exec: Arc<openshell_sandbox_backend::BoundaryExec>,
++        client_config: russh::client::Config,
+     ) -> russh::client::Handle<AcceptAnyServerKey> {
+         let host_key = {
+             let mut rng = rand::rng();
+@@ -1735,7 +1818,7 @@ mod tests {
+             main_session,
+         );
+         let (server_stream, client_stream) = tokio::io::duplex(64 * 1024);
+-        tokio::spawn(async move {
++        server_runtime.spawn(async move {
+             if let Ok(session) =
+                 russh::server::run_stream(Arc::new(server_config), server_stream, handler).await
+             {
+@@ -2080,6 +2163,298 @@ mod tests {
          main_session.release_input(owner);
      }
  
@@ -321,6 +359,120 @@ index 8b7361d7..49c3731c 100644
 +            "canonical main process already finished",
 +        )
 +        .await;
++    }
++
++    struct PendingResizeTerminal {
++        entered: tokio::sync::Notify,
++    }
++
++    #[async_trait::async_trait]
++    impl rpc_test::BoundaryTerminal for PendingResizeTerminal {
++        async fn resize(
++            &self,
++            _cols: u16,
++            _rows: u16,
++        ) -> Result<(), openshell_isolation_interface::contract::BackendError> {
++            self.entered.notify_one();
++            std::future::pending().await
++        }
++    }
++
++    struct IdleProcess;
++
++    #[async_trait::async_trait]
++    impl rpc_test::BoundaryProcess for IdleProcess {
++        async fn wait(
++            &self,
++        ) -> Result<
++            openshell_isolation_interface::contract::BoundaryExitStatus,
++            openshell_isolation_interface::contract::BackendError,
++        > {
++            std::future::pending().await
++        }
++
++        async fn signal(
++            &self,
++            _signal: openshell_isolation_interface::contract::BoundarySignal,
++        ) -> Result<(), openshell_isolation_interface::contract::BackendError> {
++            Ok(())
++        }
++
++        async fn terminate(
++            &self,
++        ) -> Result<(), openshell_isolation_interface::contract::BackendError> {
++            Ok(())
++        }
++    }
++
++    // A raw-input request cancelled while it awaits the terminal resize (after
++    // acquiring stdin) leaves no stale lease: the handler's drop releases it.
++    // russh runs the request inline in the session task, so the cancellation
++    // is that task being dropped, here by shutting its runtime down.
++    #[tokio::test]
++    async fn main_attachment_raw_input_cancelled_during_resize_releases_stdin() {
++        let (stdin, _stdin_peer) = tokio::io::duplex(1024);
++        let (stdout, _stdout_peer) = tokio::io::duplex(1024);
++        let terminal = Arc::new(PendingResizeTerminal {
++            entered: tokio::sync::Notify::new(),
++        });
++        let main_session = MainSession::from_boundary(
++            rpc_test::ProcessAttachment {
++                stdin: Box::new(stdin),
++                stdout: Box::new(stdout),
++                stderr: None,
++                terminal: Some(rpc_test::terminal(terminal.clone())),
++            },
++            rpc_test::process(Arc::new(IdleProcess)),
++        );
++        let server_runtime = tokio::runtime::Builder::new_multi_thread()
++            .worker_threads(1)
++            .enable_all()
++            .build()
++            .unwrap();
++        let client = test_client_on(
++            server_runtime.handle(),
++            Some(main_session.clone()),
++            rpc_test::exec(Arc::new(RejectingExec)),
++            russh::client::Config::default(),
++        )
++        .await;
++        let mut channel = client.channel_open_session().await.unwrap();
++        channel
++            .request_pty(true, "xterm", 80, 24, 0, 0, &[])
++            .await
++            .unwrap();
++        assert!(matches!(
++            next_main_event(&mut channel).await,
++            russh::ChannelMsg::Success
++        ));
++        channel
++            .set_env(true, "OPENSHELL_MAIN_RAW_INPUT", "1")
++            .await
++            .unwrap();
++        assert!(matches!(
++            next_main_event(&mut channel).await,
++            russh::ChannelMsg::Success
++        ));
++        channel
++            .request_subsystem(true, "openshell-main")
++            .await
++            .unwrap();
++        tokio::time::timeout(Duration::from_secs(5), terminal.entered.notified())
++            .await
++            .expect("the request reaches the resize");
++        assert!(
++            main_session.acquire_input().is_err(),
++            "the raw request holds stdin while resizing"
++        );
++        tokio::task::spawn_blocking(move || {
++            server_runtime.shutdown_timeout(Duration::from_secs(5));
++        })
++        .await
++        .unwrap();
++        let (owner, _) = main_session
++            .acquire_input()
++            .expect("cancellation releases the raw lease");
++        main_session.release_input(owner);
 +    }
 +
      #[test]

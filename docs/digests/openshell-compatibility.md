@@ -112,7 +112,8 @@ Ctrl-D and Ctrl-P Ctrl-Q detach filter. The subsystem request succeeds only
 once the attachment holds the stdin lease; when another attachment owns stdin,
 the main process is unavailable, or `OPENSHELL_MAIN_READ_ONLY=1` is also set, the
 request itself fails before the diagnostic and status 1, never attaching
-read-only. Without the switch the behaviour is upstream's. Releases may carry it
+read-only. The lease is recorded on the channel before any await, so a dropped
+handler releases it. Without the switch the behaviour is upstream's. Releases may carry it
 as an optional fifth patch. [34](#source-34)
 
 [FACT] Inside a box, a `kill` or `rt_sigqueueinfo` aimed at a positive PID is
@@ -227,4 +228,4 @@ operator-box case was not rerun separately. [26](#source-26)
 31. <a id="source-31"></a> [Go 1.27.3 os/exec_unix.go](https://github.com/golang/go/blob/go1.27.3/src/os/exec_unix.go#L77-L91) — `(*Process).signal`: pidfd when `checkPidfd` passes (`os/pidfd_linux.go` L154-L197), otherwise `kill`; `runtime/os_linux.go` L480 sets `SA_RESTART` on every handler.
 32. <a id="source-32"></a> [Linux v6.12 seccomp_filter.rst](https://github.com/torvalds/linux/blob/v6.12/Documentation/userspace-api/seccomp_filter.rst#L276-L282) — `SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV` semantics.
 33. <a id="source-33"></a> [cmd/yoloctl/signals.go](../../cmd/yoloctl/signals.go#L17-L50) — `commandSignalContext`: first signal forwarded, a second cancels; `signalOnce` in `signal_once_linux_test.go` (`tgkill`), used by `attach_signal_test.go`, `signals_test.go` and `signals_tui_test.go`.
-34. <a id="source-34"></a> [Patch 5](../../third_party/openshell/patches/0005-main-raw-input.patch#L1-L328) — `filter_main_detach_sequence` bypass, `main_raw_input`, `refuse_raw_main` and its four tests; `internal/openshell/release.go` `qualifiedPatch5Name`, `qualifiedPatchStack`; release_test.go `TestQualifiedPatchStackAcceptsOptionalFifthPatch`.
+34. <a id="source-34"></a> [Patch 5](../../third_party/openshell/patches/0005-main-raw-input.patch#L1-L480) — `filter_main_detach_sequence` bypass, `main_raw_input`, `refuse_raw_main` and its five tests; `internal/openshell/release.go` `qualifiedPatch5Name`, `qualifiedPatchStack`; release_test.go `TestQualifiedPatchStackAcceptsOptionalFifthPatch`.
