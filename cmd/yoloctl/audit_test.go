@@ -61,7 +61,7 @@ func TestAuditFollowReportsOnlyInitialAndLossChanges(t *testing.T) {
 					summary.Drops = 2
 				}
 				if poll >= 5 {
-					summary.MetadataGaps = 3
+					summary.MetadataGaps = 3 + uint64(poll-5)
 					summary.Gap = poll < 7
 				}
 				return encoder.Encode(audit.Frame{Type: "summary", Summary: &summary})
@@ -253,5 +253,35 @@ func TestAuditRegistrationOnHostAndInContainer(t *testing.T) {
 		if found != (signal == "") {
 			t.Fatal("host-only registration differs", signal, found)
 		}
+	}
+}
+
+func TestAuditFollowMetadataCounterGrowthIsOneDegradedState(t *testing.T) {
+	var out, notices bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetContext(t.Context())
+	cmd.SetOut(&out)
+	cmd.SetErr(&notices)
+	cmd.Flags().Bool("json", true, "")
+	cmd.Flags().Bool("verbose", false, "")
+	gaps := []uint64{0, 1, 251, 501, 0, 17}
+	n := 0
+	target := controllerTarget{Call: func(_ context.Context, _ controller.Request, streams controller.ClientIO) error {
+		s := audit.Summary{MetadataGaps: gaps[n]}
+		n++
+		return json.NewEncoder(streams.Out).Encode(audit.Frame{Type: "summary", Summary: &s})
+	}}
+	stop := errors.New("finished")
+	err := streamAuditLogs(cmd, target, audit.Query{}, true, func(context.Context) error {
+		if n == len(gaps) {
+			return stop
+		}
+		return nil
+	})
+	if !errors.Is(err, stop) || out.Len() != 0 {
+		t.Fatal(err, out.String())
+	}
+	if strings.Count(notices.String(), "Audit interval ") != 4 || strings.Contains(notices.String(), "metadata-gaps=251") || strings.Contains(notices.String(), "metadata-gaps=501") {
+		t.Fatal("counter growth repeated degraded state, or recovery/new degradation hidden", notices.String())
 	}
 }

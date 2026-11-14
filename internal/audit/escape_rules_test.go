@@ -50,8 +50,9 @@ func TestEscapeFamilyPreservesExistingRulesExactly(t *testing.T) {
 	if !ok {
 		t.Fatal("escape family boundary missing")
 	}
-	// Complete original rules.yaml at 3e04d2b, including the broker exception.
-	const old = "6b1b30b7d90ec4a614365e0d083e34d64bcd30fb9aed623129212b9d36742bae"
+	// Pre-existing rules after the approved output-only heading/availability
+	// cleanup; output_readability_test pins every remaining template token.
+	const old = "946f2ab242eae20fe62f0da310ea828303d0f31dcdafdfcd0f99b85fb2aa58d1"
 	if got := fmt.Sprintf("%x", sha256.Sum256([]byte(before))); got != old {
 		t.Fatalf("pre-existing rules changed: %s", got)
 	}

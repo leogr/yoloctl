@@ -62,7 +62,7 @@ func TestCustomRulesComposeWithStructuredPresentation(t *testing.T) {
 					}
 				}
 			}
-			if rule == "Customer defined rule" && !strings.Contains(text, "Audit event") {
+			if rule == "Customer defined rule" && !strings.Contains(text, "process=") {
 				t.Fatal("custom fixed-field fallback lost", text)
 			}
 		})

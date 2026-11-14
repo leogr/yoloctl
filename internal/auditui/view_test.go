@@ -141,7 +141,7 @@ func TestAuditViewIdlePollPreservesSelectionAndOnlyAppendsNewEvents(t *testing.T
 func TestAuditPrettyMessageFieldsAndColor(t *testing.T) {
 	event := audit.Event{Rule: "Yolo audit test", Severity: "Warning", Executable: "/tmp/probe\x1b[31m", Container: "host", Result: "SUCCESS", OutputFields: map[string]string{"proc.name": "probe", "user.name": "root", "user.uid": "0", "container.name": "<NA>", "fs.path.target": "/etc/target", "proc.args": "SECRET"}}
 	plain := EventText(event, EventOptions{})
-	for _, required := range []string{"(vm)", "Yolo audit test executable=", "process=probe", "user=root", "uid=0"} {
+	for _, required := range []string{"(vm)", "executable=", "process=probe", "user=root", "uid=0"} {
 		if !strings.Contains(plain, required) {
 			t.Fatal("missing field", required, plain)
 		}
@@ -168,7 +168,7 @@ func TestAuditPrettyMessageFieldsAndColor(t *testing.T) {
 	m := New(t.Context(), "test", nil).WithColor(true)
 	m, _ = apply(m, tea.WindowSizeMsg{Width: 120, Height: 32})
 	m, _ = apply(m, loaded{Batch: Batch{Events: []audit.Event{event}, Summary: audit.Summary{Last: 1}}})
-	if !strings.Contains(ansi.Strip(m.View().Content), "Yolo audit test executable=") {
+	if !strings.Contains(ansi.Strip(m.View().Content), "executable=") {
 		t.Fatal("selected message hidden", m.View().Content)
 	}
 	m, _ = apply(m, key(tea.KeyEnter))

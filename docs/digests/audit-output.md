@@ -1,27 +1,28 @@
 # Audit event output and following
 
-Verification: `1f70a4ce74a6c3979ef7838f5748175f56c1bc0d` and accompanying changes.
+Verification: `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes.
 
 [FACT] `audit logs --follow` prints the first bounded-history summary to stderr,
-then prints another only when collector drops, metadata gaps or retention-gap
-state changes. Sliding interval times, page counts and cursors do not produce
-notices. Each completed page advances the cursor even when filtering yields no
-events. JSONL stdout contains complete retained events, never summaries.
+then prints another when the collector-drop count, the metadata-gap state
+(zero versus nonzero) or retention-gap state changes. Growth of an already
+nonzero metadata-gap counter stays quiet; status/export keep the counters.
+Sliding interval times, page counts and cursors do not produce notices. Each
+completed page advances the cursor even when filtering yields no events. JSONL stdout contains complete retained events, never summaries.
 [1](#source-1) [2](#source-2)
 
 [FACT] Human-readable logs use the shared glyphs and palette roles, preserving
 Falco's priority word, origin and bold rule. The next indented block reconstructs
-the pinned rule message; `--verbose` adds retained fields with aligned key/value
-columns. Wrapping uses four-space message continuations and eight-space field
-rows, terminal width or 100 columns for scripts. Origins remain `(vm)` for the
+the pinned rule message without repeating its heading or an availability
+assignment; `container_name` is omitted only when equal to the container ID.
+`--verbose` still lists all retained fields, including metadata availability.
+Wrapping uses four-space message continuations and eight-space field rows,
+terminal width or 100 columns for scripts. Origins remain `(vm)` for the
 literal `host` ID, `(unknown)` for no ID and `(no box)` for an unjoined container;
 none is proof of per-process confinement. `<NA>` assignments stay hidden in
 pretty output and retained in JSON. `--log-level`/`-q` filter only presentation;
-`--json` and exports keep all selected retained events. `--color` follows the
-shared policy: automatic colour only on terminals unless `NO_COLOR` or
-`TERM=dumb`; an explicit policy overrides it. Line-only commands never query
-the terminal. The TUI owns its background request and supplies the shared
-space-view palette after a reply; until then it uses ANSI16 plus faint.
+`--json` and exports keep all selected retained events. Colour follows shared
+policy. Line-only commands never query the terminal; the TUI supplies its
+space-view palette after a background reply, using ANSI16 plus faint meanwhile.
 [1](#source-1) [3](#source-3) [9](#source-9) [10](#source-10) [14](#source-14)
 
 [FACT] One prettylog engine folds only consecutive matching alerts within ten
@@ -35,13 +36,11 @@ stream and drains its pending summary. Writer errors remain errors, without
 retry. [9](#source-9) [11](#source-11) [12](#source-12) [15](#source-15)
 
 [FACT] The TUI retains at most 500 displayed logical rows and bounded snapshots,
-not a second raw-event backlog. Each summary owns its first displayed event's
-immutable details, even if that event's row was evicted; an unknown/fully evicted
-owner never resolves to a newer row. Enter shows aligned fields, with an explicit
-first-event label for a summary. Timer callbacks only retain rows and signal a
-one-slot wake; the Tea update path controls selection. Idle polls preserve
-selection. Filter reset closes the old stream and fences old loads/wakes;
-view exit or context cancellation closes pending timers. Only initial or newly
+not a second raw-event backlog. A summary retains its first displayed event's
+immutable details through eviction; an evicted owner never resolves to a newer
+row. Enter labels these as first-event details. Timer callbacks signal a one-slot
+wake; only Tea updates selection, which idle polls preserve. Filter reset closes
+the old stream and fences old loads/wakes; view exit or context cancellation closes pending timers. Only initial or newly
 filtered history requests a tail. The status band keeps service/errors and
 loss/gap state visible independently of event verbosity.
 [3](#source-3) [11](#source-11) [13](#source-13) [16](#source-16)
@@ -61,11 +60,11 @@ argv, environment, aggregate labels and buffers are not persisted. Unavailable
 metadata clears identity claims rather than retaining stale plugin values.
 [4](#source-4) [5](#source-5) [8](#source-8)
 
-[FACT] Existing records remain readable: pretty messages reconstruct the current
-pinned template from their older flattened fields. Missing process/user/name
-fields cannot be recovered from history. Updated rule outputs request the new
-fields for subsequent collection; explicit audit enable selects the updated
-rules digest. [4](#source-4) [5](#source-5) [6](#source-6) [7](#source-7)
+[FACT] Older records reconstruct current templates from retained flattened
+fields; missing fields cannot be recovered. Explicit audit enable selects the
+updated rules digest. Template regressions pin every remaining output token;
+retained records are not rewritten.
+[4](#source-4) [5](#source-5) [6](#source-6) [7](#source-7) [19](#source-19)
 
 [FACT] Every syscall rule requests the retained field allow-list through
 `append_output.extra_fields`, including custom rules whose output names no
@@ -95,3 +94,4 @@ shipped names retain the shipped template even when semantics differ. [5](#sourc
 16. <a id="source-16"></a> [CLI regressions](../../cmd/yoloctl/audit_logging_test.go#L46) — flags, unchanged JSON and failure drain.
 17. <a id="source-17"></a> [Composed presentation](../../internal/auditui/composition_test.go#L17) — custom and built-in names, selected numeric fields, privacy and shared final folding.
 18. <a id="source-18"></a> [Mandatory extraction](../../internal/audit/config.go#L1) — `Configuration`, `RulesDigest`.
+19. <a id="source-19"></a> [Readability regressions](../../internal/audit/output_readability_test.go#L1) — output-only token parity, current rendering of older messages, duplicate names and retained JSON fields; cmd/yoloctl/audit_test.go `TestAuditFollowMetadataCounterGrowthIsOneDegradedState`.

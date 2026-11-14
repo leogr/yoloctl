@@ -23,7 +23,7 @@ func TestRenderedRuleRetainsSelectedFieldsWithoutRawOutput(t *testing.T) {
 	if event.MetadataAvailable || event.Box != "" || event.OutputFields["yolo.box"] != "<NA>" || event.OutputFields["user.uid"] != "0" {
 		t.Fatal(event)
 	}
-	for _, part := range []string{"executable=/tmp/yolo-audit-test", "container=host", "box=<NA>", "process=yolo-audit-test", "user=root uid=0", "metadata_available=false"} {
+	for _, part := range []string{"executable=/tmp/yolo-audit-test", "container=host", "box=<NA>", "process=yolo-audit-test", "user=root uid=0"} {
 		if !strings.Contains(event.Output, part) {
 			t.Fatal("missing rendered field", part, event.Output)
 		}

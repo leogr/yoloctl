@@ -21,7 +21,7 @@ func TestCustomRuleUsesOnlyFixedSelectedFields(t *testing.T) {
 			}
 		}
 		if name == "Customer defined rule" {
-			if !strings.Contains(rendered, "Audit event") || !strings.Contains(rendered, "process=/usr/bin/example") || !strings.Contains(rendered, "uid=1000") || strings.Contains(rendered, "<NA>") {
+			if strings.Contains(rendered, "Audit event") || !strings.Contains(rendered, "process=/usr/bin/example") || !strings.Contains(rendered, "uid=1000") || strings.Contains(rendered, "<NA>") {
 				t.Fatal(rendered)
 			}
 		} else if strings.HasPrefix(rendered, "Audit event") {

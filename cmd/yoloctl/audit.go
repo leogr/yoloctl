@@ -355,8 +355,11 @@ func streamAuditLogs(cmd *cobra.Command, target controllerTarget, query audit.Qu
 			return err
 		}
 		// Count, cursors and interval timestamps describe each bounded page.
-		// Only the initial page and changes in loss/gap state need a notice.
-		if first || summary.Drops != previous.Drops || summary.MetadataGaps != previous.MetadataGaps || summary.Gap != previous.Gap {
+		// Report a metadata degradation/recovery, not each increment of its
+		// cumulative counter. Repeated missing metadata can grow on every
+		// syscall and would otherwise print a warning each one-second poll.
+		// Driver loss counts and retention-gap transitions remain visible.
+		if first || summary.Drops != previous.Drops || (summary.MetadataGaps > 0) != (previous.MetadataGaps > 0) || summary.Gap != previous.Gap {
 			level := prettylog.LevelInfo
 			if summary.Drops > 0 || summary.MetadataGaps > 0 || summary.Gap || !first {
 				level = prettylog.LevelWarn

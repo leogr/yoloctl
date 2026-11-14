@@ -40,7 +40,7 @@ func outputTemplate(rule string) string {
 	if template, ok := outputTemplates()[rule]; ok {
 		return template
 	}
-	return "Audit event process=%proc.exepath name=%proc.name user=%user.name uid=%user.uid container=%container.id container_name=%container.name file=%fd.name path=%fs.path.name source=%fs.path.source target=%fs.path.target remote=%fd.rip client=%fd.cip port=%fd.rport result=%evt.res uid_arg=%evt.arg.uid ruid=%evt.arg.ruid euid=%evt.arg.euid suid=%evt.arg.suid parent=%proc.pexepath box=%yolo.box space=%yolo.space account=%yolo.account agent=%yolo.agent runtime=%yolo.runtime_mode unconfined=%yolo.network_unconfined metadata_available=%yolo.metadata_available"
+	return "process=%proc.exepath name=%proc.name user=%user.name uid=%user.uid container=%container.id container_name=%container.name file=%fd.name path=%fs.path.name source=%fs.path.source target=%fs.path.target remote=%fd.rip client=%fd.cip port=%fd.rport result=%evt.res uid_arg=%evt.arg.uid ruid=%evt.arg.ruid euid=%evt.arg.euid suid=%evt.arg.suid parent=%proc.pexepath box=%yolo.box space=%yolo.space account=%yolo.account agent=%yolo.agent runtime=%yolo.runtime_mode unconfined=%yolo.network_unconfined"
 }
 
 var outputField = regexp.MustCompile(`%([a-z][a-z0-9_.]*)`)
@@ -104,6 +104,11 @@ func FormatPrettyOutput(e Event, format func(string, string) string) string {
 	var parts []string
 	remaining := 1024
 	for _, part := range strings.Fields(outputTemplate(e.Rule)) {
+		// A generated fallback name is often just the container ID. Keep
+		// both values in storage/JSON, without repeating it in the message.
+		if part == "container_name=%container.name" && fields["container.name"] == fields["container.id"] {
+			continue
+		}
 		missing := false
 		part = outputField.ReplaceAllStringFunc(part, func(token string) string {
 			value := fields[token[1:]]
