@@ -356,12 +356,23 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 	}
 	cfg := resolved.Config
 	running := resolved.Runtime == boxstate.RuntimeRunning
+	if !running {
+		// Start the box only the first time or after this operation's own
+		// stop: an expected run that stopped or vanished beside it is not
+		// started again. Decided here, before any check or start.
+		if err := container.ExpectedRunsFrom(ctx).StartAllowed(name, "starting it again for the session"); err != nil {
+			return "", err
+		}
+	}
 	if running && container.ExpectedRunsFrom(ctx) != nil {
 		// The run resolved here is the one a session starts on, unless this
-		// operation already started or stopped the box itself.
-		if d, err := c.Inspect(ctx, name); err == nil && d.Running {
-			container.ExpectedRunsFrom(ctx).ExpectIfUnset(name, container.RunOf(d))
+		// operation already started or stopped the box itself. An unreadable
+		// box is a plain failure: nothing goes ahead unbound.
+		d, err := c.Inspect(ctx, name)
+		if err != nil {
+			return "", fmt.Errorf("read box %s before its session: %w", name, err)
 		}
+		container.ExpectedRunsFrom(ctx).ExpectIfUnset(name, container.RunOf(d))
 	}
 
 	// A tracked box's conversation record changes only under its box lock,

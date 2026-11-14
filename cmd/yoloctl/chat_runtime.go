@@ -363,6 +363,10 @@ func validateManagedServer(cfg *agentbox.Config, r *managedchat.Room) error {
 }
 
 func ensureManagedServer(ctx context.Context, space string, store managedchat.Store, r *managedchat.Room, boxes []boxstate.Box, notice io.Writer) error {
+	// The server run this operation creates, starts or reads is the one its
+	// execs, session start and reload assume (container.ExpectedRuns): the
+	// record exists before any creation, so a created run is its own start.
+	ctx = container.WithExpectedRuns(ctx)
 	var current *boxstate.Box
 	for i := range boxes {
 		if boxes[i].Name == r.Server.Name {
@@ -422,6 +426,9 @@ func ensureManagedServer(ctx context.Context, space string, store managedchat.St
 		return err
 	}
 	if plan.NeedsCreate {
+		if err := container.ExpectedRunsFrom(ctx).StartAllowed(cfg.Name, "creating it again"); err != nil {
+			return err
+		}
 		if err := newManagedLiveApplier(c, notice).Create(ctx, cfg, policy); err != nil {
 			return err
 		}
@@ -430,12 +437,14 @@ func ensureManagedServer(ctx context.Context, space string, store managedchat.St
 	if err != nil {
 		return err
 	}
-	// The server run this operation created, started or read is the one its
-	// execs, session start and reload assume; it never starts it again.
-	ctx = container.WithExpectedRuns(ctx)
+	// A run this operation created or already expects is never started
+	// again; a server box found stopped at its first read is started once.
 	if details.Running {
 		container.ExpectedRunsFrom(ctx).ExpectIfUnset(cfg.Name, container.RunOf(details))
 	} else {
+		if err := container.ExpectedRunsFrom(ctx).StartAllowed(cfg.Name, "starting it again"); err != nil {
+			return err
+		}
 		if err := startExistingAgentboxContainerPrepared(ctx, c, cfg, prepared); err != nil {
 			return err
 		}

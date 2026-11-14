@@ -11,8 +11,12 @@ import (
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/agentprofile"
+	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/session"
+	vmhost "github.com/leogr/yoloctl/internal/vm"
+	"gopkg.in/yaml.v3"
 )
 
 const expectedRunID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -104,5 +108,52 @@ func TestSessionHolderStartsOnTheSameRun(t *testing.T) {
 	ctx, c, _ := expectingRun(t, `"Id":"`+expectedRunID+`","State":{"Status":"running","Running":true,"Pid":42,"StartedAt":"2026-11-14T10:00:00.1Z"}`)
 	if err := startSessionHolder(ctx, c, "coder", session.UnitSpec{Agentbox: "coder"}); stoppedDuring(err) || !started {
 		t.Fatalf("same run refused: %v", err)
+	}
+}
+
+// Row 12/13 at the full ensureAgentSession entry: an operation that already
+// expects a run of the box and now resolves it stopped ends plainly, before
+// any container start; without an expectation the first start is allowed.
+func TestEnsureSessionDoesNotStartAnExpectedRunAgain(t *testing.T) {
+	f := newIdentityFixture(t)
+	_ = f
+	cfg := &agentbox.Config{SchemaVersion: agentbox.SchemaVersion, Name: "coder", Space: "work", Agent: "none", Account: "none", Image: defaultAgentboxImage, Workdir: agentbox.NewEphemeralWorkdir("coder")}
+	manifest, _ := layout.BoxPath("work", "coder")
+	if err := os.MkdirAll(filepath.Dir(manifest), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifest, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	previousResolver, previousBinary := newBoxStateResolver, ensureVMBinaryFn
+	t.Cleanup(func() { newBoxStateResolver, ensureVMBinaryFn = previousResolver, previousBinary })
+	ensureVMBinaryFn = func(context.Context, *container.Client) error { return nil }
+	newBoxStateResolver = func() boxstate.Resolver {
+		return boxstate.Resolver{
+			ListSpaces: func(context.Context) ([]vmhost.Instance, error) {
+				return []vmhost.Instance{{Name: "work", Status: "Running"}}, nil
+			},
+			ListContainers: func(context.Context, string) ([]container.Container, error) {
+				return []container.Container{{Name: "coder", Status: "Exited (0)"}}, nil
+			},
+			ProbeSession: func(context.Context, string, string, bool) boxstate.SessionInfo {
+				return boxstate.SessionInfo{State: boxstate.SessionNone}
+			},
+		}
+	}
+	ctx := container.WithExpectedRuns(held(t.Context()))
+	container.ExpectedRunsFrom(ctx).Expect("coder", container.Run{ID: expectedRunID, StartedAt: "2026-11-14T10:00:00.1Z", PID: 42})
+	_, err = ensureAgentSession(ctx, container.New("work"), "work", "coder", io.Discard, true, nil, sessionStartOptions{})
+	if !stoppedDuring(err) || !strings.Contains(err.Error(), "starting it again") {
+		t.Fatalf("an expected run was started again: %v", err)
+	} // Control: a first start (no expectation) passes this guard and goes on
+	// to the session's own checks.
+	_, err = ensureAgentSession(container.WithExpectedRuns(held(t.Context())), container.New("work"), "work", "coder", io.Discard, true, nil, sessionStartOptions{})
+	if stoppedDuring(err) {
+		t.Fatalf("a first start was refused: %v", err)
 	}
 }

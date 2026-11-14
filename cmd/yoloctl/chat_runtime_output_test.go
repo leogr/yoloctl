@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -113,6 +114,22 @@ func TestChatRuntimeLifecycleKeepsStructuredOutput(t *testing.T) {
 func TestChatEnsureLifecycleKeepsStructuredOutput(t *testing.T) {
 	for _, stopped := range []bool{false, true} {
 		t.Run(fmt.Sprintf("stopped=%v", stopped), func(t *testing.T) {
+			runChatEnsureLifecycle(t, stopped, false)
+		})
+	}
+}
+
+// An operation that already expects a run of the server box (it started or
+// read it earlier) and now reads it stopped ends plainly: the server box is
+// not started again (stop-box slice 3, expected run).
+func TestChatEnsureDoesNotStartAnExpectedRunAgain(t *testing.T) {
+	runChatEnsureLifecycle(t, true, true)
+}
+
+func runChatEnsureLifecycle(t *testing.T, stopped, expected bool) {
+	t.Helper()
+	{
+		{
 			action := "ensure-absent"
 			if stopped {
 				action = "ensure-stopped"
@@ -178,7 +195,20 @@ func TestChatEnsureLifecycleKeepsStructuredOutput(t *testing.T) {
 			oldOut := os.Stdout
 			os.Stdout = response
 			t.Cleanup(func() { os.Stdout = oldOut; _ = response.Close(); _ = notice.Close() })
-			err = ensureManagedServer(t.Context(), cfg.Space, store, room, boxes, notice)
+			ctx := t.Context()
+			if expected {
+				ctx = container.WithExpectedRuns(ctx)
+				container.ExpectedRunsFrom(ctx).Expect(cfg.Name, container.Run{ID: strings.Repeat("f", 64), StartedAt: "2026-11-14T09:00:00.1Z", PID: 41})
+			}
+			err = ensureManagedServer(ctx, cfg.Space, store, room, boxes, notice)
+			if expected {
+				calls, _ := os.ReadFile(callsPath)
+				var stoppedErr *container.StoppedDuringOperation
+				if !errors.As(err, &stoppedErr) || strings.Contains(string(calls), "nerdctl start ") {
+					t.Fatalf("an expected server run was started again: %v\n%s", err, calls)
+				}
+				return
+			}
 			if err == nil || !strings.Contains(err.Error(), "managed server image lacks required AIRC interfaces: managed chat requires the native controller") {
 				t.Fatalf("did not reach the deliberate post-lifecycle probe failure: %v", err)
 			}
@@ -207,7 +237,7 @@ func TestChatEnsureLifecycleKeepsStructuredOutput(t *testing.T) {
 			if (!stopped && (runs != 1 || starts != 0)) || (stopped && (runs != 0 || starts != 1)) {
 				t.Errorf("unexpected ensure create/start/replay: runs=%d starts=%d", runs, starts)
 			}
-		})
+		}
 	}
 }
 
@@ -227,7 +257,7 @@ func chatOutputFixture(t *testing.T, action string) (*agentbox.Config, string) {
 	script := fmt.Sprintf(`#!/bin/sh
 set -eu
 printf '%%s\n' "$*" >> "$START_TEST_FIXTURE/calls"
-case "$*" in *'nerdctl start '*) touch "$START_TEST_FIXTURE/started" ;; esac
+case "$*" in *'nerdctl start '*|*' run '*) touch "$START_TEST_FIXTURE/started" ;; esac
 case "$*" in
   *'nerdctl ps'*) if [ "$CHAT_TEST_ACTION" = storage-cleanup ] || [ "$CHAT_TEST_ACTION" = ensure-absent ]; then exit 0; fi; printf '{"Names":"coder","Status":"Exited (0)"}\n' ;;
   *'nerdctl images'*) printf '{"Repository":"yoloctl/agentbox-composed","Tag":"obsolete","ID":"sha256:%s"}\n' ;;

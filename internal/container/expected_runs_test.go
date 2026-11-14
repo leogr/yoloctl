@@ -120,3 +120,65 @@ func TestClientRecordsItsOwnStartsAndStops(t *testing.T) {
 		t.Fatal("checked without an expectation")
 	}
 }
+
+// The operation's own start whose run cannot be read back leaves the box
+// with an unknown expectation: later checks fail, never pass unbound.
+func TestUnreadableStartedRunFailsLaterChecks(t *testing.T) {
+	c, set, log := expectedRunEngine(t)
+	set("by-id", runT)
+	ctx := WithExpectedRuns(t.Context())
+	// The read before the start names the box; then the read-back breaks.
+	dir := filepath.Dir(log)
+	script, err := os.ReadFile(filepath.Join(dir, "limactl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	broken := strings.Replace(string(script), `*"sudo nerdctl start `+runT+`") exit 0 ;;`, `*"sudo nerdctl start `+runT+`") printf 'not json' > "$EXPECTED_RUN_DIR/by-id"; exit 0 ;;`, 1)
+	if err := os.WriteFile(filepath.Join(dir, "limactl"), []byte(broken), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Start(ctx, runT); err != nil {
+		t.Fatal(err)
+	}
+	set("by-name", runC)
+	var unknown *RunUnknown
+	if _, err := c.CheckExpectedRun(ctx, "coder", "the session start"); !errors.As(err, &unknown) {
+		t.Fatalf("unread run passed: %v", err)
+	}
+	// A read without a start time is not a full identity either.
+	runs := ExpectedRunsFrom(WithExpectedRuns(t.Context()))
+	runs.Expect("coder", Run{ID: runT})
+	if err := runs.Check("coder", details(runT, "", 42, true), "x"); !errors.As(err, &unknown) {
+		t.Fatalf("ID-only identity passed: %v", err)
+	}
+}
+
+// The read that names the started box fails: no engine start.
+func TestStartWithoutItsBoxReadStartsNothing(t *testing.T) {
+	c, _, log := expectedRunEngine(t) // by-id is never written: the read fails
+	if err := c.Start(WithExpectedRuns(t.Context()), runT); err == nil {
+		t.Fatal("started without knowing its box")
+	}
+	raw, _ := os.ReadFile(log)
+	if strings.Contains(string(raw), "nerdctl start") {
+		t.Fatalf("engine start submitted:\n%s", raw)
+	}
+}
+
+// StartAllowed: a first start or one after the operation's own stop; an
+// expected run that stopped beside it is not started again.
+func TestStartAllowedOnlyForAFirstStartOrAfterOwnStop(t *testing.T) {
+	runs := ExpectedRunsFrom(WithExpectedRuns(t.Context()))
+	if err := runs.StartAllowed("coder", "x"); err != nil {
+		t.Fatal("first start refused", err)
+	}
+	runs.Expect("coder", RunOf(details(runT, "s", 1, true)))
+	var stopped *StoppedDuringOperation
+	if err := runs.StartAllowed("coder", "starting it again"); !errors.As(err, &stopped) {
+		t.Fatalf("an expected run was started again: %v", err)
+	}
+	runs.stopped(runT)
+	if err := runs.StartAllowed("coder", "x"); err != nil {
+		t.Fatal("start after the operation's own stop refused", err)
+	}
+}

@@ -112,8 +112,21 @@ func (e *StoppedDuringOperation) Error() string {
 	return fmt.Sprintf("box %s stopped during the operation, after its last start or read, before %s", e.Box, e.Next)
 }
 
+// RunUnknown is the plain failure of an operation that started or read a run
+// of box but could not read that run's identity (ID and start time): no later
+// effect that assumes the run goes ahead unbound.
+type RunUnknown struct {
+	Box, Next string
+}
+
+func (e *RunUnknown) Error() string {
+	return fmt.Sprintf("the run of box %s could not be read after its start or read; stopping before %s", e.Box, e.Next)
+}
+
 // Check compares a read of box's container with the expected run. Without
-// an expectation it passes. A nil read is an absent container.
+// an expectation it passes. A nil read is an absent container. An expected
+// run without its full identity (unread after a start, or without a start
+// time) never passes.
 func (e *ExpectedRuns) Check(box string, d *Details, next string) error {
 	if e == nil {
 		return nil
@@ -124,12 +137,31 @@ func (e *ExpectedRuns) Check(box string, d *Details, next string) error {
 	if !ok {
 		return nil
 	}
-	if expected == nil || d == nil || !d.Running || d.ID != expected.ID ||
-		expected.StartedAt != "" && d.StartedAt != expected.StartedAt ||
+	if expected != nil && (expected.ID == "" || expected.StartedAt == "") {
+		return &RunUnknown{Box: box, Next: next}
+	}
+	if expected == nil || d == nil || !d.Running || d.ID != expected.ID || d.StartedAt != expected.StartedAt ||
 		expected.PID != 0 && d.PID != 0 && d.PID != expected.PID {
 		return &StoppedDuringOperation{Box: box, Next: next}
 	}
 	return nil
+}
+
+// StartAllowed reports whether the operation may start box: it expects no
+// run of it yet (a first start) or none after its own stop. A box whose
+// expected run stopped or vanished beside the operation is not started again;
+// StartAllowed then returns the operation's plain failure.
+func (e *ExpectedRuns) StartAllowed(box, next string) error {
+	if e == nil {
+		return nil
+	}
+	e.mu.Lock()
+	expected, ok := e.runs[box]
+	e.mu.Unlock()
+	if !ok || expected == nil {
+		return nil
+	}
+	return &StoppedDuringOperation{Box: box, Next: next}
 }
 
 // CheckExpectedRun reads box's container and compares it with the
@@ -151,17 +183,34 @@ func (c *Client) CheckExpectedRun(ctx context.Context, box, next string) (*Detai
 	return d, runs.Check(box, d, next)
 }
 
-// recordStarted records the run the client just started for its box.
-func (c *Client) recordStarted(ctx context.Context, target string) {
+// startedBox is, for an operation that keeps a record, the box a container
+// start is for: read before the engine start (no effect yet when the read
+// fails), so a run that cannot be read back afterwards is still bound to it.
+func (c *Client) startedBox(ctx context.Context, target string) (string, error) {
+	if ExpectedRunsFrom(ctx) == nil || len(target) != 64 {
+		return target, nil
+	}
+	d, err := c.Inspect(ctx, target)
+	if err != nil {
+		return "", fmt.Errorf("read container %s before its start: %w", target, err)
+	}
+	return d.Name, nil
+}
+
+// recordStarted records the run the client just started for box. A run that
+// cannot be read back is recorded without its start time, so every later
+// check of that box fails instead of passing unbound.
+func (c *Client) recordStarted(ctx context.Context, target, box string) {
 	runs := ExpectedRunsFrom(ctx)
 	if runs == nil {
 		return
 	}
 	d, err := c.Inspect(ctx, target)
-	if err != nil {
+	if err != nil || d.Name != box {
+		runs.Expect(box, Run{ID: target})
 		return
 	}
-	runs.Expect(d.Name, RunOf(d))
+	runs.Expect(box, RunOf(d))
 }
 
 func recordStopped(ctx context.Context, id string) {

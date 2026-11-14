@@ -198,7 +198,7 @@ func (c *Client) createOrRun(ctx context.Context, opts RunOptions, start bool, s
 	if err := vmhost.RunWithFilteredStderr(cmd, c.stderr); err != nil {
 		return err
 	}
-	c.recordStarted(ctx, opts.Name)
+	c.recordStarted(ctx, opts.Name, opts.Name)
 	return nil
 }
 
@@ -208,11 +208,15 @@ func (c *Client) Start(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
+	box, err := c.startedBox(ctx, id)
+	if err != nil {
+		return err
+	}
 	markEngineStart(ctx)
 	if err := c.nerdctl(ctx, "start", id); err != nil {
 		return err
 	}
-	c.recordStarted(ctx, id)
+	c.recordStarted(ctx, id, box)
 	return nil
 }
 
