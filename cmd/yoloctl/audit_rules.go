@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/leogr/yoloctl/internal/audit"
@@ -177,8 +178,9 @@ func changeAuditRules(cmd *cobra.Command, target controllerTarget, kind string, 
 // warnings, otherwise a notice. The native text, escaped and complete (a
 // message would be cut at 1 KiB), is the record's body under that heading.
 // The process stderr gets the process Logger's formatting; a caller-selected
-// writer gets plain records at the same verbosity, and a failed write to it
-// is returned, as before.
+// writer gets plain records at the same verbosity. Either way a failed write
+// is returned, as the direct print's was: Handle reports the Logger's write
+// error without changing how it handles other records.
 func reportAuditRuleValidation(w io.Writer, refused error, v audit.Validation) error {
 	level := prettylog.LevelNotice
 	switch {
@@ -195,12 +197,14 @@ func reportAuditRuleValidation(w io.Writer, refused error, v audit.Validation) e
 	if w != io.Writer(os.Stderr) {
 		log = prettylog.New(w, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity()})
 	}
-	log.Slog().LogAttrs(context.Background(), level, title, prettylog.Actor(logging.Audit),
+	record := slog.NewRecord(time.Now(), level, title, 0)
+	record.AddAttrs(prettylog.Actor(logging.Audit),
 		slog.String(prettylog.KeyErr, audit.DiagnosticText(strings.TrimRight(v.Diagnostics, "\n"))))
-	if log == logging.Logger() {
-		return nil // process stderr: a write error never changes what the caller does
+	err := log.Handle(context.Background(), record)
+	if log != logging.Logger() {
+		err = errors.Join(err, log.Close())
 	}
-	return log.Close()
+	return err
 }
 
 const auditSelectionHelp = `# Edit only rules: (native Falco syntax, ordered operations).

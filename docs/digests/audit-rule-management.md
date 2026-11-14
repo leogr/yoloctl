@@ -35,7 +35,7 @@ returned. Exit zero may still skip unknown-source rules; it is not a claim that
 every rule is active. The host shows them as one
 `audit` record (error when refused, warning with Falco's warning count, else
 notice) with the complete, escaped native text as its indented body; a failed
-write to a caller writer fails it. Rejected/cancelled
+write fails the command. Rejected/cancelled
 preparation leaves the previous native selection and service unchanged.
 [1](#source-1) [3](#source-3) [5](#source-5) [6](#source-6)
 

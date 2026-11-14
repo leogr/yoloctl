@@ -195,11 +195,16 @@ func TestAuditRuleValidationIsOneAuditRecord(t *testing.T) {
 	}
 }
 
-// A failed write to a caller-selected error writer fails the command, as the
-// direct print did.
+// A failed write fails the command, as the direct print did: to a
+// caller-selected error writer and to the process stderr's Logger alike.
 func TestAuditRuleValidationReportsAFailedWrite(t *testing.T) {
 	if err := reportAuditRuleValidation(failingWriter{}, nil, audit.Validation{Diagnostics: "x", Warnings: 1}); err == nil {
-		t.Fatal("a failed diagnostic write was not reported")
+		t.Fatal("a failed write to the selected writer was not reported")
+	}
+	restore := logging.SetLogger(prettylog.New(failingWriter{}, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: prettylog.Normal}))
+	defer restore()
+	if err := reportAuditRuleValidation(os.Stderr, nil, audit.Validation{Diagnostics: "x", Warnings: 1}); err == nil {
+		t.Fatal("a failed write to the process Logger was not reported")
 	}
 }
 
