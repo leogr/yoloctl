@@ -139,6 +139,11 @@ func prepareNative(ctx context.Context, in BootstrapInput, release QualifiedRele
 			return prepared, err
 		}
 	}
+	// The box's own record decides its main process: the launcher for a box
+	// created by this version, "sleep infinity" for one created before.
+	if launch.MainLauncher, err = ContainerLauncherCapable(containerRoot); err != nil {
+		return prepared, err
+	}
 	previous, info, err := safepath.ReadFileInfo(containerRoot, "origin.json", 1<<20)
 	if err != nil {
 		return prepared, err

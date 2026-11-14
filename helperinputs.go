@@ -29,7 +29,7 @@ import (
 // generated from a previous checkout. An import outside this embedded closure
 // refuses qualification until the embedding and the release proof are updated.
 //
-//go:embed *.go all:cmd/yoloctl-openshell-helper all:internal/openshell all:internal/vmanchor all:internal/workercheckpoint all:internal/operator all:internal/atomicfile all:internal/buildinfo all:internal/layout all:internal/safepath all:internal/spaceenv scripts/openshell-helper-recipe.json go.mod go.sum
+//go:embed *.go all:cmd/yoloctl-openshell-helper all:internal/openshell all:internal/vmanchor all:internal/workercheckpoint all:internal/operator all:internal/mainlaunch all:internal/atomicfile all:internal/buildinfo all:internal/layout all:internal/safepath all:internal/spaceenv scripts/openshell-helper-recipe.json go.mod go.sum
 var inputs embed.FS
 
 const (

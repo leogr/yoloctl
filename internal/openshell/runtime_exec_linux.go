@@ -49,7 +49,13 @@ func execRuntimeChild(role runtimeChildRole, launch HelperLaunch, release Qualif
 		return fmt.Errorf("%s child chdir: %w", role, err)
 	}
 	if role == runtimeSupervisor {
-		args, err := config.SupervisorArgs()
+		var shell []string
+		if config.MainLauncher {
+			if shell, err = launcherShell(os.Stat); err != nil {
+				return err
+			}
+		}
+		args, err := config.SupervisorArgs(shell)
 		if err != nil {
 			return err
 		}

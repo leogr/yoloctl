@@ -2,6 +2,7 @@ package openshell
 
 import (
 	"encoding/json"
+	"github.com/leogr/yoloctl/internal/mainlaunch"
 	"os"
 	"reflect"
 	"slices"
@@ -29,7 +30,7 @@ func TestReadOnlyLaunchIntentUsesRealCwdAndOnlyItsAuthoritativeBit(t *testing.T)
 				if err != nil {
 					t.Fatal(err)
 				}
-				args, err := config.SupervisorArgs()
+				args, err := config.SupervisorArgs(nil)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -84,7 +85,7 @@ func TestLaunchRefusesOldSchemaMixedPairAndIdentityCollision(t *testing.T) {
 	} {
 		modified := config
 		change(&modified)
-		if _, err := modified.SupervisorArgs(); err == nil {
+		if _, err := modified.SupervisorArgs(nil); err == nil {
 			t.Fatal("unsupported runtime config produced launch arguments")
 		}
 		if _, err := modified.BoundaryArgs(); err == nil {
@@ -142,6 +143,46 @@ func TestBootstrapProtocolFixtureMatchesEmittedFieldsAndFlag(t *testing.T) {
 			if _, ok := actual[field]; !ok {
 				t.Fatal("qualified protocol field missing:", field)
 			}
+		}
+	}
+}
+
+// A box whose record says so runs the fixed launcher as the supervisor's main
+// process, with a terminal and the main-exit marker, by one of the three fixed
+// shells; any other shell is refused. Its argv carries no workload text.
+func TestLaunchMainLauncherArgs(t *testing.T) {
+	raw, err := os.ReadFile("testdata/qualification-fixture.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, err := LoadQualifiedRelease(raw, sha256Hex(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := bootstrapInput()
+	in.Binding.Qualification = release.Identity()
+	config, err := NewLaunchConfig(in, release, strings.Repeat("f", 64), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.MainLauncher = true
+	for _, shell := range LauncherShells {
+		args, err := config.SupervisorArgs(shell)
+		if err != nil {
+			t.Fatal(err)
+		}
+		i := slices.Index(args, "--")
+		want := append([]string{"-i", "--main-exit-marker", SupervisorMainExitMarker}, "--")
+		if i < 3 || !reflect.DeepEqual(args[i-3:i+1], want) || !reflect.DeepEqual(args[i+1:len(args)-1], shell) || args[len(args)-1] != mainlaunch.LauncherScript {
+			t.Fatalf("main launcher argv %q", args)
+		}
+		if strings.Contains(strings.Join(args, " "), "test-secret") {
+			t.Fatal("workload environment was put in launch argv")
+		}
+	}
+	for _, shell := range [][]string{nil, {"/bin/bash", "-c"}, {"/bin/zsh", "-c"}} {
+		if _, err := config.SupervisorArgs(shell); err == nil {
+			t.Fatalf("shell %q accepted", shell)
 		}
 	}
 }

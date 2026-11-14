@@ -2,7 +2,10 @@ package openshell
 
 import (
 	"errors"
+	"slices"
 	"strconv"
+
+	"github.com/leogr/yoloctl/internal/mainlaunch"
 )
 
 const (
@@ -31,6 +34,10 @@ type LaunchConfig struct {
 	WorkspaceReadOnly bool    `json:"workspace_read_only"`
 	UnconfinedNetwork bool    `json:"unconfined_network"`
 	HelperSHA256      string  `json:"helper_sha256"`
+	// MainLauncher: the box's record says its supervisor runs the fixed
+	// launcher as its main process (a box created by this version). A box
+	// created before keeps "sleep infinity" (stop-box route M-b, section 2).
+	MainLauncher bool `json:"main_launcher,omitempty"`
 }
 
 func NewLaunchConfig(in BootstrapInput, release QualifiedRelease, helperSHA256 string, unconfinedNetwork bool) (LaunchConfig, error) {
@@ -55,10 +62,17 @@ func (c LaunchConfig) Validate() error {
 	return (BootstrapInput{Binding: c.Binding, UID: c.UID, GID: c.GID, Workdir: c.Workdir, ReadOnlyWorkdir: c.WorkspaceReadOnly}).validate()
 }
 
-// SupervisorArgs contains only infrastructure paths, identity and the explicit
-// idle child. Real managed workloads still start through the supervisor SSH
-// endpoint and session holder. There is no arbitrary extra-argv parameter.
-func (c LaunchConfig) SupervisorArgs() ([]string, error) {
+// SupervisorMainExitMarker is the supervisor's main-exit marker, in its run
+// directory (PID 1 reads it as main-exit through its run descriptor).
+const SupervisorMainExitMarker = "/.openshell/supervisor/run/main-exit"
+
+// SupervisorArgs contains only infrastructure paths, identity and the main
+// process: the fixed launcher (mainlaunch.LauncherScript) run by shell, with
+// a terminal and the main-exit marker, for a box whose record says so;
+// otherwise the explicit idle child. Workloads reach the launcher only
+// through the supervisor SSH endpoint and session holder. There is no
+// arbitrary extra-argv parameter.
+func (c LaunchConfig) SupervisorArgs(shell []string) ([]string, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
@@ -76,7 +90,32 @@ func (c LaunchConfig) SupervisorArgs() ([]string, error) {
 	if c.WorkspaceReadOnly {
 		args = append(args, "--workspace-read-only")
 	}
-	return append(args, "--", "sleep", "infinity"), nil
+	if !c.MainLauncher {
+		return append(args, "--", "sleep", "infinity"), nil
+	}
+	if !validLauncherShell(shell) {
+		return nil, errors.New("invalid launcher shell")
+	}
+	args = append(args, "-i", "--main-exit-marker", SupervisorMainExitMarker, "--")
+	return append(append(args, shell...), mainlaunch.LauncherScript), nil
+}
+
+// LauncherShells are the three fixed ways the launcher is run, in upstream's
+// login-shell order (/bin/bash, /usr/bin/bash, /bin/sh): Bash in POSIX mode
+// runs no startup code for the launcher's step and keeps every variable name.
+var LauncherShells = [][]string{
+	{"/bin/bash", "--posix", "-c"},
+	{"/usr/bin/bash", "--posix", "-c"},
+	{"/bin/sh", "-c"},
+}
+
+func validLauncherShell(shell []string) bool {
+	for _, s := range LauncherShells {
+		if slices.Equal(s, shell) {
+			return true
+		}
+	}
+	return false
 }
 
 // BoundaryArgs never supplies launch-capability-free's optional workspace

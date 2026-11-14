@@ -10,7 +10,7 @@ import (
 func runtimeMountLaunch() LaunchConfig {
 	in := bootstrapInput()
 	in.Binding.Qualification = strings.Repeat("b", 64)
-	return LaunchConfig{BootstrapSchema, in.Binding, in.UID, in.GID, in.Workdir, true, false, strings.Repeat("a", 64)}
+	return LaunchConfig{BootstrapSchema, in.Binding, in.UID, in.GID, in.Workdir, true, false, strings.Repeat("a", 64), false}
 }
 
 func TestRuntimeMountProofRequiresOpenedIdentityAndExactWriteMode(t *testing.T) {

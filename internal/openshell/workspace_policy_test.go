@@ -8,7 +8,7 @@ import (
 func TestWorkspacePolicyRejectsImplicitWritesAndLaunchDisagreement(t *testing.T) {
 	in := bootstrapInput()
 	in.Binding.Qualification = strings.Repeat("b", 64)
-	c := LaunchConfig{BootstrapSchema, in.Binding, in.UID, in.GID, in.Workdir, true, false, strings.Repeat("a", 64)}
+	c := LaunchConfig{BootstrapSchema, in.Binding, in.UID, in.GID, in.Workdir, true, false, strings.Repeat("a", 64), false}
 	readOnly := "filesystem_policy:\n  include_workdir: false\n  read_only: [/usr, /workdir]\n  read_write: [/tmp, /run, /home/sandbox]\n"
 	if err := c.ValidateWorkspacePolicy([]byte(readOnly)); err != nil {
 		t.Fatal(err)
