@@ -247,7 +247,10 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 			case strings.HasPrefix(trim, "#"):
 				prose = true
 				if n := len(trim) - len(strings.TrimLeft(trim, "#")); n <= 6 && strings.HasPrefix(trim[n:], " ") {
-					line, st.FG, st.Bold = strings.TrimLeft(trim[n:], " "), HeadingColor(theme, n), true
+					content := strings.TrimLeft(trim[n:], " ")
+					from := len(lines[idx]) - len(content)
+					line, st.FG, st.Bold = withoutClosingHashes(content), HeadingColor(theme, n), true
+					lead.Add(line, lines[idx], from, from+len(line))
 				}
 			case strings.HasPrefix(trim, "> "):
 				line, st.FG, prose, dl.Quote = strings.TrimPrefix(trim, "> "), theme.Dim, true, true
@@ -301,6 +304,26 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 	}
 	alignOrdered(out)
 	return out
+}
+
+// withoutClosingHashes drops an ATX heading's closing sequence: the final run
+// of unescaped '#', preceded by a space or TAB and followed only by spaces or
+// TABs, with the whitespace before it. A heading of only such a run is empty.
+func withoutClosingHashes(s string) string {
+	t := strings.TrimRight(s, " \t")
+	j := len(t)
+	for j > 0 && t[j-1] == '#' {
+		j--
+	}
+	switch {
+	case j == len(t):
+		return s
+	case j == 0:
+		return ""
+	case t[j-1] != ' ' && t[j-1] != '\t':
+		return s // "T#", or an escaped first '#'
+	}
+	return strings.TrimRight(t[:j], " \t")
 }
 
 // HeadingColor is the text colour of a heading of level n (1–6), shown bold

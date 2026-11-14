@@ -61,7 +61,7 @@ func InlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme,
 	for i := 0; i < len(line); {
 		c := line[i]
 		switch {
-		case c == '\\' && i+1 < len(line) && strings.IndexByte("\\`*_[]()~|", line[i+1]) >= 0:
+		case c == '\\' && i+1 < len(line) && strings.IndexByte("\\`*_[]()~|#", line[i+1]) >= 0:
 			flush(i)
 			emitSpan(line[i+1:i+2], Span{Style: base}, i, i+2)
 			i += 2
