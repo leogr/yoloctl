@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/safepath"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"github.com/spf13/cobra"
 )
 
@@ -145,7 +148,7 @@ func changeAuditRules(cmd *cobra.Command, target controllerTarget, kind string, 
 			return errors.Join(callErr, errors.New("trailing audit rule result"))
 		}
 		if response.Validation.Diagnostics != "" {
-			if _, err := fmt.Fprintln(cmd.ErrOrStderr(), audit.DiagnosticText(response.Validation.Diagnostics)); err != nil {
+			if err := reportAuditRuleValidation(cmd.ErrOrStderr(), callErr, response.Validation); err != nil {
 				return errors.Join(callErr, err)
 			}
 		}
@@ -167,6 +170,37 @@ func changeAuditRules(cmd *cobra.Command, target controllerTarget, kind string, 
 	}
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Rules %s: %s (%d Falco warnings)\n", kind, state, response.Rules.Warnings)
 	return err
+}
+
+// reportAuditRuleValidation shows Falco's own validation output as one audit
+// record: an error when the change was refused, a warning when Falco counted
+// warnings, otherwise a notice. The native text, escaped and complete (a
+// message would be cut at 1 KiB), is the record's body under that heading.
+// The process stderr gets the process Logger's formatting; a caller-selected
+// writer gets plain records at the same verbosity, and a failed write to it
+// is returned, as before.
+func reportAuditRuleValidation(w io.Writer, refused error, v audit.Validation) error {
+	level := prettylog.LevelNotice
+	switch {
+	case refused != nil:
+		level = slog.LevelError
+	case v.Warnings > 0:
+		level = slog.LevelWarn
+	}
+	title := "Falco rule validation"
+	if v.Warnings > 0 {
+		title = fmt.Sprintf("Falco rule validation, %d warnings", v.Warnings)
+	}
+	log := logging.Logger()
+	if w != io.Writer(os.Stderr) {
+		log = prettylog.New(w, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity()})
+	}
+	log.Slog().LogAttrs(context.Background(), level, title, prettylog.Actor(logging.Audit),
+		slog.String(prettylog.KeyErr, audit.DiagnosticText(strings.TrimRight(v.Diagnostics, "\n"))))
+	if log == logging.Logger() {
+		return nil // process stderr: a write error never changes what the caller does
+	}
+	return log.Close()
 }
 
 const auditSelectionHelp = `# Edit only rules: (native Falco syntax, ordered operations).

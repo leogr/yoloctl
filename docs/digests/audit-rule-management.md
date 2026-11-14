@@ -1,6 +1,6 @@
 # Native rule generations and host management
 
-Verification: `fc4ab58342732bf5234dacea479ec2e8ddf0d1b8` and accompanying changes.
+Verification: `1aceb626b9a21aacebda708a06e266205a2be704` and accompanying changes.
 
 [FACT] Host-only `audit rules list`, `import FILE`, `remove NAME --sha256 PREFIX`
 and `edit` use the running matching controller. List creates nothing and never
@@ -32,9 +32,12 @@ paths; a missing selected generation is an error, never a fallback.
 once with `-c CONFIG --dry-run`; there is no companion collector, `-V` pass or
 validation timer. Falco's own per-load warning headers and full diagnostics are
 returned. Exit zero may still skip unknown-source rules; it is not a claim that
-every rule is active. Terminal controls are escaped. Rejected/cancelled
+every rule is active. The host shows them as one
+`audit` record (error when refused, warning with Falco's warning count, else
+notice) with the complete, escaped native text as its indented body; a failed
+write to a caller writer fails it. Rejected/cancelled
 preparation leaves the previous native selection and service unchanged.
-[1](#source-1) [5](#source-5) [6](#source-6)
+[1](#source-1) [3](#source-3) [5](#source-5) [6](#source-6)
 
 [FACT] The editor gets only a `rules:` fragment with commented examples. Human
 waiting holds no native mutation lock. Save carries its original revision,
@@ -87,7 +90,7 @@ may not describe the custom condition. [10](#source-10) [11](#source-11)
 
 1. <a id="source-1"></a> [Immutable rule store](../../internal/audit/rule_store.go#L1) — `RuleStore.Read`, `Prepare`, `Configuration`, `RulesPinsDigest`.
 2. <a id="source-2"></a> [Native transaction](../../cmd/yoloctl/controller_audit_rules_linux.go#L1) — host dispatch, revision check, tool reuse, effect gate and selected apply.
-3. <a id="source-3"></a> [Host commands](../../cmd/yoloctl/audit_rules.go#L1) — list/import/remove, streamed data, editor preservation, diagnostics and `completeAuditRuleNames`.
+3. <a id="source-3"></a> [Host commands](../../cmd/yoloctl/audit_rules.go#L1) — list/import/remove, streamed data, editor preservation, `reportAuditRuleValidation` and `completeAuditRuleNames`; audit_rules_test.go.
 4. <a id="source-4"></a> [Store regressions](../../internal/audit/rule_store_test.go#L1) — order, duplicates, rejection, size boundary, selection, tampering and explicit upgrade.
 5. <a id="source-5"></a> [One native validator](../../internal/audit/rule_validate_linux.go#L1) — `ValidateRuleSet`, ordinary cancellation, native warning headers.
 6. <a id="source-6"></a> [Selection qualification](audit-rule-validation.md) — literal include, framing and warning/skip semantics.

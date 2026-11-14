@@ -92,7 +92,8 @@ func TestAuditRulesHostStreamAndEditor(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, diag, err := execute("rules", "import", source)
-	if err != nil || changed != 1 || downloads != 1 || strings.ContainsAny(diag, "\x1b\a") || !strings.Contains(diag, "native warning") {
+	if err != nil || changed != 1 || downloads != 1 || strings.ContainsAny(diag, "\x1b\a") ||
+		!strings.Contains(diag, "warning: audit: Falco rule validation, 2 warnings: native warning") {
 		t.Fatal("import/control escaping", changed, diag, err)
 	}
 	wantKind, wantBody = "remove", ""
@@ -167,3 +168,41 @@ func TestAuditRuleCleanupWarningHonorsLogLevel(t *testing.T) {
 		}()
 	}
 }
+
+// Falco's validation output is one audit record: its severity follows the
+// outcome, and the native text is its complete, escaped body, one indented
+// line per diagnostic line.
+func TestAuditRuleValidationIsOneAuditRecord(t *testing.T) {
+	long := strings.Repeat("x", 3000)
+	for _, tc := range []struct {
+		refused  error
+		warnings uint64
+		prefix   string
+	}{
+		{errors.New("invalid rules"), 0, "error: audit: Falco rule validation: "},
+		{nil, 3, "warning: audit: Falco rule validation, 3 warnings: "},
+		{nil, 0, "audit: Falco rule validation: "},
+	} {
+		var logged bytes.Buffer
+		if err := reportAuditRuleValidation(&logged, tc.refused, audit.Validation{Diagnostics: "rule 'a': bad field\n\tdetail \x1b[31m\n" + long + "\n", Warnings: tc.warnings}); err != nil {
+			t.Fatal(err)
+		}
+		lines := strings.Split(strings.TrimRight(logged.String(), "\n"), "\n")
+		if len(lines) != 3 || !strings.HasSuffix(lines[0], tc.prefix+"rule 'a': bad field") ||
+			lines[1] != "   detail \\x1b[31m" || !strings.HasSuffix(lines[2], "  "+long) {
+			t.Fatalf("%s record (%d lines):\n%q", tc.prefix, len(lines), logged.String()[:min(len(logged.String()), 200)])
+		}
+	}
+}
+
+// A failed write to a caller-selected error writer fails the command, as the
+// direct print did.
+func TestAuditRuleValidationReportsAFailedWrite(t *testing.T) {
+	if err := reportAuditRuleValidation(failingWriter{}, nil, audit.Validation{Diagnostics: "x", Warnings: 1}); err == nil {
+		t.Fatal("a failed diagnostic write was not reported")
+	}
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("stderr closed") }
