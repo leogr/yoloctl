@@ -8,17 +8,49 @@ loses those keys.
 
 A per-attachment switch, the env request OPENSHELL_MAIN_RAW_INPUT=1 (read where
 OPENSHELL_MAIN_READ_ONLY already is), forwards every input byte unchanged and
-never detaches on input. Such an attachment must own stdin: when another
-attachment owns it, the attachment is refused with the existing "cannot connect
-to the canonical main process" answer and status 1 instead of attaching
-read-only, so a client that asked for raw input is never a silent viewer.
-Without the switch the behaviour is upstream's, unchanged.
+never detaches on input. Such an attachment must own stdin: the subsystem
+request succeeds only once it holds the stdin lease. When another attachment
+owns stdin, the main process is unavailable, or OPENSHELL_MAIN_READ_ONLY=1 is
+also requested, the request itself fails, followed by the existing "cannot
+connect to the canonical main process" diagnostic and status 1. A client that
+asked for raw input therefore never mistakes a refusal for an owned attachment
+and is never a silent viewer. Without the switch the behaviour is upstream's,
+unchanged.
 
 diff --git a/crates/openshell-supervisor-process/src/ssh.rs b/crates/openshell-supervisor-process/src/ssh.rs
-index 8b7361d7..5eaec96d 100644
+index 8b7361d7..49c3731c 100644
 --- a/crates/openshell-supervisor-process/src/ssh.rs
 +++ b/crates/openshell-supervisor-process/src/ssh.rs
-@@ -389,6 +389,10 @@ struct ChannelState {
+@@ -47,6 +47,28 @@ mod peer_stream;
+ #[path = "ssh/reconnect_tests.rs"]
+ mod reconnect_tests;
+ 
++/// yoloctl patch 0005: refuses a raw-input main attachment. The request
++/// fails before any diagnostic, so a client never mistakes the refusal for an
++/// attachment that owns stdin.
++fn refuse_raw_main(
++    session: &mut Session,
++    channel: ChannelId,
++    error: impl std::fmt::Display,
++    line_ending: &str,
++) -> anyhow::Result<()> {
++    session.channel_failure(channel)?;
++    session.extended_data(
++        channel,
++        1,
++        format!("openshell: cannot connect to the canonical main process: {error}{line_ending}")
++            .into_bytes(),
++    )?;
++    session.exit_status_request(channel, 1)?;
++    session.eof(channel)?;
++    session.close(channel)?;
++    Ok(())
++}
++
+ fn filter_main_detach_sequence(prefix_pending: &mut bool, data: &[u8]) -> (Vec<u8>, bool) {
+     let mut forward = Vec::with_capacity(data.len() + usize::from(*prefix_pending));
+     for &byte in data {
+@@ -389,6 +411,10 @@ struct ChannelState {
      main_input_owner: Option<u64>,
      main_attached: bool,
      main_read_only: bool,
@@ -29,30 +61,46 @@ index 8b7361d7..5eaec96d 100644
      /// A writable attachment denied stdin may retry on later input. Explicit
      /// viewers and channels that sent EOF must never acquire a new lease.
      main_input_pending: bool,
-@@ -789,6 +793,31 @@ impl russh::server::Handler for SshHandler {
+@@ -757,6 +783,17 @@ impl russh::server::Handler for SshHandler {
+             } else {
+                 "\n"
+             };
++            // yoloctl patch 0005: a raw-input request succeeds only once it
++            // owns stdin, so every refusal fails the request itself.
++            let raw_input = state.main_raw_input;
++            if raw_input && state.main_read_only {
++                return refuse_raw_main(
++                    session,
++                    channel,
++                    "raw input cannot be combined with a read-only attachment",
++                    line_ending,
++                );
++            }
+             let main_session = self
+                 .main_session
+                 .clone()
+@@ -768,6 +805,9 @@ impl russh::server::Handler for SshHandler {
+             let main_session = match main_session {
+                 Ok(main_session) => main_session,
+                 Err(error) => {
++                    if raw_input {
++                        return refuse_raw_main(session, channel, error, line_ending);
++                    }
+                     // The subsystem is supported, but its terminal is unavailable.
+                     // A bare request failure hides this reason in OpenSSH clients.
+                     session.channel_success(channel)?;
+@@ -789,6 +829,19 @@ impl russh::server::Handler for SshHandler {
                  .channels
                  .get_mut(&channel)
                  .expect("main channel existence checked above");
 +            // A raw-input attachment must own stdin: when another attachment
 +            // owns it, refuse instead of attaching read-only.
-+            let raw_lease = if state.main_raw_input && !state.main_read_only {
++            let raw_lease = if raw_input {
 +                match main_session.acquire_input() {
 +                    Ok(lease) => Some(lease),
 +                    Err(error) => {
 +                        main_session.end_terminal_attachment();
-+                        session.channel_success(channel)?;
-+                        session.extended_data(
-+                            channel,
-+                            1,
-+                            format!(
-+                                "openshell: cannot connect to the canonical main process: {error}{line_ending}"
-+                            )
-+                            .into_bytes(),
-+                        )?;
-+                        session.exit_status_request(channel, 1)?;
-+                        session.eof(channel)?;
-+                        session.close(channel)?;
-+                        return Ok(());
++                        return refuse_raw_main(session, channel, error, line_ending);
 +                    }
 +                }
 +            } else {
@@ -61,7 +109,7 @@ index 8b7361d7..5eaec96d 100644
              state.main_attached = true;
              if let Some(pty) = state.pty_request.take() {
                  main_session
-@@ -802,6 +831,9 @@ impl russh::server::Handler for SshHandler {
+@@ -802,6 +855,9 @@ impl russh::server::Handler for SshHandler {
              }
              let (input, warning) = if state.main_read_only {
                  (None, None)
@@ -71,7 +119,7 @@ index 8b7361d7..5eaec96d 100644
              } else {
                  match main_session.acquire_input() {
                      Ok((owner, input)) => {
-@@ -918,6 +950,12 @@ impl russh::server::Handler for SshHandler {
+@@ -918,6 +974,12 @@ impl russh::server::Handler for SshHandler {
          {
              state.main_read_only = true;
          }
@@ -84,7 +132,7 @@ index 8b7361d7..5eaec96d 100644
          session.channel_success(channel)?;
          Ok(())
      }
-@@ -958,7 +996,7 @@ impl russh::server::Handler for SshHandler {
+@@ -958,7 +1020,7 @@ impl russh::server::Handler for SshHandler {
              return Ok(());
          }
          let denied_prefix = state.main_input_pending && state.main_detach_prefix_pending;
@@ -93,7 +141,7 @@ index 8b7361d7..5eaec96d 100644
              filter_main_detach_sequence(&mut state.main_detach_prefix_pending, data)
          } else {
              (data.to_vec(), false)
-@@ -2080,6 +2118,112 @@ mod tests {
+@@ -2080,6 +2142,184 @@ mod tests {
          main_session.release_input(owner);
      }
  
@@ -162,45 +210,117 @@ index 8b7361d7..5eaec96d 100644
 +        );
 +    }
 +
-+    // A raw-input attachment that cannot own stdin is refused, never a viewer.
-+    #[tokio::test]
-+    async fn main_attachment_raw_input_is_refused_without_stdin() {
-+        let main_session = MainSession::inert();
-+        let (owner, _input) = main_session.acquire_input().unwrap();
-+        let client = main_test_client(Some(main_session.clone())).await;
++    // Requests OPENSHELL_MAIN_RAW_INPUT=1 (and optionally read-only) and the
++    // openshell-main subsystem, then asserts the refusal: the request itself
++    // fails before the diagnostic, exit status 1 and close.
++    async fn assert_raw_input_refused(
++        main_session: Option<Arc<MainSession>>,
++        read_only: bool,
++        message: &str,
++    ) {
++        let client = main_test_client(main_session).await;
 +        let mut channel = client.channel_open_session().await.unwrap();
-+        channel
-+            .set_env(true, "OPENSHELL_MAIN_RAW_INPUT", "1")
-+            .await
-+            .unwrap();
-+        assert!(matches!(
-+            next_main_event(&mut channel).await,
-+            russh::ChannelMsg::Success
-+        ));
++        let mut env = vec![("OPENSHELL_MAIN_RAW_INPUT", "1")];
++        if read_only {
++            env.push(("OPENSHELL_MAIN_READ_ONLY", "1"));
++        }
++        for (name, value) in env {
++            channel.set_env(true, name, value).await.unwrap();
++            assert!(matches!(
++                next_main_event(&mut channel).await,
++                russh::ChannelMsg::Success
++            ));
++        }
 +        channel
 +            .request_subsystem(true, "openshell-main")
 +            .await
 +            .unwrap();
-+        assert!(matches!(
-+            next_main_event(&mut channel).await,
-+            russh::ChannelMsg::Success
-+        ));
++        match next_main_event(&mut channel).await {
++            russh::ChannelMsg::Failure => {}
++            event => panic!("a raw-input refusal must fail the request, got {event:?}"),
++        }
 +        match next_main_event(&mut channel).await {
 +            russh::ChannelMsg::ExtendedData { data, ext: 1 } => assert_eq!(
 +                String::from_utf8_lossy(&data),
-+                "openshell: cannot connect to the canonical main process: canonical main process already has an input owner\n"
++                format!("openshell: cannot connect to the canonical main process: {message}\n")
 +            ),
-+            event => panic!("expected refusal, got {event:?}"),
++            event => panic!("expected refusal diagnostic, got {event:?}"),
 +        }
 +        assert!(matches!(
 +            next_main_event(&mut channel).await,
 +            russh::ChannelMsg::ExitStatus { exit_status: 1 }
 +        ));
++        assert!(matches!(
++            next_main_event(&mut channel).await,
++            russh::ChannelMsg::Eof
++        ));
++        assert!(matches!(
++            next_main_event(&mut channel).await,
++            russh::ChannelMsg::Close
++        ));
++    }
++
++    // A raw-input attachment that cannot own stdin is refused, never a viewer:
++    // the request fails and the owner's lease is untouched.
++    #[tokio::test]
++    async fn main_attachment_raw_input_is_refused_without_stdin() {
++        let main_session = MainSession::inert();
++        let (owner, _input) = main_session.acquire_input().unwrap();
++        assert_raw_input_refused(
++            Some(main_session.clone()),
++            false,
++            "canonical main process already has an input owner",
++        )
++        .await;
 +        assert!(
 +            main_session.acquire_input().is_err(),
 +            "a refusal must not touch the owner's lease"
 +        );
 +        main_session.release_input(owner);
++    }
++
++    // Raw input and read-only contradict each other: refused before attaching,
++    // without taking stdin from anyone.
++    #[tokio::test]
++    async fn main_attachment_raw_input_read_only_is_refused() {
++        let main_session = MainSession::inert();
++        assert_raw_input_refused(
++            Some(main_session.clone()),
++            true,
++            "raw input cannot be combined with a read-only attachment",
++        )
++        .await;
++        let (owner, _) = main_session
++            .acquire_input()
++            .expect("the refusal leaves stdin available");
++        main_session.release_input(owner);
++        let (owner, _input) = main_session.acquire_input().unwrap();
++        assert_raw_input_refused(
++            Some(main_session.clone()),
++            true,
++            "raw input cannot be combined with a read-only attachment",
++        )
++        .await;
++        assert!(
++            main_session.acquire_input().is_err(),
++            "the refusal must not touch the owner's lease"
++        );
++        main_session.release_input(owner);
++    }
++
++    // An unavailable main process refuses a raw-input request with a failed
++    // request, unlike the default diagnostic attachment.
++    #[tokio::test]
++    async fn main_attachment_raw_input_missing_session_fails_request() {
++        assert_raw_input_refused(None, false, "no main session is available").await;
++        let finished = MainSession::inert();
++        assert!(!finished.finish(130, false).await);
++        assert_raw_input_refused(
++            Some(finished),
++            false,
++            "canonical main process already finished",
++        )
++        .await;
 +    }
 +
      #[test]
