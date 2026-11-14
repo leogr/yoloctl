@@ -132,7 +132,7 @@ func (m *ImageJobs) Cleanup(ctx context.Context, run func(context.Context, func(
 		r.State, r.Status = "complete", 0
 		r.Completion = &Completion{At: r.Finished, Status: 0}
 	} else {
-		r.State, r.Status = "uncertain", 2
+		r.State, r.Status = "interrupted", 2
 	}
 	saveErr := server.Receipts.Save(r)
 	server.record(r, saveErr, true, false, "")

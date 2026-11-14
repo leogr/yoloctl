@@ -221,7 +221,7 @@ func TestAuditQueryRejectsHostPaths(t *testing.T) {
 func TestAuditRetentionInactiveCollector(t *testing.T) {
 	scenario := os.Getenv("YOLOCTL_TEST_AUDIT_RETENTION")
 	if scenario == "" {
-		for _, scenario := range []string{"enabled-failed", "enabled-failed-observer", "enabled-inactive", "disabled-failed", "active", "activating", "deactivating", "unknown", "observation-failed", "audit-held", "global-held", "lock-failed"} {
+		for _, scenario := range []string{"enabled-failed", "enabled-failed-observer", "enabled-inactive", "disabled-failed", "active", "activating", "deactivating", "unknown", "observation-failed", "audit-held", "global-held", "audit-interrupted", "lock-failed"} {
 			t.Run(scenario, func(t *testing.T) {
 				cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestAuditRetentionInactiveCollector$")
 				cmd.Env = append(os.Environ(), "YOLOCTL_TEST_AUDIT_RETENTION="+scenario)
@@ -260,12 +260,15 @@ func TestAuditRetentionInactiveCollector(t *testing.T) {
 	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if scenario == "audit-held" || scenario == "global-held" {
-		receipt := controller.Receipt{ID: "audit-retention-held-0123456789", Method: "audit.enable", State: "uncertain", EffectPhase: controller.EffectStarted, Started: time.Now(), Generation: "fixture"}
-		if scenario == "audit-held" {
+	if scenario == "audit-held" || scenario == "global-held" || scenario == "audit-interrupted" {
+		receipt := controller.Receipt{ID: "audit-retention-held-0123456789", Method: "audit.enable", State: "pending", EffectPhase: controller.EffectStarted, Started: time.Now(), Generation: "fixture"}
+		if scenario == "audit-held" || scenario == "audit-interrupted" {
 			receipt.ProofVersion = controller.ProofVersion
 			receipt.DiskID = c.DiskID
 			receipt.Scope = &controller.Scope{Writes: []controller.Resource{{Kind: controller.ResourceAudit}}}
+		}
+		if scenario == "audit-interrupted" {
+			receipt.State = "interrupted"
 		}
 		store := controller.Receipts{Dir: filepath.Join(disk, ".controller", "receipts")}
 		if err := store.Save(receipt); err != nil {
@@ -329,7 +332,7 @@ func TestAuditRetentionInactiveCollector(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shouldPrune := scenario == "enabled-failed-observer" || scenario == "enabled-failed" || scenario == "enabled-inactive" || scenario == "disabled-failed"
+	shouldPrune := scenario == "audit-interrupted" || scenario == "enabled-failed-observer" || scenario == "enabled-failed" || scenario == "enabled-inactive" || scenario == "disabled-failed"
 	if shouldPrune {
 		if len(files) != 0 {
 			t.Fatalf("expired data remains: %v", files)

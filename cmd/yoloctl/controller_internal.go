@@ -19,7 +19,6 @@ import (
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/atomicfile"
-	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/logging"
@@ -395,6 +394,9 @@ func serveController(ctx context.Context) (result error) {
 		},
 		CheckPrincipal: checkOperatorPrincipal,
 		DiskID:         c.DiskID,
+		Observe: func(ctx context.Context, r controller.Receipt) ([]controller.BoxObservation, error) {
+			return controller.RunBoxObserver(ctx, c.Space, r)
+		},
 		Verify: func(ctx context.Context, r controller.Receipt) ([]controller.DocumentIntent, error) {
 			return controller.RunVerifier(ctx, c.Space, r)
 		},
@@ -430,12 +432,9 @@ func serveController(ctx context.Context) (result error) {
 			return err
 		}
 		if interrupted {
-			// An unknown runtime inventory keeps the space-wide hold.
-			if _, err := newBoxStateResolver().ResolveSpace(ctx, c.Space, boxstate.RuntimeInventory); err != nil {
-				return fmt.Errorf("inspect interrupted controller operations: %w", err)
-			}
-			log.Warn("Interrupted operations have uncertain outcomes; the controller checks their recorded evidence and holds what it cannot prove.")
+			log.Warn("Interrupted operations are closed; current observations are recorded separately and nothing is replayed.")
 		}
+
 		key, err := controller.LoadRecoveryKey(meta)
 		if err != nil {
 			return err

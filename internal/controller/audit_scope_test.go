@@ -16,8 +16,8 @@ func TestAuditScopeAndMethodAuthority(t *testing.T) {
 	}
 }
 
-func TestAuditUncertaintyDoesNotHoldUnrelatedBoxes(t *testing.T) {
-	receipt := Receipt{State: "uncertain", Scope: &Scope{Writes: []Resource{{Kind: ResourceAudit}}}}
+func TestRunningAuditReservationDoesNotBlockUnrelatedBoxes(t *testing.T) {
+	receipt := Receipt{State: "pending", Scope: &Scope{Writes: []Resource{{Kind: ResourceAudit}}}}
 	h := holds{writes: map[Resource][]Receipt{{Kind: ResourceAudit}: {receipt}}}
 	_, conflicts, _ := h.conflict(&Scope{Writes: []Resource{{Kind: ResourceBox, Name: "worker"}}})
 	if len(conflicts) != 0 {

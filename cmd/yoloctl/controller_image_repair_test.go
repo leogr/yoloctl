@@ -13,6 +13,7 @@ import (
 
 type startupImageBackend struct{}
 
+func (*startupImageBackend) ConfigureLegacy(*controller.Server, string) {}
 func (*startupImageBackend) Configure(func(context.Context, controller.ImageRecipe) error, func(context.Context) error) {
 }
 func (*startupImageBackend) Close()                                            {}

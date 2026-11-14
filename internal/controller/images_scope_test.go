@@ -40,7 +40,7 @@ func TestImageOverlapMatrixForReservationsAndHolds(t *testing.T) {
 					scope = writes(tc.access)
 				}
 				_, got, _ := h.conflict(scope)
-				if (len(got) != 0) != tc.conflict {
+				if (len(got) != 0) != (tc.conflict && state == "pending") {
 					t.Fatalf("conflicts=%v want %v", got, tc.conflict)
 				}
 			})

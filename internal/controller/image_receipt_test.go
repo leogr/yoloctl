@@ -162,12 +162,12 @@ func TestCleanupCancellationKeepsItsPublicEffectUnknown(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := m.server.Receipts.Read(id)
-	if err != nil || !r.unresolved() || r.Completion != nil {
+	if err != nil || r.State != "interrupted" || r.unresolved() || r.Completion != nil {
 		t.Fatal("cleanup claimed an unproved outcome", r, err)
 	}
 }
 func TestLegacyInputLookupSurvivesExpandedImageGraphIdentity(t *testing.T) {
-	m, _ := newJobs(t, 2)
+	m, backend := newJobs(t, 2)
 	input := recipe("legacy")
 	input.BaseReference = "ubuntu:24.04"
 	legacy, _ := input.Identity()
@@ -177,11 +177,18 @@ func TestLegacyInputLookupSurvivesExpandedImageGraphIdentity(t *testing.T) {
 	if err := m.server.Receipts.Save(r); err != nil {
 		t.Fatal(err)
 	}
-	input.Images = []imagejob.ImageInput{{Reference: "docker.io/library/ubuntu:24.04", Source: "ubuntu:24.04", Digest: input.BaseDigest, Platform: input.Platform}}
-	if result, err := m.Acquire(t.Context(), input); err == nil {
-		result.Release()
-		t.Fatal("expanded identity bypassed legacy hold")
+	if _, err := m.server.Receipts.Recover(); err != nil {
+		t.Fatal(err)
 	}
+	input.Images = []imagejob.ImageInput{{Reference: "docker.io/library/ubuntu:24.04", Source: "ubuntu:24.04", Digest: input.BaseDigest, Platform: input.Platform}}
+	pending := acquire(m, t.Context(), input)
+	take(t, backend.started)
+	backend.release <- struct{}{}
+	result := take(t, pending)
+	if result.err != nil {
+		t.Fatal("legacy ended attempt fenced new build", result.err)
+	}
+	result.image.Release()
 }
 
 func TestStorageRepairCannotSettleActiveImageMetadataOwner(t *testing.T) {
@@ -223,7 +230,11 @@ func TestImageCleanupRefusesIntersectingHoldDrainAndStorageFailure(t *testing.T)
 			}
 			called := false
 			err := m.Cleanup(t.Context(), func(context.Context, func() error) error { called = true; return nil })
-			if err == nil || called {
+			if mode == "hold" {
+				if err != nil || !called {
+					t.Fatal("finished outcome fenced cleanup", err)
+				}
+			} else if err == nil || called {
 				t.Fatal("unpermitted deleting helper ran", err)
 			}
 			if mode != "storage" && m.server.receiptFailure != nil {

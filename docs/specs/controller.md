@@ -54,22 +54,21 @@ Every mutation durably authorizes effects, with its footprint, over a private
 worker channel; confirmed cancellation before authorization is `recovered`
 `not-applied`. The controller also resolves an outcome from a durable
 completion record or a reviewed read-back of an exact account or chat-revoke
-document. An outcome it cannot prove holds only its recorded boxes, accounts
-and shared domains until a host reviews it; an unbounded one holds the space.
-Receipt-storage recovery rechecks current UUID, ownership and live bind
-read-only before reopening; workers and verifiers never prepare that bind.
-[15](#source-15) Fixed root service startup prepares the verified disk’s bind
-before serving, including after a guest reboot. [17](#source-17)
-An authorized `box exec` command whose result is lost is instead
-`command-uncertain`: queryable and never replayed, without a hold.
-Interrupting a `box attach`/`box use` client never creates that hold: before
-authorization it cancels cleanly; after it the controller finishes setup, which
+document. An ended operation without a proven result closes as `interrupted` and
+holds nothing. One bounded current-disk, recorded-scope observation records the
+container state separately from historical success; an unavailable observation
+is recorded as such. Matching document proofs can still establish applied once.
+Receipt-storage recovery rechecks current UUID, ownership and live bind read-only;
+workers and verifiers never prepare that bind. [15](#source-15)
+Fixed root service startup prepares the verified disk’s bind before serving,
+including after a guest reboot. [17](#source-17)
+An authorized `box exec` whose result is lost is interrupted and never replayed.
+Interrupting a `box attach`/`box use` client does not end an owned setup: before
+authorization it cancels cleanly; afterward the controller finishes setup, which
 may start a session after the client left. A signal before handoff ends the
-client (status 75), never the setup. [12](#source-12)
-A refusal names the held resources and, for hosts, the review commands
-(`--acknowledge-all` and per-ID); acknowledgment neither retries nor undoes an
-operation and never covers still-running work.
-[1](#source-1) [3](#source-3)
+client (status75), never the setup. [12](#source-12)
+Running executions still exclude conflicting work. Both acknowledgment options
+are compatibility no-ops, not recovery authority. [1](#source-1) [3](#source-3)
 
 [FACT] Image preparation is a separate controller-owned phase, outside native
 space/entity apply guards. Each attempt exports privately; only the controller
@@ -169,9 +168,8 @@ metadata comes only from validated reserved tags, never message text.
 
 [FACT] Audit control/viewing/export are host-only registered operations;
 operator authority grants no audit access. Desired state is native, while a
-separate audit receipt domain isolates uncertain control from unrelated boxes.
-Startup reconciliation skips reserved/held audit state and retains the existing
-global uncertainty rules. Firecracker uses a fixed PID-1 collector unit and a
+separate audit receipt domain records its control operations. Startup reconciliation
+skips running audit reservations; interrupted audit outcomes hold nothing. Firecracker uses a fixed PID-1 collector unit and a
 read-only support query before toggles; unsupported media needs explicit host
 image recreation. [18](#source-18)
 

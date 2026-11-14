@@ -9,11 +9,8 @@ import (
 	"github.com/distribution/reference"
 )
 
-// Holds are derived from durable receipts on every check; there is no second
-// authoritative hold database. An unresolved outcome holds its recorded
-// write footprint. An effect-started execution reserves its footprint until
-// its disposition is durable, even after its native lock was released. An
-// outcome without a trustworthy footprint holds the whole space.
+// Running reservations are derived from pending receipts. Finished outcomes
+// never reserve resources. N2 moves live reservations to controller memory.
 type holds struct {
 	// global names receipts that hold the whole space.
 	global []Receipt
@@ -21,8 +18,9 @@ type holds struct {
 	writes map[Resource][]Receipt
 }
 
-// unresolved reports a receipt whose outcome awaits proof or host review.
-func (r Receipt) unresolved() bool { return r.State == "uncertain" && !r.abandonedImage() }
+// unresolved is the compatibility predicate for old call sites. No finished
+// receipt fences an execution, including old outcome spellings.
+func (r Receipt) unresolved() bool { return false }
 
 // reserving reports a running execution already permitted to have effects
 // whose disposition is not yet durable. A completed setup or a recorded
@@ -78,38 +76,9 @@ func (h holds) unresolvedGlobal() []Receipt {
 	return out
 }
 
-// unresolvedOnly drops running reservations: what a stop beside other
-// operations still meets is a finished outcome awaiting review.
-func (h holds) unresolvedOnly() holds {
-	out := holds{writes: map[Resource][]Receipt{}}
-	for _, r := range h.global {
-		if r.unresolved() {
-			out.global = append(out.global, r)
-		}
-	}
-	for res, list := range h.writes {
-		for _, r := range list {
-			if r.unresolved() {
-				out.writes[res] = append(out.writes[res], r)
-			}
-		}
-	}
-	return out
-}
-
-func (h holds) any() bool {
-	if len(h.global) != 0 {
-		return true
-	}
-	for _, list := range h.writes {
-		for _, r := range list {
-			if r.unresolved() {
-				return true
-			}
-		}
-	}
-	return false
-}
+// unresolvedOnly is the stop-beside-other-operations policy: running
+// reservations do not delay that stop, and finished outcomes reserve nothing.
+func (h holds) unresolvedOnly() holds { return holds{writes: map[Resource][]Receipt{}} }
 
 // conflict returns the held receipts a new footprint intersects: a write or a
 // dependency read of a held resource. An unbounded footprint intersects
@@ -172,36 +141,24 @@ func resourcesOverlap(held, access Resource, writing bool) bool {
 // a box operator sees only the resources it asked to use, never receipt
 // identities or another principal's operations.
 func heldError(space string, admin, global bool, resources []Resource, receipts []Receipt) error {
-	var names []string
-	for _, r := range resources {
-		names = append(names, r.String())
-	}
-	what := "this space"
-	if len(names) != 0 && !global {
-		what = strings.Join(names, ", ")
-	}
 	if !admin {
-		return fmt.Errorf("%s is held by an interrupted operation that a host must review; unrelated changes can proceed", what)
+		var names []string
+		for _, resource := range resources {
+			names = append(names, resource.String())
+		}
+		return fmt.Errorf("waiting for running operations using %s", strings.Join(names, ", "))
 	}
 	var ids []string
 	for _, r := range receipts {
-		ids = append(ids, r.ID+" ("+r.Method+", "+r.State+")")
+		ids = append(ids, r.ID+" ("+r.Method+")")
 	}
-	return fmt.Errorf("%s is held by an interrupted or running operation: %s. "+
-		"Inspect it on the host with `yoloctl space operation %s ID`; a finished unknown outcome can be accepted with --acknowledge after review. "+
-		"Unrelated changes can proceed", what, strings.Join(ids, ", "), space)
+	return fmt.Errorf("waiting for running operations in space %s: %s", space, strings.Join(ids, ", "))
 }
 
-// refreshRecovery recomputes the compatibility summary: some outcome holds
-// part or all of the space. Callers hold s.mu. Background maintenance
-// stays off while it is set.
+// refreshRecovery retains the compatibility field without deriving admission
+// restrictions from finished receipts. Running reservations are checked separately.
 func (s *Server) refreshRecovery() error {
-	h, err := s.loadHolds("")
-	if err != nil {
-		s.RecoveryRequired = true
-		return err
-	}
-	s.RecoveryRequired = h.any()
+	s.RecoveryRequired = false
 	return nil
 }
 
@@ -257,7 +214,7 @@ func (s *Server) awaitReservations(ctx context.Context, id string, scope *Scope)
 // its JSON. It never contains payloads, secrets or fingerprints.
 func (s *Server) explainOutcome(r Receipt) string {
 	if r.abandonedImage() && r.Completion == nil {
-		return "Image preparation was abandoned and cannot be published or consumed. Its slot is free; possible surviving build work may still use CPU, memory or disk. Execution result remains unknown; no acknowledgment is required.\n"
+		return "Image preparation was abandoned and cannot be published or consumed. Its slot is free; possible surviving build work may still use CPU, memory or disk. The execution was interrupted; no acknowledgment is required.\n"
 	}
 	switch r.State {
 	case "pending":
@@ -270,11 +227,9 @@ func (s *Server) explainOutcome(r Receipt) string {
 	case "setup-complete":
 		return "Its setup finished before the interruption; nothing awaits review.\n"
 	case "acknowledged":
-		return "A host accepted this unknown outcome after review; it was neither retried nor undone and is not known to have succeeded.\n"
-	case "command-uncertain":
-		return "A box exec command may have run but its result was lost; inspect its effects in the box. It holds nothing.\n"
-	case "interrupted":
-		return "It did not finish and no result was recorded; the box's state is what box list reads. It holds nothing and needs no review.\n"
+		return "A prior build recorded an acknowledgment; this does not establish success and nothing was replayed.\n"
+	case "interrupted", "uncertain", "command-uncertain":
+		return r.interruptionText(s.Hello.Space) + "\n"
 	case "recovered":
 		switch r.Recovery.Disposition {
 		case DispositionNotApplied:
@@ -291,20 +246,7 @@ func (s *Server) explainOutcome(r Receipt) string {
 			}
 			return "Recovered automatically: the exact account declaration it was writing is on disk; the command's historical result remains unknown. Existing boxes keep their previous secrets until they are recreated.\n"
 		}
-	case "uncertain":
-		what := "the whole space, because it has no bounded footprint"
-		if scope := s.boundedScope(r); scope != nil && len(scope.Writes) != 0 {
-			var names []string
-			for _, w := range scope.Writes {
-				names = append(names, w.String())
-			}
-			what = strings.Join(names, ", ")
-		}
-		reason := "No automatic proof exists for this kind of interruption."
-		if r.Verifier != "" && len(r.Proofs) != 0 {
-			reason = "Read-back has not established the recorded document postimage; unavailable checks retry automatically, but a mismatch requires host review."
-		}
-		return fmt.Sprintf("Unknown outcome: it holds %s until a host reviews it. %s Acknowledging neither retries nor undoes it.\n", what, reason)
+
 	}
 	return ""
 }
@@ -318,40 +260,8 @@ func explainHolds(all []Receipt, s *Server) string {
 	if s.draining {
 		barriers.WriteString("The controller is in maintenance; recovery does not reopen it.\n")
 	}
-	var held []string
-	global := false
-	for _, r := range all {
-		if !r.unresolved() {
-			continue
-		}
-		scope := s.boundedScope(r)
-		if scope == nil {
-			global = true
-			continue
-		}
-		for _, w := range scope.Writes {
-			if !slicesContains(held, w.String()) {
-				held = append(held, w.String())
-			}
-		}
-	}
-	switch {
-	case global:
-		return barriers.String() + "Changes in this space are paused by an unknown outcome without a bounded footprint; reads still work.\n"
-	case len(held) != 0:
-		sort.Strings(held)
-		return barriers.String() + fmt.Sprintf("Held by unknown outcomes: %s. Changes without overlapping dependencies can proceed when no other barrier applies.\n", strings.Join(held, ", "))
-	}
-	return barriers.String()
-}
 
-func slicesContains(list []string, s string) bool {
-	for _, item := range list {
-		if item == s {
-			return true
-		}
-	}
-	return false
+	return barriers.String()
 }
 
 // publicReceipt retains the outcome and footprint without private verifier material.
@@ -375,7 +285,7 @@ func (store Receipts) CheckImageCleanup(space, disk string, exclude ...string) e
 	}
 	_, receipts, _ := h.conflict(&Scope{Writes: []Resource{{Kind: ResourceImages}}})
 	if len(receipts) != 0 {
-		return fmt.Errorf("image store is reserved or held in space %s; no cleanup started; retry after current image work is resolved", space)
+		return fmt.Errorf("image store is reserved by running work in space %s; no cleanup started; retry after current image work is resolved", space)
 	}
 	return nil
 }
@@ -390,7 +300,7 @@ func (store Receipts) CheckAuditReconcile(space, disk string) error {
 	}
 	_, receipts, _ := h.conflict(&Scope{Writes: []Resource{{Kind: ResourceAudit}}})
 	if len(receipts) != 0 {
-		return fmt.Errorf("audit state is reserved or held in space %s; review its operation before reconciling", space)
+		return fmt.Errorf("audit state is reserved by running work in space %s; review its operation before reconciling", space)
 	}
 	return nil
 }

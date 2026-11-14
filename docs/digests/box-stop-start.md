@@ -52,10 +52,10 @@ only the `box start` command passes the result policy. [4](#source-4) [5](#sourc
 [FACT] A `box.start` or `box.stop` receipt that ended without a result after its
 effects were authorized (not setup-complete, scoped, no image writes) is
 classified `interrupted` at server finalization and at recovery. It is final,
-evictable, holds nothing and needs no review; its caller gets `box stop did not
-finish; run "box list" to read the box's state`. Recorded-completion and
-not-applied proofs keep precedence; pending receipts still reserve; every other
-method, including restart and recreate, keeps `uncertain`.
+evictable, holds nothing and needs no review; its caller gets an interrupted
+failure with a closing observation or state-read advice. Recorded-completion and
+not-applied proofs keep precedence; pending receipts still reserve. The shared
+interruption rule now applies to every operation, including restart and recreate.
 [9](#source-9) [10](#source-10) [11](#source-11)
 
 [FACT] `box stop` tries the space lock once. Free: the steps above. Held
@@ -66,8 +66,8 @@ role sync. Absent, T or a replacement not running: stopped ("was not running" if
 already was), leftovers named;
 running: failure saying "this stop targeted container T". Engine errors stay
 diagnostics; a failed read fails. The `box.stop` gate never waits for running
-executions and is admitted during drain; unresolved holds and receipt-storage
-failures still refuse it. [14](#source-14) [15](#source-15) [16](#source-16)
+executions and is admitted during drain; ended outcomes hold nothing. Receipt-storage
+failures can still refuse at this implementation boundary. [14](#source-14) [15](#source-15) [16](#source-16)
 
 [FACT] Tests stub the engine; they are not live VM validation.
 [6](#source-6) [7](#source-7) [11](#source-11)
@@ -82,8 +82,8 @@ failures still refuse it. [14](#source-14) [15](#source-15) [16](#source-16)
 6. <a id="source-6"></a> [cmd/yoloctl/box_stop_result_test.go](../../cmd/yoloctl/box_stop_result_test.go#L46) — stop step failures, lost replies, reads, absent/exited, start leftovers and rollback.
 7. <a id="source-7"></a> [internal/agentbox/openshell_stop_endpoint_linux_test.go](../../internal/agentbox/openshell_stop_endpoint_linux_test.go#L52) — endpoint kept unless every check holds.
 8. <a id="source-8"></a> [cmd/yoloctl/agentbox_start_test.go](../../cmd/yoloctl/agentbox_start_test.go#L24) — `TestBoxStartAndRestartPreserveExistingContainer`: start rollback, restart unchanged.
-9. <a id="source-9"></a> [internal/controller/receipts.go](../../internal/controller/receipts.go#L76-L180) — `authorizedStartStop`, `interrupt`, `terminal`.
-10. <a id="source-10"></a> [internal/controller/server.go](../../internal/controller/server.go#L1096) — finalization exit state; `InterruptedMessage` in client.go; `explainOutcome` in holds.go.
+9. <a id="source-9"></a> [internal/controller/receipts.go](../../internal/controller/receipts.go#L76-L180) — `interrupt`, `terminal`.
+10. <a id="source-10"></a> [internal/controller/server.go](../../internal/controller/server.go#L1096) — finalization exit state; interruption text in observation.go; `explainOutcome` in holds.go.
 11. <a id="source-11"></a> [internal/controller/interrupted_test.go](../../internal/controller/interrupted_test.go#L20) — classification, holds and reservations.
 12. <a id="source-12"></a> [internal/agentbox/openshell_stop_result_test.go](../../internal/agentbox/openshell_stop_result_test.go#L65) — replacement never targeted; `openshell_stop_result_linux_test.go` storage failure and transaction accounting.
 13. <a id="source-13"></a> [internal/container/engine_calls.go](../../internal/container/engine_calls.go#L1-L71) — `EngineCalls`, marked in `Client.Start`, `createOrRun`, `Stop`, `StopContainerID`.

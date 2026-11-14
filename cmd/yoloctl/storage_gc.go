@@ -50,7 +50,16 @@ func declaredImageReferences(space string) ([]string, error) {
 
 // collectImages obtains every declaration and container identity before any
 // removal. Callers hold the native space lock, including manual image prune.
-func collectImages(ctx context.Context, c gcImageClient, refs []string, out io.Writer, dryRun bool) (int, error) {
+func collectImages(ctx context.Context, c gcImageClient, refs []string, out io.Writer, dryRun bool, legacyAliases ...string) (int, error) {
+	eligibleLegacy := map[string]bool{}
+	for _, alias := range legacyAliases {
+		name := strings.TrimPrefix(alias, "docker.io/")
+		id := strings.TrimPrefix(name, "yoloctl/prepared/")
+		if len(id) != 64 || name != "yoloctl/prepared/"+id || strings.Trim(id, "0123456789abcdef") != "" {
+			return 0, fmt.Errorf("invalid legacy cleanup alias %q", alias)
+		}
+		eligibleLegacy[name+":latest"] = true
+	}
 	boxes, err := c.List(ctx, "") // includes stopped and non-yoloctl containers
 	if err != nil {
 		return 0, fmt.Errorf("inventory containers: %w", err)
@@ -122,6 +131,7 @@ func collectImages(ctx context.Context, c gcImageClient, refs []string, out io.W
 			}
 		}
 		isManaged := strings.TrimPrefix(img.Repository, "docker.io/") == agentboximage.ComposedImageRepo && detail.Config.Labels["yoloctl.kind"] == "composed"
+		isManaged = isManaged || eligibleLegacy[strings.TrimPrefix(ref, "docker.io/")]
 		if isManaged {
 			managed++
 		}
@@ -145,7 +155,11 @@ func collectImages(ctx context.Context, c gcImageClient, refs []string, out io.W
 			return removed, fmt.Errorf("remove image %s: %w", ref, err)
 		}
 		removed++
-		cliInfo(logging.Storage, "removed unreferenced composed image %s", ref)
+		if eligibleLegacy[strings.TrimPrefix(ref, "docker.io/")] {
+			cliInfo(logging.Storage, "removed unreferenced legacy prepared image %s", ref)
+		} else {
+			cliInfo(logging.Storage, "removed unreferenced composed image %s", ref)
+		}
 	}
 	if dryRun {
 		_, _ = fmt.Fprintf(out, "would prune %d composed image(s); kept %d. No images removed.\n", len(remove), managed-len(remove))
@@ -159,7 +173,7 @@ type storageCollector struct {
 	cache  func(context.Context, uint64) error
 }
 
-func nativeStorageCollector(space string, out io.Writer) storageCollector {
+func nativeStorageCollector(space string, out io.Writer, legacyAliases ...string) storageCollector {
 	return storageCollector{
 		disk: storagegc.RootDisk,
 		images: func(ctx context.Context, extra []string) (int, error) {
@@ -169,7 +183,7 @@ func nativeStorageCollector(space string, out io.Writer) storageCollector {
 			}
 			// Build preflight can run inside an operation with structured stdout.
 			// Route nerdctl removal output through the same diagnostic stream.
-			return collectImages(ctx, container.NewWithOutput(space, out, out), append(refs, extra...), out, false)
+			return collectImages(ctx, container.NewWithOutput(space, out, out), append(refs, extra...), out, false, legacyAliases...)
 		},
 		cache: func(ctx context.Context, keep uint64) error {
 			if current := spaceenv.Current(); current != nil && current.ServiceManager == "microvm" {

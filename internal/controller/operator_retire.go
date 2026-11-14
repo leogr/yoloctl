@@ -144,13 +144,13 @@ func (c *WorkerCheckpoints) RetireOperatorListener(ctx context.Context, box, inc
 	return checkpointParentError(c.SharedChannel().RetireOperator(ctx, box, incarnation))
 }
 
-// ErrNativeOperatorPublicationHeld marks a refusal that ends once the host
-// acknowledges the holding outcome; the scanner retries it.
-var ErrNativeOperatorPublicationHeld = errors.New("native operator publication is held by an unresolved operation")
+// ErrNativeOperatorPublicationHeld marks an operation-policy publication refusal.
+// Retrying never substitutes for registration/incarnation/grant validation.
+var ErrNativeOperatorPublicationHeld = errors.New("native operator publication is waiting for a running operation")
 
 // CheckNativeOperatorPublication refuses to (re)publish box's native endpoint
-// while an unresolved receipt holds box or the space, for example a removal
-// interrupted after its listener retirement. The native scanner calls
+// against the current operation policy; ended outcomes never hold it.
+// The native scanner calls
 // it before every publication, including stale-socket restoration at startup.
 // Surviving identity/client files alone never authorize republication.
 func (s *Server) CheckNativeOperatorPublication(box string) error {

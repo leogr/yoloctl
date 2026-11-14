@@ -10,6 +10,8 @@ import (
 	"syscall"
 
 	"github.com/leogr/yoloctl/internal/account"
+	"github.com/leogr/yoloctl/internal/agentbox"
+	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/safepath"
@@ -49,6 +51,13 @@ func runControllerVerifier(ctx context.Context) error {
 	// after that wait, rather than relying only on process-entry evidence.
 	if err := controller.VerifyRuntimeStorage(ctx); err != nil {
 		return err
+	}
+	if len(in.Boxes) != 0 {
+		if in.DiskID != c.DiskID {
+			return errors.New("container observation disk identity changed")
+		}
+		boxes := observeRecoveryBoxes(ctx, c.Space, in.Boxes, container.NewWithOutput(c.Space, nil, nil))
+		return json.NewEncoder(output).Encode(boxes)
 	}
 	observed := make([]controller.DocumentIntent, 0, len(in.Documents))
 	for _, d := range in.Documents {
@@ -123,4 +132,53 @@ func observeChatDocument() (controller.DocumentIntent, error) {
 	doc.Present, doc.Data = true, raw
 	doc.UID, doc.GID, doc.Mode = os.Geteuid(), os.Getegid(), 0o600
 	return doc, nil
+}
+
+// recoveryContainerReader exposes only the two read-only engine queries used by
+// closing observations. It cannot start, stop or clean up a container.
+type recoveryContainerReader interface {
+	List(context.Context, string) ([]container.Container, error)
+	Inspect(context.Context, string) (*container.Details, error)
+}
+
+func observeRecoveryBoxes(ctx context.Context, space string, names []string, client recoveryContainerReader) []controller.BoxObservation {
+	boxes := make([]controller.BoxObservation, 0, len(names))
+	for _, name := range names {
+		observation := controller.BoxObservation{Name: name, State: "not observed"}
+		list, err := client.List(ctx, agentbox.LabelAgentbox+"="+name)
+		if err != nil {
+			observation.Reason = err.Error()
+		} else if len(list) == 0 {
+			observation.State = "absent"
+		} else if len(list) != 1 {
+			observation.Reason = "multiple containers match recorded box"
+		} else {
+			details, err := client.Inspect(ctx, list[0].ID)
+			if err != nil {
+				observation.Reason = err.Error()
+			} else if details == nil || details.Labels[agentbox.LabelSpace] != space || details.Labels[agentbox.LabelAgentbox] != name || details.Name != name || !canonicalObservedCID(details.ID) || details.AmbiguousTaskStateObserved || !details.Running && !details.InactiveTaskFieldsObserved && !details.EmptyTaskStateObserved {
+				observation.Reason = "container identity is unavailable"
+			} else {
+				observation.ID = details.ID
+				observation.State = "stopped"
+				if details.Running {
+					observation.State = "running"
+				}
+			}
+		}
+		boxes = append(boxes, observation)
+	}
+	return boxes
+}
+
+func canonicalObservedCID(id string) bool {
+	if len(id) != 64 {
+		return false
+	}
+	for _, c := range id {
+		if c < '0' || c > '9' && c < 'a' || c > 'f' {
+			return false
+		}
+	}
+	return true
 }

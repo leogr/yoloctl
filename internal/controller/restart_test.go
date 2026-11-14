@@ -63,7 +63,8 @@ func TestServiceRestartKeepsReceiptsMaintenanceAndDegradedAdmission(t *testing.T
 					return errors.New("simulated receipt storage failure")
 				}
 				required, err := s.Receipts.Recover()
-				s.RecoveryRequired = required
+				_ = required
+				_ = s.refreshRecovery()
 				return err
 			}
 			s.Degrade(errors.New("simulated startup failure"), prepare)
@@ -82,7 +83,8 @@ func TestServiceRestartKeepsReceiptsMaintenanceAndDegradedAdmission(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			s.RecoveryRequired = required
+			_ = required
+			_ = s.refreshRecovery()
 		}
 		if _, err := safepath.ReadFile(meta, "maintenance", 4096); err != nil {
 			t.Fatal(err)
@@ -93,7 +95,7 @@ func TestServiceRestartKeepsReceiptsMaintenanceAndDegradedAdmission(t *testing.T
 		if err := invoke(t, s, request("box.create"), nil, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "maintenance") {
 			t.Fatal("repair cleared maintenance", err)
 		}
-		for id, want := range map[string]string{"waiting-request-123456": "complete", "permitted-request-123456": "uncertain", "command-request-123456": "command-uncertain"} {
+		for id, want := range map[string]string{"waiting-request-123456": "complete", "permitted-request-123456": "interrupted", "command-request-123456": "interrupted"} {
 			r, err := store.Read(id)
 			if err != nil || r.State != want {
 				t.Fatal(id, r.State, err)
@@ -102,7 +104,7 @@ func TestServiceRestartKeepsReceiptsMaintenanceAndDegradedAdmission(t *testing.T
 		if raw, err := safepath.ReadFile(meta, "maintenance", 4096); err != nil || string(raw) != "generation" {
 			t.Fatal("marker changed", err)
 		}
-		if !s.RecoveryRequired || executes != 0 {
+		if s.RecoveryRequired || executes != 0 {
 			t.Fatal("outcome cleared or mutation replayed", s.RecoveryRequired, executes)
 		}
 	}

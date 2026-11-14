@@ -512,7 +512,7 @@ func (p *imageProgress) rootEndLocked() slog.Record {
 	case p.rootErr != "":
 		return imageRecord(prettylog.LevelError, subject+features, append(attrs, slog.String(prettylog.KeyState, string(prettylog.StepFailed)), slog.String(prettylog.KeyErr, p.rootErr))...)
 	default:
-		return imageRecord(prettylog.LevelWarn, subject+features, append(attrs, slog.String(prettylog.KeyState, string(prettylog.StepUnknown)), slog.String(prettylog.KeyErr, "did not finish before the command ended"))...)
+		return imageRecord(prettylog.LevelError, subject+features, append(attrs, slog.String(prettylog.KeyState, string(prettylog.StepFailed)), slog.String(prettylog.KeyErr, "did not finish before the command ended"))...)
 	}
 }
 

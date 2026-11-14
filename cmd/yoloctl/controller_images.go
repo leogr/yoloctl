@@ -370,6 +370,7 @@ type controllerImageBackend interface {
 	controller.ImageBackend
 	controller.ImageService
 	Configure(func(context.Context, controller.ImageRecipe) error, func(context.Context) error)
+	ConfigureLegacy(*controller.Server, string)
 	Sweep(context.Context, []controller.Receipt) error
 	Close()
 }
@@ -406,6 +407,7 @@ func startControllerImages(serviceCtx, ctx context.Context, s *controller.Server
 		backend.Close()
 		return nil, err
 	}
+	backend.ConfigureLegacy(s, incarnation)
 	jobs, err := controller.NewImageJobs(serviceCtx, s, backend, incarnation, runtime.NumCPU())
 	if err != nil {
 		backend.Close()

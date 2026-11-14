@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -90,10 +89,12 @@ type Server struct {
 	RecoveryKey *RecoveryKey
 	// Verify reads back the documents an unresolved receipt's proofs name,
 	// through the read-only verifier worker. Nil disables proof checks.
-	Verify func(context.Context, Receipt) ([]DocumentIntent, error)
+	Verify  func(context.Context, Receipt) ([]DocumentIntent, error)
+	Observe func(context.Context, Receipt) ([]BoxObservation, error)
 	// VerifyStorage revalidates disk identity and the private receipt store
 	// before failed receipt storage can be reconciled.
-	VerifyStorage func(context.Context) error
+	VerifyStorage     func(context.Context) error
+	legacyMaintenance func(context.Context) error
 
 	mu       sync.Mutex
 	draining bool
@@ -108,13 +109,12 @@ type Server struct {
 
 	// Recovery: the failure ledger, a degraded-startup repair, and the single
 	// checker's wake, cancellation and progress.
+	pendingChecks  map[string]pendingClosingCheck
 	ledger         map[string]ledgerEntry
 	startupRepair  func(context.Context) error
 	recoveryWake   chan struct{}
 	recoveryCancel context.CancelFunc
 	recoveryIdle   chan struct{}
-	recoveryCursor string
-	mismatched     map[string]bool
 }
 
 func (s *Server) Drain(ctx context.Context) error {
@@ -176,6 +176,7 @@ func (s *Server) Resume() error {
 		}
 	}
 	s.draining = false
+	_ = s.refreshRecovery()
 	return nil
 }
 
@@ -245,14 +246,9 @@ func (s *Server) admitOperation(req Request, principal Principal, operation Oper
 // recoveryRequiredError names the host review path for an unknown outcome
 // without a bounded footprint, which holds the whole space.
 func recoveryRequiredError(space string) error {
-	return fmt.Errorf("an interrupted operation without a trustworthy footprint may have changed space %[1]s, so changes are paused until a host reviews it; reads still work. "+
-		"On the host, `yoloctl space operation %[1]s --acknowledge-all` accepts every finished unknown outcome at once; "+
-		"`yoloctl space operation %[1]s [ID]` lists or inspects them, and `yoloctl space operation %[1]s ID --acknowledge` accepts one. "+
-		"Acknowledging neither retries nor undoes an operation; a pending operation may still be running and is never acknowledged", space)
-}
+	return fmt.Errorf("operation interrupted in space %s; read its current state", space)
 
-// saveReview persists one acknowledgment; tests inject a partial failure.
-var saveReview = Receipts.Save
+}
 
 // reviewedOutcome identifies a receipt in an acknowledge-all summary.
 type reviewedOutcome struct {
@@ -279,71 +275,11 @@ type acknowledgeAllResult struct {
 func (s *Server) acknowledgeAll() (*acknowledgeAllResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.receiptFailure != nil {
-		return nil, errors.New("receipt storage must be healthy and reconciled before acknowledging outcomes")
-	}
-	all, err := s.Receipts.List()
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(all, func(i, j int) bool { return all[i].Started.Before(all[j].Started) })
-	result := &acknowledgeAllResult{Acknowledged: []reviewedOutcome{}, Maintenance: s.draining}
-	var selected []Receipt
-	for _, r := range all {
-		switch r.State {
-		case "uncertain", "command-uncertain":
-			selected = append(selected, r)
-		case "pending":
-			result.Pending = append(result.Pending, r.ID)
-		}
-	}
-	for i, r := range selected {
-		outcome := reviewedOutcome{r.ID, r.Method, r.State}
-		prior := r.State
-		r.State = "acknowledged"
-		if err := saveReview(s.Receipts, r); err != nil {
-			s.record(r, err, true, true, prior)
-			result.Failed = &outcome
-			hold := outcome.State == "uncertain"
-			for _, rest := range selected[i+1:] {
-				result.Unattempted = append(result.Unattempted, reviewedOutcome{rest.ID, rest.Method, rest.State})
-				hold = hold || rest.State == "uncertain"
-			}
-			s.RecoveryRequired = hold
-			result.ChangesPaused = true
-			return result, fmt.Errorf("receipt storage failed while acknowledging %s in space %s; the decision is read back, never repeated, once storage is healthy: %w", r.ID, s.Hello.Space, err)
-		}
-		result.Acknowledged = append(result.Acknowledged, outcome)
-	}
-	// The snapshot is the complete inventory under the mutex: no uncertain
-	// record remains, and a later one will set the hold again.
-	_ = s.refreshRecovery()
-	result.ChangesPaused = s.draining
-	return result, nil
+	return &acknowledgeAllResult{Acknowledged: []reviewedOutcome{}, Maintenance: s.draining, ChangesPaused: s.draining || s.receiptFailure != nil}, nil
 }
 
 func (r *acknowledgeAllResult) explain(space string) string {
-	var b strings.Builder
-	if len(r.Acknowledged) == 0 && r.Failed == nil {
-		fmt.Fprintf(&b, "No uncertain outcomes to acknowledge in space %s.\n", space)
-	} else {
-		fmt.Fprintf(&b, "Acknowledged %d unknown outcome(s) in space %s; none was retried or undone.\n", len(r.Acknowledged), space)
-	}
-	if r.Failed != nil {
-		fmt.Fprintf(&b, "Receipt storage failed on %s, which may or may not be acknowledged; %d other outcome(s) were not attempted.\n", r.Failed.ID, len(r.Unattempted))
-	}
-	if len(r.Pending) > 0 {
-		fmt.Fprintf(&b, "%d running operation(s) were left untouched; a later outcome that needs controller recovery may pause changes again.\n", len(r.Pending))
-	}
-	if r.Maintenance {
-		fmt.Fprintf(&b, "Space %[1]s is in maintenance; start it with yoloctl space start %[1]s to reopen changes.\n", space)
-	}
-	if r.ChangesPaused {
-		fmt.Fprintf(&b, "Changes in space %s remain paused.\n", space)
-	} else {
-		fmt.Fprintf(&b, "Changes in space %s are not paused.\n", space)
-	}
-	return b.String()
+	return "Interrupted operations hold nothing; acknowledgment changes nothing.\n"
 }
 
 func (s *Server) check(ctx context.Context, p Principal) error {
@@ -502,6 +438,19 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			fail(errors.New("invalid outcome query"))
 			return
 		}
+		if req.Method == "control.acknowledge" {
+			if !principal.Admin() {
+				fail(errors.New("only host administration can acknowledge operations"))
+				return
+			}
+			if err := (Request{ID: query.ID, Dash: -1}).Validate(); err != nil {
+				fail(err)
+				return
+			}
+			_ = wire.Write(Frame{Type: "stderr", Data: []byte("Interrupted operations hold nothing; acknowledgment changes nothing.\n")})
+			_ = wire.Write(Frame{Type: "exit"})
+			return
+		}
 		s.mu.Lock()
 		r, err := s.Receipts.Read(query.ID)
 		s.mu.Unlock()
@@ -509,38 +458,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			fail(errors.New("operation receipt not available"))
 			return
 		}
-		if req.Method == "control.acknowledge" {
-			if !principal.Admin() {
-				fail(errors.New("only host administration can acknowledge uncertain outcomes"))
-				return
-			}
-			s.mu.Lock()
-			// Pending operations are still active. Acknowledgment records a
-			// human recovery decision; it never turns uncertainty into success.
-			// An unknown command result may be marked reviewed but never needs it.
-			r, err = s.Receipts.Read(query.ID)
-			if s.receiptFailure != nil {
-				err = errors.New("receipt storage must be healthy and reconciled before acknowledging outcomes")
-			}
-			if err == nil && r.State != "uncertain" && r.State != "command-uncertain" {
-				err = errors.New("only an uncertain or command-uncertain receipt can be acknowledged")
-			}
-			if err == nil {
-				prior := r.State
-				r.State = "acknowledged"
-				err = s.Receipts.Save(r)
-				s.record(r, err, true, true, prior)
-			}
-			if err == nil {
-				// Releases only this receipt's holds; others remain derived.
-				err = s.refreshRecovery()
-			}
-			s.mu.Unlock()
-			if err != nil {
-				fail(err)
-				return
-			}
-		}
+
 		raw, _ := json.Marshal(publicReceipt(r))
 		_ = wire.Write(Frame{Type: "stdout", Data: append(raw, '\n')})
 		if principal.Admin() {
@@ -552,7 +470,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		return
 	case "control.acknowledge-all":
 		if !principal.Admin() {
-			fail(errors.New("only host administration can acknowledge uncertain outcomes"))
+			fail(errors.New("only host administration can acknowledge operations"))
 			return
 		}
 		result, err := s.acknowledgeAll()
@@ -1071,15 +989,13 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		if execCtx.Err() != nil || errors.As(runErr, &interrupted) || errors.As(runErr, &uncertain) {
 			receipt.interrupt()
 		}
-		if receipt.State == "uncertain" {
-			s.RecoveryRequired = true
-		}
+
 		saveErr := s.Receipts.Save(*receipt)
 		s.record(*receipt, saveErr, true, false, "")
 		if saveErr == nil && receipt.State != "uncertain" {
 			_ = s.refreshRecovery()
 		}
-		if receipt.State == "uncertain" {
+		if receipt.State == "interrupted" {
 			s.wakeRecovery()
 		}
 		s.notifyReceipts()
@@ -1090,23 +1006,24 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		}
 	}
 	exit := Frame{Type: "exit", Status: status}
-	if receipt != nil && (receipt.State == "uncertain" || receipt.State == "command-uncertain") {
+	if receipt != nil && (receipt.State == "interrupted" || receipt.State == "uncertain" || receipt.State == "command-uncertain") {
 		exit.State = receipt.State
+		if status == 0 {
+			status = 2
+			exit.Status = status
+		}
+		exit.Error = receipt.interruptionText(s.Hello.Space)
+		if runErr != nil {
+			exit.Error += "; " + runErr.Error()
+		}
 	}
 	if imageInterrupted != nil && receipt != nil && receipt.EffectPhase == EffectWaiting && (receipt.State == "complete" || receipt.Recovery != nil && receipt.Recovery.Disposition == DispositionNotApplied) && execCtx.Err() == nil {
 		exit.ImageRetryJob = imageInterrupted.JobID
 	}
-	if runErr != nil {
+	if runErr != nil && exit.Error == "" {
 		exit.Error = runErr.Error()
 	}
-	if receipt != nil && receipt.State == "interrupted" {
-		// A plain failure: no unknown outcome, no hold, nothing to review.
-		exit.State = receipt.State
-		exit.Error = InterruptedMessage(receipt.Method)
-		if exit.Status == 0 {
-			exit.Status = 1
-		}
-	}
+
 	_ = wire.Write(exit)
 }
 

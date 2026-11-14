@@ -26,12 +26,24 @@ type VerifierInput struct {
 	Space     string        `json:"space"`
 	Verifier  string        `json:"verifier"`
 	Documents []DocumentRef `json:"documents"`
+	Boxes     []string      `json:"boxes,omitempty"`
+	DiskID    string        `json:"disk_id,omitempty"`
 }
 
 // Validate admits only the reviewed verifier allowlist.
 func (in VerifierInput) Validate(space string) error {
-	if in.Space != space || len(in.Documents) == 0 || len(in.Documents) > maxProofs {
+	if in.Space != space || len(in.Documents)+len(in.Boxes) == 0 || len(in.Documents) > maxProofs || len(in.Boxes) > maxScopeResources {
 		return errors.New("invalid verifier request")
+	}
+	if len(in.Boxes) != 0 {
+		if in.DiskID == "" || len(in.Documents) != 0 {
+			return errors.New("invalid container observation request")
+		}
+		for _, name := range in.Boxes {
+			if err := (Resource{Kind: ResourceBox, Name: name}).validate(); err != nil {
+				return err
+			}
+		}
 	}
 	for _, d := range in.Documents {
 		if err := (DocumentIntent{Kind: d.Kind, Name: d.Name, Present: true}).validate(in.Verifier); err != nil {
@@ -56,7 +68,36 @@ func verifierInput(space string, r Receipt) VerifierInput {
 // not a registered operation and has no public RPC. Its process group is
 // killed when ctx ends.
 func RunVerifier(ctx context.Context, space string, r Receipt) ([]DocumentIntent, error) {
-	in := verifierInput(space, r)
+	raw, err := runVerifier(ctx, space, verifierInput(space, r))
+	if err != nil {
+		return nil, err
+	}
+	var observed []DocumentIntent
+	if err := decodeStrict(raw, &observed); err != nil || len(observed) != len(r.Proofs) {
+		return nil, errors.New("invalid verifier output")
+	}
+	return observed, nil
+}
+
+// RunBoxObserver uses the same bounded private verifier transport. The controller
+// has already checked the recorded disk/scope; the worker rechecks the disk.
+func RunBoxObserver(ctx context.Context, space string, r Receipt) ([]BoxObservation, error) {
+	names, reason := observationBoxes(r, r.DiskID)
+	if reason != "" {
+		return nil, errors.New(reason)
+	}
+	raw, err := runVerifier(ctx, space, VerifierInput{Space: space, Boxes: names, DiskID: r.DiskID})
+	if err != nil {
+		return nil, err
+	}
+	var boxes []BoxObservation
+	if err := decodeStrict(raw, &boxes); err != nil || len(boxes) != len(names) {
+		return nil, errors.New("invalid container observation output")
+	}
+	return boxes, nil
+}
+
+func runVerifier(ctx context.Context, space string, in VerifierInput) ([]byte, error) {
 	if err := in.Validate(space); err != nil {
 		return nil, err
 	}
@@ -106,11 +147,7 @@ func RunVerifier(ctx context.Context, space string, r Receipt) ([]DocumentIntent
 	case len(raw) > MaxFrame:
 		return nil, errors.New("verifier output exceeds its limit")
 	}
-	var observed []DocumentIntent
-	if err := decodeStrict(raw, &observed); err != nil || len(observed) != len(in.Documents) {
-		return nil, errors.New("invalid verifier output")
-	}
-	return observed, nil
+	return raw, nil
 }
 
 // limitedWriter keeps a bounded prefix of diagnostics.

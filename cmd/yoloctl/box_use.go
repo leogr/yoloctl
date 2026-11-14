@@ -144,7 +144,7 @@ func callControllerBoxUse(cmd *cobra.Command, target controllerTarget, req contr
 		select {
 		case remoteErr = <-done:
 		case <-time.After(time.Second):
-			return &controller.OutcomeUnknown{ID: req.ID, Cause: errors.New("timed out draining box-use operation receipt")}
+			return &controller.OutcomeUnknown{ID: req.ID, Cause: errors.New("timed out draining box-use operation receipt"), Method: req.Method, Space: req.Space}
 		}
 	}
 	var unknown *controller.OutcomeUnknown

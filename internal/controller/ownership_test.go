@@ -825,7 +825,7 @@ func TestOwnedAttachGenuineFailuresStillFence(t *testing.T) {
 		_ = conn.Close()
 		h.releaseBarriers()
 		r, err := h.s.Receipts.Read(req.ID)
-		if err != nil || r.State != "uncertain" || !h.s.RecoveryRequired {
+		if err != nil || r.State != "interrupted" || h.s.RecoveryRequired {
 			t.Fatal(r, h.s.RecoveryRequired, err)
 		}
 	})
@@ -846,7 +846,7 @@ func TestOwnedAttachGenuineFailuresStillFence(t *testing.T) {
 		revoked.Store(true)
 		h.wait(h.served, "the revoked setup to end")
 		r, err := h.s.Receipts.Read(req.ID)
-		if err != nil || r.State != "uncertain" || !h.s.RecoveryRequired || h.holders() != 0 {
+		if err != nil || r.State != "interrupted" || h.s.RecoveryRequired || h.holders() != 0 {
 			t.Fatal(r, h.s.RecoveryRequired, err)
 		}
 	})

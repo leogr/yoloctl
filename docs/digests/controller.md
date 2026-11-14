@@ -1,6 +1,6 @@
 # VM controller, transport and recovery
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `272abb082790962572505495756706d40d73f06c` and accompanying N1 changes; re-read cited sources when changing behavior.
 
 [FACT] Public clients reuse the service's Cobra definitions and route registered
 operations to one root controller inside the selected VM. Host clients use a
@@ -50,7 +50,7 @@ request carries the host verbosity. The controller relays each record as a
 `log` frame and reads the pipe to EOF before the exit frame, waiting at most
 2 s after the worker exits, then sends an explicit incomplete-stream record;
 a partial or corrupt tail is reported, not parsed. An exit frame names an
-`uncertain` or `command-uncertain` receipt state; the client exposes it, and
+`interrupted` receipt state (also accepting legacy states); the client exposes it, and
 whether it already rendered a failed/unknown outcome record, on `ExitError`.
 [35](#source-35) [36](#source-36)
 Bridge closure permits a bounded graceful exit before killing a stuck process.
@@ -71,33 +71,29 @@ inventories of the read-only host catalog directories. [9](#source-9)
 [FACT] A drain persists maintenance before waiting for admitted setup and a
 running recovery check; new work is refused except `box stop`, which is admitted
 and never waits at its gate ([box stop and start](box-stop-start.md)). Host-only resume durably clears
-maintenance after export without restarting workers or clearing uncertain
-outcomes or receipt failures. Independent session units survive controller
+maintenance after export without restarting workers or clearing receipt failures. Independent session units survive controller
 restart. The guest supervisor terminates old controller workers before a new
 instance starts; startup then recovers pending receipts with the finalization
 classifier. No request is automatically replayed after a lost reply.
-Acknowledgment means reviewed, never successful, retried or undone; `pending`
-is never acknowledged. `--acknowledge-all` reviews every finished unknown
-outcome of one mutex-held inventory, reports any maintenance still in effect
-and stops at a failed save with the saved prefix under the storage hold.
-Gating, evidence, automatic recovery, footprint holds and receipt-storage
-repair are in [interrupted-outcome recovery](controller-recovery.md).
+Acknowledgment options are compatibility no-ops; interrupted outcomes hold
+nothing and nothing is retried or undone. Gating, evidence, automatic observation,
+running reservations and receipt-storage repair are in
+[interrupted-outcome recovery](controller-recovery.md).
 [12](#source-12) [13](#source-13) [22](#source-22) [26](#source-26)
 
 [FACT] Effect gates start at `effect_phase: waiting`. Private duplex FD 4
 acknowledges `BeginEffects` only after durably saving `started`; stdout cannot
 authorize effects. After authorization, signals, panic or a missing normal
 completion, process-wait errors, malformed checkpoints and explicit uncertain
-effects retain uncertainty unless setup or completion was durably recorded.
+effects close interrupted unless setup or completion was durably recorded.
 Only `box.attach` also owns authorized setup: its client's loss detaches
 instead of canceling, and finalization follows the execution, not the client.
 [23](#source-23) [24](#source-24) [8](#source-8) [12](#source-12) [27](#source-27)
 
 [FACT] Gated `box.exec` permits its command before setup release. Later
 interruption or a missing remote exit status records non-fencing
-`command-uncertain`: queryable, never replayed, optionally acknowledged, and
-never reserving its box. Known remote exits keep their status; legacy exec
-records stay `uncertain`. [2](#source-2) [13](#source-13) [25](#source-25)
+`interrupted`: queryable, never replayed and never reserving its box. Known
+remote exits keep their status; legacy exec outcomes migrate on controller startup. [2](#source-2) [13](#source-13) [25](#source-25)
 
 [FACT] Unit/PTY tests exercise frame/scope rejection, byte streams, flow control,
 resize/final output, signal status, cancellation, revocation, failed receipt

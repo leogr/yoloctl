@@ -67,14 +67,13 @@ func TestBoxStopRunsBesideAnInterruptedRecord(t *testing.T) {
 	}
 }
 
-// An unresolved outcome still refuses the stop's gate until the
-// no-uncertain contract removes holds; this slice changes waiting only.
-func TestBoxStopStillMeetsAnUnresolvedHold(t *testing.T) {
+// Old ended outcomes do not fence the stop; running policy is separate.
+func TestBoxStopIgnoresLegacyEndedOutcome(t *testing.T) {
 	s, ran := besideServer(t)
 	saveReceipt(t, s, "restart-unknown-0123456789", "box.restart", "uncertain")
 	err := invoke(t, s, request("box.stop"), nil, io.Discard, io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "held") || *ran != 0 {
-		t.Fatalf("unresolved hold: %v ran %d", err, *ran)
+	if err != nil || *ran != 1 {
+		t.Fatalf("legacy ended outcome: %v ran %d", err, *ran)
 	}
 }
 

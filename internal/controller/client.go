@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/pkg/prettylog"
@@ -42,12 +41,6 @@ type ExitError struct {
 	// failure that holds nothing); empty for a known result. Message keeps
 	// the existing wording.
 	State string
-}
-
-// InterruptedMessage is the failure a box start or stop that did not finish
-// reports: its result was not recorded and the box's state is read anew.
-func InterruptedMessage(method string) string {
-	return strings.ReplaceAll(method, ".", " ") + ` did not finish; run "box list" to read the box's state`
 }
 
 // clientLogStreams picks where relayed records go when the caller chose no
@@ -123,12 +116,22 @@ func (e *ExitError) ExitCode() int { return e.Status }
 // OutcomeUnknown means no final receipt was received. Callers may query this
 // ID over a new connection, but must never automatically repeat the operation.
 type OutcomeUnknown struct {
-	ID    string
-	Cause error
+	ID     string
+	Cause  error
+	Method string
+	Space  string
 }
 
 func (e *OutcomeUnknown) Error() string {
-	return fmt.Sprintf("connection ended before the result of request %s; outcome may be uncertain: %v", e.ID, e.Cause)
+	method := e.Method
+	if method == "" {
+		method = "request " + e.ID
+	}
+	space := e.Space
+	if space == "" {
+		space = "SPACE"
+	}
+	return fmt.Sprintf("interrupted: %s did not finish; read the state with yoloctl space operation %s %s; do not replay it: %v", method, space, e.ID, e.Cause)
 }
 func (e *OutcomeUnknown) Unwrap() error { return e.Cause }
 
@@ -171,7 +174,7 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 		return err
 	}
 	if err := wire.Write(Frame{Type: "request", Request: &req}); err != nil {
-		return &OutcomeUnknown{req.ID, err}
+		return &OutcomeUnknown{ID: req.ID, Cause: err, Method: req.Method, Space: req.Space}
 	}
 	streams = clientLogStreams(streams)
 	logSink := streams.Log
@@ -264,7 +267,7 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 	for {
 		f, err := wire.Read()
 		if err != nil {
-			return &OutcomeUnknown{req.ID, err}
+			return &OutcomeUnknown{ID: req.ID, Cause: err, Method: req.Method, Space: req.Space}
 		}
 		switch f.Type {
 		case "view-ready":
@@ -284,7 +287,7 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 			select {
 			case credits <- struct{}{}:
 			default:
-				return &OutcomeUnknown{req.ID, errors.New("invalid input flow control")}
+				return &OutcomeUnknown{ID: req.ID, Cause: errors.New("invalid input flow control"), Method: req.Method, Space: req.Space}
 			}
 		case "stdout":
 			if streams.Out != nil {
@@ -301,7 +304,7 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 		case "log":
 			record, err := prettylog.UnmarshalRecord(f.Data)
 			if err != nil {
-				return &OutcomeUnknown{req.ID, errors.New("invalid controller log record")}
+				return &OutcomeUnknown{ID: req.ID, Cause: errors.New("invalid controller log record"), Method: req.Method, Space: req.Space}
 			}
 			// Only the LAST explicit outcome counts, and only a rendered failure
 			// or uncertainty: an earlier ok (or a sub-step) never hides a later
@@ -321,14 +324,14 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 			if f.Status == 0 && f.Error == "" {
 				return nil
 			}
-			if f.State != "" && f.State != "uncertain" && f.State != "command-uncertain" && f.State != "interrupted" {
-				return &OutcomeUnknown{req.ID, errors.New("unexpected controller result state")}
+			if f.State != "" && f.State != "interrupted" && f.State != "uncertain" && f.State != "command-uncertain" {
+				return &OutcomeUnknown{ID: req.ID, Cause: errors.New("unexpected controller result state"), Method: req.Method, Space: req.Space}
 			}
 			return &ExitError{Status: f.Status, Message: f.Error, Rendered: rendered, State: f.State}
 		case "detached":
 			return &ClientDetached{ID: req.ID, Signal: f.Signal, Owned: f.Owned}
 		default:
-			return &OutcomeUnknown{req.ID, errors.New("unexpected controller response")}
+			return &OutcomeUnknown{ID: req.ID, Cause: errors.New("unexpected controller response"), Method: req.Method, Space: req.Space}
 		}
 	}
 }

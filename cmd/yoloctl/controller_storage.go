@@ -67,7 +67,10 @@ func scheduleStorageGC(parent context.Context, server *controller.Server, run fu
 			_, err := server.RunMaintenance(ctx, func(ctx context.Context) error {
 				ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 				defer cancel()
-				return run(ctx)
+				if err := run(ctx); err != nil {
+					return err
+				}
+				return server.MaintainLegacyImages(ctx)
 			})
 			if err != nil && ctx.Err() == nil && !errors.Is(err, context.Canceled) {
 				log.Warn("Storage maintenance deferred", "actor", logging.Controller, "err", err)
@@ -153,7 +156,15 @@ func collectControllerStorage(ctx context.Context) error {
 	}
 	defer cleanup()
 	spaceenv.UseCatalogSnapshot(catalogs)
-	if err := nativeStorageCollector(c.Space, os.Stderr).collect(ctx, nil, os.Stderr); err != nil {
+	boot, err := imageVMIncarnation(c.DiskID)
+	if err != nil {
+		return err
+	}
+	aliases, err := (controller.Receipts{Dir: filepath.Join(c.DiskMount, ".controller", "receipts")}).LegacyImageAliases(c.DiskID, boot)
+	if err != nil {
+		return err
+	}
+	if err := nativeStorageCollector(c.Space, os.Stderr, aliases...).collect(ctx, nil, os.Stderr); err != nil {
 		return err
 	}
 	return trimGuestStorage(ctx, c)

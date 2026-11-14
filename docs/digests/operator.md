@@ -44,10 +44,10 @@ mutation lock is held, before effects. A copied binary or same-account peer
 inherits no endpoint. [4](#source-4) [5](#source-5) [6](#source-6)
 [24](#source-24)
 
-[FACT] Host and operator mutations use the same dependency holds and recheck
-them at the effect gate. Availability never grants authority. Operator
-refusals omit other receipts and principals; only host administration can
-acknowledge unknown outcomes. [25](#source-25) [5](#source-5)
+[FACT] Host and operator mutations use the same running reservations and recheck
+them at the effect gate; ended interrupted outcomes hold nothing. Availability
+never grants authority. Operator refusals omit other receipts and principals.
+Host-only acknowledgment options are compatibility no-ops. [25](#source-25) [5](#source-5)
 
 [FACT] Replacement/removal retires old registrations. Fixed root controller startup
 first restores the verified native account bind, including after a guest reboot;

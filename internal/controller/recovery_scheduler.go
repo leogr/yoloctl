@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"time"
 
 	"github.com/leogr/yoloctl/internal/safepath"
@@ -44,6 +45,9 @@ func (e *receiptWriteError) Unwrap() error { return e.err }
 // storage hold; any flush while the hold stands must be read back before
 // the hold can be dropped. Callers hold s.mu.
 func (s *Server) record(r Receipt, err error, settled, review bool, prior string) {
+	if r.State == "interrupted" && r.Observation == nil {
+		s.wakeRecovery()
+	}
 	if err == nil && s.receiptFailure == nil {
 		return
 	}
@@ -284,66 +288,128 @@ func probeReceiptStore(dir string) error {
 // verifyOutcomes runs the reviewed read-only verifiers over unresolved
 // receipts that recorded proofs. Each check is bounded; a pass resumes after
 // the last receipt it reached so one entry cannot starve the others.
+type pendingClosingCheck struct {
+	checked  Receipt
+	next     Receipt
+	observed []DocumentIntent
+}
+
 func (s *Server) verifyOutcomes(ctx context.Context) bool {
 	s.mu.Lock()
-	if s.Verify == nil || s.RecoveryKey == nil || s.receiptFailure != nil {
-		s.mu.Unlock()
-		return false
-	}
 	all, err := s.Receipts.List()
+	if s.pendingChecks == nil {
+		s.pendingChecks = map[string]pendingClosingCheck{}
+	}
+	pending := make(map[string]pendingClosingCheck, len(s.pendingChecks))
+	for id, p := range s.pendingChecks {
+		pending[id] = p
+	}
 	s.mu.Unlock()
 	if err != nil {
 		return true
 	}
-	var candidates []Receipt
-	for _, r := range all {
-		if r.unresolved() && r.Verifier != "" && len(r.Proofs) != 0 && !s.checkedProof(r) {
-			candidates = append(candidates, r)
-		}
-	}
-	if len(candidates) == 0 {
-		return false
-	}
-	start := 0
-	for i, r := range candidates {
-		if r.ID > s.recoveryCursor {
-			start = i
-			break
-		}
-	}
 	retry := false
-	for n := range candidates {
-		r := candidates[(start+n)%len(candidates)]
+	for _, p := range pending {
 		if ctx.Err() != nil {
 			return true
 		}
-		s.recoveryCursor = r.ID
-		checkCtx, cancel := context.WithTimeout(ctx, recoveryReceiptBudget)
-		observed, err := s.Verify(checkCtx, r)
-		cancel()
-		if err != nil {
-			retry = true // locks or evidence unavailable: defer, keep the hold
+		if s.publishClosingCheck(p) != nil {
+			retry = true
+		}
+	}
+	for _, r := range all {
+		if r.State != "interrupted" || r.Observation != nil {
 			continue
 		}
-		if err := s.publishApplied(r, observed); err != nil {
-			retry = retry || !errors.Is(err, errProofMismatch)
+		s.mu.Lock()
+		_, waiting := s.pendingChecks[r.ID]
+		s.mu.Unlock()
+		// A check already made is retried only as publication, never as observation.
+		if waiting {
+			continue
+		}
+		if _, wasPending := pending[r.ID]; wasPending {
+			continue
+		}
+		if ctx.Err() != nil {
+			return true
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, recoveryReceiptBudget)
+		next, observed := s.checkInterrupted(checkCtx, r)
+		cancel()
+		p := pendingClosingCheck{checked: r, next: next, observed: observed}
+		s.mu.Lock()
+		s.pendingChecks[r.ID] = p
+		s.mu.Unlock()
+		if s.publishClosingCheck(p) != nil {
+			retry = true
 		}
 	}
 	return retry
 }
 
-var errProofMismatch = errors.New("observed state does not match the recorded postimage")
-
-func (s *Server) checkedProof(r Receipt) bool {
+func (s *Server) publishClosingCheck(p pendingClosingCheck) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.mismatched[r.ID]
+	current, err := s.Receipts.Read(p.checked.ID)
+	if err != nil {
+		// A missing receipt is conclusive only while its store itself exists.
+		if errors.Is(err, fs.ErrNotExist) {
+			if info, rootErr := os.Lstat(s.Receipts.Dir); rootErr == nil && info.IsDir() {
+				delete(s.pendingChecks, p.checked.ID)
+				s.mu.Unlock()
+				return nil
+			}
+		}
+		if s.receiptFailure == nil {
+			s.receiptFailure = err
+		}
+		s.wakeRecovery()
+		s.mu.Unlock()
+		return err
+	}
+	if current.State != "interrupted" || current.Observation != nil {
+		delete(s.pendingChecks, p.checked.ID)
+		s.mu.Unlock()
+		return nil
+	}
+	checked := p.checked
+	next := p.next
+	if !sameReceipt(current, checked) {
+		oldWithoutImage, newWithoutImage := checked, current
+		oldWithoutImage.Image, newWithoutImage.Image = nil, nil
+		next = current
+		if sameReceipt(oldWithoutImage, newWithoutImage) {
+			// Preserve a newer strict image fact; its metadata does not change the
+			// scope or document evidence which was actually observed.
+			next.Observation = p.next.Observation
+		} else {
+			next.Observation = &Observation{At: p.next.Observation.At, Reason: "record changed before its closing observation was published"}
+			p.observed = nil
+		}
+		checked = current
+	}
+	s.mu.Unlock()
+	if next.Observation.Proof == "matched" && len(p.observed) == len(checked.Proofs) {
+		err = s.publishApplied(checked, p.observed, next.Observation)
+	} else {
+		err = s.publishObservation(checked, next)
+	}
+	s.mu.Lock()
+	if err == nil {
+		delete(s.pendingChecks, p.checked.ID)
+	} else {
+		s.wakeRecovery()
+	}
+	s.mu.Unlock()
+	return err
 }
+
+var errProofMismatch = errors.New("observed state does not match the recorded postimage")
 
 // publishApplied records an exact verified postcondition. The receipt must
 // be unchanged since it was read, storage healthy, and every proof matched.
-// A mismatch is remembered so it is not retried; the hold remains.
-func (s *Server) publishApplied(checked Receipt, observed []DocumentIntent) error {
+// A mismatch is remembered so it is not retried; no finished outcome holds.
+func (s *Server) publishApplied(checked Receipt, observed []DocumentIntent, observation ...*Observation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.receiptFailure != nil {
@@ -361,23 +427,61 @@ func (s *Server) publishApplied(checked Receipt, observed []DocumentIntent) erro
 	}
 	for i, p := range checked.Proofs {
 		if !s.RecoveryKey.matchesVersion(checked.ProofVersion, checked.DiskID, checked.ID, checked.Verifier, p, observed[i]) {
-			if s.mismatched == nil {
-				s.mismatched = map[string]bool{}
-			}
-			s.mismatched[checked.ID] = true
+
 			return errProofMismatch
 		}
 	}
 	next := current
+	if len(observation) != 0 {
+		next.Observation = observation[0]
+	}
 	next.recovered(DispositionApplied, ProofDocumentImage)
 	err = s.Receipts.Save(next)
-	s.record(next, err, true, false, "")
 	if err != nil {
+		s.keepClosingCheck(checked, next, observed, err)
 		return err
 	}
 	_ = s.refreshRecovery()
 	s.notifyReceipts()
 	return nil
+}
+
+// publishObservation publishes only an unchanged ended receipt, under the same
+// controller mutex used for proof publication and execution finalization.
+func (s *Server) publishObservation(checked, next Receipt) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, err := s.Receipts.Read(checked.ID)
+	if err != nil {
+		return err
+	}
+	if !sameReceipt(current, checked) {
+		return errors.New("receipt changed during its closing check")
+	}
+	err = s.Receipts.Save(next)
+	if err != nil {
+		s.keepClosingCheck(checked, next, nil, err)
+	}
+	s.notifyReceipts()
+	return err
+}
+
+// keepClosingCheck retains publication work rather than an obsolete whole
+// receipt in the failure ledger. A newer strict image fact must survive repair.
+func (s *Server) keepClosingCheck(checked, next Receipt, observed []DocumentIntent, err error) {
+	if s.pendingChecks == nil {
+		s.pendingChecks = map[string]pendingClosingCheck{}
+	}
+	if next.Observation == nil {
+		next.Observation = &Observation{At: time.Now().UTC(), Proof: "matched"}
+	}
+	if _, exists := s.pendingChecks[checked.ID]; !exists {
+		s.pendingChecks[checked.ID] = pendingClosingCheck{checked: checked, next: next, observed: observed}
+	}
+	if s.receiptFailure == nil {
+		s.receiptFailure = err
+	}
+	s.wakeRecovery()
 }
 
 // sameReceipt compares durable encodings, which is what a reader observes.

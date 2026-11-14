@@ -8,6 +8,6 @@ import "fmt"
 type EffectsUncertain struct{ Cause error }
 
 func (e *EffectsUncertain) Error() string {
-	return fmt.Sprintf("operation effects are uncertain: %v", e.Cause)
+	return fmt.Sprintf("operation interrupted: %v", e.Cause)
 }
 func (e *EffectsUncertain) Unwrap() error { return e.Cause }

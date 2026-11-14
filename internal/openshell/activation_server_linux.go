@@ -35,7 +35,7 @@ func awaitNativeActivation(ctx context.Context, record RuntimeRecord) (_ activat
 	}
 	var previous unix.Stat_t
 	if err := unix.Fstatat(status, activationSocketName, &previous, unix.AT_SYMLINK_NOFOLLOW); !errors.Is(err, unix.ENOENT) {
-		return activationProof{}, errors.New("initial activation refuses an existing status socket or uncertain directory")
+		return activationProof{}, errors.New("initial activation refuses an existing status socket or unverified directory")
 	}
 	// The native data-disk path can exceed sockaddr_un's limit. This short
 	// descriptor alias retains the verified directory and follows no user path.

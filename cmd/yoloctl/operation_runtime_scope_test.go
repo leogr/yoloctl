@@ -167,7 +167,7 @@ func TestFailedRepointStillConflictsWithActualAccountHold(t *testing.T) {
 		method, target string
 		allowed        bool
 	}{
-		{"box.start", "dev", false}, {"account.secret.set", "desired", true}, {"account.secret.set", "other", true},
+		{"box.start", "dev", true}, {"account.secret.set", "desired", true}, {"account.secret.set", "other", true},
 	} {
 		ran = false
 		client, server := net.Pipe()

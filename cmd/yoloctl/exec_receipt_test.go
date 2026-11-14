@@ -200,12 +200,12 @@ func TestExecLostResultIsQueryableWithoutFencingTheSpace(t *testing.T) {
 					t.Fatal("remote exit status was not preserved", err)
 				}
 			case "missing exit status":
-				wantState = "command-uncertain"
+				wantState = "interrupted"
 				if !errors.As(err, &exit) || exit.Status == 0 {
 					t.Fatal("missing remote status became a known success", err)
 				}
 			case "client lost":
-				wantState = "command-uncertain"
+				wantState = "interrupted"
 				if !errors.As(err, &unknown) || unknown.ID != req.ID {
 					t.Fatal("client loss reported a known result", err)
 				}
@@ -245,11 +245,11 @@ func TestExecStillWaitsForStructuralRecovery(t *testing.T) {
 	server := execReceiptServer(t, true)
 	create := controller.Request{ID: "fedcba9876543210fedcba9876543210", Method: "box.create", Space: "work", Dash: -1}
 	_ = callChatImageFixture(ctx, ctx, server, create, nil)
-	if receipt, err := server.Receipts.Read(create.ID); err != nil || receipt.State != "uncertain" || !server.RecoveryRequired {
+	if receipt, err := server.Receipts.Read(create.ID); err != nil || receipt.State != "interrupted" || server.RecoveryRequired {
 		t.Fatal(receipt, server.RecoveryRequired, err)
 	}
 	req := controller.Request{ID: "0123456789abcdef0123456789abcdef", Method: "box.exec", Space: "work", Dash: -1}
-	if err := callChatImageFixture(ctx, ctx, server, req, nil); err == nil || fixture.dials.Load() != 0 || fixture.commands.Load() != 0 {
+	if err := callChatImageFixture(ctx, ctx, server, req, nil); err != nil || fixture.dials.Load() != 1 || fixture.commands.Load() != 1 {
 		t.Fatal("exec reached its endpoint behind an unreviewed lifecycle outcome", err)
 	}
 	list := controller.Request{ID: "00112233445566778899aabbccddeeff", Method: "box.list", Space: "work", Dash: -1}
@@ -288,7 +288,7 @@ func TestSpaceOperationHelpNamesHostReviewPath(t *testing.T) {
 	if err := cmd.Help(); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"yoloctl space operation SPACE --acknowledge-all", "yoloctl space operation SPACE ID --acknowledge", "neither retries nor undoes", "never acknowledged", "command-uncertain", "optional", "never granted permission", "success or failure", "recovered, applied", "operations depending on them", "without a restart", "a timer never stands in for evidence"} {
+	for _, want := range []string{"interrupted", "observation", "Nothing is replayed", "hold nothing", "compatibility no-ops", "Running operations"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("help lacks %q:\n%s", want, out.String())
 		}

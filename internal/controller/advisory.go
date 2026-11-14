@@ -133,7 +133,7 @@ func (w ImageWait) String() string {
 		out += " " + w.JobID
 	}
 	if len(w.Blockers) != 0 {
-		out += " held by "
+		out += " waiting for "
 		for i, b := range w.Blockers {
 			if i > 0 {
 				out += ", "

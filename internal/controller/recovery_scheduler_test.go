@@ -209,31 +209,11 @@ func TestStorageRepairWaitsForUnsettledExecutions(t *testing.T) {
 	}
 }
 
-func TestFailedAcknowledgmentIsReadBackNeverRepeated(t *testing.T) {
-	for _, durable := range []bool{true, false} {
-		s := storeServer(t)
-		r := seedReceipt(t, s, "held-0123456789abcd", "uncertain", writes(box("web")), nil)
-		reviewed := r
-		reviewed.State = "acknowledged"
-		if durable {
-			if err := s.Receipts.Save(reviewed); err != nil {
-				t.Fatal(err)
-			}
-		}
-		s.mu.Lock()
-		s.record(reviewed, errors.New("lost fsync reply"), true, true, "uncertain")
-		s.mu.Unlock()
-		if s.recoveryPass(t.Context()) || s.receiptFailure != nil {
-			t.Fatal("read-back acknowledgment kept the storage hold", s.receiptFailure)
-		}
-		got, err := s.Receipts.Read(r.ID)
-		want := "uncertain"
-		if durable {
-			want = "acknowledged"
-		}
-		if err != nil || got.State != want || s.RecoveryRequired == durable {
-			t.Fatalf("durable=%v state=%s recovery=%v err=%v", durable, got.State, s.RecoveryRequired, err)
-		}
+func TestAcknowledgmentDoesNotEnterFailureLedger(t *testing.T) {
+	s := storeServer(t)
+	seedReceipt(t, s, "review-noop-0123456789", "interrupted", writes(box("web")), nil)
+	if _, err := s.acknowledgeAll(); err != nil || len(s.ledger) != 0 || s.receiptFailure != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -266,7 +246,7 @@ func TestFailedAdmissionFlushIsClassifiedNotApplied(t *testing.T) {
 func provenReceipt(t *testing.T, s *Server, postimage string) (Receipt, DocumentIntent) {
 	t.Helper()
 	d := DocumentIntent{Kind: DocumentAccount, Name: "personal", Present: true, Data: []byte(postimage), Mode: 0o600}
-	r := seedReceipt(t, s, "proof-0123456789abcd", "uncertain", writes(acct("personal")), func(r *Receipt) {
+	r := seedReceipt(t, s, "proof-0123456789abcd", "interrupted", writes(acct("personal")), func(r *Receipt) {
 		r.Method, r.Verifier = "account.secret.set", VerifierAccountDocument
 		r.Proofs = []Proof{s.RecoveryKey.proof(r.DiskID, r.ID, r.Verifier, d)}
 	})
@@ -297,7 +277,7 @@ func TestVerifiedPostimagePublishesAppliedOnce(t *testing.T) {
 	}
 }
 
-func TestVerifierFailuresKeepTheHold(t *testing.T) {
+func TestVerifierFailuresAreFinalWithoutHold(t *testing.T) {
 	for name, tc := range map[string]struct {
 		observe func(DocumentIntent) ([]DocumentIntent, error)
 		retry   bool
@@ -315,7 +295,7 @@ func TestVerifierFailuresKeepTheHold(t *testing.T) {
 		}, false},
 		"lock busy": {func(DocumentIntent) ([]DocumentIntent, error) {
 			return nil, context.DeadlineExceeded
-		}, true},
+		}, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := storeServer(t)
@@ -326,11 +306,11 @@ func TestVerifierFailuresKeepTheHold(t *testing.T) {
 				t.Fatal("retry", retry)
 			}
 			got, err := s.Receipts.Read(r.ID)
-			if err != nil || got.State != "uncertain" {
+			if err != nil || got.State != "interrupted" {
 				t.Fatal(got, err)
 			}
 			s.recoveryPass(t.Context())
-			if wantCalls := map[bool]int{true: 2, false: 1}[tc.retry]; calls != wantCalls {
+			if calls != 1 {
 				t.Fatal("checks", calls)
 			}
 		})
@@ -456,7 +436,7 @@ func TestRecoverySchedulerBacksOffWithoutSpinning(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	cancel()
 	<-done
-	if n := len(calls); n < 2 || n > 12 {
+	if n := len(calls); n != 1 {
 		t.Fatal("checks in 300ms:", n)
 	}
 }

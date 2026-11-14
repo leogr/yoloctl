@@ -406,7 +406,7 @@ func (m *Model) imageUncertainText(img *draftImage) string {
 	}
 	switch {
 	case img.requestID != "":
-		return "Inspect yoloctl space operation " + m.opts.Space + " " + img.requestID + ": the image " + what + " is uncertain; " + advice
+		return "Inspect yoloctl space operation " + m.opts.Space + " " + img.requestID + ": the image " + what + " was interrupted; " + advice
 	case img.problem != "":
 		return "The image " + what + " is uncertain (" + img.problem + "); " + advice
 	}
@@ -510,12 +510,12 @@ func (m *Model) lateOutcome(msg ImageUploadedMsg) {
 		what = "removed"
 	}
 	id := requestRef(msg.RequestID)
-	level, text := levelWarn, m.inspect(id, "the "+what+" image's upload outcome is uncertain")
+	level, text := levelWarn, m.inspect(id, "the "+what+" image's upload did not finish")
 	switch {
 	case l.staged && msg.State == Confirmed:
 		level, text = levelOK, "The host confirmed the "+what+" image's staging; it is never announced and expires"
 	case l.staged:
-		text = m.inspect(id, "the "+what+" image's staging outcome is uncertain; staging never announces it")
+		text = m.inspect(id, "the "+what+" image's staging did not finish; staging never announces it")
 	case msg.State == Confirmed:
 		level, text = levelOK, "The host confirmed the "+what+" image's upload: it was published"
 	case msg.State == Rejected:

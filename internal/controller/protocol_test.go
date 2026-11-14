@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -19,55 +18,22 @@ import (
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 )
 
-func TestRecoveryRequiresReviewWithoutReplayingOrBlockingReads(t *testing.T) {
+func TestRecoveryClosesWithoutReviewAndNeverReplays(t *testing.T) {
 	receipts := Receipts{t.TempDir()}
-	for _, id := range []string{"pending-request-123456", "attached-request-123456"} {
-		r := request("box.create")
-		r.ID = id
-		item, err := receipts.Begin(r, Principal{}, "generation-1")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.HasPrefix(id, "attached") {
-			item.SetupComplete = true
-			if err := receipts.Save(item); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	required, err := receipts.Recover()
-	if err != nil || !required {
-		t.Fatalf("recovery: %v %v", required, err)
-	}
-	attached, err := receipts.Read("attached-request-123456")
-	if err != nil || attached.State != "setup-complete" {
-		t.Fatalf("attachment outcome: %+v %v", attached, err)
-	}
-	s := &Server{Hello: hello(), Receipts: receipts, RecoveryRequired: required,
-		Operations: map[string]Operation{"box.create": {Mutates: true}, "box.list": {}},
-		Execute:    func(context.Context, Principal, Request, Streams) (int, error) { return 0, nil },
-	}
-	if err := invoke(t, s, request("box.list"), nil, io.Discard, io.Discard); err != nil {
+	req := request("box.create")
+	req.ID = "pending-request-123456"
+	if _, err := receipts.Begin(req, Principal{}, "generation-1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := invoke(t, s, request("box.create"), nil, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "`yoloctl space operation work ID --acknowledge`") {
-		t.Fatal("mutation admitted before review, or review path missing", err)
+	if closed, err := receipts.Recover(); err != nil || !closed {
+		t.Fatal(closed, err)
 	}
-	r := request("control.acknowledge")
-	r.Payload, _ = json.Marshal(map[string]string{"id": "pending-request-123456"})
-	if err := invoke(t, s, r, nil, io.Discard, io.Discard); err != nil {
-		t.Fatal(err)
-	}
+	s := &Server{Hello: hello(), Receipts: receipts, Operations: map[string]Operation{"box.create": {Mutates: true}}, Execute: func(context.Context, Principal, Request, Streams) (int, error) { return 0, nil }}
 	if err := invoke(t, s, request("box.create"), nil, io.Discard, io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	if required, err := receipts.Recover(); required || err != nil {
-		t.Fatalf("review lost on restart: %v %v", required, err)
-	}
-	old := request("box.create")
-	old.ID = "pending-request-123456"
-	if err := invoke(t, s, old, nil, io.Discard, io.Discard); err == nil {
-		t.Fatal("acknowledged request replayed")
+	if err := invoke(t, s, req, nil, io.Discard, io.Discard); err == nil {
+		t.Fatal("interrupted request replayed")
 	}
 }
 
@@ -491,11 +457,13 @@ func TestResumeDoesNotClearUncertainOutcomesOrBypassFlushFailure(t *testing.T) {
 	if err := s.Resume(); err != nil {
 		t.Fatal(err)
 	}
-	if !s.RecoveryRequired {
-		t.Fatal("resume cleared uncertain outcomes")
+	if s.RecoveryRequired {
+		t.Fatal("finished receipt kept a recovery fence")
 	}
-	if _, _, err := s.admit(request("box.create"), Principal{}, true); err == nil {
-		t.Fatal("resume authorized unreviewed mutation")
+	if release, _, err := s.admit(request("box.create"), Principal{}, true); err != nil {
+		t.Fatal(err)
+	} else {
+		release()
 	}
 	if err := s.Drain(t.Context()); err != nil {
 		t.Fatal(err)

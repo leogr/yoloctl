@@ -80,16 +80,16 @@ func TestServeNativeOperatorStartsOneClaimedListener(t *testing.T) {
 		t.Fatal(err)
 	}
 	held := nativeServeIdentity("box", strings.Repeat("f", 32))
-	if err := s.ServeNativeOperator(t.Context(), held); !errors.Is(err, ErrNativeOperatorPublicationHeld) || len(*made) != 2 || s.operatorPublications.entries[held.Incarnation] != nil {
-		t.Fatal("a held box's registration was served")
+	if err := s.ServeNativeOperator(t.Context(), held); err != nil || len(*made) != 3 || s.operatorPublications.entries[held.Incarnation] == nil {
+		t.Fatal("finished receipt fenced registration")
 	}
 	// Once the host acknowledges the outcome, the scanner's retry serves it.
 	r.State = "acknowledged"
 	if err := s.Receipts.Save(*r); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ServeNativeOperator(t.Context(), held); err != nil || len(*made) != 3 {
-		t.Fatal("an acknowledged box's registration was not served on retry", err)
+	if err := s.ServeNativeOperator(t.Context(), held); err == nil || !strings.Contains(err.Error(), "already claimed") || len(*made) != 3 {
+		t.Fatal("acknowledgment changed an existing registration claim", err)
 	}
 }
 

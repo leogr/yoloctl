@@ -22,23 +22,30 @@ import (
 // PrivateVersion qualifies the one-time private-export/non-consumption contract.
 // Abandonment records authority revocation, never proof the solve stopped.
 type ImagePhase struct {
-	Stage          string    `json:"stage,omitempty"`
-	OrphanRecorded bool      `json:"orphan_recorded,omitempty"`
-	PrivateVersion int       `json:"private_version,omitempty"`
-	AbandonedAt    time.Time `json:"abandoned_at,omitempty,omitzero"`
-	ReleasedAt     time.Time `json:"released_at,omitempty,omitzero"`
-	Residual       bool      `json:"possible_surviving_work,omitempty"`
-	JobID          string    `json:"job_id"`
-	StableInput    string    `json:"stable_input"`
-	Attempt        string    `json:"attempt"`
-	SolveRef       string    `json:"solve_ref"`
-	Incarnation    string    `json:"incarnation"`
-	PreparedRef    string    `json:"prepared_ref"`
-	Output         string    `json:"output,omitempty"`
-	Lease          string    `json:"lease,omitempty"`
+	Stage              string    `json:"stage,omitempty"`
+	OrphanRecorded     bool      `json:"orphan_recorded,omitempty"`
+	PrivateVersion     int       `json:"private_version,omitempty"`
+	AbandonedAt        time.Time `json:"abandoned_at,omitempty,omitzero"`
+	ReleasedAt         time.Time `json:"released_at,omitempty,omitzero"`
+	Residual           bool      `json:"possible_surviving_work,omitempty"`
+	LegacyBoot         string    `json:"legacy_residual_boot,omitempty"`
+	LegacyAliasPending bool      `json:"legacy_alias_pending,omitempty"`
+	JobID              string    `json:"job_id"`
+	StableInput        string    `json:"stable_input"`
+	Attempt            string    `json:"attempt"`
+	SolveRef           string    `json:"solve_ref"`
+	Incarnation        string    `json:"incarnation"`
+	PreparedRef        string    `json:"prepared_ref"`
+	Output             string    `json:"output,omitempty"`
+	Lease              string    `json:"lease,omitempty"`
 }
 
 func (p ImagePhase) validate(r Receipt) error {
+	if p.LegacyBoot != "" || p.LegacyAliasPending {
+		if p.PrivateVersion != 0 || !p.Residual || r.Completion != nil || r.State != "interrupted" || !imageBootIdentity(p.LegacyBoot) {
+			return errors.New("invalid legacy image residual evidence")
+		}
+	}
 	if p.Stage != "" && p.Stage != "preflight" && p.Stage != "build" {
 		return errors.New("invalid image phase stage")
 	}
@@ -122,8 +129,8 @@ type imageJob struct {
 }
 
 // ImageJobs is controller-owned. Workers only hold an interest and consume a
-// result through their private channel. Registry state is never a replacement
-// for the receipt inventory: every new job checks durable stable-input holds.
+// result through their private channel. Running attempts exclude conflicting image work; ended outcomes do not
+// reserve input slots. Strict stage and residual ownership facts remain durable.
 type ImageJobs struct {
 	server      *Server
 	backend     ImageBackend
@@ -142,7 +149,7 @@ func NewImageJobs(ctx context.Context, s *Server, b ImageBackend, incarnation st
 	}
 	m := &ImageJobs{server: s, backend: b, incarnation: incarnation, capacity: max(cpus-1, 1), ctx: ctx, jobs: map[string]*imageJob{}, changed: make(chan struct{})}
 	// Recover() preserves completion and durably abandons qualified private
-	// attempts. Unqualified legacy solves retain their conservative capacity.
+	// attempts. Ended legacy residuals retain cleanup ownership, not capacity.
 	s.mu.Lock()
 	all, err := s.Receipts.List()
 	s.mu.Unlock()
@@ -218,8 +225,8 @@ func (m *ImageJobs) acquireWithProgress(ctx context.Context, recipe ImageRecipe,
 		return nil, err
 	}
 	m.mu.Lock()
-	// Reconcile risk acceptance/recovery from durable records before counting
-	// uncertain capacity or admitting a new attempt. Never delete old evidence.
+	// Drop ended tracked attempts before counting running build capacity.
+	// Strict residual cleanup evidence remains separately retained.
 	if err := m.refreshUncertain(); err != nil {
 		m.mu.Unlock()
 		return nil, err
@@ -323,8 +330,8 @@ func imageBaseReads(recipe ImageRecipe) []Resource {
 	return reads
 }
 
-// Caller holds m.mu. The durable receipt is the release authority, including
-// explicit risk acceptance; local worker death and time never release a slot.
+// Caller holds m.mu. Ended outcomes do not reserve build slots; durable
+// residual ownership and alias cleanup are independent of this local capacity.
 func (m *ImageJobs) refreshUncertain() error {
 	m.server.mu.Lock()
 	defer m.server.mu.Unlock()
@@ -369,7 +376,7 @@ func (m *ImageJobs) abandonLocked(j *imageJob) {
 			r.State, r.Status, r.Finished = "complete", 2, time.Now().UTC()
 			r.Completion = &Completion{At: r.Finished, Status: 2}
 		} else {
-			r.State, r.Status, r.Finished = "uncertain", 2, time.Now().UTC()
+			r.State, r.Status, r.Finished = "interrupted", 2, time.Now().UTC()
 			r.Image.Residual = true
 			err = server.Receipts.SaveImageOrphan(r)
 			if err == nil {
@@ -713,7 +720,7 @@ func (j *imageJob) endSteps(knownFailure bool) {
 		case knownFailure:
 			s.Fail(j.err)
 		default:
-			s.Unknown(j.err)
+			s.Fail(j.err)
 		}
 	}
 }
@@ -732,4 +739,9 @@ func jobBlocker(j *imageJob) BlockerSummary {
 		return j.owner
 	}
 	return BlockerSummary{Method: "image.job"}
+}
+
+func imageBootIdentity(value string) bool {
+	raw, err := hex.DecodeString(value)
+	return err == nil && len(raw) == sha256.Size && hex.EncodeToString(raw) == value
 }

@@ -1021,7 +1021,7 @@ func TestImageProgressRootEndsFailedOrUncertain(t *testing.T) {
 			tracker.Apply(r)
 		}
 		root := tracker.Steps()[0]
-		want, err := prettylog.StepUnknown, "did not finish before the command ended"
+		want, err := prettylog.StepFailed, "did not finish before the command ended"
 		if fail {
 			want, err = prettylog.StepFailed, "exit code: 3"
 		}

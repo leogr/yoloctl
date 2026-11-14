@@ -161,3 +161,54 @@ func TestImagePruneUnnamedContainerIdentifiesBlocker(t *testing.T) {
 		t.Fatalf("unnamed container: %v; removed %v", err, f.removed)
 	}
 }
+
+func TestImagePruneLegacyCandidateUsesExistingProtectionInventory(t *testing.T) {
+	for _, protected := range []string{"none", "declaration", "container", "foreign alias", "inventory failure"} {
+		t.Run(protected, func(t *testing.T) {
+			defer bindCLITestLogger(t, io.Discard)()
+			alias := "yoloctl/prepared/" + strings.Repeat("a", 64)
+			other := "yoloctl/prepared/" + strings.Repeat("b", 64)
+			id := "sha256:" + strings.Repeat("c", 64)
+			f := &gcFixture{details: map[string]container.ImageDetails{}, containers: map[string]*container.Details{}, parents: map[string]string{}}
+			for _, name := range []string{alias, other} {
+				ref := name + ":latest"
+				f.images = append(f.images, container.Image{Repository: name, Tag: "latest", ID: id})
+				f.details[ref] = container.ImageDetails{ID: id, RepoTags: []string{ref}}
+			}
+			// The unrelated prepared alias uses another image, so it neither becomes
+			// eligible nor independently protects the candidate under test.
+			d := f.details[other+":latest"]
+			d.ID = "sha256:" + strings.Repeat("d", 64)
+			f.details[other+":latest"] = d
+			var refs []string
+			switch protected {
+			case "declaration":
+				refs = []string{alias}
+			case "container":
+				f.boxes = []container.Container{{Name: "external-stopped"}}
+				f.containers["external-stopped"] = &container.Details{Image: alias, ImageID: id}
+			case "foreign alias":
+				refs = []string{"private/keep:latest"}
+				f.images = append(f.images, container.Image{Repository: "private/keep", Tag: "latest", ID: id})
+				f.details["private/keep:latest"] = container.ImageDetails{ID: id, RepoTags: []string{"private/keep:latest"}}
+			case "inventory failure":
+				f.fail = "containers"
+			}
+			_, err := collectImages(t.Context(), f, refs, io.Discard, false, alias)
+			if protected == "inventory failure" {
+				if err == nil {
+					t.Fatal("ignored inventory failure")
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if protected == "none" {
+				if !reflect.DeepEqual(f.removed, []string{alias + ":latest"}) {
+					t.Fatal(f.removed)
+				}
+			} else if len(f.removed) != 0 {
+				t.Fatal("removed protected alias", f.removed)
+			}
+		})
+	}
+}

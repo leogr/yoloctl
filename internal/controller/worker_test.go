@@ -34,6 +34,17 @@ func TestMain(m *testing.M) {
 			os.Exit(91)
 		}
 		out := os.NewFile(4, "verifier-result")
+		if len(in.Boxes) != 0 {
+			if err := in.Validate(in.Space); err != nil {
+				os.Exit(92)
+			}
+			var boxes []BoxObservation
+			for _, name := range in.Boxes {
+				boxes = append(boxes, BoxObservation{Name: name, State: "absent"})
+			}
+			_ = json.NewEncoder(out).Encode(boxes)
+			os.Exit(0)
+		}
 		switch in.Documents[0].Name {
 		case "hang":
 			time.Sleep(time.Minute)

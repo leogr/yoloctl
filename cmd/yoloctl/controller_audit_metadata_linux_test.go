@@ -25,7 +25,7 @@ import (
 func TestAuditMetadataPublicationUsesObservedIDsAndHolds(t *testing.T) {
 	scenario := os.Getenv("YOLOCTL_TEST_AUDIT_METADATA")
 	if scenario == "" {
-		for _, scenario := range []string{"known", "unconfined", "privileged", "startup-order", "disabled", "observation-failed", "audit-held", "lock-failed", "duplicate"} {
+		for _, scenario := range []string{"known", "unconfined", "privileged", "startup-order", "disabled", "observation-failed", "audit-held", "audit-interrupted", "lock-failed", "duplicate"} {
 			t.Run(scenario, func(t *testing.T) {
 				cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestAuditMetadataPublicationUsesObservedIDsAndHolds$")
 				cmd.Env = append(os.Environ(), "YOLOCTL_TEST_AUDIT_METADATA="+scenario)
@@ -54,8 +54,11 @@ func TestAuditMetadataPublicationUsesObservedIDsAndHolds(t *testing.T) {
 	if err := safepath.WriteFile(filepath.Dir(target), filepath.Base(target), []byte("old observation"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if scenario == "audit-held" {
-		r := controller.Receipt{ID: "audit-metadata-held-0123456789", Method: "audit.enable", State: "uncertain", EffectPhase: controller.EffectStarted, Started: time.Now(), Generation: c.Generation, ProofVersion: controller.ProofVersion, DiskID: c.DiskID, Scope: &controller.Scope{Writes: []controller.Resource{{Kind: controller.ResourceAudit}}}}
+	if scenario == "audit-held" || scenario == "audit-interrupted" {
+		r := controller.Receipt{ID: "audit-metadata-held-0123456789", Method: "audit.enable", State: "pending", EffectPhase: controller.EffectStarted, Started: time.Now(), Generation: c.Generation, ProofVersion: controller.ProofVersion, DiskID: c.DiskID, Scope: &controller.Scope{Writes: []controller.Resource{{Kind: controller.ResourceAudit}}}}
+		if scenario == "audit-interrupted" {
+			r.State = "interrupted"
+		}
 		if err := (controller.Receipts{Dir: filepath.Join(disk, ".controller", "receipts")}).Save(r); err != nil {
 			t.Fatal(err)
 		}
@@ -147,7 +150,7 @@ func TestAuditMetadataPublicationUsesObservedIDsAndHolds(t *testing.T) {
 	} else {
 		err = publishAuditMetadata(t.Context())
 	}
-	success := scenario == "known" || scenario == "unconfined" || scenario == "privileged" || scenario == "startup-order"
+	success := scenario == "audit-interrupted" || scenario == "known" || scenario == "unconfined" || scenario == "privileged" || scenario == "startup-order"
 	wantErr := !success && scenario != "disabled"
 	if (err != nil) != wantErr {
 		t.Fatal(err, wantErr)

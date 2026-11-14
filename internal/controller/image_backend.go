@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	cd "github.com/containerd/containerd/v2/client"
+	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/containerd/v2/core/leases"
 	"github.com/containerd/containerd/v2/core/remotes"
 	"github.com/containerd/containerd/v2/core/remotes/docker"
@@ -43,6 +44,17 @@ type NativeImageBackend struct {
 	builderMu      sync.Mutex
 	closed         bool
 	newBuilder     func(context.Context) (*bk.Client, error)
+	legacyServer   *Server
+	legacyBoot     string
+}
+
+// ConfigureLegacy binds strict earlier-format facts to this controller and
+// the verified disk/boot identity computed by the native startup path.
+func (b *NativeImageBackend) ConfigureLegacy(server *Server, boot string) {
+	b.legacyServer, b.legacyBoot = server, boot
+	server.mu.Lock()
+	server.legacyMaintenance = b.maintainLegacy
+	server.mu.Unlock()
 }
 
 func (b *NativeImageBackend) Close() {
@@ -517,27 +529,32 @@ func ownedAttemptName(name string) (string, bool) {
 // effects whose private isolation was never established. Orphan warnings and
 // execution receipts remain; deleting a name proves nothing about a survivor.
 func (b *NativeImageBackend) Sweep(ctx context.Context, records []Receipt) error {
-	keep := map[string]bool{}
-	for _, r := range records {
-		if r.Image != nil && r.Image.PrivateVersion != 1 && (r.unresolved() || r.reserving()) {
-			keep[r.ID] = true
-		}
-	}
 	ctx = imageContext(ctx)
 	all, err := b.Containerd.ImageService().List(ctx)
 	if err != nil {
 		return err
 	}
+	list, err := b.Containerd.LeasesService().List(ctx)
+	if err != nil {
+		return err
+	}
+	records, err = b.reconcileLegacy(ctx, records, all, list)
+	if err != nil {
+		return err
+	}
+	keep := map[string]bool{}
+	for _, r := range records {
+		if r.legacyImageResidual() {
+			keep[r.ID] = true
+		}
+	}
+
 	for _, i := range all {
 		if id, owned := ownedAttemptName(i.Name); owned && !keep[id] {
 			if err := b.Containerd.ImageService().Delete(ctx, i.Name); err != nil && !errdefs.IsNotFound(err) {
 				return err
 			}
 		}
-	}
-	list, err := b.Containerd.LeasesService().List(ctx)
-	if err != nil {
-		return err
 	}
 	for _, l := range list {
 		id, ok := strings.CutPrefix(l.ID, "yoloctl-image-")
@@ -587,4 +604,152 @@ func classifyImageSolveError(ctx context.Context, err error) error {
 		return err
 	}
 	return &ImageBuildFailure{Cause: err}
+}
+
+// stampLegacyBoot never trusts a historical Image.Incarnation. The first
+// observation starts retention in the verified current boot. No release here.
+func (b *NativeImageBackend) stampLegacyBoot(records []Receipt) ([]Receipt, error) {
+	if b.legacyServer == nil {
+		return records, nil
+	}
+	if !imageBootIdentity(b.legacyBoot) {
+		return nil, errors.New("verified image boot identity unavailable")
+	}
+	records = append([]Receipt(nil), records...)
+	for i, r := range records {
+		if !r.legacyImageResidual() || r.State != "interrupted" || !r.Image.Residual || r.DiskID != b.legacyServer.DiskID || r.Image.LegacyBoot != "" {
+			continue
+		}
+		next := r
+		phase := *r.Image
+		phase.LegacyBoot = b.legacyBoot
+		next.Image = &phase
+		if err := b.saveLegacyFact(r, next); err != nil {
+			return nil, err
+		}
+		records[i] = next
+	}
+	return records, nil
+}
+
+// reconcileLegacy releases only protection from a positively different boot.
+// Alias deletion belongs to storage cleanup's complete protected-reference plan.
+func (b *NativeImageBackend) reconcileLegacy(ctx context.Context, records []Receipt, aliases []images.Image, leaseList []leases.Lease) ([]Receipt, error) {
+	if b.legacyServer != nil && b.legacyServer.VerifyStorage != nil {
+		if err := b.legacyServer.VerifyStorage(ctx); err != nil {
+			return nil, err
+		}
+	}
+	records, err := b.stampLegacyBoot(records)
+	if err != nil || b.legacyServer == nil {
+		return records, err
+	}
+	for i, r := range records {
+		if !r.legacyImageResidual() || r.State != "interrupted" || !r.Image.Residual || r.DiskID != b.legacyServer.DiskID || r.Image.LegacyBoot == "" || r.Image.LegacyBoot == b.legacyBoot {
+			continue
+		}
+		aliasPresent := false
+		for _, alias := range aliases {
+			if id, owned := ownedAttemptName(alias.Name); owned && id == r.ID {
+				aliasPresent = true
+			}
+		}
+		for _, lease := range leaseList {
+			if lease.ID == "yoloctl-image-"+r.ID {
+				if err := b.Containerd.LeasesService().Delete(ctx, lease); err != nil && !errdefs.IsNotFound(err) {
+					return nil, err
+				}
+			}
+		}
+		next := r
+		phase := *r.Image
+		next.Image = &phase
+		if aliasPresent {
+			phase.LegacyAliasPending = true
+		} else {
+			phase.Residual = false
+			phase.LegacyBoot = ""
+			phase.LegacyAliasPending = false
+		}
+		if !sameReceipt(r, next) {
+			if err := b.saveLegacyFact(r, next); err != nil {
+				return nil, err
+			}
+			records[i] = next
+		}
+	}
+	return records, nil
+}
+
+// saveLegacyFact is strict working-state publication, never a late ordinary
+// operation record. It shares publication ordering with the controller.
+func (b *NativeImageBackend) saveLegacyFact(expected, next Receipt) error {
+	s := b.legacyServer
+	if s == nil {
+		return errors.New("legacy image recovery controller unavailable")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, err := s.Receipts.Read(expected.ID)
+	if err != nil {
+		return err
+	}
+	if current.DiskID != s.DiskID || !sameReceipt(current, expected) {
+		return errors.New("legacy image fact changed during its observation")
+	}
+	if err := next.validateEvidence(); err != nil {
+		return err
+	}
+	return s.Receipts.Save(next)
+}
+
+// MaintainLegacyImages reconciles strict residual facts after native storage GC.
+func (s *Server) MaintainLegacyImages(ctx context.Context) error {
+	s.mu.Lock()
+	run := s.legacyMaintenance
+	s.mu.Unlock()
+	if run == nil {
+		return nil
+	}
+	return run(ctx)
+}
+
+func (b *NativeImageBackend) maintainLegacy(ctx context.Context) error {
+	s := b.legacyServer
+	s.mu.Lock()
+	records, err := s.Receipts.List()
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	ctx = imageContext(ctx)
+	aliases, err := b.Containerd.ImageService().List(ctx)
+	if err != nil {
+		return err
+	}
+	leaseList, err := b.Containerd.LeasesService().List(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = b.reconcileLegacy(ctx, records, aliases, leaseList)
+	return err
+}
+
+// LegacyImageAliases returns only strict receipt-proven aliases pending the
+// existing native GC inventory. It grants no operation or build permission.
+func (s Receipts) LegacyImageAliases(disk, boot string) ([]string, error) {
+	if disk == "" || !imageBootIdentity(boot) {
+		return nil, errors.New("verified legacy image identity unavailable")
+	}
+	records, err := s.List()
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, r := range records {
+		if r.DiskID == disk && r.legacyImageResidual() && r.Image.Residual && r.Image.LegacyAliasPending && r.Image.LegacyBoot != "" && r.Image.LegacyBoot != boot {
+			out = append(out, r.Image.PreparedRef)
+		}
+	}
+	return out, nil
 }

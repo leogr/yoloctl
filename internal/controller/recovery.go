@@ -80,9 +80,9 @@ func (r Resource) validate() error {
 }
 
 // Scope is the durable footprint recorded before an effect is permitted.
-// Writes are held while the outcome is unresolved; Reads are dependencies a
-// new effect checks against existing holds but never holds itself. A missing
-// scope, or Global, holds the whole space.
+// Writes reserve resources while the permitted execution runs; Reads are
+// dependencies checked against running reservations. A missing or global
+// running footprint conflicts with the whole space. Finished receipts hold nothing.
 type Scope struct {
 	Global bool       `json:"global,omitempty"`
 	Writes []Resource `json:"writes,omitempty"`

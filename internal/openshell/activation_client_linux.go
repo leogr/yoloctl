@@ -66,7 +66,7 @@ func (a *NativeActivation) activate(ctx context.Context, inspect func(context.Co
 	defer func() { _ = unix.Close(status) }()
 	var previous unix.Stat_t
 	if err := unix.Fstatat(status, "activation.json", &previous, unix.AT_SYMLINK_NOFOLLOW); !errors.Is(err, unix.ENOENT) {
-		return &NativeEffectsUncertain{Cause: errors.New("native activation was already attempted or its outcome is uncertain; inspect it without replay")}
+		return &NativeEffectsUncertain{Cause: errors.New("native activation was already attempted or its operation interrupted; inspect it without replay")}
 	}
 	key, err := loadActivationKey(prepared.GenerationRoot, prepared.Record)
 	if err != nil {

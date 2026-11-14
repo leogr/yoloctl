@@ -48,7 +48,7 @@ func renderLoggedCLIError(err error) {
 		return
 	}
 	if cliUncertain(err) {
-		logging.Logger().Outcome(prettylog.OutcomeUnknown, "Command outcome is unknown", prettylog.Actor(logging.Controller), prettylog.Err(err))
+		logging.Logger().Outcome(prettylog.OutcomeFailed, "Operation interrupted", prettylog.Actor(logging.Controller), prettylog.Err(err))
 		return
 	}
 	logging.Logger().Outcome(prettylog.OutcomeFailed, "Command failed", prettylog.Actor(logging.Host), prettylog.Err(err))
@@ -73,7 +73,7 @@ func cliUncertain(err error) bool {
 	var lost *controller.OutcomeUnknown
 	var interrupted *controller.ImageInterrupted
 	var remote *controller.ExitError
-	return errors.As(err, &lost) || errors.As(err, &interrupted) || errors.As(err, &remote) && (remote.State == "uncertain" || remote.State == "command-uncertain")
+	return errors.As(err, &lost) || errors.As(err, &interrupted) || errors.As(err, &remote) && (remote.State == "interrupted" || remote.State == "uncertain" || remote.State == "command-uncertain")
 }
 
 func cliEndStep(step *prettylog.Step, err error) {
@@ -81,7 +81,7 @@ func cliEndStep(step *prettylog.Step, err error) {
 	case err == nil:
 		step.Done()
 	case cliUncertain(err):
-		step.Unknown(err)
+		step.Fail(err)
 	default:
 		step.Fail(err)
 	}
@@ -104,7 +104,7 @@ func cliOperation(cmd *cobra.Command, title, success, space string, run func() e
 		if result != nil {
 			kind, message = prettylog.OutcomeFailed, "Command failed"
 			if cliUncertain(result) {
-				kind, message = prettylog.OutcomeUnknown, "Command outcome is unknown"
+				kind, message = prettylog.OutcomeFailed, "Operation interrupted"
 			}
 		}
 		logging.Logger().Outcome(kind, message, prettylog.Actor(logging.Host), slog.String(logging.KeySpace, space), prettylog.Err(result))
@@ -141,7 +141,7 @@ func cliFinishOutcome(result error, success, actor string) error {
 	if result != nil {
 		kind, message = prettylog.OutcomeFailed, "Command failed"
 		if cliUncertain(result) {
-			kind, message = prettylog.OutcomeUnknown, "Command outcome is unknown"
+			kind, message = prettylog.OutcomeFailed, "Operation interrupted"
 		}
 	}
 	logging.Logger().Outcome(kind, message, prettylog.Actor(actor), prettylog.Err(result))

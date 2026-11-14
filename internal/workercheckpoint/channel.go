@@ -41,7 +41,7 @@ const (
 
 var ErrRefused = errors.New("controller refused the operation checkpoint")
 var ErrDetached = errors.New("controller client detached")
-var ErrUncertain = errors.New("original parent reported uncertain effects")
+var ErrUncertain = errors.New("original parent reported an interrupted operation")
 
 // localCancellationError marks only admission/metadata cancellation that did
 // not own an active protocol exchange. It is not exported or constructed by

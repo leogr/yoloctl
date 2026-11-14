@@ -329,35 +329,13 @@ func TestForceAfterBuildStartsUsesNewPrivateAttemptWithoutSharedInputReservation
 	}
 }
 
-func TestHeldBasePublicationRefusesWarmEffectsAndStoreCleanup(t *testing.T) {
+func TestInterruptedBasePublicationDoesNotFenceWarmEffectsOrCleanup(t *testing.T) {
 	m, b := newJobs(t, 2)
 	base := Resource{Kind: ResourceImages, Name: "local/base:pending"}
-	r, err := m.server.Receipts.begin(Request{ID: "held-base-publication-001", Method: "image.build", Dash: -1}, Principal{}, "generation", m.server.DiskID, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.ProofVersion, r.State, r.EffectPhase, r.Scope = 2, "uncertain", EffectStarted, &Scope{Writes: []Resource{base}}
-	if err := m.server.Receipts.Save(r); err != nil {
-		t.Fatal(err)
-	}
+	seedReceipt(t, m.server, "ended-base-publication-001", "interrupted", writes(base), func(r *Receipt) { r.ProofVersion = 2 })
 	input := recipe("dependent")
 	input.BaseReference = base.Name
-	if result, err := m.Acquire(t.Context(), input); err == nil {
-		result.Release()
-		t.Fatal("bypassed held base publication")
-	}
-	b.mu.Lock()
-	calls := b.preflights
-	b.mu.Unlock()
-	if calls != 0 {
-		t.Fatal("cleanup ran before dependency refusal")
-	}
-	if err := m.server.Receipts.CheckImageCleanup(m.server.Hello.Space, m.server.DiskID); err == nil {
-		t.Fatal("store-wide cleanup bypassed named hold")
-	}
-	other := recipe("independent")
-	other.BaseReference = "local/other:base"
-	pending := acquire(m, t.Context(), other)
+	pending := acquire(m, t.Context(), input)
 	take(t, b.started)
 	b.release <- struct{}{}
 	result := take(t, pending)
@@ -365,4 +343,7 @@ func TestHeldBasePublicationRefusesWarmEffectsAndStoreCleanup(t *testing.T) {
 		t.Fatal(result.err)
 	}
 	result.image.Release()
+	if err := m.server.Receipts.CheckImageCleanup(m.server.Hello.Space, m.server.DiskID); err != nil {
+		t.Fatal(err)
+	}
 }

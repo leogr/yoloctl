@@ -154,7 +154,7 @@ func TestUncertainStagingBlocksWithStagingGuidance(t *testing.T) {
 	pasteImg(t, m, h, "png")
 	press(m, tea.KeyEnter, 0)
 	m.Update(ImageUploadedMsg{Channel: "#space", Token: h.uploads[0].Token, RequestID: "REQ1", State: Uncertain})
-	if !strings.Contains(m.notice, "REQ1") || !strings.Contains(m.notice, "staging is uncertain") || !strings.Contains(m.notice, "never announces") {
+	if !strings.Contains(m.notice, "REQ1") || !strings.Contains(m.notice, "staging was interrupted") || !strings.Contains(m.notice, "never announces") {
 		t.Fatalf("staging uncertainty names its operation, not an announcement: %q", m.notice)
 	}
 	press(m, tea.KeyEnter, 0)

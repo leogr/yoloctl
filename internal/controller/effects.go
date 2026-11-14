@@ -169,7 +169,7 @@ func checkpointParentError(err error) error {
 
 // errUncertainAfterCompletion marks a worker that contradicted its own
 // completion checkpoint; finalization then disregards that checkpoint.
-var errUncertainAfterCompletion = errors.New("worker reported uncertain effects after completing them")
+var errUncertainAfterCompletion = errors.New("worker reported interrupted effects after completing them")
 
 func decodeStrict(raw []byte, dst any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -213,7 +213,7 @@ func serveWorkerCheckpoints(ctx context.Context, file *os.File, streams Streams)
 			if errors.Is(err, io.EOF) || finished && errors.Is(err, syscall.ECONNRESET) {
 				if finished {
 					if uncertain {
-						return errors.New("worker reported an uncertain effect outcome")
+						return errors.New("worker reported an interrupted operation")
 					}
 					return nil
 				}

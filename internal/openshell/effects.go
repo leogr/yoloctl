@@ -8,7 +8,7 @@ import "fmt"
 type NativeEffectsUncertain struct{ Cause error }
 
 func (e *NativeEffectsUncertain) Error() string {
-	return fmt.Sprintf("native runtime effects are uncertain: %v", e.Cause)
+	return fmt.Sprintf("native runtime operation interrupted: %v", e.Cause)
 }
 
 func (e *NativeEffectsUncertain) Unwrap() error { return e.Cause }

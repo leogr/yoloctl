@@ -91,9 +91,9 @@ func TestChatImageReceiptSeparatesPreEffectCancellationFromPossiblePOST(t *testi
 				wantPhase, wantUploads = controller.EffectWaiting, 0
 			}
 			if mode == "reply lost after POST" {
-				wantState = "uncertain"
+				wantState = "interrupted"
 			}
-			if receipt.State != wantState || receipt.EffectPhase != wantPhase || conn.uploads != wantUploads || server.RecoveryRequired != (wantState == "uncertain") {
+			if receipt.State != wantState || receipt.EffectPhase != wantPhase || conn.uploads != wantUploads || server.RecoveryRequired {
 				t.Fatal(receipt, "uploads", conn.uploads, "recovery", server.RecoveryRequired)
 			}
 			raw, err := os.ReadFile(filepath.Join(server.Receipts.Dir, request.ID+".json"))

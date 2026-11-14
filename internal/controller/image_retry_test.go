@@ -84,7 +84,7 @@ func TestImageRetryRequiresDurableRequestWaitingEvidence(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			if published && (r.State != "uncertain" || r.Completion != nil) {
+			if published && (r.State != "interrupted" || r.Completion != nil) {
 				t.Fatal("publication uncertainty was erased", r)
 			}
 			if !published && (r.EffectPhase != EffectWaiting || r.State != "complete") {
@@ -179,7 +179,7 @@ func TestDesiredImageHoldRefusesCacheHitBeforeSaveOrRuntimeEffects(t *testing.T)
 				effects++
 				return 0, nil
 			}
-			if err := invoke(t, s, Request{ID: "cache-hit-request-123", Method: method, Space: s.Hello.Space, Dash: -1}, nil, io.Discard, io.Discard); err == nil || effects != 0 {
+			if err := invoke(t, s, Request{ID: "cache-hit-request-123", Method: method, Space: s.Hello.Space, Dash: -1}, nil, io.Discard, io.Discard); err != nil || effects != 1 {
 				t.Fatal("held cache hit reached save/runtime", effects, err)
 			}
 		})

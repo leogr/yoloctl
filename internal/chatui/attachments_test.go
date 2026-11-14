@@ -508,7 +508,7 @@ func TestLateOutcomeAfterPublicationStillNamesItsOperation(t *testing.T) {
 	}
 	alt(m, '2') // the outcome arrives while another channel is shown
 	m.Update(ImageUploadedMsg{Channel: "#space", Token: h.uploads[0].Token, RequestID: "REQ9", State: Uncertain})
-	if !strings.Contains(m.notice, "#space: Inspect yoloctl space operation trial REQ9: the published image's upload outcome is uncertain") ||
+	if !strings.Contains(m.notice, "#space: Inspect yoloctl space operation trial REQ9: the published image's upload did not finish") ||
 		len(m.late) != 0 || len(m.views["#space"].editor.images()) != 0 || len(*sends) != 0 || m.name != "#build" {
 		t.Fatalf("the late outcome names its operation and changes nothing else: %q", m.notice)
 	}
@@ -560,7 +560,7 @@ func TestRemovedImageStillReportsItsLateOutcome(t *testing.T) {
 		t.Fatal("undo cannot bring back a removed uncertain upload")
 	}
 	m.Update(ImageUploadedMsg{Channel: "#space", Token: h.uploads[0].Token, RequestID: "REQ5", State: Uncertain})
-	if !strings.Contains(m.notice, "Inspect yoloctl space operation trial REQ5: the removed image's upload outcome is uncertain") ||
+	if !strings.Contains(m.notice, "Inspect yoloctl space operation trial REQ5: the removed image's upload did not finish") ||
 		img0(m) != nil || len(m.late) != 0 || len(*sends) != 0 || !presenceSays(m.views["#space"], "REQ5") {
 		t.Fatalf("the removed image's outcome is reported without recreating it: %q", m.notice)
 	}
@@ -584,7 +584,7 @@ func TestHiddenChannelImageGuidanceIsNotDropped(t *testing.T) {
 	press(m, tea.KeyEnter, 0)
 	alt(m, '2')
 	m.Update(ImageUploadedMsg{Channel: "#space", Token: h.uploads[0].Token, RequestID: "REQ3", State: Uncertain})
-	if !strings.Contains(m.notice, "#space: Inspect yoloctl space operation trial REQ3: the image upload is uncertain") || m.name != "#build" {
+	if !strings.Contains(m.notice, "#space: Inspect yoloctl space operation trial REQ3: the image upload was interrupted") || m.name != "#build" {
 		t.Fatalf("a hidden channel's uncertain upload is shown, naming it: %q", m.notice)
 	}
 	m.Update(IncomingMsg{Message: announcement("mhuman", "#space", name, "png")})

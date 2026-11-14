@@ -30,7 +30,7 @@ func TestAstraTransportInternalMustNotBecomeFailedCompletion(t *testing.T) {
 				t.Fatal("lost transport cause hidden", err)
 			}
 			r := records[0]
-			if r.State != "uncertain" || !r.abandonedImage() || !r.Image.Residual {
+			if r.State != "interrupted" || !r.abandonedImage() || !r.Image.Residual {
 				t.Fatal("lost transport lacks abandonment/orphan accounting", r)
 			}
 			// Unknown execution never reclaims admission via a made-up failure.

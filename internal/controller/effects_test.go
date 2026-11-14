@@ -37,14 +37,14 @@ func TestWorkerEffectCheckpointOutcomes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := "uncertain"
+			want := "interrupted"
 			switch action {
 			case "normal", "child-fd", "malformed", "malformed-wait", "stdout":
 				want = "complete"
 			case "setup-kill":
 				want = "setup-complete"
 			}
-			if r.State != want || s.RecoveryRequired != (want == "uncertain") {
+			if r.State != want || s.RecoveryRequired {
 				t.Fatalf("outcome=%+v recovery=%v", r, s.RecoveryRequired)
 			}
 			_, statErr := os.Stat(path)
@@ -171,19 +171,19 @@ func TestEffectGateRecoveryDistinguishesLegacyAndWaiting(t *testing.T) {
 				}
 				// Only a durably permitted exec narrows a lost result to its
 				// command; a legacy exec record proves nothing by method name.
-				want := "uncertain"
+				want := "interrupted"
 				switch {
 				case phase == EffectWaiting:
 					want = "complete"
 				case phase == EffectStarted && method == "box.exec":
-					want = "command-uncertain"
+					want = "interrupted"
 				}
 				recovery, err := store.Recover()
-				if err != nil || recovery != (want == "uncertain") {
+				if err != nil || recovery != (want == "interrupted") {
 					t.Fatal(recovery, err)
 				}
 				r, err = store.Read(req.ID)
-				if err != nil || r.State != want || r.Finished.IsZero() || (r.Status == 2) != (want == "complete") {
+				if err != nil || r.State != want || r.Finished.IsZero() || r.Status != 2 {
 					t.Fatal(r, err)
 				}
 			})
@@ -230,7 +230,7 @@ func TestExecWorkerOutcomesKeepUnknownCommandsOutOfRecovery(t *testing.T) {
 				t.Fatal(err)
 			}
 			noEffect := action == "malformed" || action == "malformed-wait" || action == "stdout"
-			want, effects := "command-uncertain", 1
+			want, effects := "interrupted", 1
 			if noEffect {
 				want, effects = "complete", 0
 			} else if action == "normal" {
@@ -283,7 +283,7 @@ func TestExecClientLossAfterPermissionStaysQueryableWithoutFence(t *testing.T) {
 		t.Fatal("abandoned command was not terminated")
 	}
 	r, err := s.Receipts.Read(req.ID)
-	if err != nil || r.State != "command-uncertain" || r.EffectPhase != EffectStarted || s.RecoveryRequired || readEffects(t, path) != 1 {
+	if err != nil || r.State != "interrupted" || r.EffectPhase != EffectStarted || s.RecoveryRequired || readEffects(t, path) != 1 {
 		t.Fatal(r, s.RecoveryRequired, err)
 	}
 	query := request("control.status")
@@ -294,7 +294,7 @@ func TestExecClientLossAfterPermissionStaysQueryableWithoutFence(t *testing.T) {
 		t.Fatal(err)
 	}
 	var queried Receipt
-	if err := json.Unmarshal(out.Bytes(), &queried); err != nil || queried.State != "command-uncertain" {
+	if err := json.Unmarshal(out.Bytes(), &queried); err != nil || queried.State != "interrupted" {
 		t.Fatal("unknown command result was not queryable", out.String(), err)
 	}
 	// A separate command runs without acknowledgment; the lost one never replays.
@@ -314,50 +314,30 @@ func TestExecClientLossAfterPermissionStaysQueryableWithoutFence(t *testing.T) {
 	if err := invoke(t, s, ack, nil, io.Discard, io.Discard); err != nil {
 		t.Fatal("optional review of an unknown command result failed", err)
 	}
-	if r, err := s.Receipts.Read(req.ID); err != nil || r.State != "acknowledged" || readEffects(t, path) != 2 {
+	if r, err := s.Receipts.Read(req.ID); err != nil || r.State != "interrupted" || readEffects(t, path) != 2 {
 		t.Fatal(r, err)
 	}
 }
 
-func TestGenuineUncertaintyStillFencesExec(t *testing.T) {
-	s := &Server{Hello: hello(), Receipts: Receipts{t.TempDir()},
-		Operations: map[string]Operation{"box.exec": execPolicy, "test.gated": {Mutates: true, EffectGated: true}, "box.list": {}},
-		Execute:    RunWorker,
-	}
+func TestInterruptedStructuralOperationDoesNotFenceExec(t *testing.T) {
+	s := &Server{Hello: hello(), Receipts: Receipts{t.TempDir()}, Operations: map[string]Operation{"box.exec": execPolicy, "test.gated": {Mutates: true, EffectGated: true}}, Execute: RunWorker}
 	structural := request("test.gated")
 	structural.ID = "structural-request-0123456789"
 	structural.Args = []string{"kill", filepath.Join(t.TempDir(), "structural")}
 	_ = invoke(t, s, structural, nil, io.Discard, io.Discard)
-	if r, err := s.Receipts.Read(structural.ID); err != nil || r.State != "uncertain" || !s.RecoveryRequired {
-		t.Fatal(r, s.RecoveryRequired, err)
+	if r, err := s.Receipts.Read(structural.ID); err != nil || r.State != "interrupted" || s.RecoveryRequired {
+		t.Fatal(r, err)
 	}
 	path := filepath.Join(t.TempDir(), "effect")
 	req := request("box.exec")
 	req.Args = []string{"normal", path}
-	if err := invoke(t, s, req, nil, io.Discard, io.Discard); err == nil || readEffects(t, path) != 0 {
-		t.Fatal("exec ran behind an unreviewed controller outcome", err)
-	}
-	if _, err := s.Receipts.Read(req.ID); !errors.Is(err, os.ErrNotExist) {
-		t.Fatal("refused exec recorded a receipt", err)
-	}
-	s.Execute = func(context.Context, Principal, Request, Streams) (int, error) { return 0, nil }
-	if err := invoke(t, s, request("box.list"), nil, io.Discard, io.Discard); err != nil {
-		t.Fatal("reads blocked by recovery", err)
-	}
-	s.Execute = RunWorker
-	ack := request("control.acknowledge")
-	ack.ID = "ack-request-0123456789"
-	ack.Payload, _ = json.Marshal(map[string]string{"id": structural.ID})
-	if err := invoke(t, s, ack, nil, io.Discard, io.Discard); err != nil || s.RecoveryRequired {
-		t.Fatal(err)
-	}
 	var exit *ExitError
 	if err := invoke(t, s, req, nil, io.Discard, io.Discard); !errors.As(err, &exit) || exit.Status != 7 || readEffects(t, path) != 1 {
-		t.Fatal("reviewed recovery did not reopen exec", err)
+		t.Fatal(err)
 	}
 }
 
-func TestStartupRecoveryFencesOnlyStructuralUncertainty(t *testing.T) {
+func TestStartupClosesStructuralAndExecAsInterrupted(t *testing.T) {
 	store := Receipts{t.TempDir()}
 	for _, method := range []string{"box.exec", "box.create"} {
 		req := request(method)
@@ -366,28 +346,18 @@ func TestStartupRecoveryFencesOnlyStructuralUncertainty(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if method == "box.exec" {
-			r.EffectPhase = EffectStarted
-			if err := store.Save(r); err != nil {
-				t.Fatal(err)
-			}
+		r.EffectPhase = EffectStarted
+		if err := store.Save(r); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if required, err := store.Recover(); err != nil || !required {
-		t.Fatal(required, err)
+	if closed, err := store.Recover(); err != nil || !closed {
+		t.Fatal(closed, err)
 	}
-	s := &Server{Hello: hello(), Receipts: store, RecoveryRequired: true}
-	ack := request("control.acknowledge")
-	ack.ID = "ack-request-0123456789"
-	ack.Payload, _ = json.Marshal(map[string]string{"id": "create-request-0123456789"})
-	if err := invoke(t, s, ack, nil, io.Discard, io.Discard); err != nil || s.RecoveryRequired {
-		t.Fatal("unknown command result kept the fence after structural review", err)
-	}
-	if required, err := store.Recover(); err != nil || required {
-		t.Fatal(required, err)
-	}
-	if r, err := store.Read("exec-request-0123456789"); err != nil || r.State != "command-uncertain" {
-		t.Fatal(r, err)
+	for _, name := range []string{"exec", "create"} {
+		if r, err := store.Read(name + "-request-0123456789"); err != nil || r.State != "interrupted" {
+			t.Fatal(r, err)
+		}
 	}
 }
 
@@ -500,7 +470,7 @@ func TestDurableEffectCheckpointWithLostPermitRemainsUncertain(t *testing.T) {
 	req.Args = []string{"normal", path}
 	_ = invoke(t, s, req, nil, io.Discard, io.Discard)
 	r, err := s.Receipts.Read(req.ID)
-	if err != nil || r.State != "uncertain" || r.EffectPhase != EffectStarted || !s.RecoveryRequired {
+	if err != nil || r.State != "interrupted" || r.EffectPhase != EffectStarted || s.RecoveryRequired {
 		t.Fatal(r, s.RecoveryRequired, err)
 	}
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {

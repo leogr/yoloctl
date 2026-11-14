@@ -160,9 +160,9 @@ func configureChatImages(s *chatSession, opts *chatui.Options, enabled bool, rea
 				// A final process error alone does not prove that HTTP did
 				// not commit. Never reuse this token or replay this request.
 				result.State = chatui.Uncertain
-				result.Err = errors.New("image publication is uncertain; inspect request " + result.RequestID + " and channel history for " + draft.request.filename() + " before any new attempt")
+				result.Err = errors.New("image publication interrupted; inspect request " + result.RequestID + " and channel history for " + draft.request.filename() + " before any new attempt")
 				if request.Stage {
-					result.Err = errors.New("image staging is uncertain; inspect request " + result.RequestID + " before any new attempt (a staged copy is never announced and expires)")
+					result.Err = errors.New("image staging interrupted; inspect request " + result.RequestID + " before any new attempt (a staged copy is never announced and expires)")
 				}
 				return result
 			}

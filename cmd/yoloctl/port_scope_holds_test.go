@@ -100,11 +100,7 @@ func interruptedTeardownPortHold(t *testing.T, path, method string) {
 		t.Fatal("interruption reported success")
 	}
 	r, err := s.Receipts.Read(req.ID)
-	if method == "box.stop" {
-		if err != nil || r.State != "interrupted" || !slices.Contains(r.Scope.Writes, portsDomain) {
-			t.Fatal("interrupted box stop", r, err)
-		}
-	} else if err != nil || r.State != "uncertain" || !slices.Contains(r.Scope.Writes, portsDomain) {
+	if err != nil || r.State != "interrupted" || !slices.Contains(r.Scope.Writes, portsDomain) {
 		t.Fatal("interrupted teardown lost its actual-port hold", r, err)
 	}
 	// A future port writer intersects the durable hold even on another box.
@@ -115,14 +111,7 @@ func interruptedTeardownPortHold(t *testing.T, path, method string) {
 		return 0, nil
 	}
 	req.ID, req.Method = "port-next-request-0123456789", "port.forward"
-	err = callScopeFixture(t, s, req)
-	if method == "box.stop" {
-		if err != nil {
-			t.Fatal("an interrupted box stop held the port domain", err)
-		}
-		return
-	}
-	if err == nil {
-		t.Fatal("a future writer bypassed the interrupted port hold")
+	if err := callScopeFixture(t, s, req); err != nil {
+		t.Fatal("a finished teardown fenced a future port writer")
 	}
 }

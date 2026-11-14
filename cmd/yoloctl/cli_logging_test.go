@@ -78,7 +78,7 @@ func TestCLIOutcomeBelongsToFinalizedOperation(t *testing.T) {
 			}
 			want := string(prettylog.OutcomeFailed)
 			if uncertain {
-				want = string(prettylog.OutcomeUnknown)
+				want = string(prettylog.OutcomeFailed)
 			}
 			if len(outcomes) != 1 || outcomes[0].Outcome != want {
 				t.Fatalf("outcomes=%+v", outcomes)
@@ -93,7 +93,7 @@ func TestCLIErrorDoesNotUseEarlierSuccessAsEvidence(t *testing.T) {
 	later := &controller.OutcomeUnknown{ID: "request-later-123456", Cause: io.EOF}
 	renderLoggedCLIError(later)
 	records := readCLIRecords(t, wire)
-	if len(records) != 2 || prettylog.StructureOf(records[1]).Outcome != string(prettylog.OutcomeUnknown) || prettylog.StructureOf(records[1]).Err != later.Error() {
+	if len(records) != 2 || prettylog.StructureOf(records[1]).Outcome != string(prettylog.OutcomeFailed) || prettylog.StructureOf(records[1]).Err != later.Error() {
 		t.Fatalf("later uncertainty lost: %+v", records)
 	}
 }
@@ -237,7 +237,7 @@ func bindCLITestLogger(t *testing.T, w io.Writer) func() {
 }
 
 func TestCLIRemoteUncertaintyUsesTypedStateWithoutNewGuidance(t *testing.T) {
-	for _, state := range []string{"uncertain", "command-uncertain"} {
+	for _, state := range []string{"interrupted", "uncertain", "command-uncertain"} {
 		t.Run(state, func(t *testing.T) {
 			wire, _ := captureCLIRecords(t)
 			remote := &controller.ExitError{Status: 2, Message: "query the existing request result; never replay", State: state}
@@ -245,7 +245,7 @@ func TestCLIRemoteUncertaintyUsesTypedStateWithoutNewGuidance(t *testing.T) {
 				t.Fatalf("status/error changed: %v", err)
 			}
 			records := readCLIRecords(t, wire)
-			if len(records) != 1 || prettylog.StructureOf(records[0]).Outcome != string(prettylog.OutcomeUnknown) || prettylog.StructureOf(records[0]).Err != remote.Error() {
+			if len(records) != 1 || prettylog.StructureOf(records[0]).Outcome != string(prettylog.OutcomeFailed) || prettylog.StructureOf(records[0]).Err != remote.Error() {
 				t.Fatalf("uncertainty changed: %+v", records)
 			}
 			if strings.Contains(records[0].Message, "acknowledge") {

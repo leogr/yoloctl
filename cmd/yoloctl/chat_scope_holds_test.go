@@ -110,7 +110,7 @@ func TestChatLifecycleGateChecksResolvedTargetsAndDependencies(t *testing.T) {
 			if err := callScopeFixture(t, s, req); err == nil {
 				t.Fatal("fixture unexpectedly performed a mutation")
 			}
-			wantPermit := tc.name == "independent hold"
+			wantPermit := true
 			if got == nil || got.Global || permitted != wantPermit {
 				t.Fatalf("scope=%+v permitted=%v, want %v", got, permitted, wantPermit)
 			}

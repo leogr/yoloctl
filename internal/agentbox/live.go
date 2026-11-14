@@ -440,7 +440,7 @@ func (a LiveApplier) Restart(ctx context.Context, c *Config, policy []byte) erro
 		if stopErr := a.Stop(ctx, c.Name); stopErr != nil {
 			var uncertain *NativeEffectsUncertain
 			if errors.As(stopErr, &uncertain) {
-				return fmt.Errorf("new policy failed; its stop is uncertain: %w", errors.Join(err, stopErr))
+				return fmt.Errorf("new policy failed; its stop did not finish: %w", errors.Join(err, stopErr))
 			}
 			return fmt.Errorf("new policy failed after its start; the previous policy is not restored automatically and the stop failed: %w", errors.Join(err, stopErr))
 		}

@@ -24,11 +24,11 @@ func (a *createAcknowledgement) Write(body []byte) (int, error) {
 func (a *createAcknowledgement) containerID() (string, error) {
 	id := strings.TrimSpace(string(a.data[:a.size]))
 	if a.overflow || len(id) != 64 {
-		return "", errors.New("container create acknowledgement lacks one bounded full ID; outcome is uncertain")
+		return "", errors.New("container create acknowledgement lacks one bounded full ID; operation interrupted")
 	}
 	for _, c := range id {
 		if c < '0' || c > '9' && c < 'a' || c > 'f' {
-			return "", errors.New("container create acknowledgement has an invalid ID; outcome is uncertain")
+			return "", errors.New("container create acknowledgement has an invalid ID; operation interrupted")
 		}
 	}
 	return id, nil

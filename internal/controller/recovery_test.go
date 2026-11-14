@@ -34,10 +34,10 @@ func TestRecoveryEvidenceThroughRealWorker(t *testing.T) {
 	}{
 		{"complete-kill", "recovered", DispositionRecordedCompletion, true, 3},
 		{"complete-ungated", "recovered", DispositionRecordedCompletion, false, 3},
-		{"complete-uncertain", "uncertain", "", true, 0},
-		{"complete-uncertain-hold", "uncertain", "", true, 0},
-		{"proof-kill", "uncertain", "", true, 0},
-		{"expand-kill", "uncertain", "", true, 0},
+		{"complete-uncertain", "interrupted", "", true, 0},
+		{"complete-uncertain-hold", "interrupted", "", true, 0},
+		{"proof-kill", "interrupted", "", true, 0},
+		{"expand-kill", "interrupted", "", true, 0},
 		{"proof-refused", "complete", "", true, 0},
 	} {
 		t.Run(tc.action, func(t *testing.T) {
@@ -49,7 +49,7 @@ func TestRecoveryEvidenceThroughRealWorker(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if r.State != tc.state || r.ProofVersion != documentProofVersion || r.DiskID != testDisk || s.RecoveryRequired != (tc.state == "uncertain") {
+			if r.State != tc.state || r.ProofVersion != documentProofVersion || r.DiskID != testDisk || s.RecoveryRequired {
 				t.Fatalf("receipt=%+v recovery=%v", r, s.RecoveryRequired)
 			}
 			if tc.disposition != "" && (r.Recovery == nil || r.Recovery.Disposition != tc.disposition || r.Status != tc.status) {

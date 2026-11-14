@@ -5,7 +5,7 @@ Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying change
 [FACT] The VM controller owns jobs capped at
 `max(runtime.NumCPU()-1, 1)` tracked attempts. Copied Dockerfile/context bytes, modes, image digests, platforms and arguments
 form input identity;
-force work has a controller-allocated nonce. Ordinary jobs share work; force callers share only before build. Desired/base reads (including cached/new destinations) honor publication holds. Consumers keep separate apply receipts/interests. [1](#source-1) [2](#source-2) [12](#source-12) [13](#source-13)
+force work has a controller-allocated nonce. Ordinary jobs share work; force callers share only before build. Desired/base reads (including cached/new destinations) honor running publication reservations. Consumers keep separate apply receipts/interests. [1](#source-1) [2](#source-2) [12](#source-12) [13](#source-13)
 
 [FACT] Requesters receive bounded independent stderr build progress, replay for
 joiners and quiet-phase feedback; see [image build progress](image-progress.md).
@@ -58,25 +58,29 @@ waiting for BuildKit. Its result can remain unknown. Late output cannot be consu
 may reappear as private garbage.
 The cap counts tracked attempts; residual resource use can accumulate. Returned
 solve failures keep their real error and failed completion; cancellation/lost
-transport preserves its cause and unknown outcome. [1](#source-1) [6](#source-6) [8](#source-8)
+transport preserves its cause and interrupted outcome. [1](#source-1) [6](#source-6) [8](#source-8)
 
 [FACT] Startup preserves already-durable image completion and application
 receipts, abandons unfinished qualified private attempts, and frees admission
 without history polling, grace, or acknowledgment. Durable orphan facts survive receipt eviction and appear in operation status
-and logs. Startup sweeps private names/leases while retaining legacy effects and
-residual-work accounting. [6](#source-6) [8](#source-8) [19](#source-19)
+and logs. Earlier-format unfinished jobs retain a strict residual. The first
+verified boot starts retention; a different verified boot releases the lease and
+marks the exact alias pending the existing protected-reference storage cleanup.
+Only observed alias absence clears that residual; other prepared names do not
+become cleanup candidates. Startup sweep and post-GC reconciliation retain
+remaining protection on failure. [6](#source-6) [8](#source-8) [19](#source-19)
 
 [FACT] Proof version 2 names image resources. The unnamed images writer overlaps
 all image accesses; a named writer overlaps an unnamed writer or the same named
-resource, but not another image's compatibility domain read. Version-1 holds stay conservative; HMACs use recorded versions. Older controllers
+resource, but not another image's compatibility domain read. Version-1 running reservations stay conservative; HMACs use recorded versions. Older controllers
 reject v2 receipts; rollback requires supported storage procedures. [9](#source-9) [20](#source-20) [21](#source-21)
 
 [FACT] Preflight has a durable private permit. Deleting low-space cleanup owns
-an independent images-domain receipt, checks holds/drain/storage, and waits
+an independent images-domain receipt, checks running reservations/drain/storage, and waits
 outside native guards for tracked build effects. Its short-lived worker takes a
 brief native guard, reports acquisition through private inherited pipes, then
 receives durable permission and verifies disk/generation/permit before deletion. Failed or
-cancelled cleanup preserves uncertainty; private preflight does not reserve an
+cancelled cleanup closes interrupted; private preflight does not reserve an
 output. Ended metadata owners settle their failure ledger for storage repair,
 without claiming a remote solve stopped. Service and bounded repair contexts are
 separate. [1](#source-1) [3](#source-3) [10](#source-10) [25](#source-25) [26](#source-26)

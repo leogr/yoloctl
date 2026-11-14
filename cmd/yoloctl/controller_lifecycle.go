@@ -404,28 +404,7 @@ func retireControllerSeed(space string) error {
 
 func newSpaceOperationCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "operation SPACE [ID]", Short: "Inspect recorded controller mutation outcomes", Args: cobra.RangeArgs(1, 2),
-		Long: "Inspect recorded controller mutation outcomes from the host. No operation is ever replayed.\n\n" +
-			"  yoloctl space operation SPACE --acknowledge-all   accept every finished unknown outcome at once\n" +
-			"  yoloctl space operation SPACE                     list recorded operations\n" +
-			"  yoloctl space operation SPACE ID                  inspect one\n" +
-			"  yoloctl space operation SPACE ID --acknowledge    accept one unknown outcome\n\n" +
-			"The controller resolves an interrupted operation by itself only from evidence: an effect gate that " +
-			"never granted permission (recovered, not applied), a durable completion record (recovered with its " +
-			"known result, success or failure), or a reviewed read-back of the exact account declaration or desired " +
-			"chat revocation it was writing (recovered, applied). It never replays, finishes or undoes an operation, " +
-			"and a timer never stands in for evidence. An outcome it cannot prove stays uncertain and holds only the " +
-			"boxes, accounts and shared chat, image or port domains it recorded and operations depending on them; unrelated changes can proceed and reads " +
-			"keep working. An outcome without a recorded footprint, from an older controller or another disk holds " +
-			"the whole space. Acknowledging records the host's decision to release a hold: it neither retries nor " +
-			"undoes the operation and does not mean it succeeded. --acknowledge-all accepts the uncertain and " +
-			"command-uncertain outcomes recorded when it runs and reports their IDs and whether changes remain " +
-			"paused. A pending operation may still be running and is never acknowledged. If receipt storage fails, " +
-			"changes pause and acknowledgment is refused; the controller rechecks the storage and reopens changes " +
-			"once every receipt is reconciled, without a restart.\n\n" +
-			"A command-uncertain operation is a box exec command that may have run after it was authorized but " +
-			"whose result was lost. Inspect its effects in the box; it holds nothing, and acknowledging it is " +
-			"optional. Finished and recovered outcomes are kept among the 256 most recent records; pending and " +
-			"uncertain ones are never evicted.",
+		Long: "Inspect recorded controller operations. An operation without a proven result is interrupted, with an observation of current state when available. Current state never proves historical success. Nothing is replayed. Interrupted operations hold nothing. --acknowledge and --acknowledge-all are compatibility no-ops. Running operations still exclude conflicting work.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := ""
 			if len(args) == 2 {
@@ -458,7 +437,7 @@ func newSpaceOperationCmd() *cobra.Command {
 			return callHostController(cmd.Context(), boot, req, controller.ClientIO{Out: cmd.OutOrStdout(), Err: cmd.ErrOrStderr()})
 		},
 	}
-	cmd.Flags().Bool("acknowledge", false, "Accept an inspected uncertain or command-uncertain outcome; records the decision without retrying, undoing or calling it successful")
-	cmd.Flags().Bool("acknowledge-all", false, "Accept every finished uncertain or command-uncertain outcome in one host decision; running operations are untouched and nothing is retried or undone")
+	cmd.Flags().Bool("acknowledge", false, "Compatibility no-op: interrupted operations hold nothing")
+	cmd.Flags().Bool("acknowledge-all", false, "Compatibility no-op: interrupted operations hold nothing")
 	return cmd
 }

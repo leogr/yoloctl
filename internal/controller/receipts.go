@@ -18,7 +18,7 @@ const receiptLimit = 256
 
 // Receipt deliberately excludes command arguments, output and payloads, which
 // can contain user code or secrets. A pending record after a restart is an
-// uncertain outcome, never permission to replay.
+// interrupted execution, never permission to replay.
 type Receipt struct {
 	ID            string    `json:"id"`
 	Method        string    `json:"method"`
@@ -40,19 +40,20 @@ type Receipt struct {
 	// Recovery evidence (ProofVersion >= 1). The scope and verifier are
 	// durable before effect permission; proofs precede their writes; the
 	// completion checkpoint follows every effect. None holds a payload.
-	ProofVersion int         `json:"proof_version,omitempty"`
-	DiskID       string      `json:"disk_id,omitempty"`
-	Scope        *Scope      `json:"scope,omitempty"`
-	Verifier     string      `json:"verifier,omitempty"`
-	Proofs       []Proof     `json:"proofs,omitempty"`
-	Completion   *Completion `json:"completion,omitempty"`
-	Recovery     *Recovery   `json:"recovery,omitempty"`
-	Image        *ImagePhase `json:"image,omitempty"`
+	ProofVersion int          `json:"proof_version,omitempty"`
+	DiskID       string       `json:"disk_id,omitempty"`
+	Scope        *Scope       `json:"scope,omitempty"`
+	Verifier     string       `json:"verifier,omitempty"`
+	Proofs       []Proof      `json:"proofs,omitempty"`
+	Completion   *Completion  `json:"completion,omitempty"`
+	Recovery     *Recovery    `json:"recovery,omitempty"`
+	Image        *ImagePhase  `json:"image,omitempty"`
+	Observation  *Observation `json:"observation,omitempty"`
 }
 
 // Receipts is serialized by Server.mu. Finished receipts, including unknown
-// command results, are bounded; pending or uncertain receipts are never
-// evicted to admit another mutation.
+// command results, are bounded; pending receipts are never evicted to admit
+// another mutation.
 type Receipts struct{ Dir string }
 
 func (s Receipts) Read(id string) (Receipt, error) {
@@ -73,7 +74,7 @@ func (s Receipts) Read(id string) (Receipt, error) {
 		return r, errors.New("operation receipt identity mismatch")
 	}
 	switch r.State {
-	case "pending", "complete", "uncertain", "setup-complete", "acknowledged", "command-uncertain", "recovered", "interrupted":
+	case "pending", "complete", "uncertain", "setup-complete", "acknowledged", "command-uncertain", "interrupted", "recovered":
 	default:
 		return r, errors.New("invalid operation receipt state")
 	}
@@ -89,28 +90,7 @@ func (s Receipts) Read(id string) (Receipt, error) {
 	if r.State == "command-uncertain" && !authorizedCommand(r) {
 		return r, errors.New("command outcome lacks authorized exec proof")
 	}
-	if r.State == "interrupted" && !authorizedStartStop(r) {
-		return r, errors.New("interrupted outcome lacks an authorized box start or stop")
-	}
 	return r, nil
-}
-
-// authorizedStartStop reports a box start or stop whose effects were durably
-// permitted. Neither leaves a pending intent: its result is the container
-// state a later read shows, so an unfinished one holds nothing. Legacy
-// records without the effect phase or a recorded scope prove nothing. A
-// scope that writes images (a start that published an image) keeps today's
-// classification: that controller state is not read from the container.
-func authorizedStartStop(r Receipt) bool {
-	if (r.Method != "box.start" && r.Method != "box.stop") || r.EffectPhase != EffectStarted || r.SetupComplete || r.Image != nil || r.Scope == nil {
-		return false
-	}
-	for _, w := range r.Scope.Writes {
-		if w.Kind == ResourceImages {
-			return false
-		}
-	}
-	return true
 }
 
 // authorizedCommand reports a box exec whose remote command was durably
@@ -143,14 +123,12 @@ func (r *Receipt) interrupt() {
 	case authorizedCommand(*r):
 		// The command may have run. Its result stays unknown and is never
 		// replayed, but no controller state awaits review.
-		r.State = "command-uncertain"
-	case authorizedStartStop(*r):
-		// The command did not finish: no result is recorded and none is
-		// claimed. The box's state is what a read of its container shows;
-		// nothing is held, reviewed or replayed.
 		r.State = "interrupted"
 	default:
-		r.State = "uncertain"
+		r.State = "interrupted"
+	}
+	if r.State == "interrupted" && r.Status == 0 {
+		r.Status = 2
 	}
 }
 
@@ -165,7 +143,17 @@ func (r Receipt) abandonedImage() bool {
 	return r.Image != nil && r.Image.PrivateVersion == 1 && !r.Image.AbandonedAt.IsZero()
 }
 
+// legacyImageResidual reports earlier-format build ownership, not permission
+// or an execution reservation. Recovery persists the explicit residual fact.
+func (r Receipt) legacyImageResidual() bool {
+	return r.Image != nil && r.Image.PrivateVersion == 0 && r.Completion == nil &&
+		(r.Image.Residual || r.State == "pending" || r.State == "uncertain")
+}
+
 func (r Receipt) terminal() bool {
+	if r.legacyImageResidual() {
+		return false
+	}
 	// The independent image receipt is also the durable orphan ledger.
 	// Request receipt eviction cannot erase possible surviving build work.
 	if r.abandonedImage() && r.Image.OrphanRecorded {
@@ -176,14 +164,15 @@ func (r Receipt) terminal() bool {
 	}
 
 	switch r.State {
-	case "complete", "setup-complete", "acknowledged", "command-uncertain", "recovered", "interrupted":
+	case "complete", "setup-complete", "acknowledged", "command-uncertain", "interrupted", "recovered":
 		return true
 	}
 	return false
 }
 
 // Recover runs with the controller singleton held, after the guest supervisor
-// (systemd or Firecracker PID 1) has killed former workers. It preserves uncertainty and never replays command input.
+// (systemd or Firecracker PID 1) has killed former workers. It closes old
+// outcomes as interrupted and never replays command input.
 func (s Receipts) Recover() (bool, error) {
 	if _, err := s.ImageOrphans(); err != nil {
 		return false, err
@@ -194,9 +183,10 @@ func (s Receipts) Recover() (bool, error) {
 	}
 	interrupted := false
 	for _, r := range all {
+
 		if r.Image != nil && r.Image.PrivateVersion == 1 && r.Completion == nil && r.Image.AbandonedAt.IsZero() {
 			r.Image.AbandonedAt, r.Image.Residual = time.Now().UTC(), true
-			r.State, r.Status, r.Finished = "uncertain", 2, time.Now().UTC()
+			r.State, r.Status, r.Finished = "interrupted", 2, time.Now().UTC()
 			if r.Image.Stage == "preflight" {
 				r.Image.Residual = false
 				r.State = "complete"
@@ -211,15 +201,20 @@ func (s Receipts) Recover() (bool, error) {
 				return false, err
 			}
 		}
-		if r.State == "pending" {
+		if r.State == "pending" || r.State == "uncertain" || r.State == "command-uncertain" {
 			// Old workers are already terminated by the supervisor.
 			r.interrupt()
+			if r.State == "interrupted" && r.Image != nil && r.Image.PrivateVersion == 0 && r.Completion == nil {
+				phase := *r.Image
+				phase.Residual = true
+				r.Image = &phase
+			}
 			r.Finished = time.Now().UTC()
 			if err := s.Save(r); err != nil {
 				return false, err
 			}
 		}
-		interrupted = interrupted || r.unresolved()
+		interrupted = interrupted || r.State == "interrupted"
 	}
 	return interrupted, nil
 }
@@ -253,7 +248,13 @@ func (s Receipts) begin(req Request, p Principal, generation, disk string, effec
 		return r, err
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].Started.Before(all[j].Started) })
-	for len(all) >= receiptLimit {
+	count := 0
+	for _, r := range all {
+		if !r.legacyImageResidual() || r.State == "pending" {
+			count++
+		}
+	}
+	for count >= receiptLimit {
 		removed := false
 		for i, item := range all {
 			if item.terminal() {
@@ -261,6 +262,7 @@ func (s Receipts) begin(req Request, p Principal, generation, disk string, effec
 					return r, &receiptWriteError{err}
 				}
 				all = append(all[:i], all[i+1:]...)
+				count--
 				removed = true
 				break
 			}

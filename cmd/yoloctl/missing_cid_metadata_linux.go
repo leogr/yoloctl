@@ -167,7 +167,7 @@ func classifyMissingCIDMetadata(box string, sample missingCIDMetadataSample) (mi
 // its last external callback/finalization. No effect dispatch is installed.
 func sampleMissingCIDMetadata(ctx context.Context, box string, client *container.Client, native *openshell.MissingCIDNativeRead, registrations *operator.RegistrationScope, claims *controller.MissingCIDClaimRead, priorEffectErr error) (missingCIDMetadataResult, error) {
 	if priorEffectErr != nil {
-		return missingCIDMetadataResult{}, errors.Join(priorEffectErr, errors.New("missing-CID observations cannot settle failed/uncertain prior Stop or remove"))
+		return missingCIDMetadataResult{}, errors.Join(priorEffectErr, errors.New("missing-CID observations cannot settle failed/interrupted prior Stop or remove"))
 	}
 	if ctx == nil || client == nil || native == nil || registrations == nil || claims == nil {
 		return missingCIDMetadataResult{}, errors.New("required actual classifier primary source unavailable")

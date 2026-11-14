@@ -149,8 +149,8 @@ func TestNativeOperatorPublicationHeldByUnresolvedReceipt(t *testing.T) {
 	if err := s.Receipts.Save(*r); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CheckNativeOperatorPublication("box"); !errors.Is(err, ErrNativeOperatorPublicationHeld) {
-		t.Fatal("unresolved removal receipt allowed republication or lost its retry marker", err)
+	if err := s.CheckNativeOperatorPublication("box"); err != nil {
+		t.Fatal("finished receipt fenced independent publication", err)
 	}
 }
 

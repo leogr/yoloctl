@@ -170,23 +170,12 @@ Authoritative destructive inventories must fail on uncertain runtime state.
 
 Preserve exact bundle/protocol/space/generation handshakes, shared Cobra command
 semantics, stream bytes/status/EOF/resize/signals and durable operation receipts.
-Never automatically replay a mutation after a lost reply. The controller may
-resolve an interrupted outcome automatically only from durable pre-effect or
-completion evidence, or a specifically reviewed read-only verifier of the
-complete affected transaction. Record the proof and preserve whether the
-command's result is known; present state alone is not proof of historical
-success. Unproved outcomes hold their verified affected resources and
-dependencies until explicit host review. Box start and stop are different: their
-only result is the container state read after one attempt; no pending intent, no
-replay, no unknown outcome, no hold. Unknown scope, unavailable storage
-identity or unreconciled receipt-storage failure retains a space-wide hold.
-Recovery never repairs application state, retries the original command or
-substitutes a timer for evidence. Repaired receipt storage may reopen admission
-only after all affected executions and durable receipts have been reconciled.
-An authorized exec command's lost result (`command-uncertain`) is never
-replayed and does not itself fence other operations. Preserve explicit
-maintenance, operator authority and the separate agent-session uncertainty
-rules. See [interrupted-outcome recovery](docs/digests/controller-recovery.md).
+Never automatically replay a mutation after a lost reply. An operation that ended
+without a recorded result is closed by the controller as interrupted, with what it
+recorded and what it observes; it is not a state of the space and it holds nothing.
+Present state is recorded as an observation, never as proof of historical success.
+Running operations still exclude each other. Preserve explicit maintenance and
+operator authority. See [interrupted-outcome recovery](docs/digests/controller-recovery.md).
 
 `yolo.space.operator` is opt-in authority over all boxes in the current space, including
 other existing accounts, stronger grants, delegation and destructive operations.

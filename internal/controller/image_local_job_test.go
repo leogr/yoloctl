@@ -43,16 +43,16 @@ func TestLocalImageJobKeepsOriginalReceiptAndSourceDependency(t *testing.T) {
 	}
 }
 
-func TestLocalImageJobCannotBypassHeldSourceThroughCanonicalAlias(t *testing.T) {
+func TestInterruptedLocalSourceDoesNotFenceCanonicalAlias(t *testing.T) {
 	m, b := newJobs(t, 2)
 	r := localJobRecipe(t)
-	seedReceipt(t, m.server, "held-local-image-source-123", "uncertain", writes(Resource{Kind: ResourceImages, Name: "custom/cache:one"}), func(receipt *Receipt) { receipt.ProofVersion = 2 })
-	if image, err := m.Acquire(t.Context(), r); err == nil || image != nil {
-		t.Fatal("retention bypassed held current source", image, err)
+	seedReceipt(t, m.server, "ended-local-source-123", "interrupted", writes(Resource{Kind: ResourceImages, Name: "custom/cache:one"}), func(r *Receipt) { r.ProofVersion = 2 })
+	pending := acquire(m, t.Context(), r)
+	take(t, b.started)
+	b.release <- struct{}{}
+	result := take(t, pending)
+	if result.err != nil {
+		t.Fatal(result.err)
 	}
-	select {
-	case <-b.started:
-		t.Fatal("held source reached a lease/alias effect")
-	default:
-	}
+	result.image.Release()
 }

@@ -121,6 +121,12 @@ func TestNativeNonceOwnerRequiresActualScopedDurablePermission(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			if change == "held" {
+				if value, err := o.allocate(t.Context(), "box"); err != nil || value == "" {
+					t.Fatal("finished receipt fenced valid live permission", err)
+				}
+				return
+			}
 			if value, err := o.allocate(t.Context(), "box"); err == nil || value != "" || len(o.allocated) != 0 {
 				t.Fatal("invalid original receipt/storage scope allocated native identity", err)
 			}

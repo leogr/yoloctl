@@ -121,7 +121,7 @@ func running(dir string) (bool, error) {
 	}
 	b, e := s.VM.alive()
 	if e == nil && !a && s.LaunchPending {
-		return false, errors.New("VM launch outcome is uncertain; retain its disks until termination is independently established")
+		return false, errors.New("VM launch interrupted; termination is not established; retain its disks until termination is independently established")
 	}
 	return a || b, e
 }
