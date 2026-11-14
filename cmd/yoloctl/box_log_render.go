@@ -18,7 +18,8 @@ import (
 // capture, tasks/feat-prettylog-remaining/item4-sample): Rust tracing lines,
 // OCSF event lines and unstamped stderr such as a panic report. Only those two
 // stamped formats are read; every other line, application output included,
-// is shown as text. --log-level debug keeps the original bytes.
+// is plain text at information level: no prefix of it is read as a level,
+// actor or outcome. --log-level debug keeps the original bytes.
 
 // boxTracingLine is `<RFC3339 UTC>Z <LEVEL> <crate::module>: <message>`.
 var boxTracingLine = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z) (ERROR|WARN|INFO|DEBUG|TRACE) ([A-Za-z0-9_]+)((?:::[A-Za-z0-9_]+)*): (.*)$`)
@@ -62,27 +63,19 @@ func newBoxLogRecord() func(string) slog.Record {
 				return record
 			}
 		}
-		record := spaceLogRecord(line)
-		if first, _, ok := strings.Cut(line, " "); ok {
-			if _, err := time.Parse(time.RFC3339Nano, first); err == nil {
-				last = record.Time
-				return record
-			}
+		stamp := last
+		if stamp.IsZero() {
+			stamp = time.Now()
 		}
-		if last.IsZero() {
-			return record
-		}
-		stamped := slog.NewRecord(last, record.Level, record.Message, 0)
-		record.Attrs(func(a slog.Attr) bool { stamped.AddAttrs(a); return true })
-		return stamped
+		return slog.NewRecord(stamp, slog.LevelInfo, line, 0)
 	}
 }
 
 // viewBoxLogs renders a box.logs request's output and error streams through
-// the box log view, unless debug keeps the original bytes. On a raw terminal
-// (a terminal request) the rendered lines end in CRLF. Each view still
-// reports its writer as the terminal, so it is formatted for it. The returned
-// function flushes both views.
+// the box log view, unless debug keeps the original bytes. On a terminal
+// request, a stream whose destination is the raw terminal gets CRLF line
+// ends; a redirected one keeps LF. A view on a terminal still reports it, so
+// it is formatted for it. The returned function flushes both views.
 func viewBoxLogs(streams *controller.ClientIO, stdout, stderr io.Writer, raw bool) func() error {
 	settings := logging.CurrentSettings()
 	if settings.Verbosity == prettylog.Trace {
@@ -94,14 +87,15 @@ func viewBoxLogs(streams *controller.ClientIO, stdout, stderr io.Writer, raw boo
 	return func() error { return errors.Join(out.Close(), errView.Close()) }
 }
 
-func boxLogTarget(w, terminal io.Writer, raw bool) io.Writer {
+func boxLogTarget(w, destination io.Writer, raw bool) io.Writer {
+	f, ok := destination.(interface{ Fd() uintptr })
+	if !ok || !logging.IsTerminal(destination) {
+		return w
+	}
 	if raw {
 		w = &rawTerminalStderr{out: w}
 	}
-	if f, ok := terminal.(interface{ Fd() uintptr }); ok && logging.IsTerminal(terminal) {
-		return terminalWriter{Writer: w, fd: f.Fd()}
-	}
-	return w
+	return terminalWriter{Writer: w, fd: f.Fd()}
 }
 
 // terminalWriter is a writer that reaches the terminal fd through adapters.

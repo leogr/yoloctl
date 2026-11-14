@@ -86,8 +86,9 @@ through the same follow Logger, one view per stream. OpenShell tracing lines
 (`time LEVEL crate::module: msg`) show as `box/<crate>` and OCSF lines
 (`time OCSF CLASS:ACTIVITY [SEV] msg`) as `box/ocsf`, INFO/LOW as info and MED as
 warning; other severities and all other output, application text and panic
-reports included, stay text at the last stamped time. A terminal request's raw
-terminal gets CRLF line ends; debug keeps the original bytes. [17](#source-17)
+reports included, stay plain info text at the last stamped time (no prefix is read
+as a level or outcome). On a terminal request only a destination that is the raw
+terminal gets CRLF; debug keeps the original bytes. [17](#source-17)
 
 [FACT] Regressions cover raw suffixes/two rotations, an oversized existing file,
 unsafe current/history files, sink recovery, a real external producer, marker

@@ -2,15 +2,18 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/creack/pty"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/pkg/prettylog"
+	"golang.org/x/term"
 )
 
 // The fixture is real `box logs` output of an OpenShell box (startup, a
@@ -74,27 +77,66 @@ func TestBoxLogUnknownLinesStayText(t *testing.T) {
 	}
 }
 
-// A box.logs request renders both streams; on a raw terminal its lines end
-// in CRLF; debug keeps the bytes.
+// A box.logs request renders both streams. On a terminal request only a
+// destination that is the raw terminal gets CRLF; a redirected one keeps LF.
 func TestViewBoxLogs(t *testing.T) {
 	lines := boxLogFixture(t)
 	raw := []byte(strings.Join(lines[:3], "\r\n") + "\r\n")
 	restore := logging.SetLogger(prettylog.New(&bytes.Buffer{}, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: prettylog.Normal}))
 	defer restore()
-	for _, terminal := range []bool{false, true} {
-		var out, errOut bytes.Buffer
-		streams := controller.ClientIO{Out: &out, Err: &errOut}
-		closeViews := viewBoxLogs(&streams, &out, &errOut, terminal)
-		if _, err := streams.Err.Write(raw); err != nil {
-			t.Fatal(err)
-		}
-		if err := closeViews(); err != nil {
-			t.Fatal(err)
-		}
-		text := errOut.String()
-		if !strings.Contains(text, "box/openshell_supervisor: Starting sandbox supervision") || strings.Contains(text, "openshell_supervisor: Starting sandbox supervision\r\r") ||
-			strings.Contains(text, `\x0d`) || terminal != strings.Contains(text, "\r\n") {
-			t.Fatalf("terminal %v view %q", terminal, text)
+	var out, redirected bytes.Buffer
+	streams := controller.ClientIO{Out: &out, Err: &redirected}
+	closeViews := viewBoxLogs(&streams, &out, &redirected, true)
+	if _, err := streams.Err.Write(raw); err != nil {
+		t.Fatal(err)
+	}
+	if err := closeViews(); err != nil {
+		t.Fatal(err)
+	}
+	if text := redirected.String(); !strings.Contains(text, "box/openshell_supervisor: Starting sandbox supervision\n") || strings.Contains(text, "\r") {
+		t.Fatalf("redirected view %q", text)
+	}
+
+	master, slave, err := pty.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = master.Close() }()
+	state, err := term.MakeRaw(int(slave.Fd()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = term.Restore(int(slave.Fd()), state) }()
+	got := make(chan string, 1)
+	go func() { b, _ := io.ReadAll(master); got <- string(b) }()
+	streams = controller.ClientIO{Out: slave, Err: slave}
+	closeViews = viewBoxLogs(&streams, slave, slave, true)
+	if _, err := streams.Out.Write(raw); err != nil {
+		t.Fatal(err)
+	}
+	if err := closeViews(); err != nil {
+		t.Fatal(err)
+	}
+	_ = slave.Close()
+	var text string
+	select {
+	case text = <-got:
+	case <-time.After(5 * time.Second):
+		t.Fatal("terminal view did not finish")
+	}
+	if !strings.Contains(text, "Starting sandbox supervision") || !strings.Contains(text, "\r\n") || strings.Contains(strings.ReplaceAll(text, "\r\n", ""), "\n") {
+		t.Fatalf("terminal view %q", text)
+	}
+}
+
+// Text that looks like a yoloctl record is still application output: no
+// level, actor or outcome is read from it.
+func TestBoxLogApplicationTextStaysText(t *testing.T) {
+	parse := newBoxLogRecord()
+	for _, line := range []string{"uncertain: box: deploy finished?", "error: host: not ours", "2026-11-05T20:44:42Z warning: vm: also not ours"} {
+		r := parse(line)
+		if r.Message != line || r.Level != slog.LevelInfo || recordAttr(r, prettylog.KeyActor) != "" || recordAttr(r, prettylog.KeyOutcome) != "" {
+			t.Fatalf("%q read as %v %q actor %q", line, r.Level, r.Message, recordAttr(r, prettylog.KeyActor))
 		}
 	}
 }
