@@ -3,7 +3,10 @@ package vmwire
 import "strings"
 
 const (
-	AuditUnitName           = "yoloctl-audit"
+	AuditUnitName = "yoloctl-audit"
+	// ControllerUnitName is the space controller's systemd unit in a Lima
+	// guest (internal/controller.ServiceName).
+	ControllerUnitName      = "yoloctl-controller.service"
 	AuditCapabilityAction   = "audit-capability"
 	AuditCapability         = "yoloctl-audit/v1"
 	LegacyPortUnitPrefix    = "yoloctl-port-"

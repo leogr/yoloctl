@@ -74,11 +74,13 @@ Host-side Lima and interactive bridge diagnostics are captured separately in
 logs/host.log under yoloctl's config root; they are not printed over live views.
 It is kept under about 1 MiB, plus one previous file, host.log.1.
 
---unit NAME shows a managed guest service's log instead: a session holder
-(yoloctl-session-BOX.service, as named in a startup failure), a port forwarder
-or yoloctl-audit. It reads the unit's file under /var/log/yoloctl-units in a
-Firecracker guest, or its journal in a Lima guest, from the running VM, and
-renders it the same way. For other guest services, use 'space ssh --root'.
+--unit NAME shows a guest service's log instead: a session holder
+(yoloctl-session-BOX.service, as named in a startup failure), a port forwarder,
+yoloctl-audit or yoloctl-controller.service. It reads the unit's file under
+/var/log/yoloctl-units in a Firecracker guest, or its journal in a Lima guest,
+from the running VM; yoloctl's own records are rendered and other output is
+shown as it is. A Firecracker controller writes to the VM log, which is shown
+instead. For other guest services, use 'space ssh --root'.
 
   yoloctl space logs default --unit yoloctl-session-coder.service -f`,
 		Args: cobra.MaximumNArgs(1),
@@ -100,16 +102,21 @@ renders it the same way. For other guest services, use 'space ssh --root'.
 	return cmd
 }
 
-// tailUnitLog prints a managed guest service's log from the running VM
-// through the same view as the VM log; debug keeps its bytes. It reads only:
-// it never starts the VM or the service.
+// tailUnitLog prints a guest service's log from the running VM through the
+// unit log view; debug keeps its bytes. It reads only: it never starts the VM
+// or the service. A Firecracker space's controller has no log of its own: its
+// output is in the VM log, shown instead with that log's view and a notice.
 func tailUnitLog(ctx context.Context, spaceName, unit string, lines int, follow bool, stdout, stderr io.Writer) error {
 	argv, err := vmservice.LogCommand(container.New(spaceName), unit, lines, follow)
+	if errors.Is(err, vmservice.ErrControllerInVMLog) {
+		cliNotice(logging.Host, "The controller writes to this space's VM log, which also holds the VM's and its kernel's output; showing it")
+		return tailLimaLog(ctx, spaceName, lines, follow, stdout, stderr)
+	}
 	if err != nil {
 		return asUserError(err)
 	}
 	read := vmhost.ShellCommand(ctx, spaceName, argv...)
-	view := newSpaceLogOutput(stdout, logging.CurrentSettings(), unit)
+	view := newLogView(stdout, logging.CurrentSettings(), newUnitLogRecord())
 	read.Stdout = view
 	read.Stderr = stderr
 	err = read.Run()

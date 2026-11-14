@@ -1,6 +1,7 @@
 package vmservice
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -20,9 +21,22 @@ func TestLogArgv(t *testing.T) {
 		{false, false, "sudo journalctl --no-pager -o cat -u yoloctl-session-coder.service -n 50"},
 		{false, true, "sudo journalctl --no-pager -o cat -u yoloctl-session-coder.service -n 50 -f"},
 	} {
-		if got := strings.Join(logArgv(tc.native, "yoloctl-session-coder.service", 50, tc.follow), " "); got != tc.want {
-			t.Fatalf("native %v follow %v: %q", tc.native, tc.follow, got)
+		argv, err := logArgv(tc.native, "yoloctl-session-coder.service", 50, tc.follow)
+		if got := strings.Join(argv, " "); err != nil || got != tc.want {
+			t.Fatalf("native %v follow %v: %q %v", tc.native, tc.follow, got, err)
 		}
+	}
+}
+
+// The controller's unit is read from its journal in a Lima guest; a
+// microVM's controller writes to the VM log, so --unit points there.
+func TestLogArgvController(t *testing.T) {
+	argv, err := logArgv(false, vmwire.ControllerUnitName, 20, true)
+	if got := strings.Join(argv, " "); err != nil || got != "sudo journalctl --no-pager -o cat -u yoloctl-controller.service -n 20 -f" {
+		t.Fatalf("Lima controller argv %q %v", got, err)
+	}
+	if _, err := logArgv(true, vmwire.ControllerUnitName, 20, false); !errors.Is(err, ErrControllerInVMLog) {
+		t.Fatalf("microVM controller: %v", err)
 	}
 }
 
@@ -37,7 +51,7 @@ func TestLogCommandRefusesOtherNames(t *testing.T) {
 			t.Fatalf("%q accepted", name)
 		}
 	}
-	for _, name := range []string{vmwire.AuditUnitName, "yoloctl-session-coder.service", "yoloctl-port-coder-8080.service", "yoloctl-openshell-port-coder-3000.service"} {
+	for _, name := range []string{vmwire.AuditUnitName, vmwire.ControllerUnitName, "yoloctl-session-coder.service", "yoloctl-port-coder-8080.service", "yoloctl-openshell-port-coder-3000.service"} {
 		if _, err := LogCommand(c, name, 10, false); err != nil {
 			t.Fatalf("%q refused: %v", name, err)
 		}

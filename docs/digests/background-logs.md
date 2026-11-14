@@ -90,14 +90,17 @@ reports included, stay plain info text at the last stamped time (no prefix is re
 as a level or outcome). On a terminal request only a destination that is the raw
 terminal gets CRLF; debug keeps the original bytes. [17](#source-17)
 
-[FACT] `space logs SPACE --unit NAME` reads one managed guest service's log
-from the running VM over the space shell and renders it with the plain parser:
-`sudo tail -n N [-F]` of `/var/log/yoloctl-units/NAME.log` in a Firecracker
-guest, `sudo journalctl --no-pager -o cat -u NAME -n N [-f]` in a Lima guest.
-NAME must be `yoloctl-audit` or a session/port `.service` unit (the guest's own
-rule, `vmwire.ManagedUnitName`) of only letters, digits and `._@-`; anything else
-is refused before the VM is contacted. It never starts the VM or a service;
-storage is unchanged and debug keeps the bytes. [18](#source-18)
+[FACT] `space logs SPACE --unit NAME` reads one guest service's log from the
+running VM over the space shell: `sudo tail -n N [-F]` of
+`/var/log/yoloctl-units/NAME.log` in a Firecracker guest, `sudo journalctl
+--no-pager -o cat -u NAME -n N [-f]` in a Lima guest. Only lines framed as
+yoloctl file records (RFC3339 time, optional level, yoloctl actor) are parsed;
+child output stays literal info text at the last record's time. NAME is a
+managed unit (the guest's launch rule, `vmwire.ManagedUnitName`) or, for reading
+only, `yoloctl-controller.service`, of letters, digits and `._@-`; anything else
+is refused before the VM is contacted. A Firecracker controller inherits the
+guest init's output, so its name shows the mixed VM log with a notice. It never
+starts the VM or a service; debug keeps the bytes. [18](#source-18)
 
 [FACT] Regressions cover raw suffixes/two rotations, an oversized existing file,
 unsafe current/history files, sink recovery, a real external producer, marker
@@ -135,4 +138,4 @@ classification, durable evidence or existing admission/cancellation rules.
 15. <a id="source-15"></a> [Firecracker adapter](../../cmd/yoloctl/firecracker_space_log_render.go#L41) — `newFirecrackerSpaceLogRecord`, `firecrackerRecord`; `firecracker_space_log_render_test.go` with real v1.17.0 console lines in `testdata/firecracker-vm-console.log`.
 16. <a id="source-16"></a> [Firecracker v1.17.0 logger](https://github.com/firecracker-microvm/firecracker/blob/v1.17.0/src/vmm/src/logger/logging.rs) — line format, defaults and stdout target; `src/utils/src/time.rs` `LocalTime`.
 17. <a id="source-17"></a> [Box log view](../../cmd/yoloctl/box_log_render.go#L37) — `newBoxLogRecord`, `viewBoxLogs`; `controller_client.go` box.logs; `box_log_render_test.go` with real OpenShell output in `testdata/box-logs-openshell.txt`.
-18. <a id="source-18"></a> [Unit log view](../../cmd/yoloctl/space.go#L106) — `tailUnitLog`; `internal/vmservice/service.go` `LogCommand`, `logArgv`; `internal/vmwire/unit.go` `ManagedUnitName`; log_command_test.go, tcp_test.go `TestManagedUnitName`.
+18. <a id="source-18"></a> [Unit log view](../../cmd/yoloctl/space.go#L109) — `tailUnitLog`; `unit_log_render.go` `newUnitLogRecord`; `internal/vmservice/service.go` `LogCommand`, `logArgv`, `ErrControllerInVMLog`; `internal/vmwire/unit.go` `ManagedUnitName`; log_command_test.go, tcp_test.go `TestManagedUnitName`.

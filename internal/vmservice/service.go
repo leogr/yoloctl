@@ -30,38 +30,47 @@ func LogHint(c *container.Client, name string) string {
 	return "journalctl -u " + name
 }
 
-// LogCommand is the guest argv that prints the last lines of managed service
-// name's log, following it when follow is set: its unit file in a microVM
+// LogCommand is the guest argv that prints the last lines of service name's
+// log, following it when follow is set: a managed unit's file in a microVM
 // (followed by name across rotation), its journal otherwise, message text
-// only so both read alike. name must be a managed unit name.
+// only so both read alike. name must be a managed unit name or the
+// controller's unit, which has a journal only in a Lima guest: a microVM's
+// controller writes to the VM log.
 func LogCommand(c *container.Client, name string, lines int, follow bool) ([]string, error) {
-	if !vmwire.ManagedUnitName(name) || strings.ContainsFunc(name, func(r rune) bool {
+	if !vmwire.ManagedUnitName(name) && name != vmwire.ControllerUnitName || strings.ContainsFunc(name, func(r rune) bool {
 		plain := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("._@-", r)
 		return !plain
 	}) {
-		return nil, fmt.Errorf("%q is not a managed service: expected yoloctl-audit or a yoloctl-session-, yoloctl-port- or yoloctl-openshell-port- unit ending in .service", name)
+		return nil, fmt.Errorf("%q is not a yoloctl service: expected %s, yoloctl-audit or a yoloctl-session-, yoloctl-port- or yoloctl-openshell-port- unit ending in .service", name, vmwire.ControllerUnitName)
 	}
 	native, e := microvm(c)
 	if e != nil {
 		return nil, e
 	}
-	return logArgv(native, name, lines, follow), nil
+	return logArgv(native, name, lines, follow)
 }
 
-func logArgv(native bool, name string, lines int, follow bool) []string {
+// ErrControllerInVMLog means the controller has no log of its own: in a
+// microVM it inherits the guest init's output, which is in the VM log.
+var ErrControllerInVMLog = errors.New("a Firecracker space's controller writes to the VM log")
+
+func logArgv(native bool, name string, lines int, follow bool) ([]string, error) {
 	n := strconv.Itoa(max(lines, 0))
+	if native && name == vmwire.ControllerUnitName {
+		return nil, ErrControllerInVMLog
+	}
 	if native {
 		argv := []string{"sudo", "tail", "-n", n}
 		if follow {
 			argv = append(argv, "-F")
 		}
-		return append(argv, "/var/log/yoloctl-units/"+name+".log")
+		return append(argv, "/var/log/yoloctl-units/"+name+".log"), nil
 	}
 	argv := []string{"sudo", "journalctl", "--no-pager", "-o", "cat", "-u", name, "-n", n}
 	if follow {
 		argv = append(argv, "-f")
 	}
-	return argv
+	return argv, nil
 }
 
 func microvm(c *container.Client) (bool, error) {
