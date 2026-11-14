@@ -36,8 +36,9 @@ func (e *EngineCalls) Started() bool {
 	return e.started
 }
 
-// StoppedAfterStart reports an engine stop invoked after that start, such as
-// a failed start's own cleanup; a stop before it (a previous generation's)
+// StoppedAfterStart reports an engine stop invoked after the latest start,
+// such as a failed start's own cleanup. A stop before it (a previous
+// generation's, or one before a later start such as a policy restart's)
 // does not count.
 func (e *EngineCalls) StoppedAfterStart() bool {
 	e.mu.Lock()
@@ -49,6 +50,7 @@ func (e *EngineCalls) StoppedAfterStart() bool {
 func (e *EngineCalls) MarkStart() {
 	e.mu.Lock()
 	e.started = true
+	e.stoppedAfterStart = false // a new attempt: its own stops count afresh
 	e.mu.Unlock()
 }
 

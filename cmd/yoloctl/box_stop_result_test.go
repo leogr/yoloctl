@@ -259,6 +259,13 @@ func TestBoxStartSettlesFromAReadAndRollsBackWithBoxStop(t *testing.T) {
 		len(f.stopped) != 0 || !strings.Contains(err.Error(), "already attempted") {
 		t.Fatalf("inner cleanup stopped: %v stopped %v", err, f.stopped)
 	}
+	// A policy restart inside the start (start A, its stop, start B) and a
+	// later failure while B runs: B is rolled back with one stop.
+	f = &fakeStop{present: true, running: true}
+	if err := runStartForResult(t.Context(), "coder", f.steps(), attemptCalling(errors.New("autoupdate coder: npm failed"), "start", "stop", "start")); err == nil ||
+		!slices.Equal(f.stopped, []string{firstID}) || strings.Contains(err.Error(), "already attempted") {
+		t.Fatalf("policy restart then failure: %v stopped %v", err, f.stopped)
+	}
 	// A stop before the start (a previous generation's) does not count.
 	f = &fakeStop{present: true, running: true}
 	if err := runStartForResult(t.Context(), "coder", f.steps(), attemptCalling(errors.New("readiness"), "stop", "start")); err == nil || len(f.stopped) != 1 {

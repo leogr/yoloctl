@@ -29,27 +29,70 @@ func (a LiveApplier) stopNativeRuntime(ctx context.Context, name, id string) err
 // own checks (RemoveStoppedEndpoint).
 //
 // Storage verification guards what the stop reads and removes on the data
-// disk (the runtime record, the namespace retirement). When it fails, the
-// engine stop still runs: the exact container, checked by its engine
-// ownership labels, is stopped by ID, and the disk-dependent work is
-// returned as a ResultLeftover.
+// disk (the runtime record, the namespace retirement) and runs at each of its
+// usual points. When it fails before the engine stop was invoked, the engine
+// stop still runs: the exact container, checked by its engine ownership
+// labels, is stopped once by ID and the disk-dependent work is returned as a
+// ResultLeftover. When it fails after, nothing is stopped again: the
+// unverified checks are the leftover.
 func (a LiveApplier) stopNativeRuntimeForResult(ctx context.Context, name, id string) error {
-	if !spaceenv.Native() || os.Geteuid() != 0 || os.Getegid() != 0 || a.Client == nil || a.VerifyStorage == nil {
+	return stopForResultWithStorageFallback(ctx, a.VerifyStorage,
+		func(ctx context.Context, verify func(context.Context) error, invoked func()) error {
+			return a.stopNativeRuntimeMode(ctx, name, id, nil, &nativeResultStop{verify: verify, invoked: invoked})
+		},
+		func(ctx context.Context, cause error) error {
+			return stopExactContainerWithoutStorage(ctx, a.Client, name, id, cause)
+		})
+}
+
+// nativeResultStop selects the result mode of stopNativeRuntimeMode: its
+// storage verifier (which marks its failures) and the mark of the engine stop.
+type nativeResultStop struct {
+	verify  func(context.Context) error
+	invoked func()
+}
+
+// storageUnverified marks a storage verification failure inside a result-mode
+// stop, wherever the route wraps it.
+type storageUnverified struct{ cause error }
+
+func (e *storageUnverified) Error() string { return "storage verification failed: " + e.cause.Error() }
+func (e *storageUnverified) Unwrap() error { return e.cause }
+
+// stopForResultWithStorageFallback runs the result-mode stop with a marking
+// storage verifier and decides a storage failure by whether the engine stop
+// was invoked: before it, the engine-only fallback stops the container once;
+// after it, the rest is a leftover and nothing stops again.
+func stopForResultWithStorageFallback(ctx context.Context, verifyStorage func(context.Context) error,
+	run func(context.Context, func(context.Context) error, func()) error, fallback func(context.Context, error) error) error {
+	if verifyStorage == nil {
 		return errors.New("native runtime stop requires admitted VM-root infrastructure")
 	}
-	if err := spaceenv.RequireSpace(a.Client.Env()); err != nil {
+	invoked := false
+	verify := func(check context.Context) error {
+		if err := verifyStorage(check); err != nil {
+			return &storageUnverified{cause: err}
+		}
+		return nil
+	}
+	err := run(ctx, verify, func() { invoked = true })
+	var unverified *storageUnverified
+	if !errors.As(err, &unverified) {
 		return err
 	}
-	if cause := a.VerifyStorage(ctx); cause != nil {
-		return stopExactContainerWithoutStorage(ctx, a.Client, name, id, cause)
+	if !invoked {
+		return fallback(ctx, unverified.cause)
 	}
-	return a.stopNativeRuntimeMode(ctx, name, id, nil, true)
+	return &ResultLeftover{What: "checks after the stop", Cause: unverified}
 }
 
 // stopExactContainerWithoutStorage is the engine-only stop of the result
 // mode: the container read by its full ID, still box name's by its engine
 // labels, stopped once by that ID.
 func stopExactContainerWithoutStorage(ctx context.Context, client *container.Client, name, id string, cause error) error {
+	if client == nil {
+		return errors.New("runtime stop requires a container client")
+	}
 	details, err := client.Inspect(ctx, id)
 	if err != nil {
 		return err
@@ -70,29 +113,36 @@ func stopExactContainerWithoutStorage(ctx context.Context, client *container.Cli
 }
 
 func (a LiveApplier) stopNativeRuntimeWithGeneration(ctx context.Context, name, id string, attempt *nativeStartedGeneration) error {
-	return a.stopNativeRuntimeMode(ctx, name, id, attempt, false)
+	return a.stopNativeRuntimeMode(ctx, name, id, attempt, nil)
 }
 
-func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string, attempt *nativeStartedGeneration, forResult bool) error {
+// nativeVMRootAdmitted is the native stop's admission: the VM controller's
+// root. Only tests that drive the real entry against a fake engine replace it.
+var nativeVMRootAdmitted = func() bool { return spaceenv.Native() && os.Geteuid() == 0 && os.Getegid() == 0 }
+
+// stopNativeRuntimeMode is today's native stop, or with result set the result
+// mode: no forward precondition, no endpoint removal, result.verify as the
+// storage verifier at every point and result.invoked marked right before the
+// engine stop.
+func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string, attempt *nativeStartedGeneration, result *nativeResultStop) error {
+	forResult := result != nil
 	if attempt != nil {
 		if err := attempt.cleanupIdentity(); err != nil {
 			return err
 		}
 	}
-	if !spaceenv.Native() || os.Geteuid() != 0 || os.Getegid() != 0 || a.Client == nil || a.VerifyStorage == nil {
+	if !nativeVMRootAdmitted() || a.Client == nil || a.VerifyStorage == nil {
 		return errors.New("native runtime stop requires admitted VM-root infrastructure")
 	}
 	if err := spaceenv.RequireSpace(a.Client.Env()); err != nil {
 		return err
 	}
-	if err := a.VerifyStorage(ctx); err != nil {
-		return err
-	}
-	// The result mode verified storage once on entry; a later failure of the
-	// same verifier must not stand between its checks and the one engine stop.
 	verify := a.VerifyStorage
 	if forResult {
-		verify = func(context.Context) error { return nil }
+		verify = result.verify
+	}
+	if err := verify(ctx); err != nil {
+		return err
 	}
 	selected, err := inspectOpenShellRuntime(ctx, a.Client, name, id)
 	if err != nil {
@@ -182,7 +232,12 @@ func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string,
 	if err := checks.owned(ctx); err != nil {
 		return err
 	}
-	stop := func(stop context.Context) error { return a.Client.Stop(stop, id) }
+	stop := func(stop context.Context) error {
+		if forResult {
+			result.invoked()
+		}
+		return a.Client.Stop(stop, id)
+	}
 	endpoint := func(check context.Context) error {
 		if directory == nil || forResult {
 			return nil

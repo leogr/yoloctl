@@ -3,6 +3,7 @@ package agentbox
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,5 +85,89 @@ func TestEngineCallsFollowTheNativeStartTransaction(t *testing.T) {
 	calls := &container.EngineCalls{}
 	if err := completeNativeGenerationStart(container.WithEngineCalls(t.Context(), calls), actions); err == nil || calls.Started() || calls.StoppedAfterStart() {
 		t.Fatalf("pre-engine refusal: %v %v", err, calls.Started())
+	}
+}
+
+// The storage verifier runs at each of the stop's points. A failure before
+// the engine stop (at the entry, or after an earlier success) takes the
+// engine-only fallback once; one after it leaves the rest as a leftover and
+// stops nothing again; other errors pass through untouched.
+func TestResultStopStorageFailureIsDecidedByTheEngineStop(t *testing.T) {
+	down := errors.New("disk identity differs")
+	sequence := func(results ...error) func(context.Context) error {
+		i := 0
+		return func(context.Context) error {
+			defer func() { i++ }()
+			if i < len(results) {
+				return results[i]
+			}
+			return nil
+		}
+	}
+	// The route's own order: entry check, ownership check, engine stop,
+	// inactivity check.
+	route := func(ctx context.Context, verify func(context.Context) error, invoked func()) error {
+		for range 2 {
+			if err := verify(ctx); err != nil {
+				return err
+			}
+		}
+		invoked()
+		if err := verify(ctx); err != nil {
+			return &NativeEffectsUncertain{Cause: fmt.Errorf("acknowledged native stop cleanup remains unproved: %w", err)}
+		}
+		return nil
+	}
+	for label, c := range map[string]struct {
+		verifier  func(context.Context) error
+		fallbacks int
+		leftover  string
+	}{
+		"fails at entry":              {sequence(down), 1, "fallback"},
+		"succeeds then fails":         {sequence(nil, down), 1, "fallback"},
+		"fails after the engine stop": {sequence(nil, nil, down), 0, "checks after the stop"},
+		"never fails":                 {sequence(), 0, ""},
+	} {
+		fallbacks := 0
+		err := stopForResultWithStorageFallback(t.Context(), c.verifier, route, func(context.Context, error) error {
+			fallbacks++
+			return &ResultLeftover{What: "fallback", Cause: down}
+		})
+		var rest *ResultLeftover
+		var marker *NativeEffectsUncertain
+		if fallbacks != c.fallbacks || (c.leftover == "") != (err == nil) || err != nil && (!errors.As(err, &rest) || rest.What != c.leftover || errors.As(err, &marker)) {
+			t.Fatalf("%s: %v fallbacks %d", label, err, fallbacks)
+		}
+	}
+	other := errors.New("runtime record differs")
+	err := stopForResultWithStorageFallback(t.Context(), sequence(), func(context.Context, func(context.Context) error, func()) error { return other },
+		func(context.Context, error) error { t.Fatal("fallback for a non-storage error"); return nil })
+	if !errors.Is(err, other) {
+		t.Fatalf("other error: %v", err)
+	}
+}
+
+// The real result-mode entry with a failing storage verifier, against a fake
+// engine: one engine stop of the exact ID, the disk work a leftover.
+func TestResultStopEntryFallsBackWhenStorageFails(t *testing.T) {
+	previous := nativeVMRootAdmitted
+	nativeVMRootAdmitted = func() bool { return true }
+	t.Cleanup(func() { nativeVMRootAdmitted = previous })
+	client, log := resultStopFixture(t, resultTargetJSON("coder", "fixture", true))
+	a := LiveApplier{Client: client, VerifyStorage: func(context.Context) error { return errors.New("disk identity differs") }}
+	err := a.stopNativeRuntimeForResult(t.Context(), "coder", resultTargetID)
+	var rest *ResultLeftover
+	commands := loggedCommands(t, log)
+	if !errors.As(err, &rest) || rest.What != "runtime record checks" || strings.Count(commands, "nerdctl stop") != 1 ||
+		!strings.Contains(commands, "nerdctl stop --time 30 "+resultTargetID) {
+		t.Fatalf("%v\n%s", err, commands)
+	}
+	// Storage verified, but the runtime record of this fake container cannot
+	// be read: that ownership boundary is reported and nothing is stopped.
+	client, log = resultStopFixture(t, resultTargetJSON("coder", "fixture", true))
+	a = LiveApplier{Client: client, VerifyStorage: func(context.Context) error { return nil }}
+	if err := a.stopNativeRuntimeForResult(t.Context(), "coder", resultTargetID); err == nil || errors.As(err, &rest) ||
+		strings.Contains(loggedCommands(t, log), "nerdctl stop") {
+		t.Fatalf("unreadable record: %v", err)
 	}
 }

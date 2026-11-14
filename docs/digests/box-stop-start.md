@@ -18,10 +18,11 @@ stopped. No step's error, including a typed uncertainty marker, leaves it.
 never the name, requires the box and space labels, and stops nothing when the
 ID now belongs to another box or no longer runs; a replacement is never stopped.
 It keeps the native ownership checks but drops the precondition that no forward
-is listed and does not remove the endpoint. When storage verification fails, the
-container, still the box's by its engine labels, is stopped once by ID and the
-runtime-record checks or, on `unconfined_network`, the namespace retirement are
-reported as a leftover. [3](#source-3) [5](#source-5) [12](#source-12)
+is listed and does not remove the endpoint. Storage verification runs at its usual
+points; a failure before the engine stop stops the container, still the box's by
+its engine labels, once by ID and reports the runtime-record checks or, on
+`unconfined_network`, the namespace retirement as a leftover; one after it is a
+leftover and stops nothing again. [3](#source-3) [5](#source-5) [12](#source-12)
 
 [FACT] The endpoint socket is removed by its own step after its own storage
 verification, and only when the directory, opened
@@ -36,8 +37,8 @@ holder inventory lists and, on the native route, the endpoint socket under the
 same checks; one it cannot remove fails the start before any engine start. The
 container client records the engine starts and stops of the attempt (engine
 start, activation, readiness, session start and autoupdate, for a stopped or a
-missing container) right before invoking the engine; a stop counts only after a
-start. After an engine start, any failure, or a final read that is not running,
+missing container) right before invoking the engine; a stop counts only after
+the latest start. After an engine start, any failure, or a final read that is not running,
 is rolled back with the `box stop` steps, which make no engine stop when the
 start's own cleanup already invoked one: `start failed: REASON` with the
 rollback's leftovers, plus `; box NAME is still running` when its read still sees
@@ -66,7 +67,7 @@ Admission of `box stop` under another operation's hold is unchanged.
 
 1. <a id="source-1"></a> [cmd/yoloctl/box_stop_result.go](../../cmd/yoloctl/box_stop_result.go#L40-L237) — `liveBoxStopSteps`, `stopAgentboxForResult`, `runBoxStop`, `removeStartLeftovers`, `runStartForResult`, `settleStartForResult`.
 2. <a id="source-2"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2250) — `box stop` RunE calls `runBoxStop`.
-3. <a id="source-3"></a> [internal/agentbox/openshell_stop_linux.go](../../internal/agentbox/openshell_stop_linux.go#L24-L200) — `stopNativeRuntimeForResult`, `stopExactContainerWithoutStorage`, `stopNativeRuntimeMode`; `RemoveStoppedEndpoint` and `removeStoppedEndpoint` at L266-L346.
+3. <a id="source-3"></a> [internal/agentbox/openshell_stop_linux.go](../../internal/agentbox/openshell_stop_linux.go#L24-L280) — `stopNativeRuntimeForResult`, `stopForResultWithStorageFallback`, `stopExactContainerWithoutStorage`, `stopNativeRuntimeMode`; `RemoveStoppedEndpoint` and `removeStoppedEndpoint` at L321-L401.
 4. <a id="source-4"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L735-L900) — `startAgentboxWithForwardIntent` `resultPolicy`; `markStartSubmitted` in `startExistingAgentboxContainerPrepared`.
 5. <a id="source-5"></a> [internal/agentbox/openshell_stop.go](../../internal/agentbox/openshell_stop.go#L13-L70) — `Stop` (today's mode), `StopRuntimeForResult` and `ResultLeftover`.
 6. <a id="source-6"></a> [cmd/yoloctl/box_stop_result_test.go](../../cmd/yoloctl/box_stop_result_test.go#L46) — stop step failures, lost replies, reads, absent/exited, start leftovers and rollback.

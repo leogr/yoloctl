@@ -41,3 +41,19 @@ func TestClientMarksEngineStartsAndStopsAtItsBoundary(t *testing.T) {
 		t.Fatal("record without context")
 	}
 }
+
+// A later start is a new attempt: a stop before it (a policy restart's stop
+// of the first start) does not suppress the later attempt's rollback.
+func TestEngineCallsBindTheStopToTheLatestStart(t *testing.T) {
+	calls := &EngineCalls{}
+	calls.MarkStart()
+	calls.MarkStop()
+	calls.MarkStart()
+	if !calls.Started() || calls.StoppedAfterStart() {
+		t.Fatal("a stop of an earlier start counted for the latest one")
+	}
+	calls.MarkStop()
+	if !calls.StoppedAfterStart() {
+		t.Fatal("the latest start's own stop was not recorded")
+	}
+}
