@@ -515,7 +515,12 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 	if err := publishControllerResumeTarget(cmd, target, req); err != nil {
 		return err
 	}
+	closeViews := func() error { return nil }
+	if req.Method == "box.logs" {
+		closeViews = viewBoxLogs(&streams, cmd.OutOrStdout(), errOut, req.Terminal)
+	}
 	err = callWithImageRetry(ctx, cmd, req, streams, target.Call)
+	err = errors.Join(err, closeViews())
 	var remote *controller.ExitError
 	if errors.As(err, &remote) && remote.Message == "" {
 		// The shared remote CLI has already printed its error. Preserve the

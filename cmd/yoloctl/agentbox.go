@@ -87,7 +87,9 @@ func newAgentboxLogsCmd() *cobra.Command {
 		Long: `Wraps ` + "`sudo nerdctl logs`" + ` on the box container inside its
 space. The first thing that lands in the log is openshell-sandbox's
 init / netns / Landlock setup, which is the right place to look when
-a box refuses to start.
+a box refuses to start. The shared log renderer shows OpenShell's tracing
+and OCSF lines at their own time and severity; any other output stays text.
+--log-level debug streams the original bytes instead.
 
   yoloctl box logs coder
   yoloctl box logs coder --follow

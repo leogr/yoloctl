@@ -1,0 +1,34 @@
+2026-11-05T20:44:42.925Z WARN openshell_supervisor: Could not open /var/log for log rotation; using stderr-only logging
+2026-11-05T20:44:42.925Z INFO openshell_supervisor: Starting sandbox supervision
+2026-11-05T20:44:42.925Z INFO openshell_sandbox_backend::runtime_initiated: Runtime-initiated Sandbox Protocol listener ready
+2026-11-05T20:44:42.926Z INFO openshell_sandbox::boundary_server::linux: Boundary control dialer ready
+2026-11-05T20:44:42.977Z OCSF CONFIG:LOADING [INFO] Loading OPA policy engine from local files [rules:/.openshell/supervisor/config/sandbox-policy.rego data:/.openshell/supervisor/config/policy.yaml]
+2026-11-05T20:44:42.978Z INFO openshell_supervisor_network::opa: Configured OPA runtime binary identity mode
+2026-11-05T20:44:42.978Z OCSF CONFIG:CONFIGURED [INFO] OPA runtime binary identity mode configured [source:files require_binary_identity:true] [source:files]
+2026-11-05T20:44:42.980Z INFO openshell_supervisor: Isolation boundary attached
+2026-11-05T20:44:42.981Z INFO openshell_supervisor: Isolation boundary enforcement confirmed
+2026-11-05T20:44:42.987Z OCSF CONFIG:ENABLED [INFO] TLS termination enabled: ephemeral CA generated
+2026-11-05T20:44:42.987Z OCSF CONFIG:READY [INFO] Policy DNS connected to isolation boundary
+2026-11-05T20:44:42.987Z OCSF NET:LISTEN [INFO] 127.0.0.1:3128
+2026-11-05T20:44:42.991Z OCSF CONFIG:PROBED [INFO] Landlock filesystem sandbox available [abi:v4 compat:BestEffort ro:12 rw:5]
+2026-11-05T20:44:42.991Z OCSF CONFIG:APPLYING [INFO] Applying Landlock filesystem sandbox [abi:V3 compat:BestEffort ro:15 rw:5]
+2026-11-05T20:44:42.991Z OCSF CONFIG:BUILT [INFO] Landlock ruleset built [rules_applied:18 skipped:2]
+2026-11-05T20:44:42.992Z OCSF PROC:LAUNCH [INFO] sleep(114)
+2026-11-05T20:44:42.992Z OCSF CONFIG:UNKNOWN [INFO] Provider file snapshot loaded [file_count:0]
+2026-11-05T20:44:42.992Z INFO openshell_supervisor: Isolation boundary agent started
+2026-11-05T20:44:42.993Z OCSF SSH:LISTEN [INFO]
+2026-11-05T20:44:42.993Z INFO openshell_supervisor: Control-mode access plane started
+2026-11-05T20:44:43.889Z OCSF SSH:OPEN [INFO] ALLOWED
+2026-11-05T20:44:43.890Z OCSF SSH:FAIL [LOW]
+2026-11-05T20:44:43.895Z OCSF SSH:OPEN [INFO] ALLOWED
+2026-11-05T20:44:43.896Z OCSF SSH:FAIL [LOW]
+2026-11-05T20:44:43.951Z OCSF SSH:OPEN [INFO] ALLOWED
+2026-11-05T21:29:05.696Z WARN openshell_sandbox::boundary_server::linux: Boundary gRPC exchange failed
+
+thread 'tokio-rt-worker' (121) panicked at /home/builder/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.3/src/runtime/time/entry.rs:539:9:
+A Tokio 1.x context was found, but it is being shutdown.
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Error:   × sandbox boundary received SIGTERM before supervisor confirmation
+
+2026-11-05T21:29:12.746Z WARN openshell_supervisor: Could not open /var/log for log rotation; using stderr-only logging
+2026-11-09T08:23:17.592Z OCSF FINDING:CREATE [MED] "Sandbox Supervisor Connection Lost" [type:sandbox-supervisor-connection-lost confidence:high]

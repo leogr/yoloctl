@@ -30,16 +30,22 @@ type spaceLogOutput struct {
 }
 
 func newSpaceLogOutput(w io.Writer, settings logging.Settings, logPath string) *spaceLogOutput {
-	out := &spaceLogOutput{
-		target:    w,
-		showBlank: settings.Verbosity.Allows(slog.NewRecord(time.Time{}, slog.LevelInfo, "", 0)),
-	}
-	out.parseRecord = spaceLogRecord
+	parse := spaceLogRecord
 	switch filepath.Base(logPath) {
 	case "ha.stdout.log":
-		out.parseRecord = limaSpaceLogRecord
+		parse = limaSpaceLogRecord
 	case "vm.log":
-		out.parseRecord = newFirecrackerSpaceLogRecord()
+		parse = newFirecrackerSpaceLogRecord()
+	}
+	return newLogView(w, settings, parse)
+}
+
+// newLogView is a human log view of a line stream on w, read by parse.
+func newLogView(w io.Writer, settings logging.Settings, parse func(string) slog.Record) *spaceLogOutput {
+	out := &spaceLogOutput{
+		target:      w,
+		showBlank:   settings.Verbosity.Allows(slog.NewRecord(time.Time{}, slog.LevelInfo, "", 0)),
+		parseRecord: parse,
 	}
 	if settings.Verbosity != prettylog.Trace {
 		out.logger = logging.NewFollowLogger(w, settings, nil)

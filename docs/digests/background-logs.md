@@ -1,7 +1,7 @@
 # Background log storage and views
 
 Verification: `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7`; Lima view:
-`e1386faff0f1db931b00d9305ec257173d38d365` and accompanying changes; Firecracker view: `1aceb626b9a21aacebda708a06e266205a2be704` and accompanying changes.
+`e1386faff0f1db931b00d9305ec257173d38d365` and accompanying changes; Firecracker view: `1aceb626b9a21aacebda708a06e266205a2be704` and accompanying changes; box view: `61a7506a9a805e9a7b14a3256d6c6f2d24227b00` and accompanying changes.
 
 [FACT] The controller service, managed holder and Firecracker guest init use the
 shared file Logger: plain UTC RFC3339 timestamps, levels and actor fields, no
@@ -74,11 +74,20 @@ Unknown fields/types and malformed/incomplete records retain their original
 text. Debug still bypasses all parsing. [13](#source-13) [14](#source-14)
 
 [FACT] For Firecracker's `vm.log`, Firecracker v1.17 logger lines (local time,
-`[instance:thread[:LEVEL…]]`) show as `vm/firecracker` at their time and level,
+`[instance:thread[:LEVEL…]]`) show as `vm/firecracker` at their time and level
+(info when the line carries none),
 and kernel console lines (`[seconds] text`) as `vm/kernel`. yoloctl's own
 records keep the plain parser. Other lines, markers included, stay generic text;
-unstamped lines take the last stamped line's time and serial carriage returns
+unstamped lines take the last stamped line's time (the read time before one) and serial carriage returns
 are dropped for display. [15](#source-15) [16](#source-16)
+
+[FACT] `box logs` renders the container's replayed stdout/stderr on the client
+through the same follow Logger, one view per stream. OpenShell tracing lines
+(`time LEVEL crate::module: msg`) show as `box/<crate>` and OCSF lines
+(`time OCSF CLASS:ACTIVITY [SEV] msg`) as `box/ocsf`, INFO/LOW as info and MED as
+warning; other severities and all other output, application text and panic
+reports included, stay text at the last stamped time. A terminal request's raw
+terminal gets CRLF line ends; debug keeps the original bytes. [17](#source-17)
 
 [FACT] Regressions cover raw suffixes/two rotations, an oversized existing file,
 unsafe current/history files, sink recovery, a real external producer, marker
@@ -115,3 +124,4 @@ classification, durable evidence or existing admission/cancellation rules.
 14. <a id="source-14"></a> [Lima 2.2.1 event schema](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/hostagent/events/events.go) — host-agent event fields.
 15. <a id="source-15"></a> [Firecracker adapter](../../cmd/yoloctl/firecracker_space_log_render.go#L41) — `newFirecrackerSpaceLogRecord`, `firecrackerRecord`; `firecracker_space_log_render_test.go` with real v1.17.0 console lines in `testdata/firecracker-vm-console.log`.
 16. <a id="source-16"></a> [Firecracker v1.17.0 logger](https://github.com/firecracker-microvm/firecracker/blob/v1.17.0/src/vmm/src/logger/logging.rs) — line format, defaults and stdout target; `src/utils/src/time.rs` `LocalTime`.
+17. <a id="source-17"></a> [Box log view](../../cmd/yoloctl/box_log_render.go#L37) — `newBoxLogRecord`, `viewBoxLogs`; `controller_client.go` box.logs; `box_log_render_test.go` with real OpenShell output in `testdata/box-logs-openshell.txt`.
