@@ -193,3 +193,29 @@ func TestQualifiedPatchStackAcceptsOptionalFourthPatch(t *testing.T) {
 		t.Fatal("fourth patch accepted off the chain")
 	}
 }
+
+// The optional fifth patch (raw main input) chains on the fourth; a sixth is
+// refused.
+func TestQualifiedPatchStackAcceptsOptionalFifthPatch(t *testing.T) {
+	p := releaseFixture(t).Pins
+	p.Patches[1].Tree = strings.Repeat("d", 40)
+	p.Patches = append(p.Patches,
+		SourcePatch{qualifiedPatch3Name, sha256Hex([]byte("patch3-fixture")), strings.Repeat("d", 40), strings.Repeat("e", 40)},
+		SourcePatch{qualifiedPatch4Name, sha256Hex([]byte("patch4-fixture")), strings.Repeat("e", 40), strings.Repeat("a", 40)},
+		SourcePatch{qualifiedPatch5Name, sha256Hex([]byte("patch5-fixture")), strings.Repeat("a", 40), p.ForkTree})
+	if !qualifiedPatchStack(p) {
+		t.Fatal("five-patch release refused")
+	}
+	broken := p
+	broken.Patches = append([]SourcePatch(nil), p.Patches...)
+	broken.Patches[4].ParentTree = strings.Repeat("c", 40)
+	if qualifiedPatchStack(broken) {
+		t.Fatal("fifth patch accepted off the chain")
+	}
+	sixth := p
+	sixth.Patches = append(append([]SourcePatch(nil), p.Patches...), SourcePatch{"extra.patch", sha256Hex([]byte("6")), p.ForkTree, strings.Repeat("b", 40)})
+	sixth.ForkTree = strings.Repeat("b", 40)
+	if qualifiedPatchStack(sixth) {
+		t.Fatal("sixth patch accepted")
+	}
+}

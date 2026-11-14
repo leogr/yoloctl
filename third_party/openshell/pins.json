@@ -31,6 +31,11 @@
       "file": "patches/0004-v0072-process-group-signals.patch",
       "sha256": "2c6c4d4005cf4dec51f02769bf6319f26b736c36b224c6b9007f372d5566ed55",
       "result_tree": "a95cfcec31a2627091f4141253c89ef0f88fedae"
+    },
+    {
+      "file": "patches/0005-main-raw-input.patch",
+      "sha256": "837f72168d2d1621a3946d9fcbae8376ebcf08e9a1e530b0f68166340c953771",
+      "result_tree": "5ae13292830b46112b049961ef96e4a55c6278ed"
     }
   ],
   "source_dir": "OpenShell-patch2-signed",

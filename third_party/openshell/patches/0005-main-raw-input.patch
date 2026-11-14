@@ -1,0 +1,208 @@
+yoloctl local patch 0005: a raw-input attachment to the canonical main process.
+
+An `openshell-main` attachment reads its client's input for a detach command
+(openshell-supervisor-process src/ssh.rs, filter_main_detach_sequence): Ctrl-D
+detaches and never reaches the main process, Ctrl-P is held until the next key
+and Ctrl-P Ctrl-Q detaches. An agent running as the main process therefore
+loses those keys.
+
+A per-attachment switch, the env request OPENSHELL_MAIN_RAW_INPUT=1 (read where
+OPENSHELL_MAIN_READ_ONLY already is), forwards every input byte unchanged and
+never detaches on input. Such an attachment must own stdin: when another
+attachment owns it, the attachment is refused with the existing "cannot connect
+to the canonical main process" answer and status 1 instead of attaching
+read-only, so a client that asked for raw input is never a silent viewer.
+Without the switch the behaviour is upstream's, unchanged.
+
+diff --git a/crates/openshell-supervisor-process/src/ssh.rs b/crates/openshell-supervisor-process/src/ssh.rs
+index 8b7361d7..5eaec96d 100644
+--- a/crates/openshell-supervisor-process/src/ssh.rs
++++ b/crates/openshell-supervisor-process/src/ssh.rs
+@@ -389,6 +389,10 @@ struct ChannelState {
+     main_input_owner: Option<u64>,
+     main_attached: bool,
+     main_read_only: bool,
++    /// `OPENSHELL_MAIN_RAW_INPUT=1`: every input byte reaches the main
++    /// process (no Ctrl-D or Ctrl-P Ctrl-Q detach), and the attachment owns
++    /// stdin or is refused, never attached read-only.
++    main_raw_input: bool,
+     /// A writable attachment denied stdin may retry on later input. Explicit
+     /// viewers and channels that sent EOF must never acquire a new lease.
+     main_input_pending: bool,
+@@ -789,6 +793,31 @@ impl russh::server::Handler for SshHandler {
+                 .channels
+                 .get_mut(&channel)
+                 .expect("main channel existence checked above");
++            // A raw-input attachment must own stdin: when another attachment
++            // owns it, refuse instead of attaching read-only.
++            let raw_lease = if state.main_raw_input && !state.main_read_only {
++                match main_session.acquire_input() {
++                    Ok(lease) => Some(lease),
++                    Err(error) => {
++                        main_session.end_terminal_attachment();
++                        session.channel_success(channel)?;
++                        session.extended_data(
++                            channel,
++                            1,
++                            format!(
++                                "openshell: cannot connect to the canonical main process: {error}{line_ending}"
++                            )
++                            .into_bytes(),
++                        )?;
++                        session.exit_status_request(channel, 1)?;
++                        session.eof(channel)?;
++                        session.close(channel)?;
++                        return Ok(());
++                    }
++                }
++            } else {
++                None
++            };
+             state.main_attached = true;
+             if let Some(pty) = state.pty_request.take() {
+                 main_session
+@@ -802,6 +831,9 @@ impl russh::server::Handler for SshHandler {
+             }
+             let (input, warning) = if state.main_read_only {
+                 (None, None)
++            } else if let Some((owner, input)) = raw_lease {
++                state.main_input_owner = Some(owner);
++                (Some(InputSender::Main(input)), None)
+             } else {
+                 match main_session.acquire_input() {
+                     Ok((owner, input)) => {
+@@ -918,6 +950,12 @@ impl russh::server::Handler for SshHandler {
+         {
+             state.main_read_only = true;
+         }
++        if variable_name == "OPENSHELL_MAIN_RAW_INPUT"
++            && variable_value == "1"
++            && let Some(state) = self.channels.get_mut(&channel)
++        {
++            state.main_raw_input = true;
++        }
+         session.channel_success(channel)?;
+         Ok(())
+     }
+@@ -958,7 +996,7 @@ impl russh::server::Handler for SshHandler {
+             return Ok(());
+         }
+         let denied_prefix = state.main_input_pending && state.main_detach_prefix_pending;
+-        let (mut forward, detach) = if state.main_attached {
++        let (mut forward, detach) = if state.main_attached && !state.main_raw_input {
+             filter_main_detach_sequence(&mut state.main_detach_prefix_pending, data)
+         } else {
+             (data.to_vec(), false)
+@@ -2080,6 +2118,112 @@ mod tests {
+         main_session.release_input(owner);
+     }
+ 
++    async fn raw_input_attachment(
++        main_session: &Arc<MainSession>,
++    ) -> russh::Channel<russh::client::Msg> {
++        let client = main_test_client(Some(main_session.clone())).await;
++        let mut channel = client.channel_open_session().await.unwrap();
++        channel
++            .set_env(true, "OPENSHELL_MAIN_RAW_INPUT", "1")
++            .await
++            .unwrap();
++        assert!(matches!(
++            next_main_event(&mut channel).await,
++            russh::ChannelMsg::Success
++        ));
++        channel
++            .request_subsystem(true, "openshell-main")
++            .await
++            .unwrap();
++        assert!(matches!(
++            next_main_event(&mut channel).await,
++            russh::ChannelMsg::Success
++        ));
++        channel
++    }
++
++    // yoloctl patch 0005: with OPENSHELL_MAIN_RAW_INPUT=1 every byte, Ctrl-D,
++    // a lone Ctrl-P and Ctrl-P Ctrl-Q included, reaches the main process in
++    // order and the attachment stays open.
++    #[tokio::test]
++    async fn main_attachment_raw_input_forwards_every_byte() {
++        let (main_session, mut input) = MainSession::inert_with_input();
++        let mut channel = raw_input_attachment(&main_session).await;
++        let all: Vec<u8> = (0..=255).collect();
++        let mut sent = Vec::new();
++        for frame in [
++            &b"\x04"[..],
++            b"\x10",
++            b"\x10\x11",
++            b"a\x10\x11b\x04c",
++            &all[..],
++        ] {
++            channel.data(frame).await.unwrap();
++            sent.extend_from_slice(frame);
++        }
++        let mut received = Vec::new();
++        while received.len() < sent.len() {
++            let chunk = tokio::time::timeout(Duration::from_secs(5), input.recv())
++                .await
++                .expect("raw input must reach the main process")
++                .expect("main stdin channel open");
++            received.extend_from_slice(&chunk);
++        }
++        assert_eq!(received, sent);
++        assert!(!main_session.finished());
++        assert!(
++            main_session.acquire_input().is_err(),
++            "the raw attachment still owns stdin"
++        );
++        assert!(
++            tokio::time::timeout(Duration::from_millis(200), channel.wait())
++                .await
++                .is_err(),
++            "the raw attachment must stay open"
++        );
++    }
++
++    // A raw-input attachment that cannot own stdin is refused, never a viewer.
++    #[tokio::test]
++    async fn main_attachment_raw_input_is_refused_without_stdin() {
++        let main_session = MainSession::inert();
++        let (owner, _input) = main_session.acquire_input().unwrap();
++        let client = main_test_client(Some(main_session.clone())).await;
++        let mut channel = client.channel_open_session().await.unwrap();
++        channel
++            .set_env(true, "OPENSHELL_MAIN_RAW_INPUT", "1")
++            .await
++            .unwrap();
++        assert!(matches!(
++            next_main_event(&mut channel).await,
++            russh::ChannelMsg::Success
++        ));
++        channel
++            .request_subsystem(true, "openshell-main")
++            .await
++            .unwrap();
++        assert!(matches!(
++            next_main_event(&mut channel).await,
++            russh::ChannelMsg::Success
++        ));
++        match next_main_event(&mut channel).await {
++            russh::ChannelMsg::ExtendedData { data, ext: 1 } => assert_eq!(
++                String::from_utf8_lossy(&data),
++                "openshell: cannot connect to the canonical main process: canonical main process already has an input owner\n"
++            ),
++            event => panic!("expected refusal, got {event:?}"),
++        }
++        assert!(matches!(
++            next_main_event(&mut channel).await,
++            russh::ChannelMsg::ExitStatus { exit_status: 1 }
++        ));
++        assert!(
++            main_session.acquire_input().is_err(),
++            "a refusal must not touch the owner's lease"
++        );
++        main_session.release_input(owner);
++    }
++
+     #[test]
+     fn main_detach_filter_preserves_prefix_before_ctrl_d() {
+         let mut prefix_pending = false;
