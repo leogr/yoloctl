@@ -430,7 +430,12 @@ func ensureManagedServer(ctx context.Context, space string, store managedchat.St
 	if err != nil {
 		return err
 	}
-	if !details.Running {
+	// The server run this operation created, started or read is the one its
+	// execs, session start and reload assume; it never starts it again.
+	ctx = container.WithExpectedRuns(ctx)
+	if details.Running {
+		container.ExpectedRunsFrom(ctx).ExpectIfUnset(cfg.Name, container.RunOf(details))
+	} else {
 		if err := startExistingAgentboxContainerPrepared(ctx, c, cfg, prepared); err != nil {
 			return err
 		}
@@ -468,6 +473,9 @@ func ensureManagedServer(ctx context.Context, space string, store managedchat.St
 	}
 	if err := status.Matches(proof); err == nil {
 		return nil
+	}
+	if _, err := c.CheckExpectedRun(ctx, cfg.Name, "the chat server reload"); err != nil {
+		return err
 	}
 	if _, err := control.Call(ctx, "reload"); err != nil {
 		return err
@@ -660,6 +668,11 @@ func (w *boundedChatWriter) Write(p []byte) (int, error) {
 }
 
 func runManagedChatExec(ctx context.Context, cfg *agentbox.Config, argv []string, in *os.File, out, notice io.Writer) error {
+	// The socket path is the box's name: a replacement would answer. Compare
+	// with the run the operation started or read right before dialing.
+	if _, err := container.New(cfg.Space).CheckExpectedRun(ctx, cfg.Name, "the chat command "+argv[0]); err != nil {
+		return err
+	}
 	if !spaceenv.Native() {
 		return errors.New("managed chat requires the native controller")
 	}

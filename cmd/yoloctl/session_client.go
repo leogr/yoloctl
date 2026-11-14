@@ -356,6 +356,13 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 	}
 	cfg := resolved.Config
 	running := resolved.Runtime == boxstate.RuntimeRunning
+	if running && container.ExpectedRunsFrom(ctx) != nil {
+		// The run resolved here is the one a session starts on, unless this
+		// operation already started or stopped the box itself.
+		if d, err := c.Inspect(ctx, name); err == nil && d.Running {
+			container.ExpectedRunsFrom(ctx).ExpectIfUnset(name, container.RunOf(d))
+		}
+	}
 
 	// A tracked box's conversation record changes only under its box lock,
 	// taken inside the command's space-operation lock and held until the
@@ -550,7 +557,7 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 		return "", err
 	}
 	start := func(argv []string, token string) error {
-		if err := session.StartHolderUnit(ctx, c, session.UnitSpec{
+		return startSessionHolder(ctx, c, name, session.UnitSpec{
 			Agentbox:        name,
 			Argv:            sessionTerminalIdentity(ctx).Command(argv),
 			Term:            termName,
@@ -563,10 +570,7 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 			HostWorkdir:     sessionHostWorkdir(cfg.Workdir),
 			LaunchToken:     token,
 			Daemons:         daemons,
-		}); err != nil {
-			return fmt.Errorf("start session holder for %s: %w", name, err)
-		}
-		return waitForAttachSocket(ctx, c, name)
+		})
 	}
 	if tracked != nil {
 		if err := tracked.observeCurrentLaunch(ctx, cfg); err != nil {
@@ -738,3 +742,20 @@ func sessionTerminalIdentity(ctx context.Context) termio.TerminalIdentity {
 	}
 	return termio.CurrentTerminalIdentity()
 }
+
+// startSessionHolder starts the box's holder and waits for its socket. The
+// holder is started by box name and dials the name-based socket, so a
+// replacement would accept it: the box's container is compared with the run
+// the operation read or started right before (no holder starts otherwise).
+func startSessionHolder(ctx context.Context, c *container.Client, name string, spec session.UnitSpec) error {
+	if _, err := c.CheckExpectedRun(ctx, name, "the session start"); err != nil {
+		return err
+	}
+	if err := startHolderUnitFn(ctx, c, spec); err != nil {
+		return fmt.Errorf("start session holder for %s: %w", name, err)
+	}
+	return waitForAttachSocket(ctx, c, name)
+}
+
+// startHolderUnitFn starts the holder unit; tests replace it.
+var startHolderUnitFn = session.StartHolderUnit

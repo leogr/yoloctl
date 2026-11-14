@@ -263,7 +263,9 @@ func registerSpaceOperations(root *cobra.Command) {
 		complete = true
 		previous := cmd.Context()
 		held := func() bool { return !released }
-		cmd.SetContext(context.WithValue(context.WithValue(previous, spaceReleaseKey{}, release), spaceHeldKey{}, held))
+		// Each operation keeps, per box, the run it expects: what it read or
+		// started, none after its own stop (container.ExpectedRuns).
+		cmd.SetContext(container.WithExpectedRuns(context.WithValue(context.WithValue(previous, spaceReleaseKey{}, release), spaceHeldKey{}, held)))
 		defer cmd.SetContext(previous)
 		if (words[0] == "box" || words[0] == "attach") && !currentControllerPrincipal(cmd.Context()).Admin() {
 			if err := revalidateOperatorFn(cmd.Context()); err != nil {

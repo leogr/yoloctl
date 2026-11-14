@@ -13,13 +13,19 @@ type EngineCalls struct {
 	mu                sync.Mutex
 	started           bool
 	stoppedAfterStart bool
+	parent            *EngineCalls // an enclosing record also sees these calls
 }
 
 type engineCallsKey struct{}
 
 // WithEngineCalls makes this client's engine starts and stops under ctx
-// recorded in calls.
+// recorded in calls, and in any record already under ctx: a nested step
+// (a policy restart's launch) can tell its own calls apart while the
+// enclosing operation (box start) still sees them.
 func WithEngineCalls(ctx context.Context, calls *EngineCalls) context.Context {
+	if parent := EngineCallsFrom(ctx); parent != nil && parent != calls && calls.parent == nil {
+		calls.parent = parent
+	}
 	return context.WithValue(ctx, engineCallsKey{}, calls)
 }
 
@@ -51,13 +57,21 @@ func (e *EngineCalls) MarkStart() {
 	e.mu.Lock()
 	e.started = true
 	e.stoppedAfterStart = false // a new attempt: its own stops count afresh
+	parent := e.parent
 	e.mu.Unlock()
+	if parent != nil {
+		parent.MarkStart()
+	}
 }
 
 func (e *EngineCalls) MarkStop() {
 	e.mu.Lock()
 	e.stoppedAfterStart = e.stoppedAfterStart || e.started
+	parent := e.parent
 	e.mu.Unlock()
+	if parent != nil {
+		parent.MarkStop()
+	}
 }
 
 func markEngineStart(ctx context.Context) {

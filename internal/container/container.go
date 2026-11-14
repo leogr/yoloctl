@@ -191,10 +191,15 @@ func (c *Client) createOrRun(ctx context.Context, opts RunOptions, start bool, s
 	args = append(args, opts.Command...)
 	cmd := c.command(ctx, append([]string{"sudo", "nerdctl"}, args...)...)
 	cmd.Stdout = stdout
-	if start {
-		markEngineStart(ctx)
+	if !start {
+		return vmhost.RunWithFilteredStderr(cmd, c.stderr)
 	}
-	return vmhost.RunWithFilteredStderr(cmd, c.stderr)
+	markEngineStart(ctx)
+	if err := vmhost.RunWithFilteredStderr(cmd, c.stderr); err != nil {
+		return err
+	}
+	c.recordStarted(ctx, opts.Name)
+	return nil
 }
 
 // Start re-launches a stopped container.
@@ -204,7 +209,11 @@ func (c *Client) Start(ctx context.Context, name string) error {
 		return err
 	}
 	markEngineStart(ctx)
-	return c.nerdctl(ctx, "start", id)
+	if err := c.nerdctl(ctx, "start", id); err != nil {
+		return err
+	}
+	c.recordStarted(ctx, id)
+	return nil
 }
 
 // stopGraceSeconds is how long `nerdctl stop` waits after SIGTERM
@@ -224,6 +233,7 @@ func (c *Client) Stop(ctx context.Context, name string) error {
 		return err
 	}
 	markEngineStop(ctx)
+	recordStopped(ctx, id)
 	return c.nerdctl(ctx, "stop", "--time", stopGraceSeconds, id)
 }
 

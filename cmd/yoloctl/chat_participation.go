@@ -130,6 +130,9 @@ func runControllerChatParticipation(ctx context.Context, req controller.Request,
 	if !details.Running {
 		return true, errors.New("participant box stopped; start it explicitly before changing its named client")
 	}
+	// Each exec assumes this run; runManagedChatExec compares before it.
+	ctx = container.WithExpectedRuns(ctx)
+	container.ExpectedRunsFrom(ctx).Expect(cfg.Name, container.RunOf(details))
 	if err := agentbox.VerifyChatRuntime(cfg, details); err != nil {
 		return true, fmt.Errorf("participant binds are not ready; inspect chat status and explicitly recreate the box if needed: %w", err)
 	}

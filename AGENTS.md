@@ -141,7 +141,9 @@ are removed by the next start or stop with exact ownership checks; they never
 fail or hold a stop. `box stop` never waits for another operation, and no running
 operation or drain refuses it: when the space is busy it stops the exact container beside the
 running operation and leaves cleanup to the next stop or start. Stops are
-idempotent and never cancel each other or any other operation. Container liveness and
+idempotent and never cancel each other or any other operation. An operation
+that finds its box's expected run gone performs no further effect on that box
+and never starts again a run it had started. Container liveness and
 agent-session liveness are distinct. A lost holder cannot adopt its old child.
 
 `space recreate` preserves disk/accounts/declarations and starts a fresh VM;

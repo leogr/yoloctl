@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/leogr/yoloctl/internal/container"
 )
 
 type nativePolicyRestartActions struct {
@@ -34,8 +36,9 @@ func completeNativePolicyRestart(ctx context.Context, originalPolicy, newPolicy 
 	// Cancellation here leaves a known stopped old runtime; there has been no
 	// uncertain launch. The same authorized rollback can still restore it.
 	err := ctx.Err()
+	launched := &container.EngineCalls{}
 	if err == nil {
-		err = a.launch(ctx, bytes.Clone(newPolicy), false)
+		err = a.launch(container.WithEngineCalls(ctx, launched), bytes.Clone(newPolicy), false)
 	}
 	if err == nil {
 		return nil
@@ -43,6 +46,13 @@ func completeNativePolicyRestart(ctx context.Context, originalPolicy, newPolicy 
 	var uncertain *NativeEffectsUncertain
 	if errors.As(err, &uncertain) {
 		return err
+	}
+	// Once the new launch's engine start was submitted (it may have started)
+	// nothing tells a policy the sandbox rejected from a stop beside it: the
+	// previous policy is not launched again (decision R1). The launch's own
+	// cleanup ran; the box's state is what a read shows.
+	if launched.Started() {
+		return fmt.Errorf("new policy failed after its engine start was submitted; the previous policy is not restored automatically: %w", err)
 	}
 	restore, cancel := context.WithTimeout(context.WithoutCancel(ctx), 90*time.Second)
 	defer cancel()

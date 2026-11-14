@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -43,7 +44,26 @@ func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentb
 		cliNotice(logging.Box, "autoupdate skipped (release source unreachable: %v)", err)
 		return nil
 	}
-	id, err := c.ResolveContainerID(ctx, agentboxName)
+	return updateAgentInRun(ctx, c, agentboxName, profile, latest.Latest, updated)
+}
+
+// updateAgentInRun reads the installed version and installs the latest into
+// the run this operation started or read: a stopped box or a replacement
+// answering on the same name ends the operation, before the version read
+// and before the install. A box the operation has no expectation for is
+// resolved by name, as before; an unreadable version still skips.
+func updateAgentInRun(ctx context.Context, c *container.Client, agentboxName string, profile *agentprofile.Profile, latest string, updated *bool) error {
+	var stopped *container.StoppedDuringOperation
+	id := ""
+	expected, err := c.CheckExpectedRun(ctx, agentboxName, "the agent update")
+	switch {
+	case errors.As(err, &stopped):
+		return err
+	case expected != nil:
+		id = expected.ID
+	case err == nil:
+		id, err = c.ResolveContainerID(ctx, agentboxName)
+	}
 	var installed string
 	if err == nil {
 		installed, err = fetchInstalledAgentVersion(ctx, c, id, profile)
@@ -52,12 +72,18 @@ func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentb
 		cliNotice(logging.Box, "autoupdate skipped (read installed %s version: %v)", profile.Distribution(), err)
 		return nil
 	}
-	if installed == latest.Latest {
+	if installed == latest {
 		// Already at latest. Quiet — host claude doesn't announce
 		// "already up to date" either.
 		return nil
 	}
-	cliInfo(logging.Box, "autoupdate: %s %s → %s", profile.Distribution(), installed, latest.Latest)
+	cliInfo(logging.Box, "autoupdate: %s %s → %s", profile.Distribution(), installed, latest)
+	if _, err := c.CheckExpectedRun(ctx, agentboxName, "the agent install"); errors.As(err, &stopped) {
+		return err
+	} else if err != nil {
+		cliNotice(logging.Box, "autoupdate skipped (read the box before the install: %v)", err)
+		return nil
+	}
 	if err := installAgentLatest(ctx, c, id, profile); err != nil {
 		return fmt.Errorf("autoupdate %s in %s: %w", profile.Distribution(), agentboxName, err)
 	}

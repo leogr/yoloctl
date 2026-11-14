@@ -151,7 +151,17 @@ func TestChatEnsureLifecycleKeepsStructuredOutput(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for name, data := range map[string][]byte{"drift.json": inspect, "policy.yaml": policy} {
+			// After its start the engine reads the server box as running: the
+			// operation's expected run (container.ExpectedRuns).
+			running, err := json.Marshal([]any{map[string]any{
+				"Id": strings.Repeat("f", 64), "Name": cfg.Name, "Path": command[0], "Args": command[1:], "State": map[string]any{"Running": true, "Pid": 42, "StartedAt": "2026-11-14T10:00:00.1Z"},
+				"Config": map[string]any{"Image": image, "Labels": map[string]string{agentbox.LabelAgent: "none", resources.WorkloadLabel: resources.WorkloadVersion}},
+				"Mounts": []any{map[string]any{"Source": cfg.Workdir.Source, "Destination": cfg.Workdir.ContainerPath(), "RW": false}},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for name, data := range map[string][]byte{"drift.json": inspect, "running.json": running, "policy.yaml": policy} {
 				if err := os.WriteFile(filepath.Join(filepath.Dir(callsPath), name), data, 0600); err != nil {
 					t.Fatal(err)
 				}
@@ -217,11 +227,12 @@ func chatOutputFixture(t *testing.T, action string) (*agentbox.Config, string) {
 	script := fmt.Sprintf(`#!/bin/sh
 set -eu
 printf '%%s\n' "$*" >> "$START_TEST_FIXTURE/calls"
+case "$*" in *'nerdctl start '*) touch "$START_TEST_FIXTURE/started" ;; esac
 case "$*" in
   *'nerdctl ps'*) if [ "$CHAT_TEST_ACTION" = storage-cleanup ] || [ "$CHAT_TEST_ACTION" = ensure-absent ]; then exit 0; fi; printf '{"Names":"coder","Status":"Exited (0)"}\n' ;;
   *'nerdctl images'*) printf '{"Repository":"yoloctl/agentbox-composed","Tag":"obsolete","ID":"sha256:%s"}\n' ;;
   *'nerdctl image inspect'*) printf '[{"Id":"sha256:%s","RepoTags":["yoloctl/agentbox-composed:obsolete"],"Config":{"Labels":{"yoloctl.kind":"composed"}}}]\n' ;;
-  *'nerdctl inspect'*) cat "$START_TEST_FIXTURE/drift.json" ;;
+  *'nerdctl inspect'*) if [ -f "$START_TEST_FIXTURE/started" ] && [ -f "$START_TEST_FIXTURE/running.json" ]; then cat "$START_TEST_FIXTURE/running.json"; else cat "$START_TEST_FIXTURE/drift.json"; fi ;;
   *'cat /sys/fs/cgroup/'*) printf '%d\nmax\n0\nMemTotal: 4194304 kB\nMemAvailable: 100 kB\n' ;;
   *'sudo cat'*) cat "$START_TEST_FIXTURE/policy.yaml" ;;
   *'binary=/opt/openshell/bin/openshell-sandbox'*'sha256sum --check --status'*) exit 0 ;;

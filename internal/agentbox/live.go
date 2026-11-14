@@ -82,6 +82,11 @@ func (i LiveInspector) Inspect(ctx context.Context, c *Config) (ActualState, err
 	if err != nil {
 		return ActualState{}, fmt.Errorf("inspect container %s: %w", c.Name, err)
 	}
+	if details.Running {
+		// The run this plan read is the one its live port changes assume,
+		// unless the operation already started or stopped the box itself.
+		container.ExpectedRunsFrom(ctx).ExpectIfUnset(c.Name, container.RunOf(details))
+	}
 	state := ActualState{
 		Exists:            true,
 		Image:             details.Image,
@@ -408,10 +413,6 @@ func (a LiveApplier) Restart(ctx context.Context, c *Config, policy []byte) erro
 		return a.restartNativeGeneration(ctx, c, policy)
 	}
 	policyPath := sandbox.AgentboxPolicyHostPath(c.Name)
-	snapshot, err := a.Client.ReadFile(ctx, policyPath)
-	if err != nil {
-		return fmt.Errorf("snapshot current policy: %w", err)
-	}
 	if err := port.UnforwardAgentbox(ctx, a.Client, c.Name); err != nil {
 		return fmt.Errorf("teardown port forwards: %w", err)
 	}
@@ -432,26 +433,18 @@ func (a LiveApplier) Restart(ctx context.Context, c *Config, policy []byte) erro
 		return fmt.Errorf("start container: %w", err)
 	}
 	if err := WaitForSandboxSocket(ctx, c.Space, c.Name, SandboxSocketTimeout); err != nil {
-		// New policy refused to load — restore snapshot. The forwards
-		// were torn down above, so once the rolled-back container is up
-		// again they must be re-applied too; otherwise a failed policy
-		// swap silently leaves the agentbox without its declared
-		// forwards while the YAML still claims them. Best-effort, like
-		// the rest of the rollback: the policy error is what the caller
-		// needs to see.
+		// The new run's engine start was submitted: nothing tells a policy
+		// the sandbox rejected from a stop beside it, so the previous
+		// policy is not started again (decision R1). This start's own run
+		// is stopped; the box's state is what a read shows.
 		if stopErr := a.Stop(ctx, c.Name); stopErr != nil {
 			var uncertain *NativeEffectsUncertain
 			if errors.As(stopErr, &uncertain) {
-				return fmt.Errorf("new policy failed; rollback stop is uncertain: %w", errors.Join(err, stopErr))
+				return fmt.Errorf("new policy failed; its stop is uncertain: %w", errors.Join(err, stopErr))
 			}
+			return fmt.Errorf("new policy failed after its start; the previous policy is not restored automatically and the stop failed: %w", errors.Join(err, stopErr))
 		}
-		_ = a.Client.WriteFile(ctx, policyPath, snapshot, "0644")
-		if startErr := a.Client.Start(ctx, c.Name); startErr == nil {
-			if waitErr := WaitForSandboxSocket(ctx, c.Space, c.Name, SandboxSocketTimeout); waitErr == nil {
-				_ = a.applyPortForwards(ctx, c, c.Ports)
-			}
-		}
-		return fmt.Errorf("new policy failed to load; previous policy restored: %w", err)
+		return fmt.Errorf("new policy failed after its start; the previous policy is not restored automatically: %w", err)
 	}
 	return a.applyPortForwards(ctx, c, c.Ports)
 }
@@ -461,6 +454,11 @@ func (a LiveApplier) Restart(ctx context.Context, c *Config, policy []byte) erro
 func (a LiveApplier) AddPortForward(ctx context.Context, c *Config, pf Port) error {
 	details, err := a.Client.Inspect(ctx, c.Name)
 	if err != nil {
+		return err
+	}
+	// A forward assumes the run the operation read or started: a stopped box
+	// or a replacement answering on the same name ends the operation.
+	if err := container.ExpectedRunsFrom(ctx).Check(c.Name, details, fmt.Sprintf("its port forward %d", pf.Published)); err != nil {
 		return err
 	}
 	return dispatchRuntimePortForward(ctx, details, c, pf,
