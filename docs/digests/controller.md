@@ -1,6 +1,6 @@
 # VM controller, transport and recovery
 
-Verification: `272abb082790962572505495756706d40d73f06c` and accompanying N1 changes; re-read cited sources when changing behavior.
+Verification: `272abb082790962572505495756706d40d73f06c` and accompanying N1/N2 changes; re-read cited sources when changing behavior.
 
 [FACT] Public clients reuse the service's Cobra definitions and route registered
 operations to one root controller inside the selected VM. Host clients use a
@@ -82,10 +82,12 @@ running reservations and receipt-storage repair are in
 [12](#source-12) [13](#source-13) [22](#source-22) [26](#source-26)
 
 [FACT] Effect gates start at `effect_phase: waiting`. Private duplex FD 4
-acknowledges `BeginEffects` only after durably saving `started`; stdout cannot
+acknowledges `BeginEffects` after retaining `started` in the original live
+admission (written now or late); stdout cannot
 authorize effects. After authorization, signals, panic or a missing normal
 completion, process-wait errors, malformed checkpoints and explicit uncertain
-effects close interrupted unless setup or completion was durably recorded.
+effects close interrupted unless the controller knows setup or completion.
+Stored waiting history after a process restart cannot prove an ungranted gate.
 Only `box.attach` also owns authorized setup: its client's loss detaches
 instead of canceling, and finalization follows the execution, not the client.
 [23](#source-23) [24](#source-24) [8](#source-8) [12](#source-12) [27](#source-27)

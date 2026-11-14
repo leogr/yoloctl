@@ -10,10 +10,11 @@ plus `OwnedSetup`. [1](#source-1) [2](#source-2)
 execution context derived from the controller's lifetime; the worker, its
 process group signals, view pair and private checkpoints follow only the
 latter. A per-request mutex orders the effect gate, handoff and detachment.
-The gate refuses a departed client, takes ownership, then durably saves
-`effect_phase: started` before replying permit. A detach before ownership
+The gate refuses a departed client, takes ownership, then retains
+`effect_phase: started` in its live admission before replying permit. A detach before ownership
 cancels the worker with nothing changed (`complete`, nonzero); after it, the
-client's transport is only detached. A failed save denies effects. Other
+client's transport is only detached. A failed ordinary record write is kept
+for late publication and does not deny effects. Other
 operations, and any phase without ownership, still cancel with their client.
 [3](#source-3) [4](#source-4)
 
@@ -56,8 +57,8 @@ synchronization never sends the checkpoint. [5](#source-5) [6](#source-6) [7](#s
 (authority loss, controller shutdown), worker interruption or explicit effect
 uncertainty runs the interrupted classifier. Receipts add informational
 `client_detached` and `detach_signal`. Authority loss, worker death after
-authorization, lost permission, receipt failure and restart recovery stay
-conservative (`uncertain`); drain counts an owned setup as active and its
+authorization, lost permission and restart recovery close interrupted when no
+result is known; recording failure alone keeps the command's result. Drain counts an owned setup as active and its
 expiry never kills it. A detached setup runs until its own timeouts or an
 explicit stop. The connection's end is observed asynchronously; when it is
 observed after a handoff that already found the client gone, it cancels

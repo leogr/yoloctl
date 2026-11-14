@@ -11,7 +11,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/leogr/yoloctl/internal/safepath"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/vmanchor"
 )
 
@@ -100,16 +100,23 @@ func (o *nativeNonceOwner) checkBootstrapReceipt(ctx context.Context) error {
 	if err := r.Scope.validate(); err != nil {
 		return err
 	}
-	if s.receiptFailure != nil {
-		return errors.New("bootstrap receipt storage is unavailable")
+	if s.nativeStorageFailure != nil {
+		return errors.Join(errors.New("bootstrap native storage identity is unavailable"), s.nativeStorageFailure)
 	}
-	expected, err := json.Marshal(*r)
-	if err != nil {
-		return err
+	entry := s.executions[r.ID]
+	if entry == nil || entry.receipt != r || entry.settled || !sameAdmission(*entry.receipt, *r) {
+		return errors.New("original waiting bootstrap live execution is unavailable")
 	}
-	raw, err := safepath.ReadFile(s.Receipts.Dir, r.ID+".json", MaxDocument)
-	if err != nil || !bytes.Equal(raw, expected) {
-		return errors.Join(errors.New("original durable bootstrap receipt changed/unavailable"), err)
+	// The registered original worker owns this waiting admission. Stored bytes
+	// describe it but cannot grant or revoke the handoff capability.
+	if !entry.durableWarned {
+		saved, err := s.Receipts.Read(r.ID)
+		expected := *r
+		expected.RecordedLate = saved.RecordedLate
+		if err != nil || !sameReceipt(saved, expected) {
+			logging.L().Warn("Live bootstrap record is unavailable or older than its execution", "actor", logging.Controller, "request", r.ID, "method", r.Method)
+			entry.durableWarned = true
+		}
 	}
 	return ctx.Err()
 }

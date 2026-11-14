@@ -50,7 +50,7 @@ destroy deletes it after VM termination. An interrupted mutation is queried by
 request ID and never automatically replayed.
 Fixed worker infrastructure is claimed before runtime verification can launch
 a child; optional launch observations do not authorize effects. [1](#source-1)
-Every mutation durably authorizes effects, with its footprint, over a private
+Every mutation authorizes effects from its live admission and footprint over a private
 worker channel; confirmed cancellation before authorization is `recovered`
 `not-applied`. The controller also resolves an outcome from a durable
 completion record or a reviewed read-back of an exact account or chat-revoke
@@ -58,6 +58,8 @@ document. An ended operation without a proven result closes as `interrupted` and
 holds nothing. One bounded current-disk, recorded-scope observation records the
 container state separately from historical success; an unavailable observation
 is recorded as such. Matching document proofs can still establish applied once.
+Ordinary recording failure preserves the current live result and reservations,
+then publishes the latest record late. Actual native-storage safety remains separate.
 Receipt-storage recovery rechecks current UUID, ownership and live bind read-only;
 workers and verifiers never prepare that bind. [15](#source-15)
 Fixed root service startup prepares the verified disk’s bind before serving,
@@ -97,8 +99,8 @@ Existing spaces require an explicit VM-image recreate to install this policy.
 [FACT] Admission and effect gates serialize mutations, except `box stop`: it is
 admitted while the controller drains, its gate never waits for running
 executions, and when another operation holds the native space lock it stops the
-box's exact container beside it. Unresolved holds and receipt-storage failures
-still apply. [19](#source-19)
+box's exact container beside it. Ordinary recording failures and finished
+outcomes do not fence it; actual native-storage identity checks still apply. [19](#source-19)
 
 [FACT] Two kinds of background work run as short-lived `controller-internal`
 workers on an idle, certain controller and yield to every admitted mutation:

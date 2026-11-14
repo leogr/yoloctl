@@ -66,3 +66,50 @@ func TestRegularFileExistsRejectsFinalSymlink(t *testing.T) {
 		t.Fatalf("RegularFileExists = (%v, %v), want false + symlink error", exists, err)
 	}
 }
+
+func TestCreateFileDoesNotReplaceExistingEntries(t *testing.T) {
+	for _, kind := range []string{"file", "symlink", "directory"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			dest := filepath.Join(root, "fact")
+			switch kind {
+			case "file":
+				if err := os.WriteFile(dest, []byte("old"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink":
+				if err := os.Symlink("missing", dest); err != nil {
+					t.Skip(err)
+				}
+			case "directory":
+				if err := os.Mkdir(dest, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := CreateFile(root, "fact", []byte("new"), 0600); !errors.Is(err, fs.ErrExist) {
+				t.Fatal("existing entry replaced", err)
+			}
+			info, err := os.Lstat(dest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kind == "symlink" && info.Mode()&os.ModeSymlink == 0 || kind == "directory" && !info.IsDir() {
+				t.Fatal("entry type changed", info.Mode())
+			}
+			if kind == "file" {
+				body, err := os.ReadFile(dest)
+				if err != nil || string(body) != "old" {
+					t.Fatal("existing bytes changed", err)
+				}
+			}
+		})
+	}
+	root := t.TempDir()
+	if err := CreateFile(root, "new", []byte("complete"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	body, err := ReadFile(root, "new", 64)
+	if err != nil || string(body) != "complete" {
+		t.Fatal(string(body), err)
+	}
+}

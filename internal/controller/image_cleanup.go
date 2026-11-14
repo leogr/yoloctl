@@ -16,7 +16,7 @@ func ImageCleanupID(ctx context.Context) string {
 	return s
 }
 
-// Cleanup owns a distinct, durable images-domain transaction. It never waits
+// Cleanup owns a distinct live images-domain transaction. It never waits
 // for jobs or a native lock while holding that native lock itself.
 func (m *ImageJobs) Cleanup(ctx context.Context, run func(context.Context, func() error) error) error {
 	scope := &Scope{Writes: []Resource{{Kind: ResourceImages}}}
@@ -49,7 +49,7 @@ func (m *ImageJobs) Cleanup(ctx context.Context, run func(context.Context, func(
 	server.mu.Lock()
 	var r Receipt
 	var err, storeErr error
-	if server.draining || server.receiptFailure != nil {
+	if server.draining || server.nativeStorageFailure != nil {
 		err = errors.New("image cleanup admission is closed")
 	} else if ctx.Err() != nil {
 		err = ctx.Err()
@@ -60,7 +60,11 @@ func (m *ImageJobs) Cleanup(ctx context.Context, run func(context.Context, func(
 			if resources, held, global := h.conflict(scope); len(held) != 0 {
 				err = heldError(server.Hello.Space, true, global, resources, held)
 			} else {
-				r, err = server.Receipts.begin(Request{ID: id, Method: "image.cleanup", Dash: -1}, Principal{}, server.Hello.Generation, server.DiskID, true)
+				var live *Receipt
+				live, err = server.beginExecution(Request{ID: id, Method: "image.cleanup", Dash: -1}, Principal{}, true)
+				if live != nil {
+					r = *live
+				}
 				storeErr = err
 			}
 		}
@@ -98,8 +102,12 @@ func (m *ImageJobs) Cleanup(ctx context.Context, run func(context.Context, func(
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if server.draining || server.receiptFailure != nil {
+		if server.draining || server.nativeStorageFailure != nil {
 			return errors.New("image cleanup admission changed before permission")
+		}
+		entry := server.executions[id]
+		if entry == nil || entry.settled || !sameAdmission(*entry.receipt, r) || entry.receipt.State != "pending" || entry.receipt.EffectPhase != EffectWaiting || r.Method != "image.cleanup" || r.Generation != server.Hello.Generation || r.DiskID != server.DiskID || !r.Principal.Admin() {
+			return errors.New("original live image cleanup permission is unavailable")
 		}
 		if r.EffectPhase != EffectWaiting {
 			return errors.New("cleanup already permitted")
@@ -112,7 +120,7 @@ func (m *ImageJobs) Cleanup(ctx context.Context, run func(context.Context, func(
 			return heldError(server.Hello.Space, true, global, resources, held)
 		}
 		r.EffectPhase, r.Scope = EffectStarted, scope
-		err = server.Receipts.Save(r)
+		err = server.persistExecution(r, false)
 		if err != nil {
 			server.record(r, err, false, false, "")
 		}
@@ -134,7 +142,7 @@ func (m *ImageJobs) Cleanup(ctx context.Context, run func(context.Context, func(
 	} else {
 		r.State, r.Status = "interrupted", 2
 	}
-	saveErr := server.Receipts.Save(r)
+	saveErr := server.persistExecution(r, true)
 	server.record(r, saveErr, true, false, "")
 	_ = server.refreshRecovery()
 	server.notifyReceipts()

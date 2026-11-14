@@ -9,8 +9,8 @@ import (
 	"github.com/distribution/reference"
 )
 
-// Running reservations are derived from pending receipts. Finished outcomes
-// never reserve resources. N2 moves live reservations to controller memory.
+// Running reservations come from controller-owned live admissions. Finished
+// outcomes and stored history never reserve resources.
 type holds struct {
 	// global names receipts that hold the whole space.
 	global []Receipt
@@ -23,7 +23,7 @@ type holds struct {
 func (r Receipt) unresolved() bool { return false }
 
 // reserving reports a running execution already permitted to have effects
-// whose disposition is not yet durable. A completed setup or a recorded
+// whose effects have not settled. A completed setup or a known
 // completion is such a disposition; an authorized exec's remote command is
 // never tracked as controller state, so neither reserves.
 func (r Receipt) reserving() bool {
@@ -39,13 +39,15 @@ func (s *Server) boundedScope(r Receipt) *Scope {
 	return r.Scope
 }
 
-// loadHolds lists the complete receipt inventory. Callers hold s.mu. An
-// unreadable inventory is an error, never an empty set of holds.
+// loadHolds reads the complete live admission table. Callers hold s.mu.
+// Historical files and recording health never authorize or exclude work.
 func (s *Server) loadHolds(exclude string) (holds, error) {
 	h := holds{writes: map[Resource][]Receipt{}}
-	all, err := s.Receipts.List()
-	if err != nil {
-		return h, err
+	var all []Receipt
+	for _, e := range s.executions {
+		if !e.settled {
+			all = append(all, *e.receipt)
+		}
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].Started.Before(all[j].Started) })
 	for _, r := range all {
@@ -62,18 +64,6 @@ func (s *Server) loadHolds(exclude string) (holds, error) {
 		}
 	}
 	return h, nil
-}
-
-// unresolvedGlobal reports space-wide holds from finished outcomes. Running
-// reservations are checked at the effect gate, not at admission.
-func (h holds) unresolvedGlobal() []Receipt {
-	var out []Receipt
-	for _, r := range h.global {
-		if r.unresolved() {
-			out = append(out, r)
-		}
-	}
-	return out
 }
 
 // unresolvedOnly is the stop-beside-other-operations policy: running
@@ -180,9 +170,9 @@ func (s *Server) notifyReceipts() {
 }
 
 // awaitReservations lets a gate whose footprint meets only running,
-// already-permitted executions wait for their durable dispositions instead of
-// failing on a race with their finalization. An unresolved conflict returns
-// at once; the authoritative check under the gate's own save refuses it.
+// already-permitted executions wait for their live disposition instead of
+// failing on a race with finalization. The gate rechecks the live table before
+// granting its own footprint.
 func (s *Server) awaitReservations(ctx context.Context, id string, scope *Scope) error {
 	for {
 		s.mu.Lock()
@@ -255,7 +245,7 @@ func (s *Server) explainOutcome(r Receipt) string {
 func explainHolds(all []Receipt, s *Server) string {
 	var barriers strings.Builder
 	if s.receiptFailure != nil {
-		barriers.WriteString("Receipt storage is not reconciled: changes are paused while the controller rechecks it automatically; acknowledgment is refused.\n")
+		barriers.WriteString("Some operation records await storage repair; commands continue and current executions are shown from memory.\n")
 	}
 	if s.draining {
 		barriers.WriteString("The controller is in maintenance; recovery does not reopen it.\n")
@@ -270,37 +260,33 @@ func publicReceipt(r Receipt) Receipt {
 	return r
 }
 
-// CheckImageCleanup is the short-lived native worker's read-only recheck after
-// acquiring its guard. It never waits while holding that guard, and an uncertain
-// inventory is never permission for store-wide deletion.
-func (store Receipts) CheckImageCleanup(space, disk string, exclude ...string) error {
-	s := &Server{Hello: Hello{Space: space}, DiskID: disk, Receipts: store}
-	id := ""
-	if len(exclude) != 0 {
-		id = exclude[0]
-	}
-	h, err := s.loadHolds(id)
+// CheckImageCleanup checks current granted footprints, never receipt files.
+func (s *Server) CheckImageCleanup(exclude string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h, err := s.loadHolds(exclude)
 	if err != nil {
 		return err
 	}
-	_, receipts, _ := h.conflict(&Scope{Writes: []Resource{{Kind: ResourceImages}}})
-	if len(receipts) != 0 {
-		return fmt.Errorf("image store is reserved by running work in space %s; no cleanup started; retry after current image work is resolved", space)
+	_, running, _ := h.conflict(&Scope{Writes: []Resource{{Kind: ResourceImages}}})
+	if len(running) != 0 {
+		return fmt.Errorf("image store is reserved by running work in space %s", s.Hello.Space)
 	}
 	return nil
 }
 
-// CheckAuditReconcile refuses startup application while its native domain is
-// reserved or held. It never treats current service state as historical proof.
-func (store Receipts) CheckAuditReconcile(space, disk string) error {
-	s := &Server{Hello: Hello{Space: space}, DiskID: disk, Receipts: store}
+// CheckAuditReconcile is called in the controller process after its native
+// audit guard. No disk record substitutes for a live execution's authority.
+func (s *Server) CheckAuditReconcile() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	h, err := s.loadHolds("")
 	if err != nil {
 		return err
 	}
-	_, receipts, _ := h.conflict(&Scope{Writes: []Resource{{Kind: ResourceAudit}}})
-	if len(receipts) != 0 {
-		return fmt.Errorf("audit state is reserved by running work in space %s; review its operation before reconciling", space)
+	_, running, _ := h.conflict(&Scope{Writes: []Resource{{Kind: ResourceAudit}}})
+	if len(running) != 0 {
+		return fmt.Errorf("audit state is reserved by running work in space %s", s.Hello.Space)
 	}
 	return nil
 }

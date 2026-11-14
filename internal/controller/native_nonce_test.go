@@ -23,18 +23,20 @@ func nativeNonceOwnerFixture(t *testing.T) (*Server, *Receipt, *nativeNonceOwner
 	t.Helper()
 	s := &Server{Hello: hello(), DiskID: testDisk, Receipts: Receipts{t.TempDir()}, VerifyStorage: func(context.Context) error { return nil }}
 	req := request("test.native-nonce")
-	r, err := s.Receipts.begin(req, Principal{}, s.Hello.Generation, s.DiskID, true)
+	s.mu.Lock()
+	r, err := s.beginExecution(req, Principal{}, true)
+	if err == nil {
+		r.Scope = &Scope{Writes: []Resource{{Kind: ResourceBox, Name: "box"}}}
+		r.EffectPhase = EffectStarted
+		err = s.persistExecution(*r, false)
+	}
+	s.mu.Unlock()
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.Scope = &Scope{Writes: []Resource{{Kind: ResourceBox, Name: "box"}}}
-	r.EffectPhase = EffectStarted
-	if err := s.Receipts.Save(r); err != nil {
-		t.Fatal(err)
-	}
-	o := s.newNativeNonceOwner(t.Context(), Principal{}, req, &r, Operation{Mutates: true, EffectGated: true})
+	o := s.newNativeNonceOwner(t.Context(), Principal{}, req, r, Operation{Mutates: true, EffectGated: true})
 	t.Cleanup(o.close)
-	return s, &r, o
+	return s, r, o
 }
 
 func TestNativeNonceOwnerAllocatesFreshIdentityBoundOnlyToOriginalExecution(t *testing.T) {
@@ -68,7 +70,7 @@ func TestNativeNonceOwnerAllocatesFreshIdentityBoundOnlyToOriginalExecution(t *t
 	}
 }
 
-func TestNativeNonceOwnerRequiresActualScopedDurablePermission(t *testing.T) {
+func TestNativeNonceOwnerRequiresOriginalLiveScopedPermission(t *testing.T) {
 	for _, change := range []string{"waiting", "complete", "state-complete", "setup-complete", "wrong-scope", "generation", "disk", "principal", "nil-scope", "proof-zero", "storage", "already-fenced", "held", "receipt-unavailable", "receipt-alias"} {
 		t.Run(change, func(t *testing.T) {
 			s, r, o := nativeNonceOwnerFixture(t)
@@ -121,7 +123,7 @@ func TestNativeNonceOwnerRequiresActualScopedDurablePermission(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if change == "held" {
+			if change == "held" || change == "already-fenced" || change == "receipt-unavailable" || change == "receipt-alias" {
 				if value, err := o.allocate(t.Context(), "box"); err != nil || value == "" {
 					t.Fatal("finished receipt fenced valid live permission", err)
 				}
@@ -130,10 +132,8 @@ func TestNativeNonceOwnerRequiresActualScopedDurablePermission(t *testing.T) {
 			if value, err := o.allocate(t.Context(), "box"); err == nil || value != "" || len(o.allocated) != 0 {
 				t.Fatal("invalid original receipt/storage scope allocated native identity", err)
 			}
-			if change == "receipt-unavailable" || change == "receipt-alias" || change == "storage" {
-				if s.receiptFailure == nil {
-					t.Fatal("unproved native storage/receipt did not close admission")
-				}
+			if change == "storage" && s.nativeStorageFailure == nil {
+				t.Fatal("actual native identity loss was not retained independently of records")
 			}
 		})
 	}
@@ -433,7 +433,7 @@ func TestNativeNonceStorageLossCannotHideBehindCancellation(t *testing.T) {
 			if err == nil || value != "" {
 				t.Fatal("canceled verification allocated identity")
 			}
-			if (s.receiptFailure != nil) != (kind == "mixed") {
+			if (s.nativeStorageFailure != nil) != (kind == "mixed") {
 				t.Fatal("mixed storage failure hidden or pure cancellation fenced unrelated work", kind, err)
 			}
 		})

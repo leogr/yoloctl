@@ -148,20 +148,9 @@ func NewImageJobs(ctx context.Context, s *Server, b ImageBackend, incarnation st
 		return nil, errors.New("image jobs require disk and VM-incarnation authority")
 	}
 	m := &ImageJobs{server: s, backend: b, incarnation: incarnation, capacity: max(cpus-1, 1), ctx: ctx, jobs: map[string]*imageJob{}, changed: make(chan struct{})}
-	// Recover() preserves completion and durably abandons qualified private
-	// attempts. Ended legacy residuals retain cleanup ownership, not capacity.
-	s.mu.Lock()
-	all, err := s.Receipts.List()
-	s.mu.Unlock()
-	if err != nil {
-		return nil, err
-	}
-	for _, r := range all {
-		if r.Image != nil && (r.unresolved() || r.reserving()) {
-			m.jobs[r.ID] = &imageJob{phase: *r.Image, slotted: true, building: true, finished: true, uncertain: true, done: make(chan struct{})}
-			close(m.jobs[r.ID].done)
-		}
-	}
+	// Previous workers belong to a terminated controller. Their cleanup facts
+	// are recovered separately; neither those facts nor record health reserves
+	// capacity in this controller's live job registry.
 	return m, nil
 }
 
@@ -333,18 +322,10 @@ func imageBaseReads(recipe ImageRecipe) []Resource {
 // Caller holds m.mu. Ended outcomes do not reserve build slots; durable
 // residual ownership and alias cleanup are independent of this local capacity.
 func (m *ImageJobs) refreshUncertain() error {
-	m.server.mu.Lock()
-	defer m.server.mu.Unlock()
 	for id, j := range m.jobs {
-		if j.uncertain {
-			r, err := m.server.Receipts.Read(id)
-			if err != nil {
-				return err
-			}
-			if !r.unresolved() && !r.reserving() {
-				delete(m.jobs, id)
-				m.notify()
-			}
+		if j.uncertain && j.finished {
+			delete(m.jobs, id)
+			m.notify()
 		}
 	}
 	return nil
@@ -363,7 +344,7 @@ func (m *ImageJobs) abandonLocked(j *imageJob) {
 		server.mu.Lock()
 		// A durable completion wins over a generic abandonment. Local metadata
 		// ownership is revoked here; a late Solve may only release private garbage.
-		if onDisk, err := server.Receipts.Read(r.ID); err == nil && onDisk.Completion != nil {
+		if onDisk, err := server.Receipts.Read(r.ID); err == nil && sameAdmission(onDisk, r) && onDisk.Image != nil && onDisk.Completion != nil {
 			r = onDisk
 			j.phase.Output, j.phase.Lease = r.Image.Output, r.Image.Lease
 		}
@@ -386,7 +367,7 @@ func (m *ImageJobs) abandonLocked(j *imageJob) {
 		j.phase = *r.Image
 		j.receipt = r
 		if err == nil {
-			err = server.Receipts.Save(r)
+			err = server.saveImageJob(r)
 		}
 		server.record(r, err, true, false, "")
 		_ = server.refreshRecovery()
@@ -428,7 +409,7 @@ func (m *ImageJobs) leave(j *imageJob) {
 		r.Image = &phase
 		j.phase, j.receipt = phase, r
 		m.server.mu.Lock()
-		err := m.server.Receipts.Save(r)
+		err := m.server.saveImageJob(r)
 		m.server.record(r, err, true, false, "")
 		_ = m.server.refreshRecovery()
 		m.server.notifyReceipts()
@@ -509,7 +490,7 @@ func (m *ImageJobs) run(j *imageJob) {
 		m.mu.Lock()
 		server := m.server
 		server.mu.Lock()
-		if server.draining || server.receiptFailure != nil {
+		if server.draining || server.nativeStorageFailure != nil {
 			err = errors.New("image job admission is closed")
 		} else if e := j.ctx.Err(); e != nil {
 			err = e
@@ -521,7 +502,7 @@ func (m *ImageJobs) run(j *imageJob) {
 					err = heldError(server.Hello.Space, true, global, resources, held)
 				} else {
 					var r Receipt
-					r, err = server.Receipts.begin(Request{ID: j.phase.JobID, Method: "image.job", Dash: -1}, Principal{}, server.Hello.Generation, server.DiskID, true)
+					r, err = server.beginImageJob(j.phase.JobID)
 					if r.ID != "" {
 						j.phase.Stage = "preflight"
 						phase := j.phase
@@ -529,7 +510,7 @@ func (m *ImageJobs) run(j *imageJob) {
 						j.receipt = r
 					}
 					if err == nil {
-						err = server.Receipts.Save(j.receipt)
+						err = server.saveImageJob(j.receipt)
 						permitted = err == nil
 					}
 					if err != nil {
@@ -559,7 +540,7 @@ func (m *ImageJobs) run(j *imageJob) {
 		server.mu.Lock()
 		if j.ctx.Err() != nil {
 			err = j.ctx.Err()
-		} else if server.draining || server.receiptFailure != nil || m.cleaning {
+		} else if server.draining || server.nativeStorageFailure != nil || m.cleaning {
 			err = errors.New("image build admission changed before permission")
 		} else {
 			var h holds
@@ -571,7 +552,7 @@ func (m *ImageJobs) run(j *imageJob) {
 					j.phase.Stage = "build"
 					phase := j.phase
 					j.receipt.Image = &phase
-					err = server.Receipts.Save(j.receipt)
+					err = server.saveImageJob(j.receipt)
 					if err == nil {
 						j.building = true
 					} else {
@@ -612,7 +593,7 @@ func (m *ImageJobs) run(j *imageJob) {
 		r.Completion = &Completion{At: r.Finished, Status: 2}
 		j.receipt = r
 		m.server.mu.Lock()
-		saveErr := m.server.Receipts.Save(r)
+		saveErr := m.server.saveImageJob(r)
 		m.server.record(r, saveErr, true, false, "")
 		_ = m.server.refreshRecovery()
 		m.server.notifyReceipts()
@@ -639,7 +620,7 @@ func (m *ImageJobs) run(j *imageJob) {
 			j.receipt = r
 			server := m.server
 			server.mu.Lock()
-			err = server.Receipts.Save(r)
+			err = server.saveImageJob(r)
 			server.record(r, err, true, false, "")
 			_ = server.refreshRecovery()
 			server.notifyReceipts()

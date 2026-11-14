@@ -83,10 +83,10 @@ func TestAuditControllerUpgradeKeepsExistingSpacesOff(t *testing.T) {
 		}
 		return "inactive", nil // Existing disabled settings may check retained logs.
 	}
-	if err := reconcileNativeAudit(t.Context()); err != nil {
+	if err := reconcileNativeAudit(t.Context(), func() error { return nil }); err != nil {
 		t.Fatal(err)
 	}
-	if checked, err := maintainNativeAudit(t.Context(), true); err != nil || !checked {
+	if checked, err := maintainNativeAudit(t.Context(), true, func() error { return nil }); err != nil || !checked {
 		t.Fatal(checked, err)
 	}
 	cfg, err := spaceconfig.Load(c.Space)

@@ -30,7 +30,11 @@ func TestImageOverlapMatrixForReservationsAndHolds(t *testing.T) {
 		} {
 			t.Run(state+"/"+tc.name, func(t *testing.T) {
 				s := storeServer(t)
-				seedReceipt(t, s, "image-reservation-12345", state, writes(tc.held), func(r *Receipt) { r.ProofVersion = 2 })
+				if state == "pending" {
+					seedLiveExecution(t, s, "image-reservation-12345", writes(tc.held), func(r *Receipt) { r.ProofVersion = 2 })
+				} else {
+					seedReceipt(t, s, "image-reservation-12345", state, writes(tc.held), func(r *Receipt) { r.ProofVersion = 2 })
+				}
 				h, err := s.loadHolds("")
 				if err != nil {
 					t.Fatal(err)

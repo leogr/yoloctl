@@ -164,6 +164,16 @@ func WriteFile(root, rel string, body []byte, perm fs.FileMode) error {
 // credential never has a partially published permission/ownership transition.
 // Negative IDs preserve the writer's ownership, as in WriteFile.
 func WriteFileOwned(root, rel string, body []byte, perm fs.FileMode, uid, gid int) error {
+	return writeFileOwned(root, rel, body, perm, uid, gid, true)
+}
+
+// CreateFile publishes a complete new file without replacing any existing entry.
+// Parent components and publication use retained no-follow directory descriptors.
+func CreateFile(root, rel string, body []byte, perm fs.FileMode) error {
+	return writeFileOwned(root, rel, body, perm, -1, -1, false)
+}
+
+func writeFileOwned(root, rel string, body []byte, perm fs.FileMode, uid, gid int, replace bool) error {
 	parentFD, base, cleanup, err := openParent(root, rel, true)
 	if err != nil {
 		return err
@@ -205,8 +215,17 @@ func WriteFileOwned(root, rel string, body []byte, perm fs.FileMode, uid, gid in
 	if err := f.Close(); err != nil {
 		return pathError("close", root, rel, err)
 	}
-	if err := unix.Renameat(parentFD, tmpName, parentFD, base); err != nil {
-		return pathError("rename", root, rel, err)
+	if replace {
+		if err := unix.Renameat(parentFD, tmpName, parentFD, base); err != nil {
+			return pathError("rename", root, rel, err)
+		}
+	} else {
+		if err := unix.Linkat(parentFD, tmpName, parentFD, base, 0); err != nil {
+			return pathError("link", root, rel, err)
+		}
+		if err := unix.Unlinkat(parentFD, tmpName, 0); err != nil {
+			return &atomicfile.CommitError{Err: err}
+		}
 	}
 	renamed = true
 	if err := unix.Fsync(parentFD); err != nil {

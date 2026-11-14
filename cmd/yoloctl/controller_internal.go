@@ -372,12 +372,15 @@ func serveController(ctx context.Context) (result error) {
 	// repairable: their failure starts a read-only server that retries them.
 	verifyStorage := func(ctx context.Context) error {
 		if err := controller.VerifyRuntimeStorage(ctx); err != nil {
-			return err
+			return &controller.NativeStorageUnavailable{Cause: err}
 		}
 		if err := controller.VerifyStoreDirectories(c.DiskMount); err != nil {
-			return err
+			return &controller.NativeStorageUnavailable{Cause: err}
 		}
-		_, err := controller.PrivateDir(meta, "receipts")
+		return nil
+	}
+	recoveryKey, err := controller.LoadRecoveryKey(meta)
+	if err != nil {
 		return err
 	}
 	server := &controller.Server{
@@ -394,6 +397,7 @@ func serveController(ctx context.Context) (result error) {
 		},
 		CheckPrincipal: checkOperatorPrincipal,
 		DiskID:         c.DiskID,
+		RecoveryKey:    recoveryKey,
 		Observe: func(ctx context.Context, r controller.Receipt) ([]controller.BoxObservation, error) {
 			return controller.RunBoxObserver(ctx, c.Space, r)
 		},
@@ -425,9 +429,13 @@ func serveController(ctx context.Context) (result error) {
 		if err := verifyStorage(ctx); err != nil {
 			return err
 		}
+		if _, err := controller.PrivateDir(meta, "receipts"); err != nil {
+			return err
+		}
 		// Old workers are already gone (guest supervisor cgroup cleanup), and no
-		// mutation is admitted before this succeeds. Nothing is replayed.
-		interrupted, err := server.Receipts.Recover()
+		// new mutations may already be live on a deferred pass. RecoverReceipts
+		// excludes their full admission identities. Nothing is replayed.
+		interrupted, err := server.RecoverReceipts()
 		if err != nil {
 			return err
 		}
@@ -435,10 +443,6 @@ func serveController(ctx context.Context) (result error) {
 			log.Warn("Interrupted operations are closed; current observations are recorded separately and nothing is replayed.")
 		}
 
-		key, err := controller.LoadRecoveryKey(meta)
-		if err != nil {
-			return err
-		}
 		imageStopMu.Lock()
 		if stopImages == nil {
 			stopImages, err = startControllerImages(serviceCtx, ctx, server)
@@ -447,11 +451,23 @@ func serveController(ctx context.Context) (result error) {
 		if err != nil {
 			return err
 		}
-		return server.ActivateRecovery(key)
+		return server.ActivateRecovery(recoveryKey)
 	}
 	if err := prepareRecovery(ctx); err != nil {
-		log.Warn("Controller is read-only until receipt storage recovers", prettylog.Err(err))
+		log.Warn("Controller is recording operations in memory until receipt storage recovers", prettylog.Err(err))
 		server.Degrade(err, prepareRecovery)
+		// Starting the image manager needs actual backend authority, not receipt
+		// history. Do not sweep old names while recovery facts are unavailable.
+		imageStopMu.Lock()
+		if stopImages == nil {
+			var imageErr error
+			stopImages, imageErr = startControllerImages(serviceCtx, ctx, server, false)
+			if imageErr != nil {
+				imageStopMu.Unlock()
+				return fmt.Errorf("start controller image service: %w", imageErr)
+			}
+		}
+		imageStopMu.Unlock()
 	}
 	go server.RunRecovery(ctx)
 	if err := installOperatorHelper(); err != nil {

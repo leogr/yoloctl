@@ -15,15 +15,15 @@ func draftWaitingWorkerOwner(t *testing.T) (*Server, *Receipt, *nativeNonceOwner
 	t.Helper()
 	s := &Server{Hello: hello(), DiskID: testDisk, Receipts: Receipts{t.TempDir()}, VerifyStorage: func(context.Context) error { return errors.New("bootstrap must not call effect/storage authorization") }}
 	req := request("test.worker-association")
-	r, err := s.Receipts.begin(req, Principal{}, s.Hello.Generation, testDisk, true)
+	r, err := s.beginExecution(req, Principal{}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	o := s.newNativeNonceOwner(t.Context(), Principal{}, req, &r, Operation{Mutates: true, EffectGated: true})
+	o := s.newNativeNonceOwner(t.Context(), Principal{}, req, r, Operation{Mutates: true, EffectGated: true})
 	t.Cleanup(o.close)
-	return s, &r, o
+	return s, r, o
 }
-func TestWorkerBootstrapObservesPendingDurableReceiptWithoutBeginGrant(t *testing.T) {
+func TestWorkerBootstrapObservesLiveWaitingReceiptWithoutBeginGrant(t *testing.T) {
 	s, r, o := draftWaitingWorkerOwner(t)
 	s.mu.Lock()
 	observation := o.checkBootstrapReceipt(t.Context())
@@ -47,7 +47,7 @@ func TestWorkerBootstrapObservesPendingDurableReceiptWithoutBeginGrant(t *testin
 		t.Fatal("bootstrap/strict policy phases conflated", observation, strict)
 	}
 }
-func TestWorkerBootstrapRequiresExactOriginalDurableBytes(t *testing.T) {
+func TestWorkerBootstrapRequiresOriginalPrincipal(t *testing.T) {
 	s, r, o := draftWaitingWorkerOwner(t)
 	r.Principal = Principal{Box: "copied", Incarnation: "actor"} // not owner identity
 	if err := s.Receipts.Save(*r); err != nil {
@@ -60,14 +60,15 @@ func TestWorkerBootstrapRequiresExactOriginalDurableBytes(t *testing.T) {
 		t.Fatal("foreign receipt adopted")
 	}
 }
-func TestWorkerBootstrapRejectsUnsavedReceiptMutation(t *testing.T) {
+func TestWorkerBootstrapRejectsReplacedLiveOwner(t *testing.T) {
 	s, r, o := draftWaitingWorkerOwner(t)
-	r.Scope = &Scope{Writes: []Resource{{Kind: ResourceBox, Name: "box"}}} // no Save
+	replacement := *r
+	s.executions[r.ID].receipt = &replacement
 	s.mu.Lock()
 	err := o.checkBootstrapReceipt(t.Context())
 	s.mu.Unlock()
 	if err == nil {
-		t.Fatal("unsaved original metadata accepted")
+		t.Fatal("replacement pointer adopted")
 	}
 }
 
@@ -138,7 +139,7 @@ func TestWorkerOwnerCloseExcludesOriginalBorrowLifetime(t *testing.T) {
 // Controller receipt/scope scheduling only. Fixture source checks do NOT supply
 // genuine VM provenance or a positive admitted controller-to-worker handoff.
 func TestWorkerHandoffFinalProviderCallbackCannotEraseOriginalBoxScope(t *testing.T) {
-	for _, change := range []string{"scope", "receipt", "expiry", "receipt-health"} {
+	for _, change := range []string{"scope", "receipt", "expiry", "native-storage"} {
 		t.Run(change, func(t *testing.T) {
 			s, r, o := draftWaitingWorkerOwner(t)
 			s.VerifyStorage = func(context.Context) error { return nil }
@@ -161,9 +162,9 @@ func TestWorkerHandoffFinalProviderCallbackCannotEraseOriginalBoxScope(t *testin
 				case "receipt":
 					r.Principal = Principal{Box: "foreign", Incarnation: "changed"}
 					return s.Receipts.Save(*r)
-				case "receipt-health":
+				case "native-storage":
 					s.mu.Lock()
-					s.record(*r, errors.New("disjoint receipt fsync failure"), false, false, "")
+					s.nativeStorageFailure = errors.New("native storage identity changed")
 					s.mu.Unlock()
 				case "expiry":
 					o.close()
@@ -172,6 +173,40 @@ func TestWorkerHandoffFinalProviderCallbackCannotEraseOriginalBoxScope(t *testin
 			})
 			if err == nil || calls != 2 {
 				t.Fatal("late provider invalidation became success", calls, err)
+			}
+		})
+	}
+}
+
+func TestWorkerBootstrapUnavailableOrStaleDiskDoesNotReplaceLiveOwner(t *testing.T) {
+	for _, mode := range []string{"unavailable", "stale", "ended", "missing", "native-storage"} {
+		t.Run(mode, func(t *testing.T) {
+			s, r, o := draftWaitingWorkerOwner(t)
+			switch mode {
+			case "unavailable":
+				s.Receipts.Dir = s.Receipts.Dir + "/missing"
+				s.receiptFailure = errors.New("receipt unavailable")
+			case "stale":
+				old := *r
+				old.Principal = Principal{Box: "other", Incarnation: "old"}
+				if err := s.Receipts.Save(old); err != nil {
+					t.Fatal(err)
+				}
+			case "native-storage":
+				s.nativeStorageFailure = errors.New("native identity changed")
+			case "ended":
+				s.executions[r.ID].settled = true
+			case "missing":
+				delete(s.executions, r.ID)
+			}
+			s.mu.Lock()
+			err := o.checkBootstrapReceipt(t.Context())
+			s.mu.Unlock()
+			if (err != nil) != (mode == "ended" || mode == "missing" || mode == "native-storage") {
+				t.Fatalf("%s: %v", mode, err)
+			}
+			if r.EffectPhase != EffectWaiting || r.SetupComplete || r.Completion != nil {
+				t.Fatal("bootstrap granted effects")
 			}
 		})
 	}

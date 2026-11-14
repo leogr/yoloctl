@@ -379,7 +379,7 @@ var newControllerImageBackend = func(ctx context.Context) (controllerImageBacken
 	return controller.NewNativeImageBackend(ctx)
 }
 
-func startControllerImages(serviceCtx, ctx context.Context, s *controller.Server) (func(), error) {
+func startControllerImages(serviceCtx, ctx context.Context, s *controller.Server, recovered ...bool) (func(), error) {
 	backend, err := newControllerImageBackend(ctx)
 	if err != nil {
 		return nil, err
@@ -413,14 +413,16 @@ func startControllerImages(serviceCtx, ctx context.Context, s *controller.Server
 		backend.Close()
 		return nil, err
 	}
-	records, err := s.Receipts.List()
-	if err != nil {
-		backend.Close()
-		return nil, err
-	}
-	if err := backend.Sweep(ctx, records); err != nil {
-		backend.Close()
-		return nil, err
+	if len(recovered) == 0 || recovered[0] {
+		records, err := s.Receipts.List()
+		if err != nil {
+			backend.Close()
+			return nil, err
+		}
+		if err := backend.Sweep(ctx, records); err != nil {
+			backend.Close()
+			return nil, err
+		}
 	}
 	s.Images = jobs
 	var once sync.Once

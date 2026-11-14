@@ -104,7 +104,7 @@ func TestCompletionSurvivesStartupRecoveryOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err = store.Read(waiting.ID)
-	if err != nil || r.State != "recovered" || r.Status != 2 || r.Recovery.Disposition != DispositionNotApplied {
+	if err != nil || r.State != "interrupted" || r.Status != 2 || r.Recovery != nil {
 		t.Fatal(r, err)
 	}
 }

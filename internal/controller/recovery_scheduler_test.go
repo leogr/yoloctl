@@ -54,8 +54,8 @@ func TestRepairedReceiptStorageReopensWithoutRestart(t *testing.T) {
 		restore = breakStore(t, s.Receipts.Dir) // the finalization flush fails
 		return 0, nil
 	}
-	if err := invoke(t, s, request("box.start"), nil, io.Discard, io.Discard); err == nil || s.receiptFailure == nil {
-		t.Fatal("a failed finalization flush was hidden", err)
+	if err := invoke(t, s, request("box.start"), nil, io.Discard, io.Discard); err != nil || s.receiptFailure == nil {
+		t.Fatal("record failure replaced the result or was not retained", err)
 	}
 	// Still broken: the pass fails and keeps the hold.
 	if !s.recoveryPass(t.Context()) || s.receiptFailure == nil {
@@ -107,8 +107,8 @@ func TestStorageRecoveryRequiresCurrentIdentityAfterFilesystemRepair(t *testing.
 				restore = breakStore(t, s.Receipts.Dir)
 				return 0, nil
 			}
-			if err := invoke(t, s, request("box.start"), nil, io.Discard, io.Discard); err == nil {
-				t.Fatal("receipt fault was hidden")
+			if err := invoke(t, s, request("box.start"), nil, io.Discard, io.Discard); err != nil || s.receiptFailure == nil {
+				t.Fatal("record fault replaced result or was not retained", err)
 			}
 			restore() // directory ownership/mode and probe I/O now succeed
 			s.VerifyStorage = func(ctx context.Context) error {
@@ -171,41 +171,44 @@ func TestStorageRepairRechecksExecutionsAfterIdentityVerification(t *testing.T) 
 	s := storeServer(t)
 	s.receiptFailure = errors.New("simulated receipt failure")
 	started, release := make(chan struct{}), make(chan struct{})
-	s.VerifyStorage = func(context.Context) error {
-		close(started)
-		<-release
-		return nil
-	}
+	s.VerifyStorage = func(context.Context) error { close(started); <-release; return nil }
 	done := make(chan bool, 1)
 	go func() { done <- s.recoveryPass(t.Context()) }()
 	<-started
-	// An execution whose flush failed must not disappear merely because it
-	// was added while the current-identity helper ran outside the mutex.
-	s.mu.Lock()
-	r, err := s.Receipts.begin(request("box.start"), Principal{}, "generation", testDisk, true)
-	if err == nil {
-		s.ledger = map[string]ledgerEntry{r.ID: {intended: r, settled: false}}
-	}
-	s.mu.Unlock()
+	// A newly admitted execution is still owned while identity verification
+	// runs outside the mutex; a repaired record must not close its live work.
+	r := seedLiveExecution(t, s, "new-during-verification-12345", writes(box("web")), nil)
 	close(release)
-	if !<-done || s.receiptFailure == nil || err != nil {
-		t.Fatal("identity check erased an unsettled execution", err)
+	if <-done || s.receiptFailure != nil {
+		t.Fatal("healthy recording did not recover", s.receiptFailure)
 	}
-	s.VerifyStorage = func(context.Context) error { return nil }
-	s.ledger[r.ID] = ledgerEntry{intended: r, settled: true}
-	if s.recoveryPass(t.Context()) || s.receiptFailure != nil {
-		t.Fatal("settled, reconciled execution did not reopen storage")
+	s.mu.Lock()
+	entry := s.executions[r.ID]
+	h, err := s.loadHolds("")
+	s.mu.Unlock()
+	_, conflicts, _ := h.conflict(writes(box("web")))
+	if err != nil || entry == nil || entry.settled || len(conflicts) != 1 {
+		t.Fatal("record repair lost live owner", entry, conflicts, err)
+	}
+	saved, err := s.Receipts.Read(r.ID)
+	if err != nil || saved.State != "pending" {
+		t.Fatal("current execution closed by repair", saved, err)
 	}
 }
 
-func TestStorageRepairWaitsForUnsettledExecutions(t *testing.T) {
+func TestStorageRepairFlushesWithoutSettlingExecutions(t *testing.T) {
 	s := storeServer(t)
-	r := seedReceipt(t, s, "running-0123456789ab", "pending", writes(box("web")), nil)
+	r := seedLiveExecution(t, s, "running-0123456789ab", writes(box("web")), nil)
+	restore := breakStore(t, s.Receipts.Dir)
 	s.mu.Lock()
-	s.record(r, errors.New("simulated fsync failure"), false, false, "")
+	_ = s.persistExecution(*r, false)
 	s.mu.Unlock()
-	if !s.recoveryPass(t.Context()) || s.receiptFailure == nil {
-		t.Fatal("storage reopened while an execution's receipt was unsettled")
+	restore()
+	if s.recoveryPass(t.Context()) || s.receiptFailure != nil {
+		t.Fatal("record repair waited for worker", s.receiptFailure)
+	}
+	if e := s.executions[r.ID]; e == nil || e.settled || !e.late {
+		t.Fatal("late recording settled or lost the worker", e)
 	}
 }
 
@@ -217,29 +220,30 @@ func TestAcknowledgmentDoesNotEnterFailureLedger(t *testing.T) {
 	}
 }
 
-func TestFailedAdmissionFlushIsClassifiedNotApplied(t *testing.T) {
+func TestFailedAdmissionFlushRunsAndRecordsResultLater(t *testing.T) {
 	s := storeServer(t)
+	calls := 0
+	s.Execute = func(ctx context.Context, _ Principal, _ Request, streams Streams) (int, error) {
+		if err := streams.BeginEffects(ctx, scopeIntent(writes(box("web")))); err != nil {
+			return 2, err
+		}
+		calls++
+		return 0, nil
+	}
 	saved := writeReceipt
+	t.Cleanup(func() { writeReceipt = saved })
 	writeReceipt = func(string, string, []byte, os.FileMode) error { return errors.New("simulated ENOSPC") }
 	err := invoke(t, s, request("box.start"), nil, io.Discard, io.Discard)
 	writeReceipt = saved
-	if err == nil || s.receiptFailure == nil {
-		t.Fatal("a failed admission flush did not hold storage", err)
+	if err != nil || calls != 1 || s.receiptFailure == nil {
+		t.Fatal("admission record failure refused or replaced execution", calls, err)
 	}
-	// A pending record the failed flush may have published anyway.
-	r, err := s.Receipts.begin(request("box.start"), Principal{}, "generation-1", testDisk, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s.mu.Lock()
-	s.ledger[r.ID] = ledgerEntry{intended: r, settled: true}
-	s.mu.Unlock()
 	if s.recoveryPass(t.Context()) || s.receiptFailure != nil {
-		t.Fatal(s.receiptFailure)
+		t.Fatal("late recording did not recover", s.receiptFailure)
 	}
-	got, err := s.Receipts.Read(r.ID)
-	if err != nil || got.State != "recovered" || got.Recovery.Disposition != DispositionNotApplied {
-		t.Fatal(got, err)
+	got, err := s.Receipts.Read(request("box.start").ID)
+	if err != nil || got.State != "complete" || got.Status != 0 || !got.RecordedLate || calls != 1 {
+		t.Fatal("result lost or operation replayed", got, calls, err)
 	}
 }
 
@@ -334,8 +338,16 @@ func TestReceiptChangedDuringCheckIsNotPublished(t *testing.T) {
 	}
 }
 
-func TestDegradedStartupServesReadsAndRepairsItself(t *testing.T) {
+func TestDegradedStartupRunsCommandsAndRepairsRecording(t *testing.T) {
 	s := storeServer(t)
+	calls := 0
+	s.Execute = func(ctx context.Context, _ Principal, _ Request, streams Streams) (int, error) {
+		if err := streams.BeginEffects(ctx, scopeIntent(writes(box("web")))); err != nil {
+			return 2, err
+		}
+		calls++
+		return 0, nil
+	}
 	attempts := 0
 	s.Degrade(errors.New("receipt directory flush failed"), func(context.Context) error {
 		attempts++
@@ -344,8 +356,8 @@ func TestDegradedStartupServesReadsAndRepairsItself(t *testing.T) {
 		}
 		return nil
 	})
-	if err := invoke(t, s, request("box.start"), nil, io.Discard, io.Discard); err == nil {
-		t.Fatal("degraded controller admitted a mutation")
+	if err := invoke(t, s, request("box.start"), nil, io.Discard, io.Discard); err != nil || calls != 1 {
+		t.Fatal("recording degradation refused a mutation", calls, err)
 	}
 	ping := request("control.ping")
 	if err := invoke(t, s, ping, nil, io.Discard, io.Discard); err != nil {

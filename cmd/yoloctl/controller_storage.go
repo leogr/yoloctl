@@ -261,15 +261,8 @@ func imagePreflightWorker(ctx context.Context) error {
 	if signal[0] != 1 {
 		return errors.New("cleanup permission refused")
 	}
-	// No wait under the native guard: a newly reserved/held image store
-	// refuses this disposable pass before any deletion.
-	store := controller.Receipts{Dir: input.ReceiptsDir}
-	permit, err := store.Read(input.CleanupID)
-	if err != nil || permit.Method != "image.cleanup" || permit.Generation != c.Generation || permit.DiskID != c.DiskID || permit.EffectPhase != controller.EffectStarted || permit.State != "pending" {
-		return errors.New("durable image cleanup permission is unavailable")
-	}
-	if err := store.CheckImageCleanup(c.Space, c.DiskID, input.CleanupID); err != nil {
-		return err
-	}
+	// The original controller callback validated its current memory-owned
+	// cleanup after this guard was acquired, before sending the one permit.
+	// Receipt bytes are not permission for this short-lived child.
 	return nativeStorageCollector(c.Space, os.Stderr).beforeBuild(ctx, input.References, os.Stderr)
 }

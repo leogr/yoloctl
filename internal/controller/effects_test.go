@@ -109,7 +109,7 @@ func TestCancelledWorkerWaitingForRealLockDoesNotFence(t *testing.T) {
 	}
 }
 
-func TestEffectCheckpointSaveFailureKeepsStorageFence(t *testing.T) {
+func TestEffectCheckpointSaveFailureKeepsLiveExecution(t *testing.T) {
 	for _, method := range []string{"test.gated", "box.exec"} {
 		t.Run(method, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "receipts")
@@ -132,11 +132,11 @@ func TestEffectCheckpointSaveFailureKeepsStorageFence(t *testing.T) {
 			req := request(method)
 			path := filepath.Join(t.TempDir(), "effect")
 			req.Args = []string{"normal", path}
-			if err := invoke(t, s, req, nil, io.Discard, io.Discard); err == nil {
-				t.Fatal("failed checkpoint reported success")
+			if err := invoke(t, s, req, nil, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "status 7") {
+				t.Fatal("record failure replaced worker result", err)
 			}
-			if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) || s.receiptFailure == nil {
-				t.Fatal("gate permitted effect after failed durable save", err)
+			if _, err := os.Stat(path); err != nil || s.receiptFailure == nil {
+				t.Fatal("effect did not run despite retained live grant", err)
 			}
 			if err := os.Remove(dir); err != nil {
 				t.Fatal(err)
@@ -145,7 +145,7 @@ func TestEffectCheckpointSaveFailureKeepsStorageFence(t *testing.T) {
 				t.Fatal(err)
 			}
 			if _, _, err := s.admitOperation(req, Principal{}, Operation{Mutates: true, EffectGated: true}); err == nil {
-				t.Fatal("storage repair alone cleared receipt fence")
+				t.Fatal("duplicate request ID was admitted")
 			}
 			r, err := s.Receipts.Read(req.ID)
 			if err != nil || r.EffectPhase != EffectWaiting {
@@ -172,12 +172,8 @@ func TestEffectGateRecoveryDistinguishesLegacyAndWaiting(t *testing.T) {
 				// Only a durably permitted exec narrows a lost result to its
 				// command; a legacy exec record proves nothing by method name.
 				want := "interrupted"
-				switch {
-				case phase == EffectWaiting:
-					want = "complete"
-				case phase == EffectStarted && method == "box.exec":
-					want = "interrupted"
-				}
+				// A stale waiting file cannot prove the former process never
+				// granted effects from memory before it exited.
 				recovery, err := store.Recover()
 				if err != nil || recovery != (want == "interrupted") {
 					t.Fatal(recovery, err)
@@ -404,15 +400,16 @@ func TestUnknownCommandResultsCannotExhaustReceiptRetention(t *testing.T) {
 	for i := 2; i < receiptLimit; i++ {
 		save(store, i, "box.exec", "command-uncertain")
 	}
+	s := &Server{Hello: hello(), Receipts: store}
 	for i := range receiptLimit + 2 {
 		req := request("box.exec")
 		req.ID = fmt.Sprintf("new-request-%04d", i)
-		r, err := store.begin(req, Principal{}, "generation", "", true)
+		r, err := s.beginExecution(req, Principal{}, true)
 		if err != nil {
 			t.Fatal("unknown command results exhausted retention", i, err)
 		}
-		r.State, r.EffectPhase, r.Finished = "command-uncertain", EffectStarted, time.Now().UTC()
-		if err := store.Save(r); err != nil {
+		r.State, r.EffectPhase, r.Finished = "interrupted", EffectStarted, time.Now().UTC()
+		if err := s.persistExecution(*r, true); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -41,15 +41,33 @@ type receiptWriteError struct{ err error }
 func (e *receiptWriteError) Error() string { return e.err.Error() }
 func (e *receiptWriteError) Unwrap() error { return e.err }
 
-// record notes a receipt flush in the failure ledger: a failed one sets the
-// storage hold; any flush while the hold stands must be read back before
-// the hold can be dropped. Callers hold s.mu.
+// record tracks strict image working facts until their metadata owner settles
+// and their stored state is reconciled. Ordinary execution publication is
+// tracked separately and never fences other commands. Callers hold s.mu.
 func (s *Server) record(r Receipt, err error, settled, review bool, prior string) {
+	if r.Method != "image.job" {
+		if r.State == "interrupted" && r.Observation == nil {
+			s.wakeRecovery()
+		}
+		return
+	}
+	if settled {
+		if e := s.executions[r.ID]; e != nil && sameAdmission(*e.receipt, r) {
+			if retainsImageMetadata(r) {
+				e.settled = true
+			} else {
+				delete(s.executions, r.ID)
+			}
+		}
+	}
+
 	if r.State == "interrupted" && r.Observation == nil {
 		s.wakeRecovery()
 	}
-	if err == nil && s.receiptFailure == nil {
-		return
+	if err == nil {
+		if _, dirty := s.ledger[r.ID]; !dirty {
+			return
+		}
 	}
 	// An eviction failure names no new receipt; only the inventory check
 	// below reconciles it.
@@ -83,16 +101,20 @@ func (s *Server) wakeRecovery() {
 	}
 }
 
-// Degrade starts the server read-only after a receipt-store or recovery
-// metadata failure. repair re-establishes that metadata; until it and the
-// receipt reconciliation succeed, every mutation is refused. Invalid disk
-// identity or store authority is not repairable and never reaches here.
+// Degrade records a receipt-store or recovery metadata failure. Ordinary
+// commands retain their live state while recording is repaired. An actual
+// native identity failure remains a separate guard until verified; invalid
+// recovery-key authority is rejected before the server is exposed.
 func (s *Server) Degrade(cause error, repair func(context.Context) error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.receiptFailure = fmt.Errorf("controller started read-only: %w", cause)
+	s.receiptFailure = fmt.Errorf("controller records are awaiting storage repair: %w", cause)
+	var native *NativeStorageUnavailable
+	if errors.As(cause, &native) {
+		s.noteNativeStorageFailure(native)
+	}
 	s.startupRepair = repair
-	s.RecoveryRequired = true
+	s.RecoveryRequired = false
 }
 
 // RunRecovery is the controller's single recovery checker. It runs until ctx
@@ -140,7 +162,7 @@ func (s *Server) recoveryPass(parent context.Context) bool {
 	s.recoveryCancel = cancel
 	s.recoveryIdle = make(chan struct{})
 	idle := s.recoveryIdle
-	failed := s.receiptFailure != nil
+	failed := s.receiptFailure != nil || s.nativeStorageFailure != nil
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
@@ -150,53 +172,63 @@ func (s *Server) recoveryPass(parent context.Context) bool {
 	}()
 	if failed {
 		if err := s.repairStorage(ctx); err != nil {
+			_ = s.verifyOutcomes(ctx)
 			return true
 		}
 	}
 	return s.verifyOutcomes(ctx)
 }
 
-// repairStorage drops the storage hold only after the store is healthy and
+// repairStorage clears the recording error only after the store is healthy and
 // every ledger entry is reconciled with a complete, strictly decoded
 // inventory. A probe alone never clears anything.
 func (s *Server) repairStorage(ctx context.Context) error {
 	s.mu.Lock()
 	repair := s.startupRepair
 	s.mu.Unlock()
+	var prepareErr error
 	if repair != nil {
-		if err := repair(ctx); err != nil {
-			return err
+		prepareErr = repair(ctx)
+		if prepareErr == nil {
+			s.mu.Lock()
+			s.startupRepair = nil
+			s.mu.Unlock()
 		}
-		s.mu.Lock()
-		s.startupRepair = nil
-		s.mu.Unlock()
 	}
 	s.mu.Lock()
-	if s.receiptFailure == nil {
+	if s.receiptFailure == nil && s.nativeStorageFailure == nil {
 		s.mu.Unlock()
 		return nil
 	}
-	for _, entry := range s.ledger {
-		if !entry.settled {
-			s.mu.Unlock()
-			return errors.New("an execution with an unrecorded receipt is still running")
-		}
-	}
 	verify := s.VerifyStorage
+	nativeRevision := s.nativeStorageRevision
+	hadNativeFailure := s.nativeStorageFailure != nil
 	s.mu.Unlock()
-	// The storage hold prevents new effects throughout this check. Existing
-	// executions may settle, and reads/drain must remain responsive. Never
+	// Receipt recording failure does not prevent effects. A separate actual
+	// native-identity failure remains guarded until positively verified. Never
 	// run the native identity helper while holding the server mutex.
+	if verify == nil && hadNativeFailure {
+		return errors.New("native storage identity has not been verified")
+	}
 	if verify != nil {
 		checkCtx, cancel := context.WithTimeout(ctx, recoveryReceiptBudget)
 		err := verify(checkCtx)
 		cancel()
 		if err != nil {
+			if ctx.Err() == nil {
+				s.mu.Lock()
+				s.noteNativeStorageFailure(err)
+				s.mu.Unlock()
+			}
 			return err
 		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.nativeStorageRevision != nativeRevision && s.nativeStorageFailure != nil {
+		return errors.New("native storage verification changed during recovery")
+	}
+	s.nativeStorageFailure = nil
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -206,17 +238,37 @@ func (s *Server) repairStorage(ctx context.Context) error {
 	if s.receiptFailure == nil {
 		return nil
 	}
-	for _, entry := range s.ledger {
-		if !entry.settled {
-			return errors.New("an execution changed while storage identity was checked")
-		}
+	if err := s.flushExecutions(); err != nil {
+		return err
+	}
+	// Every newly readable inventory is recovered against full live admission
+	// identities, not just startup's snapshot or request ID.
+	if _, err := s.Receipts.recoverExcept(s.ownsExecution, s.publishHistorical); err != nil {
+		return err
+	}
+	if err := s.flushExecutions(); err != nil {
+		return err
 	}
 	if err := probeReceiptStore(s.Receipts.Dir); err != nil {
 		return err
 	}
+	if prepareErr != nil {
+		return prepareErr
+	}
 	for id, entry := range s.ledger {
+		// Strict job facts are not ordinary late records. Never close a current
+		// job while its owner is still updating that working state.
+		if !entry.settled {
+			return errors.New("strict image job metadata is still owned by its execution")
+		}
+		if e := s.executions[id]; e != nil && !e.settled && sameAdmission(*e.receipt, entry.intended) {
+			return errors.New("strict image job metadata is still owned by its execution")
+		}
 		onDisk, err := s.Receipts.Read(id)
 		missing := errors.Is(err, fs.ErrNotExist)
+		if err == nil && !sameAdmission(onDisk, entry.intended) {
+			return fmt.Errorf("strict image fact %s has another admission identity", id)
+		}
 		if err != nil && !missing {
 			return err
 		}
@@ -296,19 +348,40 @@ type pendingClosingCheck struct {
 
 func (s *Server) verifyOutcomes(ctx context.Context) bool {
 	s.mu.Lock()
-	all, err := s.Receipts.List()
+	all, historyErr := s.Receipts.List()
+	indices := map[string]int{}
+	for i, r := range all {
+		indices[receiptCheckKey(r)] = i
+	}
+	add := func(r Receipt) {
+		key := receiptCheckKey(r)
+		if i, ok := indices[key]; ok {
+			all[i] = r
+		} else {
+			indices[key] = len(all)
+			all = append(all, r)
+		}
+	}
+	for _, e := range s.executions {
+		r := *e.receipt
+		r.RecordedLate = e.late
+		add(r)
+	}
+	for _, r := range s.historical {
+		add(r)
+	}
+	for _, note := range s.collisions {
+		add(note.later)
+	}
 	if s.pendingChecks == nil {
 		s.pendingChecks = map[string]pendingClosingCheck{}
 	}
 	pending := make(map[string]pendingClosingCheck, len(s.pendingChecks))
-	for id, p := range s.pendingChecks {
-		pending[id] = p
+	for key, p := range s.pendingChecks {
+		pending[key] = p
 	}
 	s.mu.Unlock()
-	if err != nil {
-		return true
-	}
-	retry := false
+	retry := historyErr != nil
 	for _, p := range pending {
 		if ctx.Err() != nil {
 			return true
@@ -322,13 +395,13 @@ func (s *Server) verifyOutcomes(ctx context.Context) bool {
 			continue
 		}
 		s.mu.Lock()
-		_, waiting := s.pendingChecks[r.ID]
+		_, waiting := s.pendingChecks[receiptCheckKey(r)]
 		s.mu.Unlock()
 		// A check already made is retried only as publication, never as observation.
 		if waiting {
 			continue
 		}
-		if _, wasPending := pending[r.ID]; wasPending {
+		if _, wasPending := pending[receiptCheckKey(r)]; wasPending {
 			continue
 		}
 		if ctx.Err() != nil {
@@ -339,7 +412,7 @@ func (s *Server) verifyOutcomes(ctx context.Context) bool {
 		cancel()
 		p := pendingClosingCheck{checked: r, next: next, observed: observed}
 		s.mu.Lock()
-		s.pendingChecks[r.ID] = p
+		s.pendingChecks[receiptCheckKey(r)] = p
 		s.mu.Unlock()
 		if s.publishClosingCheck(p) != nil {
 			retry = true
@@ -350,12 +423,12 @@ func (s *Server) verifyOutcomes(ctx context.Context) bool {
 
 func (s *Server) publishClosingCheck(p pendingClosingCheck) error {
 	s.mu.Lock()
-	current, err := s.Receipts.Read(p.checked.ID)
+	current, err := s.receiptForCheck(p.checked)
 	if err != nil {
 		// A missing receipt is conclusive only while its store itself exists.
 		if errors.Is(err, fs.ErrNotExist) {
 			if info, rootErr := os.Lstat(s.Receipts.Dir); rootErr == nil && info.IsDir() {
-				delete(s.pendingChecks, p.checked.ID)
+				delete(s.pendingChecks, receiptCheckKey(p.checked))
 				s.mu.Unlock()
 				return nil
 			}
@@ -368,11 +441,18 @@ func (s *Server) publishClosingCheck(p pendingClosingCheck) error {
 		return err
 	}
 	if current.State != "interrupted" || current.Observation != nil {
-		delete(s.pendingChecks, p.checked.ID)
+		delete(s.pendingChecks, receiptCheckKey(p.checked))
+		s.mu.Unlock()
+		return nil
+	}
+	if !sameAdmission(current, p.checked) {
+		delete(s.pendingChecks, receiptCheckKey(p.checked))
+		s.wakeRecovery()
 		s.mu.Unlock()
 		return nil
 	}
 	checked := p.checked
+	checked.RecordedLate = current.RecordedLate
 	next := p.next
 	if !sameReceipt(current, checked) {
 		oldWithoutImage, newWithoutImage := checked, current
@@ -396,7 +476,7 @@ func (s *Server) publishClosingCheck(p pendingClosingCheck) error {
 	}
 	s.mu.Lock()
 	if err == nil {
-		delete(s.pendingChecks, p.checked.ID)
+		delete(s.pendingChecks, receiptCheckKey(p.checked))
 	} else {
 		s.wakeRecovery()
 	}
@@ -412,10 +492,7 @@ var errProofMismatch = errors.New("observed state does not match the recorded po
 func (s *Server) publishApplied(checked Receipt, observed []DocumentIntent, observation ...*Observation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.receiptFailure != nil {
-		return errors.New("receipt storage failed")
-	}
-	current, err := s.Receipts.Read(checked.ID)
+	current, err := s.receiptForCheck(checked)
 	if err != nil {
 		return err
 	}
@@ -436,7 +513,7 @@ func (s *Server) publishApplied(checked Receipt, observed []DocumentIntent, obse
 		next.Observation = observation[0]
 	}
 	next.recovered(DispositionApplied, ProofDocumentImage)
-	err = s.Receipts.Save(next)
+	err = s.publishCheckedReceipt(checked, next)
 	if err != nil {
 		s.keepClosingCheck(checked, next, observed, err)
 		return err
@@ -451,14 +528,14 @@ func (s *Server) publishApplied(checked Receipt, observed []DocumentIntent, obse
 func (s *Server) publishObservation(checked, next Receipt) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	current, err := s.Receipts.Read(checked.ID)
+	current, err := s.receiptForCheck(checked)
 	if err != nil {
 		return err
 	}
 	if !sameReceipt(current, checked) {
 		return errors.New("receipt changed during its closing check")
 	}
-	err = s.Receipts.Save(next)
+	err = s.publishCheckedReceipt(checked, next)
 	if err != nil {
 		s.keepClosingCheck(checked, next, nil, err)
 	}
@@ -475,8 +552,8 @@ func (s *Server) keepClosingCheck(checked, next Receipt, observed []DocumentInte
 	if next.Observation == nil {
 		next.Observation = &Observation{At: time.Now().UTC(), Proof: "matched"}
 	}
-	if _, exists := s.pendingChecks[checked.ID]; !exists {
-		s.pendingChecks[checked.ID] = pendingClosingCheck{checked: checked, next: next, observed: observed}
+	if _, exists := s.pendingChecks[receiptCheckKey(checked)]; !exists {
+		s.pendingChecks[receiptCheckKey(checked)] = pendingClosingCheck{checked: checked, next: next, observed: observed}
 	}
 	if s.receiptFailure == nil {
 		s.receiptFailure = err
@@ -496,6 +573,8 @@ func sameReceipt(a, b Receipt) bool {
 func (s *Server) ActivateRecovery(key *RecoveryKey) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.RecoveryKey = key
+	if s.RecoveryKey == nil {
+		s.RecoveryKey = key
+	}
 	return s.refreshRecovery()
 }

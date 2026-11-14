@@ -76,10 +76,10 @@ resource, but not another image's compatibility domain read. Version-1 running r
 reject v2 receipts; rollback requires supported storage procedures. [9](#source-9) [20](#source-20) [21](#source-21)
 
 [FACT] Preflight has a durable private permit. Deleting low-space cleanup owns
-an independent images-domain receipt, checks running reservations/drain/storage, and waits
+an independent live images-domain admission, checks running reservations/drain/native identity, and waits
 outside native guards for tracked build effects. Its short-lived worker takes a
 brief native guard, reports acquisition through private inherited pipes, then
-receives durable permission and verifies disk/generation/permit before deletion. Failed or
+receives its original parent permission and verifies disk/generation/permit before deletion. Failed or
 cancelled cleanup closes interrupted; private preflight does not reserve an
 output. Ended metadata owners settle their failure ledger for storage repair,
 without claiming a remote solve stopped. Service and bounded repair contexts are

@@ -343,7 +343,7 @@ func TestInterruptedBasePublicationDoesNotFenceWarmEffectsOrCleanup(t *testing.T
 		t.Fatal(result.err)
 	}
 	result.image.Release()
-	if err := m.server.Receipts.CheckImageCleanup(m.server.Hello.Space, m.server.DiskID); err != nil {
+	if err := m.server.CheckImageCleanup(""); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/auditmeta"
 	"github.com/leogr/yoloctl/internal/container"
-	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
@@ -21,7 +20,7 @@ var auditObserveLabels = func(ctx context.Context, space string) ([]container.Au
 }
 var auditMetadataPath = layout.AuditMetadataPath
 
-func publishAuditMetadata(ctx context.Context) error {
+func publishAuditMetadata(ctx context.Context, check func() error) error {
 	c := spaceenv.Current()
 	if c == nil {
 		return errors.New("audit metadata requires the native controller")
@@ -31,7 +30,10 @@ func publishAuditMetadata(ctx context.Context) error {
 		return err
 	}
 	defer release()
-	if err := (controller.Receipts{Dir: filepath.Join(c.DiskMount, ".controller", "receipts")}).CheckAuditReconcile(c.Space, c.DiskID); err != nil {
+	if check == nil {
+		return errors.New("live controller audit check unavailable")
+	}
+	if err := check(); err != nil {
 		return err
 	}
 	cfg, err := spaceconfig.Load(c.Space)
@@ -79,13 +81,13 @@ func publishAuditMetadata(ctx context.Context) error {
 
 // maintainNativeAudit shares one admission with retention. A metadata failure
 // must not prevent expiry, and two aligned background tickers must not compete.
-func maintainNativeAudit(ctx context.Context, expiryDue bool) (bool, error) {
+func maintainNativeAudit(ctx context.Context, expiryDue bool, check func() error) (bool, error) {
 	var expiryErr error
 	if expiryDue {
-		expiryErr = pruneInactiveAudit(ctx)
+		expiryErr = pruneInactiveAudit(ctx, check)
 	}
 	attempt, stop := context.WithTimeout(ctx, 5*time.Second)
 	defer stop()
-	metadataErr := publishAuditMetadata(attempt)
+	metadataErr := publishAuditMetadata(attempt, check)
 	return expiryDue && expiryErr == nil, errors.Join(expiryErr, metadataErr)
 }

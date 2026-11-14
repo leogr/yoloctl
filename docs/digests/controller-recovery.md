@@ -1,6 +1,6 @@
 # Controller interrupted-outcome recovery
 
-Verification: `2c911fb23783c65f13488438858f36f873aaee09` plus accompanying N1 changes (original base `272abb08`);
+Verification: `a4322a8c233da5f9eeb51239db68fab34d55f9b0` plus accompanying N1/N2 changes;
 re-read cited symbols when changing behavior.
 
 [FACT] Registered mutations use typed effect gates and recorded footprints.
@@ -57,12 +57,13 @@ replays the original command. Each receipt check is bounded to5s, a pass to30s;
 drain cancels and waits. Storage repair retains its existing backoff.
 [11](#source-11) [12](#source-12) [18](#source-18)
 
-[FACT] At this N1 boundary receipt writes are still required before checkpoints
-are acknowledged. A failed write enters the failure ledger and pauses ordinary
-admission until storage is reconciled. Read-only UUID/owner/live-bind verification,
-file probe and inventory reconciliation remain; workers and verifier never prepare
-that bind. This storage behavior is separate from finished receipt outcomes.
-[11](#source-11) [14](#source-14) [17](#source-17)
+[FACT] Ordinary records use the live controller admission, not durable bytes, as
+permission and reservation authority. Recording failures keep the latest value in
+memory for ordered late publication without replacing the command's result.
+Actual UUID/owner/live-bind safety remains separate; workers and verifier never
+prepare that bind. Image working facts remain strict. See
+[receipt recording](controller-recording.md). [11](#source-11) [14](#source-14)
+[17](#source-17)
 
 [FACT] Source tests cover classification, legacy migration, no-op acknowledgment,
 bounded scope/disk selection and a single persisted observation; they do not

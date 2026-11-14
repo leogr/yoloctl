@@ -68,6 +68,37 @@ func TestMain(m *testing.M) {
 		}
 		released := os.NewFile(4, "release")
 		finishExit := func(code int) { _, _ = released.Write([]byte{checkpointFinish}); os.Exit(code) }
+		if len(work.Request.Args) > 0 && work.Request.Args[0] == "recording-matrix" {
+			checkpoints := NewWorkerCheckpoints(released)
+			checkpoints.Gate()
+			if err := checkpoints.BeginEffects(context.Background(), EffectIntent{Scope: writes(acct("personal")), Verifier: VerifierAccountDocument}); err != nil {
+				finishExit(91)
+			}
+			if err := checkpoints.ExpandEffects(context.Background(), []Resource{{Kind: ResourceImages}}); err != nil {
+				finishExit(92)
+			}
+			if err := checkpoints.RecordDocument(context.Background(), DocumentIntent{Kind: DocumentAccount, Name: "personal", Present: true, Data: []byte("fixture"), Mode: 0600}); err != nil {
+				finishExit(93)
+			}
+			if setupThenAttach(work.Request.Method) {
+				if err := checkpoints.Release(); err != nil {
+					finishExit(94)
+				}
+			}
+			f, err := os.OpenFile(work.Request.Args[1], os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+			if err != nil {
+				finishExit(95)
+			}
+			_, writeErr := f.WriteString("one\n")
+			closeErr := f.Close()
+			if writeErr != nil || closeErr != nil {
+				finishExit(96)
+			}
+			if err := checkpoints.CompleteEffects(context.Background(), 0); err != nil {
+				finishExit(97)
+			}
+			finishExit(0)
+		}
 		switch work.Request.Method {
 		case "test.native-phase":
 			nativePhaseTestWorker(released, work)

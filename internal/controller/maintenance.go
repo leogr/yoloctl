@@ -8,7 +8,7 @@ import "context"
 // user operations retain the normal receipt/recovery contract.
 func (s *Server) RunMaintenance(ctx context.Context, run func(context.Context) error) (bool, error) {
 	s.mu.Lock()
-	if s.draining || s.active != 0 || s.RecoveryRequired || s.receiptFailure != nil {
+	if s.draining || s.active != 0 || s.RecoveryRequired || s.receiptFailure != nil || s.nativeStorageFailure != nil {
 		s.mu.Unlock()
 		return false, nil
 	}

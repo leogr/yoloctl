@@ -169,7 +169,10 @@ and never boot a VM; unavailable declarations are explicit, not an empty result.
 Authoritative destructive inventories must fail on uncertain runtime state.
 
 Preserve exact bundle/protocol/space/generation handshakes, shared Cobra command
-semantics, stream bytes/status/EOF/resize/signals and durable operation receipts.
+semantics and stream bytes/status/EOF/resize/signals. Ordinary operation records
+are kept in controller memory when storage fails and published late; recording
+never refuses a command or replaces its result. Image job stages/orphan ownership
+facts remain strict working state, and actual native-storage identity checks stay.
 Never automatically replay a mutation after a lost reply. An operation that ended
 without a recorded result is closed by the controller as interrupted, with what it
 recorded and what it observes; it is not a state of the space and it holds nothing.

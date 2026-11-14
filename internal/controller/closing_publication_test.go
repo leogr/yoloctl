@@ -95,7 +95,7 @@ func TestClosingObservationPreservesNewerLegacyFact(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := pendingClosingCheck{checked: r, next: next, observed: observed}
-	s.pendingChecks = map[string]pendingClosingCheck{r.ID: p}
+	s.pendingChecks = map[string]pendingClosingCheck{receiptCheckKey(r): p}
 	if err := s.publishClosingCheck(p); err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestClosingObservationPreservesNewerLegacyFact(t *testing.T) {
 	if err := s.Receipts.Save(current); err != nil {
 		t.Fatal(err)
 	}
-	s.pendingChecks[r.ID] = p
+	s.pendingChecks[receiptCheckKey(r)] = p
 	if err := s.publishClosingCheck(p); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestClosingObservationWriteFailureDoesNotRestoreOlderImageFact(t *testing.T
 	r, _ = s.Receipts.Read(r.ID)
 	next, observed := s.checkInterrupted(t.Context(), r)
 	p := pendingClosingCheck{checked: r, next: next, observed: observed}
-	s.pendingChecks = map[string]pendingClosingCheck{r.ID: p}
+	s.pendingChecks = map[string]pendingClosingCheck{receiptCheckKey(r): p}
 	oldWrite := writeReceipt
 	writeReceipt = func(string, string, []byte, os.FileMode) error { return fmt.Errorf("closing observation write failed") }
 	t.Cleanup(func() { writeReceipt = oldWrite })

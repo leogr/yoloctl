@@ -17,16 +17,22 @@ func saveReceipt(t *testing.T, s *Server, id, method, state string) {
 	t.Helper()
 	req := request(method)
 	req.ID = id
-	r, err := s.Receipts.Begin(req, Principal{}, "generation")
+	s.mu.Lock()
+	r, err := s.beginExecution(req, Principal{}, true)
+	if err == nil {
+		r.EffectPhase, r.Scope = EffectStarted, boxWrite("coder")
+		r.ProofVersion, r.DiskID = r.Scope.proofVersion(), testDisk
+		r.State = state
+		if state == "interrupted" {
+			r.Status = 2
+		}
+		err = s.persistExecution(*r, state != "pending")
+	}
+	s.mu.Unlock()
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.EffectPhase, r.Scope = EffectStarted, boxWrite("coder")
-	r.ProofVersion, r.DiskID = r.Scope.proofVersion(), testDisk
-	r.State = state
-	if err := s.Receipts.Save(r); err != nil {
-		t.Fatal(err)
-	}
+
 }
 
 func besideServer(t *testing.T) (*Server, *int) {

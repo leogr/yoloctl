@@ -37,7 +37,7 @@ func TestRecoveryClosesWithoutReviewAndNeverReplays(t *testing.T) {
 	}
 }
 
-func TestReceiptWriteFailureClosesMutationAdmissionUntilReconciled(t *testing.T) {
+func TestReceiptWriteFailureKeepsResultAndAdmissionWhileReconciled(t *testing.T) {
 	for _, duringSetup := range []bool{false, true} {
 		name := "final-result"
 		if duringSetup {
@@ -74,8 +74,8 @@ func TestReceiptWriteFailureClosesMutationAdmissionUntilReconciled(t *testing.T)
 				},
 			}
 			req := request("box.create")
-			if err := invoke(t, s, req, nil, io.Discard, io.Discard); err == nil {
-				t.Fatal("unflushed outcome reported as success")
+			if err := invoke(t, s, req, nil, io.Discard, io.Discard); err != nil {
+				t.Fatal("record failure replaced outcome", err)
 			}
 			if err := os.Remove(dir); err != nil {
 				t.Fatal(err)
@@ -83,22 +83,21 @@ func TestReceiptWriteFailureClosesMutationAdmissionUntilReconciled(t *testing.T)
 			if err := os.Rename(saved, dir); err != nil {
 				t.Fatal(err)
 			}
-			// Repair alone must not authorize a new write. The controller
-			// keeps serving reads and says it is read-only.
+			// Recording health is diagnostic, not mutation authority.
 			if err := invoke(t, s, request("box.list"), nil, io.Discard, io.Discard); err != nil {
 				t.Fatal(err)
 			}
 			var notice strings.Builder
-			if err := invoke(t, s, request("control.ping"), nil, io.Discard, &notice); err != nil || !strings.Contains(notice.String(), "read-only") {
+			if err := invoke(t, s, request("control.ping"), nil, io.Discard, &notice); err != nil || !strings.Contains(notice.String(), "memory") {
 				t.Fatal("controller hid failed receipt storage", err, notice.String())
 			}
 			next := request("box.create")
 			next.ID += "-next"
-			if err := invoke(t, s, next, nil, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "receipt storage failed") {
+			if err := invoke(t, s, next, nil, io.Discard, io.Discard); err != nil {
 				t.Fatalf("mutation after receipt failure: %v", err)
 			}
-			if writes.Load() != 1 {
-				t.Fatal("a second mutation ran")
+			if writes.Load() != 2 {
+				t.Fatal("a second mutation did not run")
 			}
 			// A recovery pass reconciles the original execution's own outcome
 			// and reopens admission without a restart or replay.
@@ -106,12 +105,13 @@ func TestReceiptWriteFailureClosesMutationAdmissionUntilReconciled(t *testing.T)
 				t.Fatal("healthy storage stayed held", s.receiptFailure)
 			}
 			receipt, err := s.Receipts.Read(req.ID)
-			// A failed setup flush cancels the execution after its setup.
-			want := map[bool]string{false: "complete", true: "setup-complete"}[duringSetup]
+			// A failed setup record does not cancel the worker or replace its result.
+			want := "complete"
 			if err != nil || receipt.State != want || receipt.SetupComplete != duringSetup {
 				t.Fatalf("reconciled outcome: %+v, %v", receipt, err)
 			}
-			if err := invoke(t, s, next, nil, io.Discard, io.Discard); err != nil || writes.Load() != 2 {
+			next.ID += "-repaired"
+			if err := invoke(t, s, next, nil, io.Discard, io.Discard); err != nil || writes.Load() != 3 {
 				t.Fatal("reconciled controller refused a new mutation", err)
 			}
 		})
@@ -469,8 +469,8 @@ func TestResumeDoesNotClearUncertainOutcomesOrBypassFlushFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.receiptFailure = errors.New("durability unknown")
-	if err := s.Resume(); err == nil {
-		t.Fatal("resume hid receipt failure")
+	if err := s.Resume(); err != nil || s.receiptFailure == nil {
+		t.Fatal("receipt failure fenced resume or was hidden", err)
 	}
 }
 

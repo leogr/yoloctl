@@ -54,7 +54,8 @@ effects were authorized (not setup-complete, scoped, no image writes) is
 classified `interrupted` at server finalization and at recovery. It is final,
 evictable, holds nothing and needs no review; its caller gets an interrupted
 failure with a closing observation or state-read advice. Recorded-completion and
-not-applied proofs keep precedence; pending receipts still reserve. The shared
+live not-applied evidence keeps precedence; stored waiting history after
+restart closes interrupted. Live pending admissions still reserve. The shared
 interruption rule now applies to every operation, including restart and recreate.
 [9](#source-9) [10](#source-10) [11](#source-11)
 

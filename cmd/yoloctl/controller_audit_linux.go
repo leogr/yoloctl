@@ -415,7 +415,7 @@ func collectNativeAudit(ctx context.Context) error {
 
 // Startup reconciliation does not retry an interrupted request. Any reservation
 // or uncertainty in the audit domain prevents it from applying desired state.
-func reconcileNativeAudit(ctx context.Context) error {
+func reconcileNativeAudit(ctx context.Context, check func() error) error {
 	c := spaceenv.Current()
 	if c == nil {
 		return errors.New("audit reconciliation needs native storage")
@@ -425,8 +425,10 @@ func reconcileNativeAudit(ctx context.Context) error {
 		return err
 	}
 	defer release()
-	receipts := controller.Receipts{Dir: filepath.Join(c.DiskMount, ".controller", "receipts")}
-	if err := receipts.CheckAuditReconcile(c.Space, c.DiskID); err != nil {
+	if check == nil {
+		return errors.New("live controller audit check unavailable")
+	}
+	if err := check(); err != nil {
 		return err
 	}
 	cfg, err := spaceconfig.Load(c.Space)
@@ -452,7 +454,7 @@ func startAuditRetention(parent context.Context, server *controller.Server) func
 	go func() {
 		defer close(done)
 		startup, stopStartup := context.WithTimeout(ctx, 5*time.Second)
-		_, startupErr := server.RunMaintenance(startup, reconcileNativeAudit)
+		_, startupErr := server.RunMaintenance(startup, func(ctx context.Context) error { return reconcileNativeAudit(ctx, server.CheckAuditReconcile) })
 		stopStartup()
 		if startupErr != nil && ctx.Err() == nil {
 			cliWarn(logging.Audit, "Reconciliation deferred")
@@ -467,7 +469,7 @@ func startAuditRetention(parent context.Context, server *controller.Server) func
 			checked := false
 			_, err := server.RunMaintenance(ctx, func(ctx context.Context) error {
 				var err error
-				checked, err = maintainNativeAudit(ctx, expiryDue)
+				checked, err = maintainNativeAudit(ctx, expiryDue, server.CheckAuditReconcile)
 				return err
 			})
 			if checked {
@@ -489,14 +491,17 @@ func startAuditRetention(parent context.Context, server *controller.Server) func
 // pruneInactiveAudit owns the writer only after the native lock, receipt hold
 // check and service observation exclude an active collector. Desired enablement
 // is independent: a failed collector must still expire its retained events.
-func pruneInactiveAudit(ctx context.Context) error {
+func pruneInactiveAudit(ctx context.Context, check func() error) error {
 	c := spaceenv.Current()
 	release, err := auditAcquire(ctx, c.Space, true)
 	if err != nil {
 		return err
 	}
 	defer release()
-	if err := (controller.Receipts{Dir: filepath.Join(c.DiskMount, ".controller", "receipts")}).CheckAuditReconcile(c.Space, c.DiskID); err != nil {
+	if check == nil {
+		return errors.New("live controller audit check unavailable")
+	}
+	if err := check(); err != nil {
 		return err
 	}
 	cfg, err := spaceconfig.Load(c.Space)

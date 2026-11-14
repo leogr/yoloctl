@@ -311,12 +311,12 @@ func TestAuditRetentionInactiveCollector(t *testing.T) {
 	if scenario == "enabled-failed-observer" {
 		auditObserveLabels = func(context.Context, string) ([]container.AuditLabelObservation, error) { return nil, sentinel }
 		var checked bool
-		checked, err = maintainNativeAudit(t.Context(), true)
+		checked, err = maintainNativeAudit(t.Context(), true, fixtureLiveAuditCheck(scenario))
 		if !checked {
 			t.Fatal("metadata failure skipped expiry")
 		}
 	} else {
-		err = pruneInactiveAudit(t.Context())
+		err = pruneInactiveAudit(t.Context(), fixtureLiveAuditCheck(scenario))
 	}
 	wantErr := scenario == "enabled-failed-observer" || scenario == "observation-failed" || scenario == "audit-held" || scenario == "global-held" || scenario == "lock-failed"
 	if (err != nil) != wantErr {
@@ -396,5 +396,14 @@ func TestAuditCompletionUsesNativeHostAuthority(t *testing.T) {
 				t.Fatal("native audit completion", out.String(), err)
 			}
 		}
+	}
+}
+
+func fixtureLiveAuditCheck(scenario string) func() error {
+	return func() error {
+		if scenario == "audit-held" || scenario == "global-held" {
+			return errors.New("audit domain has a running execution")
+		}
+		return nil
 	}
 }

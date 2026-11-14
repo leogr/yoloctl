@@ -13,7 +13,7 @@ import (
 	"sync"
 
 	"github.com/leogr/yoloctl/internal/layout"
-	"github.com/leogr/yoloctl/internal/safepath"
+	"github.com/leogr/yoloctl/internal/logging"
 )
 
 const nativeNonceFrameLimit = 4096
@@ -157,21 +157,23 @@ func (o *nativeNonceOwner) checkReceipt(ctx context.Context, box string) error {
 	if !r.Scope.Global && !containsResource(r.Scope.Writes, Resource{Kind: ResourceBox, Name: box}) {
 		return errors.New("native incarnation box is outside original write scope")
 	}
-	if s.receiptFailure != nil {
-		return &EffectsUncertain{Cause: errors.New("native incarnation requires healthy receipt storage")}
+	if s.nativeStorageFailure != nil {
+		return &EffectsUncertain{Cause: s.nativeStorageFailure}
 	}
-	// Bind to THIS live receipt's exact currently saved bytes. This refuses
-	// hidden duplicate/alias edits and stale/foreign replacement without treating
-	// a newly decoded current document as original execution permission.
-	expected, err := json.Marshal(*r)
-	if err != nil {
-		return err
+	entry := s.executions[r.ID]
+	if entry == nil || entry.receipt != r || entry.settled || !sameAdmission(*entry.receipt, *r) {
+		return errors.New("native incarnation original live execution is unavailable")
 	}
-	raw, err := safepath.ReadFile(s.Receipts.Dir, r.ID+".json", MaxDocument)
-	if err != nil || !bytes.Equal(raw, expected) {
-		cause := errors.New("native incarnation original durable receipt changed or is unavailable")
-		s.record(*r, cause, false, false, "")
-		return &EffectsUncertain{Cause: cause}
+	// Durable bytes are diagnostic only; permission remains bound to this
+	// original worker, principal, generation, scope and nonce lifetime.
+	if !entry.durableWarned {
+		saved, err := s.Receipts.Read(r.ID)
+		expected := *r
+		expected.RecordedLate = saved.RecordedLate
+		if err != nil || !sameReceipt(saved, expected) {
+			logging.L().Warn("Live operation record is unavailable or older than its execution", "actor", logging.Controller, "request", r.ID, "method", r.Method)
+			entry.durableWarned = true
+		}
 	}
 	current, err := s.loadHolds(r.ID)
 	if err != nil {
@@ -251,7 +253,7 @@ func (o *nativeNonceOwner) verifyStorage(ctx context.Context) error {
 		return err
 	}
 	o.server.mu.Lock()
-	o.server.record(*o.receipt, err, false, false, "")
+	o.server.noteNativeStorageFailure(err)
 	o.server.mu.Unlock()
 	return &EffectsUncertain{Cause: err}
 }

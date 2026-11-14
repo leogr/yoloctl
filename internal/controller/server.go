@@ -96,14 +96,19 @@ type Server struct {
 	VerifyStorage     func(context.Context) error
 	legacyMaintenance func(context.Context) error
 
-	mu       sync.Mutex
-	draining bool
-	active   int
-	idle     chan struct{}
+	executions map[string]*liveReceipt
+	collisions map[string]receiptCollision
+	historical map[string]Receipt
+	mu         sync.Mutex
+	draining   bool
+	active     int
+	idle       chan struct{}
 	// A failed receipt flush cannot be cleared by an in-memory acknowledgment.
 	// Restart must inspect the durable records after storage has been repaired.
-	receiptFailure   error
-	backgroundCancel context.CancelFunc
+	receiptFailure        error
+	nativeStorageFailure  error
+	nativeStorageRevision uint64
+	backgroundCancel      context.CancelFunc
 	// changed is closed by a receipt transition that can end a reservation.
 	changed chan struct{}
 
@@ -167,8 +172,8 @@ func (s *Server) Resume() error {
 	if !s.draining {
 		return nil
 	}
-	if s.active != 0 || s.receiptFailure != nil {
-		return errors.New("controller cannot resume before setup and receipt storage are healthy")
+	if s.active != 0 || s.nativeStorageFailure != nil {
+		return errors.New("controller cannot resume before active operations finish and native storage is verified")
 	}
 	if s.ResumeAdmission != nil {
 		if err := s.ResumeAdmission(); err != nil {
@@ -190,6 +195,9 @@ func (s *Server) admitOperation(req Request, principal Principal, operation Oper
 	if s.draining && !operation.Beside {
 		return nil, nil, errors.New("space controller is in maintenance; start the space to reopen it")
 	}
+	if operation.Mutates && s.nativeStorageFailure != nil {
+		return nil, nil, fmt.Errorf("native storage identity is unavailable: %w", s.nativeStorageFailure)
+	}
 	if !operation.Mutates {
 		if s.ReadFinished == nil {
 			return func() {}, nil, nil
@@ -197,25 +205,7 @@ func (s *Server) admitOperation(req Request, principal Principal, operation Oper
 		var once sync.Once
 		return func() { once.Do(func() { s.ReadFinished(req.Method) }) }, nil, nil
 	}
-	if s.receiptFailure != nil {
-		return nil, nil, fmt.Errorf("operation receipt storage failed, so changes are paused; reads still work and the controller reopens changes by itself once storage is healthy and every receipt is reconciled: %w", s.receiptFailure)
-	}
-	// Only a space-wide unresolved outcome refuses admission; a scoped hold
-	// is checked against the footprint the worker declares at its gate.
-	current, err := s.loadHolds("")
-	if err != nil {
-		return nil, nil, fmt.Errorf("operation receipts cannot be inventoried, so changes are paused: %w", err)
-	}
-	if len(current.unresolvedGlobal()) != 0 {
-		return nil, nil, recoveryRequiredError(s.Hello.Space)
-	}
-	r, err := s.Receipts.begin(req, principal, s.Hello.Generation, s.DiskID, operation.EffectGated)
-	var writeErr *receiptWriteError
-	if errors.As(err, &writeErr) {
-		// No worker runs; its possibly-published pending record is
-		// reconciled before the storage hold can drop.
-		s.record(r, err, true, false, "")
-	}
+	r, err := s.beginExecution(req, principal, operation.EffectGated)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -240,14 +230,7 @@ func (s *Server) admitOperation(req Request, principal Principal, operation Oper
 			}
 		})
 	}
-	return release, &r, nil
-}
-
-// recoveryRequiredError names the host review path for an unknown outcome
-// without a bounded footprint, which holds the whole space.
-func recoveryRequiredError(space string) error {
-	return fmt.Errorf("operation interrupted in space %s; read its current state", space)
-
+	return release, r, nil
 }
 
 // reviewedOutcome identifies a receipt in an acknowledge-all summary.
@@ -275,7 +258,7 @@ type acknowledgeAllResult struct {
 func (s *Server) acknowledgeAll() (*acknowledgeAllResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return &acknowledgeAllResult{Acknowledged: []reviewedOutcome{}, Maintenance: s.draining, ChangesPaused: s.draining || s.receiptFailure != nil}, nil
+	return &acknowledgeAllResult{Acknowledged: []reviewedOutcome{}, Maintenance: s.draining, ChangesPaused: s.draining || s.nativeStorageFailure != nil}, nil
 }
 
 func (r *acknowledgeAllResult) explain(space string) string {
@@ -362,11 +345,15 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		s.mu.Lock()
 		drained := s.draining
 		receiptFailure := s.receiptFailure
+		nativeFailure := s.nativeStorageFailure
 		s.mu.Unlock()
+		if nativeFailure != nil {
+			_ = wire.Write(Frame{Type: "stderr", Data: []byte(fmt.Sprintf("Native storage identity is unavailable: %v\n", nativeFailure))})
+		}
 		// A read-only controller is serving: reads work and it reconciles
 		// its receipt storage by itself. Restarting it is never required.
 		if receiptFailure != nil && !drained {
-			_ = wire.Write(Frame{Type: "stderr", Data: []byte(fmt.Sprintf("Space %s controller is read-only until receipt storage recovers: %v\n", s.Hello.Space, receiptFailure))})
+			_ = wire.Write(Frame{Type: "stderr", Data: []byte(fmt.Sprintf("Space %s controller is recording operations in memory until receipt storage recovers: %v\n", s.Hello.Space, receiptFailure))})
 		}
 		if drained {
 			fail(errors.New("controller is in maintenance"))
@@ -404,32 +391,31 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			return
 		}
 		s.mu.Lock()
-		all, err := s.Receipts.List()
-		summary := ""
-		if err == nil {
-			summary = explainHolds(all, s)
-			orphans, e := s.Receipts.ImageOrphans()
-			if e != nil {
-				err = e
-			} else if len(orphans) != 0 {
-				summary += fmt.Sprintf("%d abandoned image attempt(s) may still use CPU, memory or disk; their slots are free and no acknowledgment is required.\n", len(orphans))
-			}
+		all, historyErr := s.operationViews()
+		summary := explainHolds(nil, s)
+		var orphans []ImageOrphan
+		orphanErr := s.nativeStorageFailure
+		if orphanErr == nil {
+			orphans, orphanErr = s.Receipts.ImageOrphans()
+		}
+		if orphanErr != nil {
+			historyErr = errors.Join(historyErr, orphanErr)
+		} else if len(orphans) != 0 {
+			summary += fmt.Sprintf("%d abandoned image attempt(s) may still use CPU, memory or disk; their slots are free and no acknowledgment is required.\n", len(orphans))
 		}
 		s.mu.Unlock()
-		if err != nil {
-			fail(err)
-			return
-		}
-		for i := range all {
-			all[i] = publicReceipt(all[i])
-		}
 		raw, _ := json.Marshal(all)
 		_ = wire.Write(Frame{Type: "stdout", Data: append(raw, '\n')})
 		if summary != "" {
 			_ = wire.Write(Frame{Type: "stderr", Data: []byte(summary)})
 		}
+		if historyErr != nil {
+			fail(fmt.Errorf("durable operation history is unavailable; only known memory records are shown: %w", historyErr))
+			return
+		}
 		_ = wire.Write(Frame{Type: "exit"})
 		return
+
 	case "control.status", "control.acknowledge":
 		var query struct {
 			ID string `json:"id"`
@@ -452,22 +438,30 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			return
 		}
 		s.mu.Lock()
-		r, err := s.Receipts.Read(query.ID)
+		view, err := s.operationView(query.ID, principal)
 		s.mu.Unlock()
-		if err != nil || !principal.Admin() && r.Principal != principal {
-			fail(errors.New("operation receipt not available"))
+		if err != nil {
+			fail(err)
 			return
 		}
-
-		raw, _ := json.Marshal(publicReceipt(r))
+		raw, _ := json.Marshal(view)
 		_ = wire.Write(Frame{Type: "stdout", Data: append(raw, '\n')})
-		if principal.Admin() {
-			if text := s.explainOutcome(r); text != "" {
+		if view.NotStored {
+			text := "No result was recorded for the later execution under this ID; its result is in the controller log. Any historical record shown is an earlier, unrelated use of the ID.\n"
+			if view.Source == "history-only" {
+				text = "Only earlier, unrelated history is available for this ID; no current result is available to this principal.\n"
+			} else if view.State == "pending" {
+				text = "This live execution uses an ID with earlier, unrelated history; its receipt stays in memory and will not replace that history.\n"
+			}
+			_ = wire.Write(Frame{Type: "stderr", Data: []byte(text)})
+		} else if principal.Admin() {
+			if text := s.explainOutcome(view.Receipt); text != "" {
 				_ = wire.Write(Frame{Type: "stderr", Data: []byte(text)})
 			}
 		}
 		_ = wire.Write(Frame{Type: "exit"})
 		return
+
 	case "control.acknowledge-all":
 		if !principal.Admin() {
 			fail(errors.New("only host administration can acknowledge operations"))
@@ -677,8 +671,14 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			}
 			s.mu.Lock()
 			defer s.mu.Unlock()
+			if s.nativeStorageFailure != nil {
+				return &EffectsUncertain{Cause: s.nativeStorageFailure}
+			}
+			if e := s.executions[receipt.ID]; e == nil || e.receipt != receipt || e.settled {
+				return errors.New("original live setup receipt is unavailable")
+			}
 			receipt.SetupComplete = true
-			err := s.Receipts.Save(*receipt)
+			err := s.persistExecution(*receipt, false)
 			s.record(*receipt, err, false, false, "")
 			if err != nil {
 				return err
@@ -724,8 +724,11 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			err := owner.authorize(effectCtx, func() error {
 				s.mu.Lock()
 				defer s.mu.Unlock()
-				if s.receiptFailure != nil {
-					return errors.New("operation effects require healthy receipt storage")
+				if s.nativeStorageFailure != nil {
+					return &EffectsUncertain{Cause: s.nativeStorageFailure}
+				}
+				if e := s.executions[receipt.ID]; e == nil || e.receipt != receipt || e.settled {
+					return errors.New("original live effect receipt is unavailable")
 				}
 				if receipt.EffectPhase != EffectWaiting {
 					return errors.New("operation effects were already authorized")
@@ -756,9 +759,9 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 					next.ProofVersion = intent.Scope.proofVersion()
 				}
 				next.EffectPhase = EffectStarted
-				if err := s.Receipts.Save(next); err != nil {
-					// Permission is denied; the durable record may read
-					// either way and is reconciled before reopening.
+				if err := s.persistExecution(next, false); err != nil {
+					// Invalid live ownership denies permission; recording
+					// failures are retained by persistExecution and do not reach here.
 					s.record(*receipt, err, false, false, "")
 					return err
 				}
@@ -990,7 +993,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			receipt.interrupt()
 		}
 
-		saveErr := s.Receipts.Save(*receipt)
+		saveErr := s.persistExecution(*receipt, true)
 		s.record(*receipt, saveErr, true, false, "")
 		if saveErr == nil && receipt.State != "uncertain" {
 			_ = s.refreshRecovery()
@@ -999,6 +1002,11 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			s.wakeRecovery()
 		}
 		s.notifyReceipts()
+		// Late publication/checking may update the memory record after its
+		// worker ends. The reply uses this finalization snapshot, never that
+		// concurrently maintained live pointer.
+		finalSnapshot := *receipt
+		receipt = &finalSnapshot
 		s.mu.Unlock()
 		if saveErr != nil {
 			fail(fmt.Errorf("operation %s ended but its receipt could not be flushed: %w", req.ID, saveErr))
@@ -1042,8 +1050,11 @@ func (e *receiptEvidence) update(change func(*Receipt) error) error {
 	s := e.server
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.receiptFailure != nil {
-		return errors.New("operation receipt storage failed")
+	if s.nativeStorageFailure != nil {
+		return &EffectsUncertain{Cause: s.nativeStorageFailure}
+	}
+	if live := s.executions[e.receipt.ID]; live == nil || live.receipt != e.receipt || live.settled {
+		return errors.New("original live evidence receipt is unavailable")
 	}
 	if e.receipt.ProofVersion == 0 || e.receipt.EffectPhase == EffectWaiting || e.receipt.Completion != nil {
 		return errors.New("operation evidence is recorded only after permission and before completion")
@@ -1057,7 +1068,7 @@ func (e *receiptEvidence) update(change func(*Receipt) error) error {
 	if err := next.validateEvidence(); err != nil {
 		return err
 	}
-	if err := s.Receipts.Save(next); err != nil {
+	if err := s.persistExecution(next, false); err != nil {
 		s.record(*e.receipt, err, false, false, "")
 		return err
 	}

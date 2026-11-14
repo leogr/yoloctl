@@ -158,26 +158,12 @@ func (s *Server) CheckNativeOperatorPublication(box string) error {
 		return errors.New("invalid native operator publication target")
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.receiptFailure != nil {
-		return errors.Join(errors.New("native operator publication requires healthy receipt storage"), s.receiptFailure)
+	failure := s.nativeStorageFailure
+	s.mu.Unlock()
+	if failure != nil {
+		return errors.Join(errors.New("native storage identity is unavailable"), failure)
 	}
-	current, err := s.loadHolds("")
-	if err != nil {
-		return err
-	}
-	// Only a finished unresolved outcome holds publication. A running
-	// execution, such as the create that is waiting for this very socket,
-	// never does.
-	resources, held, global := current.conflict(&Scope{Writes: []Resource{{Kind: ResourceBox, Name: box}}})
-	var unresolved []Receipt
-	for _, r := range held {
-		if r.unresolved() {
-			unresolved = append(unresolved, r)
-		}
-	}
-	if len(unresolved) != 0 {
-		return errors.Join(ErrNativeOperatorPublicationHeld, heldError(s.Hello.Space, true, global, resources, unresolved))
-	}
+	// Registration, native claim and current grant checks remain in the
+	// publisher. Neither receipt health nor ended records grants or refuses it.
 	return nil
 }

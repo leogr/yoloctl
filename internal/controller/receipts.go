@@ -49,6 +49,7 @@ type Receipt struct {
 	Recovery     *Recovery    `json:"recovery,omitempty"`
 	Image        *ImagePhase  `json:"image,omitempty"`
 	Observation  *Observation `json:"observation,omitempty"`
+	RecordedLate bool         `json:"recorded_late,omitempty"`
 }
 
 // Receipts is serialized by Server.mu. Finished receipts, including unknown
@@ -173,7 +174,9 @@ func (r Receipt) terminal() bool {
 // Recover runs with the controller singleton held, after the guest supervisor
 // (systemd or Firecracker PID 1) has killed former workers. It closes old
 // outcomes as interrupted and never replays command input.
-func (s Receipts) Recover() (bool, error) {
+func (s Receipts) Recover() (bool, error) { return s.recoverExcept(nil, s.Save) }
+
+func (s Receipts) recoverExcept(skip func(Receipt) bool, publish func(Receipt) error) (bool, error) {
 	if _, err := s.ImageOrphans(); err != nil {
 		return false, err
 	}
@@ -183,6 +186,9 @@ func (s Receipts) Recover() (bool, error) {
 	}
 	interrupted := false
 	for _, r := range all {
+		if skip != nil && skip(r) {
+			continue
+		}
 
 		if r.Image != nil && r.Image.PrivateVersion == 1 && r.Completion == nil && r.Image.AbandonedAt.IsZero() {
 			r.Image.AbandonedAt, r.Image.Residual = time.Now().UTC(), true
@@ -203,14 +209,18 @@ func (s Receipts) Recover() (bool, error) {
 		}
 		if r.State == "pending" || r.State == "uncertain" || r.State == "command-uncertain" {
 			// Old workers are already terminated by the supervisor.
-			r.interrupt()
+			if r.Method != "image.job" && r.EffectPhase == EffectWaiting && !r.SetupComplete && r.Completion == nil {
+				r.State, r.Status = "interrupted", 2
+			} else {
+				r.interrupt()
+			}
 			if r.State == "interrupted" && r.Image != nil && r.Image.PrivateVersion == 0 && r.Completion == nil {
 				phase := *r.Image
 				phase.Residual = true
 				r.Image = &phase
 			}
 			r.Finished = time.Now().UTC()
-			if err := s.Save(r); err != nil {
+			if err := publish(r); err != nil {
 				return false, err
 			}
 		}
@@ -226,6 +236,17 @@ func (s Receipts) Save(r Receipt) error {
 	}
 	return writeReceipt(s.Dir, r.ID+".json", raw, 0o600)
 }
+
+// Create publishes the first strict working fact without replacing an ID.
+func (s Receipts) Create(r Receipt) error {
+	raw, err := json.Marshal(r)
+	if err != nil {
+		return err
+	}
+	return createReceipt(s.Dir, r.ID+".json", raw, 0600)
+}
+
+var createReceipt = safepath.CreateFile
 
 // writeReceipt is a fault-injection seam; production writes durably.
 var writeReceipt = safepath.WriteFile

@@ -178,7 +178,7 @@ func TestRunningReservationsStillCoverAllDependencyKinds(t *testing.T) {
 	for _, resource := range []Resource{box("web"), acct("personal"), {Kind: ResourceChat}, {Kind: ResourcePorts}, {Kind: ResourceAudit}, {Kind: ResourceImages}} {
 		t.Run(resource.Kind, func(t *testing.T) {
 			s := storeServer(t)
-			r := seedReceipt(t, s, "running-dependency-0123456789", "pending", writes(resource), nil)
+			r := seedLiveExecution(t, s, "running-dependency-0123456789", writes(resource), nil)
 			h, err := s.loadHolds("")
 			if err != nil {
 				t.Fatal(err)
@@ -188,7 +188,7 @@ func TestRunningReservationsStillCoverAllDependencyKinds(t *testing.T) {
 				t.Fatal("running dependency lost its reservation", conflicts)
 			}
 			r.State = "interrupted"
-			if err := s.Receipts.Save(r); err != nil {
+			if err := s.persistExecution(*r, true); err != nil {
 				t.Fatal(err)
 			}
 			h, err = s.loadHolds("")

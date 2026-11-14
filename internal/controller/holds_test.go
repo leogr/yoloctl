@@ -36,6 +36,27 @@ func seedReceipt(t *testing.T, s *Server, id, state string, scope *Scope, mutate
 	return r
 }
 
+// seedLiveExecution models a controller-owned admission, not a historical file.
+func seedLiveExecution(t *testing.T, s *Server, id string, scope *Scope, mutate func(*Receipt)) *Receipt {
+	t.Helper()
+	req := request("box.start")
+	req.ID = id
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, err := s.beginExecution(req, Principal{}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.EffectPhase, r.Scope = EffectStarted, scope
+	if mutate != nil {
+		mutate(r)
+	}
+	if err := s.persistExecution(*r, false); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
 func gatedServer(t *testing.T, intent func(Request) EffectIntent, effects *[]string) *Server {
 	t.Helper()
 	s := &Server{Hello: hello(), Receipts: Receipts{t.TempDir()}, DiskID: testDisk,
@@ -54,17 +75,17 @@ func gatedServer(t *testing.T, intent func(Request) EffectIntent, effects *[]str
 func TestGateWaitsForRunningReservationNotForSessions(t *testing.T) {
 	var effects []string
 	s := gatedServer(t, func(Request) EffectIntent { return scopeIntent(writes(box("web"))) }, &effects)
-	running := seedReceipt(t, s, "running-0123456789ab", "pending", writes(box("web")), nil)
+	running := seedLiveExecution(t, s, "running-0123456789ab", writes(box("web")), nil)
 	// A completed setup (a live session) and an authorized exec never reserve.
-	seedReceipt(t, s, "session-0123456789ab", "pending", writes(box("web")), func(r *Receipt) { r.SetupComplete = true })
-	seedReceipt(t, s, "exec-0123456789abcd", "pending", writes(box("web")), func(r *Receipt) { r.Method = "box.exec" })
+	seedLiveExecution(t, s, "session-0123456789ab", writes(box("web")), func(r *Receipt) { r.SetupComplete = true })
+	seedLiveExecution(t, s, "exec-0123456789abcd", writes(box("web")), func(r *Receipt) { r.Method = "box.exec" })
 	done := make(chan error, 1)
 	go func() { done <- invoke(t, s, request("box.start"), nil, io.Discard, io.Discard) }()
 	time.Sleep(200 * time.Millisecond)
 	s.mu.Lock()
 	waiting := len(effects) == 0
 	running.State, running.Finished = "complete", time.Now().UTC()
-	if err := s.Receipts.Save(running); err != nil {
+	if err := s.persistExecution(*running, true); err != nil {
 		t.Fatal(err)
 	}
 	s.notifyReceipts()

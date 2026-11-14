@@ -95,7 +95,7 @@ func TestServiceRestartKeepsReceiptsMaintenanceAndDegradedAdmission(t *testing.T
 		if err := invoke(t, s, request("box.create"), nil, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "maintenance") {
 			t.Fatal("repair cleared maintenance", err)
 		}
-		for id, want := range map[string]string{"waiting-request-123456": "complete", "permitted-request-123456": "interrupted", "command-request-123456": "interrupted"} {
+		for id, want := range map[string]string{"waiting-request-123456": "interrupted", "permitted-request-123456": "interrupted", "command-request-123456": "interrupted"} {
 			r, err := store.Read(id)
 			if err != nil || r.State != want {
 				t.Fatal(id, r.State, err)

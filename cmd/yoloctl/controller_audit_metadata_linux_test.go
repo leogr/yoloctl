@@ -148,7 +148,7 @@ func TestAuditMetadataPublicationUsesObservedIDsAndHolds(t *testing.T) {
 		}
 		stop()
 	} else {
-		err = publishAuditMetadata(t.Context())
+		err = publishAuditMetadata(t.Context(), fixtureLiveAuditCheck(scenario))
 	}
 	success := scenario == "audit-interrupted" || scenario == "known" || scenario == "unconfined" || scenario == "privileged" || scenario == "startup-order"
 	wantErr := !success && scenario != "disabled"
