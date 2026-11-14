@@ -568,6 +568,57 @@ func TestSetupOwnerSignalRefusesLaterAuthorization(t *testing.T) {
 	}
 }
 
+// A signal frame detaches the client of an owned setup before its handoff.
+// The connection's end may be observed before or after that handoff; either
+// way the setup finishes without the client and is not cancelled. A client
+// still attached at handoff is cancelled by its later departure.
+func TestSetupOwnerLateDetachKeepsDetachedHandoff(t *testing.T) {
+	for _, late := range []bool{false, true} {
+		conn, cancelConn := context.WithCancel(context.Background())
+		exec, cancelExec := context.WithCancel(context.Background())
+		o := newSetupOwner(true, conn, cancelExec, &clientOutput{})
+		if err := o.authorize(exec, func() error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+		if forward, owned := o.signal(15); forward || !owned {
+			t.Fatal(forward, owned)
+		}
+		cancelConn()
+		if !late {
+			o.detach()
+		}
+		if attached, err := o.handoff(func() error { return nil }); attached || err != nil {
+			t.Fatal(late, attached, err)
+		}
+		if late {
+			o.detach()
+		}
+		if exec.Err() != nil {
+			t.Fatalf("late=%v: the detached setup's execution was cancelled", late)
+		}
+		if detached, sig := o.outcome(); !detached || sig != 15 {
+			t.Fatal(late, detached, sig)
+		}
+		cancelExec()
+	}
+	conn, cancelConn := context.WithCancel(context.Background())
+	defer cancelConn()
+	exec, cancelExec := context.WithCancel(context.Background())
+	defer cancelExec()
+	o := newSetupOwner(true, conn, cancelExec, &clientOutput{})
+	if err := o.authorize(exec, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if attached, err := o.handoff(func() error { return nil }); !attached || err != nil {
+		t.Fatal(attached, err)
+	}
+	cancelConn()
+	o.detach()
+	if exec.Err() == nil {
+		t.Fatal("an attached client's departure after handoff did not cancel its execution")
+	}
+}
+
 // After handoff the first signal reaches the attached worker, as before.
 func TestOwnedAttachForwardsSignalAfterHandoff(t *testing.T) {
 	h := newOwnedHarness(t, Principal{})

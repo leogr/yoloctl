@@ -194,7 +194,7 @@ func TestAttachClientSignalDuringOwnedSetupDetaches(t *testing.T) {
 				c := newOwnedSetupController(t, false)
 				client, exited, stderr := startAttachSignalClient(t, c, mode)
 				await(t, c.authorized, "the attach setup to be authorized")
-				if err := client.Process.Signal(sig); err != nil {
+				if err := signalOnce(client.Process, sig); err != nil {
 					t.Fatal(err)
 				}
 				var err error
@@ -279,7 +279,7 @@ func TestAttachClientSignalAfterHandoff(t *testing.T) {
 			if err := <-c.released; err != nil {
 				t.Fatal("setup acknowledgment", err)
 			}
-			if err := client.Process.Signal(sig); err != nil {
+			if err := signalOnce(client.Process, sig); err != nil {
 				t.Fatal(err)
 			}
 			if status := exitWithin(t, exited, stderr, "one "+sig.String()); status != 0 || strings.Contains(stderr.String(), "keeps starting the session") {
@@ -298,7 +298,7 @@ func TestAttachClientSignalAfterHandoff(t *testing.T) {
 		close(c.proceed)
 		client, exited, stderr := startAttachSignalClient(t, c, "box attach")
 		await(t, c.handedOff, "the attachment to start")
-		if err := client.Process.Signal(syscall.SIGTERM); err != nil {
+		if err := signalOnce(client.Process, syscall.SIGTERM); err != nil {
 			t.Fatal(err)
 		}
 		forwarded(t, c, syscall.SIGTERM)
@@ -307,7 +307,7 @@ func TestAttachClientSignalAfterHandoff(t *testing.T) {
 			t.Fatalf("the client ended on a forwarded signal its attachment ignored: %v", err)
 		case <-time.After(300 * time.Millisecond):
 		}
-		if err := client.Process.Signal(syscall.SIGTERM); err != nil {
+		if err := signalOnce(client.Process, syscall.SIGTERM); err != nil {
 			t.Fatal(err)
 		}
 		if status := exitWithin(t, exited, stderr, "a second SIGTERM"); status == exitDetached {

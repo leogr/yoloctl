@@ -1,6 +1,6 @@
 # OpenShell 0.1.6 image and environment compatibility
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47` plus `third_party/openshell/patches/`; runtime selection `1d265df` and accompanying changes; mediated signal delivery at `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47` plus `third_party/openshell/patches/`; runtime selection `1d265df` and accompanying changes; mediated signal delivery at `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes; its measurement and `signalOnce` at `658ead276` and accompanying changes.
 
 [FACT] On the upgrade integration tree a native space selects the embedded
 0.1.6 runtime for every new ordinary (non-privileged) box and for an explicit
@@ -125,11 +125,14 @@ new notification and is delivered again. Go workloads take this path:
 `pidfd_open` returns `ENOSYS` in a box, so `os.Process.Signal` falls back to
 plain `kill`, and Go installs every signal handler with `SA_RESTART`. The
 attach client forwards its first signal and cancels its context on a second,
-so a duplicate can race the attach's detach reply: the exit status then
-depends on whether the final reply arrived before the cancellation.
-`commandSignalContext` sends no signal itself, and no yoloctl patch changes
-the listener flags or adds repeat detection: the limit is documented, not
-fixed. [28](#source-28) [29](#source-29) [30](#source-30) [31](#source-31)
+so a duplicate can race the attach's detach reply. Measured in a box: a
+single `kill` reached a Go or Python child twice (occasionally three times) in
+about 1% of trials, and `sigtimedwait` reported every copy with the broker
+(`openshell-sandbox`) as `si_pid`; a thread-directed `tgkill` to the child's
+main thread arrived once in 8,000 trials. `commandSignalContext` sends no
+signal itself, and no yoloctl patch changes the listener flags or adds repeat
+detection: the limit is documented, not fixed. The signal regressions send
+their one test signal with `signalOnce` (`tgkill` on Linux). [28](#source-28) [29](#source-29) [30](#source-30) [31](#source-31)
 [32](#source-32) [33](#source-33)
 
 [FACT] OpenShell 0.1.6 removes secret-provided `HTTP_PROXY`, `HTTPS_PROXY`,
@@ -213,4 +216,4 @@ operator-box case was not rerun separately. [26](#source-26)
 30. <a id="source-30"></a> [Upstream child_seccomp.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/child_seccomp.rs#L150-L201) — `pidfd_send_signal` denied to the workload, `pidfd_open` answered with `ENOSYS`.
 31. <a id="source-31"></a> [Go 1.27.3 os/exec_unix.go](https://github.com/golang/go/blob/go1.27.3/src/os/exec_unix.go#L77-L91) — `(*Process).signal`: pidfd when `checkPidfd` passes (`os/pidfd_linux.go` L154-L197), otherwise `kill`; `runtime/os_linux.go` L480 sets `SA_RESTART` on every handler.
 32. <a id="source-32"></a> [Linux v6.12 seccomp_filter.rst](https://github.com/torvalds/linux/blob/v6.12/Documentation/userspace-api/seccomp_filter.rst#L276-L282) — `SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV` semantics.
-33. <a id="source-33"></a> [cmd/yoloctl/signals.go](../../cmd/yoloctl/signals.go#L17-L50) — `commandSignalContext`: first signal forwarded, a second cancels; `TestAttachClientSignalDuringOwnedSetupDetaches` in `attach_signal_test.go` sends one `Process.Signal` and expects status 75.
+33. <a id="source-33"></a> [cmd/yoloctl/signals.go](../../cmd/yoloctl/signals.go#L17-L50) — `commandSignalContext`: first signal forwarded, a second cancels; `signalOnce` in `signal_once_linux_test.go` (`tgkill`), used by `attach_signal_test.go`, `signals_test.go` and `signals_tui_test.go`.

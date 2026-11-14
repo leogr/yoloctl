@@ -18,12 +18,12 @@ afterwards, and a client timeout is no proof of a failed launch; inspect
 `box session` or the request ID instead of retrying. After the attachment
 starts, one signal is forwarded to it and ends it (the ordinary detach, status
 0); a second ends the client unconditionally. [16](#source-16)
-[INFERENCE] Inside a box the bundled sandbox's signal broker delivers a
-mediated `kill` before answering it, and its listener lets a signal interrupt
-and restart that call, so one `kill` can arrive twice. The attach-signal
-regression has occasionally seen a single test signal reach the client twice
-there, ending it with status 2 instead of the forwarded detach; no yoloctl
-sender was found and nothing is changed. The mechanism and the unpatched
+[FACT] Inside a box the bundled sandbox's signal broker delivers a mediated
+`kill` before answering it, and its listener lets a signal interrupt and
+restart that call, so one `kill` can arrive twice; both copies name the broker
+as sender. A second copy ends an attach client with status 2 instead of the
+forwarded detach. The product is unchanged; the signal regressions send their
+one signal as a thread-directed `tgkill`, which arrives once. The mechanism and the unpatched
 listener flags are recorded in [22](#source-22).
 
 [FACT] A fresh session in an existing container refuses verified recipe-image

@@ -1,6 +1,6 @@
 # Owned attach setup and client loss
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; late detach at `658ead276` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] `box.attach` (box attach/use, root attach, managed, passthrough and
 guarded chat attachments) is the only operation registered as `EffectGated`
@@ -59,7 +59,11 @@ uncertainty runs the interrupted classifier. Receipts add informational
 authorization, lost permission, receipt failure and restart recovery stay
 conservative (`uncertain`); drain counts an owned setup as active and its
 expiry never kills it. A detached setup runs until its own timeouts or an
-explicit stop. [3](#source-3) [8](#source-8)
+explicit stop. The connection's end is observed asynchronously; when it is
+observed after a handoff that already found the client gone, it cancels
+nothing, as when it is observed before, so the receipt stays `complete`.
+A client still attached at handoff is cancelled by its later departure.
+[3](#source-3) [4](#source-4) [8](#source-8) [9](#source-9)
 
 [FACT] Real worker and client-process regressions kill the client (SIGTERM,
 SIGKILL), close its stdout consumer (client SIGPIPE), send cancel, signal,
@@ -76,12 +80,12 @@ the standalone `smoke-attach-interrupt` stage is the live gate.
 1. <a id="source-1"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L69) — `controllerOperations["box.attach"]`.
 2. <a id="source-2"></a> [internal/controller/protocol.go](../../internal/controller/protocol.go#L164) — `Operation.OwnedSetup`; the `detached` frame (`Frame.Owned`).
 3. <a id="source-3"></a> [internal/controller/server.go](../../internal/controller/server.go#L470) — `ServeConn` execution context, input holding, signals, `setupDone`, gate and finalization.
-4. <a id="source-4"></a> [internal/controller/ownership.go](../../internal/controller/ownership.go#L1) — `setupOwner`, `clientOutput`, `clientSink`, `ErrClientDetached`, `ClientDetached`.
+4. <a id="source-4"></a> [internal/controller/ownership.go](../../internal/controller/ownership.go#L1) — `setupOwner` (`detach`: `goneAtHandoff`), `clientOutput`, `clientSink`, `ErrClientDetached`, `ClientDetached`.
 5. <a id="source-5"></a> [internal/controller/effects.go](../../internal/controller/effects.go#L90) — acknowledged `WorkerCheckpoints.Release`, `serveWorkerCheckpoints`.
 6. <a id="source-6"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L29) — `releaseSpaceOperation`, `beginAttachEffects`, wrapper gate order.
 7. <a id="source-7"></a> [cmd/yoloctl/attach_effects_test.go](../../cmd/yoloctl/attach_effects_test.go#L1) — registry, gate order, denial, role-sync failure and detached acknowledgment.
 8. <a id="source-8"></a> [internal/controller/receipts.go](../../internal/controller/receipts.go#L22) — receipt fields, `interrupt`, `Recover`.
-9. <a id="source-9"></a> [internal/controller/ownership_test.go](../../internal/controller/ownership_test.go#L1) — owned-setup client-loss, race, stream and negative-recovery regressions.
+9. <a id="source-9"></a> [internal/controller/ownership_test.go](../../internal/controller/ownership_test.go#L1) — owned-setup client-loss, race (`TestSetupOwnerLateDetachKeepsDetachedHandoff`), stream and negative-recovery regressions.
 10. <a id="source-10"></a> [internal/controller/worker_test.go](../../internal/controller/worker_test.go#L27) — `TestMain` worker/client helpers.
 11. <a id="source-11"></a> [scripts/smoke/attach-interrupt.sh](../../scripts/smoke/attach-interrupt.sh#L1) — live kill and closed-pipe gate with receipt-traced phases; opt-in after-handoff stage.
 12. <a id="source-12"></a> [cmd/yoloctl/attach_signal_test.go](../../cmd/yoloctl/attach_signal_test.go#L1) — CLI-path signal regressions before and after handoff; `reportClientDetached`, `exitDetached` in `controller_client.go`/`main.go`.

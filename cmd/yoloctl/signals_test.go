@@ -65,12 +65,12 @@ func TestControllerProcessSignals(t *testing.T) {
 				}
 			}
 			expect("ready")
-			if err := child.Process.Signal(syscall.SIGTERM); err != nil {
+			if err := signalOnce(child.Process, syscall.SIGTERM); err != nil {
 				t.Fatal(err)
 			}
 			if mode == "stream" {
 				expect("forwarded")
-				if err := child.Process.Signal(os.Interrupt); err != nil {
+				if err := signalOnce(child.Process, syscall.SIGINT); err != nil {
 					t.Fatal(err)
 				}
 			}

@@ -130,7 +130,7 @@ func testTUISignalShutdown(t *testing.T, mode string, sig syscall.Signal) {
 			t.Fatalf("renderer not ready: %v; output=%q", err, captured.String())
 		}
 	}
-	if err := child.Process.Signal(sig); err != nil {
+	if err := signalOnce(child.Process, sig); err != nil {
 		t.Fatal(err)
 	}
 	shutdownStart := captured.Len()

@@ -79,12 +79,15 @@ func newSetupOwner(policy bool, conn context.Context, cancelExec context.CancelF
 }
 
 // detach runs once the public connection ends. Only an owned setup survives.
+// A handoff that already found its client gone told the worker so; a detach
+// that runs after it changes nothing, as when it runs before the handoff.
 func (o *setupOwner) detach() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	goneAtHandoff := o.policy && o.state == setupFinished && o.detached
 	o.detached = o.detached || o.state != setupFinished
 	o.output.detach()
-	if !o.policy || o.state != setupOwned {
+	if !o.policy || o.state != setupOwned && !goneAtHandoff {
 		o.cancelExec()
 	}
 }
