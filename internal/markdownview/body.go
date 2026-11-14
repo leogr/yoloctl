@@ -185,6 +185,9 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 		if _, _, item := listMarker(l); item {
 			return false
 		}
+		if strip := stripTags(l); strip.tags && len(strip.breaks) == 0 && strings.TrimSpace(strip.text) == "" {
+			return false // a tag-only line is hidden
+		}
 		if k < noTable {
 			return true
 		}
@@ -433,9 +436,14 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 			tabs = &SourceMap{Hi: len(line)}
 		}
 		dl.Text = ExpandTabsMap(wm, line, tabs)
+		var strip tagStrip
 		if prose {
 			var spans []Span
-			if srcs != nil {
+			strip = stripTags(dl.Text)
+			if strip.tags {
+				dl.Text = strip.text
+			}
+			if srcs != nil || strip.tags {
 				inline = &SourceMap{Hi: len(dl.Text)}
 			}
 			dl.Text, spans = InlineMarkdownMap(dl.Text, st, theme, inline)
@@ -446,6 +454,9 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 				}
 				dl.Pieces = append(dl.Pieces, p)
 			}
+			if strip.tags {
+				dl.Pieces = styleTags(dl.Pieces, inline, strip.styles, theme)
+			}
 		} else if dl.Code {
 			dl.Pieces, hl = highlightLine(lang, dl.Text, hl, st, theme)
 		} else {
@@ -454,14 +465,30 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 		if !dl.Code {
 			dl.Pieces = decorateTokens(dl.Text, dl.Pieces, theme, decorate, !source)
 		}
-		out = append(out, dl)
+		var breaks []int
+		if strip.tags {
+			for _, b := range strip.breaks {
+				breaks = append(breaks, displayAt(inline, b))
+			}
+			if len(breaks) == 0 && strings.TrimSpace(dl.Text) == "" {
+				// Nothing left to show after hiding its tags or comment.
+				dl.Decor, dl.Hidden = true, true
+			}
+		}
 		if srcs != nil {
 			m := tabs.Then(lead)
+			if strip.tags {
+				m = strip.src.Then(m)
+			}
 			if inline != nil {
 				m = inline.Then(m)
 			}
 			ls.Src = m.Shift(at)
-			*srcs = append(*srcs, ls)
+		}
+		parts, partSrcs := splitAtBreaks(dl, ls, breaks, srcs != nil)
+		out = append(out, parts...)
+		if srcs != nil {
+			*srcs = append(*srcs, partSrcs...)
 		}
 	}
 	if fence != "" {
@@ -544,6 +571,57 @@ func quoteMarkers(line string) (int, string) {
 func quoteDepth(line string) int {
 	depth, _ := quoteMarkers(line)
 	return depth
+}
+
+// splitAtBreaks splits a display line at the display offsets of its <br>
+// tags. Each part keeps the line's quote and heading style; only the first
+// is the list item. Each part has its own LineSource over its part of the
+// source, the tag's bytes a hidden unit at the end of the part before it.
+func splitAtBreaks(dl DisplayLine, ls LineSource, breaks []int, mapped bool) ([]DisplayLine, []LineSource) {
+	if len(breaks) == 0 {
+		if !mapped {
+			return []DisplayLine{dl}, nil
+		}
+		return []DisplayLine{dl}, []LineSource{ls}
+	}
+	var parts []DisplayLine
+	var srcs []LineSource
+	bounds := append(append([]int{0}, breaks...), len(dl.Text))
+	for k := 0; k+1 < len(bounds); k++ {
+		a, b := bounds[k], bounds[k+1]
+		part := dl
+		part.Text = dl.Text[a:b]
+		part.Pieces = nil
+		for _, p := range dl.Pieces {
+			empty := p.Start == p.End && p.Start >= a && p.Start <= b
+			if (p.End <= a || p.Start >= b) && !empty {
+				continue
+			}
+			p.Start, p.End = max(p.Start, a)-a, min(p.End, b)-a
+			part.Pieces = append(part.Pieces, p)
+		}
+		if len(part.Pieces) == 0 && len(dl.Pieces) > 0 {
+			part.Pieces = []Piece{{Style: dl.Pieces[0].Style}}
+		}
+		part.Subs = nil
+		if k > 0 {
+			part.List = ListItem{}
+		}
+		parts = append(parts, part)
+		if !mapped {
+			continue
+		}
+		m := ls.Src
+		sub := &SourceMap{At: append([]int(nil), m.At[a:b]...), Units: m.Units, Lo: m.Lo, Hi: m.Hi}
+		if k > 0 {
+			sub.Lo = m.After(a)
+		}
+		if k+2 < len(bounds) {
+			sub.Hi = m.After(b)
+		}
+		srcs = append(srcs, LineSource{Start: sub.Lo, End: sub.Hi, Src: sub, Fence: ls.Fence})
+	}
+	return parts, srcs
 }
 
 // commentBlockEnd is the closing line of a comment block opened at line k:

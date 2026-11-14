@@ -437,3 +437,135 @@ func TestCommentBlocks(t *testing.T) {
 		}
 	}
 }
+
+// C1 inline tags: styles, hidden tags, literal unmatched or unknown ones, and
+// the places a tag is not a tag.
+func TestInlineTags(t *testing.T) {
+	type styled struct {
+		text         string
+		bold, italic bool
+	}
+	pieces := func(dl DisplayLine) []styled {
+		var out []styled
+		for _, p := range dl.Pieces {
+			if p.End > p.Start {
+				out = append(out, styled{dl.Text[p.Start:p.End], p.Style.Bold, p.Style.Italic})
+			}
+		}
+		return out
+	}
+	theme := documentOptions().Theme
+	for _, tc := range []struct {
+		input, text string
+		bold        string // the bold text, "" for none
+		italic      string
+	}{
+		{"<b>x <i>y</i> z</b>", "x y z", "x y z", "y"},
+		{"<B>x</B> <EM>y</EM>", "x y", "x", "y"},
+		{"<strong>s</strong>", "s", "s", ""},
+		{"<b>x <i>y</b> z</i>", "<b>x y</b> z", "", "y</b> z"},
+		{"<b>x", "<b>x", "", ""},
+		{"x</b>", "x</b>", "", ""},
+		{"<b class=\"a\">x</b>", "<b class=\"a\">x</b>", "", ""},
+		{"<span>x</span> &amp;", "<span>x</span> &amp;", "", ""},
+		{"\\<b>x\\</b>", "<b>x</b>", "", ""},
+		{"`<b>x</b>`", "<b>x</b>", "", ""},
+		{"<details><summary>More</summary>body</details>", "Morebody", "", ""},
+		{"a <!-- x --> *b*", "a  b", "", "b"},
+		{"<https://example.org/b> <b>x</b>", "https://example.org/b x", "x", ""},
+	} {
+		mapped(t, tc.input, func(_ ansi.Method, doc Document) {
+			dl := doc.Lines[0]
+			if dl.Text != tc.text {
+				t.Fatalf("%q shows %q, want %q", tc.input, dl.Text, tc.text)
+			}
+			var bold, italic strings.Builder
+			for _, p := range pieces(dl) {
+				if p.bold {
+					bold.WriteString(p.text)
+				}
+				if p.italic {
+					italic.WriteString(p.text)
+				}
+			}
+			if bold.String() != tc.bold || italic.String() != tc.italic {
+				t.Fatalf("%q: bold %q italic %q, want %q %q", tc.input, bold.String(), italic.String(), tc.bold, tc.italic)
+			}
+		})
+	}
+	// Code style for <kbd> and <code>; a tag in a heading, quote and list item.
+	mapped(t, "<kbd>Ctrl</kbd>+<code>C</code>", func(_ ansi.Method, doc Document) {
+		var code strings.Builder
+		for _, p := range doc.Lines[0].Pieces {
+			if p.Style.FG == theme.Brand {
+				code.WriteString(doc.Lines[0].Text[p.Start:p.End])
+			}
+		}
+		if doc.Lines[0].Text != "Ctrl+C" || code.String() != "CtrlC" {
+			t.Fatalf("kbd/code %q code %q", doc.Lines[0].Text, code.String())
+		}
+	})
+	mapped(t, "# <b>H</b>\n> <i>q</i>\n- <b>item</b>", func(_ ansi.Method, doc Document) {
+		if doc.Lines[0].Text != "H" || doc.Lines[1].Text != "q" || doc.Lines[2].Text != "• item" {
+			t.Fatalf("tags in blocks %q %q %q", doc.Lines[0].Text, doc.Lines[1].Text, doc.Lines[2].Text)
+		}
+	})
+	// A line left empty is hidden; a tag-only line is not a setext paragraph.
+	mapped(t, "<details>\nFoo\n---", func(_ ansi.Method, doc Document) {
+		if !doc.Lines[0].Hidden || doc.Lines[1].Text != "Foo" || !doc.Lines[2].Hidden {
+			t.Fatalf("details/setext %+v", doc.Lines)
+		}
+	})
+}
+
+// <br> splits a line into parts, each wrapped by itself, copied as its own
+// line, and quoted (whole) as the source with its tag.
+func TestLineBreakTag(t *testing.T) {
+	options := documentOptions()
+	options.MapSource = true
+	text := "a<br>b"
+	doc := Parse(text, options)
+	if len(doc.Lines) != 2 || doc.Lines[0].Text != "a" || doc.Lines[1].Text != "b" || len(doc.Sources) != 2 {
+		t.Fatalf("parts %+v", doc.Lines)
+	}
+	if RenderText(doc) != "a\nb" {
+		t.Fatalf("copy %q", RenderText(doc))
+	}
+	selection := SourceSelection{Lines: doc.Lines, Sources: doc.Sources, Text: text, Render: func(s string) string {
+		return RenderText(Parse(s, options))
+	}}
+	if got, ok := selection.Exact(0, 0, 1, 1, true, true); !ok || got != text {
+		t.Fatalf("quote %q %v", got, ok)
+	}
+	for _, br := range []string{"x<br/>y", "x<br />y", "x<BR>y"} {
+		if d := Parse(br, options); len(d.Lines) != 2 || d.Lines[1].Text != "y" {
+			t.Fatalf("%q parts %+v", br, d.Lines)
+		}
+	}
+	long := Parse("- "+strings.Repeat("word ", 8)+"<br>"+strings.Repeat("more ", 8), options)
+	for _, width := range []int{20, 80} {
+		rows, _ := painted(t, long, options, width)
+		checkCoverage(t, long, rows)
+	}
+}
+
+// Copy and Quote of inline tags (plan section 6): a selection inside the
+// tagged text is bare; a whole-line one takes the tags.
+func TestInlineTagQuote(t *testing.T) {
+	options := documentOptions()
+	options.MapSource = true
+	text := "a <b>c</b> d"
+	doc := Parse(text, options)
+	if RenderText(doc) != "a c d" {
+		t.Fatalf("copy %q", RenderText(doc))
+	}
+	selection := SourceSelection{Lines: doc.Lines, Sources: doc.Sources, Text: text, Render: func(s string) string {
+		return RenderText(Parse(s, options))
+	}}
+	if got, ok := selection.Exact(0, 2, 0, 3, true, true); !ok || got != "c" {
+		t.Fatalf("quote of c: %q %v", got, ok)
+	}
+	if got, ok := selection.Exact(0, 0, 0, len(doc.Lines[0].Text), true, true); !ok || got != text {
+		t.Fatalf("whole-line quote %q %v", got, ok)
+	}
+}
