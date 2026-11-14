@@ -120,6 +120,9 @@ func stopTargetBeside(ctx context.Context, name string, steps besideSteps) error
 		cliNotice(logging.Box, "box %s stopped: container %s was removed meanwhile", name, shortID(target))
 	case current == target && currentRunning:
 		return fmt.Errorf("stop failed: box %s is still running (container %s)%s", name, shortID(target), diagnostic)
+	case current == target && !stopped:
+		// It made no engine stop: the target was not running at its read.
+		cliNotice(logging.Box, "box %s was not running (container %s)", name, shortID(target))
 	case current == target:
 		cliNotice(logging.Box, "box %s stopped (container %s)", name, shortID(target))
 	case currentRunning:

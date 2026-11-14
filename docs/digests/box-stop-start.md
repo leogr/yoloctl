@@ -62,7 +62,8 @@ method, including restart and recreate, keeps `uncertain`.
 (contention only; other lock failures fail): a branch revalidates an operator,
 gates the named box only, selects the box's container once (T), stops T by ID
 if running, reads the box again and records its completion, with no cleanup or
-role sync. Absent, T or a replacement not running: stopped, leftovers named;
+role sync. Absent, T or a replacement not running: stopped ("was not running" if T
+already was), leftovers named;
 running: failure saying "this stop targeted container T". Engine errors stay
 diagnostics; a failed read fails. The `box.stop` gate never waits for running
 executions and is admitted during drain; unresolved holds and receipt-storage

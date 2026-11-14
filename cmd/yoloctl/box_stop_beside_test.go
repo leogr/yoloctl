@@ -273,3 +273,15 @@ func (w *besideWrapper) runWith(t *testing.T, box *fakeBox, revalidate func(cont
 	}
 	return w.run(t, false, trySpaceOperationLockFn, box)
 }
+
+// A busy-path stop that found its target not running made no engine stop
+// and says so, instead of "stopped".
+func TestBusyStopOfANotRunningTargetSaysSo(t *testing.T) {
+	var out strings.Builder
+	t.Cleanup(bindCLITestLogger(t, &out))
+	f := &fakeBox{reads: []boxRead{{besideT, false}}}
+	if err := stopTargetBeside(t.Context(), "coder", f.steps()); err != nil || len(f.stops) != 0 ||
+		!strings.Contains(out.String(), "box coder was not running (container aaaaaaaaaaaa)") || strings.Contains(out.String(), "coder stopped") {
+		t.Fatalf("%v stops %v\n%s", err, f.stops, out.String())
+	}
+}
