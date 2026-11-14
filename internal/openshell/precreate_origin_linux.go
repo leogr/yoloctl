@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -237,19 +238,28 @@ func (p *precreateOriginObservation) checkDirectories() error {
 			return errors.New("precreate named directory changed")
 		}
 	}
-	// An initial pre-CID reservation has precisely its original origin file.
+	// An initial pre-CID reservation has precisely its original origin file
+	// and the creating build's launcher record, in its exact private shape.
 	// This is only a shape check, never historical proof that Create did not run.
 	listing, _, err := openPinDirectory(int(p.directory.Fd()), ".", false, p.uid, p.gid)
 	if err != nil {
 		return err
 	}
-	names, readErr := listing.Readdirnames(2)
+	names, readErr := listing.Readdirnames(3)
 	closeErr := listing.Close()
 	if readErr != nil && !errors.Is(readErr, io.EOF) {
 		return readErr
 	}
-	if closeErr != nil || len(names) != 1 || names[0] != "origin.json" {
+	slices.Sort(names)
+	if closeErr != nil || len(names) != 2 || names[0] != LauncherCapabilityName || names[1] != "origin.json" {
 		return errors.New("precreate reservation has conflicting initial members")
+	}
+	var record unix.Stat_t
+	if err := unix.Fstatat(int(p.directory.Fd()), LauncherCapabilityName, &record, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return err
+	}
+	if record.Mode&unix.S_IFMT != unix.S_IFREG || record.Mode&0o7777 != 0o600 || int(record.Uid) != p.uid || int(record.Gid) != p.gid || record.Nlink != 1 || record.Size != 2 {
+		return errors.New("precreate reservation has a malformed launcher record")
 	}
 	return nil
 }

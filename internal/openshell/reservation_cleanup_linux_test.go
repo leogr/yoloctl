@@ -152,3 +152,56 @@ func TestOwnedReservationCloseRetainsRuntimeState(t *testing.T) {
 		t.Fatal("closed handle adopted state")
 	}
 }
+
+// The launcher record a fresh reservation writes is admitted only in its
+// exact producer shape: a directory, a link, another mode or a near name in
+// its place refuses the cleanup before anything is unlinked.
+func TestOwnedReservationCleanupAdmitsOnlyTheExactLauncherRecord(t *testing.T) {
+	for _, change := range []string{"directory", "symlink", "mode", "near-name"} {
+		t.Run(change, func(t *testing.T) {
+			r := ownedReservationFixture(t)
+			populateReservationFixture(t, r)
+			record := filepath.Join(r.Directory(), LauncherCapabilityName)
+			if _, err := os.Lstat(record); err != nil {
+				t.Fatal("the fresh reservation has no launcher record", err)
+			}
+			outside := filepath.Join(t.TempDir(), "outside")
+			if err := os.WriteFile(outside, []byte("1\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			switch change {
+			case "directory":
+				if err := os.Remove(record); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Mkdir(record, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink":
+				if err := os.Remove(record); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(outside, record); err != nil {
+					t.Fatal(err)
+				}
+			case "mode":
+				if err := os.Chmod(record, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			case "near-name":
+				if err := os.WriteFile(record+"s", []byte("1\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := r.RemoveAfterContainerRemoval(t.Context()); err == nil {
+				t.Fatal("a malformed launcher record was accepted")
+			}
+			if _, err := os.Lstat(filepath.Join(r.Directory(), "origin.json")); err != nil {
+				t.Fatal("cleanup unlinked before refusing", err)
+			}
+			if raw, err := os.ReadFile(outside); err != nil || string(raw) != "1\n" {
+				t.Fatal("the link target changed", err)
+			}
+		})
+	}
+}

@@ -35,7 +35,7 @@ func TestPrecreateOriginIndependentParentReadsOriginalWithoutEffects(t *testing.
 	if err := p.check(); err != nil {
 		t.Fatal(err)
 	}
-	if files, err := os.ReadDir(r.Directory()); err != nil || len(files) != 1 || files[0].Name() != "origin.json" {
+	if files, err := os.ReadDir(r.Directory()); err != nil || len(files) != 2 || files[0].Name() != LauncherCapabilityName || files[1].Name() != "origin.json" {
 		t.Fatal("read-only observer changed reservation", err)
 	}
 	if err := r.Close(); err != nil {
@@ -224,5 +224,36 @@ func TestPrecreateOriginBracketsActualReadWithCurrentNativeRoot(t *testing.T) {
 	err := p.check()
 	if !called || err == nil || !strings.Contains(err.Error(), "precreate native root mapping changed") {
 		t.Fatal("root replacement after original read escaped final mapping bracket", err)
+	}
+}
+
+// The initial members are the origin and the launcher record in its exact
+// private shape: a missing, linked or loosened record is refused.
+func TestPrecreateOriginRefusesAMissingOrMalformedLauncherRecord(t *testing.T) {
+	for _, change := range []string{"missing", "symlink", "mode"} {
+		t.Run(change, func(t *testing.T) {
+			r, _, p := precreateObservationFixture(t)
+			record := filepath.Join(r.Directory(), LauncherCapabilityName)
+			switch change {
+			case "missing":
+				if err := os.Remove(record); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink":
+				if err := os.Remove(record); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(filepath.Join(t.TempDir(), "x"), record); err != nil {
+					t.Fatal(err)
+				}
+			case "mode":
+				if err := os.Chmod(record, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := p.check(); err == nil {
+				t.Fatal("a malformed launcher record passed the initial-member check")
+			}
+		})
 	}
 }

@@ -163,6 +163,13 @@ func reserveOwnedContainerAt(root string, origin containerOrigin, uid, gid int) 
 	}); err != nil {
 		return nil, err
 	}
+	// The creating build records, with the fresh origin, that this box's
+	// supervisor runs the fixed launcher as its main process (stop-box route
+	// M-b, section 2). Only a fresh reservation writes it: an existing box's
+	// later preparation never gains it.
+	if err := publishPrivateOnce(directory, LauncherCapabilityName, []byte("1\n"), uid, gid); err != nil {
+		return nil, err
+	}
 	if err := unix.Fsync(parent); err != nil {
 		return nil, &atomicfile.CommitError{Err: err}
 	}

@@ -47,8 +47,12 @@ func TestFreshContainerReservationIsPrivateAndNeverAdoptsExistingState(t *testin
 	if json.Unmarshal(raw, &got) != nil || got != origin {
 		t.Fatal("reservation origin changed")
 	}
-	if files, err := os.ReadDir(directory); err != nil || len(files) != 1 || files[0].Name() != "origin.json" {
+	// Exactly the origin and the creating build's launcher record.
+	if files, err := os.ReadDir(directory); err != nil || len(files) != 2 || files[0].Name() != LauncherCapabilityName || files[1].Name() != "origin.json" {
 		t.Fatal("reservation created credentials/generation/launch material", err)
+	}
+	if capable, err := ContainerLauncherCapableOwned(directory, os.Geteuid(), os.Getegid()); err != nil || !capable {
+		t.Fatal("a fresh reservation lacks its launcher record", capable, err)
 	}
 	changed := origin
 	changed.Box = "different"
@@ -58,6 +62,25 @@ func TestFreshContainerReservationIsPrivateAndNeverAdoptsExistingState(t *testin
 	after, err := os.ReadFile(name)
 	if err != nil || string(after) != string(raw) {
 		t.Fatal("foreign reservation origin changed")
+	}
+}
+
+// An existing box's later preparation never gains the record: only a fresh
+// reservation writes it, and an existing reservation is never adopted.
+func TestLauncherRecordOnlyFromAFreshReservation(t *testing.T) {
+	root, origin := reservationFixture(t)
+	directory := filepath.Join(root, "containers", origin.Incarnation)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := publishPrivateOnce(directory, "origin.json", []byte("{}"), os.Geteuid(), os.Getegid()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reserveContainerAt(root, origin, os.Geteuid(), os.Getegid()); !errors.Is(err, os.ErrExist) {
+		t.Fatal("an existing box was reserved again", err)
+	}
+	if capable, err := ContainerLauncherCapableOwned(directory, os.Geteuid(), os.Getegid()); err != nil || capable {
+		t.Fatal("an existing box gained the launcher record", capable, err)
 	}
 }
 

@@ -2,10 +2,13 @@
 
 Verification: `549d46495e13d1814aff3358c3a68fc7463211be` and accompanying changes; re-read cited sources when changing behavior.
 
-[FACT] The build that creates a current-runtime box writes a `launcher`
-record (`1\n`, root-owned) beside `origin.json`, once; later builds never add
-it to an existing box. Reading it is strict: absent means "created before",
-any other failure is an error, never "old". [1](#source-1) [2](#source-2)
+[FACT] The fresh reservation that creates a current-runtime box writes a
+`launcher` record (`1\n`, private) beside `origin.json`; an existing box is
+never reserved again, so a later build never adds it. Reading it is strict:
+absent means "created before", any other failure is an error, never "old".
+Native cleanup admits it at the container root only in that exact shape (a
+directory, link, other mode or near name in its place refuses the cleanup
+before any unlink). [1](#source-1) [2](#source-2)
 
 [FACT] A managed launch (an agent or a declared `session_command`) reads its
 box's start mode before the holder starts; a plain shell reads nothing.
@@ -54,7 +57,7 @@ launch. [10](#source-10) [11](#source-11)
 ## Sources
 
 1. <a id="source-1"></a> [internal/openshell/launcher_capability_linux.go](../../internal/openshell/launcher_capability_linux.go#L1) — `LauncherCapabilityName`, `ContainerLauncherCapable`.
-2. <a id="source-2"></a> [internal/openshell/prepare_linux.go](../../internal/openshell/prepare_linux.go#L127) — `prepareNative` writes the record with the first `origin.json`.
+2. <a id="source-2"></a> [internal/openshell/reserve_linux.go](../../internal/openshell/reserve_linux.go#L89) — `reserveOwnedContainerAt` writes the record after `origin.json`; `reservation_cleanup_linux.go` `reservationMember` admits it; tests in `reserve_linux_test.go` and `reservation_cleanup_linux_test.go`.
 3. <a id="source-3"></a> [cmd/yoloctl/session_client.go](../../cmd/yoloctl/session_client.go#L1) — `ensureAgentSession`, `sessionStartModeOf`, `restartPrivilegedForMainSession`, stopped-box marker handling.
 4. <a id="source-4"></a> [internal/agentbox/launcher_linux.go](../../internal/agentbox/launcher_linux.go#L1) — `BoxLauncher`, `PrivilegedMainSession`; `launcher.go` `LauncherSupport`; `main_session_probe_linux.go` `ProbeMainSession` and its tests.
 5. <a id="source-5"></a> [internal/agentbox/launcher_idle_linux.go](../../internal/agentbox/launcher_idle_linux.go#L1) — `OtherContainerProcesses`.

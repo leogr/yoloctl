@@ -235,7 +235,7 @@ func reservationMember(path string) (directory, socket, allowed bool) {
 	parts := strings.Split(path, "/")
 	switch len(parts) {
 	case 1:
-		return path == "generations", false, path == "origin.json" || path == "current.json" || path == "generations"
+		return path == "generations", false, path == "origin.json" || path == "current.json" || path == LauncherCapabilityName || path == "generations"
 	case 2:
 		return true, false, parts[0] == "generations" && reservationGeneration(parts[1])
 	case 3:
