@@ -50,7 +50,7 @@ func populateSupervisorRuntimeContents(t *testing.T, status *os.File, shared run
 	runtimeReservationSocket(t, shared.control, "control.sock", 0o666)
 	runtimeReservationSocket(t, shared.supervisorRun, "ready.sock", 0o755) // inherited umask, no final chmod
 	runtimeReservationSocket(t, shared.supervisorRun, "ssh/ssh.sock", 0o600)
-	for name, mode := range map[string]os.FileMode{"proxy-tls/openshell-ca.pem": 0o600, "proxy-tls/ca-bundle.pem": 0o600, "proxy-tls/.tmpAb123Z": 0o600, "tmp/.tmp9a8B7c": 0o400, "main-exit": 0o600, ".main-exit.tmp-7": 0o600} {
+	for name, mode := range map[string]os.FileMode{"proxy-tls/openshell-ca.pem": 0o600, "proxy-tls/ca-bundle.pem": 0o600, "proxy-tls/.tmpAb123Z": 0o600, "tmp/.tmp9a8B7c": 0o400, "main-exit": 0o600, ".main-exit.tmp-7": 0o600, "main-attachments-ended": 0o600, ".main-attachments-ended.tmp-7": 0o600} {
 		path := fmt.Sprintf("/proc/self/fd/%d/%s", shared.supervisorRun.Fd(), name)
 		if err := os.WriteFile(path, []byte("project TLS fixture"), mode); err != nil {
 			t.Fatal(err)

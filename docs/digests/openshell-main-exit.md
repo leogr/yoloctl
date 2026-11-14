@@ -1,11 +1,11 @@
 # Native OpenShell main-exit observation
 
-Verification: `549d46495e13d1814aff3358c3a68fc7463211be` and accompanying changes;
+Verification: `6e71f7dff5b841a32da02737b50dc206058ff225` and accompanying changes;
 upstream OpenShell `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47`.
 
 [FACT] Native PID 1 observes `main-exit` through its retained supervisor-run
 directory on the existing 100 ms monitor loop. Before starting children it
-removes an existing regular marker only after checking supervisor ownership.
+removes both existing regular markers only after checking supervisor ownership.
 The monitor adds no workload predicate: no marker preserves ordinary behavior,
 including supervisor-loss degradation. This reader does not enable the
 supervisor flag or change workload launch. [1](#source-1) [2](#source-2)
@@ -17,26 +17,38 @@ runtime without a known code; failed observation remains unavailable and is
 reported, not converted into a main exit. [2](#source-2) [3](#source-3)
 
 [FACT] A main exit closes new SSH admission, publishes `main-exited`, and follows
-normal relay and child cleanup. The final status retains optional `main_exit`;
+normal relay and child cleanup. For a valid code it first keeps existing relays
+and children alive until a supervisor-owned, no-follow regular
+`main-attachments-ended` containing exactly `ended\n` appears, or one overall
+`runtimeMainExitWait` deadline (4 s, test-pinned to twice the endpoint's default close timeout) expires, whichever comes
+first. A missing, invalid or unreadable second marker does not shorten the wait;
+an invalid main marker still ends immediately. The second marker reports
+attachment completion or abandonment, not delivered output. A healthy slow
+holder can hit the bound and lose remaining output. This one deadline does not
+observe the privileged endpoint's separate phase boundaries. The final status
+retains optional `main_exit`;
 its phase distinguishes stopped children from unproved cleanup. The helper
 returns the known main code, or 1 for an invalid marker. Cleanup diagnostics
 remain reportable. Old status records without the field still validate; the
 pure decoder checks the selected record identity and grants no storage or
-container authority. [1](#source-1) [2](#source-2) [4](#source-4) [5](#source-5)
+container authority. [1](#source-1) [2](#source-2) [4](#source-4) [5](#source-5) [9](#source-9) [10](#source-10)
 
 [FACT] The pinned supervisor publishes the marker using a mode-0600 temporary
 file, file fsync, rename and parent fsync. Native cleanup admits only `main-exit`
-and its `.main-exit.tmp-<PID>` producer names with supervisor ownership and
+and `main-attachments-ended`, plus only their `.BASENAME.tmp-<PID>` producer names with supervisor ownership and
 mode 0600. Marker observation does not establish delivery of final SSH output
-or status to a client. [6](#source-6) [7](#source-7) [8](#source-8)
+or status to a client. [6](#source-6) [7](#source-7) [8](#source-8) [9](#source-9)
 
 ## Sources
 
-1. <a id="source-1"></a> [runtime_main_linux.go](../../internal/openshell/runtime_main_linux.go#L1-L264) — `runRuntimePID1`, `monitorRuntime`: marker decision, admission, relay and child cleanup.
-2. <a id="source-2"></a> [runtime_main_exit_linux.go](../../internal/openshell/runtime_main_exit_linux.go#L1-L142) — descriptor-relative parsing, stale removal, outcome and final observation.
+1. <a id="source-1"></a> [runtime_main_linux.go](../../internal/openshell/runtime_main_linux.go#L1-L296) — `runRuntimePID1`, `monitorRuntime`: marker decision, admission, relay and child cleanup.
+2. <a id="source-2"></a> [runtime_main_exit_linux.go](../../internal/openshell/runtime_main_exit_linux.go#L1-L184) — descriptor-relative parsing, stale removal, outcome and final observation.
 3. <a id="source-3"></a> [runtime_main_exit_linux_test.go](../../internal/openshell/runtime_main_exit_linux_test.go#L1-L285) — format/type/owner, unavailable, exact-run and monitor controls.
 4. <a id="source-4"></a> [runtime_status_linux.go](../../internal/openshell/runtime_status_linux.go#L1-L137) — `RuntimeStatus`, `DecodeRuntimeStatus`, phase/code validation.
 5. <a id="source-5"></a> [runtime_manifest_linux.go](../../internal/openshell/runtime_manifest_linux.go#L1-L109) — `ProjectedRuntimeMain`, `projectedRuntimeResult`.
-6. <a id="source-6"></a> [pinned supervisor lib.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-supervisor/src/lib.rs) — `persist_main_exit_marker`, `write_private_file_atomically`, main-exit publication before attachment wait/status release.
+6. <a id="source-6"></a> [pinned supervisor lib.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-supervisor/src/lib.rs) — `persist_main_exit_marker`, `write_private_file_atomically`, main-exit atomic publication; the local attachment-ended extension is integrated separately.
 7. <a id="source-7"></a> [reservation_cleanup_linux.go](../../internal/openshell/reservation_cleanup_linux.go#L296-L460) — `runtimeReservationMember`, inventory ownership/mode checks; producer-name allowlist and inactive inventory.
 8. <a id="source-8"></a> [cleanup fixture](../../internal/openshell/reservation_runtime_cleanup_linux_test.go#L48-L80) — regular marker and temporary members survive strict inventory and are removed only in acknowledged cleanup.
+
+9. <a id="source-9"></a> [ordering controls](../../internal/openshell/runtime_main_exit_ordering_linux_test.go#L1-L145) — fake-clock deadline/early end, invalid or unavailable completion evidence, stale markers and narrow cleanup inventory.
+10. <a id="source-10"></a> [endpoint](../../internal/boxendpoint/server_linux.go#L20-L46) — `DefaultCloseTimeout`, pinned equal by the ordering test.

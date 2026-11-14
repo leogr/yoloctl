@@ -32,7 +32,9 @@ const (
 	shutdownGrace       = 10 * time.Second
 	defaultHangupGrace  = 5 * time.Second
 	defaultDrainTimeout = 2 * time.Second
-	defaultCloseTimeout = 2 * time.Second
+	// DefaultCloseTimeout bounds each endpoint channel-close phase. Native
+	// OpenShell PID 1 maps its two remaining phases onto twice this value.
+	DefaultCloseTimeout = 2 * time.Second
 	// abandonGrace lets copies that were mid-read finish after their sources
 	// close; a copy parked on the peer's channel window does not.
 	abandonGrace = 100 * time.Millisecond
@@ -103,7 +105,7 @@ func NewServer(cfg Config) (*Server, error) {
 		cfg.DrainTimeout = defaultDrainTimeout
 	}
 	if cfg.CloseTimeout <= 0 {
-		cfg.CloseTimeout = defaultCloseTimeout
+		cfg.CloseTimeout = DefaultCloseTimeout
 	}
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

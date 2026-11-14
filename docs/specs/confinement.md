@@ -136,7 +136,9 @@ unknown metadata remains visible. No syscall errno proves which policy denied it
 [16](#source-16)
 
 [FACT] Native PID 1 can end on a supervisor-owned main-exit marker and retain
-the known code in its generation-bound final observation. Its cleanup phase
+the known code in its generation-bound final observation. With a valid code,
+it keeps existing relays alive until the attachment-ended marker or an overall
+4 s bound; reaching that bound may cut a slow holder's remaining output. Its cleanup phase
 still distinguishes stopped children from unproved cleanup; this mechanism
 does not establish delivery of final SSH output. [17](#source-17)
 
