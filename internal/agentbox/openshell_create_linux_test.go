@@ -190,3 +190,18 @@ func TestNativeStartupSSHDoesNotAcceptBannerOrDialAlone(t *testing.T) {
 		t.Fatal("cancelled probe became ready")
 	}
 }
+
+// A start whose own container reads stopped before the start finished says
+// so in plain words; the stage still fails exactly as before.
+func TestNativeStartupOfAStoppedContainerSaysSoPlainly(t *testing.T) {
+	id := strings.Repeat("a", 64)
+	stopped := &container.Details{ID: id, Running: false, Status: "exited", StartedAt: "2026-10-31T00:00:00Z"}
+	if _, err := selectNativeStartedTarget(stopped, id, openshell.ActivationTarget{}); !errors.Is(err, errStoppedBeforeStartFinished) ||
+		err.Error() != "the box's container stopped before its start finished" {
+		t.Fatalf("stopped: %v", err)
+	}
+	other := &container.Details{ID: strings.Repeat("b", 64), Running: false}
+	if _, err := selectNativeStartedTarget(other, id, openshell.ActivationTarget{}); err == nil || errors.Is(err, errStoppedBeforeStartFinished) {
+		t.Fatalf("another container is not this start's: %v", err)
+	}
+}

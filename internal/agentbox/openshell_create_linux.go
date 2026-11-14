@@ -380,7 +380,15 @@ func (a LiveApplier) createNativeContainer(ctx context.Context, c *Config, image
 	return completeNativeContainerCreation(ctx, actions)
 }
 
+// errStoppedBeforeStartFinished is the plain words for a start whose own
+// container is read stopped before its start transaction finished (stopped
+// beside it, or ended by itself); the stage logic is unchanged.
+var errStoppedBeforeStartFinished = errors.New("the box's container stopped before its start finished")
+
 func selectNativeStartedTarget(d *container.Details, id string, selected openshell.ActivationTarget) (openshell.ActivationTarget, error) {
+	if d != nil && d.ID == id && !d.Running {
+		return openshell.ActivationTarget{}, errStoppedBeforeStartFinished
+	}
 	if d == nil || d.ID != id || !d.Running || d.PID <= 1 {
 		return openshell.ActivationTarget{}, errors.New("native startup requires its acknowledged running container")
 	}

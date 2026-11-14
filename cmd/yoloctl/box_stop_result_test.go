@@ -290,3 +290,12 @@ func TestBoxStartSettlesFromAReadAndRollsBackWithBoxStop(t *testing.T) {
 		t.Fatalf("rollback read: %v", err)
 	}
 }
+
+// box start shows that stage failure as the plain contract text.
+func TestBoxStartWhoseContainerStoppedBesideItSaysSo(t *testing.T) {
+	f := &fakeStop{present: true}
+	err := runStartForResult(t.Context(), "coder", f.steps(), attemptCalling(errors.New("the box's container stopped before its start finished"), "start"))
+	if err == nil || err.Error() != "start failed: the box's container stopped before its start finished" {
+		t.Fatalf("%v", err)
+	}
+}

@@ -33,7 +33,7 @@ func TestNativeStartupDiagnosticIsCollectedBeforeOwnedCleanup(t *testing.T) {
 		return nil
 	}
 	err := completeNativeContainerCreation(t.Context(), actions)
-	if err == nil || errors.Unwrap(err) == nil || !strings.Contains(err.Error(), "native startup requires its acknowledged running container") || !strings.Contains(err.Error(), "actual early error") {
+	if err == nil || errors.Unwrap(err) == nil || !strings.Contains(err.Error(), "the box's container stopped before its start finished") || !strings.Contains(err.Error(), "actual early error") {
 		t.Fatalf("err=%v", err)
 	}
 	want := []string{"preflight", "reserve", "create", "inspect", "prepare", "start", "activate", "diagnostic", "cleanup"}
