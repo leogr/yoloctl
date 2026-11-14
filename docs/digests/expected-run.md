@@ -1,6 +1,6 @@
 # Expected run per box
 
-Verification: `061a26dc02534dd129f62613f447b7563c81abb1` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `32f245c3415ce3a1caf7bd1eec2d4b086cf50188` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] A run is the full container ID with the run's own start time and PID
 from inspect: a stopped container started again keeps its ID but not its start

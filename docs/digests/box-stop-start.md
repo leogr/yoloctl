@@ -1,6 +1,6 @@
 # Box stop and start results
 
-Verification: `d842b45512430e146b4cd25921721547b6f51580` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `54e0df18de728fadc88d0fae984ece2cee237083` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] `box stop` runs each step once, in order: read the box's exact container;
 withdraw the session holder; withdraw the box's forwards; one engine stop when the
