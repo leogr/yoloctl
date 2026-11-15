@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/config"
+	"github.com/leogr/yoloctl/internal/operator"
 	"github.com/leogr/yoloctl/internal/tui/tabs"
 )
 
@@ -22,6 +23,11 @@ func TestPaneReopenKeepsActualLaunchTarget(t *testing.T) {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			t.Setenv("YOLOCTL_HOME", t.TempDir())
 			t.Setenv(config.SpaceEnv, "")
+			// An in-box operator binds the TUI to its own space before the
+			// context default (initSpace); this test covers the host path.
+			oldOperator := tuiOperatorClient
+			tuiOperatorClient = func() (*operator.Client, error) { return nil, nil }
+			t.Cleanup(func() { tuiOperatorClient = oldOperator })
 			if err := (&config.Context{Space: "first"}).Save(); err != nil {
 				t.Fatal(err)
 			}
