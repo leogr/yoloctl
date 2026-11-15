@@ -756,7 +756,7 @@ func waitForAttachSocket(ctx context.Context, c *container.Client, name string) 
 			// Directive 61: the holder's own refusal names the reason.
 			if r, ok := session.ReadVMRefusal(ctx, c, name); ok && r.Reason == session.RefusalNoMkfifo {
 				_ = c.Shell(ctx, "sudo", "rm", "-f", session.RefusalPath(name))
-				return asUserError(fmt.Errorf("box %s's image has no mkfifo; a session cannot be started in it", name))
+				return asUserError(fmt.Errorf("box %s's image has no mkfifo (install coreutils in the image); a session cannot be started in it", name))
 			}
 			return fmt.Errorf("session holder for %s exited during startup (unit %s; logs: `%s` in the space VM)",
 				name, session.UnitName(name), vmservice.LogHint(c, session.UnitName(name)))

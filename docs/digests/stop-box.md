@@ -54,8 +54,8 @@ environment's names and the token. Status 0: delivered, input opens. 81 (no
 token): proven not delivered, marker removed. On 81 the holder also writes
 its refusal record (`refused`, beside the marker); the caller removes any
 earlier one before each holder start and, when the holder dies during
-startup, reads it and fails with `box NAME's image has no mkfifo; a session
-cannot be started in it`. Anything else: not known,
+startup, reads it and fails with `box NAME's image has no mkfifo (install
+coreutils in the image); a session cannot be started in it`. Anything else: not known,
 marker kept, ends as a lost connection. Never sent twice. A marked start
 sends `yoloctl-main-session` before today's exec; a refusal starts nothing.
 [15](#source-15)

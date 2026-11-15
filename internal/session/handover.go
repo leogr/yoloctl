@@ -36,7 +36,7 @@ func markMainSession(s *ssh.Session, mark bool) error {
 
 // ErrNoMkfifo is directive 61's refusal: the image cannot take a managed
 // session through the launcher.
-var ErrNoMkfifo = errors.New("the box's image has no mkfifo; a session cannot be started in it")
+var ErrNoMkfifo = errors.New("the box's image has no mkfifo (install coreutils in the image); a session cannot be started in it")
 
 // handOver gives the box's launcher this session's launch with one SSH exec
 // of the fixed hand-over command, without the server's login shell, the

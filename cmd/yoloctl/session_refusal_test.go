@@ -39,7 +39,7 @@ func refusalEngine(t *testing.T, record string) (*container.Client, string) {
 func TestHolderRefusalNamesTheMissingTool(t *testing.T) {
 	c, log := refusalEngine(t, "reason: no-mkfifo\n")
 	err := waitForAttachSocket(t.Context(), c, "coder")
-	if err == nil || err.Error() != "box coder's image has no mkfifo; a session cannot be started in it" {
+	if err == nil || err.Error() != "box coder's image has no mkfifo (install coreutils in the image); a session cannot be started in it" {
 		t.Fatalf("err %v", err)
 	}
 	raw, _ := os.ReadFile(log)
