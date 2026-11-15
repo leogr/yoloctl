@@ -25,6 +25,13 @@ type materialFixture struct {
 
 func newMaterialFixture(t *testing.T) materialFixture {
 	t.Helper()
+	return newMaterialFixtureWith(t, false)
+}
+
+// newMaterialFixtureWith is newMaterialFixture for a box whose current
+// generation runs the launcher as its main process (mainLauncher) or not.
+func newMaterialFixtureWith(t *testing.T, mainLauncher bool) materialFixture {
+	t.Helper()
 	release, rego, _ := installFixture(t)
 	in := bootstrapInput()
 	in.Binding.Qualification = release.Identity()
@@ -42,6 +49,7 @@ func newMaterialFixture(t *testing.T) materialFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	launch.MainLauncher = mainLauncher
 	platform, err := release.Platform(runtime.GOARCH)
 	if err != nil {
 		t.Skip("filesystem fixture requires a qualified test architecture")

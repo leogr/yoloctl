@@ -17,7 +17,12 @@ import (
 
 func generationFixture(t *testing.T) (materialFixture, *NativeGeneration) {
 	t.Helper()
-	f := newMaterialFixture(t)
+	return generationFixtureWith(t, false)
+}
+
+func generationFixtureWith(t *testing.T, mainLauncher bool) (materialFixture, *NativeGeneration) {
+	t.Helper()
+	f := newMaterialFixtureWith(t, mainLauncher)
 	raw, _ := json.Marshal(generationOrigin(f.record))
 	if err := os.WriteFile(filepath.Join(f.root.Name(), "origin.json"), raw, 0o600); err != nil {
 		t.Fatal(err)
@@ -40,6 +45,13 @@ func generationTarget(g *NativeGeneration) func(context.Context) (GenerationTarg
 // start a container or provide joint runtime/namespace proof.
 func generationEffectFixture(t *testing.T, g *NativeGeneration, policies ...[]byte) func(context.Context, BootstrapInput, []byte) (PreparedRuntime, error) {
 	t.Helper()
+	return generationEffectFixtureWith(t, g, g.current.Launch.MainLauncher, policies...)
+}
+
+// generationEffectFixtureWith writes a generation whose launch says
+// mainLauncher, as prepareNative records the box's main process.
+func generationEffectFixtureWith(t *testing.T, g *NativeGeneration, mainLauncher bool, policies ...[]byte) func(context.Context, BootstrapInput, []byte) (PreparedRuntime, error) {
+	t.Helper()
 	_, issuer, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +70,7 @@ func generationEffectFixture(t *testing.T, g *NativeGeneration, policies ...[]by
 		if err != nil {
 			return PreparedRuntime{}, err
 		}
+		launch.MainLauncher = mainLauncher
 		platform := g.current.Artifacts
 		activation := make([]byte, 32)
 		if _, err := rand.Read(activation); err != nil {
@@ -344,5 +357,23 @@ func TestNativeGenerationRefusesUnprovedEmptyTaskAndUnknownEvenWithObservationBi
 				t.Fatal("unproved task observation reached generation preparation", err, calls)
 			}
 		})
+	}
+}
+
+// Stop-box route M-b: a box created with the launcher keeps it as its main
+// process in every later generation (its next start after it stopped with
+// its session). A generation that carries the box's main-process kind is
+// accepted; one that changes it is refused before it is selected.
+func TestNativeGenerationKeepsTheMainLauncher(t *testing.T) {
+	for _, current := range []bool{true, false} {
+		_, g := generationFixtureWith(t, current)
+		prepared, err := g.prepareNext(t.Context(), "current-controller", g.OriginalPolicy(), generationTarget(g), generationEffectFixtureWith(t, g, current))
+		if err != nil || prepared.Record.Launch.MainLauncher != current {
+			t.Fatalf("main launcher %v: the next generation was refused: %v", current, err)
+		}
+		_, g = generationFixtureWith(t, current)
+		if _, err := g.prepareNext(t.Context(), "current-controller", g.OriginalPolicy(), generationTarget(g), generationEffectFixtureWith(t, g, !current)); err == nil || !strings.Contains(err.Error(), "did not acknowledge fresh bound runtime material") {
+			t.Fatalf("main launcher %v: a changed main process was accepted: %v", current, err)
+		}
 	}
 }

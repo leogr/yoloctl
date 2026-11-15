@@ -397,6 +397,10 @@ func (g *NativeGeneration) prepareNext(ctx context.Context, controller string, p
 		return PreparedRuntime{}, &NativeEffectsUncertain{Cause: g.uncertainty}
 	}
 	expected, validationErr := NewLaunchConfig(input, g.release, g.current.Launch.HelperSHA256, g.current.Launch.UnconfinedNetwork)
+	// A box's main process (the launcher or "sleep infinity") is fixed by its
+	// creation record and never changes across generations: the fresh
+	// generation must carry the current one's (stop-box route M-b).
+	expected.MainLauncher = g.current.Launch.MainLauncher
 	if validationErr == nil {
 		validationErr = prepared.Record.Validate(g.release, g.current.Launch.HelperSHA256)
 	}
