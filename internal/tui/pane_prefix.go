@@ -433,10 +433,15 @@ var paneKeys = []paneBinding{
 		}
 	})},
 	{key: "x", help: "detach the focused pane", text: "x", act: func(m *model, _ tea.Key) tea.Cmd {
+		wasPalette := m.focusPalette
 		m.focusPalette = false // a pane key returns to the pane, after any popup
 		m.closeFocusedPane()
-		if m.confirm == nil && m.tabs.Current() == nil {
+		if m.confirm != nil {
+			m.confirm.clearPalette = wasPalette // decided when the popup closes
+		} else if m.tabs.Current() == nil {
 			m.focusPalette = true // no tab left: the palette keeps focus
+		} else if wasPalette {
+			m.paletteClosed()
 		}
 		return nil
 	}},

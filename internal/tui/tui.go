@@ -804,8 +804,12 @@ func (m *model) openTab(args []string) {
 	t := tabs.New(p)
 	m.tabs.Add(t)
 	m.layoutTab(t)
+	wasPalette := m.focusPalette
 	m.focusPalette = false
-	m.closeConsoleView() // opening a tab takes focus off the palette
+	m.resetConsoleView() // opening a tab takes focus off the palette
+	if wasPalette {
+		m.console.ClearShown()
+	}
 	m.status = ""
 	m.watchPaneExit(p)
 }
@@ -1356,7 +1360,12 @@ func (m *model) activatePane(t *tabs.Tab, p *panes.Pane) {
 		if tab == t {
 			m.tabs.Select(i)
 			t.Layout.SetFocus(p)
-			m.focusPalette = false
+			if m.focusPalette {
+				m.focusPalette = false
+				if m.console != nil {
+					m.console.ClearShown() // an idle palette closes; a running command keeps its output
+				}
+			}
 			return
 		}
 	}
@@ -1643,10 +1652,20 @@ func (m *model) resetConsoleView() {
 
 // closeConsoleView is the idle palette closing: like a clear, it empties the
 // last command's output, so reopening shows no previous output. Ctrl+R history
-// keeps every command. A running command (detached) keeps its output.
+// keeps every command. A running command (detached) keeps its output, also
+// once it ends: only closing the palette clears, never a transition that
+// starts with the palette already closed.
 func (m *model) closeConsoleView() {
 	m.console.ClearShown()
 	m.resetConsoleView()
+}
+
+// paletteClosed is closeConsoleView for an idle palette that a pane action
+// closed; a running command's view is left as it is.
+func (m *model) paletteClosed() {
+	if !m.console.Busy() {
+		m.closeConsoleView()
+	}
 }
 
 // showConsoleCommand leaves the history view, at its newest line, for the

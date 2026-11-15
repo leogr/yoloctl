@@ -36,10 +36,13 @@ instead. While shown, history owns the overlay over an open or late completion
 menu and keeps the draft; Ctrl+R, PgUp/PgDn, Esc and the palette key act on
 the view, and any other key returns to editing first. Esc, focus changes and a
 new command or error return to the last command; hiding never erases history.
-Closing an idle palette (Esc, the palette key, opening or focusing a tab)
-also clears the shown last command through `Console.ClearShown`, so reopening
-shows no previous output; Ctrl+R still shows it in history. A running
-command's output is not cleared when focus leaves it. [4](#source-4) [7](#source-7) [8](#source-8)
+Closing an idle palette (Esc, the palette key, opening, reusing or focusing
+a tab, or detaching a pane with Ctrl+Q x) also clears the shown last command
+through `Console.ClearShown`, so reopening shows no previous output; Ctrl+R
+still shows it in history. A close-confirmation popup decides when it closes:
+a confirmed close of the only tab returns to the palette, output kept. A
+running command's output is not cleared when focus leaves it, and nothing
+clears when the palette was already closed. [4](#source-4) [7](#source-7) [8](#source-8)
 [12](#source-12) [13](#source-13) [14](#source-14)
 
 ## Sources
@@ -57,4 +60,4 @@ command's output is not cleared when focus leaves it. [4](#source-4) [7](#source
 11. <a id="source-11"></a> [Disk warnings](../../internal/tui/spaceview/disks.go#L204) — `diskEvents`.
 12. <a id="source-12"></a> [Console history](../../internal/tui/term/console.go#L1) — `Console.history`, `begin`, `ClearShown`, `HistoryFrame`, `History`, the pump/echo writes to both; emulator.go `ClearKeepHistory`, `reset`; native `Terminal.ResetKeepHistory`.
 13. <a id="source-13"></a> [Consecutive-command regression](../../internal/tui/term/console_test.go#L57) — last output shown alone; history order, exit notices, blank lines and fresh input modes; `TestConsoleHistoryRotatesByLines`, `TestConsoleClearShownKeepsHistory`; lifecycle_test.go keeps old direct-child text in history only and rejects the late descendant's output and clipboard tail.
-14. <a id="source-14"></a> [History view and UI transitions](../../internal/tui/tui.go#L1) — the Ctrl+R case, `consoleHistory`, `showConsoleCommand`, `resetConsoleView`, `closeConsoleView`, `leavePaletteForTab`, `refreshSuggestions`, the palette legend; frames.go `consoleDisplayFrame`, `scroller`; `menuShown`; tui_test.go `TestOverlayShowsOneCommandAndCtrlRShowsHistory`, `TestConsoleHistoryWinsOverCompletionMenu`, `TestClickTabIdlePreservesConsoleHistory`, `TestClosingPaletteKeepsARunningCommandsOutput`.
+14. <a id="source-14"></a> [History view and UI transitions](../../internal/tui/tui.go#L1) — the Ctrl+R case, `consoleHistory`, `showConsoleCommand`, `resetConsoleView`, `closeConsoleView`, `paletteClosed`, `activatePane`, `openTab`, `leavePaletteForTab`, `refreshSuggestions`, the palette legend; frames.go `consoleDisplayFrame`, `scroller`; `menuShown`; tui_test.go `TestOverlayShowsOneCommandAndCtrlRShowsHistory`, `TestConsoleHistoryWinsOverCompletionMenu`, `TestClickTabIdlePreservesConsoleHistory`, `TestClosingPaletteKeepsARunningCommandsOutput`, `TestPaneRoutesClosingThePaletteClearIt`, `TestRequestWithPaletteClosedKeepsItsOutput`; pane_prefix.go `x`; confirm_close.go `clearPalette`, `cancelConfirm`, `acceptConfirm`.

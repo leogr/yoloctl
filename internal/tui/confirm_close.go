@@ -74,6 +74,7 @@ type closeConfirm struct {
 	noticeUntil   time.Time // at least noticeTime
 	x, y          int       // where it was last placed: its notice stays there
 	returnPalette bool
+	clearPalette  bool // a pane close from the palette: clear it if it stays closed
 }
 
 // requestDetachPane closes a pane at once, or asks first when it runs a
@@ -110,6 +111,9 @@ func (m *model) cancelConfirm() {
 	if c := m.confirm; c != nil {
 		m.focusPalette = c.returnPalette
 		m.confirm = nil
+		if c.clearPalette && !m.focusPalette {
+			m.paletteClosed()
+		}
 	}
 }
 
@@ -135,11 +139,16 @@ func (m *model) acceptConfirm() {
 			return
 		}
 	}
+	clearPalette := c.clearPalette
+	c.clearPalette = false // decided after the close: the last tab reopens the palette
 	m.cancelConfirm()
 	if c.pane != nil {
 		m.detachPane(c.tab, c.pane)
 	} else {
 		m.detachTab(c.tab)
+	}
+	if clearPalette && !m.focusPalette {
+		m.paletteClosed()
 	}
 }
 

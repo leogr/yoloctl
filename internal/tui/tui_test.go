@@ -16,6 +16,7 @@ import (
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/operator"
 	"github.com/leogr/yoloctl/internal/termio"
+	"github.com/leogr/yoloctl/internal/tui/panes"
 	"github.com/leogr/yoloctl/internal/tui/term"
 	"github.com/leogr/yoloctl/internal/tui/yoloctlcli"
 	"github.com/mattn/go-runewidth"
@@ -1720,6 +1721,87 @@ func TestClosingPaletteKeepsARunningCommandsOutput(t *testing.T) {
 	m.leavePaletteForTab()
 	if !m.console.Busy() || !strings.Contains(m.console.GridText(), "RUNNING-OUT") {
 		t.Fatal("closing the palette cleared a running command's output")
+	}
+}
+
+// Reusing an open tab for a request and detaching a pane (Ctrl+Q x) close
+// the palette too: reopening shows no output; Ctrl+R history keeps it. A
+// confirmed close of the only tab returns to the palette, which keeps it.
+func TestPaneRoutesClosingThePaletteClearIt(t *testing.T) {
+	running := func(m *model) *panes.Pane {
+		m.tabs.Add(testTab(paneSession(t, 20, 80, "sleep", "30"), "yoloctl box exec coder -- make test", false))
+		m.layoutTab(m.tabs.Current())
+		return m.tabs.Focused()
+	}
+	for _, route := range []string{"request-reuse", "prefix-detach", "confirm-keep", "confirm-close"} {
+		t.Run(route, func(t *testing.T) {
+			m := newTestModel(t, 80, 20)
+			switch route {
+			case "request-reuse":
+				m.tabs.Add(testTab(nil, "yoloctl box attach api --space dev", false))
+			case "prefix-detach":
+				addExitedTab(t, m, "t1")
+				addExitedTab(t, m, "t2")
+			case "confirm-keep":
+				addExitedTab(t, m, "t1")
+				running(m)
+			case "confirm-close":
+				running(m)
+			}
+			m.focusPalette = true
+			m.console.ShowError("OLD-PALETTE-OUTPUT")
+			if route == "request-reuse" {
+				m.handleTabRequest(termio.TabRequest{Op: "attach", Space: "dev", Box: "api"}, false, nil)
+			} else {
+				_, _ = m.Update(tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl})
+				_, _ = m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+			}
+			switch route {
+			case "confirm-keep", "confirm-close":
+				if m.confirm == nil {
+					t.Fatal("a running pane's close did not ask")
+				}
+				if !strings.Contains(m.console.GridText(), "OLD-PALETTE-OUTPUT") {
+					t.Fatal("cleared before the popup decided")
+				}
+				if route == "confirm-keep" {
+					m.cancelConfirm()
+				} else {
+					m.confirm.close = true
+					m.acceptConfirm()
+				}
+			}
+			if route == "confirm-close" {
+				if !m.focusPalette || !strings.Contains(m.View().Content, "OLD-PALETTE-OUTPUT") {
+					t.Fatal("closing the only tab should return to the palette with its output")
+				}
+				return
+			}
+			if m.focusPalette {
+				t.Fatal("route did not close the palette")
+			}
+			_, _ = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+			if strings.Contains(m.View().Content, "OLD-PALETTE-OUTPUT") {
+				t.Fatal("reopened palette shows the last command's output")
+			}
+			_, _ = m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+			if !strings.Contains(m.View().Content, "OLD-PALETTE-OUTPUT") {
+				t.Fatal("Ctrl+R history lost the command")
+			}
+		})
+	}
+}
+
+// A request reusing a tab while the palette is already closed leaves the
+// palette's output, such as a detached command's that has since ended.
+func TestRequestWithPaletteClosedKeepsItsOutput(t *testing.T) {
+	m := newTestModel(t, 80, 20)
+	m.tabs.Add(testTab(nil, "yoloctl box attach api --space dev", false))
+	m.console.ShowError("DETACHED-OUTPUT")
+	m.focusPalette = false
+	m.handleTabRequest(termio.TabRequest{Op: "attach", Space: "dev", Box: "api"}, false, nil)
+	if !strings.Contains(m.console.GridText(), "DETACHED-OUTPUT") {
+		t.Fatal("a closed palette's output was cleared")
 	}
 }
 
