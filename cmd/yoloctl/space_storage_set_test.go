@@ -116,6 +116,9 @@ func TestStorageReserveNativeTransaction(t *testing.T) {
 }
 
 func TestStorageReserveSetRejectsInvalidValuesBeforeHostContact(t *testing.T) {
+	previous := loadOperatorClient
+	loadOperatorClient = func() (*controller.OperatorClient, error) { return nil, nil }
+	t.Cleanup(func() { loadOperatorClient = previous })
 	for _, v := range []string{"500MiB", "1.5GiB", "garbage", "17179869184GiB"} {
 		cmd := newSpaceStorageSetCmd()
 		cmd.SetArgs([]string{"--build-reserve-max", v})
