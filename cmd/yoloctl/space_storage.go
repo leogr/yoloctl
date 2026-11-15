@@ -335,6 +335,13 @@ Use the tool's cache command in the box that owns the bytes, for example:
 
 These remove rebuildable caches; later builds may rebuild or download again.
 The tool must be installed and its cache path allowed by the box's policy.
+For a box with a separate /home/sandbox/.cache bind, stop it and use
+  yoloctl box cache clear BOX
+Ordinary recreate keeps that separate cache; only explicit
+  yoloctl box recreate --clear-cache BOX
+clears it while recreating. Caches inside an older box's writable layer still
+require the tool command or recreation; clearing a separate cache does not
+remove files from the layer.
 Removing files inside a box, recreating a box, or yoloctl image prune can
 also free space. Recreate discards all files in the container's writable
 layer, not just caches; preserve anything needed outside bind mounts first.

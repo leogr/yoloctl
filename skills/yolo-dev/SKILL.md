@@ -124,3 +124,8 @@ other deletion or cleanup commands. The assigning main agent owns any cleanup:
 verify ownership, retained evidence and live consumers, then use exact paths,
 never a glob relative to an assumed working directory. Delegation does not
 expand cleanup authority or transfer another worker's resources.
+
+## When the VM disk is full
+
+Read the [storage remedies](references/storage.md) before proposing cleanup.
+They do not grant runtime authority or broaden automatic collection.

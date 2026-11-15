@@ -122,6 +122,8 @@ func registerSpaceOperations(root *cobra.Command) {
 				switch words[1] {
 				case "create", "copy", "start", "stop", "restart", "recreate", "destroy", "reconcile", "set", "attach":
 					mutates = true
+				case "cache":
+					mutates = len(words) == 3 && words[2] == "clear"
 				case "exec":
 					mutates = !currentControllerPrincipal(cmd.Context()).Admin()
 				}
@@ -202,7 +204,7 @@ func registerSpaceOperations(root *cobra.Command) {
 		sort.Strings(spaces)
 		releases := []func(){}
 		complete, started, released := false, false, false
-		syncRoles := words[0] == "box" && path != "box exec" || path == "attach" || path == "account destroy"
+		syncRoles := words[0] == "box" && path != "box exec" && path != "box cache clear" || path == "attach" || path == "account destroy"
 		// The execution's own outcome, captured only when original returned
 		// normally; a panic or an early setup release leaves it unset.
 		var outcome *error

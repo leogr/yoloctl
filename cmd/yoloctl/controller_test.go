@@ -316,10 +316,16 @@ func TestControllerBoxCommandInventoryAndSharedSurface(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	service, client := newRootCmd(), newClientRootCmd()
 	box := findByPath(service, "box")
-	if len(box.Commands()) != 19 {
+	if len(box.Commands()) != 20 {
 		t.Fatalf("update controller inventory for %d box commands", len(box.Commands()))
 	}
 	for _, cmd := range box.Commands() {
+		if cmd.Name() == "cache" {
+			cmd = findByPath(service, "box", "cache", "clear")
+			if cmd == nil {
+				t.Fatal("cache clear command missing")
+			}
+		}
 		method := commandMethod(cmd)
 		switch method {
 		case "box.use":
@@ -335,7 +341,7 @@ func TestControllerBoxCommandInventoryAndSharedSurface(t *testing.T) {
 		if !controllerOperations[method].BoxAllowed {
 			t.Fatalf("%s not authorized", method)
 		}
-		other := findByPath(client, "box", cmd.Name())
+		other := findByPath(client, strings.Split(commandMethod(cmd), ".")...)
 		if other == nil || !reflect.DeepEqual(cmd.Aliases, other.Aliases) || cmd.UsageString() != other.UsageString() || cmd.Long != other.Long {
 			t.Fatalf("CLI surface differs for %s", cmd.Name())
 		}

@@ -25,7 +25,7 @@ var mutationGates = map[string]string{
 	// command and its deferred role synchronization.
 	"box.create": "wrapper", "box.copy": "wrapper", "box.start": "wrapper", "box.stop": "wrapper",
 	"box.restart": "wrapper", "box.destroy": "wrapper", "box.recreate": "wrapper", "box.reconcile": "wrapper",
-	"box.set": "wrapper", "box.attach": "wrapper",
+	"box.set": "wrapper", "box.attach": "wrapper", "box.cache.clear": "wrapper",
 	"account.create": "wrapper", "account.destroy": "wrapper", "account.secret.set": "wrapper",
 	"account.secret.unset": "wrapper", "account.observe": "wrapper",
 	"port.forward": "wrapper", "port.unforward": "wrapper",
@@ -63,7 +63,7 @@ func TestEveryMutationIsGatedAndClassified(t *testing.T) {
 			t.Errorf("%s is classified as wrapper-gated but the wrapper does not gate it", method)
 		}
 	}
-	if mutations != 46 || len(mutationGates) != 46 {
+	if mutations != 47 || len(mutationGates) != 47 {
 		t.Fatalf("%d mutations, %d classified", mutations, len(mutationGates))
 	}
 }

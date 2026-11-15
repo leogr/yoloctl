@@ -154,8 +154,9 @@ check. User data and stopped boxes are retained; cleanup cannot guarantee space
 for workloads whose retained data exceeds the VM's capacity. [5](#source-5)
 
 [FACT] New confined boxes use a separate VM-local `.cache` bind. Stop/start,
-restart and ordinary recreate keep it; explicit destroy removes only that
-box's verified leaf. Older containers without the bind do not gain recreation
+restart and ordinary recreate keep it. Explicit `box cache clear` requires a
+known stopped container; `box recreate --clear-cache` clears only after removal
+and before creation. Explicit destroy removes only that box's verified leaf. Older containers without the bind do not gain recreation
 drift. Automatic image/cache collection never removes box caches.
 [25](#source-25)
 

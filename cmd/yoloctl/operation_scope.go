@@ -299,6 +299,11 @@ func spaceOperationIntent(cmd *cobra.Command, path, space string, args []string)
 	}
 	verifier := ""
 	switch path {
+	case "box cache clear":
+		if len(args) != 1 || validateAgentboxName(arg(0)) != nil {
+			return globalIntent
+		}
+		f.write(boxResource(arg(0)))
 	case "box create", "box start", "box stop", "box restart", "box destroy", "box recreate", "box reconcile", "box set", "box attach", "attach":
 		if len(args) == 0 {
 			return globalIntent

@@ -273,6 +273,13 @@ summaries appear initially and when loss/gap state changes; growth of an
 already nonzero metadata-gap counter is quiet. Terminal colour
 respects `NO_COLOR` and redirection. [29](#source-29)
 
+[FACT] `box cache clear NAME` empties only the box's owned separate cache,
+refusing running or unknown runtime state. Older boxes with caches inside
+the writable layer require their tool's cache command or explicit recreation
+(which discards non-bound files). Default recreate keeps separate caches;
+`box recreate --clear-cache NAME` requests clearing between removal and creation.
+[33](#source-33)
+
 ## Sources
 
 1. <a id="source-1"></a> [CLI, output and completion evidence](../digests/cli-state.md).
@@ -323,3 +330,5 @@ respects `NO_COLOR` and redirection. [29](#source-29)
 31. <a id="source-31"></a> [Nested virtualization](../digests/vm-adapters.md#nested-virtualization).
 
 32. <a id="source-32"></a> [Expanding a running step](../digests/step-expand.md).
+
+33. <a id="source-33"></a> [Per-box caches](../digests/box-caches.md).

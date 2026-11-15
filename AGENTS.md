@@ -220,8 +220,9 @@ Automatic storage cleanup owns only unreferenced composed tags and unused
 BuildKit cache. Preserve declaration/base/alias and actual-container identity
 retention, complete inventories, native locking and foreground cancellation;
 never expand it to box data or generic container/volume pruning. Controller-derived per-box cache directories
-are retained across ordinary stop/start/recreate and removed only by explicit
-box destruction, never by automatic storage cleanup. See
+are retained across ordinary stop/start/recreate and cleared only by explicit
+`box cache clear`, `box recreate --clear-cache` or box destruction, never by
+automatic storage cleanup. See
 [storage cleanup](docs/digests/storage-gc.md).
 The Firecracker helper separately guards host backing-filesystem headroom.
 Keep storage pauses recoverable in memory: never turn them into a forced-stop

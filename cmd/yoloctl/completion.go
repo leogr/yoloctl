@@ -110,6 +110,7 @@ func registerCompletions(root *cobra.Command) {
 		{[]string{"box", "inspect"}, firstArgOnly(completeKnownBoxes)},
 		{[]string{"box", "destroy"}, firstArgOnly(completeKnownBoxes)},
 		{[]string{"box", "recreate"}, firstArgOnly(completeAgentboxes)},
+		{[]string{"box", "cache", "clear"}, firstArgOnly(completeAgentboxes)},
 		{[]string{"box", "reconcile"}, firstArgOnly(completeReconcileBoxes)},
 		{[]string{"box", "diff"}, firstArgOnly(completeAgentboxes)},
 		{[]string{"box", "edit"}, firstArgOnly(completeAgentboxes)},

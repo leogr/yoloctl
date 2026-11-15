@@ -60,6 +60,7 @@ func newAgentboxCmd() *cobra.Command {
 		newAgentboxRestartCmd(),
 		newAgentboxDestroyCmd(),
 		newAgentboxRecreateCmd(),
+		newAgentboxCacheCmd(),
 		newAgentboxListCmd(),
 		newAgentboxShowCmd(),
 		newAgentboxSessionCmd(),
@@ -2535,6 +2536,10 @@ Preserved across recreate:
   - The box YAML itself.
   - /workdir (host workdir or VM-local box dir).
   - The selected account's agent-owned native state (the account-state bind source).
+  - Its separate cache directory (unless --clear-cache is explicitly supplied).
+
+Use --clear-cache to empty only the separate cache directory between removal
+and creation. It is never implied by --force or the recreate offer.
 
 Lost across recreate: anything the agent wrote inside the container
 outside the bind-mounted paths above (notably ` + "`/tmp` and `/home/sandbox/`" + `
@@ -2569,6 +2574,7 @@ base, run ` + "`yoloctl image refresh`" + ` and then
 	}
 	cmd.Flags().StringVar(&spaceName, "space", defaultSpaceName, "Space hosting the box")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Skip the confirmation prompt")
+	cmd.Flags().Bool("clear-cache", false, "After removing the old container, empty its separate cache before creating the replacement; default keeps it")
 	cmd.Flags().BoolVar(&noAutoupdate, "no-autoupdate", false, "Skip the post-create npm install -g <pkg>@latest that brings the agent CLI to current registry-latest")
 	addPassthroughFlag(cmd)
 	cmd.Flags().BoolVar(&noAttach, "no-attach", false, "Skip the automatic attach to the box's session when the command finishes")
@@ -2643,7 +2649,7 @@ func recreateAgentbox(cmd *cobra.Command, spaceName, name string, force, noAutou
 		return err
 	}
 	applier := newManagedLiveApplier(c, errw)
-	if err := applier.Recreate(cmd.Context(), cfg, policy); err != nil {
+	if err := applier.Recreate(recreateCacheContext(cmd, name), cfg, policy); err != nil {
 		return fmt.Errorf("recreate %s: %w", name, err)
 	}
 	// The old container, its holder and its agent are gone: a launched or

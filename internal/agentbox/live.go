@@ -303,6 +303,9 @@ func (a LiveApplier) Create(ctx context.Context, c *Config, policy []byte) error
 	if c.Workdir.MountSource() == "" {
 		return errors.New("workdir is required to create an agentbox; the CLI fills this in at create time")
 	}
+	if err := a.clearCacheBeforeReplacementCreate(ctx, c); err != nil {
+		return err
+	}
 	var endpointBinary *EndpointBinary
 	if c.Privileged {
 		// Verify before building or staging anything for this box.

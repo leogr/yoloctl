@@ -73,6 +73,7 @@ var controllerOperations = map[string]controller.Operation{
 	"box.start":             {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages},
 	"box.stop":              {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages, Beside: true},
 	"box.restart":           {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages},
+	"box.cache.clear":       {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox},
 	"box.destroy":           {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages},
 	"box.recreate":          {BoxAllowed: true, Mutates: true, EffectGated: true, Footprint: controller.FootprintBox | controller.FootprintPorts | controller.FootprintChat | controller.FootprintImages},
 	"box.list":              {BoxAllowed: true},
