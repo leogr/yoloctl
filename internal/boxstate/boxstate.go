@@ -468,6 +468,9 @@ func declaredBoxes(space string) ([]Box, map[string]int, error) {
 			Drift:       DriftUnknown,
 		}
 		cfg, err := agentbox.Load(space, name)
+		if err == nil {
+			err = agentbox.ValidateCacheDeclaration(cfg)
+		}
 		if err != nil {
 			b.Declaration = DeclarationInvalid
 			b.ConfigError = err.Error()

@@ -153,6 +153,12 @@ Before a build/pull, low root-disk space triggers cleanup and a measured free-sp
 check. User data and stopped boxes are retained; cleanup cannot guarantee space
 for workloads whose retained data exceeds the VM's capacity. [5](#source-5)
 
+[FACT] New confined boxes use a separate VM-local `.cache` bind. Stop/start,
+restart and ordinary recreate keep it; explicit destroy removes only that
+box's verified leaf. Older containers without the bind do not gain recreation
+drift. Automatic image/cache collection never removes box caches.
+[25](#source-25)
+
 [FACT] Host `space storage` is a lock-free controller read that partitions the
 system disk into each container's writable layer, images, BuildKit cache and
 the remainder. It measures keyed boxes before global totals and delivers partial
@@ -225,3 +231,5 @@ and import starts disabled. [21](#source-21)
 23. <a id="source-23"></a> [Expected run per box](../digests/expected-run.md).
 
 24. <a id="source-24"></a> [Explicit cache remedies](../digests/box-cache-remedy.md).
+
+25. <a id="source-25"></a> [Per-box cache ownership and lifecycle](../digests/box-caches.md).

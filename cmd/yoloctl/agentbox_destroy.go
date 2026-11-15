@@ -148,6 +148,9 @@ func newAgentboxDestroyCmd() *cobra.Command {
 			if err := agentbox.RemoveObservationRuntime(name); err != nil {
 				return err
 			}
+			if err := agentbox.RemoveCacheRuntime(name); err != nil {
+				return fmt.Errorf("remove box cache: %w", err)
+			}
 			// Delete the per-agentbox declaration unless asked to keep it.
 			// Host workdir + agent-state are never touched here.
 			if !keepManifest {

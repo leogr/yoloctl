@@ -610,6 +610,9 @@ func (c *Config) Validate() error {
 		}
 		seenPublished[key] = struct{}{}
 	}
+	if err := ValidateCacheDeclaration(c); err != nil {
+		return err
+	}
 	for i, m := range c.Mounts {
 		if m.Source == "" || m.Target == "" {
 			return fmt.Errorf("mounts[%d]: source and target are required", i)

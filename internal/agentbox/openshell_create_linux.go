@@ -48,6 +48,9 @@ func (a LiveApplier) createNativeContainer(ctx context.Context, c *Config, image
 	if err != nil {
 		return err
 	}
+	if err := addCacheRunOptions(c, &options); err != nil {
+		return err
+	}
 	if err := addChatRunOptions(c, &options); err != nil {
 		return err
 	}

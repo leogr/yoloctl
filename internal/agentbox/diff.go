@@ -68,6 +68,9 @@ type ActualState struct {
 	// ChatMounts are controller-derived leaves, kept separate from manifest
 	// mounts so drift cannot silently turn into a host mount declaration.
 	ChatMounts []Mount
+	// CacheMounts are controller-derived leaves; their absence in an older
+	// container never creates declaration drift.
+	CacheMounts []Mount
 
 	// Env is the container's full environment (KEY=VALUE), including
 	// image-baked entries. Diff compares only the yoloctl-managed keys

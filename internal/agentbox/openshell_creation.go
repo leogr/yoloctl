@@ -32,6 +32,9 @@ func (a LiveApplier) WithNativeCreationRelease(release openshell.QualifiedReleas
 // the enclosing controller image-preparation pin across this check and Create.
 // No container, endpoint, incarnation or per-box generation is created here.
 func (a LiveApplier) PreflightRecreate(ctx context.Context, c *Config, policy []byte) error {
+	if err := ValidateCacheDeclaration(c); err != nil {
+		return err
+	}
 	if c == nil {
 		return errors.New("replacement qualification requires its declaration")
 	}
@@ -47,6 +50,9 @@ func (a LiveApplier) PreflightRecreate(ctx context.Context, c *Config, policy []
 // Production callers must bind the compiled release before selecting this
 // route. The returned image is the retained OCI target, never a mutable tag.
 func (a LiveApplier) PreflightNativeCreate(ctx context.Context, c *Config, policy []byte) (string, error) {
+	if err := ValidateCacheDeclaration(c); err != nil {
+		return "", err
+	}
 	if c == nil || c.Privileged || a.nativeCreation == nil || a.Client == nil {
 		return "", errors.New("native creation qualification requires an ordinary box and selected release")
 	}

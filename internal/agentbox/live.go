@@ -13,6 +13,7 @@ import (
 
 	"github.com/leogr/yoloctl/internal/agentboximage"
 	"github.com/leogr/yoloctl/internal/agentsession/observe"
+	"github.com/leogr/yoloctl/internal/boxcache"
 	"github.com/leogr/yoloctl/internal/boxendpoint"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/managedchat"
@@ -97,6 +98,11 @@ func (i LiveInspector) Inspect(ctx context.Context, c *Config) (ActualState, err
 		WorkloadPoolKnown: true,
 		WorkloadPool:      details.Labels[resources.WorkloadLabel] == resources.WorkloadVersion,
 	}
+	if !c.Privileged {
+		if _, err := CacheBound(c.Name, details); err != nil {
+			return ActualState{}, err
+		}
+	}
 	// Record which env keys yoloctl managed last time (label present) so
 	// Diff can detect a removed managed key. Label absent → nil → Diff
 	// keeps the conservative legacy behavior (no removal detection).
@@ -147,6 +153,8 @@ func (i LiveInspector) Inspect(ctx context.Context, c *Config) (ActualState, err
 			state.ObservationEnabled = true
 		case m.Destination == operator.HelperMount, m.Destination == operator.CodexSkill,
 			m.Destination == operator.ClaudeSkill, m.Destination == operator.GeminiSkill:
+		case !c.Privileged && m.Destination == boxcache.Target:
+			state.CacheMounts = append(state.CacheMounts, Mount{Source: m.Source, Target: m.Destination, ReadOnly: m.ReadOnly})
 		case managedchat.IsProjectionTarget(m.Destination):
 			state.ChatMounts = append(state.ChatMounts, Mount{Source: m.Source, Target: m.Destination, ReadOnly: m.ReadOnly})
 		default:
@@ -289,6 +297,9 @@ type LiveApplier struct {
 
 // Create brings up a new agentbox container with the supplied policy.
 func (a LiveApplier) Create(ctx context.Context, c *Config, policy []byte) error {
+	if err := ValidateCacheDeclaration(c); err != nil {
+		return err
+	}
 	if c.Workdir.MountSource() == "" {
 		return errors.New("workdir is required to create an agentbox; the CLI fills this in at create time")
 	}
@@ -335,6 +346,9 @@ func (a LiveApplier) Create(ctx context.Context, c *Config, policy []byte) error
 	}
 	runOpts, err := buildRunOptions(c, runtimeImage, endpointBinary)
 	if err != nil {
+		return err
+	}
+	if err := addCacheRunOptions(c, &runOpts); err != nil {
 		return err
 	}
 	if err := addChatRunOptions(c, &runOpts); err != nil {

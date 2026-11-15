@@ -93,6 +93,9 @@ func (a managedApplier) Recreate(ctx context.Context, c *agentbox.Config, policy
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := agentbox.ValidateCacheDeclaration(c); err != nil {
+		return err
+	}
 	if err := agentbox.ValidateChatDeclaration(c); err != nil {
 		return err
 	}

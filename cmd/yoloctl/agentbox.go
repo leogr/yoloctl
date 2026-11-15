@@ -1959,6 +1959,9 @@ func preflightAgentboxRuntime(ctx context.Context, c *container.Client, cfg *age
 // and pure runtime validation, BEFORE config/account/socket/workdir writes.
 // A native result leaves protected SSH directory preparation to the SDK.
 func preflightAgentboxRuntimeQualified(ctx context.Context, c *container.Client, cfg *agentbox.Config, persisted bool, qualify func(context.Context, *agentbox.Config) (bool, error)) error {
+	if err := agentbox.ValidateCacheDeclaration(cfg); err != nil {
+		return err
+	}
 	if err := warmBoxBeforeEffects(ctx, c, cfg, persisted); err != nil {
 		return err
 	}
@@ -2186,6 +2189,9 @@ func startExistingAgentboxContainerPrepared(ctx context.Context, c *container.Cl
 	}
 	// A VM reboot empties /run: remount the capped root a bound container
 	// expects before it starts, never an uncapped directory in its place.
+	if err := agentbox.PrepareCacheRuntime(cfg, details); err != nil {
+		return err
+	}
 	if err := agentbox.PrepareObservationRuntime(cfg, details); err != nil {
 		return err
 	}
@@ -2587,6 +2593,10 @@ func recreateAgentbox(cmd *cobra.Command, spaceName, name string, force, noAutou
 	cfg, err := agentbox.Load(spaceName, name)
 	if err != nil {
 		return fmt.Errorf("load box manifest: %w", err)
+	}
+
+	if err := agentbox.ValidateCacheDeclaration(cfg); err != nil {
+		return err
 	}
 
 	errw := cmd.ErrOrStderr()
