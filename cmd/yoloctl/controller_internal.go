@@ -386,8 +386,9 @@ func serveController(ctx context.Context) (result error) {
 	server := &controller.Server{
 		Hello:      controller.Hello{Protocol: controller.ProtocolVersion, Bundle: c.Bundle, Space: c.Space, Generation: c.Generation},
 		Operations: controllerOperations, Execute: controller.RunWorker,
-		Receipts:    controller.Receipts{Dir: filepath.Join(meta, "receipts")},
-		Maintenance: func() error { return safepath.WriteFile(meta, "maintenance", []byte(c.Generation), 0o600) },
+		StorageWarning: diskReserveWarning,
+		Receipts:       controller.Receipts{Dir: filepath.Join(meta, "receipts")},
+		Maintenance:    func() error { return safepath.WriteFile(meta, "maintenance", []byte(c.Generation), 0o600) },
 		ResumeAdmission: func() error {
 			err := safepath.RemoveFile(meta, "maintenance")
 			if errors.Is(err, os.ErrNotExist) {
@@ -543,6 +544,7 @@ func runControllerWorker(ctx context.Context) error {
 	if err := controller.Authorize(work.Principal, work.Request, spaceenv.Current().Space, controllerOperations); err != nil {
 		return err
 	}
+	warnControllerDisk(work.Request)
 	// Reuse the phase writer ALREADY raw-claimed before LoadRuntime. Exact
 	// collector/final-flush behavior is the accepted ae33 replay, not a second claim.
 	if phaseWriter := early.phase; phaseWriter != nil {

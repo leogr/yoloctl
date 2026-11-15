@@ -151,12 +151,19 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 					return offerSpaceVMRecreate(cmd, boot, err)
 				}
 				if err := retireControllerSeed(space); err != nil || !update {
+					if err == nil {
+						warnHostDisk(cmd.Context(), boot)
+					}
 					return err
 				}
 				// The prompt and the box restarts run outside the host lifecycle
 				// lock; each restart takes the controller's own native locks.
 				release()
-				return offerSessionRestarts(cmd.Context(), space, hostSessionRestartOffer(cmd, boot), restartSessions)
+				err = offerSessionRestarts(cmd.Context(), space, hostSessionRestartOffer(cmd, boot), restartSessions)
+				if err == nil {
+					warnHostDisk(cmd.Context(), boot)
+				}
+				return err
 			case "stop":
 				if err := stopControllerSpace(cmd.Context(), boot, cmd.ErrOrStderr()); err != nil {
 					return err

@@ -21,6 +21,10 @@ const ProtocolVersion = 3
 const MaxFrame = 4 << 20
 const MaxDocument = 1 << 20
 
+// StorageWarningFlag opts an admin ping into the cheap startup disk notice.
+// It is internal request metadata, not a public CLI option or read method.
+const StorageWarningFlag = "storage-warning"
+
 // Request identifies one registered operation. Flags preserve repeated values
 // and the distinction between omitted and explicitly empty CLI options.
 type Request struct {

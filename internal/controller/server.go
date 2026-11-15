@@ -66,6 +66,8 @@ type Server struct {
 	Hello      Hello
 	Operations map[string]Operation
 	Execute    Handler
+	// StorageWarning is an optional statfs-only observation for an admin ping.
+	StorageWarning func() string
 	// CheckPrincipal revalidates the endpoint's runtime grant/incarnation.
 	CheckPrincipal func(context.Context, Principal) error
 	Receipts       Receipts
@@ -326,6 +328,10 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		if drained {
 			fail(errors.New("controller is in maintenance"))
 			return
+		}
+		if values := req.Flags[StorageWarningFlag]; len(values) == 1 && values[0] == "true" && s.StorageWarning != nil {
+			raw, _ := json.Marshal(s.StorageWarning())
+			_ = wire.Write(Frame{Type: "stdout", Data: raw})
 		}
 		_ = wire.Write(Frame{Type: "exit"})
 		return

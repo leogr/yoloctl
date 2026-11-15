@@ -110,6 +110,11 @@ disposable storage cleanup and, while someone reads the box inventory, at most
 one read per minute of the daemon of each live tracked Codex launch. Neither is an
 operation: no receipt, never replayed. [13](#source-13) [14](#source-14)
 
+[FACT] Human box create/recreate/start/list and successful space start warn
+below the existing image-preparation disk reserve. These optional observations
+do not clean storage or change results; JSON and internal reads keep their
+output, and the view keeps its existing thresholds. [20](#source-20)
+
 [FACT] `yolo.space.operator` is opt-in full box authority within one space, including
 existing accounts, stronger capabilities and delegation. Per-incarnation socket
 access and live server checks enforce scope; CLI help and skills do not enforce
@@ -202,3 +207,4 @@ image recreation. [18](#source-18)
 18. <a id="source-18"></a> [VM-native audit contracts](../digests/audit.md).
 
 19. <a id="source-19"></a> [Box stop and start results](../digests/box-stop-start.md).
+20. <a id="source-20"></a> [Disk reserve notices](../digests/disk-reserve-warning.md).

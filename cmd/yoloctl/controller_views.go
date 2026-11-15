@@ -66,6 +66,8 @@ func controllerAllSpaces(cmd *cobra.Command, method string) error {
 	var images []imageRow
 	var agents []agentStatusRow
 	var unavailable []error
+	asJSON, _ := cmd.Flags().GetBool("json")
+	warnedDisk := false
 	for _, name := range names {
 		readCtx, cancel := context.WithTimeout(cmd.Context(), 2*vmhost.GuestProbeTimeout)
 		boot, err := checkControllerSpace(readCtx, name)
@@ -77,6 +79,9 @@ func controllerAllSpaces(cmd *cobra.Command, method string) error {
 				for _, b := range view {
 					b.State.Config, b.State.Container = b.Config, b.Container
 					boxes = append(boxes, b.State)
+				}
+				if err == nil && !asJSON && !warnedDisk {
+					warnedDisk = warnHostDisk(readCtx, boot)
 				}
 			case "image.list":
 				all, _ := cmd.Flags().GetBool("all")
@@ -103,7 +108,6 @@ func controllerAllSpaces(cmd *cobra.Command, method string) error {
 			cliWarn(logging.Host, "space %s unavailable: %v", name, err)
 		}
 	}
-	asJSON, _ := cmd.Flags().GetBool("json")
 	switch method {
 	case "box.list":
 		workdir, _ := cmd.Flags().GetString("workdir")
