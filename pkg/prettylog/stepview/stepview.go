@@ -398,7 +398,11 @@ func (v *View) blockRows(steps []prettylog.StepView, limit int) ([]string, []str
 		if len(lines) <= room {
 			return lines
 		}
-		keep := max(room-1, 1)
+		if room < 2 {
+			// No row for the count: the latest line only, as collapsed.
+			return lines[len(lines)-room:]
+		}
+		keep := room - 1
 		return append([]string{"… " + strconv.Itoa(len(lines)-keep) + " earlier lines"}, lines[len(lines)-keep:]...)
 	})
 }

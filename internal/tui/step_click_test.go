@@ -73,3 +73,22 @@ func TestOnlyPlainClicksReachTheStepsBlock(t *testing.T) {
 	_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: r.X + 1, Y: top})
 	waitFor(t, func() bool { return strings.Contains(paneText(s), "got -2") })
 }
+
+// A plain press released with a modifier is not a plain click.
+func TestModifiedReleaseSendsNothing(t *testing.T) {
+	m := newTestModel(t, 80, 24)
+	s := stepPane(t)
+	tab := testTab(s, "yoloctl box create api", false)
+	m.tabs.Add(tab)
+	m.layoutTab(tab)
+	m.focusPalette = false
+	waitFor(t, func() bool { return s.Frame().Cursor.Y == 2 })
+	r := tab.Focused().Rect()
+	top := m.tabTop() + r.Y
+	_, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: r.X + 1, Y: top})
+	_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: r.X + 1, Y: top, Mod: tea.ModShift})
+	time.Sleep(300 * time.Millisecond)
+	if strings.Contains(paneText(s), "got") {
+		t.Fatalf("a modified release sends nothing:\n%s", paneText(s))
+	}
+}

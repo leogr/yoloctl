@@ -455,7 +455,7 @@ func (m *model) mouseHit(mo tea.Mouse) tea.Mouse {
 // when the pane's program owns no mouse mode and no alternate screen. The
 // local selection gesture is unchanged; nothing is sent as terminal input.
 func (m *model) stepClick(owner mouseOwner, mo tea.Mouse) {
-	if owner.press == nil || owner.pane == nil || mo.Button != tea.MouseLeft || mo.X != owner.press.X || mo.Y != owner.press.Y {
+	if owner.press == nil || owner.pane == nil || mo.Button != tea.MouseLeft || mo.Mod != 0 || mo.X != owner.press.X || mo.Y != owner.press.Y {
 		return
 	}
 	p := owner.pane

@@ -551,3 +551,22 @@ func TestPointerUnderACollapsedRoot(t *testing.T) {
 		t.Fatalf("pointer under the collapsed line:\n%s", scr.text())
 	}
 }
+
+// With room for one output row only, expansion shows the latest line and no
+// count row, so no other row of the block is pushed out.
+func TestExpansionWithOneRowEvictsNothing(t *testing.T) {
+	l, v, scr, _ := setup(t, func() (int, int) { return 80, 5 })
+	root := l.StartStep("Building image a1b2c3", prettylog.Actor("builder"))
+	run := root.Step("[1/1] RUN npm install")
+	for i := range 5 {
+		_, _ = io.WriteString(run.Detail(), "added "+strconv.Itoa(i)+"\n")
+	}
+	v.mu.Lock()
+	v.updateLocked(false)
+	v.mu.Unlock()
+	before := scr.text()
+	v.Click(0)
+	if got := scr.text(); got != before || strings.Contains(got, "earlier lines") || !strings.Contains(got, "Building image a1b2c3") {
+		t.Fatalf("one row of room keeps the block as it was:\n%s\nwas:\n%s", got, before)
+	}
+}
