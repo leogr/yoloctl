@@ -250,7 +250,7 @@ Lima/vendor and parsed marker formats retain their existing owners and bytes.
 [28](#source-28)
 
 [FACT] Host-only `audit` opens the read-only Falco view; `audit status`,
-`enable`, `disable`, `logs --follow --json` and finite JSONL `export --output`
+`enable`, `disable`, `logs [SPACE] --follow --json` and finite JSONL `export [SPACE] --output`
 use the running controller. Host-only `audit rules import/list/remove/edit`
 manages native ordered files and Falco selection; one file is at most 2 MiB.
 Invalid changes preserve the prior selection; enabled accepted changes restart
@@ -264,7 +264,8 @@ explicit; viewing never installs tools. Old Firecracker images require explicit
 `space recreate NAME --update-vm-image`; audit never replaces media. Exports refuse overwrite and publish
 only completed privacy-filtered output. Pretty logs show the wrapped pinned rule
 message without its repeated rule heading or availability assignment, shared
-severity glyphs/tones and consecutive repeat summaries;
+severity glyphs/tones and consecutive repeat summaries with full UTC dates.
+The optional logs/export SPACE and an explicit `--space` must agree;
 `--verbose` adds aligned retained fields. Log-level filtering and folding never
 change JSON/export records. The origin distinguishes
 Falco-reported VM processes, unlabelled containers and missing IDs without

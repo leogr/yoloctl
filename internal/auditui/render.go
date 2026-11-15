@@ -80,7 +80,7 @@ func decorate(text, prefix string) string {
 func (r *eventRenderer) heading(e audit.Event) string {
 	kind := prettylog.KindOf(eventRecord(e))
 	severity := prettylog.DefaultGlyphs.For(kind) + " " + fmt.Sprintf("%-9s", audit.Clean(e.Severity))
-	return fmt.Sprintf("%s  %s  %-14s  %s", e.Time.UTC().Format("15:04:05"),
+	return fmt.Sprintf("%s  %s  %-14s  %s", e.Time.UTC().Format("2006-01-02 15:04:05"),
 		decorate(severity, r.roles[kind]), eventOrigin(e), decorate(audit.Clean(e.Rule), r.bold))
 }
 
@@ -113,7 +113,7 @@ func (r *eventRenderer) summary(repeat int, until time.Time) string {
 	if repeat == 1 {
 		word = "time"
 	}
-	return decorate(fmt.Sprintf("%s repeated %d more %s until %s", prettylog.DefaultGlyphs.Repeat, repeat, word, until.UTC().Format("15:04:05")), r.dim)
+	return decorate(fmt.Sprintf("%s repeated %d more %s until %s", prettylog.DefaultGlyphs.Repeat, repeat, word, until.UTC().Format("2006-01-02 15:04:05")), r.dim)
 }
 
 func (r *eventRenderer) text(e audit.Event) string {

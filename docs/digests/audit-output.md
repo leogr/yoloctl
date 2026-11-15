@@ -1,6 +1,6 @@
 # Audit event output and following
 
-Verification: `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes.
+Verification: `a7c77ff4f47fbb5bea104e2108b12f0cd4971876` and accompanying changes.
 
 [FACT] `audit logs --follow` prints the first bounded-history summary to stderr,
 then prints another when the collector-drop count, the metadata-gap state
@@ -10,7 +10,9 @@ Sliding interval times, page counts and cursors do not produce notices. Each
 completed page advances the cursor even when filtering yields no events. JSONL stdout contains complete retained events, never summaries.
 [1](#source-1) [2](#source-2)
 
-[FACT] Human-readable logs use the shared glyphs and palette roles, preserving
+[FACT] Human headings and repeat endpoints include UTC `YYYY-MM-DD HH:MM:SS`,
+for history and live events alike. `logs [SPACE]` and `export [SPACE]` keep
+`--space`; explicit targets must agree. Logs use shared glyphs/palette, preserving
 Falco's priority word, origin and bold rule. The next indented block reconstructs
 the pinned rule message without repeating its heading or an availability
 assignment; `container_name` is omitted only when equal to the container ID.
@@ -29,7 +31,7 @@ space-view palette after a background reply, using ANSI16 plus faint meanwhile.
 seconds. Identity comprises priority, rule, reported origin, executable, result,
 path and endpoint, never time/cursor or arbitrary raw output. The first record
 appears immediately; repeats yield a separate `↳ repeated N more times until
-HH:MM:SS` line on the timer, next different shown record, flush or close. There
+YYYY-MM-DD HH:MM:SS` line on the timer, next different shown record, flush or close. There
 is no redraw or multi-key aggregation: A B A stays three records. JSON, storage
 and export never fold. A read failure or exit still closes the presentation
 stream and drains its pending summary. Writer errors remain errors, without
@@ -76,7 +78,7 @@ shipped names retain the shipped template even when semantics differ. [5](#sourc
 
 ## Sources
 
-1. <a id="source-1"></a> [Host audit commands](../../cmd/yoloctl/audit.go#L315) — `streamAuditLogs`, `auditSummaryText`, `runAuditView`.
+1. <a id="source-1"></a> [Host audit commands](../../cmd/yoloctl/audit.go#L147) — `addAuditQueryFlags`, `streamAuditLogs` (L328), summaries and view.
 2. <a id="source-2"></a> [Bounded history](../../internal/audit/logs.go#L101) — `Store.Scan`, filtered cursor advancement.
 3. <a id="source-3"></a> [Read-only view](../../internal/auditui/view.go#L1) — `Model.load`, `Model.Update`, `Model.visible`, `Model.View`, `Model.Close`.
 4. <a id="source-4"></a> [Event schema/privacy](../../internal/audit/types.go#L1) — `Event`, `ParseEvent`, `Clean`.

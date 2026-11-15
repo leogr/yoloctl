@@ -121,6 +121,10 @@ func registerCompletions(root *cobra.Command) {
 		// Root attach mirrors box attach completion.
 		{[]string{"attach"}, firstArgOnly(completeAgentboxes)},
 
+		// Host audit history/export accept the same optional running-space target.
+		{[]string{"audit", "logs"}, firstArgOnly(completeRunningSpaces)},
+		{[]string{"audit", "export"}, firstArgOnly(completeRunningSpaces)},
+
 		// agent
 		{[]string{"agent", "update"}, firstArgOnly(completeAgentProfiles)},
 		// agent catalog: show = any (built-in+custom); copy SRC

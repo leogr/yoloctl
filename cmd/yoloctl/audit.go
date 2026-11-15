@@ -128,15 +128,15 @@ func newAuditCmd() *cobra.Command {
 			return err
 		}})
 	}
-	logs := &cobra.Command{Use: "logs", Short: "Read bounded audit history or follow new events",
-		Long: "Read retained Falco events. The origin column shows a box name when metadata\nis available, (vm) when Falco reports container=host inside the space VM,\n(no box) for a container without box metadata, or (unknown) when no container\nID was retained. Use --verbose for all retained fields or --json for JSONL.",
+	logs := &cobra.Command{Use: "logs [SPACE]", Short: "Read bounded audit history or follow new events",
+		Long: "Read retained Falco events. The origin column shows a box name when metadata\nis available, (vm) when Falco reports container=host inside the space VM,\n(no box) for a container without box metadata, or (unknown) when no container\nID was retained. Human timestamps include the UTC date and time. Optional SPACE must match --space\nwhen both are given. Use --verbose for all retained fields or --json for JSONL.",
 		Args: cobra.NoArgs, RunE: runAuditLogs}
 	addAuditQueryFlags(logs)
 	logs.Flags().Bool("follow", false, "Follow new events until interrupted")
 	logs.Flags().Bool("json", false, "Print privacy-filtered JSONL")
 	logs.Flags().Bool("verbose", false, "Show all retained fields below each rule message")
 	logs.Flags().Int("limit", 500, "Maximum events per history page (1–1000)")
-	export := &cobra.Command{Use: "export --output PATH", Short: "Export a finite privacy-filtered JSONL interval", Args: cobra.NoArgs, RunE: runAuditExport}
+	export := &cobra.Command{Use: "export [SPACE] --output PATH", Short: "Export a finite privacy-filtered JSONL interval", Long: "Export retained events unchanged as JSONL. Optional SPACE must match --space when both are given.", Args: cobra.NoArgs, RunE: runAuditExport}
 	addAuditQueryFlags(export)
 	export.Flags().String("output", "", "New private host output file (refuses overwrite)")
 	_ = export.MarkFlagRequired("output")
@@ -149,8 +149,21 @@ func addAuditQueryFlags(cmd *cobra.Command) {
 	cmd.Flags().String("until", "", "End time (RFC3339)")
 	cmd.Flags().String("box", "", "Filter by box (unavailable metadata remains unlabelled)")
 	cmd.Args = func(cmd *cobra.Command, args []string) error {
-		if err := cobra.NoArgs(cmd, args); err != nil {
+		if err := cobra.MaximumNArgs(1)(cmd, args); err != nil {
 			return err
+		}
+		if len(args) == 1 {
+			if err := validateSpaceName(args[0]); err != nil {
+				return err
+			}
+			flag := cmd.Flag("space")
+			if flag.Changed && flag.Value.String() != args[0] {
+				return errors.New("SPACE and --space must name the same space")
+			}
+			if err := flag.Value.Set(args[0]); err != nil {
+				return err
+			}
+			flag.Changed = true
 		}
 		box, _ := cmd.Flags().GetString("box")
 		if box != "" {
