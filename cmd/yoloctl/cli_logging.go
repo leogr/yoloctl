@@ -101,6 +101,11 @@ func cliOperation(cmd *cobra.Command, title, success, space string, run func() e
 		if nested {
 			return
 		}
+		if result == nil && stepview.Current() != nil {
+			// The steps block already left "✓ title took" for this
+			// operation; a second success line would repeat it.
+			return
+		}
 		kind, message := prettylog.OutcomeOK, success
 		if result != nil {
 			kind, message = prettylog.OutcomeFailed, "Command failed"

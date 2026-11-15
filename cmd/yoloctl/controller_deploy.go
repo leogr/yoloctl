@@ -63,7 +63,9 @@ func nativeInfrastructure(ctx context.Context, space, action string, input any, 
 		}
 		cmd.Stdin = bytes.NewReader(raw)
 	}
-	cmd.Stdout, cmd.Stderr = out, errw
+	stderr, flush := infraStderr(errw)
+	defer flush()
+	cmd.Stdout, cmd.Stderr = out, stderr
 	return cmd.Run()
 }
 

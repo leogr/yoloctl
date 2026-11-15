@@ -94,7 +94,12 @@ type RunOptions struct {
 
 // Run launches a container with `nerdctl run`.
 func (c *Client) Run(ctx context.Context, opts RunOptions) error {
-	return c.createOrRun(ctx, opts, true, c.stdout)
+	stdout := c.stdout
+	if opts.Detach {
+		// A detached run prints only the new container's ID.
+		stdout = io.Discard
+	}
+	return c.createOrRun(ctx, opts, true, stdout)
 }
 
 // Create records an unstarted container. Native OpenShell preparation inspects
@@ -213,7 +218,7 @@ func (c *Client) Start(ctx context.Context, name string) error {
 		return err
 	}
 	markEngineStart(ctx)
-	if err := c.nerdctl(ctx, "start", id); err != nil {
+	if err := c.nerdctlEcho(ctx, "start", id); err != nil {
 		return err
 	}
 	c.recordStarted(ctx, id, box)
@@ -238,7 +243,7 @@ func (c *Client) Stop(ctx context.Context, name string) error {
 	}
 	markEngineStop(ctx)
 	recordStopped(ctx, id)
-	return c.nerdctl(ctx, "stop", "--time", stopGraceSeconds, id)
+	return c.nerdctlEcho(ctx, "stop", "--time", stopGraceSeconds, id)
 }
 
 // Image is a parsed `nerdctl images --format json` entry.
@@ -288,19 +293,20 @@ func parseImages(r io.Reader) ([]Image, error) {
 
 // ImagePull pulls a reference into the space's local cache. nerdctl
 // streams progress to stderr (preserved through the Client's stderr)
-// and prints the final digest to stdout.
+// and prints the final digest to stdout, which is not shown: a bare digest
+// line is no progress for the user.
 func (c *Client) ImagePull(ctx context.Context, ref string) error {
 	if err := checkBuildSpace(ctx, []string{ref}); err != nil {
 		return err
 	}
-	return c.nerdctl(ctx, "pull", ref)
+	return c.nerdctlEcho(ctx, "pull", ref)
 }
 
 // ImageRemove deletes ref from the space's local image cache
 // (`nerdctl rmi <ref>`). Used by `yoloctl image prune` to reclaim
 // feature-composed images no box references.
 func (c *Client) ImageRemove(ctx context.Context, ref string) error {
-	return c.nerdctl(ctx, "rmi", ref)
+	return c.nerdctlEcho(ctx, "rmi", ref)
 }
 
 // ImagePresent reports whether ref already lives in the VM's local
@@ -510,7 +516,7 @@ func (c *Client) Remove(ctx context.Context, name string, force bool) error {
 		args = append(args, "-f")
 	}
 	args = append(args, id)
-	if err := c.nerdctl(ctx, args...); err != nil {
+	if err := c.nerdctlEcho(ctx, args...); err != nil {
 		return err
 	}
 	if name == id {
@@ -915,6 +921,16 @@ func (c *Client) ShellOutputQuiet(ctx context.Context, args ...string) (string, 
 func (c *Client) nerdctl(ctx context.Context, args ...string) error {
 	cmd := c.command(ctx, append([]string{"sudo", "nerdctl"}, args...)...)
 	cmd.Stdout = c.stdout
+	return vmhost.RunWithFilteredStderr(cmd, c.stderr)
+}
+
+// nerdctlEcho runs a nerdctl command whose stdout only echoes the container
+// or image it acted on (start, stop and rm print the ID; pull and rmi print
+// digests). That echo is not shown: a bare hex line is no progress for the
+// user. Errors and progress stay on stderr.
+func (c *Client) nerdctlEcho(ctx context.Context, args ...string) error {
+	cmd := c.command(ctx, append([]string{"sudo", "nerdctl"}, args...)...)
+	cmd.Stdout = io.Discard
 	return vmhost.RunWithFilteredStderr(cmd, c.stderr)
 }
 

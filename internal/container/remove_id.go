@@ -21,5 +21,5 @@ func (c *Client) RemoveContainerID(ctx context.Context, id string) error {
 			return errors.New("container removal requires a canonical acknowledged ID")
 		}
 	}
-	return c.nerdctl(ctx, "rm", id)
+	return c.nerdctlEcho(ctx, "rm", id)
 }

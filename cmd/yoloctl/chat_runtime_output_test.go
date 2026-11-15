@@ -81,8 +81,10 @@ func TestChatRuntimeLifecycleKeepsStructuredOutput(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(string(diagnostics), "fixture stdout") || !strings.Contains(string(diagnostics), "fixture stderr") {
-				t.Errorf("lifecycle diagnostics lost: %q", diagnostics)
+			// stderr diagnostics stay; nerdctl's stdout ID/name echo is not
+			// shown, while build output is.
+			if !strings.Contains(string(diagnostics), "fixture stderr") || strings.Contains(string(diagnostics), "fixture stdout") != (action == "build") {
+				t.Errorf("lifecycle diagnostics changed: %q", diagnostics)
 			}
 			calls, err := os.ReadFile(callsPath)
 			if err != nil {
@@ -223,8 +225,8 @@ func runChatEnsureLifecycle(t *testing.T, stopped, expected bool) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(string(diagnostics), "fixture stdout") || !strings.Contains(string(diagnostics), "fixture stderr") {
-				t.Errorf("ensure lost lifecycle diagnostics: %q", diagnostics)
+			if !strings.Contains(string(diagnostics), "fixture stderr") || strings.Contains(string(diagnostics), "fixture stdout") {
+				t.Errorf("ensure changed lifecycle diagnostics (stderr kept, ID echo hidden): %q", diagnostics)
 			}
 			calls, err := os.ReadFile(callsPath)
 			if err != nil {

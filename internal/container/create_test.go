@@ -120,8 +120,9 @@ esac
 				if create && ((!failed && id != strings.Repeat("a", 64)) || (failed && id != "") || stdout.Len() != 0) {
 					t.Fatal("create did not retain only its successful private acknowledgement", err)
 				}
-				if !create && stdout.String() != strings.Repeat("a", 64)+"\n" {
-					t.Fatal("Run output routing changed")
+				// A detached run's stdout is only the new container's ID: not shown.
+				if !create && stdout.Len() != 0 {
+					t.Fatal("detached run echoed its container ID", stdout.String())
 				}
 				raw, err := os.ReadFile(log)
 				if err != nil {

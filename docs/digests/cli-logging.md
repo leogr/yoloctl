@@ -33,7 +33,9 @@ while successful outcomes are hidden. Sink failure changes neither operation sta
 [1](#source-1) [3](#source-3) [4](#source-4)
 
 [FACT] Host create/start/stop/recreate/destroy and archive commands report
-existing phases as steps and end with an outcome after cleanup. Nested phases
+existing phases as steps and end with an outcome after cleanup; under the
+interactive steps block a successful operation's root summary is its only final
+line (no second success outcome), while failures keep their outcome. Nested phases
 inherit the root's parent; nested lifecycle calls do not emit another command
 outcome. VM image preparation, disk allocation, boot and controller deployment
 use the existing functions and guards, without new effect permission or retry.
@@ -41,6 +43,15 @@ Lima lifecycle launcher stdout/stderr feed the current phase’s detail; explici
 consumers retain their writers. Owned pipes retain bounded private host-log
 tails without waiting for descendant-held FDs. [9](#source-9)
 [1](#source-1) [5](#source-5)
+
+[FACT] While the steps block is on the process terminal, a VM-side
+`controller-internal` command's stderr (for example `space export --stop`'s
+workload stop) goes through it: a line framed as a yoloctl record is shown again
+through the process Logger above the block, any other line unchanged above it,
+one complete line at a time. Without the block those bytes are unchanged.
+Container start/stop/rm, detached run, pull and rmi never show their stdout,
+which only echoes an ID or digest; their stderr is unchanged.
+[14](#source-14) [15](#source-15)
 
 [FACT] Prompts, editors, host SSH and standalone attachments suspend the shared
 inline step view and resume after returning terminal ownership. They add no
@@ -89,3 +100,7 @@ notice's existing once-per-attachment rule are unchanged.
 
 12. <a id="source-12"></a> [Remaining CLI notices](../../cmd/yoloctl/image.go#L115) — `newImageRefreshCmd`; space_lifecycle.go `deleteSpaceRuntime`, session_client.go `attachToSession`, controller_client.go `callControllerTerminal`.
 13. <a id="source-13"></a> [Terminal diagnostic boundary](../../cmd/yoloctl/controller_stderr.go#L16) — `attachLogWriter`, `rawTerminalStderr`; owned_notice_test.go raw PTY, wire and caller-writer/stream controls.
+
+14. <a id="source-14"></a> [Child stderr under the block](../../cmd/yoloctl/infra_stderr.go#L1) — `infraStderr`, `infraLines`; controller_deploy.go `nativeInfrastructure`; cli_logging.go `cliOperation`; infra_stderr_test.go `TestInfraStderrGoesThroughTheStepsBlock`, `TestCLIOperationLeavesOneFinalLineUnderTheStepsBlock`.
+
+15. <a id="source-15"></a> [ID echoes](../../internal/container/container.go#L927) — `nerdctlEcho`, `Run` (detached), `Start`, `Stop`, `ImagePull`, `ImageRemove`, `Remove`; stop_id.go, remove_id.go; echo_output_test.go `TestNerdctlIDEchoesAreNotShown`.

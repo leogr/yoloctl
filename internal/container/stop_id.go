@@ -25,5 +25,5 @@ func (c *Client) StopContainerID(ctx context.Context, id string, immediate bool)
 	}
 	markEngineStop(ctx)
 	recordStopped(ctx, id)
-	return c.nerdctl(ctx, "stop", "--time", grace, id)
+	return c.nerdctlEcho(ctx, "stop", "--time", grace, id)
 }
