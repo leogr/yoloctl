@@ -31,25 +31,22 @@ type channelView struct {
 	unreadMentions int
 	lastRows       int
 	lastBodyHeight int
-	// lastImageHeight is the transcript's height with a one-line draft, no
-	// reply and no notice: the steady room an image preview may fill.
-	lastImageHeight int
-	lastTextWidth   int
-	anchor          *viewAnchor
-	lastTranscript  []transcriptRow
-	bodyCache       map[string]cachedBody
-	tableRows       map[string]map[markdownview.TableRowID]bool
-	members         []Member
-	loadingOlder    bool
-	olderRequest    string
-	historyEnd      bool
-	olderAt         int
-	olderSkipped    int
-	sel             *selection
-	joinedAt        time.Time
-	presence        []presenceEvent
-	topic, topicBy  string
-	topicKnown      bool
+	lastTextWidth  int
+	anchor         *viewAnchor
+	lastTranscript []transcriptRow
+	bodyCache      map[string]cachedBody
+	tableRows      map[string]map[markdownview.TableRowID]bool
+	members        []Member
+	loadingOlder   bool
+	olderRequest   string
+	historyEnd     bool
+	olderAt        int
+	olderSkipped   int
+	sel            *selection
+	joinedAt       time.Time
+	presence       []presenceEvent
+	topic, topicBy string
+	topicKnown     bool
 	// membership is joining, joined, left, kicked, deleted or unknown as the
 	// stream reports it; "" means never reported (the legacy single channel).
 	membership string

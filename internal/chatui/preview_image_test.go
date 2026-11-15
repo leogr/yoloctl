@@ -540,8 +540,8 @@ func TestPreviewFollowsTheTextWidth(t *testing.T) {
 	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 256, MaxRows: 256})
 	m.View()
 	m.runAction("image")
-	if h.requests[0].Cols != m.textWidth() || h.requests[0].Rows != m.lastImageHeight-1 {
-		t.Fatalf("asked for %d×%d cells, text width %d, image height %d", h.requests[0].Cols, h.requests[0].Rows, m.textWidth(), m.lastImageHeight)
+	if h.requests[0].Cols != m.textWidth() || h.requests[0].Rows != m.steadyBodyHeight()-1 {
+		t.Fatalf("asked for %d×%d cells, text width %d, steady height %d", h.requests[0].Cols, h.requests[0].Rows, m.textWidth(), m.steadyBodyHeight())
 	}
 	// Filling the width: the width bound it.
 	w := h.requests[0].Cols
@@ -589,17 +589,18 @@ func TestPreviewOfASmallImageIsNotAskedAgain(t *testing.T) {
 	}
 }
 
-// A tall image fills the transcript's steady height less the chip row; a
-// taller or shorter pane asks again, while a multi-line draft or a notice,
-// which do not change that height, never do.
+// A tall image fills the transcript's steady height less the chip row. A
+// taller or shorter pane asks again on the resize itself, before any other
+// event or render; a multi-line draft or a notice, which do not change that
+// height, never do.
 func TestPreviewFollowsTheTranscriptHeight(t *testing.T) {
 	m, h := previewModel(t)
 	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 256, MaxRows: 256})
 	m.View()
 	m.runAction("image")
 	rows := h.requests[0].Rows
-	if rows < 1 || rows != m.lastImageHeight-1 || rows >= m.lastBodyHeight {
-		t.Fatalf("asked for %d rows; image height %d, body %d", rows, m.lastImageHeight, m.lastBodyHeight)
+	if rows < 1 || rows != m.lastBodyHeight-1 {
+		t.Fatalf("asked for %d rows; body %d", rows, m.lastBodyHeight)
 	}
 	// Taller than wide: the height bound it.
 	m.Update(PreviewReadyMsg{Request: h.requests[0].Request, Generation: 1, Token: "tall", ID: 3, Cols: 10, Rows: rows})
@@ -613,10 +614,35 @@ func TestPreviewFollowsTheTranscriptHeight(t *testing.T) {
 		t.Fatalf("a draft or a notice asked again: %+v", h.requests)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	m.View()
-	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	if len(h.requests) != 2 || h.requests[1].Rows != rows+10 || strings.Join(h.released, ",") != "tall" {
 		t.Fatalf("a taller pane: requests %+v released %v", h.requests, h.released)
+	}
+	m.Update(PreviewReadyMsg{Request: h.requests[1].Request, Generation: 1, Token: "taller", ID: 4, Cols: 10, Rows: rows + 10})
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 25})
+	if len(h.requests) != 3 || h.requests[2].Rows != rows-5 || strings.Join(h.released, ",") != "tall,taller" {
+		t.Fatalf("a shorter pane: requests %+v released %v", h.requests, h.released)
+	}
+}
+
+// The steady height a preview asks for is the transcript height View lays
+// out with a one-line draft, no reply and no notice, at every size and with
+// or without the channel strip and the participants panel.
+func TestSteadyBodyHeightMatchesTheLayout(t *testing.T) {
+	m, _ := previewModel(t)
+	for _, size := range [][2]int{{20, 7}, {60, 15}, {60, 16}, {100, 30}, {200, 60}} {
+		for _, roster := range []bool{false, true} {
+			for _, channels := range [][]string{{"#space"}, {"#space", "#ux"}} {
+				for _, name := range channels {
+					m.view(name)
+				}
+				m.order, m.rosterOpen = channels, roster
+				m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+				m.View()
+				if got := m.steadyBodyHeight(); got != m.lastBodyHeight {
+					t.Errorf("%dx%d roster %v channels %d: steady %d, laid out %d", size[0], size[1], roster, len(channels), got, m.lastBodyHeight)
+				}
+			}
+		}
 	}
 }
 

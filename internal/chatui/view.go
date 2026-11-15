@@ -89,6 +89,30 @@ func (m *Model) transcriptWidth() int {
 	return m.width
 }
 
+// steadyBodyHeight is the transcript's height at the current size with a
+// one-line draft, no reply and no notice, as View lays it out: the room an
+// image preview may fill. It reads only the pane's geometry, so Update can
+// use it before the next View, and a draft or a notice never changes it.
+func (m *Model) steadyBodyHeight() int {
+	w, h := m.width, m.height
+	if w < 20 || h < 7 {
+		return 0
+	}
+	top, padRows := 1, 0
+	if h >= 16 {
+		top, padRows = top+1, 1
+	}
+	panel := 0
+	if m.rosterOpen {
+		panel = panelWidth(w)
+	}
+	if panel == 0 && len(m.order) > 1 {
+		top++
+	}
+	const blankRows, inputRows = 1, 1
+	return max(h-top-1-padRows-blankRows-inputRows-1, 0)
+}
+
 // textWidth is the width of message text at the current size.
 func (m *Model) textWidth() int { return max(m.transcriptWidth()-bodyIndent-1, 1) }
 
@@ -149,7 +173,6 @@ func (m *Model) View() tea.View {
 	bodyHeight := max(h-top-1-boxRows-statusRows-inputRows-1, 0)
 
 	m.lastRows, m.lastBodyHeight = len(transcript), bodyHeight
-	m.lastImageHeight = max(h-top-1-padRows-blankRows-1-1, 0)
 	m.place(transcript, bodyHeight)
 	m.lastTranscript = transcript
 	m.layout = viewLayout{bodyTop: top, bodyHeight: bodyHeight, transcriptWidth: tw}

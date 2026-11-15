@@ -103,10 +103,7 @@ func (m *Model) previewWidth() int {
 // the whole image, at most the host's tallest preview. A draft's extra lines
 // or a notice do not shrink it, so typing never asks for the image again.
 func (m *Model) previewHeight() int {
-	if m.lastImageHeight < 1 {
-		return max(m.previewCap.MaxRows, 1)
-	}
-	return max(min(m.lastImageHeight-1, m.previewCap.MaxRows), 1)
+	return max(min(m.steadyBodyHeight()-1, m.previewCap.MaxRows), 1)
 }
 
 // fits reports whether shown preview p, placed on p.cols×p.rows cells for

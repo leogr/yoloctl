@@ -13,7 +13,8 @@ its own. Asking captures the room, disk, human and channel identities at
 that moment and sends one preview request with the artifact tuple, the
 `[file NAME · SIZE]` chip text and the area the host fits the image in
 without enlarging it: the text width and the transcript's steady height (a
-one-line draft, no reply or notice) less the chip row, each at most 256. [1](#source-1) [2](#source-2)
+one-line draft, no reply or notice, from the pane's size, so a resize asks at
+once) less the chip row, each at most 256. [1](#source-1) [2](#source-2)
 
 [FACT] A pane has at most one preview: showing another first releases the
 current one. On a ready reply for its own request and generation the pane
@@ -66,7 +67,7 @@ cells display. [4](#source-4)
 
 ## Sources
 
-1. <a id="source-1"></a> [preview_image.go](../../internal/chatui/preview_image.go#L1) — `PreviewCapabilityMsg`, `PreviewReadyMsg`, `PreviewErrorMsg`, `previewArtifacts`, `chipAction`, `previewWidth`, `previewHeight`, `fits`, `canPreview`, `nextPreview`, `imageActionLabel`, `stepPreview`, `togglePreview`, `requestPreview`, `resizePreview`, `releasePreview`, `previewUpdate`, `previewChip`, `previewRow`, `previewRows`, `chipText`, `placeChips`, `literalChipLines`, `swapText`; the `trueColor` field, message action, `actPreview`, the body cache key, preview placement in `transcript`, `pointAt` in selection.go, `transcriptWidth`/`textWidth`/`lastImageHeight` in view.go, `isPreviewRow`, hover.go, model.go, mouse.go.
+1. <a id="source-1"></a> [preview_image.go](../../internal/chatui/preview_image.go#L1) — `PreviewCapabilityMsg`, `PreviewReadyMsg`, `PreviewErrorMsg`, `previewArtifacts`, `chipAction`, `previewWidth`, `previewHeight`, `fits`, `canPreview`, `nextPreview`, `imageActionLabel`, `stepPreview`, `togglePreview`, `requestPreview`, `resizePreview`, `releasePreview`, `previewUpdate`, `previewChip`, `previewRow`, `previewRows`, `chipText`, `placeChips`, `literalChipLines`, `swapText`; the `trueColor` field, message action, `actPreview`, the body cache key, preview placement in `transcript`, `pointAt` in selection.go, `transcriptWidth`/`textWidth`/`steadyBodyHeight` in view.go, `isPreviewRow`, hover.go, model.go, mouse.go.
 2. <a id="source-2"></a> [chat_image_preview.go](../../cmd/yoloctl/chat_image_preview.go#L1) — `claimChatPreviews`, `configure`, `relay`; chat_view.go wiring; chat_image_preview_test.go.
 3. <a id="source-3"></a> [preview_image_test.go](../../internal/chatui/preview_image_test.go#L1) — action gating, request fields, area following, no hover underline, placeholder rows and colour, hide, errors, stray ready, capability change, reduced colour profile, lost connection or membership, chip click toggle and its absence where no preview applies, an own echoed message's chip clicked through SGR input in a running program, per-chip previews under their chip rows (wrapped paragraphs and wrapped chips), footer stepping, width following, generated chip only (not a typed look-alike), literal file names, copy and wrapping, label placeholder filter, literal inert table chips (plain, code, emphasis; column alignment), literal placeholders.
 4. <a id="source-4"></a> [chat_image_standalone.go](../../cmd/yoloctl/chat_image_standalone.go#L1) — `ownsTerminalImages`, `standaloneImages` (`start`, `update`, `checkProbe`, `advertise`, `acceptCellSize`, `answer`, `finish`, `show`, `release`, `filter`, `close`), `standaloneChat`; chat_view.go wiring; chat_image_standalone_test.go.
