@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 
+	"github.com/leogr/yoloctl/internal/agentboximage"
 	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/lima"
@@ -26,6 +28,26 @@ func cliLog(level slog.Level, actor, format string, args ...any) {
 }
 
 func cliWarn(actor, format string, args ...any) { cliLog(slog.LevelWarn, actor, format, args...) }
+
+// cliReportTo writes one human message for a command that takes an explicit
+// report writer: a log record when that writer is the process stderr (the
+// Logger owns that terminal), otherwise one line on the caller's writer.
+func cliReportTo(w io.Writer, level slog.Level, actor, format string, args ...any) {
+	if w == io.Writer(os.Stderr) {
+		cliLog(level, actor, format, args...)
+		return
+	}
+	_, _ = fmt.Fprintf(w, format+"\n", args...)
+}
+
+// cliNoticeSink is the notice writer for agentboximage: its notices become
+// log records when they would go to the process stderr.
+func cliNoticeSink(w io.Writer) io.Writer {
+	if w == io.Writer(os.Stderr) {
+		return agentboximage.LogNotices
+	}
+	return w
+}
 func cliNotice(actor, format string, args ...any) {
 	cliLog(prettylog.LevelNotice, actor, format, args...)
 }

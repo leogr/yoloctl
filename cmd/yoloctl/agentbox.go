@@ -2213,18 +2213,16 @@ func startExistingAgentboxContainerPrepared(ctx context.Context, c *container.Cl
 // mode where a newer agent version rejects on-disk state an older one
 // wrote (e.g. codex 0.138 strict-parsing a rules ledger 0.134
 // tolerated). Advisory only; the nonzero exit is still returned.
-func warnPostAutoupdateFailure(w io.Writer, agentboxName, agent string, exitCode int) {
-	_, _ = fmt.Fprintf(w,
-		"\nnotice: the agent in %s exited (status %d) right after an autoupdate. "+
-			"A newer agent version can reject on-disk state written by an older "+
-			"one; if it failed to start, recreate the box (keeps workdir "+
-			"+ account state) or clear its persisted state:\n"+
-			"  yoloctl box recreate %s\n",
-		agentboxName, exitCode, agentboxName)
+func warnPostAutoupdateFailure(agentboxName, agent string, exitCode int) {
+	steps := "yoloctl box recreate " + agentboxName
 	if agent != "" {
-		_, _ = fmt.Fprintf(w,
-			"  yoloctl box inspect %s   # shows the account-derived state dir to inspect/clear\n", agentboxName)
+		steps += "\nyoloctl box inspect " + agentboxName + "   # shows the account-derived state dir to inspect/clear"
 	}
+	cliNotice(logging.Session, "the agent in %s exited (status %d) right after an autoupdate. "+
+		"A newer agent version can reject on-disk state written by an older "+
+		"one; if it failed to start, recreate the box (keeps workdir "+
+		"+ account state) or clear its persisted state:\n%s",
+		agentboxName, exitCode, steps)
 }
 
 func newAgentboxStopCmd() *cobra.Command {

@@ -113,7 +113,7 @@ composed image on the refreshed base and recreate it.`,
 				return fmt.Errorf("ensure space %s: %w", spaceName, err)
 			}
 			c := container.New(spaceName)
-			notice := cmd.ErrOrStderr()
+			notice := cliNoticeSink(cmd.ErrOrStderr())
 			ref := agentboximage.RefAgentbox
 			cliInfo(logging.Builder, "Refreshing %s", ref)
 			if cmd.Context().Value(warmKey{}) != nil {

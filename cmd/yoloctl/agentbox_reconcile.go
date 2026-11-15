@@ -187,7 +187,7 @@ func runRebuild(ctx context.Context, lock *agentsession.BoxLock, out, errw io.Wr
 		return err
 	}
 	if _, err := agentboximage.EnsureComposedImage(ctx, client, cfg.Image, candidates,
-		agentboximage.Options{Force: true, Notice: errw, FeaturePlan: plan}); err != nil {
+		agentboximage.Options{Force: true, Notice: cliNoticeSink(errw), FeaturePlan: plan}); err != nil {
 		return fmt.Errorf("rebuild composed image: %w", err)
 	}
 	actual, err := inspector.Inspect(ctx, cfg)

@@ -54,6 +54,12 @@ only echoes an ID or digest; their stderr is unchanged. Pull keeps its stdout,
 where pinned nerdctl writes its progress.
 [14](#source-14) [15](#source-15)
 
+[FACT] A command report or notice aimed at the process stderr is a log record:
+`cliReportTo` (chat export failures and its stderr report) and `cliNoticeSink`
+(image refresh and reconcile rebuild notices) write a record there and a plain
+line to any other caller writer; the post-autoupdate hint is one notice whose
+commands are continuation lines. [16](#source-16)
+
 [FACT] Prompts, editors, host SSH and standalone attachments suspend the shared
 inline step view and resume after returning terminal ownership. They add no
 input reader. Exec/attach/chat-stream output and dry-run data bypass added
@@ -105,3 +111,5 @@ notice's existing once-per-attachment rule are unchanged.
 14. <a id="source-14"></a> [Child stderr under the block](../../cmd/yoloctl/infra_stderr.go#L1) — `infraStderr`, `infraLines`; controller_deploy.go `nativeInfrastructure`; cli_logging.go `cliOperation`; infra_stderr_test.go `TestInfraStderrGoesThroughTheStepsBlock`, `TestCLIOperationLeavesOneFinalLineUnderTheStepsBlock`.
 
 15. <a id="source-15"></a> [ID echoes](../../internal/container/container.go#L927) — `nerdctlEcho`, `Run` (detached), `Start`, `Stop`, `ImageRemove`, `Remove` (`ImagePull` keeps stdout); stop_id.go, remove_id.go; echo_output_test.go `TestNerdctlIDEchoesAreNotShown`.
+
+16. <a id="source-16"></a> [Report routing](../../cmd/yoloctl/cli_logging.go#L32) — `cliReportTo`, `cliNoticeSink`; chat_export.go `exportChat`, `writeChatExport`; image.go, agentbox_reconcile.go; agentbox.go `warnPostAutoupdateFailure`; cli_report_test.go.

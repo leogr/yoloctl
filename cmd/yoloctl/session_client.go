@@ -309,7 +309,7 @@ func ensureAndAttachSession(ctx context.Context, c *container.Client, space, nam
 	if shouldWarnPostAutoupdate(agentUpdated, attachErr) {
 		var se *session.ExitError
 		if errors.As(attachErr, &se) {
-			warnPostAutoupdateFailure(errw, name, agentName, se.Status)
+			warnPostAutoupdateFailure(name, agentName, se.Status)
 		}
 	}
 	return attachErr

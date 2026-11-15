@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +16,7 @@ import (
 	"github.com/leogr/yoloctl/internal/atomicfile"
 	"github.com/leogr/yoloctl/internal/chatexport"
 	"github.com/leogr/yoloctl/internal/chatstream"
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/managedchat"
 	"github.com/spf13/cobra"
 )
@@ -204,10 +206,10 @@ func exportChat(parent context.Context, plan chatExportPlan, defaultChannel stri
 	err := chatstream.Export(ctx, events, older, actions, defaultChannel, plan.channels, func(r chatstream.ExportResult) {
 		if err := writeChatExport(plan, r, stdout, report); err != nil {
 			failed = append(failed, r.Channel)
-			_, _ = fmt.Fprintf(stderr, "%s: export failed: %v\n", r.Channel, err)
+			cliReportTo(stderr, slog.LevelError, logging.Chat, "%s: export failed: %v", r.Channel, err)
 		}
 		if r.Joined && r.PartErr != nil {
-			_, _ = fmt.Fprintf(stderr, "%s: the export joined this channel but leaving it again failed: %v\n", r.Channel, r.PartErr)
+			cliReportTo(stderr, slog.LevelWarn, logging.Chat, "%s: the export joined this channel but leaving it again failed: %v", r.Channel, r.PartErr)
 		}
 	})
 	cancel()
@@ -263,7 +265,7 @@ func writeChatExport(plan chatExportPlan, r chatstream.ExportResult, stdout, rep
 	if target == "-" {
 		where = "standard output"
 	}
-	_, _ = fmt.Fprintf(report, "%s: %d messages written to %s (received %d, oldest %s, newest %s)\n", r.Channel, len(selected), where, len(r.Messages), exportTime(oldest), exportTime(newest))
+	cliReportTo(report, slog.LevelInfo, logging.Chat, "%s: %d messages written to %s (received %d, oldest %s, newest %s)", r.Channel, len(selected), where, len(r.Messages), exportTime(oldest), exportTime(newest))
 	return nil
 }
 
