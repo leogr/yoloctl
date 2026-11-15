@@ -194,8 +194,8 @@ func TestQualifiedPatchStackAcceptsOptionalFourthPatch(t *testing.T) {
 	}
 }
 
-// The optional fifth patch (raw main input) chains on the fourth; a sixth is
-// refused.
+// The optional fifth patch (raw main input) chains on the fourth; unknown
+// subsequent patches are refused.
 func TestQualifiedPatchStackAcceptsOptionalFifthPatch(t *testing.T) {
 	p := releaseFixture(t).Pins
 	p.Patches[1].Tree = strings.Repeat("d", 40)
@@ -248,5 +248,37 @@ func TestQualifiedPatchStackAcceptsOptionalSixthPatch(t *testing.T) {
 	seventh.ForkTree = strings.Repeat("f", 40)
 	if qualifiedPatchStack(seventh) {
 		t.Fatal("seventh patch accepted")
+	}
+}
+
+func TestQualifiedPatchStackAcceptsOptionalSeventhPatch(t *testing.T) {
+	p := releaseFixture(t).Pins
+	fork := p.ForkTree
+	p.Patches[1].Tree = strings.Repeat("d", 40)
+	p.Patches = append(p.Patches,
+		SourcePatch{qualifiedPatch3Name, sha256Hex([]byte("patch3-fixture")), strings.Repeat("d", 40), strings.Repeat("e", 40)},
+		SourcePatch{qualifiedPatch4Name, sha256Hex([]byte("patch4-fixture")), strings.Repeat("e", 40), strings.Repeat("a", 40)},
+		SourcePatch{qualifiedPatch5Name, sha256Hex([]byte("patch5-fixture")), strings.Repeat("a", 40), strings.Repeat("b", 40)},
+		SourcePatch{qualifiedPatch6Name, sha256Hex([]byte("patch6-fixture")), strings.Repeat("b", 40), strings.Repeat("c", 40)},
+		SourcePatch{qualifiedPatch7Name, sha256Hex([]byte("patch7-fixture")), strings.Repeat("c", 40), fork})
+	if !qualifiedPatchStack(p) {
+		t.Fatal("seven-patch release refused")
+	}
+	broken := p
+	broken.Patches = append([]SourcePatch(nil), p.Patches...)
+	broken.Patches[6].ParentTree = strings.Repeat("f", 40)
+	if qualifiedPatchStack(broken) {
+		t.Fatal("seventh patch accepted off the chain")
+	}
+	skipped := p
+	skipped.Patches = append(append([]SourcePatch(nil), p.Patches[:5]...), p.Patches[6])
+	if qualifiedPatchStack(skipped) {
+		t.Fatal("seventh patch accepted without the sixth")
+	}
+	extra := p
+	extra.Patches = append(append([]SourcePatch(nil), p.Patches...), SourcePatch{"extra.patch", sha256Hex([]byte("8")), fork, strings.Repeat("f", 40)})
+	extra.ForkTree = strings.Repeat("f", 40)
+	if qualifiedPatchStack(extra) {
+		t.Fatal("unexpected eighth patch accepted")
 	}
 }

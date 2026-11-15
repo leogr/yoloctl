@@ -13,6 +13,11 @@ settings, even for unconfined boxes. These accepted limits are documented
 together; on the integration tree new ordinary boxes in a native space select
 0.1.6, while the legacy pins stay until the old path is retired. [15](#source-15)
 
+[FACT] The patched canonical-main transport applies backpressure to a live
+process when its input-owning attachment is slow. Other viewers and absent
+readers retain bounded replay; main exit releases backpressure before draining.
+This does not guarantee complete final output. [15](#source-15)
+
 [FACT] Policy comes from explicit positive capabilities plus requirements of
 effective features. `unconfined_network` is a separate process-mode setting that
 removes inner network/proxy confinement. UID/GID alignment makes host workdirs

@@ -41,6 +41,11 @@
       "file": "patches/0006-main-attachments-ended.patch",
       "sha256": "cbf89212158a5e15c87300b17173b2772dd6d9b2236137633d3717c338aa3e30",
       "result_tree": "d9d295cf04bfbd506f2d5fb87bf34b21a5bdcead"
+    },
+    {
+      "file": "patches/0007-main-output-backpressure.patch",
+      "sha256": "4395162fe85e0716e156b1c4a609fc946af372765a4547a994adaa7c0f49a230",
+      "result_tree": "a4a3e54fefd579785a619ad801c4f3cdb47949ad"
     }
   ],
   "source_dir": "OpenShell-patch2-signed",

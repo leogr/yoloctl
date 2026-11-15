@@ -1,0 +1,935 @@
+diff --git a/crates/openshell-sandbox/Cargo.toml b/crates/openshell-sandbox/Cargo.toml
+index 88f3380..1349d82 100644
+--- a/crates/openshell-sandbox/Cargo.toml
++++ b/crates/openshell-sandbox/Cargo.toml
+@@ -80,6 +80,7 @@ socket2 = { workspace = true, features = ["all"] }
+ tempfile = "3"
+ 
+ [dev-dependencies]
++tokio = { workspace = true, features = ["test-util"] }
+ hyper-util = { workspace = true }
+ openshell-ocsf = { path = "../openshell-ocsf", features = ["test-support"] }
+ rcgen = { workspace = true }
+diff --git a/crates/openshell-sandbox/src/main_session.rs b/crates/openshell-sandbox/src/main_session.rs
+index 334cfc2..43e522c 100644
+--- a/crates/openshell-sandbox/src/main_session.rs
++++ b/crates/openshell-sandbox/src/main_session.rs
+@@ -62,6 +62,8 @@ struct OutputLog {
+     version: watch::Sender<u64>,
+     /// Exec output must not discard bytes while its consumer is slow.
+     lossless: bool,
++    /// Canonical-main flow control never adopts exec's no-subscriber timeout.
++    main_backpressure: bool,
+     space_version: watch::Sender<u64>,
+     failed: AtomicBool,
+     post_exit: AtomicBool,
+@@ -71,6 +73,7 @@ struct OutputLog {
+ }
+ 
+ impl OutputLog {
++    #[cfg(test)]
+     fn new() -> Arc<Self> {
+         Self::with_lossless(false)
+     }
+@@ -87,6 +90,7 @@ impl OutputLog {
+             }),
+             version,
+             lossless,
++            main_backpressure: false,
+             space_version,
+             failed: AtomicBool::new(false),
+             post_exit: AtomicBool::new(false),
+@@ -117,6 +121,59 @@ impl OutputLog {
+         self.version.send_replace(version);
+     }
+ 
++    fn with_main_backpressure() -> Arc<Self> {
++        let mut log = Self::with_lossless(false);
++        Arc::get_mut(&mut log)
++            .expect("new output log")
++            .main_backpressure = true;
++        log
++    }
++
++    // The supervisor stream is the canonical main's consumer. If it is
++    // absent, retain the upstream bounded replay instead of waiting/failing.
++    // Consumption intentionally remains upstream's one position per log.
++    async fn publish_main(&self, event: MainOutput) {
++        let mut space = self.space_version.subscribe();
++        loop {
++            let _ = space.borrow_and_update();
++            let version = {
++                let mut state = self.state.lock().expect("main output log lock poisoned");
++                let pacing = self.subscribers.load(Ordering::Acquire) != 0
++                    && !self.post_exit.load(Ordering::Acquire);
++                while state.retained_bytes + event.len() > OUTPUT_BUFFER_BYTES {
++                    let Some(front) = state.events.front() else {
++                        break;
++                    };
++                    if pacing && front.sequence >= state.consumed_through {
++                        break;
++                    }
++                    let removed = state.events.pop_front().expect("front checked");
++                    state.retained_bytes -= removed.event.len();
++                }
++                if state.retained_bytes + event.len() > OUTPUT_BUFFER_BYTES {
++                    None
++                } else {
++                    let sequence = state.next_sequence;
++                    state.next_sequence = sequence
++                        .checked_add(1)
++                        .expect("main output sequence exhausted");
++                    state.retained_bytes += event.len();
++                    state.events.push_back(SequencedOutput {
++                        sequence,
++                        event: event.clone(),
++                    });
++                    Some(state.next_sequence)
++                }
++            };
++            if let Some(version) = version {
++                self.version.send_replace(version);
++                return;
++            }
++            // No timeout, fail flag or process termination on this path.
++            let _ = space.changed().await;
++        }
++    }
++
+     /// Bound memory by making the process reader wait for the attachment.
+     /// A stalled or absent attachment eventually fails the exec rather than
+     /// allowing a successful result with missing output.
+@@ -210,12 +267,12 @@ impl OutputLog {
+             .events
+             .front()
+             .map_or(state.next_sequence, |retained| retained.sequence);
+-        if self.lossless {
++        if self.lossless || self.main_backpressure {
+             state.consumed_through = next_sequence;
+             self.subscribers.fetch_add(1, Ordering::AcqRel);
+         }
+         drop(state);
+-        if self.lossless {
++        if self.lossless || self.main_backpressure {
+             self.space_version.send_modify(|version| *version += 1);
+         }
+         MainOutputCursor {
+@@ -253,7 +310,7 @@ pub struct MainOutputCursor {
+ 
+ impl Drop for MainOutputCursor {
+     fn drop(&mut self) {
+-        if self.output.lossless {
++        if self.output.lossless || self.output.main_backpressure {
+             self.output.subscribers.fetch_sub(1, Ordering::AcqRel);
+             self.output
+                 .space_version
+@@ -295,7 +352,7 @@ impl MainOutputCursor {
+                         .event
+                         .clone();
+                     self.next_sequence += 1;
+-                    if self.output.lossless {
++                    if self.output.lossless || self.output.main_backpressure {
+                         state.consumed_through = self.next_sequence;
+                         self.output
+                             .space_version
+@@ -446,7 +503,7 @@ impl MainSession {
+             pid,
+             terminal,
+             input: MainInputSender { sender: input },
+-            output: OutputLog::new(),
++            output: OutputLog::with_main_backpressure(),
+             input_owner: Mutex::new(None),
+             input_closed: AtomicBool::new(false),
+             next_owner: AtomicU64::new(1),
+@@ -604,9 +661,15 @@ impl MainSession {
+                             file.read(&mut buffer)
+                         }) {
+                             Ok(Ok(0) | Err(_)) => break,
+-                            Ok(Ok(read)) => output.publish(MainOutput::Stdout(
+-                                Bytes::copy_from_slice(&buffer[..read]),
+-                            )),
++                            Ok(Ok(read)) => {
++                                drop(ready);
++                                output
++                                    .output
++                                    .publish_main(MainOutput::Stdout(Bytes::copy_from_slice(
++                                        &buffer[..read],
++                                    )))
++                                    .await;
++                            }
+                             Err(_would_block) => {}
+                         }
+                     }
+@@ -697,10 +760,11 @@ impl MainSession {
+     }
+ 
+     async fn publish_agent(&self, stream: AgentStream, data: Bytes) {
+-        self.publish(match stream {
++        let event = match stream {
+             AgentStream::Stdout => MainOutput::Stdout(data.clone()),
+             AgentStream::Stderr => MainOutput::Stderr(data.clone()),
+-        });
++        };
++        self.output.publish_main(event).await;
+         if let Some(container_log) = &self.container_log {
+             let mut released = self.container_log_released.subscribe();
+             tokio::select! {
+@@ -735,6 +799,9 @@ impl MainSession {
+         attachment_expected: bool,
+         container_log_timeout: std::time::Duration,
+     ) -> bool {
++        if self.output.main_backpressure {
++            self.output.stop_retaining_after_exit();
++        }
+         if let Some(container_log) = &self.container_log {
+             let delivered = tokio::time::timeout(container_log_timeout, async {
+                 self.wait_for_output_readers().await;
+@@ -766,6 +833,9 @@ impl MainSession {
+         attachment_expected: bool,
+         timeout: std::time::Duration,
+     ) -> bool {
++        if self.output.main_backpressure {
++            self.output.stop_retaining_after_exit();
++        }
+         if self.output.lossless {
+             // The pipe can contain parent bytes after the process exits. If
+             // descendants keep it open beyond the drain deadline, report a
+@@ -1753,4 +1823,203 @@ mod tests {
+         publisher.abort();
+         gate.open();
+     }
++
++    async fn main_log_full(log: &OutputLog) {
++        tokio::time::timeout(std::time::Duration::from_secs(2), async {
++            while log.state.lock().unwrap().retained_bytes <= OUTPUT_BUFFER_BYTES - 4096 {
++                tokio::task::yield_now().await;
++            }
++        })
++        .await
++        .expect("canonical ring filled");
++    }
++
++    fn main_log_writer(log: Arc<OutputLog>) -> tokio::task::JoinHandle<()> {
++        tokio::spawn(async move {
++            for _ in 0..512 {
++                log.publish_main(MainOutput::Stdout(Bytes::from(vec![b'x'; 4096])))
++                    .await;
++            }
++        })
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn canonical_main_waits_past_exec_stall_timeout_without_failure() {
++        let log = OutputLog::with_main_backpressure();
++        let mut output = log.subscribe();
++        let producer = main_log_writer(log.clone());
++        main_log_full(&log).await;
++        tokio::time::advance(std::time::Duration::from_secs(61)).await;
++        assert!(!producer.is_finished());
++        assert!(!log.failed.load(Ordering::Acquire));
++        for _ in 0..512 {
++            assert!(
++                matches!(output.recv().await.unwrap(), MainOutput::Stdout(data) if data.len() == 4096)
++            );
++        }
++        producer.await.unwrap();
++    }
++
++    #[tokio::test]
++    async fn canonical_main_without_subscriber_discards_without_waiting() {
++        let log = OutputLog::with_main_backpressure();
++        tokio::time::timeout(
++            std::time::Duration::from_secs(2),
++            main_log_writer(log.clone()),
++        )
++        .await
++        .unwrap()
++        .unwrap();
++        assert!(log.state.lock().unwrap().events.front().unwrap().sequence > 0);
++        assert!(!log.failed.load(Ordering::Acquire));
++    }
++
++    #[tokio::test]
++    async fn canonical_subscriber_drop_or_main_exit_releases_full_ring() {
++        for exits in [false, true] {
++            let log = OutputLog::with_main_backpressure();
++            let output = log.subscribe();
++            let producer = main_log_writer(log.clone());
++            main_log_full(&log).await;
++            assert!(!producer.is_finished());
++            if exits {
++                log.stop_retaining_after_exit();
++            } else {
++                drop(output);
++            }
++            tokio::time::timeout(std::time::Duration::from_secs(2), producer)
++                .await
++                .unwrap()
++                .unwrap();
++            assert!(!log.failed.load(Ordering::Acquire));
++        }
++    }
++
++    #[tokio::test]
++    async fn canonical_two_subscribers_keep_upstreams_single_consumption_position() {
++        let log = OutputLog::with_main_backpressure();
++        let mut slow = log.subscribe();
++        let mut fast = log.subscribe();
++        let producer = main_log_writer(log.clone());
++        for _ in 0..512 {
++            fast.recv().await.unwrap();
++        }
++        producer.await.unwrap();
++        assert!(
++            slow.recv().await.is_err(),
++            "upstream does not pace by the slowest subscriber"
++        );
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn exec_without_subscriber_still_uses_its_existing_stall_failure() {
++        let log = OutputLog::with_lossless(true);
++        for _ in 0..(OUTPUT_BUFFER_BYTES / 4096) {
++            assert!(
++                log.publish_lossless(MainOutput::Stdout(Bytes::from(vec![0; 4096])))
++                    .await
++            );
++        }
++        let writer = log.clone();
++        let producer = tokio::spawn(async move {
++            writer
++                .publish_lossless(MainOutput::Stdout(Bytes::from_static(b"blocked")))
++                .await
++        });
++        tokio::task::yield_now().await;
++        tokio::time::advance(std::time::Duration::from_secs(31)).await;
++        assert!(!producer.await.unwrap());
++        assert!(log.failed.load(Ordering::Acquire));
++    }
++
++    #[tokio::test]
++    async fn canonical_blocked_publish_cancels_like_an_ordinary_reader_task() {
++        let log = OutputLog::with_main_backpressure();
++        let _output = log.subscribe();
++        let producer = main_log_writer(log.clone());
++        main_log_full(&log).await;
++        producer.abort();
++        assert!(producer.await.unwrap_err().is_cancelled());
++        log.stop_retaining_after_exit();
++        log.publish_main(MainOutput::Stdout(Bytes::from_static(b"after shutdown")))
++            .await;
++    }
++
++    #[tokio::test]
++    async fn canonical_main_pty_writer_is_backpressured_and_preserves_all_bytes() {
++        let (session, mut slave) = MainSession::terminal_for_test();
++        let mut output = session.subscribe();
++        let producer = tokio::task::spawn_blocking(move || {
++            slave
++                .write_all(&vec![b'x'; 2 * OUTPUT_BUFFER_BYTES])
++                .unwrap();
++        });
++        main_log_full(&session.output).await;
++        assert!(
++            !producer.is_finished(),
++            "the real PTY writer waits behind its subscriber"
++        );
++        let mut received = 0;
++        while received < 2 * OUTPUT_BUFFER_BYTES {
++            match output.recv().await.unwrap() {
++                MainOutput::Stdout(data) => {
++                    assert!(data.iter().all(|byte| *byte == b'x'));
++                    received += data.len();
++                }
++                other => panic!("unexpected {other:?}"),
++            }
++        }
++        tokio::time::timeout(std::time::Duration::from_secs(2), producer)
++            .await
++            .unwrap()
++            .unwrap();
++        assert_eq!(received, 2 * OUTPUT_BUFFER_BYTES);
++    }
++
++    #[tokio::test]
++    async fn canonical_finish_releases_a_waiting_reader_without_changing_exit_status() {
++        for remote in [false, true] {
++            let mut session = MainSession::inert();
++            let inner = Arc::get_mut(&mut session).unwrap();
++            inner.output = OutputLog::with_main_backpressure();
++            inner.readers_remaining.store(1, Ordering::Release);
++            let _output = session.subscribe();
++            let writer = session.clone();
++            let producer = tokio::spawn(async move {
++                for _ in 0..512 {
++                    writer
++                        .output
++                        .publish_main(MainOutput::Stdout(Bytes::from(vec![0; 4096])))
++                        .await;
++                }
++                writer.reader_finished();
++            });
++            main_log_full(&session.output).await;
++            let finish = async {
++                if remote {
++                    session.finish_remote(7, false).await;
++                } else {
++                    session.finish(7, false).await;
++                }
++            };
++            tokio::time::timeout(std::time::Duration::from_secs(2), finish)
++                .await
++                .unwrap();
++            producer.await.unwrap();
++            assert!(session.finished());
++            assert!(!session.output_failed());
++            assert!(matches!(
++                session
++                    .output
++                    .state
++                    .lock()
++                    .unwrap()
++                    .events
++                    .back()
++                    .unwrap()
++                    .event,
++                MainOutput::Exit(7)
++            ));
++        }
++    }
+ }
+diff --git a/crates/openshell-supervisor-process/src/main_session.rs b/crates/openshell-supervisor-process/src/main_session.rs
+index 5bf4879..edd2477 100644
+--- a/crates/openshell-supervisor-process/src/main_session.rs
++++ b/crates/openshell-supervisor-process/src/main_session.rs
+@@ -7,7 +7,7 @@
+ use openshell_sandbox_backend::test_support as rpc_test;
+ 
+ use openshell_sandbox_backend::{BoundaryProcess, BoundaryTerminal, ProcessAttachment};
+-use std::collections::VecDeque;
++use std::collections::{HashMap, VecDeque};
+ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+ use std::sync::{Arc, Mutex};
+ 
+@@ -47,12 +47,17 @@ struct OutputLogState {
+     events: VecDeque<SequencedOutput>,
+     retained_bytes: usize,
+     next_sequence: u64,
++    next_cursor: u64,
++    cursors: HashMap<u64, u64>,
++    pacing: Option<(u64, u64)>,
+ }
+ 
+ #[derive(Debug)]
+ struct OutputLog {
+     state: Mutex<OutputLogState>,
+     version: watch::Sender<u64>,
++    space: watch::Sender<u64>,
++    after_exit: std::sync::atomic::AtomicBool,
+     terminal_reported: std::sync::atomic::AtomicBool,
+     terminal_reported_notify: Notify,
+ }
+@@ -60,13 +65,19 @@ struct OutputLog {
+ impl OutputLog {
+     fn new() -> Arc<Self> {
+         let (version, _) = watch::channel(0);
++        let (space, _) = watch::channel(0);
+         Arc::new(Self {
+             state: Mutex::new(OutputLogState {
+                 events: VecDeque::new(),
+                 retained_bytes: 0,
+                 next_sequence: 0,
++                next_cursor: 0,
++                cursors: HashMap::new(),
++                pacing: None,
+             }),
+             version,
++            space,
++            after_exit: std::sync::atomic::AtomicBool::new(false),
+             terminal_reported: std::sync::atomic::AtomicBool::new(false),
+             terminal_reported_notify: Notify::new(),
+         })
+@@ -93,16 +104,78 @@ impl OutputLog {
+         self.version.send_replace(version);
+     }
+ 
++    // Only the input owner's cursor paces the boundary reader. Other
++    // attachments retain the upstream replay/lag behavior.
++    async fn publish_paced(&self, event: MainOutput) {
++        let mut space = self.space.subscribe();
++        loop {
++            let _ = space.borrow_and_update();
++            let version = {
++                let mut state = self.state.lock().expect("main output log lock poisoned");
++                let consumed = if self.after_exit.load(Ordering::Acquire) {
++                    None
++                } else {
++                    state
++                        .pacing
++                        .and_then(|(_, cursor)| state.cursors.get(&cursor).copied())
++                };
++                while state.retained_bytes + event.len() > OUTPUT_BUFFER_BYTES {
++                    let Some(front) = state.events.front() else {
++                        break;
++                    };
++                    if consumed.is_some_and(|next| front.sequence >= next) {
++                        break;
++                    }
++                    let removed = state.events.pop_front().expect("front checked");
++                    state.retained_bytes -= removed.event.len();
++                }
++                if state.retained_bytes + event.len() > OUTPUT_BUFFER_BYTES {
++                    None
++                } else {
++                    let sequence = state.next_sequence;
++                    state.next_sequence = sequence
++                        .checked_add(1)
++                        .expect("main output sequence exhausted");
++                    state.retained_bytes += event.len();
++                    state.events.push_back(SequencedOutput {
++                        sequence,
++                        event: event.clone(),
++                    });
++                    Some(state.next_sequence)
++                }
++            };
++            if let Some(version) = version {
++                self.version.send_replace(version);
++                return;
++            }
++            // Subscribe before inspecting the ring; a receive/release/drop
++            // between the inspection and this await cannot lose its wake.
++            let _ = space.changed().await;
++        }
++    }
++
++    fn stop_backpressure(&self) {
++        self.after_exit.store(true, Ordering::Release);
++        self.space
++            .send_modify(|version| *version = version.wrapping_add(1));
++    }
++
+     fn subscribe(self: &Arc<Self>) -> MainOutputCursor {
+         let version = self.version.subscribe();
+-        let state = self.state.lock().expect("main output log lock poisoned");
++        let mut state = self.state.lock().expect("main output log lock poisoned");
+         let next_sequence = state
+             .events
+             .front()
+             .map_or(state.next_sequence, |retained| retained.sequence);
++        let id = state.next_cursor;
++        state.next_cursor = id
++            .checked_add(1)
++            .expect("main output cursor identity exhausted");
++        state.cursors.insert(id, next_sequence);
+         drop(state);
+         MainOutputCursor {
+             output: Arc::clone(self),
++            id,
+             next_sequence,
+             version,
+         }
+@@ -130,15 +203,38 @@ pub struct MainOutputLagged {
+ 
+ pub struct MainOutputCursor {
+     output: Arc<OutputLog>,
++    id: u64,
+     next_sequence: u64,
+     version: watch::Receiver<u64>,
+ }
+ 
++impl Drop for MainOutputCursor {
++    fn drop(&mut self) {
++        let mut state = self
++            .output
++            .state
++            .lock()
++            .expect("main output log lock poisoned");
++        state.cursors.remove(&self.id);
++        if state.pacing.is_some_and(|(_, cursor)| cursor == self.id) {
++            state.pacing = None;
++        }
++        drop(state);
++        self.output
++            .space
++            .send_modify(|version| *version = version.wrapping_add(1));
++    }
++}
++
+ impl MainOutputCursor {
++    pub(crate) fn id(&self) -> u64 {
++        self.id
++    }
++
+     pub async fn recv(&mut self) -> Result<MainOutput, MainOutputLagged> {
+         loop {
+             let next = {
+-                let state = self
++                let mut state = self
+                     .output
+                     .state
+                     .lock()
+@@ -150,6 +246,7 @@ impl MainOutputCursor {
+                 if self.next_sequence < oldest {
+                     let skipped = oldest - self.next_sequence;
+                     self.next_sequence = oldest;
++                    state.cursors.insert(self.id, self.next_sequence);
+                     return Err(MainOutputLagged { skipped });
+                 }
+                 if self.next_sequence >= state.next_sequence {
+@@ -164,10 +261,14 @@ impl MainOutputCursor {
+                         .event
+                         .clone();
+                     self.next_sequence += 1;
++                    state.cursors.insert(self.id, self.next_sequence);
+                     Some(event)
+                 }
+             };
+             if let Some(event) = next {
++                self.output
++                    .space
++                    .send_modify(|version| *version = version.wrapping_add(1));
+                 return Ok(event);
+             }
+             // The log owns a sender for the cursor lifetime, so closure is not
+@@ -264,8 +365,14 @@ impl MainSession {
+             loop {
+                 match stdout.read(&mut buffer).await {
+                     Ok(0) | Err(_) => break,
+-                    Ok(read) => stdout_session
+-                        .publish(MainOutput::Stdout(Bytes::copy_from_slice(&buffer[..read]))),
++                    Ok(read) => {
++                        stdout_session
++                            .output
++                            .publish_paced(MainOutput::Stdout(Bytes::copy_from_slice(
++                                &buffer[..read],
++                            )))
++                            .await;
++                    }
+                 }
+             }
+             stdout_session.reader_finished();
+@@ -277,8 +384,14 @@ impl MainSession {
+                 loop {
+                     match stderr.read(&mut buffer).await {
+                         Ok(0) | Err(_) => break,
+-                        Ok(read) => stderr_session
+-                            .publish(MainOutput::Stderr(Bytes::copy_from_slice(&buffer[..read]))),
++                        Ok(read) => {
++                            stderr_session
++                                .output
++                                .publish_paced(MainOutput::Stderr(Bytes::copy_from_slice(
++                                    &buffer[..read],
++                                )))
++                                .await;
++                        }
+                     }
+                 }
+                 stderr_session.reader_finished();
+@@ -316,6 +429,7 @@ impl MainSession {
+     ///
+     /// Returns whether terminal delivery must complete before shutdown.
+     pub async fn finish(&self, exit_code: i32, attachment_expected: bool) -> bool {
++        self.output.stop_backpressure();
+         self.wait_for_output_readers().await;
+         self.complete_finish(exit_code, attachment_expected)
+     }
+@@ -337,6 +451,9 @@ impl MainSession {
+         attachment_expected: bool,
+         timeout: std::time::Duration,
+     ) -> bool {
++        // The existing output-drain deadline owns the end path, even when
++        // an input owner remains alive without reading.
++        self.output.stop_backpressure();
+         let _ = tokio::time::timeout(timeout, self.wait_for_output_readers()).await;
+         self.complete_finish(exit_code, attachment_expected)
+     }
+@@ -465,12 +582,45 @@ impl MainSession {
+     }
+ 
+     pub fn acquire_input(&self) -> Result<(u64, tokio::sync::mpsc::Sender<Vec<u8>>), &'static str> {
++        self.acquire_input_for_cursor(None)
++    }
++
++    pub(crate) fn acquire_input_for_output(
++        &self,
++        cursor: u64,
++    ) -> Result<(u64, tokio::sync::mpsc::Sender<Vec<u8>>), &'static str> {
++        self.acquire_input_for_cursor(Some(cursor))
++    }
++
++    fn acquire_input_for_cursor(
++        &self,
++        cursor: Option<u64>,
++    ) -> Result<(u64, tokio::sync::mpsc::Sender<Vec<u8>>), &'static str> {
+         let mut owner = self.input_owner.lock().expect("main input lock poisoned");
+         if owner.is_some() {
+             return Err("canonical main process already has an input owner");
+         }
++        let mut output = self
++            .output
++            .state
++            .lock()
++            .expect("main output log lock poisoned");
++        if cursor.is_some_and(|cursor| !output.cursors.contains_key(&cursor)) {
++            return Err("canonical main process output attachment is closed");
++        }
++        let oldest = output
++            .events
++            .front()
++            .map_or(output.next_sequence, |event| event.sequence);
++        if cursor.is_some_and(|cursor| output.cursors[&cursor] < oldest) {
++            // Already evicted replay cannot be made lossless by taking stdin.
++            // Refuse before acquiring the lease; existing viewer lag handling
++            // still owns that attachment.
++            return Err("canonical main process output attachment has fallen behind");
++        }
+         let id = self.next_owner.fetch_add(1, Ordering::Relaxed);
+         *owner = Some(id);
++        output.pacing = cursor.map(|cursor| (id, cursor));
+         Ok((id, self.input.clone()))
+     }
+ 
+@@ -478,6 +628,18 @@ impl MainSession {
+         let mut owner = self.input_owner.lock().expect("main input lock poisoned");
+         if *owner == Some(id) {
+             *owner = None;
++            let mut output = self
++                .output
++                .state
++                .lock()
++                .expect("main output log lock poisoned");
++            if output.pacing.is_some_and(|(owner, _)| owner == id) {
++                output.pacing = None;
++            }
++            drop(output);
++            self.output
++                .space
++                .send_modify(|version| *version = version.wrapping_add(1));
+         }
+     }
+ 
+@@ -771,4 +933,168 @@ mod tests {
+             "no boundary process is attached"
+         );
+     }
++
++    fn paced_boundary() -> (Arc<MainSession>, tokio::io::DuplexStream) {
++        let (stdin, _stdin_peer) = tokio::io::duplex(1024);
++        let (stdout, stdout_peer) = tokio::io::duplex(1024);
++        let session = MainSession::from_boundary(
++            ProcessAttachment {
++                stdin: Box::new(stdin),
++                stdout: Box::new(stdout),
++                stderr: None,
++                terminal: None,
++            },
++            rpc_test::process(Arc::new(TestBoundaryProcess {
++                signals: Mutex::new(Vec::new()),
++            })),
++        );
++        (session, stdout_peer)
++    }
++
++    async fn wait_full(session: &MainSession) {
++        tokio::time::timeout(std::time::Duration::from_secs(2), async {
++            while session.output.state.lock().unwrap().retained_bytes <= OUTPUT_BUFFER_BYTES - 4096
++            {
++                tokio::task::yield_now().await;
++            }
++        })
++        .await
++        .expect("boundary reader filled the bounded ring");
++    }
++
++    #[tokio::test]
++    async fn pacing_owner_receives_every_byte_while_a_viewer_lags() {
++        let (session, mut writer) = paced_boundary();
++        let mut owner = session.subscribe();
++        let (lease, _) = session.acquire_input_for_output(owner.id()).unwrap();
++        let mut viewer = session.subscribe();
++        let bytes: Vec<u8> = (0..3 * OUTPUT_BUFFER_BYTES)
++            .map(|n| u8::try_from(n % 251).unwrap())
++            .collect();
++        let expected = bytes.clone();
++        let producer = tokio::spawn(async move {
++            writer.write_all(&bytes).await.unwrap();
++        });
++        wait_full(&session).await;
++        assert!(
++            !producer.is_finished(),
++            "slow owner backpressures the real boundary stream"
++        );
++        let mut received = Vec::new();
++        while received.len() < expected.len() {
++            match owner.recv().await.expect("pacer never lags") {
++                MainOutput::Stdout(data) => received.extend_from_slice(&data),
++                other => panic!("unexpected {other:?}"),
++            }
++        }
++        tokio::time::timeout(std::time::Duration::from_secs(2), producer)
++            .await
++            .unwrap()
++            .unwrap();
++        assert_eq!(received, expected);
++        assert!(
++            viewer.recv().await.is_err(),
++            "an unread viewer retains upstream lag semantics"
++        );
++        session.release_input(lease);
++    }
++
++    #[tokio::test]
++    async fn pacing_release_drop_and_main_exit_unblock_boundary_readers() {
++        for action in ["release", "drop", "exit"] {
++            let (session, mut writer) = paced_boundary();
++            let owner = session.subscribe();
++            let (lease, _) = session.acquire_input_for_output(owner.id()).unwrap();
++            let producer = tokio::spawn(async move {
++                writer
++                    .write_all(&vec![b'x'; 3 * OUTPUT_BUFFER_BYTES])
++                    .await
++                    .unwrap();
++            });
++            wait_full(&session).await;
++            assert!(!producer.is_finished());
++            match action {
++                "release" => session.release_input(lease),
++                "drop" => drop(owner),
++                "exit" => {
++                    session
++                        .finish_remote_with_timeout(7, false, std::time::Duration::from_millis(100))
++                        .await;
++                    assert!(session.finished());
++                }
++                _ => unreachable!(),
++            }
++            tokio::time::timeout(std::time::Duration::from_secs(2), producer)
++                .await
++                .unwrap()
++                .unwrap();
++        }
++    }
++
++    #[tokio::test]
++    async fn viewer_taking_input_becomes_the_pacer_and_stale_release_cannot_clear_it() {
++        let session = MainSession::inert();
++        let first = session.subscribe();
++        let (old, _) = session.acquire_input_for_output(first.id()).unwrap();
++        let mut next = session.subscribe();
++        session.release_input(old);
++        let (current, _) = session.acquire_input_for_output(next.id()).unwrap();
++        session.release_input(old);
++        let log = session.output.clone();
++        let producer = tokio::spawn(async move {
++            for _ in 0..512 {
++                log.publish_paced(MainOutput::Stdout(Bytes::from(vec![b'x'; 4096])))
++                    .await;
++            }
++        });
++        wait_full(&session).await;
++        assert!(!producer.is_finished());
++        for _ in 0..512 {
++            assert!(next.recv().await.is_ok());
++        }
++        producer.await.unwrap();
++        session.release_input(current);
++    }
++
++    #[tokio::test]
++    async fn blocked_pacing_publish_is_cancellable_without_holding_the_ring_lock() {
++        let session = MainSession::inert();
++        let owner = session.subscribe();
++        let (lease, _) = session.acquire_input_for_output(owner.id()).unwrap();
++        let log = session.output.clone();
++        let producer = tokio::spawn(async move {
++            for _ in 0..512 {
++                log.publish_paced(MainOutput::Stdout(Bytes::from(vec![0; 4096])))
++                    .await;
++            }
++        });
++        wait_full(&session).await;
++        producer.abort();
++        assert!(producer.await.unwrap_err().is_cancelled());
++        session.release_input(lease);
++        session
++            .output
++            .publish_paced(MainOutput::Stdout(Bytes::from_static(b"after shutdown")))
++            .await;
++    }
++
++    #[tokio::test]
++    async fn already_lagged_or_dropped_viewer_cannot_acquire_the_input_lease() {
++        let session = MainSession::inert();
++        let mut old = session.subscribe();
++        for _ in 0..512 {
++            session
++                .output
++                .publish_paced(MainOutput::Stdout(Bytes::from(vec![0; 4096])))
++                .await;
++        }
++        assert!(session.acquire_input_for_output(old.id()).is_err());
++        assert!(session.input_owner.lock().unwrap().is_none());
++        assert!(old.recv().await.is_err());
++        let id = old.id();
++        drop(old);
++        assert!(session.acquire_input_for_output(id).is_err());
++        let current = session.subscribe();
++        assert!(session.acquire_input_for_output(current.id()).is_ok());
++    }
+ }
+diff --git a/crates/openshell-supervisor-process/src/ssh.rs b/crates/openshell-supervisor-process/src/ssh.rs
+index 324e88b..82ad04c 100644
+--- a/crates/openshell-supervisor-process/src/ssh.rs
++++ b/crates/openshell-supervisor-process/src/ssh.rs
+@@ -409,6 +409,7 @@ struct ChannelState {
+     pty_request: Option<PtyRequest>,
+     no_login_shell: bool,
+     main_input_owner: Option<u64>,
++    main_output_cursor: Option<u64>,
+     main_attached: bool,
+     main_read_only: bool,
+     /// `OPENSHELL_MAIN_RAW_INPUT=1`: every input byte reaches the main
+@@ -829,12 +830,14 @@ impl russh::server::Handler for SshHandler {
+                 .channels
+                 .get_mut(&channel)
+                 .expect("main channel existence checked above");
++            let mut output = main_session.subscribe();
++            state.main_output_cursor = Some(output.id());
+             // A raw-input attachment must own stdin: when another attachment
+             // owns it, refuse instead of attaching read-only.
+             // The owner token is recorded before any await, so the handler's
+             // drop releases the lease even if this request is cancelled.
+             let raw_input_sender = if raw_input {
+-                match main_session.acquire_input() {
++                match main_session.acquire_input_for_output(output.id()) {
+                     Ok((owner, input)) => {
+                         state.main_input_owner = Some(owner);
+                         Some(input)
+@@ -863,7 +866,7 @@ impl russh::server::Handler for SshHandler {
+             } else if let Some(input) = raw_input_sender {
+                 (Some(InputSender::Main(input)), None)
+             } else {
+-                match main_session.acquire_input() {
++                match main_session.acquire_input_for_output(output.id()) {
+                     Ok((owner, input)) => {
+                         state.main_input_owner = Some(owner);
+                         (Some(InputSender::Main(input)), None)
+@@ -874,7 +877,6 @@ impl russh::server::Handler for SshHandler {
+             state.main_input_pending = warning.is_some();
+             state.input_sender = input;
+             state.main_detach_prefix_pending = false;
+-            let mut output = main_session.subscribe();
+             let terminal_delivery = main_session.clone();
+             let handle = session.handle();
+             session.channel_success(channel)?;
+@@ -1045,7 +1047,8 @@ impl russh::server::Handler for SshHandler {
+             && !forward.is_empty()
+             && let Some(main_session) = self.main_session.as_ref()
+             && !main_session.finished()
+-            && let Ok((owner, input)) = main_session.acquire_input()
++            && let Some(cursor) = state.main_output_cursor
++            && let Ok((owner, input)) = main_session.acquire_input_for_output(cursor)
+         {
+             state.main_input_owner = Some(owner);
+             state.input_sender = Some(InputSender::Main(input));

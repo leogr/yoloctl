@@ -1,6 +1,6 @@
 # OpenShell 0.1.6 image and environment compatibility
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47` plus `third_party/openshell/patches/`; runtime selection `1d265df` and accompanying changes; mediated signal delivery at `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes; its measurement and `signalOnce` at `658ead276` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47` plus `third_party/openshell/patches/`; runtime selection `1d265df` and accompanying changes; mediated signal delivery at `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes; its measurement and `signalOnce` at `658ead276` and accompanying changes; main-output backpressure at `e68b8cf8cd78afd4cf5b888c45a7524a92ea15be` and accompanying changes.
 
 [FACT] On the upgrade integration tree a native space selects the embedded
 0.1.6 runtime for every new ordinary (non-privileged) box and for an explicit
@@ -129,6 +129,17 @@ once; a shutdown during the wait writes nothing. The file does not tell
 completion from abandonment and carries no timer. Releases may carry it as an
 optional sixth patch after the fifth. [35](#source-35)
 
+[FACT] Patch 7 (`0007-main-output-backpressure.patch`) makes a live canonical
+main process wait when its input-owning attachment falls behind. The supervisor
+protects that attachment's output cursor; other viewers can still lag. Releasing
+input or ending the cursor wakes the reader. The sandbox separately waits while
+its supervisor-stream subscriber exists, discarding old replay when absent.
+Neither main-process path uses exec's 30-second failure/termination rule. Main
+exit releases waiting readers before the existing drain, so final output remains
+bounded best effort. The sandbox retains upstream's single consumption position:
+overlapping subscribers can still skip data. Rings remain 1 MiB; this is source
+and unit-test evidence, not live holder qualification. [36](#source-36)
+
 [FACT] Inside a box, a `kill` or `rt_sigqueueinfo` aimed at a positive PID is
 seccomp-notified to the sandbox broker, which checks that the notification is
 still live (`validate_id`), delivers the signal itself through
@@ -243,3 +254,4 @@ operator-box case was not rerun separately. [26](#source-26)
 33. <a id="source-33"></a> [cmd/yoloctl/signals.go](../../cmd/yoloctl/signals.go#L17-L50) — `commandSignalContext`: first signal forwarded, a second cancels; `signalOnce` in `signal_once_linux_test.go` (`tgkill`), used by `attach_signal_test.go`, `signals_test.go` and `signals_tui_test.go`.
 34. <a id="source-34"></a> [Patch 5](../../third_party/openshell/patches/0005-main-raw-input.patch#L1-L480) — `filter_main_detach_sequence` bypass, `main_raw_input`, `refuse_raw_main` and its five tests; `internal/openshell/release.go` `qualifiedPatch5Name`, `qualifiedPatchStack`; release_test.go `TestQualifiedPatchStackAcceptsOptionalFifthPatch`.
 35. <a id="source-35"></a> [Patch 6](../../third_party/openshell/patches/0006-main-attachments-ended.patch#L1-L303) — `drain_then_mark_attachments_ended`, `persist_main_attachments_ended` and four tests in `openshell-supervisor/src/lib.rs`; ssh.rs `main_delivery_completes_*` pin the connection-end semantics; `internal/openshell/release.go` `qualifiedPatch6Name`; release_test.go `TestQualifiedPatchStackAcceptsOptionalSixthPatch`.
+36. <a id="source-36"></a> [Patch 7](../../third_party/openshell/patches/0007-main-output-backpressure.patch#L1) — `publish_main`, `publish_paced`, `acquire_input_for_output`, main-only subscriber/cursor flow control and PTY/exit/cancellation controls; `internal/openshell/release.go` `qualifiedPatch7Name`, `qualifiedPatchStack`; release_test.go `TestQualifiedPatchStackAcceptsOptionalSeventhPatch`.

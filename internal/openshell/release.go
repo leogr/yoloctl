@@ -24,6 +24,7 @@ const (
 	qualifiedPatch4Name    = "v0072-process-group-signals.patch"
 	qualifiedPatch5Name    = "main-raw-input.patch"
 	qualifiedPatch6Name    = "main-attachments-ended.patch"
+	qualifiedPatch7Name    = "main-output-backpressure.patch"
 	protocolFixtureVersion = "workspace-read-only-v1"
 )
 
@@ -119,7 +120,7 @@ func LoadQualifiedRelease(raw []byte, reviewedSHA256 string) (QualifiedRelease, 
 // and the last ending at the fork tree. Two-patch releases stay valid, so
 // boxes created from them keep loading their recorded qualification.
 func qualifiedPatchStack(p ReleasePins) bool {
-	names := []string{"unmediated-network.patch", "workspace-read-only.patch", qualifiedPatch3Name, qualifiedPatch4Name, qualifiedPatch5Name, qualifiedPatch6Name}
+	names := []string{"unmediated-network.patch", "workspace-read-only.patch", qualifiedPatch3Name, qualifiedPatch4Name, qualifiedPatch5Name, qualifiedPatch6Name, qualifiedPatch7Name}
 	if len(p.Patches) < 2 || len(p.Patches) > len(names) {
 		return false
 	}
