@@ -363,7 +363,8 @@ func TestNativeGenerationRefusesUnprovedEmptyTaskAndUnknownEvenWithObservationBi
 // Stop-box route M-b: a box created with the launcher keeps it as its main
 // process in every later generation (its next start after it stopped with
 // its session). A generation that carries the box's main-process kind is
-// accepted; one that changes it is refused before it is selected.
+// accepted; one that changes it is refused at acknowledgement, before any
+// launch (the preparation callback has already written its selection).
 func TestNativeGenerationKeepsTheMainLauncher(t *testing.T) {
 	for _, current := range []bool{true, false} {
 		_, g := generationFixtureWith(t, current)
