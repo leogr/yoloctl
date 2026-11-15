@@ -1363,7 +1363,7 @@ func (m *model) activatePane(t *tabs.Tab, p *panes.Pane) {
 			if m.focusPalette {
 				m.focusPalette = false
 				if m.console != nil {
-					m.console.ClearShown() // an idle palette closes; a running command keeps its output
+					m.paletteClosed() // an idle palette closes; a running command keeps its output
 				}
 			}
 			return

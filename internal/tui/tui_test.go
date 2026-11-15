@@ -1792,6 +1792,27 @@ func TestPaneRoutesClosingThePaletteClearIt(t *testing.T) {
 	}
 }
 
+// A request reusing a tab while the palette shows Ctrl+R history also leaves
+// that view: reopening shows neither the history nor the last output.
+func TestRequestReuseLeavesTheHistoryView(t *testing.T) {
+	m := newTestModel(t, 80, 20)
+	m.tabs.Add(testTab(nil, "yoloctl box attach api --space dev", false))
+	m.focusPalette = true
+	m.console.ShowError("OLD-PALETTE-OUTPUT")
+	_, _ = m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	if !m.consoleHistory || !strings.Contains(m.View().Content, "OLD-PALETTE-OUTPUT") {
+		t.Fatal("precondition: Ctrl+R shows the history")
+	}
+	m.handleTabRequest(termio.TabRequest{Op: "attach", Space: "dev", Box: "api"}, false, nil)
+	if m.focusPalette || m.consoleHistory {
+		t.Fatal("the reuse did not leave the palette's history view")
+	}
+	_, _ = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+	if strings.Contains(m.View().Content, "OLD-PALETTE-OUTPUT") {
+		t.Fatal("reopened palette shows the old history or output")
+	}
+}
+
 // A request reusing a tab while the palette is already closed leaves the
 // palette's output, such as a detached command's that has since ended.
 func TestRequestWithPaletteClosedKeepsItsOutput(t *testing.T) {
