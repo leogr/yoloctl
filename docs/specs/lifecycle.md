@@ -199,6 +199,10 @@ The independent native disk retains audit state/logs through recreation, while
 space backup retains selected rule sources/selection, omits audit infrastructure,
 and import starts disabled. [21](#source-21)
 
+[FACT] Storage reports distinguish a box's separate cache from its writable layer;
+older unbound boxes report caches "in the layer". Failed cache measurements stay
+unknown and are not hidden in the remainder. [25](#source-25)
+
 ## Sources
 
 1. <a id="source-1"></a> [Reconcile, locking and teardown evidence](../digests/lifecycle.md).

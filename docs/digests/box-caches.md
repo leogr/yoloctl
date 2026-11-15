@@ -48,6 +48,15 @@ uncertain observation, cancellation or failed clear stops the replacement.
 Default recreation does not perform the cache-clear observation or removal.
 [14](#source-14) [15](#source-15)
 
+[FACT] `space storage` reports each observed declared box's cache separately
+from its writable layer. An exact controller-derived bind is measured at its
+VM-local source; an unbound older box says "in the layer". Failed inspection or
+cache traversal says "not measured" and withholds the remainder. Known separate
+cache bytes are subtracted once from "guest OS and other". Cache observations
+share the remaining collector budget before global walks, retaining completed
+layer/cache measurements when a later read fails.
+[16](#source-16) [17](#source-17)
+
 [FACT] Tests cover retained contents, exact-leaf deletion, foreign root/leaf
 rejection, symlink targets surviving removal, declared target overlap,
 unchanged policy bytes and no recreation drift with or without the bind.
@@ -74,3 +83,6 @@ a process can still write outside `.cache`.
 13. <a id="source-13"></a> [box_cache.go](../../cmd/yoloctl/box_cache.go#L1) — public clear, stopped-state checks and the explicit recreate context.
 14. <a id="source-14"></a> [cache_clear.go](../../internal/agentbox/cache_clear.go#L1) — command intent, fresh absence/storage checks and clearing before replacement creation.
 15. <a id="source-15"></a> [box_cache_test.go](../../cmd/yoloctl/box_cache_test.go#L1) — runtime refusal, authorization, effect/native guard and non-implied flag controls.
+
+16. <a id="source-16"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L1) — `storageBoxCache`, native bind inspection, bounded cache observations and report partition.
+17. <a id="source-17"></a> [space_storage_cache_test.go](../../cmd/yoloctl/space_storage_cache_test.go#L1) — separate sums, legacy/foreign rows, failed cache reads and completed-layer retention.

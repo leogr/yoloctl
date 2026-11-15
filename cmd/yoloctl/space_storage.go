@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
+	"github.com/leogr/yoloctl/internal/boxcache"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/spacetelemetry"
@@ -44,12 +45,20 @@ type storageDisk struct {
 // storageBox is one container's writable layer: everything the box wrote
 // outside its mounts, stopped containers included.
 type storageBox struct {
-	Name       string  `json:"name"`
-	Container  string  `json:"container"`
-	Running    bool    `json:"running"`
-	Declared   bool    `json:"declared"` // a box of this space, not another container
-	Bytes      *uint64 `json:"bytes"`    // nil means unmeasured or shared, never zero
-	SharedWith string  `json:"shared_with,omitempty"`
+	Name       string           `json:"name"`
+	Container  string           `json:"container"`
+	Running    bool             `json:"running"`
+	Declared   bool             `json:"declared"` // a box of this space, not another container
+	Bytes      *uint64          `json:"bytes"`    // nil means unmeasured or shared, never zero
+	SharedWith string           `json:"shared_with,omitempty"`
+	Cache      *storageBoxCache `json:"cache,omitempty"`
+}
+
+// storageBoxCache is separate from the writable layer. Missing Bytes means
+// not measured unless InLayer explicitly identifies an older unbound box.
+type storageBoxCache struct {
+	Bytes   *uint64 `json:"bytes"`
+	InLayer bool    `json:"in_layer"`
 }
 
 // storageImages is unpacked image layers plus the downloaded and built
@@ -74,7 +83,7 @@ type storageError struct {
 }
 
 // storageReport partitions the system disk. Each snapshot is counted once,
-// so boxes + images + buildkit + other == system.used. An unavailable part
+// so boxes + separate caches + images + buildkit + other == system.used. An unavailable part
 // is null with its reason in errors; other is then null too, never a
 // remainder that silently absorbs it.
 type storageReport struct {
@@ -99,6 +108,7 @@ type storageSource struct {
 	snapshotUsage func(context.Context, string) (uint64, error)
 	snapshots     func(context.Context) (map[string]uint64, error)
 	dirUsage      func(context.Context, string) (uint64, error)
+	cacheBound    func(context.Context, storageBox) (bool, error)
 }
 
 func nativeStorageSource(space string) storageSource {
@@ -116,6 +126,16 @@ func nativeStorageSource(space string) storageSource {
 		snapshotUsage: c.SnapshotUsage,
 		snapshots:     c.SnapshotUsages,
 		dirUsage:      diskUsage,
+		cacheBound: func(ctx context.Context, box storageBox) (bool, error) {
+			details, err := c.Inspect(ctx, box.Name)
+			if err != nil {
+				return false, err
+			}
+			if box.Container == "" || !strings.HasPrefix(details.ID, box.Container) {
+				return false, errors.New("container changed while measuring its cache")
+			}
+			return agentbox.CacheBound(box.Name, details)
+		},
 	}
 }
 
@@ -154,6 +174,9 @@ func collectSpaceStorage(ctx context.Context, src storageSource, now time.Time) 
 		// Declarations only label containers; they never change the sums.
 		if names, err := src.declared(); err != nil {
 			fail("declarations", err)
+			if src.cacheBound != nil {
+				complete = false
+			}
 		} else {
 			for _, n := range names {
 				declared[n] = true
@@ -163,6 +186,14 @@ func collectSpaceStorage(ctx context.Context, src storageSource, now time.Time) 
 		for _, c := range containers {
 			if key, ok := container.SnapshotFor(keys, c.ID); ok {
 				pending[key] = true
+			}
+		}
+		cachePending := 0
+		if src.cacheBound != nil {
+			for _, c := range containers {
+				if declared[c.Name] {
+					cachePending++
+				}
 			}
 		}
 		counted := map[string]string{}
@@ -185,7 +216,7 @@ func collectSpaceStorage(ctx context.Context, src storageSource, now time.Time) 
 			// Give each unique layer a share of what remains, reserving one
 			// share for global image/cache observations and response delivery.
 			deadline, _ := ctx.Deadline()
-			budget := max(time.Duration(0), time.Until(deadline)/time.Duration(len(pending)+1))
+			budget := max(time.Duration(0), time.Until(deadline)/time.Duration(len(pending)+cachePending+1))
 			measureCtx, stop := context.WithTimeout(ctx, budget)
 			var size uint64
 			var err error
@@ -222,6 +253,49 @@ func collectSpaceStorage(ctx context.Context, src storageSource, now time.Time) 
 	}
 	if !boxesKnown {
 		complete = false
+	}
+
+	// Measure separately bound cache trees before the global walks, sharing
+	// the remaining budget. Unknown cache bytes must not enter the remainder.
+	if src.cacheBound != nil {
+		pending := 0
+		for _, box := range r.Boxes {
+			if box.Declared {
+				pending++
+			}
+		}
+		for i := range r.Boxes {
+			box := &r.Boxes[i]
+			if !box.Declared {
+				continue
+			}
+			box.Cache = &storageBoxCache{}
+			deadline, _ := ctx.Deadline()
+			budget := max(time.Duration(0), time.Until(deadline)/time.Duration(pending+1))
+			measureCtx, stop := context.WithTimeout(ctx, budget)
+			bound, err := src.cacheBound(measureCtx, *box)
+			if err == nil {
+				if !bound {
+					box.Cache.InLayer = true
+				} else {
+					var path string
+					path, err = boxcache.Path(box.Name)
+					if err == nil {
+						var size uint64
+						size, err = src.dirUsage(measureCtx, path)
+						if err == nil {
+							box.Cache.Bytes = &size
+						}
+					}
+				}
+			}
+			stop()
+			pending--
+			if err != nil {
+				fail("box "+box.Name+" caches", err)
+				complete = false
+			}
+		}
 	}
 
 	// A global scan can still be slow; it no longer consumes the budget
@@ -278,6 +352,9 @@ func collectSpaceStorage(ctx context.Context, src storageSource, now time.Time) 
 			if b.Bytes != nil {
 				sum += *b.Bytes
 			}
+			if b.Cache != nil && b.Cache.Bytes != nil {
+				sum += *b.Cache.Bytes
+			}
 		}
 		// Parts measured a moment apart can exceed the filesystem's total
 		// while files change; the remainder is then nothing, not negative.
@@ -318,6 +395,9 @@ and anything else written outside its mounts). It is rebuilt with the VM.
 The data disk holds accounts and box settings and is kept across VM rebuilds.
 
 Each box's writable layer is measured by containerd, stopped boxes included.
+Its caches row measures the separate /home/sandbox/.cache bind once, outside
+that layer. Older boxes without the bind say "in the layer"; failed cache
+reads say "not measured" and leave the remainder unavailable.
 Boxes are measured before global image/cache totals, each within its share of
 the time budget. Completed measurements remain visible if another walk is slow;
 unmeasured boxes say unavailable, and shared layers are counted once.
@@ -429,6 +509,17 @@ func writeSpaceStorage(w io.Writer, space string, r *storageReport) error {
 			what += "; counted with " + b.SharedWith
 		}
 		_, _ = fmt.Fprintf(tw, "  %s\t%s\t%s\n", b.Name, size, what)
+		if b.Cache != nil {
+			cacheSize := "not measured"
+			cacheWhat := b.Name + "; separate cache kept on recreate"
+			if b.Cache.InLayer {
+				cacheWhat = b.Name + "; included in writable layer"
+				cacheSize = "in the layer"
+			} else if b.Cache.Bytes != nil {
+				cacheSize = humanBytes(*b.Cache.Bytes)
+			}
+			_, _ = fmt.Fprintf(tw, "    caches\t%s\t%s\n", cacheSize, cacheWhat)
+		}
 	}
 	if r.Images != nil {
 		_, _ = fmt.Fprintf(tw, "  images\t%s\tlayers %s, downloaded blobs %s\n", humanBytes(r.Images.Bytes), humanBytes(r.Images.Layers), humanBytes(r.Images.Blobs))
