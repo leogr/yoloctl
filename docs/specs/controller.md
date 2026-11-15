@@ -79,6 +79,8 @@ cancellation or recovery abandonment immediately releases capacity and same-inpu
 waiting. Its output remains non-consumable and residual work remains accounted
 for; no image-preparation acknowledgment or history wait is required. Legacy
 unqualified effects and public apply keep their existing recovery rules.
+Returned preflight refusals preserve their original reason, including disk
+headroom, as preparation failures without interrupted-build retry advice.
 Each requester receives plain build logs through stderr, with bounded independent
 delivery for joined clients and quiet-phase feedback. Interactive clients keep
 these lines at column zero while raw, without rewriting session output or

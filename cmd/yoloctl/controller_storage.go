@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -209,7 +210,18 @@ type imagePreflightInput struct {
 	Cleanup     bool     `json:"cleanup"`
 }
 
-func imagePreflightWorker(ctx context.Context) error {
+type imagePreflightResult struct {
+	Error string `json:"error"`
+}
+
+func imagePreflightWorker(ctx context.Context) (result error) {
+	// Stdout is private to this fixed child; keep progress on stderr. Publish
+	// the returned reason after the worker's cleanup, not on interruption.
+	defer func() {
+		if result != nil && ctx.Err() == nil {
+			_ = json.NewEncoder(os.Stdout).Encode(imagePreflightResult{Error: result.Error()})
+		}
+	}()
 	var input imagePreflightInput
 	if err := decodeBoundedJSON(os.Stdin, &input, controller.MaxDocument); err != nil {
 		return err

@@ -471,7 +471,6 @@ func runImagePreflightProcess(ctx context.Context, refs []string, cleanup bool, 
 	cmd := exec.CommandContext(ctx, executable, "controller-internal", "image-preflight")
 	cmd.Env = []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOME=/root", "LANG=C.UTF-8", spaceenv.ContextEnv + "=" + spaceenv.ContextPath}
 	cmd.Stdin = bytes.NewReader(raw)
-	cmd.Stdout = io.Discard
 	cmd.Stderr = os.Stderr
 	return runImagePreflightCommand(ctx, cmd, permit)
 }
@@ -485,7 +484,21 @@ func gateWithoutImageBuild(ctx context.Context) error {
 
 // The child announces its held native guard over private inherited pipes;
 // stdout/stderr and input JSON can never grant cleanup permission.
-func runImagePreflightCommand(ctx context.Context, cmd *exec.Cmd, permit func() error) error {
+func runImagePreflightCommand(ctx context.Context, cmd *exec.Cmd, permit func() error) (result error) {
+	// Only a returned worker result establishes a known refusal. Journal text,
+	// a signal, cancellation, or an exit without a result cannot do so.
+	output := &imagePreflightOutput{}
+	cmd.Stdout = output
+	defer func() {
+		exit, ok := result.(*exec.ExitError)
+		if !ok || exit.ExitCode() != exitRuntime || ctx.Err() != nil || output.overflow {
+			return
+		}
+		var reply imagePreflightResult
+		if decodeBoundedJSON(bytes.NewReader(output.data), &reply, controller.MaxDocument) == nil && reply.Error != "" {
+			result = &controller.ImageBuildFailure{Cause: errors.New(reply.Error)}
+		}
+	}()
 	if permit == nil {
 		return waitStorageGCProcess(ctx, cmd)
 	}
@@ -528,7 +541,24 @@ func runImagePreflightCommand(ctx context.Context, cmd *exec.Cmd, permit func() 
 	_ = readyW.Close()
 	_ = readyR.Close()
 	_ = permitW.Close()
-	return errors.Join(err, <-done)
+	if permitErr := <-done; permitErr != nil {
+		return errors.Join(err, permitErr)
+	}
+	return err
+}
+
+// Drain oversized output without retaining it or treating a partial result as
+// complete. Named storage prevents io.Copy from bypassing Write via ReaderFrom.
+type imagePreflightOutput struct {
+	data     []byte
+	overflow bool
+}
+
+func (w *imagePreflightOutput) Write(p []byte) (int, error) {
+	keep := min(len(p), controller.MaxDocument-len(w.data))
+	w.data = append(w.data, p[:keep]...)
+	w.overflow = w.overflow || keep != len(p)
+	return len(p), nil
 }
 
 // Keep every warm output private until this consumer's ordinary apply. A

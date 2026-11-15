@@ -59,6 +59,9 @@ may reappear as private garbage.
 The cap counts tracked attempts; residual resource use can accumulate. Returned
 solve failures keep their real error and failed completion; cancellation/lost
 transport preserves its cause and interrupted outcome. [1](#source-1) [6](#source-6) [8](#source-8)
+Returned preflight refusals likewise preserve their original reason as a failed
+preparation, rather than reporting an interrupted build with retry advice.
+[3](#source-3) [10](#source-10)
 
 [FACT] Startup preserves already-durable image completion and application
 receipts, abandons unfinished qualified private attempts, and frees admission

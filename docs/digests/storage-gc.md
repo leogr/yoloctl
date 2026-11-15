@@ -68,6 +68,16 @@ all unused cache. Free bytes are remeasured for up to three seconds afterward;
 persistent shortage refuses the build. Shared-layer totals are not physical
 recovery measurements. [7](#source-7) [9](#source-9) [16](#source-16)
 
+[FACT] A returned image-preflight refusal reaches the requesting client with
+its original reason, including measured free/required space. The controller
+reads a bounded JSON result from the fixed worker's private stdout; stderr
+remains journal progress.
+A valid result plus runtime-error exit is a known image-preparation failure,
+without interruption/retry advice. Cancellation, a signal, missing/invalid or
+oversized results, and cleanup-permission failure retain their existing error
+handling. No build starts after refusal. [33](#source-33) [34](#source-34)
+[35](#source-35) [36](#source-36)
+
 [FACT] Tests cover retention, partial inventories, both nerdctl identity paths,
 invalid-image repair, cancellation/deadlines, wakeups, delayed reclamation and
 rollback ordering/markers. Virtual time exercises bounded waits without real
@@ -118,3 +128,7 @@ cancellation; the orphan ledger is separate from receipt retention. See
 30. <a id="source-30"></a> [agentbox_reconcile_test.go](../../cmd/yoloctl/agentbox_reconcile_test.go#L119) — invalid-image repair.
 31. <a id="source-31"></a> [nerdctl 2.4 inspect](https://github.com/containerd/nerdctl/blob/v2.4.0/pkg/inspecttypes/dockercompat/dockercompat.go#L344-L369) — recorded digest.
 32. <a id="source-32"></a> [Guest builder](../../internal/vmguest/buildkit_linux.go#L1) — `configureBuilder`, shared policy before lazy startup.
+33. <a id="source-33"></a> [controller_images.go](../../cmd/yoloctl/controller_images.go#L487) — returned preflight result and bounded capture, verified on `e05d46a4` and accompanying changes.
+34. <a id="source-34"></a> [controller_storage.go](../../cmd/yoloctl/controller_storage.go#L213) — worker return publication, verified on `e05d46a4` and accompanying changes.
+35. <a id="source-35"></a> [Subprocess controls](../../cmd/yoloctl/controller_preflight_result_test.go#L1) — returned refusal and interrupted-result boundaries.
+36. <a id="source-36"></a> [Request regression](../../internal/controller/image_failure_test.go#L30) — known-failure propagation without build or retry advice.

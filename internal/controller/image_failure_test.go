@@ -17,6 +17,53 @@ type failedImageBackend struct {
 	calls   int
 }
 
+type refusedImagePreflight struct {
+	*imageServiceFixture
+	reason string
+}
+
+func (b *refusedImagePreflight) Preflight(context.Context, ImageRecipe) error {
+	return &ImageBuildFailure{Cause: errors.New(b.reason)}
+}
+
+func TestReturnedPreflightRefusalReachesRequestWithoutRetry(t *testing.T) {
+	s := storeServer(t)
+	s.Operations["box.start"] = Operation{Mutates: true, EffectGated: true, Footprint: FootprintImages}
+	b := &jobBackend{started: make(chan ImagePhase, 1)}
+	const reason = "VM system disk has 28.3 GiB free after cleanup; at least 28.9 GiB is required before a build or pull"
+	backend := &refusedImagePreflight{imageServiceFixture: &imageServiceFixture{jobBackend: b}, reason: reason}
+	var err error
+	s.Images, err = NewImageJobs(t.Context(), s, backend, "vm", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Execute = func(ctx context.Context, _ Principal, _ Request, streams Streams) (int, error) {
+		_, err := streams.Image(ctx, ImageRequest{Action: "acquire", Recipe: recipe("disk-refusal")})
+		return 2, err
+	}
+	var output strings.Builder
+	err = invoke(t, s, request("box.start"), nil, io.Discard, &output)
+	if err == nil || !strings.Contains(output.String()+err.Error(), reason) ||
+		strings.Contains(output.String()+err.Error(), "shared image build was interrupted") ||
+		strings.Contains(output.String()+err.Error(), "retry the command") {
+		t.Fatal("preflight refusal hidden or offered retry", output.String(), err)
+	}
+	select {
+	case <-b.started:
+		t.Fatal("refused preflight started a build")
+	default:
+	}
+	records, err := s.Receipts.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range records {
+		if r.Method == "image.job" && (r.State != "complete" || r.Status != 2 || r.Completion == nil || r.Image.Stage != "preflight") {
+			t.Fatal("returned preflight refusal recorded as interrupted", r)
+		}
+	}
+}
+
 func (b *failedImageBackend) Build(ctx context.Context, _ ImageRecipe, _ ImagePhase) (PinnedImage, error) {
 	b.calls++
 	return PinnedImage{}, classifyImageSolveError(ctx, b.failure)
