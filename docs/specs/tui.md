@@ -301,6 +301,12 @@ agents can recognize terminal-specific preferences; existing processes keep
 their launch environment.
 [6](#source-6) [7](#source-7)
 
+[FACT] A plain click on a running step in a pane's steps block expands that
+step to as many of its kept lines as fit, and a second click collapses it.
+The TUI passes the click's row over a private inherited channel, never as
+input, and only when the pane's program owns no mouse mode or alternate
+screen. Nothing is saved. [54](#source-54)
+
 [FACT] Image placeholder cells (Kitty U+10EEEE) reach the display only inside
 the one chat preview registered for that pane's session; any other placeholder
 in any pane or the palette console is shown as a space. A native chat pane's
@@ -437,3 +443,5 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 52. <a id="source-52"></a> [Mermaid views](../digests/mermaid-views.md).
 
 53. <a id="source-53"></a> [Tolerant Markdown rules](../digests/markdown-tolerant.md).
+
+54. <a id="source-54"></a> [Expanding a running step](../digests/step-expand.md).

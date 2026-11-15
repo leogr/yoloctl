@@ -476,3 +476,78 @@ func TestRetitledRootCollapsesToOneLine(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// A click on a running step's row (offset from the cursor, which the
+// block's last row holds) expands it to as many of its kept lines as fit;
+// a second click collapses it. A title row of a step with sub-steps, or a
+// row outside the block, expands nothing.
+func TestClickExpandsARunningStep(t *testing.T) {
+	l, v, scr, _ := setup(t, func() (int, int) { return 80, 14 })
+	root := l.StartStep("Building image a1b2c3", prettylog.Actor("builder"))
+	run := root.Step("[1/1] RUN npm install")
+	for i := range 30 {
+		_, _ = io.WriteString(run.Detail(), "added "+strconv.Itoa(i)+"\n")
+	}
+	v.mu.Lock()
+	v.updateLocked(false)
+	v.mu.Unlock()
+	if got := scr.text(); strings.Contains(got, "added 28") || !strings.Contains(got, "added 29") {
+		t.Fatalf("collapsed: one latest line:\n%s", got)
+	}
+	v.Click(-(v.shown - 1)) // the root's title row
+	if v.expanded != "" {
+		t.Fatal("a step with sub-steps does not expand")
+	}
+	v.Click(1)
+	v.Click(-v.shown)
+	if v.expanded != "" {
+		t.Fatal("a row outside the block expands nothing")
+	}
+	v.Click(0) // its output row
+	got := scr.text()
+	if !strings.Contains(got, "added 29") || !strings.Contains(got, "added 21") || strings.Contains(got, "added 20") || !strings.Contains(got, "… 21 earlier lines") || v.shown > 12 {
+		t.Fatalf("expanded within the height limit, earlier lines counted:\n%s", got)
+	}
+	if !strings.Contains(got, "Building image a1b2c3") {
+		t.Fatalf("the root title stays on screen:\n%s", got)
+	}
+	v.Click(0)
+	if got := scr.text(); strings.Contains(got, "added 28") || v.expanded != "" {
+		t.Fatalf("a second click collapses it:\n%s", got)
+	}
+	v.Click(0)
+	run.Done()
+	root.Done()
+	if got := scr.text(); strings.Contains(got, "added") {
+		t.Fatalf("an ended step collapses as today:\n%s", got)
+	}
+}
+
+// The pointer is asked only for a root whose steps had output lines, and
+// its answer is printed under the collapsed line.
+func TestPointerUnderACollapsedRoot(t *testing.T) {
+	c := &clock{t: time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)}
+	scr := &screen{}
+	l := prettylog.New(scr, prettylog.Options{Format: prettylog.FormatPretty, Verbosity: prettylog.Normal, ActorWidth: 20, Now: c.now})
+	var asked []string
+	v := Install(l, scr, Options{ActorWidth: 20, Interval: time.Hour, Now: c.now, Pointer: func(actor string, root prettylog.StepView) string {
+		asked = append(asked, actor+" "+root.Title)
+		return "full output: yoloctl space logs dev --host"
+	}})
+	t.Cleanup(v.Close)
+	quiet := l.StartStep("Starting space dev", prettylog.Actor("host"))
+	quiet.Step("Starting controller").Done()
+	quiet.Done()
+	lima := l.StartStep("Starting space dev", prettylog.Actor("host"))
+	boot := lima.Step("Booting VM")
+	_, _ = io.WriteString(boot.Detail(), "time=... msg=\"Starting the instance\"\n")
+	boot.Done()
+	lima.Done()
+	if len(asked) != 1 || asked[0] != "host Starting space dev" {
+		t.Fatalf("asked only for the root with output: %q", asked)
+	}
+	lines := strings.Split(scr.text(), "\n")
+	if len(lines) != 3 || !strings.Contains(lines[2], "› host") || !strings.Contains(lines[2], "full output: yoloctl space logs dev --host") {
+		t.Fatalf("pointer under the collapsed line:\n%s", scr.text())
+	}
+}

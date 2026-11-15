@@ -234,6 +234,9 @@ shows and whether it colours; they override `YOLOCTL_LOG` (same values) and
 `YOLOCTL_DEBUG=1` (`debug`). `-v` prints the version.
 Data output (`--json`, receipts, streams) is not rendered by it. [26](#source-26)
 
+[FACT] When a collapsed host step had Lima output lines, its summary is
+followed by `full output: yoloctl space logs SPACE --host`. [32](#source-32)
+
 [FACT] `space logs` renders the VM log with the shared logger, follows its name
 across rotation, and preserves raw stdout bytes with `--log-level debug`.
 Lima host-agent status events show readable forwarding, vsock, cloud-init
@@ -318,3 +321,5 @@ respects `NO_COLOR` and redirection. [29](#source-29)
 30. <a id="source-30"></a> [Chat export](../digests/chat-export.md).
 
 31. <a id="source-31"></a> [Nested virtualization](../digests/vm-adapters.md#nested-virtualization).
+
+32. <a id="source-32"></a> [Expanding a running step](../digests/step-expand.md).

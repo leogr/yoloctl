@@ -58,6 +58,10 @@ type Options struct {
 	// only queue work. A malformed frame closes the channel: previews stop,
 	// the session continues. Close never joins a blocked callback.
 	OnImage func(*Session, chatimage.Frame)
+	// StepClicks gives the child the private step click channel
+	// (termio.StepClickFDEnv): the TUI writes a click on the child's steps
+	// block there, never into its input.
+	StepClicks bool
 	// ImageCopy marks a native chat session: copying its local selection maps
 	// preview image cells back to attachment chips instead of exporting the
 	// placeholder characters. Other sessions copy plain native text.
@@ -89,6 +93,7 @@ type Session struct {
 	drainBy time.Time
 
 	requestFile *os.File
+	stepFile    *os.File
 	imageConn   *chatimage.Conn
 	imageFile   *os.File
 	requestDone chan struct{}
@@ -172,7 +177,28 @@ func Start(opts Options) (*Session, error) {
 		cmd.ExtraFiles = append(cmd.ExtraFiles, imageChild)
 		cmd.Env = forceEnv(cmd.Env, fmt.Sprintf("%s=%d", chatimage.ChannelFDEnv, 2+len(cmd.ExtraFiles)))
 	}
+	var stepParent, stepChild *os.File
+	if !opts.StepClicks {
+		cmd.Env = dropEnv(cmd.Env, termio.StepClickFDEnv)
+	} else {
+		var err error
+		stepParent, stepChild, err = termio.StepClickPair()
+		if err != nil {
+			for _, f := range []*os.File{viewParent, viewChild, requestParent, requestChild, imageParent, imageChild} {
+				if f != nil {
+					_ = f.Close()
+				}
+			}
+			_ = emu.Close()
+			return nil, err
+		}
+		cmd.ExtraFiles = append(cmd.ExtraFiles, stepChild)
+		cmd.Env = forceEnv(cmd.Env, fmt.Sprintf("%s=%d", termio.StepClickFDEnv, 2+len(cmd.ExtraFiles)))
+	}
 	ptmx, releaseSlave, err := startPTYGeometry(cmd, size)
+	if stepChild != nil {
+		_ = stepChild.Close()
+	}
 	if imageChild != nil {
 		_ = imageChild.Close()
 	}
@@ -192,6 +218,9 @@ func Start(opts Options) (*Session, error) {
 		if imageParent != nil {
 			_ = imageParent.Close()
 		}
+		if stepParent != nil {
+			_ = stepParent.Close()
+		}
 		_ = emu.Close()
 		return nil, fmt.Errorf("term: start %s: %w", opts.Argv[0], err)
 	}
@@ -209,6 +238,7 @@ func Start(opts Options) (*Session, error) {
 		release:   releaseSlave,
 		done:      make(chan struct{}),
 		exited:    make(chan struct{}),
+		stepFile:  stepParent,
 	}
 	if requestParent != nil {
 		s.requestFile = requestParent
@@ -336,6 +366,9 @@ func (s *Session) pump(onData func()) {
 	if s.imageConn != nil {
 		// The same rule for the image channel: close, never join its reader.
 		_ = s.imageConn.Close()
+	}
+	if s.stepFile != nil {
+		_ = s.stepFile.Close()
 	}
 
 	if s.managed != nil {
@@ -569,6 +602,19 @@ func (s *Session) CloseImageChannel() {
 	if s.imageConn != nil {
 		_ = s.imageConn.Close()
 	}
+}
+
+// SendStepClick tells the child that a row of its steps block was clicked,
+// as that row's offset from the cursor row. A child that is not drawing
+// steps ignores it; one that stops reading never holds the sender.
+func (s *Session) SendStepClick(offset int) error {
+	if s.stepFile == nil {
+		return errors.New("term: session has no step click channel")
+	}
+	// The image channel's send bound: only a child that stopped reading
+	// with a full socket buffer reaches it.
+	_ = s.stepFile.SetWriteDeadline(time.Now().Add(imageSendTimeout))
+	return termio.WriteStepClick(s.stepFile, offset)
 }
 
 // HasImageChannel reports whether the session was given an image channel.

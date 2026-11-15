@@ -861,6 +861,7 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 		OnTabRequest:     m.tabRequestHandler(args, &self),
 		OnImage:          m.chatImageHandler(args),
 		ImageCopy:        isChatView(args),
+		StepClicks:       true,
 		ResumeTargetKind: resumeKind,
 		EndHint:          m.reattachHint(args),
 		Foreground:       m.foreground,

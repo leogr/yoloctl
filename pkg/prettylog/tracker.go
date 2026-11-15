@@ -254,6 +254,23 @@ func (t *Tracker) Steps() []StepView {
 	return out
 }
 
+// Retained returns every tracked step in start order, like Steps, with
+// all its retained detail lines in Tail instead of the last TailLines, and
+// Omitted counting only the bytes the limits dropped.
+func (t *Tracker) Retained() []StepView {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]StepView, 0, len(t.order))
+	for _, ts := range t.order {
+		v := ts.view
+		v.Attrs = slices.Clone(v.Attrs)
+		v.Tail = slices.Clone(ts.lines)
+		v.Omitted = ts.dropped
+		out = append(out, v)
+	}
+	return out
+}
+
 // Overflow is how many steps were not tracked because of the Steps limit.
 func (t *Tracker) Overflow() int {
 	t.mu.Lock()

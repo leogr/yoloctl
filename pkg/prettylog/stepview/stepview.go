@@ -43,6 +43,11 @@ type Options struct {
 	Interval time.Duration
 	// Now is the clock (nil = time.Now).
 	Now func() time.Time
+	// Pointer, when set, may name where an ended root step's full output
+	// is kept; it is asked only when the root or a sub-step had output
+	// lines, and its non-empty answer is printed under the collapsed line.
+	// actor is the root's actor. It must not log.
+	Pointer func(actor string, root prettylog.StepView) string
 }
 
 const (
@@ -69,11 +74,16 @@ type View struct {
 	// replay ends (a step-less snapshot record or any live record).
 	replaying bool
 	closed    bool
-	frame     int
-	dirty     bool
-	ticker    *time.Ticker
-	stop      chan struct{}
-	restore   func()
+	// owners maps each block row on screen (top first) to the step whose
+	// title or output it shows; expanded is the running step shown with as
+	// many of its kept lines as fit (Click toggles it).
+	owners   []string
+	expanded string
+	frame    int
+	dirty    bool
+	ticker   *time.Ticker
+	stop     chan struct{}
+	restore  func()
 }
 
 // New returns a View writing to out (a terminal).
@@ -239,9 +249,10 @@ func (v *View) drawLocked(b *bytes.Buffer, steps []prettylog.StepView) {
 		return
 	}
 	width, height := v.size()
-	rows := v.blockRows(steps)
-	if limit := max(height-2, 1); len(rows) > limit {
-		rows = rows[len(rows)-limit:]
+	limit := max(height-2, 1)
+	rows, owners := v.blockRows(steps, limit)
+	if len(rows) > limit {
+		rows, owners = rows[len(rows)-limit:], owners[len(owners)-limit:]
 	}
 	for i, row := range rows {
 		if i > 0 {
@@ -250,6 +261,33 @@ func (v *View) drawLocked(b *bytes.Buffer, steps []prettylog.StepView) {
 		b.WriteString(ansi.Truncate(row, max(width-1, 1), "…"))
 	}
 	v.shown = len(rows)
+	v.owners = owners
+}
+
+// Click toggles the expansion of the running step shown on a block row:
+// offset is that row's distance from the cursor row, which the block's last
+// row occupies (0 is that row, -1 the one above). A row that is not part of
+// the block, or a step that shows no output lines, is ignored. Clicks come
+// from a TUI over a private channel; the View still reads no terminal.
+func (v *View) Click(offset int) {
+	if v == nil {
+		return
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	i := len(v.owners) - 1 + offset
+	if v.closed || v.pause > 0 || v.shown == 0 || offset > 0 || i < 0 || i >= len(v.owners) || v.owners[i] == "" {
+		return
+	}
+	if v.expanded == v.owners[i] {
+		v.expanded = ""
+	} else {
+		v.expanded = v.owners[i]
+	}
+	var b bytes.Buffer
+	v.clearLocked(&b)
+	v.drawLocked(&b, v.tracker.Steps())
+	_, _ = v.out.Write(b.Bytes())
 }
 
 // renderer formats synthetic step records with the Logger's grammar.
@@ -305,6 +343,9 @@ func (r *renderer) detail(s prettylog.StepView, text string) {
 	_ = r.l.Handle(context.Background(), rec)
 }
 
+// count is how many lines the renderer has produced.
+func (r *renderer) count() int { return bytes.Count(r.buf.Bytes(), []byte{'\n'}) }
+
 func (r *renderer) lines() []string {
 	text := strings.TrimSuffix(r.buf.String(), "\n")
 	if text == "" {
@@ -324,8 +365,47 @@ func children(steps []prettylog.StepView, parent string) []prettylog.StepView {
 }
 
 // blockRows renders the live block: each active root, then its most recent
-// sub-steps (older ones counted), each running one with its last output.
-func (v *View) blockRows(steps []prettylog.StepView) []string {
+// sub-steps (older ones counted), each running one with its last output,
+// and the step each row belongs to ("" for a row that expands nothing). The
+// expanded step shows as many of its latest kept lines as fit in limit
+// rows with the rest of the block, counting the earlier ones on one row.
+func (v *View) blockRows(steps []prettylog.StepView, limit int) ([]string, []string) {
+	rows, owners := v.blockRowsWith(steps, nil)
+	if v.expanded == "" {
+		return rows, owners
+	}
+	var lines []string
+	for _, s := range v.tracker.Retained() {
+		if s.ID == v.expanded && s.State == prettylog.StepRunning {
+			lines = s.Tail
+		}
+	}
+	shown := 0
+	for _, o := range owners {
+		if o == v.expanded {
+			shown++
+		}
+	}
+	if shown == 0 || len(lines) <= 1 {
+		return rows, owners
+	}
+	// The step's own rows are its title and its tail; the rest stays.
+	room := max(limit-(len(rows)-shown)-1, 1)
+	return v.blockRowsWith(steps, func(s prettylog.StepView) []string {
+		if s.ID != v.expanded {
+			return nil
+		}
+		if len(lines) <= room {
+			return lines
+		}
+		keep := max(room-1, 1)
+		return append([]string{"… " + strconv.Itoa(len(lines)-keep) + " earlier lines"}, lines[len(lines)-keep:]...)
+	})
+}
+
+// blockRowsWith renders the block; expand, when it returns lines for a
+// running step, replaces that step's short tail.
+func (v *View) blockRowsWith(steps []prettylog.StepView, expand func(prettylog.StepView) []string) ([]string, []string) {
 	glyphs := prettylog.DefaultGlyphs
 	glyphs.Info = spinner[v.frame%len(spinner)]
 	r := v.renderer(glyphs)
@@ -338,6 +418,12 @@ func (v *View) blockRows(steps []prettylog.StepView) []string {
 	if v.o.Verbosity >= prettylog.Verbose {
 		tail = 10
 	}
+	var owners []string
+	own := func(id string) {
+		for len(owners) < r.count() {
+			owners = append(owners, id)
+		}
+	}
 	var walk func(s prettylog.StepView)
 	walk = func(s prettylog.StepView) {
 		took := s.Took
@@ -345,19 +431,34 @@ func (v *View) blockRows(steps []prettylog.StepView) []string {
 			took = now.Sub(s.Started).Truncate(time.Second)
 		}
 		r.step(s, v.actors[s.ID], took, false)
+		// A running leaf shows output lines and can expand: its rows are its.
+		leaf := s.State == prettylog.StepRunning && len(children(steps, s.ID)) == 0
+		if leaf {
+			own(s.ID)
+		} else {
+			own("")
+		}
 		if s.State == prettylog.StepRunning {
 			kids := children(steps, s.ID)
 			if hidden := len(kids) - maxChildren; hidden > 0 {
 				r.detail(s, "… "+strconv.Itoa(hidden)+" earlier steps")
+				own("")
 				kids = kids[hidden:]
 			}
 			for _, k := range kids {
 				walk(k)
 			}
 			if len(kids) == 0 {
-				for _, line := range lastN(s.Tail, tail) {
+				lines := lastN(s.Tail, tail)
+				if expand != nil {
+					if more := expand(s); more != nil {
+						lines = more
+					}
+				}
+				for _, line := range lines {
 					r.detail(s, line)
 				}
+				own(s.ID)
 			}
 		}
 	}
@@ -366,7 +467,7 @@ func (v *View) blockRows(steps []prettylog.StepView) []string {
 			walk(s)
 		}
 	}
-	return r.lines()
+	return r.lines(), owners
 }
 
 // summaryLocked is what an ended root step leaves in the scrollback: one
@@ -393,11 +494,34 @@ func (v *View) summaryLocked(root prettylog.StepView, steps []prettylog.StepView
 		}
 		walk(root.ID)
 	}
+	if v.o.Pointer != nil && hadOutput(root, steps) {
+		actor := v.actors[root.ID]
+		if text := v.o.Pointer(actor[0], root); text != "" {
+			rec := slog.NewRecord(time.Time{}, prettylog.LevelInfo, text, 0)
+			if actor[0] != "" {
+				rec.AddAttrs(prettylog.Actor(actor[0]))
+			}
+			_ = r.l.Handle(context.Background(), rec)
+		}
+	}
 	var b strings.Builder
 	for _, line := range r.lines() {
 		b.WriteString(line + "\r\n")
 	}
 	return b.String()
+}
+
+// hadOutput reports whether root or any step under it had output lines.
+func hadOutput(root prettylog.StepView, steps []prettylog.StepView) bool {
+	if len(root.Tail) > 0 || root.Omitted > 0 {
+		return true
+	}
+	for _, k := range children(steps, root.ID) {
+		if hadOutput(k, steps) {
+			return true
+		}
+	}
+	return false
 }
 
 func lastN(lines []string, n int) []string {

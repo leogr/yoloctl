@@ -31,6 +31,9 @@ type mouseOwner struct {
 	row0, col0   int
 	selection    bool
 	captureShift bool
+	// press is where a local-selection left press landed, so its release
+	// at the same cell is a plain click (see stepClick).
+	press *tea.Mouse
 }
 
 // tabTop is the screen row of the tab area's first row: below the tab
@@ -267,6 +270,7 @@ func (m *model) handleMouse(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if owner, ok := m.mouseOwners[mo.Button]; ok {
 			delete(m.mouseOwners, mo.Button)
 			m.deliverMouse(owner, mo, terminal.MouseRelease, pixels)
+			m.stepClick(owner, mo)
 		} else if mo.Button == tea.MouseNone {
 			// Legacy host reports do not identify the released button. End
 			// captured gestures at their owners rather than retargeting them.
@@ -324,6 +328,10 @@ func (m *model) handleMouse(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.mouseOwners == nil {
 			m.mouseOwners = make(map[tea.MouseButton]mouseOwner)
+		}
+		if owner.selection && mo.Button == tea.MouseLeft && mo.Mod == 0 {
+			press := mo
+			owner.press = &press
 		}
 		m.mouseOwners[mo.Button] = owner
 		m.deliverMouse(owner, mo, terminal.MousePress, pixels)
@@ -438,4 +446,28 @@ func (m *model) mouseHit(mo tea.Mouse) tea.Mouse {
 		mo.Y = min(max(mo.Y, 0), max(m.height-1, 0))
 	}
 	return mo
+}
+
+// stepClick passes a plain left click (press and release on the same cell,
+// no modifier) in a running pane's live screen to its command's steps
+// block, as the clicked row's offset from the pane's cursor row: the block
+// ends at the cursor. Only rows at or above the cursor qualify, and only
+// when the pane's program owns no mouse mode and no alternate screen. The
+// local selection gesture is unchanged; nothing is sent as terminal input.
+func (m *model) stepClick(owner mouseOwner, mo tea.Mouse) {
+	if owner.press == nil || owner.pane == nil || mo.Button != tea.MouseLeft || mo.X != owner.press.X || mo.Y != owner.press.Y {
+		return
+	}
+	p := owner.pane
+	if p.Exited || p.Empty() || p.Session.IsAlt() || p.Session.MouseMode().Tracking != 0 {
+		return
+	}
+	f := p.Session.Frame()
+	if f.Offset != 0 {
+		return
+	}
+	owner = m.paneOwner(p, owner.selection)
+	if offset := (mo.Y - owner.row0) - f.Cursor.Y; offset <= 0 {
+		_ = p.Session.SendStepClick(offset)
+	}
 }
