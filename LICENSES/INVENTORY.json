@@ -8,8 +8,8 @@
       "sha256": "389fb7e1d22c956a130e319858d62902dbd8264d5bd72715d23ac1929f2f2d6b"
     },
     "airc": {
-      "revision": "8a6cfa5aff1daa7b9d63ce786b32bce8af17db32",
-      "lockfile_sha256": "f17409b5e82856b9d6171deacadca0081db0d7e94b740b42d6db6573b1dba1e2"
+      "revision": "84ea507836e82ea0581180e794d289523788c373",
+      "lockfile_sha256": "c1e96cb974f23680d2a72dd2b5a6214df4da83a575f8a34b9d81b29e52cd3f22"
     },
     "openshell": {
       "revision": "e8605009bed50a05136efe106a0c1e2f283ee771",
@@ -7277,30 +7277,6 @@
       "notice_files": []
     },
     {
-      "name": "rustls-webpki",
-      "version": "0.103.15",
-      "checksum": "f3c3cf1d8b1e7d4927e2d154c3fcb02979afb9939629c62cd9048d4f07b60ac2",
-      "used_by": [
-        "airc"
-      ],
-      "url": "https://static.crates.io/crates/rustls-webpki/rustls-webpki-0.103.15.crate",
-      "license": "ISC",
-      "license_file": null,
-      "license_files": [
-        {
-          "path": "LICENSE",
-          "sha256": "5b698ca13897be3afdb7174256fa1574f8c6892b8bea1a66dd6469d3fe27885a",
-          "bundle": "THIRD_PARTY_LICENSES.txt",
-          "payload_offset": 781597,
-          "payload_bytes": 916,
-          "copyright_statements": [
-            "Copyright 2015 Brian Smith."
-          ]
-        }
-      ],
-      "notice_files": []
-    },
-    {
       "name": "rustversion",
       "version": "1.0.23",
       "checksum": "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f",
@@ -9422,28 +9398,6 @@
           "copyright_statements": [
             "Copyright (c) 2023 dAxpeDDa"
           ]
-        }
-      ],
-      "notice_files": []
-    },
-    {
-      "name": "webpki-roots",
-      "version": "1.0.9",
-      "checksum": "7dcd9d09a39985f5344844e66b0c530a33843579125f23e21e9f0f220850f22a",
-      "used_by": [
-        "airc"
-      ],
-      "url": "https://static.crates.io/crates/webpki-roots/webpki-roots-1.0.9.crate",
-      "license": "CDLA-Permissive-2.0",
-      "license_file": null,
-      "license_files": [
-        {
-          "path": "LICENSE",
-          "sha256": "e271993808fec50ab29350b39539cdec611a9103f827e0aa26d61da70e2d33f8",
-          "bundle": "THIRD_PARTY_LICENSES.txt",
-          "payload_offset": 872914,
-          "payload_bytes": 2371,
-          "copyright_statements": []
         }
       ],
       "notice_files": []
@@ -23758,6 +23712,7 @@
       "version": "0.103.16",
       "checksum": "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281",
       "used_by": [
+        "airc",
         "openshell"
       ],
       "url": "https://static.crates.io/crates/rustls-webpki/rustls-webpki-0.103.16.crate",
@@ -28052,6 +28007,7 @@
       "version": "1.0.10",
       "checksum": "1c1c8e20c8a38fc7d65abfe74eb7280e4aa667e8eec8bc84996d2874810748d9",
       "used_by": [
+        "airc",
         "openshell"
       ],
       "url": "https://static.crates.io/crates/webpki-roots/webpki-roots-1.0.10.crate",
