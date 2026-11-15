@@ -326,8 +326,19 @@ The rest is image layers and their downloaded blobs, BuildKit's cache, and
 ephemeral workdirs). A part that cannot be measured is reported as
 unavailable rather than folded into the remainder.
 
-Space can be freed by removing files inside a box, recreating a box (which
-discards its writable layer), or yoloctl image prune. The space view warns
+Use the tool's cache command in the box that owns the bytes, for example:
+
+  yoloctl box exec BOX -- go clean -cache
+  yoloctl box exec BOX -- go clean -modcache
+  yoloctl box exec BOX -- npm cache clean --force
+  yoloctl box exec BOX -- python3 -m pip cache purge
+
+These remove rebuildable caches; later builds may rebuild or download again.
+The tool must be installed and its cache path allowed by the box's policy.
+Removing files inside a box, recreating a box, or yoloctl image prune can
+also free space. Recreate discards all files in the container's writable
+layer, not just caches; preserve anything needed outside bind mounts first.
+The space view warns
 below 4 GiB free (15% of a smaller disk) or from 85% used, and marks the disk
 critical below 2 GiB (10%) or from 95%.
 

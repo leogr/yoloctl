@@ -160,6 +160,10 @@ results within the enclosing deadline; unknown sizes stay unknown instead of
 folding into the remainder. Space view warns before either VM disk runs out. Neither frees
 space. [16](#source-16)
 
+[FACT] `space storage` help names explicit in-box Go/npm/pip cache-cleaning
+commands. Recreating a box also discards its writable layer, including files
+other than caches; workdir/account binds are preserved. [24](#source-24)
+
 [FACT] Firecracker separately measures host capacity for its sparse writable
 disks: startup requires 4 GiB available. Its existing helper pauses the VMM below
 2 GiB or when measurement fails, and resumes after both backing filesystems have
@@ -219,3 +223,5 @@ and import starts disabled. [21](#source-21)
 22. <a id="source-22"></a> [Box stop and start results](../digests/box-stop-start.md).
 
 23. <a id="source-23"></a> [Expected run per box](../digests/expected-run.md).
+
+24. <a id="source-24"></a> [Explicit cache remedies](../digests/box-cache-remedy.md).
