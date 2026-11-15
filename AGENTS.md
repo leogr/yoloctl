@@ -144,7 +144,11 @@ running operation and leaves cleanup to the next stop or start. Stops are
 idempotent and never cancel each other or any other operation. An operation
 that finds its box's expected run gone performs no further effect on that box
 and never starts again a run it had started. Container liveness and
-agent-session liveness are distinct. A lost holder cannot adopt its old child.
+agent-session liveness are distinct. A box whose session process (its agent
+or `session_command`) is its main process stops when that process exits, with
+or without its holder; a box without a session process, or one created before
+the session launcher (it needs recreate), keeps running. A lost holder cannot
+adopt its old child.
 The agent daemon reaper is gone; an obsolete `session.daemons` in a custom
 profile is dropped with a warning when the profile loads. A box created before
 a runtime change is recognized from its record. One that needs recreation gets

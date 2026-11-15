@@ -85,8 +85,9 @@ failed probe refuses and removes nothing. [6](#source-6) [3](#source-3) [9](#sou
 [FACT] The agent daemon reaper is gone: no `--reap-daemon`, no launch
 wrapper, no `session.daemons` in the Codex profile. A custom profile that
 still declares it loads with a warning per load and loses it at its next
-save. Until boxes stop with their session, a Codex app-server can outlive a
-launch. [10](#source-10) [11](#source-11)
+save. A Codex app-server ends with its box's container when the box stops
+with its session; in a box that does not (one that needs recreate, or a plain
+shell's), it can outlive a launch. [10](#source-10) [11](#source-11)
 
 [FACT] Tests use fakes, real shells for the launcher and hand-over (under
 `/bin/sh` and `bash --posix`, including the `BASH_ENV` hook seen once as by

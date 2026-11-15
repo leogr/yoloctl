@@ -77,7 +77,8 @@ The `thread/read` fields used are unchanged between Codex 0.164.0 and 0.165.0.
 [4](#source-4) [6](#source-6) [7](#source-7) [8](#source-8)
 
 [FACT] A later TUI reuses a running daemon without comparing its
-environment. There is no daemon reaper: until a box stops with its session,
+environment. There is no daemon reaper: a box that stops with its session
+ends the daemon with its container; in one that does not (it needs recreate),
 a daemon can outlive its launch and a later TUI may reuse it ([stop-box](stop-box.md)).
 A stale socket file a killed daemon leaves is refused and skipped. [6](#source-6) [9](#source-9)
 
