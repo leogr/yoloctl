@@ -1,11 +1,13 @@
 # Managed sessions, attachment, and replay
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; default title `1d265df3` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; default title `1d265df3` and accompanying changes; companion linking at `d7dda62e` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] `make build` produces the host CLI and static Linux amd64/arm64 companions.
 Native and Darwin host targets link the companions' SHA-256 values as runtime
 variables, independent of Go build-info/VCS metadata and `-trimpath`. A common bundle ID is stamped once per Make invocation and checked by the
 controller protocol. Guest compilation excludes host `-race` instrumentation but retains other `GOFLAGS`.
+Companions link with `-s -w` (`GUEST_LDFLAGS`), like the VM init: no symbol table or DWARF, while Go
+build info and the `-X` identity values remain for bundle checks.
 [11](#source-11) [12](#source-12)
 
 [FACT] Guest architecture selects the companion, resolving host symlinks first.

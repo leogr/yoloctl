@@ -16,6 +16,10 @@ BUILDVCS ?= false
 BUNDLE_ID := $(shell od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 VERSION ?= dev
 BUNDLE_LDFLAGS = $(LDFLAGS) -X github.com/leogr/yoloctl/internal/buildinfo.Version=$(VERSION) -X github.com/leogr/yoloctl/internal/controller.BuildID=$(BUNDLE_ID)
+# Linux guest companions are copied into, hashed in and paged in by each VM; drop
+# their symbol table and DWARF like the VM init (about 15% smaller). Build info and
+# the -X identity values stay, so bundle and companion-hash checks are unchanged.
+GUEST_LDFLAGS = -s -w $(BUNDLE_LDFLAGS)
 
 # Instrument the host with -race without requiring cross-platform C compilers
 # for the static guest artifacts. Preserve semantic options such as build tags.
@@ -110,10 +114,10 @@ build-vm-init: $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS= go build -buildvcs=false -trimpath -ldflags "-s -w" -o $(BIN_DIR)/yoloctl-vm-init-linux-amd64 ./cmd/yoloctl-vm-guest
 
 build-linux-amd64: native-embed $(BIN_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS= go build -buildvcs=$(BUILDVCS) $(GUEST_GOFLAGS) -ldflags "$(BUNDLE_LDFLAGS)" -o $(BIN_DIR)/yoloctl-linux-amd64 $(MAIN)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS= go build -buildvcs=$(BUILDVCS) $(GUEST_GOFLAGS) -ldflags "$(GUEST_LDFLAGS)" -o $(BIN_DIR)/yoloctl-linux-amd64 $(MAIN)
 
 build-linux-arm64: native-embed $(BIN_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 GOFLAGS= go build -buildvcs=$(BUILDVCS) $(GUEST_GOFLAGS) -ldflags "$(BUNDLE_LDFLAGS)" -o $(BIN_DIR)/yoloctl-linux-arm64 $(MAIN)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 GOFLAGS= go build -buildvcs=$(BUILDVCS) $(GUEST_GOFLAGS) -ldflags "$(GUEST_LDFLAGS)" -o $(BIN_DIR)/yoloctl-linux-arm64 $(MAIN)
 
 # Release maintenance only: ordinary builds/downloads never compile the PID 1
 # helper. Freeze these inputs and arrange the shared build slot before running.
