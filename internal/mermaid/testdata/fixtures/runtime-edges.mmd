@@ -1,0 +1,12 @@
+flowchart TD
+  CLI[Host: yoloctl CLI / TUI] -->|versioned RPC| CTL[Space VM: root controller]
+  BOOT[Host: space bootstrap<br>disk id, grants, VM settings] --> CTL
+  CTL --> DISK[Native data disk<br>space, boxes, accounts]
+  CTL --> IMG[containerd + BuildKit<br>composed box images]
+  CLI -->|box attach| HOLD[Session holder<br>one per box session]
+  IMG --> PID1[Box: PID 1 helper<br>binds account leaf + mounts]
+  PID1 --> SUP[OpenShell supervisor<br>Landlock, seccomp, netns proxy]
+  HOLD -->|SSH openshell-main| SUP
+  SUP --> AGENT[Agent = main process]
+  AGENT -->|exits| PID1
+  PID1 -->|stops container| IMG

@@ -133,6 +133,10 @@ for the snapshot and qualification limits.
 patches, Rust 1.95.0 toolchain, WASI target, Cargo lock, wrapper/builder hashes and
 notices for the embedded `internal/mermaid/wasm/mermaid.wasm`. Normal builds need
 only Go. This artifact does not itself enable fenced diagrams in chat or follow.
+Patch 09 joins rectangular flowchart borders using final routed paths, uses
+shafted arrowheads, and orders/spaces vertical fan-in ports. Its updated
+upstream snapshots and the Go embedded-artifact routing regression accompany
+regeneration; sequence drawings remain unchanged.
 
 Maintenance requires Rust 1.95.0, its `wasm32-wasip1` target, Python and `patch`:
 

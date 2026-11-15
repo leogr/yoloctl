@@ -1,6 +1,6 @@
 # Pinned Mermaid WASI artifact
 
-Verification: `85f67be08d8bceefb03db745cad123ea5bbade49` and accompanying changes.
+Verification: `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes.
 
 [FACT] `internal/mermaid` embeds a Mermaid text-rendering WASI command and its
 manifest. Ordinary Go builds use the committed bytes; regeneration is a
@@ -19,7 +19,12 @@ The manifest binds these inputs to the embedded bytes. [1](#source-1)
 - solid lifelines joined to messages;
 - subgraph borders crossed perpendicularly, never followed;
 - a simple top-down fan-out drawn as one trunk;
-- decisions drawn as a shallow diamond, at least 17 columns wide.
+- decisions drawn as a shallow diamond, at least 17 columns wide;
+- rectangular flowchart source borders joined to the final routed path,
+  including return-edge corners; shafted arrows at rectangular destinations;
+  top-down/bottom-up rectangular fan-in ports ordered by source position and
+  spaced across the available border. These changes preserve labels and the
+  sequence renderer. [2](#source-2)
 
 [FACT] The diamond outline uses one-eighth horizontal lines and verticals
 (`▁ 🭻…🭶 ▔ ▕ ▏`); the sloped ones are in the Unicode "Symbols for Legacy
@@ -53,7 +58,10 @@ manifest and pinned-output equality. It does not change committed files.
 wazero with fresh instances for flowchart, sequence, strict-width and invalid
 input controls. These finite artifact tests do not establish drawing fidelity
 for all inputs, native macOS execution, a total RSS bound or a UI cancellation
-guarantee. [5](#source-5)
+guarantee. The cyclic runtime-flowchart regression checks border legs, the
+return-edge corner and separated incoming ports against the real embedded
+module. Text-cell checks do not establish pixel continuity in every native
+terminal/font; that remains a visual check. [5](#source-5) [8](#source-8)
 
 ## Sources
 
@@ -64,3 +72,5 @@ guarantee. [5](#source-5)
 5. <a id="source-5"></a> [Artifact tests](../../internal/mermaid/artifact_test.go#L1) — `TestArtifactManifestMatchesPinnedInputs`, `TestPinnedWASICommand`.
 6. <a id="source-6"></a> [Crate identity](../../third_party/mermaid-text/rustc-repro.py#L1).
 7. <a id="source-7"></a> [Maintenance regressions](../../scripts/test_mermaid_build.py#L1).
+
+8. <a id="source-8"></a> [Routing regression](../../internal/mermaid/edge_routing_test.go#L1) — `TestRuntimeFlowEdgesJoin`, with testdata/fixtures/runtime-edges.mmd.
