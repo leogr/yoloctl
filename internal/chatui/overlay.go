@@ -132,6 +132,7 @@ var helpSections = []struct {
 	}},
 	{"Participants", [][2]string{
 		{"Ctrl+P", "Show or hide the panel; on narrow screens it opens over the messages"},
+		{"click CHANNELS · PARTICIPANTS", "Collapse that list to its heading, or expand it again (also in /settings)"},
 		{"wheel  Alt+PgUp  Alt+PgDn", "Scroll the participants when their cards do not fit: the wheel over the panel moves one card, the keys a page (Shift+PgUp and Shift+PgDn too, where the terminal passes them)"},
 		{"Click a box", "Attach that box's session, after its membership and declaration are checked again"},
 		{"Right-click a name", "Details. Only boxes can be attached; direct messages are not supported."},
@@ -186,6 +187,8 @@ func (m *Model) settingRows() []settingRow {
 		{"nick", "Nickname", nick, "Enter to change. Saving reconnects this view; your draft and reply stay.", m.opts.SaveNick != nil},
 		{"account", "Signed in as", account, "Authenticated room account. A nickname never changes it.", false},
 		{"panel", "Participants panel", onOff(m.rosterOpen, "shown", "hidden"), "Enter toggles (also Ctrl+P)", true},
+		{"channels", "Channels list", onOff(m.channelsCollapsed, "collapsed", "expanded"), "Enter toggles (also a click on its heading)", true},
+		{"participants", "Participants list", onOff(m.participantsCollapsed, "collapsed", "expanded"), "Enter toggles (also a click on its heading)", true},
 		{"view", "Message view", onOff(m.source, "source", "Markdown"), "Enter toggles (also Ctrl+S)", true},
 		{"copy", "Copy on select", onOff(m.copyOnSelect, "on", "off"), "Releasing a drag copies the selection", true},
 		{"clipboard", "Host clipboard", policy(m.opts.Clipboard), "seams.clipboard in ~/.config/yoloctl/tui.yaml", false},
@@ -319,6 +322,8 @@ func (m *Model) activateSetting(id string) tea.Cmd {
 		m.overlay.problem = ""
 	case "panel":
 		m.toggleParticipants()
+	case "channels", "participants":
+		m.toggleList(id)
 	case "view":
 		m.toggleSource()
 	case "copy":

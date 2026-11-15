@@ -48,28 +48,57 @@ func panelWidth(width int) int {
 	return 0
 }
 
-// panelRow is one side panel row; member indexes sortedMembers, and a
-// positive channel is 1 + the index of a channel in m.order.
+// panelRow is one side panel row; member indexes sortedMembers, a
+// positive channel is 1 + the index of a channel in m.order, and head names
+// the list whose heading the row is ("channels" or "participants").
 type panelRow struct {
 	runs    []run
 	member  int
 	channel int
+	head    string
+}
+
+// panelHeading is a side panel list's heading: a disclosure mark, the
+// title and the list's count. A click on it collapses the list to this row
+// or expands it again.
+func (m *Model) panelHeading(id, title, count string, collapsed bool, width int, bg spaceview.Color) panelRow {
+	t := m.theme
+	mark := "▾"
+	if collapsed {
+		mark = "▸"
+	}
+	label := " " + mark + " " + title
+	return panelRow{member: -1, head: id, runs: []run{
+		m.hoverRun(deco(label, spaceview.Style{FG: t.Dim, BG: bg, Bold: true}), m.hovered(hitPanelHead, 0, id)),
+		deco(strings.Repeat(" ", max(width-m.widthMethod.StringWidth(label)-len(count)-1, 1)), spaceview.Style{BG: bg}),
+		deco(count, spaceview.Style{FG: t.Dim, BG: bg}),
+	}}
+}
+
+// toggleList collapses a side panel list to its heading, or expands it.
+func (m *Model) toggleList(id string) {
+	switch id {
+	case "channels":
+		m.channelsCollapsed = !m.channelsCollapsed
+	case "participants":
+		m.participantsCollapsed = !m.participantsCollapsed
+		m.rosterScroll = 0
+	}
+	m.hover = hoverKey{} // rows moved under the pointer
 }
 
 // channelRail lists the open channels at the top of a side panel,
 // with unread counts and a marker on the visible one. One channel needs no
-// rail; the top band still names it.
+// rail; the top band still names it. Collapsed, the rail is its heading.
 func (m *Model) channelRail(width int) []panelRow {
 	t := m.theme
 	if len(m.order) < 2 {
 		return nil
 	}
-	count := fmt.Sprint(len(m.order))
-	rows := []panelRow{{member: -1, runs: []run{
-		deco(" CHANNELS", spaceview.Style{FG: t.Dim, Bold: true}),
-		deco(strings.Repeat(" ", max(width-9-len(count)-1, 1)), spaceview.Style{}),
-		deco(count, spaceview.Style{FG: t.Dim}),
-	}}}
+	rows := []panelRow{m.panelHeading("channels", "CHANNELS", fmt.Sprint(len(m.order)), m.channelsCollapsed, width, 0)}
+	if m.channelsCollapsed {
+		return append(rows, panelRow{member: -1})
+	}
 	for i, name := range m.order {
 		v := m.views[name]
 		bg := spaceview.Color(0)
@@ -109,20 +138,30 @@ func (m *Model) channelRail(width int) []panelRow {
 // note. Cards keep their height however many participants there are: when
 // they do not fit, the list scrolls by whole cards (m.rosterScroll, clamped
 // here), with a dim row naming how many are above or below. The heading
-// never scrolls.
-func (m *Model) participantRows(members []Member, width, height int, bg spaceview.Color) []panelRow {
+// never scrolls. In the side panel (collapsible) a click on the heading
+// collapses the list to it; the overlay, opened on purpose, always lists.
+func (m *Model) participantRows(members []Member, width, height int, bg spaceview.Color, collapsible bool) []panelRow {
 	t := m.theme
 	m.layout.rosterPage = 0
 	if height <= 0 {
 		return nil
 	}
 	count := fmt.Sprint(len(members))
-	head := " PARTICIPANTS"
-	rows := []panelRow{{member: -1, runs: []run{
-		deco(head, spaceview.Style{FG: t.Dim, BG: bg, Bold: true}),
-		deco(strings.Repeat(" ", max(width-len(head)-len(count)-1, 1)), spaceview.Style{BG: bg}),
-		deco(count, spaceview.Style{FG: t.Dim, BG: bg}),
-	}}, {member: -1}}
+	var heading panelRow
+	if collapsible {
+		heading = m.panelHeading("participants", "PARTICIPANTS", count, m.participantsCollapsed, width, bg)
+		if m.participantsCollapsed {
+			return []panelRow{heading}
+		}
+	} else {
+		head := " PARTICIPANTS"
+		heading = panelRow{member: -1, runs: []run{
+			deco(head, spaceview.Style{FG: t.Dim, BG: bg, Bold: true}),
+			deco(strings.Repeat(" ", max(width-len(head)-len(count)-1, 1)), spaceview.Style{BG: bg}),
+			deco(count, spaceview.Style{FG: t.Dim, BG: bg}),
+		}}
+	}
+	rows := []panelRow{heading, {member: -1}}
 	if m.members == nil {
 		return append(rows, panelRow{member: -1, runs: []run{deco(" waiting for the room…", spaceview.Style{FG: t.Dim, BG: bg})}})
 	}

@@ -258,6 +258,8 @@ func (m *Model) clickHit(h hit, mo tea.Mouse) tea.Cmd {
 		if h.item < len(m.order) {
 			return m.selectChannel(m.order[h.item])
 		}
+	case hitPanelHead:
+		m.toggleList(h.id)
 	case hitPanel:
 		if h.item < len(m.layout.panelMembers) {
 			mem := m.layout.panelMembers[h.item]

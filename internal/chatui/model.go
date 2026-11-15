@@ -307,18 +307,21 @@ type Model struct {
 	tele              boxTelemetry
 	rosterOpen        bool
 	rosterOverlay     bool
-	maxLines          int
-	quitArmed         bool
-	linkPrompt        *linkPrompt
-	suggest           *suggestState
-	dismissed         string
-	pendingRun        bool
-	drag              dragState
-	copyOnSelect      bool
-	overlay           *overlayState
-	layout            viewLayout
-	hits              []hit
-	reconnecting      bool
+	// The side panel's lists, each collapsed to its heading by the user.
+	channelsCollapsed     bool
+	participantsCollapsed bool
+	maxLines              int
+	quitArmed             bool
+	linkPrompt            *linkPrompt
+	suggest               *suggestState
+	dismissed             string
+	pendingRun            bool
+	drag                  dragState
+	copyOnSelect          bool
+	overlay               *overlayState
+	layout                viewLayout
+	hits                  []hit
+	reconnecting          bool
 	// rosterScroll is how many participant cards the panel has scrolled
 	// past; each frame clamps it to the cards that do not fit.
 	rosterScroll    int

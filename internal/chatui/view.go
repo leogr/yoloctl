@@ -45,8 +45,9 @@ const (
 	hitOverlayRow
 	hitOverlayButton
 	hitChannel
-	hitFold   // a collapsed paste or image in the composer; id is its number
-	hitFilter // the divider's For me / filter toggle
+	hitFold      // a collapsed paste or image in the composer; id is its number
+	hitFilter    // the divider's For me / filter toggle
+	hitPanelHead // a side panel list's heading; id is "channels" or "participants"
 )
 
 // hit is one click target of the last frame, covering cells [x0, x1) of
@@ -170,7 +171,7 @@ func (m *Model) View() tea.View {
 	if panel > 0 {
 		// Side panels list channels before allocating rows to participants.
 		rail := m.channelRail(panel)
-		side = append(rail, m.participantRows(members, panel, bodyHeight-len(rail), 0)...)
+		side = append(rail, m.participantRows(members, panel, bodyHeight-len(rail), 0, true)...)
 	}
 	selStyle := m.selectionStyle()
 	for i := range bodyHeight {
@@ -189,6 +190,8 @@ func (m *Model) View() tea.View {
 			if i < len(side) {
 				runs = side[i].runs
 				switch {
+				case side[i].head != "":
+					m.hits = append(m.hits, hit{x0: tw + 1, x1: w, y: top + i, area: hitPanelHead, id: side[i].head})
 				case side[i].channel > 0:
 					m.hits = append(m.hits, hit{x0: tw + 1, x1: w, y: top + i, area: hitChannel, item: side[i].channel - 1})
 				case side[i].member >= 0:
@@ -864,7 +867,7 @@ func (m *Model) participantOverlay(members []Member, lines []string, w, top, hei
 	pw := min(30, w)
 	x := w - pw
 	m.layout.panelX0, m.layout.panelX1 = x, w
-	rows := m.participantRows(members, pw, height, m.theme.Popup)
+	rows := m.participantRows(members, pw, height, m.theme.Popup, false)
 	for i := range height {
 		var runs []run
 		if i < len(rows) {

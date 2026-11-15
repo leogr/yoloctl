@@ -188,6 +188,16 @@ func (m *Model) hoverHint() []run {
 		if h.item < len(m.order) {
 			name, what = m.order[h.item], "click to show it"
 		}
+	case hitPanelHead:
+		collapsed := m.channelsCollapsed
+		name = "Channels"
+		if h.id == "participants" {
+			collapsed, name = m.participantsCollapsed, "Participants"
+		}
+		what = "click to collapse the list"
+		if collapsed {
+			what = "click to expand the list"
+		}
 	case hitPanel:
 		account, nick, _ := strings.Cut(h.id, "\x00")
 		name, what = m.participantHint(account, nick)
