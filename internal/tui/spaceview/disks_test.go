@@ -207,3 +207,23 @@ func TestDiskGaugesHoverAndClick(t *testing.T) {
 		t.Fatalf("data disk popup:\n%s", m.last.c.plain())
 	}
 }
+
+func TestStoragePopupKeepsUnknownBoxBytesUnknown(t *testing.T) {
+	m := fixtureModel(t, 140, 60)
+	lines, err := m.storageLines([]byte(`{"boxes":[{"name":"slow-box","bytes":null},{"name":"shared-box","bytes":null,"shared_with":"known-box"},{"name":"known-box","bytes":0}],"images":null,"buildkit":null,"other":null}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rendered []string
+	for _, l := range lines {
+		var row strings.Builder
+		for _, s := range l {
+			row.WriteString(s.text)
+		}
+		rendered = append(rendered, row.String())
+	}
+	text := strings.Join(rendered, "\n")
+	if !strings.Contains(text, "slow-box  unavailable") || !strings.Contains(text, "shared-box  shared; counted with known-box") {
+		t.Fatal(text)
+	}
+}

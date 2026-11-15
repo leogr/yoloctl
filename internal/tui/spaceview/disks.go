@@ -284,10 +284,11 @@ type storageReport struct {
 		Used uint64 `json:"used"`
 	} `json:"system"`
 	Boxes []struct {
-		Name     string `json:"name"`
-		Running  bool   `json:"running"`
-		Declared bool   `json:"declared"`
-		Bytes    uint64 `json:"bytes"`
+		Name       string  `json:"name"`
+		Running    bool    `json:"running"`
+		Declared   bool    `json:"declared"`
+		Bytes      *uint64 `json:"bytes"`
+		SharedWith string  `json:"shared_with"`
 	} `json:"boxes"`
 	Images *struct {
 		Bytes  uint64 `json:"bytes"`
@@ -318,6 +319,7 @@ func (m *Model) storageLines(raw []byte) ([]line, error) {
 		color      Color
 	}
 	var rows []row
+	var unknown []line
 	for _, b := range r.Boxes {
 		note := "box, stopped"
 		if b.Running {
@@ -330,7 +332,15 @@ func (m *Model) storageLines(raw []byte) ([]line, error) {
 		if b.Declared {
 			c = m.accent(b.Name)
 		}
-		rows = append(rows, row{b.Name, note, b.Bytes, c})
+		if b.Bytes == nil {
+			size := "unavailable"
+			if b.SharedWith != "" {
+				size = "shared; counted with " + b.SharedWith
+			}
+			unknown = append(unknown, line{txt("  "+b.Name, c).bold(), txt("  "+size, t.Dim), txt("  "+note, t.Dim)})
+			continue
+		}
+		rows = append(rows, row{b.Name, note, *b.Bytes, c})
 	}
 	if r.Images != nil {
 		rows = append(rows, row{"images", "layers " + humanBytes(r.Images.Layers) + ", downloads " + humanBytes(r.Images.Blobs), r.Images.Bytes, t.Label})
@@ -360,6 +370,7 @@ func (m *Model) storageLines(raw []byte) ([]line, error) {
 		out = append(out, line{txt("  "+fmt.Sprintf("%-20s", truncate(rw.name, 20)), rw.color).bold(),
 			txt(fmt.Sprintf("%8s ", humanBytes(rw.bytes)), t.Text), txt(fmt.Sprintf("%-20s ", bar), t.Brand), txt(rw.note, t.Dim)})
 	}
+	out = append(out, unknown...)
 	if r.Images == nil {
 		out = append(out, line{txt("  images", t.Label).bold(), txt("  unavailable", t.Dim)})
 	}

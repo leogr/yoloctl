@@ -55,6 +55,14 @@ func storageFixture() storageSource {
 				"buildkit-rec": testGiB, "extract-1 sha256:tmp": testGiB / 2,
 			}, nil
 		},
+		snapshotUsage: func(_ context.Context, key string) (uint64, error) {
+			sizes := map[string]uint64{"k-dev": 9 * testGiB, "k-opus": 2 * testGiB, "k-idle": testGiB / 2, "k-x": 0}
+			size, ok := sizes[key]
+			if !ok {
+				return 0, errors.New("unknown snapshot " + key)
+			}
+			return size, nil
+		},
 		dirUsage: func(_ context.Context, path string) (uint64, error) {
 			switch path {
 			case containerdContentDir:
@@ -83,7 +91,7 @@ func TestSpaceStoragePartitionsTheSystemDisk(t *testing.T) {
 	if strings.Join(names, ",") != "yolo-dev,opus,idle,scratch" {
 		t.Fatalf("boxes sorted by size: %v", names)
 	}
-	if b := r.Boxes[2]; b.Running || !b.Declared || b.Bytes != testGiB/2 {
+	if b := r.Boxes[2]; b.Running || !b.Declared || b.Bytes == nil || *b.Bytes != testGiB/2 {
 		t.Fatalf("stopped box: %+v", b)
 	}
 	if r.Boxes[3].Declared || !r.Boxes[0].Running {
@@ -98,7 +106,9 @@ func TestSpaceStoragePartitionsTheSystemDisk(t *testing.T) {
 	// Each snapshot is counted once: the parts add up to the used space.
 	sum := r.Images.Bytes + r.BuildKit.Bytes + *r.Other
 	for _, b := range r.Boxes {
-		sum += b.Bytes
+		if b.Bytes != nil {
+			sum += *b.Bytes
+		}
 	}
 	if r.Other == nil || sum != r.System.Used {
 		t.Fatalf("sum %d != used %d (other %v)", sum, r.System.Used, r.Other)
@@ -130,7 +140,7 @@ func TestSpaceStorageReportsUnavailableParts(t *testing.T) {
 	}{
 		"snapshots": {func(s *storageSource) {
 			s.snapshots = func(context.Context) (map[string]uint64, error) { return nil, errors.New("ctr failed") }
-		}, []string{"snapshots"}, 0, false, false},
+		}, []string{"snapshots"}, 4, false, false},
 		"container keys": {func(s *storageSource) {
 			s.snapshotKeys = func(context.Context, []string) (map[string]string, error) { return nil, errors.New("inspect failed") }
 		}, []string{"boxes"}, 0, false, false},
@@ -138,7 +148,7 @@ func TestSpaceStorageReportsUnavailableParts(t *testing.T) {
 			s.snapshotKeys = func(context.Context, []string) (map[string]string, error) {
 				return map[string]string{fullID("1"): "k-opus", fullID("2"): "k-dev", fullID("4"): "k-x"}, nil
 			}
-		}, []string{"box idle"}, 3, true, false},
+		}, []string{"box idle"}, 4, true, false},
 		"blobs": {func(s *storageSource) {
 			inner := s.dirUsage
 			s.dirUsage = func(ctx context.Context, p string) (uint64, error) {

@@ -44,11 +44,12 @@ type storageDisk struct {
 // storageBox is one container's writable layer: everything the box wrote
 // outside its mounts, stopped containers included.
 type storageBox struct {
-	Name      string `json:"name"`
-	Container string `json:"container"`
-	Running   bool   `json:"running"`
-	Declared  bool   `json:"declared"` // a box of this space, not another container
-	Bytes     uint64 `json:"bytes"`
+	Name       string  `json:"name"`
+	Container  string  `json:"container"`
+	Running    bool    `json:"running"`
+	Declared   bool    `json:"declared"` // a box of this space, not another container
+	Bytes      *uint64 `json:"bytes"`    // nil means unmeasured or shared, never zero
+	SharedWith string  `json:"shared_with,omitempty"`
 }
 
 // storageImages is unpacked image layers plus the downloaded and built
@@ -90,13 +91,14 @@ type storageReport struct {
 // storageSource reads the VM. Its functions are replaceable so the
 // partition can be tested without one.
 type storageSource struct {
-	dataMount    string
-	statfs       func(string) (spacetelemetry.Usage, error)
-	declared     func() ([]string, error)
-	containers   func(context.Context) ([]container.Container, error)
-	snapshotKeys func(context.Context, []string) (map[string]string, error)
-	snapshots    func(context.Context) (map[string]uint64, error)
-	dirUsage     func(context.Context, string) (uint64, error)
+	dataMount     string
+	statfs        func(string) (spacetelemetry.Usage, error)
+	declared      func() ([]string, error)
+	containers    func(context.Context) ([]container.Container, error)
+	snapshotKeys  func(context.Context, []string) (map[string]string, error)
+	snapshotUsage func(context.Context, string) (uint64, error)
+	snapshots     func(context.Context) (map[string]uint64, error)
+	dirUsage      func(context.Context, string) (uint64, error)
 }
 
 func nativeStorageSource(space string) storageSource {
@@ -106,13 +108,14 @@ func nativeStorageSource(space string) storageSource {
 		dataMount = current.DiskMount
 	}
 	return storageSource{
-		dataMount:    dataMount,
-		statfs:       spacetelemetry.StatfsUsage,
-		declared:     func() ([]string, error) { return agentbox.ListNames(space) },
-		containers:   func(ctx context.Context) ([]container.Container, error) { return c.List(ctx, "") },
-		snapshotKeys: c.ContainerSnapshots,
-		snapshots:    c.SnapshotUsages,
-		dirUsage:     diskUsage,
+		dataMount:     dataMount,
+		statfs:        spacetelemetry.StatfsUsage,
+		declared:      func() ([]string, error) { return agentbox.ListNames(space) },
+		containers:    func(ctx context.Context) ([]container.Container, error) { return c.List(ctx, "") },
+		snapshotKeys:  c.ContainerSnapshots,
+		snapshotUsage: c.SnapshotUsage,
+		snapshots:     c.SnapshotUsages,
+		dirUsage:      diskUsage,
 	}
 }
 
@@ -121,6 +124,8 @@ func storageDiskOf(u spacetelemetry.Usage) *storageDisk {
 }
 
 func collectSpaceStorage(ctx context.Context, src storageSource, now time.Time) *storageReport {
+	ctx, cancel := context.WithTimeout(ctx, spaceStorageTimeout)
+	defer cancel()
 	r := &storageReport{MeasuredAt: now.UTC(), Boxes: []storageBox{}, Errors: []storageError{}}
 	fail := func(item string, err error) { r.Errors = append(r.Errors, storageError{item, err.Error()}) }
 	if u, err := src.statfs("/"); err != nil {
@@ -137,11 +142,6 @@ func collectSpaceStorage(ctx context.Context, src storageSource, now time.Time) 
 	}
 
 	complete := true
-	usages, err := src.snapshots(ctx)
-	if err != nil {
-		fail("snapshots", err)
-		complete = false
-	}
 	owned := map[string]bool{}
 	boxesKnown, allKeyed := false, true
 	if containers, err := src.containers(ctx); err != nil {
@@ -159,29 +159,60 @@ func collectSpaceStorage(ctx context.Context, src storageSource, now time.Time) 
 				declared[n] = true
 			}
 		}
+		pending := map[string]bool{}
 		for _, c := range containers {
+			if key, ok := container.SnapshotFor(keys, c.ID); ok {
+				pending[key] = true
+			}
+		}
+		counted := map[string]string{}
+		for _, c := range containers {
+			box := storageBox{Name: c.Name, Container: c.ID, Running: strings.HasPrefix(c.Status, "Up"), Declared: declared[c.Name]}
 			key, ok := container.SnapshotFor(keys, c.ID)
 			if !ok {
 				fail("box "+c.Name, errors.New("no overlayfs writable layer found"))
 				complete, allKeyed = false, false
+				r.Boxes = append(r.Boxes, box)
 				continue
 			}
 			owned[key] = true
-			if usages == nil {
+			if first, shared := counted[key]; shared {
+				box.SharedWith = first
+				r.Boxes = append(r.Boxes, box)
 				continue
 			}
-			size, ok := usages[key]
-			if !ok {
-				fail("box "+c.Name, errors.New("writable layer was not measured"))
+			counted[key] = c.Name
+			// Give each unique layer a share of what remains, reserving one
+			// share for global image/cache observations and response delivery.
+			deadline, _ := ctx.Deadline()
+			budget := max(time.Duration(0), time.Until(deadline)/time.Duration(len(pending)+1))
+			measureCtx, stop := context.WithTimeout(ctx, budget)
+			var size uint64
+			var err error
+			if measureCtx.Err() != nil {
+				err = measureCtx.Err()
+			} else {
+				size, err = src.snapshotUsage(measureCtx, key)
+			}
+			stop()
+			delete(pending, key)
+			if err != nil {
+				fail("box "+c.Name, err)
 				complete = false
-				continue
+			} else {
+				box.Bytes = &size
 			}
-			r.Boxes = append(r.Boxes, storageBox{Name: c.Name, Container: c.ID, Running: strings.HasPrefix(c.Status, "Up"),
-				Declared: declared[c.Name], Bytes: size})
+			r.Boxes = append(r.Boxes, box)
 		}
 		slices.SortStableFunc(r.Boxes, func(a, b storageBox) int {
-			if a.Bytes != b.Bytes {
-				if a.Bytes > b.Bytes {
+			if a.Bytes == nil && b.Bytes != nil {
+				return 1
+			}
+			if a.Bytes != nil && b.Bytes == nil {
+				return -1
+			}
+			if a.Bytes != nil && b.Bytes != nil && *a.Bytes != *b.Bytes {
+				if *a.Bytes > *b.Bytes {
 					return -1
 				}
 				return 1
@@ -193,12 +224,29 @@ func collectSpaceStorage(ctx context.Context, src storageSource, now time.Time) 
 		complete = false
 	}
 
-	blobs, blobsErr := src.dirUsage(ctx, containerdContentDir)
+	// A global scan can still be slow; it no longer consumes the budget
+	// before containers have been keyed and independently measured.
+	var usages map[string]uint64
+	err := ctx.Err()
+	if err == nil {
+		usages, err = src.snapshots(ctx)
+	}
+	if err != nil {
+		fail("snapshots", err)
+		complete = false
+	}
+	dirUsage := func(path string) (uint64, error) {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		return src.dirUsage(ctx, path)
+	}
+	blobs, blobsErr := dirUsage(containerdContentDir)
 	if blobsErr != nil {
 		fail("images", blobsErr)
 		complete = false
 	}
-	state, stateErr := src.dirUsage(ctx, buildkitStateDir)
+	state, stateErr := dirUsage(buildkitStateDir)
 	if stateErr != nil {
 		fail("buildkit", stateErr)
 		complete = false
@@ -227,7 +275,9 @@ func collectSpaceStorage(ctx context.Context, src storageSource, now time.Time) 
 	if complete && r.System != nil && r.Images != nil && r.BuildKit != nil {
 		sum := r.Images.Bytes + r.BuildKit.Bytes
 		for _, b := range r.Boxes {
-			sum += b.Bytes
+			if b.Bytes != nil {
+				sum += *b.Bytes
+			}
 		}
 		// Parts measured a moment apart can exceed the filesystem's total
 		// while files change; the remainder is then nothing, not negative.
@@ -245,10 +295,14 @@ func containerNames(cs []container.Container) []string {
 	return out
 }
 
+var storageViewSource = nativeStorageSource
+
 func runSpaceStorageView(ctx context.Context, space string, out io.Writer) error {
-	ctx, cancel := context.WithTimeout(ctx, spaceStorageTimeout)
-	defer cancel()
-	return json.NewEncoder(out).Encode(collectSpaceStorage(ctx, nativeStorageSource(space), time.Now()))
+	report := collectSpaceStorage(ctx, storageViewSource(space), time.Now())
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return json.NewEncoder(out).Encode(report)
 }
 
 func newSpaceStorageCmd() *cobra.Command {
@@ -264,6 +318,9 @@ and anything else written outside its mounts). It is rebuilt with the VM.
 The data disk holds accounts and box settings and is kept across VM rebuilds.
 
 Each box's writable layer is measured by containerd, stopped boxes included.
+Boxes are measured before global image/cache totals, each within its share of
+the time budget. Completed measurements remain visible if another walk is slow;
+unmeasured boxes say unavailable, and shared layers are counted once.
 The rest is image layers and their downloaded blobs, BuildKit's cache, and
 "guest OS and other" (the remainder, including the filesystem reserve and
 ephemeral workdirs). A part that cannot be measured is reported as
@@ -346,7 +403,14 @@ func writeSpaceStorage(w io.Writer, space string, r *storageReport) error {
 		} else {
 			what += ", stopped"
 		}
-		_, _ = fmt.Fprintf(tw, "  %s\t%s\t%s\n", b.Name, humanBytes(b.Bytes), what)
+		size := "unavailable"
+		if b.Bytes != nil {
+			size = humanBytes(*b.Bytes)
+		} else if b.SharedWith != "" {
+			size = "shared"
+			what += "; counted with " + b.SharedWith
+		}
+		_, _ = fmt.Fprintf(tw, "  %s\t%s\t%s\n", b.Name, size, what)
 	}
 	if r.Images != nil {
 		_, _ = fmt.Fprintf(tw, "  images\t%s\tlayers %s, downloaded blobs %s\n", humanBytes(r.Images.Bytes), humanBytes(r.Images.Layers), humanBytes(r.Images.Blobs))

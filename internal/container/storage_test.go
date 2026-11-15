@@ -120,6 +120,26 @@ func TestSnapshotUsagesParse(t *testing.T) {
 	}
 }
 
+func TestSnapshotUsageRequiresTheRequestedKey(t *testing.T) {
+	for _, tc := range []struct {
+		raw  string
+		want uint64
+		ok   bool
+	}{
+		{"KEY SIZE INODES\nowned 1234 7\n", 1234, true},
+		{"KEY SIZE INODES\nowned 0 0\n", 0, true},
+		{"KEY SIZE INODES\nother 1234 7\n", 0, false},
+		{"KEY SIZE INODES\n", 0, false},
+		{"KEY SIZE INODES\nowned 1 2\nother 3 4\n", 0, false},
+		{"owned 1234", 0, false},
+	} {
+		got, err := snapshotUsage([]byte(tc.raw), "owned")
+		if (err == nil) != tc.ok || got != tc.want {
+			t.Fatalf("reply=%q got=%d err=%v", tc.raw, got, err)
+		}
+	}
+}
+
 func TestContainerSnapshotsParse(t *testing.T) {
 	out := map[string]string{}
 	raw := `[{"ID":"c1","Snapshotter":"overlayfs","SnapshotKey":"c1"},{"ID":"c2","Snapshotter":"native","SnapshotKey":"c2"},{"ID":"c3","Snapshotter":"overlayfs","SnapshotKey":""}]`

@@ -103,7 +103,8 @@ the data disk (accounts and box settings, kept across VM rebuilds). Both use
 one rule, warn under min(4 GiB, 15%) free or from 85% used and critical under
 min(2 GiB, 10%) or from 95%, shown in the band, the title's warning slot and one toast per worse
 crossing. Unknown usage is never shown as a healthy gauge. The system disk
-popup runs `space storage --json` on demand. [28](#source-28)
+popup runs `space storage --json` on demand, showing completed measurements
+with unavailable sizes explicitly unknown when a walk exhausts its budget. [28](#source-28)
 
 [FACT] Space view's VM memory fill uses only its labeled
 `MemTotal − MemAvailable`. Box and pool charges (`memory.current`, file cache

@@ -155,8 +155,9 @@ for workloads whose retained data exceeds the VM's capacity. [5](#source-5)
 
 [FACT] Host `space storage` is a lock-free controller read that partitions the
 system disk into each container's writable layer, images, BuildKit cache and
-the remainder, reporting unmeasured parts instead of folding them into the
-remainder. Space view warns before either VM disk runs out. Neither frees
+the remainder. It measures keyed boxes before global totals and delivers partial
+results within the enclosing deadline; unknown sizes stay unknown instead of
+folding into the remainder. Space view warns before either VM disk runs out. Neither frees
 space. [16](#source-16)
 
 [FACT] Firecracker separately measures host capacity for its sparse writable

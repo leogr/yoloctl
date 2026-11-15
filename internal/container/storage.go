@@ -190,6 +190,31 @@ func (c *Client) SnapshotUsages(ctx context.Context) (map[string]uint64, error) 
 	return parseSnapshotUsages(raw)
 }
 
+// SnapshotUsage measures one known writable-layer key without walking every
+// snapshot first. A missing or mismatched reply is unknown, never zero.
+func (c *Client) SnapshotUsage(ctx context.Context, key string) (uint64, error) {
+	if key == "" {
+		return 0, fmt.Errorf("snapshot key is required")
+	}
+	raw, err := c.command(ctx, "sudo", "ctr", "--namespace", "default", "snapshots", "--snapshotter", "overlayfs", "usage", "-b", "--", key).Output()
+	if err != nil {
+		return 0, fmt.Errorf("measure snapshot %s: %w", key, err)
+	}
+	return snapshotUsage(raw, key)
+}
+
+func snapshotUsage(raw []byte, key string) (uint64, error) {
+	usages, err := parseSnapshotUsages(raw)
+	if err != nil {
+		return 0, err
+	}
+	size, ok := usages[key]
+	if !ok || len(usages) != 1 {
+		return 0, fmt.Errorf("snapshot usage reply does not identify only %q", key)
+	}
+	return size, nil
+}
+
 // parseSnapshotUsages reads `ctr snapshots usage -b` from the right: a
 // transient unpack key contains a space, size and inode count never do.
 func parseSnapshotUsages(raw []byte) (map[string]uint64, error) {
