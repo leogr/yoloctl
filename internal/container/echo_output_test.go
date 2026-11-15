@@ -8,9 +8,10 @@ import (
 	"testing"
 )
 
-// nerdctl start, stop, rm, pull and rmi print only the container ID or an
-// image digest on stdout. Those bare hex lines must never reach the user's
-// stream; stderr (progress and errors) still does.
+// nerdctl start, stop, rm and rmi print only the container ID or an image
+// digest on stdout. Those bare hex lines must never reach the user's stream;
+// stderr still does. Pull writes its progress to stdout (pinned nerdctl sets
+// ProgressOutputToStdout), so that output stays visible.
 func TestNerdctlIDEchoesAreNotShown(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("LIMA_HOME", t.TempDir())
@@ -19,7 +20,7 @@ func TestNerdctlIDEchoesAreNotShown(t *testing.T) {
 	script := `#!/bin/sh
 case "$*" in
   *'nerdctl stop'*|*'nerdctl rm'*) echo ` + id + ` ;;
-  *'nerdctl pull'*) echo 'progress line' >&2; echo sha256:` + id + ` ;;
+  *'nerdctl pull'*) echo 'pull progress line'; echo 'stderr line' >&2 ;;
   *'nerdctl rmi'*) echo 'Untagged: unit-image'; echo 'Deleted: sha256:` + id + `' ;;
 esac
 exit 0
@@ -43,10 +44,10 @@ exit 0
 	if err := c.ImageRemove(ctx, "unit-image"); err != nil {
 		t.Fatal(err)
 	}
-	if stdout.Len() != 0 {
-		t.Fatalf("ID echoes reached the user's stream: %q", stdout.String())
+	if stdout.String() != "pull progress line\n" {
+		t.Fatalf("want only pull progress on the user's stream, got %q", stdout.String())
 	}
-	if !strings.Contains(stderr.String(), "progress line") {
-		t.Fatalf("stderr progress lost: %q", stderr.String())
+	if !strings.Contains(stderr.String(), "stderr line") {
+		t.Fatalf("stderr lost: %q", stderr.String())
 	}
 }

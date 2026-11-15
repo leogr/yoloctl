@@ -293,13 +293,12 @@ func parseImages(r io.Reader) ([]Image, error) {
 
 // ImagePull pulls a reference into the space's local cache. nerdctl
 // streams progress to stderr (preserved through the Client's stderr)
-// and prints the final digest to stdout, which is not shown: a bare digest
-// line is no progress for the user.
+// and prints the final digest to stdout.
 func (c *Client) ImagePull(ctx context.Context, ref string) error {
 	if err := checkBuildSpace(ctx, []string{ref}); err != nil {
 		return err
 	}
-	return c.nerdctlEcho(ctx, "pull", ref)
+	return c.nerdctl(ctx, "pull", ref)
 }
 
 // ImageRemove deletes ref from the space's local image cache
@@ -925,9 +924,10 @@ func (c *Client) nerdctl(ctx context.Context, args ...string) error {
 }
 
 // nerdctlEcho runs a nerdctl command whose stdout only echoes the container
-// or image it acted on (start, stop and rm print the ID; pull and rmi print
-// digests). That echo is not shown: a bare hex line is no progress for the
-// user. Errors and progress stay on stderr.
+// or image it acted on (start, stop and rm print the ID; rmi prints the
+// untagged/deleted digests). That echo is not shown: a bare hex line is no
+// progress for the user. Errors stay on stderr. Pull is not one of them: its
+// progress is written to stdout.
 func (c *Client) nerdctlEcho(ctx context.Context, args ...string) error {
 	cmd := c.command(ctx, append([]string{"sudo", "nerdctl"}, args...)...)
 	cmd.Stdout = io.Discard

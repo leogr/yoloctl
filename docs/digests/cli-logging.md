@@ -49,8 +49,9 @@ tails without waiting for descendant-held FDs. [9](#source-9)
 workload stop) goes through it: a line framed as a yoloctl record is shown again
 through the process Logger above the block, any other line unchanged above it,
 one complete line at a time. Without the block those bytes are unchanged.
-Container start/stop/rm, detached run, pull and rmi never show their stdout,
-which only echoes an ID or digest; their stderr is unchanged.
+Container start/stop/rm, detached run and rmi never show their stdout, which
+only echoes an ID or digest; their stderr is unchanged. Pull keeps its stdout,
+where pinned nerdctl writes its progress.
 [14](#source-14) [15](#source-15)
 
 [FACT] Prompts, editors, host SSH and standalone attachments suspend the shared
@@ -103,4 +104,4 @@ notice's existing once-per-attachment rule are unchanged.
 
 14. <a id="source-14"></a> [Child stderr under the block](../../cmd/yoloctl/infra_stderr.go#L1) — `infraStderr`, `infraLines`; controller_deploy.go `nativeInfrastructure`; cli_logging.go `cliOperation`; infra_stderr_test.go `TestInfraStderrGoesThroughTheStepsBlock`, `TestCLIOperationLeavesOneFinalLineUnderTheStepsBlock`.
 
-15. <a id="source-15"></a> [ID echoes](../../internal/container/container.go#L927) — `nerdctlEcho`, `Run` (detached), `Start`, `Stop`, `ImagePull`, `ImageRemove`, `Remove`; stop_id.go, remove_id.go; echo_output_test.go `TestNerdctlIDEchoesAreNotShown`.
+15. <a id="source-15"></a> [ID echoes](../../internal/container/container.go#L927) — `nerdctlEcho`, `Run` (detached), `Start`, `Stop`, `ImageRemove`, `Remove` (`ImagePull` keeps stdout); stop_id.go, remove_id.go; echo_output_test.go `TestNerdctlIDEchoesAreNotShown`.
