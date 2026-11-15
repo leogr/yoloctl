@@ -87,7 +87,7 @@ hover and popups with fixtures. No live VM measurement is established by them.
 13. <a id="source-13"></a> [storage_usage_linux.go](../../cmd/yoloctl/storage_usage_linux.go#L15-L70) — `diskUsage`.
 14. <a id="source-14"></a> [containerd v2.3.3 ctr snapshots](https://github.com/containerd/containerd/blob/v2.3.3/cmd/ctr/commands/snapshots/snapshots.go) — `usageCommand`.
 15. <a id="source-15"></a> [containerd v2.3.3 overlay snapshotter](https://github.com/containerd/containerd/blob/v2.3.3/plugins/snapshots/overlay/overlay.go) — `Usage`.
-16. <a id="source-16"></a> [disks.go](../../internal/tui/spaceview/disks.go#L280-L403) — `storageReport`, `storageLines`.
+16. <a id="source-16"></a> [disks.go](../../internal/tui/spaceview/disks.go#L280-L387) — `storageReport`, `storageLines`.
 17. <a id="source-17"></a> [telemetry_test.go](../../internal/spacetelemetry/telemetry_test.go#L421) — `TestDiskPressure`, `TestSystemDiskUnavailable`.
 18. <a id="source-18"></a> [storage_test.go](../../internal/container/storage_test.go#L95-L135) — snapshot parser tests.
 19. <a id="source-19"></a> [space_storage_test.go](../../cmd/yoloctl/space_storage_test.go#L1) — partition, unavailable parts, operator refusal, `diskUsage`.
