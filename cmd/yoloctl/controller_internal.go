@@ -118,6 +118,7 @@ var controllerOperations = map[string]controller.Operation{
 	"space.inventory":       {},
 	"space.telemetry":       {},
 	"space.storage":         {},
+	"space.storage.set":     {Mutates: true, EffectGated: true, Footprint: controller.FootprintGlobal},
 	"space.validate-grants": {},
 }
 
@@ -719,6 +720,9 @@ func executeControllerWorker(ctx context.Context, work controller.WorkerInput) e
 		return collector.beforeBuild(ctx, refs, os.Stderr)
 	})
 	if handled, err := runControllerAudit(ctx, work.Request, os.Stdin, os.Stdout); handled {
+		return err
+	}
+	if handled, err := runControllerStorageSet(ctx, work.Request, os.Stdout); handled {
 		return err
 	}
 	if handled, err := runControllerChatRuntime(ctx, work.Request, os.Stdout, os.Stderr); handled {

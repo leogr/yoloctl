@@ -1,14 +1,19 @@
 # VM image-preparation reserve notices
 
-Verification: `f72913d4f7d7403a9bf4aecb94947d00823892d7` and accompanying changes.
+Verification: `1ea4713a87d08ef6ef50528cde2aff060bcde72b` and accompanying changes.
 
 [FACT] Human `box create`, `box recreate`, `box start` and `box list` requests
 observe the VM root filesystem once after worker authorization, before image
-warming or apply. Below image preflight's existing 20% reserve they emit one
+warming or apply. Below image preflight's effective capped admission reserve they emit one
 stderr warning with the measured free/required GiB and `yoloctl space storage`
 guidance. Statfs failure, unknown capacity and sufficient free space emit no
 notice. This does not start cleanup, walk files, refuse an operation or change
 its result. [1](#source-1) [2](#source-2) [3](#source-3)
+
+[FACT] The requirement is min(20% of disk, `storage.build_reserve_max`), default
+10 GiB. `none` restores 20%; `0GiB` requires no reserve. An unreadable setting
+uses uncapped 20%, disclosed in the warning. Cleanup/view thresholds remain
+unchanged. [10](#source-10) [11](#source-11)
 
 [FACT] Successful `space start` observes the same notice with the existing
 admin-only `control.ping`, using internal request metadata. A failed optional
@@ -33,3 +38,5 @@ events are unchanged. There is no new margin, quota or cleanup ownership.
 7. <a id="source-7"></a> [storage_warning_test.go](../../cmd/yoloctl/storage_warning_test.go#L1) — threshold, unknown read, JSON and optional host read controls.
 8. <a id="source-8"></a> [Ping controls](../../internal/controller/storage_warning_test.go#L1) — ordinary output, operator refusal and maintenance.
 9. <a id="source-9"></a> [disk.go](../../internal/spacetelemetry/disk.go#L17) — unchanged view pressure thresholds.
+10. <a id="source-10"></a> [reserve.go](../../internal/storagegc/reserve.go#L1) — default, parsing and admission formula.
+11. <a id="source-11"></a> [build_reserve.go](../../cmd/yoloctl/build_reserve.go#L1) — native setting read and disclosed fallback.

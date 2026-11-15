@@ -224,6 +224,9 @@ are retained across ordinary stop/start/recreate and cleared only by explicit
 `box cache clear`, `box recreate --clear-cache` or box destruction, never by
 automatic storage cleanup. See
 [storage cleanup](docs/digests/storage-gc.md).
+Image-build admission requires min(20% of the system disk, the native
+`storage.build_reserve_max` cap), default 10 GiB; this changes no cleanup
+target and imposes no quota on box writes.
 The Firecracker helper separately guards host backing-filesystem headroom.
 Keep storage pauses recoverable in memory: never turn them into a forced-stop
 fallback or replay an interrupted operation. See [host storage](docs/digests/host-storage.md).

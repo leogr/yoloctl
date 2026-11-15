@@ -65,7 +65,8 @@ builds/pulls, root free space below 20% triggers a bounded 30-second cleanup
 retaining that build's input/output references. Its timeout reports shortage
 and incomplete cleanup, separately from user cancellation. Pressure may discard
 all unused cache. Free bytes are remeasured for up to three seconds afterward;
-persistent shortage refuses the build. Shared-layer totals are not physical
+persistent shortage below the [build admission reserve](build-reserve.md) refuses
+the build. Cleanup targets stay uncapped. Shared-layer totals are not physical
 recovery measurements. [7](#source-7) [9](#source-9) [16](#source-16)
 
 [FACT] A returned image-preflight refusal reaches the requesting client with

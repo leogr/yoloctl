@@ -20,3 +20,7 @@ Cache clearing never touches account credentials, the workdir or another box.
 Automatic cleanup still owns only unused composed images and BuildKit cache.
 Never widen it to generic container/volume pruning or unrequested user files.
 See the repository [cache contract](../../../docs/digests/box-caches.md).
+
+Cargo cache downloads can be cleared explicitly inside the owning box with
+`rm -rf ~/.cargo/registry/cache`; do not remove `.cargo/bin`, configuration or
+credentials. This is a user-requested cache action, never automatic cleanup.

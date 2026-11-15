@@ -28,11 +28,21 @@ stopped, or explicitly `box recreate --clear-cache BOX` to empty that separate
 cache. Neither clears cache files that a tool keeps elsewhere in the layer. `space storage` help names
 that consequence before suggesting it. [1](#source-1) [6](#source-6)
 
+[FACT] Low-disk warnings and build-preflight refusals name both remedies:
+stop then clear a separate cache (ordinary recreate keeps it), or explicitly
+recreate a legacy layer (discarding non-bound files). Human `space storage`
+output repeats that distinction in its footer, with in-box tool commands;
+JSON remains the structured measurement alone. [7](#source-7) [8](#source-8) [9](#source-9)
+
 ## Sources
 
-1. <a id="source-1"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L308) — `newSpaceStorageCmd` help and explicit remedies.
+1. <a id="source-1"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L401) — `newSpaceStorageCmd` help and explicit remedies.
 2. <a id="source-2"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2671) — `newAgentboxExecCmd` argv and confined command transport.
 3. <a id="source-3"></a> [Go clean](https://pkg.go.dev/cmd/go#hdr-Remove_object_files_and_cached_files) — `-cache` and `-modcache`.
 4. <a id="source-4"></a> [npm cache](https://docs.npmjs.com/cli/v11/commands/npm-cache/) — `clean` and required force flag.
 5. <a id="source-5"></a> [pip cache](https://pip.pypa.io/en/stable/cli/pip_cache/) — `purge`.
-6. <a id="source-6"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2524) — recreate's kept binds and removal confirmation in `recreateAgentbox`.
+6. <a id="source-6"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2594) — recreate's kept binds and removal confirmation in `recreateAgentbox`.
+
+7. <a id="source-7"></a> [storage_remedy.go](../../cmd/yoloctl/storage_remedy.go#L1) — shared explicit-action wording used by `diskReserveWarning`, `beforeBuild` and the storage report footer.
+8. <a id="source-8"></a> [storage_warning.go](../../cmd/yoloctl/storage_warning.go#L30) — `diskReserveWarning` appends the shared explicit cache remedy.
+9. <a id="source-9"></a> [storage_gc.go](../../cmd/yoloctl/storage_gc.go#L236) — `beforeBuild` budget/final refusal carry the shared remedy without changing admission or cleanup.

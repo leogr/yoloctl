@@ -204,6 +204,9 @@ const (
 	FootprintImages
 	FootprintPorts
 	FootprintAudit
+	// FootprintGlobal is a whole-space native settings transaction; it grants
+	// no narrower resource write kinds. BeginEffects records its global scope.
+	FootprintGlobal
 )
 
 var footprintKinds = map[string]Footprint{

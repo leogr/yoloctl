@@ -168,14 +168,16 @@ func collectImages(ctx context.Context, c gcImageClient, refs []string, out io.W
 }
 
 type storageCollector struct {
-	disk   func() (storagegc.Disk, error)
-	images func(context.Context, []string) (int, error)
-	cache  func(context.Context, uint64) error
+	disk    func() (storagegc.Disk, error)
+	reserve func() buildReserveRead
+	images  func(context.Context, []string) (int, error)
+	cache   func(context.Context, uint64) error
 }
 
 func nativeStorageCollector(space string, out io.Writer, legacyAliases ...string) storageCollector {
 	return storageCollector{
-		disk: storagegc.RootDisk,
+		disk:    storagegc.RootDisk,
+		reserve: func() buildReserveRead { return readBuildReserve(space) },
 		images: func(ctx context.Context, extra []string) (int, error) {
 			refs, err := declaredImageReferences(space)
 			if err != nil {
@@ -236,6 +238,13 @@ func (c storageCollector) beforeBuild(ctx context.Context, refs []string, out io
 	if err != nil {
 		return fmt.Errorf("measure VM storage before build: %w", err)
 	}
+	reserve := buildReserveRead{}
+	if c.reserve != nil {
+		reserve = c.reserve()
+	}
+	if reserve.Err != nil {
+		cliWarn(logging.Storage, "%s: %v", reserve.description(), reserve.Err)
+	}
 	if !disk.Low() {
 		return nil
 	}
@@ -250,8 +259,8 @@ func (c storageCollector) beforeBuild(ctx context.Context, refs []string, out io
 		if parent.Err() != nil {
 			result = parent.Err()
 		} else if ctx.Err() != nil {
-			result = fmt.Errorf("VM system disk has %.1f GiB free (20%% reserve: %.1f GiB); storage cleanup exceeded its 30s preflight budget; build/pull not started; allow idle cleanup to finish or free space: %w",
-				gib(disk.Available), gib(disk.TargetFree()), ctx.Err())
+			result = fmt.Errorf("VM system disk has %.1f GiB free (20%% cleanup target %.1f GiB; build reserve %.1f GiB; %s); storage cleanup exceeded its 30s preflight budget; build/pull not started; allow idle cleanup to finish or free space (%s): %w",
+				gib(disk.Available), gib(disk.TargetFree()), gib(reserve.Reserve.AdmissionFree(disk)), reserve.description(), storageCacheRemedy, ctx.Err())
 		}
 	}()
 	if err := c.collect(ctx, refs, out); err != nil {
@@ -281,8 +290,8 @@ waiting:
 			}
 		}
 	}
-	if disk.Low() {
-		return fmt.Errorf("VM system disk has %.1f GiB free after cleanup; at least %.1f GiB (20%%) is required before a build or pull; retained images and box data were preserved; free space or increase the VM system disk", gib(disk.Available), gib(disk.TargetFree()))
+	if !reserve.Reserve.Admits(disk) {
+		return fmt.Errorf("VM system disk has %.1f GiB free after cleanup; at least %.1f GiB is required before a build or pull (%s); retained images and box data were preserved; see yoloctl space storage, adjust the cap with yoloctl space storage set, or increase the VM system disk; %s", gib(disk.Available), gib(reserve.Reserve.AdmissionFree(disk)), reserve.description(), storageCacheRemedy)
 	}
 	return nil
 }

@@ -81,6 +81,7 @@ func registerCompletions(root *cobra.Command) {
 		{[]string{"space", "edit"}, firstArgOnly(completeSpaces)},
 		{[]string{"space", "view"}, firstArgOnly(completeRunningSpaces)},    // host-only live view of a running space
 		{[]string{"space", "storage"}, firstArgOnly(completeRunningSpaces)}, // host-only read of a running space
+		{[]string{"space", "storage", "set"}, firstArgOnly(completeRunningSpaces)},
 		{[]string{"space", "use"}, firstArgOnly(completeSpaces)},
 		{[]string{"space", "logs"}, firstArgOnly(completeSpaces)},
 		{[]string{"space", "mount", "list"}, firstArgOnly(completeSpaces)},

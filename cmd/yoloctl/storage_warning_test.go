@@ -34,6 +34,13 @@ func TestDiskReserveWarningUsesPreflightThreshold(t *testing.T) {
 			if (note != "") != tc.warn {
 				t.Fatalf("notice=%q", note)
 			}
+			if tc.warn {
+				for _, want := range []string{"box cache clear BOX", "ordinary recreate keeps it", "box recreate BOX discards non-bound files"} {
+					if !strings.Contains(note, want) {
+						t.Errorf("missing cache remedy %q: %s", want, note)
+					}
+				}
+			}
 			if tc.warn && (!strings.Contains(note, "19.0 GiB free") || !strings.Contains(note, "needs 20.0 GiB") || !strings.Contains(note, "yoloctl space storage")) {
 				t.Fatal(note)
 			}

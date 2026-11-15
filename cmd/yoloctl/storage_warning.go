@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -12,19 +13,31 @@ import (
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
+	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/storagegc"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 )
 
 var storageWarningDisk = storagegc.RootDisk
 
+var storageWarningReserve = func() buildReserveRead {
+	if c := spaceenv.Current(); c != nil {
+		return readBuildReserve(c.Space)
+	}
+	return buildReserveRead{Err: errors.New("native space context unavailable")}
+}
+
 func diskReserveWarning() string {
 	disk, err := storageWarningDisk()
-	if err != nil || disk.Total == 0 || disk.Available > disk.Total || !disk.Low() {
+	if err != nil || disk.Total == 0 || disk.Available > disk.Total {
 		return ""
 	}
-	return fmt.Sprintf("VM system disk: %.1f GiB free; image preparation needs %.1f GiB; see yoloctl space storage to identify large boxes and free their caches",
-		gib(disk.Available), gib(disk.TargetFree()))
+	reserve := storageWarningReserve()
+	if reserve.Reserve.Admits(disk) {
+		return ""
+	}
+	return fmt.Sprintf("VM system disk: %.1f GiB free; image preparation needs %.1f GiB (%s); see yoloctl space storage to identify large boxes and free their caches",
+		gib(disk.Available), gib(reserve.Reserve.AdmissionFree(disk)), reserve.description()) + "; " + storageCacheRemedy
 }
 
 // Run once per admitted worker, not once per image-warming/apply pass. Internal

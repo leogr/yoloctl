@@ -16,6 +16,7 @@ import (
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/spacetelemetry"
+	"github.com/leogr/yoloctl/internal/storagegc"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
 )
@@ -87,19 +88,21 @@ type storageError struct {
 // is null with its reason in errors; other is then null too, never a
 // remainder that silently absorbs it.
 type storageReport struct {
-	MeasuredAt time.Time      `json:"measured_at"`
-	System     *storageDisk   `json:"system"`
-	Data       *storageDisk   `json:"data"`
-	Boxes      []storageBox   `json:"boxes"`
-	Images     *storageImages `json:"images"`
-	BuildKit   *storageBuild  `json:"buildkit"`
-	Other      *uint64        `json:"other"`
-	Errors     []storageError `json:"errors"`
+	BuildReserve *storageBuildReserve `json:"build_reserve"`
+	MeasuredAt   time.Time            `json:"measured_at"`
+	System       *storageDisk         `json:"system"`
+	Data         *storageDisk         `json:"data"`
+	Boxes        []storageBox         `json:"boxes"`
+	Images       *storageImages       `json:"images"`
+	BuildKit     *storageBuild        `json:"buildkit"`
+	Other        *uint64              `json:"other"`
+	Errors       []storageError       `json:"errors"`
 }
 
 // storageSource reads the VM. Its functions are replaceable so the
 // partition can be tested without one.
 type storageSource struct {
+	reserve       func() buildReserveRead
 	dataMount     string
 	statfs        func(string) (spacetelemetry.Usage, error)
 	declared      func() ([]string, error)
@@ -118,6 +121,7 @@ func nativeStorageSource(space string) storageSource {
 		dataMount = current.DiskMount
 	}
 	return storageSource{
+		reserve:       func() buildReserveRead { return readBuildReserve(space) },
 		dataMount:     dataMount,
 		statfs:        spacetelemetry.StatfsUsage,
 		declared:      func() ([]string, error) { return agentbox.ListNames(space) },
@@ -152,6 +156,18 @@ func collectSpaceStorage(ctx context.Context, src storageSource, now time.Time) 
 		fail("system", err)
 	} else {
 		r.System = storageDiskOf(u)
+	}
+	reserve := buildReserveRead{}
+	if src.reserve != nil {
+		reserve = src.reserve()
+	} else {
+		reserve.Reserve, _ = storagegc.ParseReserve(nil)
+	}
+	if reserve.Err != nil {
+		fail("build reserve", fmt.Errorf("%s: %w", reserve.description(), reserve.Err))
+	}
+	if r.System != nil {
+		r.BuildReserve = reserve.report(storagegc.Disk{Total: r.System.Total, Available: r.System.Free})
 	}
 	if src.dataMount == "" {
 		fail("data", errors.New("data disk mount unknown"))
@@ -394,6 +410,15 @@ layers, BuildKit's cache and every box's own files (its home, /tmp, /var/tmp
 and anything else written outside its mounts). It is rebuilt with the VM.
 The data disk holds accounts and box settings and is kept across VM rebuilds.
 
+Build admission requires min(20% of the system disk, storage.build_reserve_max),
+whose default cap is 10GiB. Change it on a running space with:
+
+  yoloctl space storage set dev --build-reserve-max 12GiB
+
+Use none for uncapped 20%, or 0GiB for no free-space admission reserve.
+Cleanup still starts below 20%, and its failures/cancellation still refuse
+the build. This is not a quota and does not limit writes inside boxes.
+
 Each box's writable layer is measured by containerd, stopped boxes included.
 Its caches row measures the separate /home/sandbox/.cache bind once, outside
 that layer. Older boxes without the bind say "in the layer"; failed cache
@@ -461,6 +486,7 @@ critical below 2 GiB (10%) or from 95%.
 		},
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "Emit JSON instead of the human-readable view")
+	cmd.AddCommand(newSpaceStorageSetCmd())
 	return cmd
 }
 
@@ -485,6 +511,7 @@ func writeSpaceStorage(w io.Writer, space string, r *storageReport) error {
 	_, _ = fmt.Fprintf(tw, "SPACE\t%s\n", space)
 	disk("SYSTEM DISK", r.System, "boxes, images, build caches")
 	disk("DATA DISK", r.Data, "accounts & box settings (kept across VM rebuilds)")
+	_, _ = fmt.Fprintf(tw, "BUILD RESERVE\t%s\n", describeBuildReserve(r.BuildReserve))
 	_, _ = fmt.Fprintln(tw)
 	_, _ = fmt.Fprintln(tw, "SYSTEM DISK\tSIZE\tWHAT")
 	labelled := !slices.ContainsFunc(r.Errors, func(e storageError) bool { return e.Item == "declarations" })
@@ -542,6 +569,6 @@ func writeSpaceStorage(w io.Writer, space string, r *storageReport) error {
 	for _, e := range r.Errors {
 		_, _ = fmt.Fprintf(w, "unavailable: %s: %s\n", e.Item, e.Reason)
 	}
-	_, err := fmt.Fprintf(w, "measured %s\n", r.MeasuredAt.Local().Format("15:04:05"))
+	_, err := fmt.Fprintf(w, "cache remedies: %s\nmeasured %s\n", storageCacheRemedy, r.MeasuredAt.Local().Format("15:04:05"))
 	return err
 }

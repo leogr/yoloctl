@@ -160,6 +160,11 @@ and before creation. Explicit destroy removes only that box's verified leaf. Old
 drift. Automatic image/cache collection never removes box caches.
 [25](#source-25)
 
+[FACT] Build admission's free-space requirement is min(20% of disk, the native
+`storage.build_reserve_max` cap), default 10 GiB; `none` keeps 20%, `0GiB`
+requires no reserve. Host `space storage set` changes it live. Cleanup targets,
+errors and cancellation remain unchanged; this is no quota. [26](#source-26)
+
 [FACT] Host `space storage` is a lock-free controller read that partitions the
 system disk into each container's writable layer, images, BuildKit cache and
 the remainder. It measures keyed boxes before global totals and delivers partial
@@ -240,3 +245,4 @@ features place their caches inside this bind by default. [25](#source-25)
 24. <a id="source-24"></a> [Explicit cache remedies](../digests/box-cache-remedy.md).
 
 25. <a id="source-25"></a> [Per-box cache ownership and lifecycle](../digests/box-caches.md).
+26. <a id="source-26"></a> [Build reserve](../digests/build-reserve.md).

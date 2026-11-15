@@ -87,12 +87,13 @@ func (a *AuditSettings) Validate() error {
 }
 
 type Config struct {
-	Audit           *AuditSettings `yaml:"audit,omitempty"`
-	SchemaVersion   int            `yaml:"schema_version"`
-	Name            string         `yaml:"name"`
-	DefaultAccount  string         `yaml:"default_account"`
-	AccountDiskID   string         `yaml:"account_disk_id"`
-	AccountDiskUUID string         `yaml:"account_disk_uuid,omitempty"`
+	Storage         *StorageSettings `yaml:"storage,omitempty" json:"storage,omitempty"`
+	Audit           *AuditSettings   `yaml:"audit,omitempty"`
+	SchemaVersion   int              `yaml:"schema_version"`
+	Name            string           `yaml:"name"`
+	DefaultAccount  string           `yaml:"default_account"`
+	AccountDiskID   string           `yaml:"account_disk_id"`
+	AccountDiskUUID string           `yaml:"account_disk_uuid,omitempty"`
 	// Initialization authority is granted only after allocating a new blank disk.
 	// Retry additionally checks that the disk is unattached and its guest-visible
 	// contents are entirely zero (raw or standalone QCOW2).
@@ -220,6 +221,9 @@ func (c *Config) Path() string { return c.path }
 // and — the key invariant — that default_workdir is covered by a grant, so
 // the default /workdir bind is always mountable.
 func (c *Config) Validate() error {
+	if _, err := c.Storage.BuildReserve(); err != nil {
+		return fmt.Errorf("storage.build_reserve_max: %w", err)
+	}
 	if err := c.Audit.Validate(); err != nil {
 		return err
 	}
