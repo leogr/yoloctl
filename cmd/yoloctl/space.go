@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -534,7 +535,7 @@ func confirmSpaceMountRestart(cmd *cobra.Command, name string, yes bool) (bool, 
 			for i, box := range running {
 				list[i] = fmt.Sprintf("- %s (%s)", box.Name, box.Status)
 			}
-			cliInfo(logging.Host, "restarting space %s will stop %d running box(es) and terminate their agent sessions; declarations are preserved:\n%s", name, len(running), strings.Join(list, "\n"))
+			cliLogLines(slog.LevelInfo, logging.Host, fmt.Sprintf("restarting space %s will stop %d running box(es) and terminate their agent sessions; declarations are preserved:", name, len(running)), list)
 		}
 	}
 	if yes {

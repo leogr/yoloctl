@@ -55,10 +55,12 @@ where pinned nerdctl writes its progress.
 [14](#source-14) [15](#source-15)
 
 [FACT] A command report or notice aimed at the process stderr is a log record:
-`cliReportTo` (chat export failures and its stderr report) and `cliNoticeSink`
-(image refresh and reconcile rebuild notices) write a record there and a plain
-line to any other caller writer; the post-autoupdate hint is one notice whose
-commands are continuation lines. [16](#source-16)
+`cliReportTo` (chat export failures and its per-channel report, which goes to
+stderr for file and stdout targets alike) and `cliNoticeSink` (image refresh and
+reconcile rebuild notices) write a record there and a plain line to any other
+caller writer; the post-autoupdate hint is one notice whose commands are
+continuation lines. `cliLogLines` splits a lead and its listing lines over as
+many records as the message limit needs, never cutting a line. [16](#source-16)
 
 [FACT] Prompts, editors, host SSH and standalone attachments suspend the shared
 inline step view and resume after returning terminal ownership. They add no
@@ -112,4 +114,4 @@ notice's existing once-per-attachment rule are unchanged.
 
 15. <a id="source-15"></a> [ID echoes](../../internal/container/container.go#L927) — `nerdctlEcho`, `Run` (detached), `Start`, `Stop`, `ImageRemove`, `Remove` (`ImagePull` keeps stdout); stop_id.go, remove_id.go; echo_output_test.go `TestNerdctlIDEchoesAreNotShown`.
 
-16. <a id="source-16"></a> [Report routing](../../cmd/yoloctl/cli_logging.go#L32) — `cliReportTo`, `cliNoticeSink`; chat_export.go `exportChat`, `writeChatExport`; image.go, agentbox_reconcile.go; agentbox.go `warnPostAutoupdateFailure`; cli_report_test.go.
+16. <a id="source-16"></a> [Report routing](../../cmd/yoloctl/cli_logging.go#L32-L73) — `cliLogLines`, `cliReportTo`, `cliNoticeSink`; chat_export.go `exportChat`, `finishChatExportChannel`, `writeChatExport`; controller_sessions.go and space.go listings; image.go, agentbox_reconcile.go; agentbox.go `warnPostAutoupdateFailure`; cli_report_test.go.

@@ -198,18 +198,10 @@ func exportChat(parent context.Context, plan chatExportPlan, defaultChannel stri
 		defer close(events)
 		_ = chatstream.RunChannels(ctx, responseRead, requestWrite, nil, older, actions, nil, func(e chatstream.Event) { events <- e })
 	}()
-	report := stdout
-	if plan.targets[plan.channels[0]] == "-" {
-		report = stderr // the transcript owns standard output
-	}
 	var failed []string
 	err := chatstream.Export(ctx, events, older, actions, defaultChannel, plan.channels, func(r chatstream.ExportResult) {
-		if err := writeChatExport(plan, r, stdout, report); err != nil {
+		if !finishChatExportChannel(plan, r, stdout, stderr) {
 			failed = append(failed, r.Channel)
-			cliReportTo(stderr, slog.LevelError, logging.Chat, "%s: export failed: %v", r.Channel, err)
-		}
-		if r.Joined && r.PartErr != nil {
-			cliReportTo(stderr, slog.LevelWarn, logging.Chat, "%s: the export joined this channel but leaving it again failed: %v", r.Channel, r.PartErr)
 		}
 	})
 	cancel()
@@ -230,6 +222,22 @@ func exportChat(parent context.Context, plan chatExportPlan, defaultChannel stri
 		return fmt.Errorf("%d of %d channels failed: %s", len(failed), len(plan.channels), strings.Join(failed, ", "))
 	}
 	return nil
+}
+
+// finishChatExportChannel writes one channel's result and reports it. Only
+// a transcript goes to stdout (target "-"); every report for the person,
+// for a file target too, goes to stderr, where it is a log record when that
+// is the process stderr. It returns false when the channel failed.
+func finishChatExportChannel(plan chatExportPlan, r chatstream.ExportResult, stdout, stderr io.Writer) bool {
+	ok := true
+	if err := writeChatExport(plan, r, stdout, stderr); err != nil {
+		ok = false
+		cliReportTo(stderr, slog.LevelError, logging.Chat, "%s: export failed: %v", r.Channel, err)
+	}
+	if r.Joined && r.PartErr != nil {
+		cliReportTo(stderr, slog.LevelWarn, logging.Chat, "%s: the export joined this channel but leaving it again failed: %v", r.Channel, r.PartErr)
+	}
+	return ok
 }
 
 // writeChatExport writes one channel's result to its target and reports it.

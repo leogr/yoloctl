@@ -177,3 +177,39 @@ func TestChatExportClassifiesConnectionErrorsAndInterrupts(t *testing.T) {
 		t.Fatalf("interrupt: %v", err)
 	}
 }
+
+// Both target routes keep the report for the person off stdout: a file
+// target and the transcript-on-stdout target both report on stderr, which
+// is a log record when it is the process stderr.
+func TestChatExportReportsNeverGoToStdout(t *testing.T) {
+	messages := []chatstream.Message{{Channel: "#ux", ID: "m1", Nick: "opus", Text: "hi", Time: exportNow}}
+	for _, target := range []string{"file", "-"} {
+		t.Run(target, func(t *testing.T) {
+			plan := chatExportPlan{space: "dev", channels: []string{"#ux"}, format: "text", exported: exportNow,
+				targets: map[string]string{"#ux": filepath.Join(t.TempDir(), "ux.txt")}}
+			if target == "-" {
+				plan.targets["#ux"] = "-"
+			}
+			var stdout, stderr bytes.Buffer
+			if !finishChatExportChannel(plan, chatstream.ExportResult{Channel: "#ux", Messages: messages}, &stdout, &stderr) {
+				t.Fatal("export failed")
+			}
+			if !strings.Contains(stderr.String(), "#ux: 1 messages written to ") || strings.Contains(stdout.String(), "messages written") {
+				t.Fatalf("stdout %q stderr %q", stdout.String(), stderr.String())
+			}
+			if (target == "-") != strings.Contains(stdout.String(), "opus: hi") {
+				t.Fatalf("transcript routing: stdout %q", stdout.String())
+			}
+		})
+	}
+	// On the process stderr the report is a log record.
+	var logs bytes.Buffer
+	t.Cleanup(bindCLITestLogger(t, &logs))
+	plan := chatExportPlan{space: "dev", channels: []string{"#ux"}, format: "text", exported: exportNow,
+		targets: map[string]string{"#ux": filepath.Join(t.TempDir(), "ux.txt")}}
+	var stdout bytes.Buffer
+	if !finishChatExportChannel(plan, chatstream.ExportResult{Channel: "#ux", Messages: messages}, &stdout, os.Stderr) ||
+		!strings.HasPrefix(logs.String(), "chat: #ux: 1 messages written to ") || stdout.Len() != 0 {
+		t.Fatalf("logs %q stdout %q", logs.String(), stdout.String())
+	}
+}

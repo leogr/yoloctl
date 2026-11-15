@@ -29,6 +29,29 @@ func cliLog(level slog.Level, actor, format string, args ...any) {
 
 func cliWarn(actor, format string, args ...any) { cliLog(slog.LevelWarn, actor, format, args...) }
 
+// cliLogLines writes lead and its lines (commands, list entries) as records
+// whose message fits prettylog's message limit: a line that would not fit
+// starts the next record, so a long listing is split, never cut. Each line
+// must itself fit; listings here hold one command or entry per line.
+func cliLogLines(level slog.Level, actor, lead string, lines []string) {
+	msg := lead
+	for _, line := range lines {
+		if msg != "" && len(msg)+1+len(line) > prettylog.DefaultMessageLimit {
+			cliLog(level, actor, "%s", msg)
+			msg = line
+			continue
+		}
+		if msg == "" {
+			msg = line
+		} else {
+			msg += "\n" + line
+		}
+	}
+	if msg != "" {
+		cliLog(level, actor, "%s", msg)
+	}
+}
+
 // cliReportTo writes one human message for a command that takes an explicit
 // report writer: a log record when that writer is the process stderr (the
 // Logger owns that terminal), otherwise one line on the caller's writer.

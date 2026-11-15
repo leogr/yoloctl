@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"slices"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -284,7 +286,7 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 				lines = append(lines, s.recovery(space)+"   # then start its managed workload again, and detach")
 			}
 		}
-		cliNotice(logging.Host, "%s", strings.Join(lines, "\n"))
+		cliLogLines(prettylog.LevelNotice, logging.Host, lines[0], lines[1:])
 	}
 	if !explicit {
 		if !o.interactive {
@@ -394,7 +396,7 @@ func setAsideRecreations(ctx context.Context, space string, o sessionRestartOffe
 		case workloadSession:
 			steps = append(steps, s.recovery(space)+"   # then start its managed workload again, and detach")
 		}
-		cliWarn(logging.Host, "Box %s runs an agent session of the previous build and also requires recreation (%s), which a restart refuses, so it is left running. Recreation ends its agent's current process and replaces its container: the workdir and the account's native state are kept, other files in the container are lost. Inspect it, then recreate it explicitly if replacement is intended:\n%s", s.name, reason, strings.Join(steps, "\n"))
+		cliLogLines(slog.LevelWarn, logging.Host, fmt.Sprintf("Box %s runs an agent session of the previous build and also requires recreation (%s), which a restart refuses, so it is left running. Recreation ends its agent's current process and replaces its container: the workdir and the account's native state are kept, other files in the container are lost. Inspect it, then recreate it explicitly if replacement is intended:", s.name, reason), steps)
 		if s.kind == agentSession {
 			cliNotice(logging.Host, "Box %s: %s", s.name, restartConversationNote(conversations[s.name]))
 		}
