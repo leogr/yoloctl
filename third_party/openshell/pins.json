@@ -44,8 +44,8 @@
     },
     {
       "file": "patches/0007-main-output-backpressure.patch",
-      "sha256": "4395162fe85e0716e156b1c4a609fc946af372765a4547a994adaa7c0f49a230",
-      "result_tree": "a4a3e54fefd579785a619ad801c4f3cdb47949ad"
+      "sha256": "e3dc856c08ef3a80b68a0f02b44da31620a53248b364f1fb1ec03ab69d4dccfd",
+      "result_tree": "d3ab006afa7d81624c734dcd6ec541073bb985cb"
     }
   ],
   "source_dir": "OpenShell-patch2-signed",
@@ -54,11 +54,11 @@
     "to": "version = \"0.1.6\"\n",
     "before": {
       "Cargo.toml": "e1cb51aaac075e9f4f2d61fbb98385dc0e82b60647ea662b968a5184e568d1f8",
-      "Cargo.lock": "845a694d70974d6eb22f402952daa0ff35d2cbaa3bc25117c39230daa3855776"
+      "Cargo.lock": "f8a97a6f1aa7fd483ddb37f33ca485d87f918e6fc942b2c1fdaf3aa64ef24d6f"
     },
     "after": {
       "Cargo.toml": "04a46bda0fea476ab4b4d00eb9b452a2f8eecb45c19b6c2283e3610a9d8cea63",
-      "Cargo.lock": "1642c375e9ec79b9b4d3ba530e66a142584722144954438f8ad049b6bcdfacb3"
+      "Cargo.lock": "bfd5dbcdb6f8d184d2432d25c4008c88397bf5a42b0a1c15427cd88c41afe91e"
     }
   },
   "source_date_epoch": 1793363018,

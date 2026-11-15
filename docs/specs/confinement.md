@@ -15,7 +15,10 @@ together; on the integration tree new ordinary boxes in a native space select
 
 [FACT] The patched canonical-main transport applies backpressure to a live
 process when its input-owning attachment is slow. Other viewers and absent
-readers retain bounded replay; main exit releases backpressure before draining.
+readers retain bounded replay. After main exit the finite captured tail stays
+paced; the supervisor releases it after two seconds without owner-cursor
+progress, with a skip notice and retained exit event for a lagging owner.
+PID 1's separate post-marker bound can still cut output.
 This does not guarantee complete final output. [15](#source-15)
 
 [FACT] Policy comes from explicit positive capabilities plus requirements of

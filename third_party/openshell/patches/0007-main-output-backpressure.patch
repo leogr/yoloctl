@@ -1,3 +1,29 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 9c8d097..22bfb37 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -5259,6 +5259,7 @@ dependencies = [
+  "openshell-core",
+  "openshell-isolation-interface",
+  "openshell-ocsf",
++ "openshell-sandbox",
+  "openshell-sandbox-backend",
+  "rand 0.10.2",
+  "russh",
+diff --git a/crates/openshell-isolation-interface/src/contract.rs b/crates/openshell-isolation-interface/src/contract.rs
+index b16dfdd..8e14577 100644
+--- a/crates/openshell-isolation-interface/src/contract.rs
++++ b/crates/openshell-isolation-interface/src/contract.rs
+@@ -7,6 +7,9 @@
+ //! `proto/sandbox_protocol.proto`. This module contains data and validation,
+ //! not a second trait-based backend interface.
+ 
++/// Existing canonical output-drain duration, shared by both sides of the boundary.
++pub const MAIN_OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_secs(2);
++
+ use std::collections::BTreeMap;
+ use std::fmt;
+ use std::net::{IpAddr, SocketAddr};
 diff --git a/crates/openshell-sandbox/Cargo.toml b/crates/openshell-sandbox/Cargo.toml
 index 88f3380..1349d82 100644
 --- a/crates/openshell-sandbox/Cargo.toml
@@ -10,11 +36,161 @@ index 88f3380..1349d82 100644
  hyper-util = { workspace = true }
  openshell-ocsf = { path = "../openshell-ocsf", features = ["test-support"] }
  rcgen = { workspace = true }
+diff --git a/crates/openshell-sandbox/src/boundary_server.rs b/crates/openshell-sandbox/src/boundary_server.rs
+index 1d923c1..255ed41 100644
+--- a/crates/openshell-sandbox/src/boundary_server.rs
++++ b/crates/openshell-sandbox/src/boundary_server.rs
+@@ -3328,11 +3328,17 @@ mod linux {
+                 let _ = process.boundary_runtime.begin_termination();
+             }
+             if Self::wait_for_process_tree_exit(process, ENFORCEMENT_LOSS_TERMINATION_GRACE).await {
++                if let Some(task) = process.cancel_output_reaper() {
++                    let _ = task.await;
++                }
+                 return Ok(());
+             }
+ 
+             process.boundary_runtime.force_kill();
+             if Self::wait_for_process_tree_exit(process, FORCE_KILL_REAP_TIMEOUT).await {
++                if let Some(task) = process.cancel_output_reaper() {
++                    let _ = task.await;
++                }
+                 Ok(())
+             } else {
+                 Err("owned workload processes remain after forced termination".to_string())
+@@ -3360,8 +3366,11 @@ mod linux {
+                 }
+             };
+             if let Some(process) = process {
++                process.cancel_output_reaper();
+                 process.boundary_runtime.deactivate();
+             }
++            // The owning process runtime is dropped when serve returns;
++            // Tokio cancels and joins its remaining readers/reaper there.
+         }
+ 
+         fn dispatch(&self, envelope: RequestEnvelope) -> Response {
+@@ -4337,6 +4346,7 @@ mod linux {
+         boundary_runtime: Arc<BoundaryRuntimeState>,
+         provider_credentials: ProviderCredentialState,
+         provider_environment_generation: Mutex<u64>,
++        output_reaper: Mutex<Option<tokio::task::JoinHandle<()>>>,
+     }
+ 
+     struct ManagedProcessLaunch {
+@@ -4434,15 +4444,22 @@ mod linux {
+             let main_session = spawned.main_session();
+             let exit = Arc::new((Mutex::new(None), Condvar::new()));
+             let reaper_exit = exit.clone();
+-            runtime.spawn(async move {
+-                let result = spawned
+-                    .wait()
+-                    .await
++            let output_reaper = runtime.spawn(async move {
++                let result = spawned.wait().await;
++                let exit_code = result.as_ref().ok().map(ProcessStatus::code);
++                let result = result
+                     .map(process_status)
+                     .map_err(|error| format!("wait for process supervisor leaf: {error}"));
+-                let (state, changed) = &*reaper_exit;
+-                *lock(state) = Some(result);
+-                changed.notify_all();
++                {
++                    let (state, changed) = &*reaper_exit;
++                    *lock(state) = Some(result);
++                    changed.notify_all();
++                }
++                // The raw process wait is observable before paced publication
++                // can block, while this owned task retains the draining agent.
++                if let Some(code) = exit_code {
++                    spawned.finish_output(code).await;
++                }
+             });
+             Ok(Self {
+                 process_id,
+@@ -4455,9 +4472,19 @@ mod linux {
+                 boundary_runtime,
+                 provider_credentials,
+                 provider_environment_generation: Mutex::new(0),
++                output_reaper: Mutex::new(Some(output_reaper)),
+             })
+         }
+ 
++        fn cancel_output_reaper(&self) -> Option<tokio::task::JoinHandle<()>> {
++            self.main_session.cancel_output();
++            let task = lock(&self.output_reaper).take();
++            if let Some(task) = &task {
++                task.abort();
++            }
++            task
++        }
++
+         fn process_id(&self) -> String {
+             self.process_id.clone()
+         }
+@@ -4513,6 +4540,7 @@ mod linux {
+ 
+     impl Drop for ManagedProcess {
+         fn drop(&mut self) {
++            self.cancel_output_reaper();
+             self.boundary_runtime.deactivate();
+         }
+     }
+diff --git a/crates/openshell-sandbox/src/delegated.rs b/crates/openshell-sandbox/src/delegated.rs
+index 94cd3d2..28de650 100644
+--- a/crates/openshell-sandbox/src/delegated.rs
++++ b/crates/openshell-sandbox/src/delegated.rs
+@@ -208,10 +208,18 @@ impl SpawnedAgent {
+         };
+         self.boundary_runtime
+             .unregister_process_group(self.handle.pid(), &self.terminal);
+-        let _ = self.main_session.finish(status.code(), false).await;
+-        self.main_session.mark_terminal_reported();
++        // The process wait must not depend on tail delivery: the supervisor
++        // needs the real exit now to start its independent progress-idle wait.
++        self.main_session.observe_main_exit();
+         Ok(status)
+     }
++
++    /// Drain the bounded canonical tail after the process result is observable.
++    /// The boundary's owned reaper task drives this and teardown cancels it.
++    pub async fn finish_output(&self, exit_code: i32) {
++        let _ = self.main_session.finish(exit_code, false).await;
++        self.main_session.mark_terminal_reported();
++    }
+ }
+ 
+ /// Lock-free process-group signal handle used while another task owns `wait`.
 diff --git a/crates/openshell-sandbox/src/main_session.rs b/crates/openshell-sandbox/src/main_session.rs
-index 334cfc2..43e522c 100644
+index 334cfc2..5dbdf6a 100644
 --- a/crates/openshell-sandbox/src/main_session.rs
 +++ b/crates/openshell-sandbox/src/main_session.rs
-@@ -62,6 +62,8 @@ struct OutputLog {
+@@ -7,19 +7,21 @@ use crate::native_api::{BoundaryProcess, BoundaryTerminal, ProcessAttachment};
+ 
+ use std::collections::VecDeque;
+ use std::io::{Read, Write};
+-use std::os::fd::AsRawFd;
++use std::os::fd::{AsFd, AsRawFd};
++use std::pin::Pin;
+ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+ use std::sync::{Arc, Mutex};
++use std::task::{Context, Poll};
+ 
+ use bytes::Bytes;
+ use nix::fcntl::{FcntlArg, OFlag, fcntl};
+ use rustix::termios::Winsize;
+ use tokio::io::unix::AsyncFd;
+-use tokio::io::{AsyncReadExt, AsyncWriteExt};
++use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt, ReadBuf};
+ use tokio::sync::Notify;
+ use tokio::sync::watch;
+ 
+-use openshell_isolation_interface::contract::BoundarySignal;
++use openshell_isolation_interface::contract::{BoundarySignal, MAIN_OUTPUT_DRAIN_TIMEOUT};
+ 
+ use crate::container_log::{AgentOutputSink, AgentStream};
+ use crate::process::ProcessIo;
+@@ -62,6 +64,8 @@ struct OutputLog {
      version: watch::Sender<u64>,
      /// Exec output must not discard bytes while its consumer is slow.
      lossless: bool,
@@ -23,7 +199,7 @@ index 334cfc2..43e522c 100644
      space_version: watch::Sender<u64>,
      failed: AtomicBool,
      post_exit: AtomicBool,
-@@ -71,6 +73,7 @@ struct OutputLog {
+@@ -71,6 +75,7 @@ struct OutputLog {
  }
  
  impl OutputLog {
@@ -31,7 +207,7 @@ index 334cfc2..43e522c 100644
      fn new() -> Arc<Self> {
          Self::with_lossless(false)
      }
-@@ -87,6 +90,7 @@ impl OutputLog {
+@@ -87,6 +92,7 @@ impl OutputLog {
              }),
              version,
              lossless,
@@ -39,7 +215,7 @@ index 334cfc2..43e522c 100644
              space_version,
              failed: AtomicBool::new(false),
              post_exit: AtomicBool::new(false),
-@@ -117,6 +121,59 @@ impl OutputLog {
+@@ -117,6 +123,59 @@ impl OutputLog {
          self.version.send_replace(version);
      }
  
@@ -99,7 +275,7 @@ index 334cfc2..43e522c 100644
      /// Bound memory by making the process reader wait for the attachment.
      /// A stalled or absent attachment eventually fails the exec rather than
      /// allowing a successful result with missing output.
-@@ -210,12 +267,12 @@ impl OutputLog {
+@@ -210,12 +269,12 @@ impl OutputLog {
              .events
              .front()
              .map_or(state.next_sequence, |retained| retained.sequence);
@@ -114,7 +290,7 @@ index 334cfc2..43e522c 100644
              self.space_version.send_modify(|version| *version += 1);
          }
          MainOutputCursor {
-@@ -253,7 +310,7 @@ pub struct MainOutputCursor {
+@@ -253,7 +312,7 @@ pub struct MainOutputCursor {
  
  impl Drop for MainOutputCursor {
      fn drop(&mut self) {
@@ -123,7 +299,7 @@ index 334cfc2..43e522c 100644
              self.output.subscribers.fetch_sub(1, Ordering::AcqRel);
              self.output
                  .space_version
-@@ -295,7 +352,7 @@ impl MainOutputCursor {
+@@ -295,7 +354,7 @@ impl MainOutputCursor {
                          .event
                          .clone();
                      self.next_sequence += 1;
@@ -132,7 +308,170 @@ index 334cfc2..43e522c 100644
                          state.consumed_through = self.next_sequence;
                          self.output
                              .space_version
-@@ -446,7 +503,7 @@ impl MainSession {
+@@ -355,6 +414,144 @@ impl MainInputPermit<'_> {
+     }
+ }
+ 
++// Capture and delivery are independent. The timer snapshots the descriptor
++// under this same lock even while the reader is awaiting paced publication.
++struct MainTailState {
++    remaining: Option<usize>,
++    ended: bool,
++    held: usize,
++    #[cfg(test)]
++    snapshot: Option<(tokio::time::Instant, usize, usize)>,
++}
++
++struct MainTailCapture {
++    descriptor: Result<std::fs::File, rustix::io::Errno>,
++    state: Mutex<MainTailState>,
++    changed: watch::Sender<u64>,
++}
++
++impl MainTailCapture {
++    fn new(fd: impl AsFd) -> Arc<Self> {
++        Arc::new(Self {
++            descriptor: rustix::io::dup(fd).map(std::fs::File::from),
++            state: Mutex::new(MainTailState {
++                remaining: None,
++                ended: false,
++                held: 0,
++                #[cfg(test)]
++                snapshot: None,
++            }),
++            changed: watch::channel(0).0,
++        })
++    }
++
++    async fn freeze_at(self: Arc<Self>, deadline: tokio::time::Instant) {
++        tokio::time::sleep_until(deadline).await;
++        self.freeze();
++    }
++
++    fn freeze(&self) {
++        let mut state = self.state.lock().expect("main tail lock poisoned");
++        if state.ended || state.remaining.is_some() {
++            return;
++        }
++        let count = self
++            .descriptor
++            .as_ref()
++            .map_err(|error| *error)
++            .and_then(rustix::io::ioctl_fionread);
++        let count = match count {
++            Ok(count) => usize::try_from(count)
++                .unwrap_or(usize::MAX)
++                .min(OUTPUT_BUFFER_BYTES),
++            Err(error) => {
++                tracing::warn!(%error, "canonical main tail readable-count failed; ending capture");
++                0
++            }
++        };
++        state.remaining = Some(count);
++        #[cfg(test)]
++        {
++            state.snapshot = Some((tokio::time::Instant::now(), count, state.held));
++        }
++        drop(state);
++        self.changed
++            .send_modify(|version| *version = version.wrapping_add(1));
++    }
++
++    async fn read<R: AsyncRead + Unpin>(
++        &self,
++        reader: &mut R,
++        bytes: &mut [u8],
++    ) -> std::io::Result<usize> {
++        let mut changed = self.changed.subscribe();
++        loop {
++            let _ = changed.borrow_and_update();
++            let read = std::future::poll_fn(|cx| {
++                let mut state = self.state.lock().expect("main tail lock poisoned");
++                if state.ended || state.remaining == Some(0) {
++                    return Poll::Ready(Ok(0));
++                }
++                let limit = state.remaining.unwrap_or(bytes.len()).min(bytes.len());
++                let mut buffer = ReadBuf::new(&mut bytes[..limit]);
++                match Pin::new(&mut *reader).poll_read(cx, &mut buffer) {
++                    Poll::Pending => Poll::Pending,
++                    Poll::Ready(Err(error)) => {
++                        state.ended = true;
++                        Poll::Ready(Err(error))
++                    }
++                    Poll::Ready(Ok(())) => {
++                        let n = buffer.filled().len();
++                        if let Some(remaining) = &mut state.remaining {
++                            *remaining -= n;
++                        }
++                        state.held = n;
++                        state.ended |= n == 0;
++                        Poll::Ready(Ok(n))
++                    }
++                }
++            });
++            tokio::select! {
++                result = read => return result,
++                _ = changed.changed() => {}
++            }
++        }
++    }
++
++    fn published(&self) {
++        self.state.lock().expect("main tail lock poisoned").held = 0;
++    }
++}
++
++struct MainPtyReader(Arc<AsyncFd<std::fs::File>>);
++
++impl AsyncRead for MainPtyReader {
++    fn poll_read(
++        self: Pin<&mut Self>,
++        cx: &mut Context<'_>,
++        buffer: &mut ReadBuf<'_>,
++    ) -> Poll<std::io::Result<()>> {
++        loop {
++            let mut ready = match self.0.poll_read_ready(cx) {
++                Poll::Pending => return Poll::Pending,
++                Poll::Ready(Err(error)) => return Poll::Ready(Err(error)),
++                Poll::Ready(Ok(ready)) => ready,
++            };
++            match ready.try_io(|inner| {
++                let mut file = inner.get_ref();
++                file.read(buffer.initialize_unfilled())
++            }) {
++                Err(_) => {}
++                Ok(Err(error)) => return Poll::Ready(Err(error)),
++                Ok(Ok(n)) => {
++                    buffer.advance(n);
++                    return Poll::Ready(Ok(()));
++                }
++            }
++        }
++    }
++}
++
+ pub struct MainSession {
+     pid: u32,
+     terminal: bool,
+@@ -373,6 +570,8 @@ pub struct MainSession {
+     terminal_attachments_done: Notify,
+     container_log: Option<AgentOutputSink>,
+     container_log_released: watch::Sender<bool>,
++    main_exit_observed: AtomicBool,
++    tail_captures: Mutex<Vec<Arc<MainTailCapture>>>,
+ }
+ 
+ impl MainSession {
+@@ -409,6 +608,8 @@ impl MainSession {
+             terminal_attachments_done: Notify::new(),
+             container_log: None,
+             container_log_released: watch::channel(false).0,
++            main_exit_observed: AtomicBool::new(false),
++            tail_captures: Mutex::new(Vec::new()),
+         });
+         (session, input_rx)
+     }
+@@ -446,7 +647,7 @@ impl MainSession {
              pid,
              terminal,
              input: MainInputSender { sender: input },
@@ -141,26 +480,120 @@ index 334cfc2..43e522c 100644
              input_owner: Mutex::new(None),
              input_closed: AtomicBool::new(false),
              next_owner: AtomicU64::new(1),
-@@ -604,9 +661,15 @@ impl MainSession {
-                             file.read(&mut buffer)
-                         }) {
-                             Ok(Ok(0) | Err(_)) => break,
+@@ -464,6 +665,8 @@ impl MainSession {
+             terminal_attachments_done: Notify::new(),
+             container_log: if terminal { None } else { container_log },
+             container_log_released: watch::channel(false).0,
++            main_exit_observed: AtomicBool::new(false),
++            tail_captures: Mutex::new(Vec::new()),
+         });
+         Self::start_io(&session, io, input_rx);
+         session
+@@ -507,6 +710,8 @@ impl MainSession {
+             terminal_attachments_done: Notify::new(),
+             container_log: None,
+             container_log_released: watch::channel(false).0,
++            main_exit_observed: AtomicBool::new(false),
++            tail_captures: Mutex::new(Vec::new()),
+         });
+         let stdout_session = Arc::clone(&session);
+         tokio::spawn(async move {
+@@ -591,23 +796,29 @@ impl MainSession {
+                 let master =
+                     unsafe { AsyncFd::register(master) }.expect("register canonical PTY master");
+                 let master = Arc::new(master);
+-                let reader = Arc::clone(&master);
++                let capture = this.capture(master.get_ref());
++                let mut reader = MainPtyReader(Arc::clone(&master));
+                 let output = Arc::clone(this);
+                 tokio::spawn(async move {
+                     let mut buffer = [0u8; 4096];
+                     loop {
+-                        let Ok(mut ready) = reader.readable().await else {
+-                            break;
+-                        };
+-                        match ready.try_io(|inner| {
+-                            let mut file = inner.get_ref();
+-                            file.read(&mut buffer)
+-                        }) {
+-                            Ok(Ok(0) | Err(_)) => break,
 -                            Ok(Ok(read)) => output.publish(MainOutput::Stdout(
 -                                Bytes::copy_from_slice(&buffer[..read]),
 -                            )),
-+                            Ok(Ok(read)) => {
-+                                drop(ready);
+-                            Err(_would_block) => {}
++                        match capture.read(&mut reader, &mut buffer).await {
++                            Ok(0) => break,
++                            Ok(read) => {
 +                                output
 +                                    .output
 +                                    .publish_main(MainOutput::Stdout(Bytes::copy_from_slice(
 +                                        &buffer[..read],
 +                                    )))
 +                                    .await;
++                                capture.published();
 +                            }
-                             Err(_would_block) => {}
++                            Err(error) => {
++                                if error.raw_os_error() != Some(libc::EIO) {
++                                    tracing::warn!(%error, "canonical main terminal read failed; ending capture");
++                                }
++                                break;
++                            }
                          }
                      }
-@@ -697,10 +760,11 @@ impl MainSession {
+                     output.reader_finished();
+@@ -639,12 +850,18 @@ impl MainSession {
+                 mut stdout,
+                 mut stderr,
+             } => {
++                let stdout_capture = this.capture(&stdout);
++                let stderr_capture = this.capture(&stderr);
+                 let stdout_session = Arc::clone(this);
+                 tokio::spawn(async move {
+                     let mut buffer = [0u8; 4096];
+                     loop {
+-                        match stdout.read(&mut buffer).await {
+-                            Ok(0) | Err(_) => break,
++                        match stdout_capture.read(&mut stdout, &mut buffer).await {
++                            Ok(0) => break,
++                            Err(error) => {
++                                tracing::warn!(%error, "canonical main stdout read failed; ending capture");
++                                break;
++                            }
+                             Ok(read) => {
+                                 stdout_session
+                                     .publish_agent(
+@@ -652,6 +869,7 @@ impl MainSession {
+                                         Bytes::copy_from_slice(&buffer[..read]),
+                                     )
+                                     .await;
++                                stdout_capture.published();
+                             }
+                         }
+                     }
+@@ -661,8 +879,12 @@ impl MainSession {
+                 tokio::spawn(async move {
+                     let mut buffer = [0u8; 4096];
+                     loop {
+-                        match stderr.read(&mut buffer).await {
+-                            Ok(0) | Err(_) => break,
++                        match stderr_capture.read(&mut stderr, &mut buffer).await {
++                            Ok(0) => break,
++                            Err(error) => {
++                                tracing::warn!(%error, "canonical main stderr read failed; ending capture");
++                                break;
++                            }
+                             Ok(read) => {
+                                 stderr_session
+                                     .publish_agent(
+@@ -670,6 +892,7 @@ impl MainSession {
+                                         Bytes::copy_from_slice(&buffer[..read]),
+                                     )
+                                     .await;
++                                stderr_capture.published();
+                             }
+                         }
+                     }
+@@ -697,10 +920,11 @@ impl MainSession {
      }
  
      async fn publish_agent(&self, stream: AgentStream, data: Bytes) {
@@ -174,27 +607,81 @@ index 334cfc2..43e522c 100644
          if let Some(container_log) = &self.container_log {
              let mut released = self.container_log_released.subscribe();
              tokio::select! {
-@@ -735,6 +799,9 @@ impl MainSession {
+@@ -716,6 +940,45 @@ impl MainSession {
+         }
+     }
+ 
++    pub(crate) fn cancel_output(&self) {
++        if self.output.main_backpressure {
++            self.output.stop_retaining_after_exit();
++            self.container_log_released.send_replace(true);
++            for capture in self
++                .tail_captures
++                .lock()
++                .expect("main tail list lock poisoned")
++                .iter()
++            {
++                capture.freeze();
++            }
++        }
++    }
++
++    pub(crate) fn observe_main_exit(&self) {
++        if !self.output.main_backpressure || self.main_exit_observed.swap(true, Ordering::AcqRel) {
++            return;
++        }
++        let deadline = tokio::time::Instant::now() + MAIN_OUTPUT_DRAIN_TIMEOUT;
++        for capture in self
++            .tail_captures
++            .lock()
++            .expect("main tail list lock poisoned")
++            .iter()
++        {
++            tokio::spawn(Arc::clone(capture).freeze_at(deadline));
++        }
++    }
++
++    fn capture(&self, descriptor: impl AsFd) -> Arc<MainTailCapture> {
++        let capture = MainTailCapture::new(descriptor);
++        self.tail_captures
++            .lock()
++            .expect("main tail list lock poisoned")
++            .push(capture.clone());
++        capture
++    }
++
+     /// Publish the terminal event and retain the transport only when a real
+     /// foreground attachment exists or the creating client declared one.
+     ///
+@@ -735,6 +998,7 @@ impl MainSession {
          attachment_expected: bool,
          container_log_timeout: std::time::Duration,
      ) -> bool {
-+        if self.output.main_backpressure {
-+            self.output.stop_retaining_after_exit();
-+        }
++        self.observe_main_exit();
          if let Some(container_log) = &self.container_log {
              let delivered = tokio::time::timeout(container_log_timeout, async {
                  self.wait_for_output_readers().await;
-@@ -766,6 +833,9 @@ impl MainSession {
+@@ -766,6 +1030,7 @@ impl MainSession {
          attachment_expected: bool,
          timeout: std::time::Duration,
      ) -> bool {
-+        if self.output.main_backpressure {
-+            self.output.stop_retaining_after_exit();
-+        }
++        self.observe_main_exit();
          if self.output.lossless {
              // The pipe can contain parent bytes after the process exits. If
              // descendants keep it open beyond the drain deadline, report a
-@@ -1753,4 +1823,203 @@ mod tests {
+@@ -820,8 +1085,9 @@ impl MainSession {
+             };
+             attachment_expected || state.active != 0
+         };
+-        self.finished.store(true, Ordering::Release);
+-        self.publish(MainOutput::Exit(exit_code));
++        if !self.finished.swap(true, Ordering::AcqRel) {
++            self.publish(MainOutput::Exit(exit_code));
++        }
+         delivery_pending
+     }
+ 
+@@ -1753,4 +2019,453 @@ mod tests {
          publisher.abort();
          gate.open();
      }
@@ -250,24 +737,18 @@ index 334cfc2..43e522c 100644
 +    }
 +
 +    #[tokio::test]
-+    async fn canonical_subscriber_drop_or_main_exit_releases_full_ring() {
-+        for exits in [false, true] {
-+            let log = OutputLog::with_main_backpressure();
-+            let output = log.subscribe();
-+            let producer = main_log_writer(log.clone());
-+            main_log_full(&log).await;
-+            assert!(!producer.is_finished());
-+            if exits {
-+                log.stop_retaining_after_exit();
-+            } else {
-+                drop(output);
-+            }
-+            tokio::time::timeout(std::time::Duration::from_secs(2), producer)
-+                .await
-+                .unwrap()
-+                .unwrap();
-+            assert!(!log.failed.load(Ordering::Acquire));
-+        }
++    async fn canonical_subscriber_drop_releases_full_ring() {
++        let log = OutputLog::with_main_backpressure();
++        let output = log.subscribe();
++        let producer = main_log_writer(log.clone());
++        main_log_full(&log).await;
++        assert!(!producer.is_finished());
++        drop(output);
++        tokio::time::timeout(std::time::Duration::from_secs(2), producer)
++            .await
++            .unwrap()
++            .unwrap();
++        assert!(!log.failed.load(Ordering::Acquire));
 +    }
 +
 +    #[tokio::test]
@@ -310,12 +791,12 @@ index 334cfc2..43e522c 100644
 +    #[tokio::test]
 +    async fn canonical_blocked_publish_cancels_like_an_ordinary_reader_task() {
 +        let log = OutputLog::with_main_backpressure();
-+        let _output = log.subscribe();
++        let output = log.subscribe();
 +        let producer = main_log_writer(log.clone());
 +        main_log_full(&log).await;
 +        producer.abort();
 +        assert!(producer.await.unwrap_err().is_cancelled());
-+        log.stop_retaining_after_exit();
++        drop(output);
 +        log.publish_main(MainOutput::Stdout(Bytes::from_static(b"after shutdown")))
 +            .await;
 +    }
@@ -352,13 +833,13 @@ index 334cfc2..43e522c 100644
 +    }
 +
 +    #[tokio::test]
-+    async fn canonical_finish_releases_a_waiting_reader_without_changing_exit_status() {
++    async fn canonical_finish_keeps_tail_paced_without_changing_exit_status() {
 +        for remote in [false, true] {
 +            let mut session = MainSession::inert();
 +            let inner = Arc::get_mut(&mut session).unwrap();
 +            inner.output = OutputLog::with_main_backpressure();
 +            inner.readers_remaining.store(1, Ordering::Release);
-+            let _output = session.subscribe();
++            let mut output = session.subscribe();
 +            let writer = session.clone();
 +            let producer = tokio::spawn(async move {
 +                for _ in 0..512 {
@@ -377,9 +858,12 @@ index 334cfc2..43e522c 100644
 +                    session.finish(7, false).await;
 +                }
 +            };
-+            tokio::time::timeout(std::time::Duration::from_secs(2), finish)
-+                .await
-+                .unwrap();
++            let consume = async {
++                for _ in 0..512 {
++                    output.recv().await.unwrap();
++                }
++            };
++            tokio::join!(finish, consume);
 +            producer.await.unwrap();
 +            assert!(session.finished());
 +            assert!(!session.output_failed());
@@ -397,9 +881,395 @@ index 334cfc2..43e522c 100644
 +            ));
 +        }
 +    }
++    // r6: capture is fixed independently from paced delivery.
++    #[tokio::test(start_paused = true)]
++    async fn tail_cutoff_snapshots_while_publication_holds_a_chunk() {
++        let (session, mut slave) = MainSession::terminal_for_test();
++        let mut cursor = session.subscribe();
++        for _ in 0..OUTPUT_BUFFER_BYTES / 4096 {
++            session
++                .output
++                .publish_main(MainOutput::Stdout(Bytes::from(vec![b'p'; 4096])))
++                .await;
++        }
++        slave.write_all(b"main-last\n").unwrap();
++        let capture = session.tail_captures.lock().unwrap()[0].clone();
++        while capture.state.lock().unwrap().held == 0 {
++            tokio::task::yield_now().await;
++        }
++        slave.write_all(b"before-cutoff\n").unwrap();
++        // PTY output becomes readable through the kernel's deferred flip work.
++        while rustix::io::ioctl_fionread(capture.descriptor.as_ref().unwrap()).unwrap() == 0 {
++            tokio::task::yield_now().await;
++        }
++        let observed = tokio::time::Instant::now();
++        session.observe_main_exit();
++        tokio::task::yield_now().await;
++        tokio::time::advance(MAIN_OUTPUT_DRAIN_TIMEOUT).await;
++        tokio::task::yield_now().await;
++        let (at, count, held) = capture
++            .state
++            .lock()
++            .unwrap()
++            .snapshot
++            .expect("snapshot while blocked");
++        assert_eq!(at, observed + MAIN_OUTPUT_DRAIN_TIMEOUT);
++        assert!(count > 0 && count <= OUTPUT_BUFFER_BYTES);
++        assert!(held > 0, "the held chunk is part of the tail");
++        slave.write_all(b"AFTER-CUTOFF\n").unwrap();
++        let finish_session = session.clone();
++        let finish = tokio::spawn(async move { finish_session.finish(7, false).await });
++        let mut received = Vec::new();
++        loop {
++            match cursor.recv().await.unwrap() {
++                MainOutput::Stdout(data) => received.extend_from_slice(&data),
++                MainOutput::Exit(7) => break,
++                other => panic!("unexpected {other:?}"),
++            }
++        }
++        finish.await.unwrap();
++        assert_eq!(received.len(), OUTPUT_BUFFER_BYTES + held + count);
++        assert!(received.windows(9).any(|bytes| bytes == b"main-last"));
++        assert!(!received.windows(12).any(|bytes| bytes == b"AFTER-CUTOFF"));
++        assert_eq!(capture.state.lock().unwrap().remaining, Some(0));
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn tail_last_line_survives_eio_and_a_silent_descendant_repeatedly() {
++        for descendant in [false, true] {
++            for _ in 0..16 {
++                let (session, mut slave) = MainSession::terminal_for_test();
++                let mut output = session.subscribe();
++                slave.write_all(b"last-line\n").unwrap();
++                let held = if descendant {
++                    Some(slave)
++                } else {
++                    drop(slave);
++                    None
++                };
++                session.observe_main_exit();
++                let finish_session = session.clone();
++                let finish = tokio::spawn(async move { finish_session.finish(17, false).await });
++                let mut bytes = Vec::new();
++                loop {
++                    match output.recv().await.unwrap() {
++                        MainOutput::Stdout(data) => bytes.extend_from_slice(&data),
++                        MainOutput::Exit(17) => break,
++                        other => panic!("unexpected {other:?}"),
++                    }
++                }
++                finish.await.unwrap();
++                assert_eq!(bytes, b"last-line\r\n");
++                drop(held);
++            }
++        }
++    }
++
++    #[tokio::test]
++    async fn pipe_last_line_immediately_before_exit_is_kept_repeatedly() {
++        for _ in 0..32 {
++            let (mut child, io) = spawn_piped("printf 'last-line\\n'; printf 'last-error\\n' >&2");
++            let session = MainSession::new(io, child.id().unwrap(), None);
++            let mut output = session.subscribe();
++            assert!(child.wait().await.unwrap().success());
++            session.observe_main_exit();
++            let ending = session.clone();
++            let finish = tokio::spawn(async move { ending.finish(0, false).await });
++            let mut stdout = Vec::new();
++            let mut stderr = Vec::new();
++            loop {
++                match output.recv().await.unwrap() {
++                    MainOutput::Stdout(data) => stdout.extend_from_slice(&data),
++                    MainOutput::Stderr(data) => stderr.extend_from_slice(&data),
++                    MainOutput::Exit(0) => break,
++                    other @ MainOutput::Exit(_) => panic!("unexpected {other:?}"),
++                }
++            }
++            finish.await.unwrap();
++            assert_eq!(stdout, b"last-line\n");
++            assert_eq!(stderr, b"last-error\n");
++        }
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn tail_continuous_descendant_cannot_extend_capture_with_reader_progress() {
++        let (session, mut slave) = MainSession::terminal_for_test();
++        let mut cursor = session.subscribe();
++        slave.write_all(b"main-last\n").unwrap();
++        session.observe_main_exit();
++        let capture = session.tail_captures.lock().unwrap()[0].clone();
++        for _ in 0..20 {
++            slave.write_all(b"child\n").unwrap();
++            tokio::task::yield_now().await;
++            while session.output.state.lock().unwrap().next_sequence > cursor.next_sequence {
++                cursor.recv().await.unwrap();
++            }
++            tokio::time::advance(std::time::Duration::from_millis(100)).await;
++        }
++        tokio::task::yield_now().await;
++        let (_, count, _) = capture.state.lock().unwrap().snapshot.unwrap();
++        assert!(count <= OUTPUT_BUFFER_BYTES);
++        let finish_session = session.clone();
++        let finish = tokio::spawn(async move { finish_session.finish(0, false).await });
++        loop {
++            if matches!(cursor.recv().await.unwrap(), MainOutput::Exit(0)) {
++                break;
++            }
++        }
++        finish.await.unwrap();
++        assert_eq!(capture.state.lock().unwrap().remaining, Some(0));
++    }
++
++    #[tokio::test]
++    async fn tail_count_and_read_errors_end_without_losing_a_held_chunk() {
++        struct FailedRead;
++        impl AsyncRead for FailedRead {
++            fn poll_read(
++                self: Pin<&mut Self>,
++                _: &mut Context<'_>,
++                _: &mut ReadBuf<'_>,
++            ) -> Poll<std::io::Result<()>> {
++                Poll::Ready(Err(std::io::Error::other("read failed")))
++            }
++        }
++        let null = std::fs::File::open("/dev/null").unwrap();
++        let capture = MainTailCapture::new(&null);
++        capture.state.lock().unwrap().held = 7;
++        capture.freeze(); // FIONREAD on /dev/null is ENOTTY, not an empty successful tail.
++        assert_eq!(capture.state.lock().unwrap().remaining, Some(0));
++        assert_eq!(capture.state.lock().unwrap().held, 7);
++        let mut empty = tokio::io::empty();
++        assert_eq!(capture.read(&mut empty, &mut [0; 8]).await.unwrap(), 0);
++        let capture = MainTailCapture::new(&null);
++        assert!(capture.read(&mut FailedRead, &mut [0; 8]).await.is_err());
++        assert_eq!(capture.read(&mut empty, &mut [0; 8]).await.unwrap(), 0);
++        assert!(capture.state.lock().unwrap().ended);
++    }
++    #[tokio::test(start_paused = true)]
++    async fn pipe_tail_with_silent_descendant_keeps_last_bytes_on_both_streams() {
++        for _ in 0..16 {
++            let (input_read, input_write) = nix::unistd::pipe().unwrap();
++            let (output_read, output_write) = nix::unistd::pipe().unwrap();
++            let (error_read, error_write) = nix::unistd::pipe().unwrap();
++            let io = ProcessIo::Pipes {
++                stdin: tokio::process::ChildStdin::from_std(std::process::ChildStdin::from(
++                    input_write,
++                ))
++                .unwrap(),
++                stdout: tokio::process::ChildStdout::from_std(std::process::ChildStdout::from(
++                    output_read,
++                ))
++                .unwrap(),
++                stderr: tokio::process::ChildStderr::from_std(std::process::ChildStderr::from(
++                    error_read,
++                ))
++                .unwrap(),
++            };
++            let mut stdout = std::fs::File::from(output_write);
++            let mut stderr = std::fs::File::from(error_write);
++            let session = MainSession::new(io, 1, None);
++            let mut cursor = session.subscribe();
++            stdout.write_all(b"last-output\n").unwrap();
++            stderr.write_all(b"last-error\n").unwrap();
++            let ending = session.clone();
++            let finish = tokio::spawn(async move { ending.finish(13, false).await });
++            let mut out = Vec::new();
++            let mut err = Vec::new();
++            loop {
++                match cursor.recv().await.unwrap() {
++                    MainOutput::Stdout(data) => out.extend_from_slice(&data),
++                    MainOutput::Stderr(data) => err.extend_from_slice(&data),
++                    MainOutput::Exit(13) => break,
++                    other @ MainOutput::Exit(_) => panic!("unexpected {other:?}"),
++                }
++            }
++            finish.await.unwrap();
++            assert_eq!(out, b"last-output\n");
++            assert_eq!(err, b"last-error\n");
++            drop((input_read, stdout, stderr));
++        }
++    }
++
++    #[tokio::test]
++    async fn tail_snapshot_caps_additional_bytes_at_one_ring() {
++        use std::io::{Seek, SeekFrom};
++        let mut file = tempfile::tempfile().unwrap();
++        file.write_all(&vec![b'x'; 2 * OUTPUT_BUFFER_BYTES])
++            .unwrap();
++        file.seek(SeekFrom::Start(0)).unwrap();
++        let capture = MainTailCapture::new(&file);
++        capture.freeze();
++        assert_eq!(
++            capture.state.lock().unwrap().remaining,
++            Some(OUTPUT_BUFFER_BYTES)
++        );
++    }
++
++    #[tokio::test]
++    async fn tail_teardown_releases_publication_and_completion_is_only_once() {
++        let mut session = MainSession::inert();
++        let inner = Arc::get_mut(&mut session).unwrap();
++        inner.output = OutputLog::with_main_backpressure();
++        let _cursor = session.subscribe();
++        let producer = main_log_writer(session.output.clone());
++        main_log_full(&session.output).await;
++        assert!(!producer.is_finished());
++        session.cancel_output();
++        tokio::time::timeout(std::time::Duration::from_secs(1), producer)
++            .await
++            .unwrap()
++            .unwrap();
++        session.complete_finish(9, false);
++        session.complete_finish(9, false);
++        assert_eq!(
++            session
++                .output
++                .state
++                .lock()
++                .unwrap()
++                .events
++                .iter()
++                .filter(|entry| matches!(entry.event, MainOutput::Exit(_)))
++                .count(),
++            1
++        );
++    }
+ }
+diff --git a/crates/openshell-supervisor-process/Cargo.toml b/crates/openshell-supervisor-process/Cargo.toml
+index 2283370..0d14cef 100644
+--- a/crates/openshell-supervisor-process/Cargo.toml
++++ b/crates/openshell-supervisor-process/Cargo.toml
+@@ -38,6 +38,7 @@ libc = "0.2"
+ rustix = { workspace = true, features = ["termios"] }
+ 
+ [dev-dependencies]
++openshell-sandbox = { path = "../openshell-sandbox" }
+ openshell-sandbox-backend = { path = "../openshell-sandbox-backend", features = ["test-support"] }
+ 
+ openshell-ocsf = { path = "../openshell-ocsf", features = ["test-support"] }
+diff --git a/crates/openshell-supervisor-process/src/delegated.rs b/crates/openshell-supervisor-process/src/delegated.rs
+index 32e3fd4..8e8b572 100644
+--- a/crates/openshell-supervisor-process/src/delegated.rs
++++ b/crates/openshell-supervisor-process/src/delegated.rs
+@@ -45,13 +45,19 @@ impl BoundaryAccess {
+     }
+ 
+     /// Publish the canonical process's terminal status to attached clients.
+-    pub async fn publish_main_exit(&self, exit_code: i32, attachment_expected: bool) {
++    pub async fn publish_main_exit(
++        &self,
++        exit_code: i32,
++        attachment_expected: bool,
++        shutdown: impl Future<Output = ()>,
++    ) -> bool {
+         let Some(main_session) = self.main_session.as_ref() else {
+-            return;
++            return false;
+         };
+-        let _ = main_session
+-            .finish_remote(exit_code, attachment_expected)
+-            .await;
++        tokio::select! {
++            _ = main_session.finish_remote(exit_code, attachment_expected) => false,
++            () = shutdown => true,
++        }
+     }
+ 
+     /// Release terminal delivery after the gateway acknowledges the exit, then
+@@ -389,7 +395,11 @@ mod tests {
+             .main_session
+             .as_ref()
+             .expect("main attachment retained");
+-        access.publish_main_exit(7, true).await;
++        assert!(
++            !access
++                .publish_main_exit(7, true, std::future::pending())
++                .await
++        );
+         main.begin_terminal_attachment()
+             .expect("fast-exit attachment survives without SSH");
+         main.end_terminal_attachment();
+@@ -438,11 +448,77 @@ mod tests {
+             main_session: Some(main_session.clone()),
+         };
+ 
+-        access.publish_main_exit(7, true).await;
++        assert!(
++            !access
++                .publish_main_exit(7, true, std::future::pending())
++                .await
++        );
+ 
+         main_session
+             .begin_terminal_attachment()
+             .expect("declared CLI attachment must remain valid after a fast remote main exits");
+         main_session.end_terminal_attachment();
+     }
++    #[tokio::test(start_paused = true)]
++    async fn progressing_tail_publication_is_cancelled_by_real_access_shutdown() {
++        use tokio::io::AsyncWriteExt;
++        let (output, mut writer) = tokio::io::duplex(1024);
++        let main = crate::main_session::MainSession::from_boundary(
++            openshell_sandbox_backend::ProcessAttachment {
++                stdin: Box::new(tokio::io::sink()),
++                stdout: Box::new(output),
++                stderr: Some(Box::new(tokio::io::empty())),
++                terminal: None,
++            },
++            rpc_test::process(Arc::new(AccessBoundary)),
++        );
++        let mut owner = main.subscribe();
++        let (lease, _) = main.acquire_input_for_output(owner.id()).unwrap();
++        let access = BoundaryAccess {
++            instance_id: "tail-cancellation".to_string(),
++            terminating: Arc::new(AtomicBool::new(false)),
++            ssh_task: None,
++            session_task: None,
++            session_readiness: None,
++            main_session: Some(main.clone()),
++        };
++        let producer = tokio::spawn(async move {
++            loop {
++                if writer.write_all(&[b'x'; 4096]).await.is_err() {
++                    break;
++                }
++            }
++        });
++        let (stop, stopped) = tokio::sync::oneshot::channel();
++        let publication = tokio::spawn(async move {
++            access
++                .publish_main_exit(5, false, async {
++                    let _ = stopped.await;
++                })
++                .await
++        });
++        // Progress keeps the real finish_remote future pending well beyond
++        // its original total deadline. Shutdown must interrupt that same call.
++        for _ in 0..50 {
++            assert!(matches!(
++                owner.recv().await.unwrap(),
++                crate::main_session::MainOutput::Stdout(_)
++            ));
++            tokio::time::advance(Duration::from_millis(100)).await;
++            tokio::task::yield_now().await;
++            assert!(!publication.is_finished());
++        }
++        stop.send(()).unwrap();
++        assert!(
++            publication.await.unwrap(),
++            "actual access publication returns cancelled"
++        );
++        assert!(
++            !main.finished(),
++            "cancelled publication never publishes Exit"
++        );
++        main.release_input(lease);
++        producer.abort();
++        let _ = producer.await;
++    }
  }
 diff --git a/crates/openshell-supervisor-process/src/main_session.rs b/crates/openshell-supervisor-process/src/main_session.rs
-index 5bf4879..edd2477 100644
+index 5bf4879..ea728c2 100644
 --- a/crates/openshell-supervisor-process/src/main_session.rs
 +++ b/crates/openshell-supervisor-process/src/main_session.rs
 @@ -7,7 +7,7 @@
@@ -411,13 +1281,14 @@ index 5bf4879..edd2477 100644
  use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
  use std::sync::{Arc, Mutex};
  
-@@ -47,12 +47,17 @@ struct OutputLogState {
+@@ -47,12 +47,18 @@ struct OutputLogState {
      events: VecDeque<SequencedOutput>,
      retained_bytes: usize,
      next_sequence: u64,
 +    next_cursor: u64,
 +    cursors: HashMap<u64, u64>,
 +    pacing: Option<(u64, u64)>,
++    terminal: bool,
  }
  
  #[derive(Debug)]
@@ -429,7 +1300,7 @@ index 5bf4879..edd2477 100644
      terminal_reported: std::sync::atomic::AtomicBool,
      terminal_reported_notify: Notify,
  }
-@@ -60,13 +65,19 @@ struct OutputLog {
+@@ -60,13 +66,20 @@ struct OutputLog {
  impl OutputLog {
      fn new() -> Arc<Self> {
          let (version, _) = watch::channel(0);
@@ -442,6 +1313,7 @@ index 5bf4879..edd2477 100644
 +                next_cursor: 0,
 +                cursors: HashMap::new(),
 +                pacing: None,
++                terminal: false,
              }),
              version,
 +            space,
@@ -449,7 +1321,18 @@ index 5bf4879..edd2477 100644
              terminal_reported: std::sync::atomic::AtomicBool::new(false),
              terminal_reported_notify: Notify::new(),
          })
-@@ -93,16 +104,78 @@ impl OutputLog {
+@@ -75,6 +88,10 @@ impl OutputLog {
+     fn publish(&self, event: MainOutput) {
+         let version = {
+             let mut state = self.state.lock().expect("main output log lock poisoned");
++            if state.terminal {
++                return;
++            }
++            state.terminal = matches!(event, MainOutput::Exit(_));
+             let sequence = state.next_sequence;
+             state.next_sequence = state
+                 .next_sequence
+@@ -93,16 +110,88 @@ impl OutputLog {
          self.version.send_replace(version);
      }
  
@@ -461,6 +1344,9 @@ index 5bf4879..edd2477 100644
 +            let _ = space.borrow_and_update();
 +            let version = {
 +                let mut state = self.state.lock().expect("main output log lock poisoned");
++                if state.terminal {
++                    return;
++                }
 +                let consumed = if self.after_exit.load(Ordering::Acquire) {
 +                    None
 +                } else {
@@ -503,6 +1389,13 @@ index 5bf4879..edd2477 100644
 +        }
 +    }
 +
++    fn owner_progress(&self) -> Option<(u64, u64)> {
++        let state = self.state.lock().expect("main output log lock poisoned");
++        state
++            .pacing
++            .and_then(|(_, cursor)| state.cursors.get(&cursor).map(|next| (cursor, *next)))
++    }
++
 +    fn stop_backpressure(&self) {
 +        self.after_exit.store(true, Ordering::Release);
 +        self.space
@@ -529,7 +1422,7 @@ index 5bf4879..edd2477 100644
              next_sequence,
              version,
          }
-@@ -130,15 +203,38 @@ pub struct MainOutputLagged {
+@@ -130,15 +219,50 @@ pub struct MainOutputLagged {
  
  pub struct MainOutputCursor {
      output: Arc<OutputLog>,
@@ -561,6 +1454,18 @@ index 5bf4879..edd2477 100644
 +        self.id
 +    }
 +
++    // Only a current input owner released by the post-exit idle deadline
++    // may continue from a skip notice to the retained terminal event.
++    pub(crate) fn tail_idle_released(&self) -> bool {
++        let state = self
++            .output
++            .state
++            .lock()
++            .expect("main output log lock poisoned");
++        self.output.after_exit.load(Ordering::Acquire)
++            && state.pacing.is_some_and(|(_, cursor)| cursor == self.id)
++    }
++
      pub async fn recv(&mut self) -> Result<MainOutput, MainOutputLagged> {
          loop {
              let next = {
@@ -569,7 +1474,7 @@ index 5bf4879..edd2477 100644
                      .output
                      .state
                      .lock()
-@@ -150,6 +246,7 @@ impl MainOutputCursor {
+@@ -150,6 +274,7 @@ impl MainOutputCursor {
                  if self.next_sequence < oldest {
                      let skipped = oldest - self.next_sequence;
                      self.next_sequence = oldest;
@@ -577,7 +1482,7 @@ index 5bf4879..edd2477 100644
                      return Err(MainOutputLagged { skipped });
                  }
                  if self.next_sequence >= state.next_sequence {
-@@ -164,10 +261,14 @@ impl MainOutputCursor {
+@@ -164,10 +289,14 @@ impl MainOutputCursor {
                          .event
                          .clone();
                      self.next_sequence += 1;
@@ -592,7 +1497,17 @@ index 5bf4879..edd2477 100644
                  return Ok(event);
              }
              // The log owns a sender for the cursor lifetime, so closure is not
-@@ -264,8 +365,14 @@ impl MainSession {
+@@ -193,7 +322,8 @@ pub struct MainSession {
+ }
+ 
+ impl MainSession {
+-    const REMOTE_OUTPUT_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
++    const REMOTE_OUTPUT_DRAIN_TIMEOUT: std::time::Duration =
++        openshell_isolation_interface::contract::MAIN_OUTPUT_DRAIN_TIMEOUT;
+     #[cfg(test)]
+     pub fn inert() -> Arc<Self> {
+         Self::inert_with_input().0
+@@ -264,8 +394,14 @@ impl MainSession {
              loop {
                  match stdout.read(&mut buffer).await {
                      Ok(0) | Err(_) => break,
@@ -609,7 +1524,7 @@ index 5bf4879..edd2477 100644
                  }
              }
              stdout_session.reader_finished();
-@@ -277,8 +384,14 @@ impl MainSession {
+@@ -277,8 +413,14 @@ impl MainSession {
                  loop {
                      match stderr.read(&mut buffer).await {
                          Ok(0) | Err(_) => break,
@@ -626,7 +1541,25 @@ index 5bf4879..edd2477 100644
                      }
                  }
                  stderr_session.reader_finished();
-@@ -316,6 +429,7 @@ impl MainSession {
+@@ -301,6 +443,17 @@ impl MainSession {
+         self.publish(MainOutput::Stdout(Bytes::from_static(data)));
+     }
+ 
++    #[cfg(all(test, unix))]
++    pub(crate) fn publish_idle_tail_for_test(&self, code: i32) {
++        self.output.stop_backpressure();
++        for _ in 0..512 {
++            self.output
++                .publish(MainOutput::Stdout(Bytes::from(vec![b'x'; 4096])));
++        }
++        self.complete_finish(code, false);
++        self.mark_terminal_reported();
++    }
++
+     fn publish(&self, event: MainOutput) {
+         self.output.publish(event);
+     }
+@@ -316,6 +469,7 @@ impl MainSession {
      ///
      /// Returns whether terminal delivery must complete before shutdown.
      pub async fn finish(&self, exit_code: i32, attachment_expected: bool) -> bool {
@@ -634,17 +1567,47 @@ index 5bf4879..edd2477 100644
          self.wait_for_output_readers().await;
          self.complete_finish(exit_code, attachment_expected)
      }
-@@ -337,6 +451,9 @@ impl MainSession {
+@@ -337,12 +491,38 @@ impl MainSession {
          attachment_expected: bool,
          timeout: std::time::Duration,
      ) -> bool {
-+        // The existing output-drain deadline owns the end path, even when
-+        // an input owner remains alive without reading.
-+        self.output.stop_backpressure();
-         let _ = tokio::time::timeout(timeout, self.wait_for_output_readers()).await;
+-        let _ = tokio::time::timeout(timeout, self.wait_for_output_readers()).await;
++        let mut progress = self.output.space.subscribe();
++        let mut owner = self.output.owner_progress();
++        let mut deadline = tokio::time::Instant::now() + timeout;
++        loop {
++            let _ = progress.borrow_and_update();
++            let current = self.output.owner_progress();
++            if let (Some((cursor, next)), Some((previous, taken))) = (current, owner)
++                && cursor == previous
++                && next > taken
++            {
++                deadline = tokio::time::Instant::now() + timeout;
++            }
++            owner = current;
++            tokio::select! {
++                biased;
++                () = self.wait_for_output_readers() => break,
++                _ = progress.changed() => {}
++                () = tokio::time::sleep_until(deadline) => {
++                    self.output.stop_backpressure();
++                    break;
++                }
++            }
++        }
++        // Seal the log so a boundary reader unblocked by idle release cannot
++        // evict this terminal event or publish output after it.
          self.complete_finish(exit_code, attachment_expected)
      }
-@@ -465,12 +582,45 @@ impl MainSession {
+ 
+     async fn wait_for_output_readers(&self) {
+         let notified = self.readers_done.notified();
++        tokio::pin!(notified);
++        notified.as_mut().enable();
+         if self.readers_remaining.load(Ordering::Acquire) != 0 {
+             notified.await;
+         }
+@@ -465,12 +645,45 @@ impl MainSession {
      }
  
      pub fn acquire_input(&self) -> Result<(u64, tokio::sync::mpsc::Sender<Vec<u8>>), &'static str> {
@@ -690,7 +1653,7 @@ index 5bf4879..edd2477 100644
          Ok((id, self.input.clone()))
      }
  
-@@ -478,6 +628,18 @@ impl MainSession {
+@@ -478,6 +691,18 @@ impl MainSession {
          let mut owner = self.input_owner.lock().expect("main input lock poisoned");
          if *owner == Some(id) {
              *owner = None;
@@ -709,7 +1672,7 @@ index 5bf4879..edd2477 100644
          }
      }
  
-@@ -771,4 +933,168 @@ mod tests {
+@@ -771,4 +996,381 @@ mod tests {
              "no boundary process is attached"
          );
      }
@@ -722,7 +1685,9 @@ index 5bf4879..edd2477 100644
 +                stdin: Box::new(stdin),
 +                stdout: Box::new(stdout),
 +                stderr: None,
-+                terminal: None,
++                terminal: Some(rpc_test::terminal(Arc::new(TestBoundaryTerminal {
++                    size: Mutex::new(None),
++                }))),
 +            },
 +            rpc_test::process(Arc::new(TestBoundaryProcess {
 +                signals: Mutex::new(Vec::new()),
@@ -877,9 +1842,220 @@ index 5bf4879..edd2477 100644
 +        let current = session.subscribe();
 +        assert!(session.acquire_input_for_output(current.id()).is_ok());
 +    }
++    #[tokio::test(start_paused = true)]
++    async fn tail_owner_progress_restarts_idle_wait_well_past_total_two_seconds() {
++        let (session, mut writer) = paced_boundary();
++        let mut owner = session.subscribe();
++        let (_lease, _) = session.acquire_input_for_output(owner.id()).unwrap();
++        let bytes = vec![b'x'; 2 * OUTPUT_BUFFER_BYTES];
++        let producer = tokio::spawn(async move {
++            writer.write_all(&bytes).await.unwrap();
++        });
++        wait_full(&session).await;
++        let ending = session.clone();
++        let finish = tokio::spawn(async move { ending.finish_remote(23, false).await });
++        tokio::task::yield_now().await;
++        let observed = tokio::time::Instant::now();
++        let mut received = 0;
++        loop {
++            match owner.recv().await.expect("owner must not lag") {
++                MainOutput::Stdout(data) => received += data.len(),
++                MainOutput::Exit(23) => break,
++                other => panic!("unexpected {other:?}"),
++            }
++            tokio::time::advance(std::time::Duration::from_millis(100)).await;
++            tokio::task::yield_now().await;
++        }
++        producer.await.unwrap();
++        finish.await.unwrap();
++        assert_eq!(received, 2 * OUTPUT_BUFFER_BYTES);
++        assert!(tokio::time::Instant::now() - observed > std::time::Duration::from_secs(2));
++        assert!(!owner.tail_idle_released());
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn tail_idle_deadline_follows_last_owner_progress_then_preserves_exit() {
++        let (session, mut writer) = paced_boundary();
++        let mut owner = session.subscribe();
++        let mut viewer = session.subscribe();
++        let (_lease, _) = session.acquire_input_for_output(owner.id()).unwrap();
++        let producer = tokio::spawn(async move {
++            writer
++                .write_all(&vec![b'x'; 3 * OUTPUT_BUFFER_BYTES])
++                .await
++                .unwrap();
++        });
++        wait_full(&session).await;
++        let ending = session.clone();
++        let finish = tokio::spawn(async move { ending.finish_remote(7, false).await });
++        tokio::task::yield_now().await;
++        tokio::time::advance(std::time::Duration::from_secs(1)).await;
++        owner.recv().await.unwrap();
++        tokio::task::yield_now().await;
++        tokio::time::advance(std::time::Duration::from_millis(1999)).await;
++        tokio::task::yield_now().await;
++        assert!(
++            !finish.is_finished(),
++            "2s since exit is not the idle deadline"
++        );
++        tokio::time::advance(std::time::Duration::from_millis(1)).await;
++        tokio::task::yield_now().await;
++        finish.await.unwrap();
++        assert!(owner.tail_idle_released());
++        // Model a boundary chunk already being forwarded at the cutoff.
++        // It must never move the terminal event or append after it.
++        session
++            .output
++            .publish_paced(MainOutput::Stdout(Bytes::from_static(b"late")))
++            .await;
++        assert!(matches!(
++            session
++                .output
++                .state
++                .lock()
++                .unwrap()
++                .events
++                .back()
++                .unwrap()
++                .event,
++            MainOutput::Exit(7)
++        ));
++        loop {
++            match owner.recv().await {
++                Ok(MainOutput::Exit(7)) => break,
++                Ok(_) => {}
++                Err(_) => assert!(
++                    owner.tail_idle_released(),
++                    "skip is diagnostic, not lag-close"
++                ),
++            }
++        }
++        // Viewer lag remains the ordinary close path, even after idle release.
++        assert!(!viewer.tail_idle_released());
++        if viewer.recv().await.is_err() {
++            assert!(!viewer.tail_idle_released());
++        }
++        producer.await.unwrap();
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn tail_no_owner_uses_original_total_wait_and_cancel_is_safe() {
++        let session = MainSession::inert();
++        session.readers_remaining.store(1, Ordering::Release);
++        let ending = session.clone();
++        let finish = tokio::spawn(async move { ending.finish_remote(3, false).await });
++        tokio::task::yield_now().await;
++        tokio::time::advance(std::time::Duration::from_millis(1999)).await;
++        assert!(!finish.is_finished());
++        tokio::time::advance(std::time::Duration::from_millis(1)).await;
++        finish.await.unwrap();
++        assert!(session.finished());
++        let session = MainSession::inert();
++        session.readers_remaining.store(1, Ordering::Release);
++        let ending = session.clone();
++        let finish = tokio::spawn(async move { ending.finish_remote(3, false).await });
++        tokio::task::yield_now().await;
++        finish.abort();
++        assert!(finish.await.unwrap_err().is_cancelled());
++        assert!(!session.finished());
++    }
++
++    #[tokio::test]
++    async fn idle_released_owner_gets_skip_then_exit_while_viewer_still_lags() {
++        let session = MainSession::inert();
++        let mut owner = session.subscribe();
++        let mut viewer = session.subscribe();
++        session.acquire_input_for_output(owner.id()).unwrap();
++        session.output.stop_backpressure();
++        for _ in 0..512 {
++            session
++                .output
++                .publish_paced(MainOutput::Stdout(Bytes::from(vec![0; 4096])))
++                .await;
++        }
++        session.complete_finish(5, false);
++        assert!(owner.recv().await.unwrap_err().skipped > 0);
++        assert!(owner.tail_idle_released());
++        loop {
++            if matches!(owner.recv().await.unwrap(), MainOutput::Exit(5)) {
++                break;
++            }
++        }
++        assert!(viewer.recv().await.is_err());
++        assert!(!viewer.tail_idle_released());
++    }
++
++    #[tokio::test(start_paused = true)]
++    async fn sandbox_and_supervisor_keep_a_fixed_descendant_tail_paced_until_exit() {
++        use openshell_sandbox::main_session::{
++            MainOutput as SandboxOutput, MainSession as SandboxMain,
++        };
++        use openshell_sandbox::process::ProcessIo;
++        let mut command = tokio::process::Command::new("sh");
++        command
++            .args([
++                "-c",
++                "printf 'main-last\\n'; (while :; do printf 'child-line\\n'; done) & exit 0",
++            ])
++            .stdin(std::process::Stdio::piped())
++            .stdout(std::process::Stdio::piped())
++            .stderr(std::process::Stdio::piped())
++            .kill_on_drop(true);
++        command.process_group(0);
++        let mut child = command.spawn().unwrap();
++        let pid =
++            rustix::process::Pid::from_raw(i32::try_from(child.id().unwrap()).unwrap()).unwrap();
++        let io = ProcessIo::Pipes {
++            stdin: child.stdin.take().unwrap(),
++            stdout: child.stdout.take().unwrap(),
++            stderr: child.stderr.take().unwrap(),
++        };
++        let sandbox = SandboxMain::new(io, child.id().unwrap(), None);
++        let mut sandbox_output = sandbox.subscribe();
++        let (supervisor, mut boundary) = paced_boundary();
++        let mut owner = supervisor.subscribe();
++        supervisor.acquire_input_for_output(owner.id()).unwrap();
++        let bridge = tokio::spawn(async move {
++            loop {
++                match sandbox_output.recv().await.unwrap() {
++                    SandboxOutput::Stdout(data) | SandboxOutput::Stderr(data) => {
++                        boundary.write_all(&data).await.unwrap();
++                    }
++                    SandboxOutput::Exit(0) => break,
++                    other @ SandboxOutput::Exit(_) => panic!("unexpected {other:?}"),
++                }
++            }
++        });
++        assert!(child.wait().await.unwrap().success());
++        let observed = tokio::time::Instant::now();
++        let sandbox_finish = tokio::spawn(async move { sandbox.finish(0, false).await });
++        let ending = supervisor.clone();
++        let supervisor_finish = tokio::spawn(async move { ending.finish_remote(0, false).await });
++        let mut output = Vec::new();
++        loop {
++            match owner.recv().await.expect("paced owner never lags") {
++                MainOutput::Stdout(data) => output.extend_from_slice(&data),
++                MainOutput::Exit(0) => break,
++                other => panic!("unexpected {other:?}"),
++            }
++            tokio::time::advance(std::time::Duration::from_millis(50)).await;
++            tokio::task::yield_now().await;
++        }
++        bridge.await.unwrap();
++        sandbox_finish.await.unwrap();
++        supervisor_finish.await.unwrap();
++        let _ = rustix::process::kill_process_group(pid, rustix::process::Signal::KILL);
++        assert!(output.starts_with(b"main-last\n"));
++        assert!(!owner.tail_idle_released());
++        println!(
++            "combined continuous-descendant tail: {} bytes, {:?} exit-to-event",
++            output.len(),
++            tokio::time::Instant::now() - observed
++        );
++    }
  }
 diff --git a/crates/openshell-supervisor-process/src/ssh.rs b/crates/openshell-supervisor-process/src/ssh.rs
-index 324e88b..82ad04c 100644
+index 324e88b..e91cc5b 100644
 --- a/crates/openshell-supervisor-process/src/ssh.rs
 +++ b/crates/openshell-supervisor-process/src/ssh.rs
 @@ -409,6 +409,7 @@ struct ChannelState {
@@ -923,7 +2099,35 @@ index 324e88b..82ad04c 100644
              let terminal_delivery = main_session.clone();
              let handle = session.handle();
              session.channel_success(channel)?;
-@@ -1045,7 +1047,8 @@ impl russh::server::Handler for SshHandler {
+@@ -900,17 +902,26 @@ impl russh::server::Handler for SshHandler {
+                             let _ = send_main_output(&handle, channel, event).await;
+                         }
+                         Err(error) => {
++                            let tail_idle_released = output.tail_idle_released();
++                            let suffix = if tail_idle_released {
++                                "post-exit idle wait expired; continuing to exit status"
++                            } else {
++                                "reconnect for buffered output"
++                            };
+                             let _ = handle
+                                 .extended_data(
+                                     channel,
+                                     1,
+                                     format!(
+-                                        "openshell: attachment fell behind by {} output chunks; reconnect for buffered output\n",
++                                        "openshell: attachment fell behind by {} output chunks; {suffix}\n",
+                                         error.skipped
+                                     )
+                                     .into_bytes(),
+                                 )
+                                 .await;
++                            if tail_idle_released {
++                                continue;
++                            }
+                             let _ = handle.close(channel).await;
+                             break;
+                         }
+@@ -1045,7 +1056,8 @@ impl russh::server::Handler for SshHandler {
              && !forward.is_empty()
              && let Some(main_session) = self.main_session.as_ref()
              && !main_session.finished()
@@ -933,3 +2137,83 @@ index 324e88b..82ad04c 100644
          {
              state.main_input_owner = Some(owner);
              state.input_sender = Some(InputSender::Main(input));
+@@ -2606,6 +2618,49 @@ mod tests {
+         .expect("delivery completes once the connection ends");
+     }
+ 
++    #[tokio::test]
++    async fn idle_released_input_owner_gets_skip_notice_and_exit_over_ssh() {
++        let main = MainSession::inert();
++        let client = main_test_client(Some(main.clone())).await;
++        let mut owner = client.channel_open_session().await.unwrap();
++        owner
++            .set_env(true, "OPENSHELL_MAIN_RAW_INPUT", "1")
++            .await
++            .unwrap();
++        assert!(matches!(
++            next_main_event(&mut owner).await,
++            russh::ChannelMsg::Success
++        ));
++        owner
++            .request_subsystem(true, "openshell-main")
++            .await
++            .unwrap();
++        assert!(matches!(
++            next_main_event(&mut owner).await,
++            russh::ChannelMsg::Success
++        ));
++        // A synchronous burst prevents the attachment task from taking output
++        // until the idle-released log has an evicted prefix and final status.
++        main.publish_idle_tail_for_test(5);
++        let mut notice = false;
++        let mut status = false;
++        loop {
++            match next_main_event(&mut owner).await {
++                russh::ChannelMsg::ExtendedData { data, .. } => {
++                    assert!(String::from_utf8_lossy(&data).contains("continuing to exit status"));
++                    notice = true;
++                }
++                russh::ChannelMsg::ExitStatus { exit_status: 5 } => status = true,
++                russh::ChannelMsg::Close => break,
++                _ => {}
++            }
++        }
++        assert!(
++            notice && status,
++            "idle owner must receive diagnostic AND status"
++        );
++    }
++
+     #[tokio::test]
+     async fn main_attachment_accepts_declared_session_after_process_exit() {
+         let main_session = MainSession::inert();
+diff --git a/crates/openshell-supervisor/src/lib.rs b/crates/openshell-supervisor/src/lib.rs
+index 64f5d7e..39d7545 100644
+--- a/crates/openshell-supervisor/src/lib.rs
++++ b/crates/openshell-supervisor/src/lib.rs
+@@ -1786,13 +1786,20 @@ pub async fn run_sandbox_instance(
+         if !retain_access {
+             instance_readiness.release();
+         }
+-        boundary_access
+-            .publish_main_exit(exit_code, await_main_process_attachment)
+-            .await;
+         // `shutdown_requested` has already completed when shutdown won the
+-        // lifecycle select above and must not be polled again.
++        // lifecycle select above and must not be polled again. Otherwise it
++        // also cancels the progress-extended tail wait before any marker.
+         let mut completion_cancelled = !retain_access;
+-        if retain_access && let Some(marker) = main_exit_marker.as_deref() {
++        if !completion_cancelled {
++            completion_cancelled = boundary_access
++                .publish_main_exit(
++                    exit_code,
++                    await_main_process_attachment,
++                    shutdown_requested.as_mut(),
++                )
++                .await;
++        }
++        if !completion_cancelled && let Some(marker) = main_exit_marker.as_deref() {
+             persist_main_exit_marker(marker, exit_code)
+                 .into_diagnostic()
+                 .wrap_err("persist canonical-process completion marker")?;
