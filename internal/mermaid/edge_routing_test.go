@@ -1,6 +1,7 @@
 package mermaid
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -14,7 +15,8 @@ import (
 // Exercise the shipped WASI bytes with the reported cyclic flowchart, not a
 // substitute Go renderer. Border cells need a leg into the adjacent route cell;
 // flat borders and triangle-only arrowheads leave half-cell gaps on terminals.
-func TestRuntimeFlowEdgesJoin(t *testing.T) {
+func runtimeFlowDiagram(t *testing.T, width int) Result {
+	t.Helper()
 	skipUnderRace(t)
 	ctx := t.Context()
 	rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().WithMemoryLimitPages(1024).WithCloseOnContextDone(true))
@@ -30,10 +32,15 @@ func TestRuntimeFlowEdgesJoin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := render(ctx, rt, compiled, request{protocol, moduleHash(), 160, "grapheme", string(raw)}, ansi.GraphemeWidth, workerLimits{1024, 2 * time.Second, MaxDrawing})
+	result := render(ctx, rt, compiled, request{protocol, moduleHash(), width, "grapheme", string(raw)}, ansi.GraphemeWidth, workerLimits{1024, 2 * time.Second, MaxDrawing})
 	if result.Status != OK {
 		t.Fatalf("runtime fixture: %+v", result)
 	}
+	return result
+}
+
+func TestRuntimeFlowEdgesJoin(t *testing.T) {
+	result := runtimeFlowDiagram(t, 160)
 	drawing := strings.Join(result.Lines, "\n")
 	labelRow := func(label string) int {
 		t.Helper()
@@ -84,5 +91,40 @@ func TestRuntimeFlowEdgesJoin(t *testing.T) {
 				t.Fatalf("incoming edges cross/jog above their ports:\n%s", drawing)
 			}
 		}
+	}
+}
+
+// The outgoing return edge must not share a protected incoming arrow's port.
+func TestRuntimeFlowSideSourceJoin(t *testing.T) {
+	for _, width := range []int{100, 120, 160} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			result := runtimeFlowDiagram(t, width)
+			for _, line := range result.Lines {
+				if _, suffix, found := strings.Cut(line, "Box: PID 1 helper"); found {
+					if !strings.HasPrefix(strings.TrimSpace(suffix), "├") {
+						t.Fatalf("PID 1 side source stays detached:\n%s", strings.Join(result.Lines, "\n"))
+					}
+					return
+				}
+			}
+			t.Fatal("PID 1 label missing")
+		})
+	}
+}
+
+func TestRuntimeFlowLabelPreservesSiblingEdge(t *testing.T) {
+	for _, width := range []int{100, 120, 160} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			result := runtimeFlowDiagram(t, width)
+			for _, line := range result.Lines {
+				if prefix, _, found := strings.Cut(line, "versioned RPC"); found {
+					if !strings.Contains(prefix, "│ │") {
+						t.Fatalf("RPC label overwrites sibling box-attach line:\n%s", strings.Join(result.Lines, "\n"))
+					}
+					return
+				}
+			}
+			t.Fatal("versioned RPC label missing")
+		})
 	}
 }

@@ -19,11 +19,11 @@
                  │
                  │
        ┌─────────↓─────────┐←─┐
-       │ Build in worktree │  │
+       │ Build in worktree │  │changes requested
        └─────────┬─────────┘←─┼┐
                  │            ││
                  │            ││
-                 │            │changes requested
+                 │            ││
                  │            ││
                  │            ││fail
                  │            ││

@@ -4,7 +4,8 @@ Subject: [PATCH] fix(mermaid-text): join flowchart edge endpoints and order fan-
 Join rectangular source borders and first route cells from final paths, not
 nominal centre-port corners. Use shafted arrows and preserve ASCII conversion.
 Order vertical rectangular fan-in by its source and separate its ports. Keep
-labels and sequence rendering unchanged. Include regressions and drawing
+labels and sequence rendering unchanged. Separate incoming/outgoing ports and
+keep labels off other routed edges, even in fallback placement. Include drawing
 updates for these intentional endpoint changes.
 
 diff --git a/crates/mermaid-text/src/layout/snapshots/mermaid_text__layout__sugiyama__tests__cicd_parallel_styles_to_same_target_sugiyama.snap b/crates/mermaid-text/src/layout/snapshots/mermaid_text__layout__sugiyama__tests__cicd_parallel_styles_to_same_target_sugiyama.snap
@@ -130,7 +131,7 @@ index 52c5770..7fac0e5 100644
   │                 │
   ╰─────────────────╯
 diff --git a/crates/mermaid-text/src/layout/snapshots/mermaid_text__layout__sugiyama__tests__supervisor_bidirectional_in_subgraph_sugiyama.snap b/crates/mermaid-text/src/layout/snapshots/mermaid_text__layout__sugiyama__tests__supervisor_bidirectional_in_subgraph_sugiyama.snap
-index 5d239ba..a2ebcf3 100644
+index 5d239ba..be1dbbc 100644
 --- a/crates/mermaid-text/src/layout/snapshots/mermaid_text__layout__sugiyama__tests__supervisor_bidirectional_in_subgraph_sugiyama.snap
 +++ b/crates/mermaid-text/src/layout/snapshots/mermaid_text__layout__sugiyama__tests__supervisor_bidirectional_in_subgraph_sugiyama.snap
 @@ -1,16 +1,16 @@
@@ -140,13 +141,15 @@ index 5d239ba..a2ebcf3 100644
  expression: out
  ---
   ╭─Supervisor───────────╮
-  │                      │
+- │                      │
++ │       creates        │
   │ ┌─────────┐          │
 - │ │ Factory │◂         │
 - │ └─────────┘│         │
+- │      │creates        │
 + │ │ Factory │←         │
 + │ └────┬────┘│         │
-  │      │creates        │
++ │      │     │         │
   │      │     │panics   │
 - │ ┌────▾───┐ │         │
 - │ │ Worker ├┌┘   beat  │       ┌───────────┐       ┌──────────┐
@@ -332,7 +335,7 @@ index 0000000..c4c3445
 +  AGENT -->|exits| PID1
 +  PID1 -->|stops container| IMG
 diff --git a/crates/mermaid-text/src/render/unicode.rs b/crates/mermaid-text/src/render/unicode.rs
-index d616fa8..4370eef 100644
+index d616fa8..12f0cc6 100644
 --- a/crates/mermaid-text/src/render/unicode.rs
 +++ b/crates/mermaid-text/src/render/unicode.rs
 @@ -357,52 +357,6 @@ fn routed_direction_bits_at(paths: &[Option<Vec<(usize, usize)>>], col: usize, r
@@ -419,7 +422,23 @@ index d616fa8..4370eef 100644
              continue;
          }
          if edge.from == edge.to {
-@@ -1375,21 +1324,105 @@ fn render_inner(
+@@ -1243,7 +1192,15 @@ fn render_inner(
+                 let prior_path_cells = has_parallel_same_direction
+                     .then(|| prior_path_cells_by_pair.get(&edge_pair))
+                     .flatten();
++                let foreign_path_cells: HashSet<(usize, usize)> = paths
++                    .iter()
++                    .enumerate()
++                    .filter(|(idx, _)| *idx != edge_idx)
++                    .filter_map(|(_, path)| path.as_ref())
++                    .flat_map(|path| path.iter().copied())
++                    .collect();
+                 let label_context = LabelPlacementContext {
++                    foreign_path_cells: &foreign_path_cells,
+                     dir: edge_effective_dirs
+                         .get(edge_idx)
+                         .copied()
+@@ -1375,21 +1332,105 @@ fn render_inner(
          grid.set(*col, *row, glyph);
      }
  
@@ -447,8 +466,7 @@ index d616fa8..4370eef 100644
 +                sg_bounds,
 +                &externally_attached_markers,
 +            )
-         {
--            grid.set(join.border.0, join.border.1, join.junction);
++        {
 +            let join = if c == x + geom.width && r >= y && r < y + geom.height {
 +                Some((c - 1, r, DIR_LEFT, DIR_UP | DIR_DOWN | DIR_RIGHT))
 +            } else if c + 1 == x && r >= y && r < y + geom.height {
@@ -515,7 +533,8 @@ index d616fa8..4370eef 100644
 +                .node(&edge.to)
 +                .is_some_and(|node| node.shape == NodeShape::Rectangle)
 +            && let Some(&(tc, tr)) = path.last()
-+        {
+         {
+-            grid.set(join.border.0, join.border.1, join.junction);
 +            // A triangle alone has no shaft joining the preceding cell.
 +            // Keep its direction, but use the corresponding shafted arrow.
 +            let arrow = match grid.get(tc, tr) {
@@ -538,7 +557,7 @@ index d616fa8..4370eef 100644
      }
  
      // Pass 2b: Write all edge labels after node boxes so that node box
-@@ -1690,10 +1723,20 @@ fn compute_spread_attaches(
+@@ -1690,10 +1731,20 @@ fn compute_spread_attaches(
          } else {
              graph.direction
          };
@@ -563,7 +582,87 @@ index d616fa8..4370eef 100644
          spread_destinations(
              &mut pairs,
              indices,
-@@ -1808,7 +1851,8 @@ fn spread_destinations(
+@@ -1705,6 +1756,79 @@ fn compute_spread_attaches(
+         );
+     }
+ 
++    // An incoming arrow is protected. It cannot also be the first cell of
++    // another edge leaving this node: that hides the departure's border leg.
++    // Prefer an unused interior port, then a corner port if needed.
++    for i in 0..pairs.len() {
++        let Some((src, _)) = pairs[i] else { continue };
++        let node = &graph.edges[i].from;
++        if !graph
++            .node(node)
++            .is_some_and(|n| n.shape == NodeShape::Rectangle)
++        {
++            continue;
++        }
++        let collides = pairs.iter().enumerate().any(|(j, pair)| {
++            j != i
++                && graph.edges[j].to == *node
++                && pair.is_some_and(|(_, dst)| dst.col == src.col && dst.row == src.row)
++        });
++        if !collides {
++            continue;
++        }
++        let Some(((x, y), geom)) = endpoint_geom(
++            node,
++            positions,
++            geoms,
++            sg_bounds,
++            externally_attached_markers,
++        ) else {
++            continue;
++        };
++        let vertical_side = src.col == x + geom.width || src.col + 1 == x;
++        let horizontal_side = src.row == y + geom.height || src.row + 1 == y;
++        if !vertical_side && !horizontal_side {
++            continue;
++        }
++        let (lo, len, old) = if vertical_side {
++            (y, geom.height, src.row)
++        } else {
++            (x, geom.width, src.col)
++        };
++        let mut slots: Vec<usize> = (lo..lo + len).collect();
++        slots.sort_by_key(|&slot| (slot == lo || slot + 1 == lo + len, slot.abs_diff(old), slot));
++        for slot in slots {
++            let candidate = if vertical_side {
++                Attach {
++                    col: src.col,
++                    row: slot,
++                }
++            } else {
++                Attach {
++                    col: slot,
++                    row: src.row,
++                }
++            };
++            let occupied = pairs.iter().enumerate().any(|(j, pair)| {
++                pair.is_some_and(|(other_src, dst)| {
++                    (j != i
++                        && graph.edges[j].from == *node
++                        && other_src.col == candidate.col
++                        && other_src.row == candidate.row)
++                        || (graph.edges[j].to == *node
++                            && dst.col == candidate.col
++                            && dst.row == candidate.row)
++                })
++            });
++            if !occupied {
++                if let Some((source, _)) = &mut pairs[i] {
++                    *source = candidate;
++                }
++                break;
++            }
++        }
++    }
++
+     pairs
+ }
+ 
+@@ -1808,7 +1932,8 @@ fn spread_destinations(
              let centre = (to_col + to_geom.cx()) as isize;
              let spread_range = (max_col - min_col) as isize;
              let step = if n > 1 {
@@ -573,7 +672,71 @@ index d616fa8..4370eef 100644
              } else {
                  1
              };
-@@ -3354,6 +3398,91 @@ mod tests {
+@@ -2307,6 +2432,7 @@ fn draw_label_centred(
+ // ---------------------------------------------------------------------------
+ 
+ struct LabelPlacementContext<'a> {
++    foreign_path_cells: &'a HashSet<(usize, usize)>,
+     dir: Direction,
+     node_rects: &'a [(usize, usize, usize, usize)],
+     sg_bounds: &'a [SubgraphBounds],
+@@ -2371,6 +2497,30 @@ fn label_position(
+         return None;
+     }
+ 
++    // Keep the established anchors first; if a neighbouring edge blocks
++    // them, search beside those anchors within the existing canvas.
++    let positions = || {
++        candidates
++            .iter()
++            .copied()
++            .chain((1..context.grid.cols()).flat_map(|distance| {
++                candidates.iter().flat_map(move |&(c, r)| {
++                    [c.checked_add(distance), c.checked_sub(distance)]
++                        .into_iter()
++                        .flatten()
++                        .filter_map(move |shifted| {
++                            (shifted + lbl_w <= context.grid.cols()
++                                && r + lbl_h <= context.grid.rows())
++                            .then_some((shifted, r))
++                        })
++                })
++            }))
++    };
++    let crosses_foreign_path = |c: usize, r: usize| {
++        (0..lbl_h)
++            .any(|dr| (c..c + lbl_w).any(|col| context.foreign_path_cells.contains(&(col, r + dr))))
++    };
++
+     // Pass A: avoid every visually-protected region — other labels,
+     // node interiors, node border rows (the `┌──┐` / `└──┘` rows),
+     // subgraph border cells (`╭╮╰╯─│`), positions where the label
+@@ -2390,9 +2540,10 @@ fn label_position(
+     // For multi-line labels each subsequent row (r+1, r+2, …) must also
+     // clear the subgraph border (B11): the second wrapped line must not
+     // fall on the subgraph bottom border or outside the subgraph.
+-    for &(c, r) in &candidates {
++    for (c, r) in positions() {
+         // Check the first (and only, for single-line) row.
+-        let row_ok = !collides(c, r, lbl_w, placed)
++        let row_ok = !crosses_foreign_path(c, r)
++            && !collides(c, r, lbl_w, placed)
+             && !overlaps_prior_path(c, r, lbl_w, context.prior_path_cells)
+             && !overlaps_node_interior(c, r, lbl_w, context.node_rects)
+             && !overlaps_node_border_row(c, r, lbl_w, context.node_rects)
+@@ -2424,8 +2575,9 @@ fn label_position(
+     // performs the cell-level test; `overlaps_subgraph_border` (bounds-based)
+     // is NOT repeated here so that labels can sit immediately adjacent to a
+     // border when there is no other option.
+-    for &(c, r) in &candidates {
+-        if !collides(c, r, lbl_w, placed)
++    for (c, r) in positions() {
++        if !crosses_foreign_path(c, r)
++            && !collides(c, r, lbl_w, placed)
+             && !label_spans_subgraph_border_cell(c, r, lbl_w, context.sg_bounds)
+         {
+             placed.push((c, r, lbl_w, lbl_h));
+@@ -3354,6 +3506,139 @@ mod tests {
          render(&graph, &positions, &sg_bounds)
      }
  
@@ -662,10 +825,58 @@ index d616fa8..4370eef 100644
 +        assert!(ports[1] - ports[0] >= 4, "adjacent incoming ports:\n{out}");
 +    }
 +
++    #[test]
++    fn edge_routing_side_source_does_not_share_an_incoming_arrow() {
++        for width in [100, 120, 160] {
++            let out = crate::render_with_options(
++                include_str!("testdata/runtime-edges.mmd"),
++                &crate::RenderOptions {
++                    max_width: Some(width),
++                    ..Default::default()
++                },
++            )
++            .unwrap();
++            let row = out
++                .lines()
++                .find(|line| line.contains("Box: PID 1 helper"))
++                .unwrap();
++            assert!(
++                row.split("Box: PID 1 helper")
++                    .nth(1)
++                    .unwrap()
++                    .trim_start()
++                    .starts_with('├'),
++                "side source has no border connector at width {width}:\n{out}"
++            );
++        }
++    }
++
++    #[test]
++    fn edge_routing_label_does_not_erase_the_sibling_line() {
++        for width in [100, 120, 160] {
++            let out = crate::render_with_options(
++                include_str!("testdata/runtime-edges.mmd"),
++                &crate::RenderOptions {
++                    max_width: Some(width),
++                    ..Default::default()
++                },
++            )
++            .unwrap();
++            let row = out
++                .lines()
++                .find(|line| line.contains("versioned RPC"))
++                .unwrap();
++            assert!(
++                row.split("versioned RPC").next().unwrap().contains("│ │"),
++                "label erased a routed vertical at width {width}:\n{out}"
++            );
++        }
++    }
++
      #[test]
      fn lr_output_contains_node_labels() {
          let out = render_diagram("graph LR\nA[Start] --> B[End]");
-@@ -4489,7 +4618,7 @@ if_state --> False: !condition";
+@@ -4489,7 +4774,7 @@ if_state --> False: !condition";
          let lines: Vec<Vec<char>> = out.lines().map(|l| l.chars().collect()).collect();
          let lines_str: Vec<String> = lines.iter().map(|l| l.iter().collect()).collect();
  
@@ -674,7 +885,7 @@ index d616fa8..4370eef 100644
              .iter()
              .filter(|needle| lines_str.iter().any(|l| l.contains(*needle)))
              .count();
-@@ -4502,7 +4631,19 @@ if_state --> False: !condition";
+@@ -4502,7 +4787,19 @@ if_state --> False: !condition";
              .iter()
              .map(|l| {
                  l.iter()
@@ -695,7 +906,7 @@ index d616fa8..4370eef 100644
                      .count()
              })
              .sum::<usize>();
-@@ -4640,7 +4781,7 @@ if_state --> False: !condition";
+@@ -4640,7 +4937,7 @@ if_state --> False: !condition";
          let out = crate::render(src).expect("render must succeed");
          let lines: Vec<Vec<char>> = out.lines().map(|l| l.chars().collect()).collect();
  
@@ -704,7 +915,7 @@ index d616fa8..4370eef 100644
          let (b_row, b_col) = lines
              .iter()
              .enumerate()
-@@ -4651,7 +4792,7 @@ if_state --> False: !condition";
+@@ -4651,7 +4948,7 @@ if_state --> False: !condition";
              })
              .expect("trap-check: B box not rendered (fixture render is broken)");
  
@@ -713,7 +924,7 @@ index d616fa8..4370eef 100644
              let n: Vec<char> = label.chars().collect();
              let found = lines
                  .iter()
-@@ -4663,7 +4804,7 @@ if_state --> False: !condition";
+@@ -4663,7 +4960,7 @@ if_state --> False: !condition";
          // the halo column immediately right of the box. Fan-in may merge tips
          // at the sink, so visible arrowheads are not a reliable route count.
          for label in ["A", "B", "C", "D"] {
@@ -1091,7 +1302,7 @@ index bd560a4..5f1c4f0 100644
 +  │       └───┘       │
    └───────────────────┘
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_back_edge_td_cycle.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_back_edge_td_cycle.snap
-index 9ffa953..592977c 100644
+index 9ffa953..760ea1e 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_back_edge_td_cycle.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_back_edge_td_cycle.snap
 @@ -1,10 +1,10 @@
@@ -1108,7 +1319,7 @@ index 9ffa953..592977c 100644
                    │        │
                    │        │
                    │        │
-@@ -12,9 +12,9 @@ expression: natural
+@@ -12,16 +12,16 @@ expression: natural
                    │        │
                    │        │
                  ┌─┘        │
@@ -1120,7 +1331,8 @@ index 9ffa953..592977c 100644
            ┌────┘ └────┐    │
            │           │    │
            │           │    │
-@@ -22,6 +22,6 @@ expression: natural
+-     done │           │error
++     done │          error │
            │           │    │
            │           │    │
            │           │    │
@@ -1129,7 +1341,7 @@ index 9ffa953..592977c 100644
        │ Done │   │ Failed ├┘
        └──────┘   └────────┘
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_back_edge_td_cycle.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_back_edge_td_cycle.width80.snap
-index 51d2984..456cdae 100644
+index 51d2984..5795164 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_back_edge_td_cycle.width80.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_back_edge_td_cycle.width80.snap
 @@ -1,10 +1,10 @@
@@ -1146,7 +1358,7 @@ index 51d2984..456cdae 100644
                    │        │
                    │        │
                    │        │
-@@ -12,9 +12,9 @@ expression: constrained
+@@ -12,16 +12,16 @@ expression: constrained
                    │        │
                    │        │
                  ┌─┘        │
@@ -1158,7 +1370,8 @@ index 51d2984..456cdae 100644
            ┌────┘ └────┐    │
            │           │    │
            │           │    │
-@@ -22,6 +22,6 @@ expression: constrained
+-     done │           │error
++     done │          error │
            │           │    │
            │           │    │
            │           │    │
@@ -1519,7 +1732,7 @@ index 620fc14..e8693d7 100644
                         ╰────────────────╯       │▸╰───────╯    │
                                                  │              │
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_label_no_corner_adjacent.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_label_no_corner_adjacent.snap
-index c754709..a068c0a 100644
+index c754709..ebb47ce 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_label_no_corner_adjacent.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_label_no_corner_adjacent.snap
 @@ -1,17 +1,17 @@
@@ -1539,15 +1752,16 @@ index c754709..a068c0a 100644
 + │┌──┘        →┌───┐ │
   ││            │ B │ │
 - ││           ▸└─┬─┘ │
-+ ││           →└─┬─┘ │
-  ││┌───┐   creates   │
+- ││┌───┐   creates   │
 - │││ C │──────┘  │   │
++ ││           →└─┬─┘ │
++ ││┌───┐  creates│   │
 + │││ C ├──────┘  │   │
   ││└───┘      panics │
   │└──────────────┘   │
   ╰───────────────────╯
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_label_no_corner_adjacent.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_label_no_corner_adjacent.width80.snap
-index f7084fa..b688b90 100644
+index f7084fa..a783245 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_label_no_corner_adjacent.width80.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_label_no_corner_adjacent.width80.snap
 @@ -1,17 +1,17 @@
@@ -1567,15 +1781,16 @@ index f7084fa..b688b90 100644
 + │┌──┘        →┌───┐ │
   ││            │ B │ │
 - ││           ▸└─┬─┘ │
-+ ││           →└─┬─┘ │
-  ││┌───┐   creates   │
+- ││┌───┐   creates   │
 - │││ C │──────┘  │   │
++ ││           →└─┬─┘ │
++ ││┌───┐  creates│   │
 + │││ C ├──────┘  │   │
   ││└───┘      panics │
   │└──────────────┘   │
   ╰───────────────────╯
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_styles.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_styles.snap
-index fb67921..0673a87 100644
+index fb67921..624ece5 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_styles.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_styles.snap
 @@ -1,37 +1,37 @@
@@ -1606,14 +1821,15 @@ index fb67921..0673a87 100644
 -│ A │┏━━━━━┛
 -└───┘┣┄┄┄┄┄┐
 +┌───┬┴────┘┃
-+│ A ├┬━━━━━┛
++│ A ├┬━━━━━┛labelled
 +└───┴┼┄┄┄┄┄┐
       ┃     ┆┌───┐
 -labelled───▸│ E │
-+labelled───→│ E │
++     ┣─────→│ E │
       ┃     ┆└───┘
       ┃     ┆
- dashed label
+-dashed label
++     ┃     ┆ dashed label
       ┃     ┆
       ┃     ┆┌───┐
 -     ┃     ▸│ F │
@@ -1627,7 +1843,7 @@ index fb67921..0673a87 100644
 +     ┗━━━━━→│ G │
              └───┘
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_styles.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_styles.width80.snap
-index ee8fb80..a7ea096 100644
+index ee8fb80..f03b184 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_styles.width80.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_edge_styles.width80.snap
 @@ -1,37 +1,37 @@
@@ -1658,14 +1874,15 @@ index ee8fb80..a7ea096 100644
 -│ A │┏━━━━━┛
 -└───┘┣┄┄┄┄┄┐
 +┌───┬┴────┘┃
-+│ A ├┬━━━━━┛
++│ A ├┬━━━━━┛labelled
 +└───┴┼┄┄┄┄┄┐
       ┃     ┆┌───┐
 -labelled───▸│ E │
-+labelled───→│ E │
++     ┣─────→│ E │
       ┃     ┆└───┘
       ┃     ┆
- dashed label
+-dashed label
++     ┃     ┆ dashed label
       ┃     ┆
       ┃     ┆┌───┐
 -     ┃     ▸│ F │
@@ -1679,7 +1896,7 @@ index ee8fb80..a7ea096 100644
 +     ┗━━━━━→│ G │
              └───┘
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_inline_quoted_labels.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_inline_quoted_labels.snap
-index ce76a75..a4b7790 100644
+index ce76a75..c08f54a 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_inline_quoted_labels.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_inline_quoted_labels.snap
 @@ -1,19 +1,19 @@
@@ -1698,10 +1915,11 @@ index ce76a75..a4b7790 100644
 -┌───┐──────┘┌───┐
 -│ A │┄┄┄┄┄┄▸│ C │
 -└───┘━━━━━━┓└───┘
+-       dashed quoted
 +┌───┬──────┘┌───┐
 +│ A ├─┄┄┄┄┄→│ C │
 +└───┴─━━━━━┓└───┘
-        dashed quoted
++           ┃dashed quoted
             ┃
             ┃
  thick quoted┌───┐
@@ -1709,7 +1927,7 @@ index ce76a75..a4b7790 100644
 +           →│ D │
              └───┘
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_inline_quoted_labels.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_inline_quoted_labels.width80.snap
-index 73de14a..d535ef4 100644
+index 73de14a..00a855d 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_inline_quoted_labels.width80.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_inline_quoted_labels.width80.snap
 @@ -1,19 +1,19 @@
@@ -1728,10 +1946,11 @@ index 73de14a..d535ef4 100644
 -┌───┐──────┘┌───┐
 -│ A │┄┄┄┄┄┄▸│ C │
 -└───┘━━━━━━┓└───┘
+-       dashed quoted
 +┌───┬──────┘┌───┐
 +│ A ├─┄┄┄┄┄→│ C │
 +└───┴─━━━━━┓└───┘
-        dashed quoted
++           ┃dashed quoted
             ┃
             ┃
  thick quoted┌───┐
@@ -1739,10 +1958,10 @@ index 73de14a..d535ef4 100644
 +           →│ D │
              └───┘
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_label_midpoint_lr.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_label_midpoint_lr.snap
-index 6f8fcb4..b5cb84d 100644
+index 6f8fcb4..95abb17 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_label_midpoint_lr.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_label_midpoint_lr.snap
-@@ -1,9 +1,9 @@
+@@ -1,9 +1,10 @@
  ---
 -source: crates/mermaid-text/tests/regression_corpus.rs
 +source: tests/regression_corpus.rs
@@ -1754,13 +1973,14 @@ index 6f8fcb4..b5cb84d 100644
 -└────────┘─┐     └───────┘────edge label─────────▸└──────┘
 +┌────────┬──────┐┌───────┬──────→│ Gate2 ├───────→┌──────┐
 +│ Source │      →│ Gate1 │       └───────┘       →│ Dest │
-+└────────┴─┐     └───────┴────edge label─────────→└──────┘
++└────────┴─┐     └───────┴───────────────────────→└──────┘
             └─────────────────────────────────────┘
++                              edge label
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_label_midpoint_lr.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_label_midpoint_lr.width80.snap
-index f5004c0..d440312 100644
+index f5004c0..38f9715 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_label_midpoint_lr.width80.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_label_midpoint_lr.width80.snap
-@@ -1,9 +1,9 @@
+@@ -1,9 +1,10 @@
  ---
 -source: crates/mermaid-text/tests/regression_corpus.rs
 +source: tests/regression_corpus.rs
@@ -1772,8 +1992,9 @@ index f5004c0..d440312 100644
 -└────────┘─┐     └───────┘────edge label─────────▸└──────┘
 +┌────────┬──────┐┌───────┬──────→│ Gate2 ├───────→┌──────┐
 +│ Source │      →│ Gate1 │       └───────┘       →│ Dest │
-+└────────┴─┐     └───────┴────edge label─────────→└──────┘
++└────────┴─┐     └───────┴───────────────────────→└──────┘
             └─────────────────────────────────────┘
++                              edge label
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_md_tui_diagram.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_md_tui_diagram.snap
 index f267399..4c16db0 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_md_tui_diagram.snap
@@ -2255,7 +2476,7 @@ index 5b4ecf1..a954c08 100644
                  │       │      │
                  │       │      │
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_supervisor_bidirectional.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_supervisor_bidirectional.snap
-index e106f8b..9045cd0 100644
+index e106f8b..8e54904 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_supervisor_bidirectional.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_supervisor_bidirectional.snap
 @@ -1,16 +1,16 @@
@@ -2265,13 +2486,15 @@ index e106f8b..9045cd0 100644
  expression: natural
  ---
   ╭─Supervisor───────────╮
-  │                      │
+- │                      │
++ │       creates        │
   │ ┌─────────┐          │
 - │ │ Factory │◂         │
 - │ └─────────┘│         │
+- │      │creates        │
 + │ │ Factory │←         │
 + │ └────┬────┘│         │
-  │      │creates        │
++ │      │     │         │
   │      │     │panics   │
 - │ ┌────▾───┐ │         │
 - │ │ Worker ├┌┘   beat  │       ┌───────────┐       ┌──────────┐
@@ -2282,7 +2505,7 @@ index e106f8b..9045cd0 100644
   │                      │       └───────────┘       └──────────┘
   ╰──────────────────────╯
 diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_supervisor_bidirectional.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_supervisor_bidirectional.width80.snap
-index f3ccb9c..9396675 100644
+index f3ccb9c..892cdf5 100644
 --- a/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_supervisor_bidirectional.width80.snap
 +++ b/crates/mermaid-text/tests/regression_corpus/snapshots/flowchart_supervisor_bidirectional.width80.snap
 @@ -1,16 +1,16 @@
@@ -2292,13 +2515,15 @@ index f3ccb9c..9396675 100644
  expression: constrained
  ---
   ╭─Supervisor───────────╮
-  │                      │
+- │                      │
++ │       creates        │
   │ ┌─────────┐          │
 - │ │ Factory │◂         │
 - │ └─────────┘│         │
+- │      │creates        │
 + │ │ Factory │←         │
 + │ └────┬────┘│         │
-  │      │creates        │
++ │      │     │         │
   │      │     │panics   │
 - │ ┌────▾───┐ │         │
 - │ │ Worker ├┌┘   beat  │       ┌───────────┐       ┌──────────┐
@@ -2504,6 +2729,173 @@ index 1c79eff..2275d2a 100644
 -   │ C │──────▸│ D │
 +   │ C ├──────→│ D │
     └───┘       └───┘
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.snap
+index 8244ffa..f4ea1a3 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_anonymous_choice.snap
+@@ -1,5 +1,5 @@
+ ---
+-source: crates/mermaid-text/tests/regression_corpus.rs
++source: tests/regression_corpus.rs
+ expression: natural
+ ---
+                                       ╭──────╮
+@@ -15,9 +15,9 @@ expression: natural
+ (  ●  )                                                                ┌▸││  ●  ││
+ ╰─────╯──────┐                    start                                │▸│╰─────╯│
+              │ ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┐╭──────╮                         ││╰───────╯
+-             ▸▕               ▏   stop│ Open │─────────────────────────┘│
++             ▸▕               ▏      ▸│ Open │─────────────────────────┘│
+                ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ──────┐╰──────╯                          │
+-                                     │                                  │
++                                  stop                                  │
+                                      │                                  │
+                                      │                                  │
+                                      │╭────────╮                        │
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_basic_machine.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_basic_machine.snap
+index f6c6659..fb0c71a 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_basic_machine.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_basic_machine.snap
+@@ -1,5 +1,5 @@
+ ---
+-source: crates/mermaid-text/tests/regression_corpus.rs
++source: tests/regression_corpus.rs
+ expression: natural
+ ---
+                             start
+@@ -11,6 +11,6 @@ expression: natural
+                   │   │                  ││                   │╭─────╮│ │
+                   │   └──────────────────┼┼──────────────────▸││  ●  ││ │
+                   │                      ││                   │╰─────╯│ │
+-                  │                    stop                   ╰───────╯ │
++                  │                      ││                   ╰───────╯ │
+                   └──────────────────────┘└─────────────────────────────┘
+-                                                                     resume
++                                       stop                          resume
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_basic_machine.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_basic_machine.width80.snap
+index 9e78bea..3ce0749 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_basic_machine.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_basic_machine.width80.snap
+@@ -1,5 +1,5 @@
+ ---
+-source: crates/mermaid-text/tests/regression_corpus.rs
++source: tests/regression_corpus.rs
+ expression: constrained
+ ---
+                             start
+@@ -11,6 +11,6 @@ expression: constrained
+                   │   │                  ││                   │╭─────╮│ │
+                   │   └──────────────────┼┼──────────────────▸││  ●  ││ │
+                   │                      ││                   │╰─────╯│ │
+-                  │                    stop                   ╰───────╯ │
++                  │                      ││                   ╰───────╯ │
+                   └──────────────────────┘└─────────────────────────────┘
+-                                                                     resume
++                                       stop                          resume
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_circuit_breaker.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_circuit_breaker.width80.snap
+index 34b772e..528acc3 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_circuit_breaker.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_circuit_breaker.width80.snap
+@@ -1,12 +1,13 @@
+ ---
+-source: crates/mermaid-text/tests/regression_corpus.rs
++source: tests/regression_corpus.rs
+ expression: constrained
+ ---
++                                    5 consecutive failures
+            ╭──────────────────────╮    ╭─────────────────────╮                                     ╭─────────────────╮
+ ╭─────╮    │  All DB calls pass   │────│  DB calls skipped   │─────────────────────────────────────│ One probe call  │
+ (  ●  )───┐│       through        │    │  (sleep for probe   │                                    ▸│ allowed through │
+ ╰─────╯   ▸│ Counting consecutive │───▸│      interval)      │────────────────────────────────────┘╰─────────────────╯
+            │       failures       │    │ No writes attempted │                  probe interval elapsed      ┘
+            ╰───────────▴──────────╯    ╰──────────▴──────────╯                               probe fails (increased backoff)
+-                                    5 consecutive failures──────────────────────────────────────────────────┘
++                                                  └─────────────────────────────────────────────────────────┘
+                         probe succeeds
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_composite_keyboard_lock.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_composite_keyboard_lock.snap
+index b4c9960..c1795bf 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_composite_keyboard_lock.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_composite_keyboard_lock.snap
+@@ -1,14 +1,13 @@
+ ---
+-source: crates/mermaid-text/tests/regression_corpus.rs
+-assertion_line: 72
++source: tests/regression_corpus.rs
+ expression: natural
+ ---
+  ╭─Active──────────────────────────────────────────────────╮
+- │┌──────────────────────────EvNumLockPressed─────────────┐│
++ │┌───────────────────────────────────────────────────────┐│
+  ││╭────────────╮                           ╭───────────╮ ││
+  │││ NumLockOff │──────────────────────────▸│ NumLockOn │ ││
+  ││╰──────▴─────╯                           ╰───────────╯ ││
+- │└───────┘                                       ┘───────┘│
++ │└───────┘                  EvNumLockPressed     ┘───────┘│
+  │ EvNumLockPressed                                        │
+  │                            EvCapsLockPressed            │
+  │ ╭─────────────╮                          ╭────────────╮ │
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_composite_keyboard_lock.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_composite_keyboard_lock.width80.snap
+index 85d8467..bc81a48 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_composite_keyboard_lock.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_composite_keyboard_lock.width80.snap
+@@ -1,14 +1,13 @@
+ ---
+-source: crates/mermaid-text/tests/regression_corpus.rs
+-assertion_line: 80
++source: tests/regression_corpus.rs
+ expression: constrained
+ ---
+  ╭─Active──────────────────────────────────────────────────╮
+- │┌──────────────────────────EvNumLockPressed─────────────┐│
++ │┌───────────────────────────────────────────────────────┐│
+  ││╭────────────╮                           ╭───────────╮ ││
+  │││ NumLockOff │──────────────────────────▸│ NumLockOn │ ││
+  ││╰──────▴─────╯                           ╰───────────╯ ││
+- │└───────┘                                       ┘───────┘│
++ │└───────┘                  EvNumLockPressed     ┘───────┘│
+  │ EvNumLockPressed                                        │
+  │                            EvCapsLockPressed            │
+  │ ╭─────────────╮                          ╭────────────╮ │
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_note_anchored.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_note_anchored.snap
+index 5684d73..b6a9ad1 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_note_anchored.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_note_anchored.snap
+@@ -1,12 +1,13 @@
+ ---
+-source: crates/mermaid-text/tests/regression_corpus.rs
++source: tests/regression_corpus.rs
+ expression: natural
+ ---
++                                        timeout reached
+                                                      ╭───────────────╮
+                                                     ▸│ CircuitClosed │
+                                                     │╰───────────────╯
+ ╭─────╮       ╭─────────────╮───────────────────────┼────────┘
+-(  ●  )──────▸│ CircuitOpen │           timeout reached
++(  ●  )──────▸│ CircuitOpen │                      ┌┘
+ ╰─────╯       ╰──────▴──────╯┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┼┐
+                      │                             │┆╭───────────────────────────────╮
+                      │                             │┆│    Open state rejects all     │
+diff --git a/crates/mermaid-text/tests/regression_corpus/snapshots/state_note_anchored.width80.snap b/crates/mermaid-text/tests/regression_corpus/snapshots/state_note_anchored.width80.snap
+index 52a47e5..f958d02 100644
+--- a/crates/mermaid-text/tests/regression_corpus/snapshots/state_note_anchored.width80.snap
++++ b/crates/mermaid-text/tests/regression_corpus/snapshots/state_note_anchored.width80.snap
+@@ -1,12 +1,13 @@
+ ---
+-source: crates/mermaid-text/tests/regression_corpus.rs
++source: tests/regression_corpus.rs
+ expression: constrained
+ ---
++                                    timeout reached
+                                                ╭───────────────╮
+                                               ▸│ CircuitClosed │
+                                               │╰───────────────╯
+ ╭─────╮    ╭─────────────╮────────────────────┼────────┘
+-(  ●  )───▸│ CircuitOpen │          timeout reached
++(  ●  )───▸│ CircuitOpen │                   ┌┘
+ ╰─────╯    ╰──────▴──────╯┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┼┐
+                   │                          │┆╭───────────────────────────────╮
+                   │                          │┆│    Open state rejects all     │
 diff --git a/crates/mermaid-text/tests/snapshots.rs b/crates/mermaid-text/tests/snapshots.rs
 index 2ead73c..654ab63 100644
 --- a/crates/mermaid-text/tests/snapshots.rs
@@ -2662,7 +3054,7 @@ index 1ea16f4..abbe12a 100644
       ││
       ││
 diff --git a/crates/mermaid-text/tests/snapshots/snapshots__all_edge_styles_inline_quoted_labels.snap b/crates/mermaid-text/tests/snapshots/snapshots__all_edge_styles_inline_quoted_labels.snap
-index a3b5bad..015ba61 100644
+index a3b5bad..f49628e 100644
 --- a/crates/mermaid-text/tests/snapshots/snapshots__all_edge_styles_inline_quoted_labels.snap
 +++ b/crates/mermaid-text/tests/snapshots/snapshots__all_edge_styles_inline_quoted_labels.snap
 @@ -1,19 +1,19 @@
@@ -2681,10 +3073,11 @@ index a3b5bad..015ba61 100644
 -┌───┐──────┘┌───┐
 -│ A │┄┄┄┄┄┄▸│ C │
 -└───┘━━━━━━┓└───┘
+-       dashed quoted
 +┌───┬──────┘┌───┐
 +│ A ├─┄┄┄┄┄→│ C │
 +└───┴─━━━━━┓└───┘
-        dashed quoted
++           ┃dashed quoted
             ┃
             ┃
  thick quoted┌───┐
@@ -2825,7 +3218,7 @@ index d0195bf..c800af1 100644
  │ └───────┘                             │   │ └───────┘  │
  │                                       │   │            │
 diff --git a/crates/mermaid-text/tests/snapshots/snapshots__back_edge_avoids_diagram_interior_in_td_cycle.snap b/crates/mermaid-text/tests/snapshots/snapshots__back_edge_avoids_diagram_interior_in_td_cycle.snap
-index 425b4c9..cb4f4de 100644
+index 425b4c9..0c2b9a2 100644
 --- a/crates/mermaid-text/tests/snapshots/snapshots__back_edge_avoids_diagram_interior_in_td_cycle.snap
 +++ b/crates/mermaid-text/tests/snapshots/snapshots__back_edge_avoids_diagram_interior_in_td_cycle.snap
 @@ -1,10 +1,10 @@
@@ -2842,7 +3235,7 @@ index 425b4c9..cb4f4de 100644
                    │        │
                    │        │
                    │        │
-@@ -12,9 +12,9 @@ expression: out
+@@ -12,16 +12,16 @@ expression: out
                    │        │
                    │        │
                  ┌─┘        │
@@ -2854,7 +3247,8 @@ index 425b4c9..cb4f4de 100644
            ┌────┘ └────┐    │
            │           │    │
            │           │    │
-@@ -22,6 +22,6 @@ expression: out
+-     done │           │error
++     done │          error │
            │           │    │
            │           │    │
            │           │    │
@@ -3051,7 +3445,7 @@ index 8b83e14..56a210a 100644
                         ╰────────────────╯       │▸╰───────╯    │
                                                  │              │
 diff --git a/crates/mermaid-text/tests/snapshots/snapshots__edge_label_does_not_abut_subgraph_right_wall.snap b/crates/mermaid-text/tests/snapshots/snapshots__edge_label_does_not_abut_subgraph_right_wall.snap
-index c16de05..cf5711c 100644
+index c16de05..ae06c9f 100644
 --- a/crates/mermaid-text/tests/snapshots/snapshots__edge_label_does_not_abut_subgraph_right_wall.snap
 +++ b/crates/mermaid-text/tests/snapshots/snapshots__edge_label_does_not_abut_subgraph_right_wall.snap
 @@ -1,16 +1,16 @@
@@ -3061,13 +3455,15 @@ index c16de05..cf5711c 100644
  expression: out
  ---
   ╭─Supervisor───────────╮
-  │                      │
+- │                      │
++ │       creates        │
   │ ┌─────────┐          │
 - │ │ Factory │◂         │
 - │ └─────────┘│         │
+- │      │creates        │
 + │ │ Factory │←         │
 + │ └────┬────┘│         │
-  │      │creates        │
++ │      │     │         │
   │      │     │panics   │
 - │ ┌────▾───┐ │         │
 - │ │ Worker ├┌┘   beat  │       ┌───────────┐       ┌──────────┐
@@ -3078,7 +3474,7 @@ index c16de05..cf5711c 100644
   │                      │       └───────────┘       └──────────┘
   ╰──────────────────────╯
 diff --git a/crates/mermaid-text/tests/snapshots/snapshots__edge_label_not_adjacent_to_corner_glyph.snap b/crates/mermaid-text/tests/snapshots/snapshots__edge_label_not_adjacent_to_corner_glyph.snap
-index 88a5652..78043b8 100644
+index 88a5652..b081119 100644
 --- a/crates/mermaid-text/tests/snapshots/snapshots__edge_label_not_adjacent_to_corner_glyph.snap
 +++ b/crates/mermaid-text/tests/snapshots/snapshots__edge_label_not_adjacent_to_corner_glyph.snap
 @@ -1,17 +1,17 @@
@@ -3098,9 +3494,10 @@ index 88a5652..78043b8 100644
 + │┌──┘        →┌───┐ │
   ││            │ B │ │
 - ││           ▸└─┬─┘ │
-+ ││           →└─┬─┘ │
-  ││┌───┐   creates   │
+- ││┌───┐   creates   │
 - │││ C │──────┘  │   │
++ ││           →└─┬─┘ │
++ ││┌───┐  creates│   │
 + │││ C ├──────┘  │   │
   ││└───┘      panics │
   │└──────────────┘   │
@@ -3129,10 +3526,10 @@ index d357c37..5859868 100644
 +         [38;2;0;255;0m→[0m│ C │[0m
            └───┘
 diff --git a/crates/mermaid-text/tests/snapshots/snapshots__flowchart_label_midpoint_placement_lr.snap b/crates/mermaid-text/tests/snapshots/snapshots__flowchart_label_midpoint_placement_lr.snap
-index 3a3cf49..1b1b2e5 100644
+index 3a3cf49..f79c7d8 100644
 --- a/crates/mermaid-text/tests/snapshots/snapshots__flowchart_label_midpoint_placement_lr.snap
 +++ b/crates/mermaid-text/tests/snapshots/snapshots__flowchart_label_midpoint_placement_lr.snap
-@@ -1,9 +1,9 @@
+@@ -1,9 +1,10 @@
  ---
 -source: crates/mermaid-text/tests/snapshots.rs
 +source: tests/snapshots.rs
@@ -3144,8 +3541,9 @@ index 3a3cf49..1b1b2e5 100644
 -└────────┘─┐     └───────┘────edge label─────────▸└──────┘
 +┌────────┬──────┐┌───────┬──────→│ Gate2 ├───────→┌──────┐
 +│ Source │      →│ Gate1 │       └───────┘       →│ Dest │
-+└────────┴─┐     └───────┴────edge label─────────→└──────┘
++└────────┴─┐     └───────┴───────────────────────→└──────┘
             └─────────────────────────────────────┘
++                              edge label
 diff --git a/crates/mermaid-text/tests/snapshots/snapshots__flowchart_md_tui_test_diagram.snap b/crates/mermaid-text/tests/snapshots/snapshots__flowchart_md_tui_test_diagram.snap
 index 4e1d6c5..2531a39 100644
 --- a/crates/mermaid-text/tests/snapshots/snapshots__flowchart_md_tui_test_diagram.snap
@@ -3387,8 +3785,53 @@ index b68197d..6a21c5d 100644
   │ └───┘     └───┘ │     └───┘
   │                 │
   ╰─────────────────╯
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__state_composite_keyboard_lock.snap b/crates/mermaid-text/tests/snapshots/snapshots__state_composite_keyboard_lock.snap
+index f93314f..f2d46d9 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__state_composite_keyboard_lock.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__state_composite_keyboard_lock.snap
+@@ -1,14 +1,13 @@
+ ---
+-source: crates/mermaid-text/tests/snapshots.rs
+-assertion_line: 817
++source: tests/snapshots.rs
+ expression: out
+ ---
+  ╭─Active──────────────────────────────────────────────────╮
+- │┌──────────────────────────EvNumLockPressed─────────────┐│
++ │┌───────────────────────────────────────────────────────┐│
+  ││╭────────────╮                           ╭───────────╮ ││
+  │││ NumLockOff │──────────────────────────▸│ NumLockOn │ ││
+  ││╰──────▴─────╯                           ╰───────────╯ ││
+- │└───────┘                                       ┘───────┘│
++ │└───────┘                  EvNumLockPressed     ┘───────┘│
+  │ EvNumLockPressed                                        │
+  │                            EvCapsLockPressed            │
+  │ ╭─────────────╮                          ╭────────────╮ │
+diff --git a/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_anonymous_choice.snap b/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_anonymous_choice.snap
+index d7a7a1e..60812db 100644
+--- a/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_anonymous_choice.snap
++++ b/crates/mermaid-text/tests/snapshots/snapshots__state_diagram_anonymous_choice.snap
+@@ -1,5 +1,5 @@
+ ---
+-source: crates/mermaid-text/tests/snapshots.rs
++source: tests/snapshots.rs
+ expression: out
+ ---
+                                       ╭──────╮
+@@ -15,9 +15,9 @@ expression: out
+ (  ●  )                                                                ┌▸││  ●  ││
+ ╰─────╯──────┐                    start                                │▸│╰─────╯│
+              │ ▁🭻🭺🭹🭸🭷🭶▔🭶🭷🭸🭹🭺🭻▁ ──────┐╭──────╮                         ││╰───────╯
+-             ▸▕               ▏   stop│ Open │─────────────────────────┘│
++             ▸▕               ▏      ▸│ Open │─────────────────────────┘│
+                ▔🭶🭷🭸🭹🭺🭻▁🭻🭺🭹🭸🭷🭶▔ ──────┐╰──────╯                          │
+-                                     │                                  │
++                                  stop                                  │
+                                      │                                  │
+                                      │                                  │
+                                      │╭────────╮                        │
 diff --git a/crates/mermaid-text/tests/snapshots/snapshots__supervisor_bidirectional_in_subgraph.snap b/crates/mermaid-text/tests/snapshots/snapshots__supervisor_bidirectional_in_subgraph.snap
-index c16de05..cf5711c 100644
+index c16de05..ae06c9f 100644
 --- a/crates/mermaid-text/tests/snapshots/snapshots__supervisor_bidirectional_in_subgraph.snap
 +++ b/crates/mermaid-text/tests/snapshots/snapshots__supervisor_bidirectional_in_subgraph.snap
 @@ -1,16 +1,16 @@
@@ -3398,13 +3841,15 @@ index c16de05..cf5711c 100644
  expression: out
  ---
   ╭─Supervisor───────────╮
-  │                      │
+- │                      │
++ │       creates        │
   │ ┌─────────┐          │
 - │ │ Factory │◂         │
 - │ └─────────┘│         │
+- │      │creates        │
 + │ │ Factory │←         │
 + │ └────┬────┘│         │
-  │      │creates        │
++ │      │     │         │
   │      │     │panics   │
 - │ ┌────▾───┐ │         │
 - │ │ Worker ├┌┘   beat  │       ┌───────────┐       ┌──────────┐

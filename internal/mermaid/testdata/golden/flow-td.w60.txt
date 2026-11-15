@@ -9,11 +9,11 @@
                             │
                             │
          ┌──────────────────↓─────────────────┐←─┐
-         │ Dev implements in its own worktree │  │
+         │ Dev implements in its own worktree │  │findings
          └──────────────────┬─────────────────┘←─┼┐
                             │                    ││
                             │                    ││
-                            │                    │findings
+                            │                    ││
                             │                    ││
                             │                    ││
                             │                    ││

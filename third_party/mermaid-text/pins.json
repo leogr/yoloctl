@@ -1,5 +1,5 @@
 {
-  "artifact_sha256": "7f240715991193c0db903ec1f74ffde84029e941dbf0ae4ecd6d190b4bf55293",
+  "artifact_sha256": "280bd2b0f4470d4ebbc0258cc14142d02ba35aff8935a4ed1ac9427bb62381d6",
   "builder_sha256": "374f4a3549e8693f886aa6596e66585577494965cfb184dbf6a71b1298b93b13",
   "inputs": {
     "LICENSE": "5203d5cf8b80e46ea53ad08e47bc30c938cbf742757c15f6906ffa9d385c4cb5",
@@ -54,7 +54,7 @@
     },
     {
       "file": "patches/09-flowchart-edge-connectivity.patch",
-      "sha256": "a8d8f4a6bba9ab103b59c10caae89fe73e695def3eeee646d0c24c740dda20cf"
+      "sha256": "6bebccac14f46bcff997787edca19510bb4dba8734536e9b4ca65339306faf50"
     }
   ],
   "rust": "1.95.0",

@@ -21,10 +21,13 @@ The manifest binds these inputs to the embedded bytes. [1](#source-1)
 - a simple top-down fan-out drawn as one trunk;
 - decisions drawn as a shallow diamond, at least 17 columns wide;
 - rectangular flowchart source borders joined to the final routed path,
-  including return-edge corners; shafted arrows at rectangular destinations;
+  including return-edge corners and side sources separated from incoming
+  arrow ports; shafted arrows at rectangular destinations;
   top-down/bottom-up rectangular fan-in ports ordered by source position and
   spaced across the available border. These changes preserve labels and the
-  sequence renderer. [2](#source-2)
+  sequence renderer. Labels cannot overwrite another routed edge, including
+  in fallback placement; alternative positions stay within the existing canvas.
+  [2](#source-2)
 
 [FACT] The diamond outline uses one-eighth horizontal lines and verticals
 (`▁ 🭻…🭶 ▔ ▕ ▏`); the sloped ones are in the Unicode "Symbols for Legacy

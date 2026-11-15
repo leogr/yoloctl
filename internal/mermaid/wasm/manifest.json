@@ -1,5 +1,5 @@
 {
-  "artifact_sha256": "7f240715991193c0db903ec1f74ffde84029e941dbf0ae4ecd6d190b4bf55293",
+  "artifact_sha256": "280bd2b0f4470d4ebbc0258cc14142d02ba35aff8935a4ed1ac9427bb62381d6",
   "inputs": {
     "LICENSE": "5203d5cf8b80e46ea53ad08e47bc30c938cbf742757c15f6906ffa9d385c4cb5",
     "licenses/ascii-dag-0.9.1/LICENSE-APACHE": "8761391f3a3280ef14c9ab74aa87063496a525c36f80f16ef653eeb2d6e8da0b",
@@ -53,10 +53,10 @@
     },
     {
       "file": "patches/09-flowchart-edge-connectivity.patch",
-      "sha256": "a8d8f4a6bba9ab103b59c10caae89fe73e695def3eeee646d0c24c740dda20cf"
+      "sha256": "6bebccac14f46bcff997787edca19510bb4dba8734536e9b4ca65339306faf50"
     }
   ],
-  "recipe_sha256": "7370b0d5b76bf7573ad57dabaf6518bd2378c1f75523b922ba4d55817c1d72e0",
+  "recipe_sha256": "5395763e7b724cf6227de8f4c961b7c42d301ffff18d517e7ee70007837d51af",
   "rust": "1.95.0",
   "schema": 1,
   "source_sha256": "90fa78f1bb32963ed114d9c318d880901ee4fa7103e133c3c3e530ebe5a09090",
