@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
+	"github.com/leogr/yoloctl/internal/agentsession"
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
@@ -699,5 +700,47 @@ func TestStartWorkloadRefusesTheChatServerBeforeTeardown(t *testing.T) {
 	cmd.SetErr(io.Discard)
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "yoloctl chat ensure --space default") || len(*calls) != 0 {
 		t.Fatalf("err=%v teardown=%v", err, *calls)
+	}
+}
+
+// Every line of a session restart is a log record: the per-box conversation
+// note rides on that box's "Restarting box" record (or, before a decision, a
+// record of its own), never a bare line on the terminal, and the resume
+// policy reads without nested parentheses.
+func TestSessionRestartNotesAreLogRecords(t *testing.T) {
+	for _, explicit := range []bool{true, false} {
+		t.Run(fmt.Sprint(explicit), func(t *testing.T) {
+			o, _, logs := sessionOfferFixture(t, false, "")
+			var raw bytes.Buffer
+			o.errw = &raw
+			inventory := o.inventory
+			o.inventory = func(ctx context.Context) ([]boxstate.Box, error) {
+				boxes, err := inventory(ctx)
+				for i := range boxes {
+					if boxes[i].Name == "alpha" {
+						boxes[i].Conversation = &agentsession.Status{Tracked: true, ID: "019a", Policy: "last (default)"}
+					}
+				}
+				return boxes, err
+			}
+			if err := offerSessionRestarts(t.Context(), "work", *o, explicit); err != nil {
+				t.Fatal(err)
+			}
+			if raw.Len() != 0 {
+				t.Fatalf("written raw to the terminal:\n%s", raw.String())
+			}
+			out := logs.String()
+			note := "the next attach requests conversation 019a again (resume policy: last, the default)"
+			want := "notice: host: Box alpha: " + note
+			if explicit {
+				want = "notice: host: Restarting box alpha: " + note
+			}
+			if !strings.Contains(out, want) || strings.Contains(out, "(default))") {
+				t.Fatalf("want %q in:\n%s", want, out)
+			}
+			if explicit && strings.Contains(out, "Box alpha:") {
+				t.Fatalf("note repeated before the restart:\n%s", out)
+			}
+		})
 	}
 }

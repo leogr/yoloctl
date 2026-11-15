@@ -43,6 +43,9 @@ server by `yoloctl chat ensure --space SPACE` and for another workload by
 The shared `isInteractive` gate makes the same terminal check for its other
 prompts and `space ssh`. `--restart-sessions`, which requires
 `--update-controller` and is checked before the lock, restarts without asking.
+Every line is a log record: listings are one record's continuation lines, and an
+agent box's conversation note (resume policy shown as `last, the default`)
+rides on its "Restarting box" record, or before a decision on its own.
 [3](#source-3) [4](#source-4)
 
 [FACT] Each restart is bound to its listed holder. Before each one the host
@@ -84,5 +87,5 @@ fakes; no live VM update was run. [4](#source-4)
 
 1. <a id="source-1"></a> [stats.go](../../internal/session/stats.go#L47-L149) — `serveStats`, `ErrBuildMismatch`, `buildMismatch`, `holderMismatchReason`, `ReadStats`, `readStats`; view refusal in holder_view.go L243.
 2. <a id="source-2"></a> [boxstate.go](../../internal/boxstate/boxstate.go#L61-L485) — `SessionBuild`, `SessionInfo`, `NewResolver`, `ProbeHolder`, `sessionBuild`; marker `Identity` in session/tombstone.go L32 and `ReadVMMarker` in unit.go L105; `box.inventory` in controller_views.go L256.
-3. <a id="source-3"></a> [controller_sessions.go](../../cmd/yoloctl/controller_sessions.go#L29-L417) — `sessionRestartOffer`, `hostSessionRestartOffer`, `sessionRestartRequest`, `chatEnsureRequest`, `chatEnsureOutcome`, `staleSessions`, `offerSessionRestarts`, `checkStaleSession`, `requireStaleSession`, `restartableWorkload`, `startRestartedWorkload`; `defaultChatHuman` in chat.go L87, `ensureManagedServer` in chat_runtime.go; caller `hostControllerLifecycle` in controller_lifecycle.go L64-L111, preconditions and workload start in agentbox.go `newAgentboxRestartCmd` L2122-L2152, `isInteractive` in agent.go L328.
+3. <a id="source-3"></a> [controller_sessions.go](../../cmd/yoloctl/controller_sessions.go#L29-L435) — `sessionRestartOffer`, `hostSessionRestartOffer`, `sessionRestartRequest`, `chatEnsureRequest`, `chatEnsureOutcome`, `staleSessions`, `offerSessionRestarts`, `checkStaleSession`, `requireStaleSession`, `restartableWorkload`, `startRestartedWorkload`; `defaultChatHuman` in chat.go L87, `ensureManagedServer` in chat_runtime.go; caller `hostControllerLifecycle` in controller_lifecycle.go L64-L111, preconditions and workload start in agentbox.go `newAgentboxRestartCmd` L2122-L2152, `isInteractive` in agent.go L328.
 4. <a id="source-4"></a> [Restart offer regressions](../../cmd/yoloctl/controller_sessions_test.go#L1) — with `TestReadStatsClassifiesOnlyExplicitBuildAnswers` and `TestMarkerIdentityNeedsPIDAndStart` in session/stats_test.go L278-L363, and `TestSessionBuildFollowsTheHolderAnswer` in boxstate_test.go L211.

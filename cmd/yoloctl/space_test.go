@@ -654,6 +654,8 @@ func TestSpaceMountAdd_DeclinedRestartChangesNothing(t *testing.T) {
 	)
 
 	var stderr bytes.Buffer
+	// The affected boxes are listed in the restart warning's log record.
+	t.Cleanup(bindCLITestLogger(t, &stderr))
 	cmd := newSpaceMountAddCmd()
 	if flag := cmd.Flags().Lookup("restart"); flag != nil {
 		t.Fatalf("space mount add still exposes removed --restart flag: %+v", flag)

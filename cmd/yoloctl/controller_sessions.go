@@ -262,8 +262,9 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 	cliNotice(logging.Host, "These boxes still run agent sessions of the previous build, which this build cannot attach to: %s.", strings.Join(names, ", "))
 	cliWarn(logging.Host, "Restarting a box ends its agent's current process.")
 	for _, s := range stale {
-		if s.kind == agentSession {
-			_, _ = fmt.Fprintf(o.errw, "%s: %s\n", s.name, restartConversationNote(conversations[s.name]))
+		// With --restart-sessions each box's "Restarting box" record says it.
+		if s.kind == agentSession && !explicit {
+			cliNotice(logging.Host, "Box %s: %s", s.name, restartConversationNote(conversations[s.name]))
 		}
 		switch s.kind {
 		case chatServerSession:
@@ -273,16 +274,17 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 		}
 	}
 	commands := func(lead string) {
-		_, _ = fmt.Fprintln(o.errw, lead)
+		lines := []string{lead}
 		for _, s := range stale {
-			_, _ = fmt.Fprintf(o.errw, "  %s\n", sessionRestartCommand(space, s.name))
+			lines = append(lines, sessionRestartCommand(space, s.name))
 			switch s.kind {
 			case chatServerSession:
-				_, _ = fmt.Fprintf(o.errw, "  %s   # then start the chat room again on this build\n", s.recovery(space))
+				lines = append(lines, s.recovery(space)+"   # then start the chat room again on this build")
 			case workloadSession:
-				_, _ = fmt.Fprintf(o.errw, "  %s   # then start its managed workload again, and detach\n", s.recovery(space))
+				lines = append(lines, s.recovery(space)+"   # then start its managed workload again, and detach")
 			}
 		}
+		cliNotice(logging.Host, "%s", strings.Join(lines, "\n"))
 	}
 	if !explicit {
 		if !o.interactive {
@@ -317,7 +319,11 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 			cliWarn(logging.Host, "Skipped box %s: its session changed since it was listed; left running.", s.name)
 			continue
 		}
-		cliNotice(logging.Host, "Restarting box %s", s.name)
+		if s.kind == agentSession {
+			cliNotice(logging.Host, "Restarting box %s: %s", s.name, restartConversationNote(conversations[s.name]))
+		} else {
+			cliNotice(logging.Host, "Restarting box %s", s.name)
+		}
 		// A failed restart may already have stopped a workload: say how to
 		// bring it back.
 		down := func(what string) {
@@ -378,15 +384,19 @@ func setAsideRecreations(ctx context.Context, space string, o sessionRestartOffe
 			keep = append(keep, s)
 			continue
 		}
-		cliWarn(logging.Host, "Box %s runs an agent session of the previous build and also requires recreation (%s), which a restart refuses, so it is left running. Recreation ends its agent's current process and replaces its container: the workdir and the account's native state are kept, other files in the container are lost. Inspect it, then recreate it explicitly if replacement is intended:", s.name, reason)
-		_, _ = fmt.Fprintf(o.errw, "  yoloctl box inspect %s --space %s\n  yoloctl box recreate %s --space %s --no-attach\n", s.name, space, s.name, space)
+		steps := []string{
+			fmt.Sprintf("yoloctl box inspect %s --space %s", s.name, space),
+			fmt.Sprintf("yoloctl box recreate %s --space %s --no-attach", s.name, space),
+		}
 		switch s.kind {
 		case chatServerSession:
-			_, _ = fmt.Fprintf(o.errw, "  %s   # then start the chat room again on this build\n", s.recovery(space))
+			steps = append(steps, s.recovery(space)+"   # then start the chat room again on this build")
 		case workloadSession:
-			_, _ = fmt.Fprintf(o.errw, "  %s   # then start its managed workload again, and detach\n", s.recovery(space))
-		default:
-			_, _ = fmt.Fprintf(o.errw, "%s: %s\n", s.name, restartConversationNote(conversations[s.name]))
+			steps = append(steps, s.recovery(space)+"   # then start its managed workload again, and detach")
+		}
+		cliWarn(logging.Host, "Box %s runs an agent session of the previous build and also requires recreation (%s), which a restart refuses, so it is left running. Recreation ends its agent's current process and replaces its container: the workdir and the account's native state are kept, other files in the container are lost. Inspect it, then recreate it explicitly if replacement is intended:\n%s", s.name, reason, strings.Join(steps, "\n"))
+		if s.kind == agentSession {
+			cliNotice(logging.Host, "Box %s: %s", s.name, restartConversationNote(conversations[s.name]))
 		}
 	}
 	return keep
@@ -399,15 +409,24 @@ func restartConversationNote(c *agentsession.Status) string {
 	case c == nil:
 		return "its conversation is not known here; resume it yourself after the restart"
 	case c.Tracked && c.Switched() && c.Note == "":
-		return fmt.Sprintf("the next attach requests conversation %s, the one the agent last reported (policy %s)", c.Current.ID, c.Policy)
+		return fmt.Sprintf("the next attach requests conversation %s, the one the agent last reported (resume policy: %s)", c.Current.ID, policyPhrase(c.Policy))
 	case c.Tracked && c.ID != "" && c.Note == "":
-		return fmt.Sprintf("the next attach requests conversation %s again (policy %s)", c.ID, c.Policy)
+		return fmt.Sprintf("the next attach requests conversation %s again (resume policy: %s)", c.ID, policyPhrase(c.Policy))
 	case c.Note == agentsession.Untracked:
 		return "its conversation started before tracking, so the next attach starts a new tracked one; resume the old one yourself if needed"
 	case c.Note != "":
 		return "its conversation is not resumed automatically (" + c.Note + ")"
 	}
 	return "its next attach starts a new tracked conversation"
+}
+
+// policyPhrase names a resume policy inside parentheses without nesting
+// them: "last (default)" reads "last, the default".
+func policyPhrase(policy string) string {
+	if name, ok := strings.CutSuffix(policy, " (default)"); ok {
+		return name + ", the default"
+	}
+	return policy
 }
 
 func containsStale(list []staleSession, s staleSession) bool {

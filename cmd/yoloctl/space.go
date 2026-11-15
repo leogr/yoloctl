@@ -530,10 +530,11 @@ func confirmSpaceMountRestart(cmd *cobra.Command, name string, yes bool) (bool, 
 			}
 		}
 		if len(running) > 0 {
-			cliInfo(logging.Host, "restarting space %s will stop %d running box(es) and terminate their agent sessions; declarations are preserved:", name, len(running))
-			for _, box := range running {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "  - %s (%s)\n", box.Name, box.Status)
+			list := make([]string, len(running))
+			for i, box := range running {
+				list[i] = fmt.Sprintf("- %s (%s)", box.Name, box.Status)
 			}
+			cliInfo(logging.Host, "restarting space %s will stop %d running box(es) and terminate their agent sessions; declarations are preserved:\n%s", name, len(running), strings.Join(list, "\n"))
 		}
 	}
 	if yes {
