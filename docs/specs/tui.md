@@ -359,8 +359,9 @@ time and resets transient terminal/input state before the next prompt. Its
 history keeps every command, with a blank line between commands, under the
 `scrollback_lines` line ring; Ctrl+R in the idle palette toggles it, newest
 last, over any completion menu and keeping the draft. An editing key, Esc,
-focus changes and a new command return to the last command. No disk
-log or row replay is added. [48](#source-48)
+focus changes and a new command return to the last command. Closing the idle
+palette clears that shown output, so reopening shows none; history keeps it.
+No disk log or row replay is added. [48](#source-48)
 
 [FACT] The read-only audit view uses shared severity glyphs/theme roles and
 consecutive repeat-summary rows. Enter on a summary shows its first displayed

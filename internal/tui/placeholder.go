@@ -46,7 +46,7 @@ func (m *model) fillPlaceholder(t *tabs.Tab, e *panes.Pane, args []string) {
 	t.Layout.Replace(e, p)
 	m.layoutTab(t)
 	m.activatePane(t, p)
-	m.resetConsoleView()
+	m.closeConsoleView()
 	m.status = ""
 	m.watchPaneExit(p)
 }

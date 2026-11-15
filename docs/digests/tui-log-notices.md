@@ -1,6 +1,6 @@
 # TUI log notices
 
-Verification: `b3b2cf92659f79545ec4cc8d405d5f1b0a3c122e` and accompanying changes.
+Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes.
 
 [FACT] Host-owned TUI status messages, pane-menu refusals and terminal exit
 notices use `prettylog` kinds, glyphs and bounded message escaping. Errors use
@@ -35,7 +35,11 @@ the history, newest last, both scrollable; a running command receives Ctrl+R
 instead. While shown, history owns the overlay over an open or late completion
 menu and keeps the draft; Ctrl+R, PgUp/PgDn, Esc and the palette key act on
 the view, and any other key returns to editing first. Esc, focus changes and a
-new command or error return to the last command; hiding never erases history. [4](#source-4) [7](#source-7) [8](#source-8)
+new command or error return to the last command; hiding never erases history.
+Closing an idle palette (Esc, the palette key, opening or focusing a tab)
+also clears the shown last command through `Console.ClearShown`, so reopening
+shows no previous output; Ctrl+R still shows it in history. A running
+command's output is not cleared when focus leaves it. [4](#source-4) [7](#source-7) [8](#source-8)
 [12](#source-12) [13](#source-13) [14](#source-14)
 
 ## Sources
@@ -51,6 +55,6 @@ new command or error return to the last command; hiding never erases history. [4
 9. <a id="source-9"></a> [Toast model](../../internal/tui/spaceview/model.go#L347) — `say` and event classification.
 10. <a id="source-10"></a> [Toast rendering](../../internal/tui/spaceview/layout.go#L328) — shared glyphs and semantic tone.
 11. <a id="source-11"></a> [Disk warnings](../../internal/tui/spaceview/disks.go#L204) — `diskEvents`.
-12. <a id="source-12"></a> [Console history](../../internal/tui/term/console.go#L1) — `Console.history`, `begin`, `HistoryFrame`, `History`, the pump/echo writes to both; emulator.go `ClearKeepHistory`, `reset`; native `Terminal.ResetKeepHistory`.
-13. <a id="source-13"></a> [Consecutive-command regression](../../internal/tui/term/console_test.go#L57) — last output shown alone; history order, exit notices, blank lines and fresh input modes; `TestConsoleHistoryRotatesByLines`; lifecycle_test.go keeps old direct-child text in history only and rejects the late descendant's output and clipboard tail.
-14. <a id="source-14"></a> [History view and UI transitions](../../internal/tui/tui.go#L1) — the Ctrl+R case, `consoleHistory`, `showConsoleCommand`, `resetConsoleView`, `leavePaletteForTab`, `refreshSuggestions`, the palette legend; frames.go `consoleDisplayFrame`, `scroller`; `menuShown`; tui_test.go `TestOverlayShowsOneCommandAndCtrlRShowsHistory`, `TestConsoleHistoryWinsOverCompletionMenu`.
+12. <a id="source-12"></a> [Console history](../../internal/tui/term/console.go#L1) — `Console.history`, `begin`, `ClearShown`, `HistoryFrame`, `History`, the pump/echo writes to both; emulator.go `ClearKeepHistory`, `reset`; native `Terminal.ResetKeepHistory`.
+13. <a id="source-13"></a> [Consecutive-command regression](../../internal/tui/term/console_test.go#L57) — last output shown alone; history order, exit notices, blank lines and fresh input modes; `TestConsoleHistoryRotatesByLines`, `TestConsoleClearShownKeepsHistory`; lifecycle_test.go keeps old direct-child text in history only and rejects the late descendant's output and clipboard tail.
+14. <a id="source-14"></a> [History view and UI transitions](../../internal/tui/tui.go#L1) — the Ctrl+R case, `consoleHistory`, `showConsoleCommand`, `resetConsoleView`, `closeConsoleView`, `leavePaletteForTab`, `refreshSuggestions`, the palette legend; frames.go `consoleDisplayFrame`, `scroller`; `menuShown`; tui_test.go `TestOverlayShowsOneCommandAndCtrlRShowsHistory`, `TestConsoleHistoryWinsOverCompletionMenu`, `TestClickTabIdlePreservesConsoleHistory`, `TestClosingPaletteKeepsARunningCommandsOutput`.

@@ -256,6 +256,18 @@ func (c *Console) Close() error {
 	return errors.Join(c.emulator.Close(), c.history.Close())
 }
 
+// ClearShown empties the shown last command when the console is idle;
+// history keeps every command. A running command's output is never cleared.
+func (c *Console) ClearShown() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed || c.cmd != nil {
+		return false
+	}
+	c.Clear()
+	return true
+}
+
 // Busy reports whether a command is still running.
 func (c *Console) Busy() bool {
 	c.mu.Lock()

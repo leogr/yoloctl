@@ -197,7 +197,8 @@ func TestOverlayWheelScrollAndHide(t *testing.T) {
 		t.Errorf("scrollOff after wheel-downs = %d, want 0", m.scrollOff)
 	}
 
-	// Esc hides the overlay; refocusing shows the retained history.
+	// Esc hides the overlay like a clear: refocusing shows no previous output,
+	// and Ctrl+R still shows the command in history.
 	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	if m.focusPalette {
 		t.Fatal("Esc should unfocus the palette")
@@ -206,12 +207,13 @@ func TestOverlayWheelScrollAndHide(t *testing.T) {
 	if strings.Contains(hidden, "40") {
 		t.Errorf("overlay content still visible after unfocus:\n%s", hidden)
 	}
-	if len(m.console.Scrollback()) == 0 {
-		t.Error("history lost on unfocus")
-	}
 	_, _ = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
-	if !m.focusPalette || !strings.Contains(m.View().Content, "40") {
-		t.Fatal("retained console did not reappear")
+	if !m.focusPalette || strings.Contains(m.View().Content, "40") || m.consoleContentRows() != 0 {
+		t.Fatalf("reopened palette shows the last command's output:\n%s", m.View().Content)
+	}
+	_, _ = m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	if !m.consoleHistory || !strings.Contains(m.View().Content, "40") {
+		t.Fatalf("Ctrl+R lost the command after close:\n%s", m.View().Content)
 	}
 }
 
@@ -1701,6 +1703,26 @@ func TestClickPaletteWhileFocusedKeepsOutput(t *testing.T) {
 }
 
 // Clicking a tab hides the palette without erasing its command history.
+// A command still running when the palette closes keeps its output: closing
+// clears only an idle console.
+func TestClosingPaletteKeepsARunningCommandsOutput(t *testing.T) {
+	m := newTestModel(t, 80, 20)
+	addExitedTab(t, m, "t1")
+	m.focusPalette = true
+	if ok, err := m.console.Run(nil, "", "sh", "-c", "printf RUNNING-OUT; sleep 5"); !ok || err != nil {
+		t.Fatalf("start: %v %v", ok, err)
+	}
+	t.Cleanup(m.console.Kill)
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(m.console.GridText(), "RUNNING-OUT") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	m.leavePaletteForTab()
+	if !m.console.Busy() || !strings.Contains(m.console.GridText(), "RUNNING-OUT") {
+		t.Fatal("closing the palette cleared a running command's output")
+	}
+}
+
 func TestClickTabIdlePreservesConsoleHistory(t *testing.T) {
 	m := newTestModel(t, 80, 20)
 	addExitedTab(t, m, "t1")
@@ -1715,15 +1737,16 @@ func TestClickTabIdlePreservesConsoleHistory(t *testing.T) {
 	if m.focusPalette {
 		t.Error("clicking a tab should leave the palette")
 	}
-	if !strings.Contains(m.console.GridText(), "hello-overlay") {
-		t.Fatal("tab-click erased history")
-	}
 	if strings.Contains(m.View().Content, "hello-overlay") {
 		t.Fatal("hidden palette is still visible")
 	}
 	_, _ = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+	if strings.Contains(m.View().Content, "hello-overlay") {
+		t.Fatal("reopened palette shows the last command's output")
+	}
+	_, _ = m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	if !strings.Contains(m.View().Content, "hello-overlay") {
-		t.Fatal("refocus did not show history")
+		t.Fatal("tab-click lost the command from Ctrl+R history")
 	}
 }
 

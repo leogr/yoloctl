@@ -805,7 +805,7 @@ func (m *model) openTab(args []string) {
 	m.tabs.Add(t)
 	m.layoutTab(t)
 	m.focusPalette = false
-	m.resetConsoleView() // opening a tab takes focus off the palette
+	m.closeConsoleView() // opening a tab takes focus off the palette
 	m.status = ""
 	m.watchPaneExit(p)
 }
@@ -1332,7 +1332,7 @@ func (m *model) leavePaletteForTab() {
 	if m.console.Busy() {
 		m.scrollToLive()
 	} else {
-		m.resetConsoleView() // also resets scrollOff and suggNav
+		m.closeConsoleView() // also resets scrollOff and suggNav
 	}
 }
 
@@ -1434,12 +1434,12 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// An empty pane takes no key: the palette key hides the palette,
 		// and the next key typed opens it again.
 		m.focusPalette = false
-		m.resetConsoleView()
+		m.closeConsoleView()
 	case paletteKey: // double-tap: pass the literal key to the child
 		if cur != nil {
 			m.sendKey(cur.Session, k, false)
 			m.focusPalette = false
-			m.resetConsoleView() // focus left the palette: hide output
+			m.closeConsoleView() // focus left the palette: hide output
 		}
 	case k.Code == tea.KeyEscape && m.newTab != nil:
 		m.cancelNewTab() // Esc ends prefix c; an empty pane stays
@@ -1450,11 +1450,11 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.detachPane(t, t.Focused())
 		if m.tabs.Current() != nil {
 			m.focusPalette = false
-			m.resetConsoleView()
+			m.closeConsoleView()
 		}
 	case k.Code == tea.KeyEscape:
 		m.focusPalette = false // hide the overlay
-		m.resetConsoleView()   // focus left the palette: hide output
+		m.closeConsoleView()   // focus left the palette: hide output
 	case k.Code == tea.KeyPgUp: // page the overlay's scrollback up
 		m.scrollBy(m.overlayPage())
 	case k.Code == tea.KeyPgDown:
@@ -1639,6 +1639,14 @@ func (m *model) resetConsoleView() {
 	m.showConsoleCommand()
 	m.scrollToLive()
 	m.suggNav = false // focus left the palette: forget menu-steering
+}
+
+// closeConsoleView is the idle palette closing: like a clear, it empties the
+// last command's output, so reopening shows no previous output. Ctrl+R history
+// keeps every command. A running command (detached) keeps its output.
+func (m *model) closeConsoleView() {
+	m.console.ClearShown()
+	m.resetConsoleView()
 }
 
 // showConsoleCommand leaves the history view, at its newest line, for the

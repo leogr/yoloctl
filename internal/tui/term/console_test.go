@@ -120,3 +120,29 @@ func TestConsoleHistoryRotatesByLines(t *testing.T) {
 		t.Fatalf("history not bounded to 8 lines, oldest first out: %d %q", len(c.history.Scrollback()), text)
 	}
 }
+
+// ClearShown empties the shown last command of an idle console only; history
+// keeps it.
+func TestConsoleClearShownKeepsHistory(t *testing.T) {
+	c := NewConsole(5, 60, 32, nil)
+	t.Cleanup(func() { _ = c.Close() })
+	if started, err := c.Run(nil, "$ done", "printf", "DONE_OUTPUT"); err != nil || !started {
+		t.Fatalf("command: %t %v", started, err)
+	}
+	awaitInput(t, "command completed", func() bool { return !c.Busy() })
+	if !c.ClearShown() || strings.Contains(c.GridText(), "DONE_OUTPUT") || len(c.Scrollback()) != 0 {
+		t.Fatalf("idle console not cleared: %q", c.GridText())
+	}
+	history := strings.Join(append(c.history.Scrollback(), c.history.GridText()), "\n")
+	if !strings.Contains(history, "DONE_OUTPUT") {
+		t.Fatalf("history lost the command: %q", history)
+	}
+	if started, err := c.Run(nil, "$ busy", "sh", "-c", "printf BUSY_OUTPUT; sleep 5"); err != nil || !started {
+		t.Fatalf("running command: %t %v", started, err)
+	}
+	t.Cleanup(c.Kill)
+	awaitInput(t, "running output", func() bool { return strings.Contains(c.GridText(), "BUSY_OUTPUT") })
+	if c.ClearShown() || !strings.Contains(c.GridText(), "BUSY_OUTPUT") {
+		t.Fatal("a running command's output was cleared")
+	}
+}
