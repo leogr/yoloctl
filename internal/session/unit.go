@@ -7,6 +7,7 @@ import (
 
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/spaceenv"
+	"github.com/leogr/yoloctl/internal/strictyaml"
 	"github.com/leogr/yoloctl/internal/vmservice"
 	"gopkg.in/yaml.v3"
 )
@@ -190,6 +191,17 @@ func ReadVMMarker(ctx context.Context, c *container.Client, agentbox string) (Ma
 // ok is false when there is none (or it can't be read/parsed). Quiet probe:
 // no tombstone is the common case and cat's complaint about it is not for
 // the user.
+// ReadVMRefusal reads the holder's startup refusal record in the VM; false
+// when it is absent or not a strict record.
+func ReadVMRefusal(ctx context.Context, c *container.Client, agentbox string) (Refusal, bool) {
+	var r Refusal
+	out, err := c.ShellOutputQuiet(ctx, "sudo", "cat", RefusalPath(agentbox))
+	if err != nil || strictyaml.Decode([]byte(out), &r) != nil || r.Reason == "" {
+		return Refusal{}, false
+	}
+	return r, true
+}
+
 func ReadVMTombstone(ctx context.Context, c *container.Client, agentbox string) (Tombstone, bool) {
 	var ts Tombstone
 	out, err := c.ShellOutputQuiet(ctx, "sudo", "cat", TombstonePath(agentbox))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -84,11 +85,21 @@ func TestHolderMainStartHandoverOutcomes(t *testing.T) {
 		{"no status", -1, func(err error) bool { return errors.Is(err, ErrHolderConnLost) }, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			opts, _ := testPaths(t)
+			opts, dir := testPaths(t)
 			opts.StartMain = true
+			opts.RefusalPath = filepath.Join(dir, "refused")
 			fs := startFakeSandbox(t, opts.SSHSocket)
 			fs.handoverStatus = tc.status
 			r := <-runHolderAsync(context.Background(), opts)
+			// Only directive 61's refusal leaves a record for the caller.
+			refusal, err := readSessionFile[Refusal](opts.RefusalPath)
+			if tc.status == mainlaunch.HandoverNoMkfifo {
+				if err != nil || refusal.Reason != RefusalNoMkfifo {
+					t.Fatalf("refusal record %+v, %v", refusal, err)
+				}
+			} else if !os.IsNotExist(err) {
+				t.Fatalf("a refusal record was written: %+v, %v", refusal, err)
+			}
 			if !tc.want(r.err) || r.status != -1 {
 				t.Fatalf("RunHolder = %d, %v", r.status, r.err)
 			}

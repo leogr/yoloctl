@@ -51,7 +51,11 @@ the fixed `HandoverScript` with `OPENSHELL_NO_LOGIN_SHELL=1` and the record
 (`TERM`, token, `exec` + today's command) on stdin; the script appends its own
 environment's names and the token. Status 0: delivered, input opens. 81 (no
 `mkfifo`: directive 61's refusal), 82 (no FIFO), 83 (a name holds the
-token): proven not delivered, marker removed. Anything else: not known,
+token): proven not delivered, marker removed. On 81 the holder also writes
+its refusal record (`refused`, beside the marker); the caller removes any
+earlier one before each holder start and, when the holder dies during
+startup, reads it and fails with `box NAME's image has no mkfifo; a session
+cannot be started in it`. Anything else: not known,
 marker kept, ends as a lost connection. Never sent twice. A marked start
 sends `yoloctl-main-session` before today's exec; a refusal starts nothing.
 [15](#source-15)
@@ -105,4 +109,4 @@ nothing here was run on a VM. [7](#source-7) [9](#source-9) [14](#source-14) [15
 12. <a id="source-12"></a> [internal/openshell/launch.go](../../internal/openshell/launch.go#L1) — `MainLauncher`, `SupervisorArgs`, `LauncherShells`, `SupervisorMainExitMarker`; `launch_test.go`.
 13. <a id="source-13"></a> [internal/openshell/launcher_shell_linux.go](../../internal/openshell/launcher_shell_linux.go#L1) — `launcherShell`; `runtime_exec_linux.go`, `prepare_linux.go`; `helperinputs.go`.
 14. <a id="source-14"></a> [internal/mainlaunch/mainlaunch.go](../../internal/mainlaunch/mainlaunch.go#L1) — `LauncherScript`, `HandoverScript`, `Record`, `NewToken`, statuses; `mainlaunch_linux_test.go`.
-15. <a id="source-15"></a> [internal/session/handover.go](../../internal/session/handover.go#L1) — `openMainChannel`, `handOver`, `markMainSession`, `mainChannel.wait`; `holder.go` `RunHolder`; `holder_main_test.go`.
+15. <a id="source-15"></a> [internal/session/handover.go](../../internal/session/handover.go#L1) — `openMainChannel`, `handOver`, `markMainSession`, `mainChannel.wait`; `holder.go` `RunHolder`; `holder_main_test.go`; the refusal record in `tombstone.go`, `unit.go` `ReadVMRefusal`, `cmd/yoloctl/session_client.go` `waitForAttachSocket`, `session_refusal_test.go`.

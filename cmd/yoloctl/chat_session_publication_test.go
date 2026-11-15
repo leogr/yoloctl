@@ -133,6 +133,7 @@ func TestChatServerHolderRevivalRequiresCurrentPublication(t *testing.T) {
 	bin, starts := t.TempDir(), filepath.Join(t.TempDir(), "starts")
 	t.Setenv("YOLOCTL_TEST_CHAT_STARTS", starts)
 	t.Setenv("YOLOCTL_TEST_CHAT_TOMBSTONE", session.TombstonePath(cfg.Name))
+	t.Setenv("YOLOCTL_TEST_CHAT_REFUSAL", session.RefusalPath(cfg.Name))
 	t.Setenv("YOLOCTL_TEST_CHAT_MARKER", session.MarkerPath(cfg.Name))
 	t.Setenv("YOLOCTL_TEST_CHAT_SOCKET", session.SocketPath(cfg.Name))
 	for name, body := range map[string]string{
@@ -142,6 +143,7 @@ func TestChatServerHolderRevivalRequiresCurrentPublication(t *testing.T) {
 fi
 exit 91`,
 		"rm": `if [ "$#" = 2 ] && [ "$1" = -f ] && [ "$2" = "$YOLOCTL_TEST_CHAT_TOMBSTONE" ]; then exit 0; fi
+if [ "$#" = 2 ] && [ "$1" = -f ] && [ "$2" = "$YOLOCTL_TEST_CHAT_REFUSAL" ]; then exit 0; fi
 exit 92`,
 		"test": `if [ "$#" = 2 ] && [ "$1" = -f ] && [ "$2" = "$YOLOCTL_TEST_CHAT_MARKER" ]; then exit 1; fi
 if [ "$#" = 2 ] && [ "$1" = -S ] && [ "$2" = "$YOLOCTL_TEST_CHAT_SOCKET" ]; then exit 0; fi

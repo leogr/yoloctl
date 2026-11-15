@@ -37,7 +37,7 @@ func expectingRun(t *testing.T, state string) (context.Context, *container.Clien
 	dir := t.TempDir()
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("EXPECTED_RUN_LOG", filepath.Join(dir, "log"))
-	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$EXPECTED_RUN_LOG\"\ncase \"$*\" in\n *'sudo nerdctl inspect coder') printf '%s\\n' '[{\"Name\":\"coder\",\"Config\":{\"Labels\":{}}," + state + "}]' ;;\n *) exit 97 ;;\nesac\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$EXPECTED_RUN_LOG\"\ncase \"$*\" in\n *'sudo rm -f '*/refused) exit 0 ;;\n *'sudo nerdctl inspect coder') printf '%s\\n' '[{\"Name\":\"coder\",\"Config\":{\"Labels\":{}}," + state + "}]' ;;\n *) exit 97 ;;\nesac\n"
 	if err := os.WriteFile(filepath.Join(dir, "limactl"), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}

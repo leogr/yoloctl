@@ -70,6 +70,19 @@ func WriteMarker(path string, m Marker) error {
 	return writeYAML(path, m)
 }
 
+// Refusal is the holder's startup refusal record (RefusalPath).
+type Refusal struct {
+	Reason string `yaml:"reason"`
+}
+
+// RefusalNoMkfifo: the box's image has no mkfifo (directive 61).
+const RefusalNoMkfifo = "no-mkfifo"
+
+// WriteRefusal writes r atomically, creating the parent directory if needed.
+func WriteRefusal(path string, r Refusal) error {
+	return writeYAML(path, r)
+}
+
 // RemoveMarker removes the marker; missing is fine.
 func RemoveMarker(path string) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {

@@ -59,6 +59,8 @@ type HolderOptions struct {
 	// forwarded, then hand the launch to the box's launcher. Otherwise the
 	// session starts with today's exec.
 	StartMain bool
+	// RefusalPath receives the startup refusal record (directive 61).
+	RefusalPath string
 	// MarkMain marks a privileged box's session as its main session (contract
 	// section 7) before today's exec; its endpoint stops the box after it.
 	MarkMain bool
@@ -256,6 +258,11 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 		if err := handOver(client, opts, []byte(mainCommand)); err != nil {
 			if !errors.Is(err, ErrHolderConnLost) {
 				_ = RemoveMarker(opts.MarkerPath) // proven: nothing was delivered
+			}
+			if errors.Is(err, ErrNoMkfifo) && opts.RefusalPath != "" {
+				if werr := WriteRefusal(opts.RefusalPath, Refusal{Reason: RefusalNoMkfifo}); werr != nil {
+					logf("write refusal: %v", werr)
+				}
 			}
 			return -1, err
 		}

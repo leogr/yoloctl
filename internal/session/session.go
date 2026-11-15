@@ -100,6 +100,13 @@ func TombstonePath(agentbox string) string {
 	return StateDirFor(agentbox) + "/last-exit"
 }
 
+// RefusalPath returns the holder's startup refusal record for an agentbox:
+// written only when a session was refused before anything started, so the
+// caller can name the reason (directive 61: an image without mkfifo).
+func RefusalPath(agentbox string) string {
+	return StateDirFor(agentbox) + "/refused"
+}
+
 // UnitName returns the holder's transient systemd unit name for an
 // agentbox.
 func UnitName(agentbox string) string {

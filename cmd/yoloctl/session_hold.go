@@ -90,6 +90,7 @@ func newSessionHoldCmd() *cobra.Command {
 				HostIntegration:   hostIntegration,
 				HostWorkdir:       hostWorkdir,
 				StartMain:         startMain,
+				RefusalPath:       session.RefusalPath(agentbox),
 				MarkMain:          markMain,
 				KeepaliveInterval: keepalive,
 				Logf:              logf,
