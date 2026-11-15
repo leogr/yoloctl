@@ -1,15 +1,15 @@
 {
   "repository": "https://github.com/leogr/airc",
-  "release": "v0.1.1",
-  "revision": "6af217cfb6fe2fb05106ba592b75b9bf8225aa73",
+  "release": "v0.1.2",
+  "revision": "84ea507836e82ea0581180e794d289523788c373",
   "assets": {
     "amd64": {
-      "url": "https://github.com/leogr/airc/releases/download/v0.1.1/airc-linux-amd64.tar.gz",
-      "sha256": "e881593c1adc8298d15689a4aa434dcda4a4f536fb2e20fbf567a767981d68c4"
+      "url": "https://github.com/leogr/airc/releases/download/v0.1.2/airc-linux-amd64.tar.gz",
+      "sha256": "be07acae9c6b2b92d5af6346ee52cb439a9e9bc81820d0a2f34a51d12cbef532"
     },
     "arm64": {
-      "url": "https://github.com/leogr/airc/releases/download/v0.1.1/airc-linux-arm64.tar.gz",
-      "sha256": "0dcf949182a83e15debc4e856335fd58021bb8fcb4f8e67591d48f42350527d0"
+      "url": "https://github.com/leogr/airc/releases/download/v0.1.2/airc-linux-arm64.tar.gz",
+      "sha256": "399651bdae6fa3b4f9b8f847a152e6e4b89f31da8c62d5fbc3e2f3412026b7d2"
     }
   }
 }

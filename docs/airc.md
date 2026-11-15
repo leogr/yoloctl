@@ -520,7 +520,7 @@ its static binaries, skill, Claude plugin and license. Nothing is compiled and
 no AIRC source is embedded in yoloctl. No Rust toolchain enters the host build
 or the image.
 
-The selected release (v0.1.1, source `6af217cf`) includes rustls-webpki 0.103.16 and webpki-roots 1.0.10:
+The selected release (v0.1.2, source `84ea5078`) includes rustls-webpki 0.103.16 and webpki-roots 1.0.10:
 external TLS/HTTPS rejects compromised emSign intermediate keys even when a
 configured CA permits the chain. Unrelated private CAs remain supported.
 This updates AIRC's compiled verifier, independently of VM registry tools or
