@@ -404,7 +404,13 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 		if err := refuseRecreateBeforeImageWork(ctx, space, cfg); err != nil {
 			return "", err
 		}
-		if err := warmBoxBeforeEffects(ctx, c, cfg, true); err != nil {
+		warmCtx := ctx
+		if resolved.Runtime == boxstate.RuntimeMissing {
+			// Creation must retain even a cached image before apply begins.
+			// Existing containers instead use their recorded runtime generation.
+			warmCtx = defaultCreationContext(ctx, cfg)
+		}
+		if err := warmBoxBeforeEffects(warmCtx, c, cfg, true); err != nil {
 			return "", err
 		}
 	}

@@ -1,6 +1,6 @@
 # Controller-owned image preparation
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Private exporter compression and its space setting verified on `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Missing-container session preparation verified on `e05d46a4` and accompanying changes. Private exporter compression and its space setting verified on `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes.
 
 [FACT] The VM controller owns jobs capped at
 `max(runtime.NumCPU()-1, 1)` tracked attempts. Copied Dockerfile/context bytes, modes, image digests, platforms and arguments
@@ -21,6 +21,11 @@ Unmanaged no-install runtime pulls stay locked. [3](#source-3)
 mutate-and-reconcile run in the native creation mode (`defaultCreationContext`),
 like the reconcile's later creation preflight, so a cached image is retained
 before apply begins and the first apply after an edit succeeds. [33](#source-33)
+
+[FACT] Session ensure (`box attach` and `box use`) also selects native creation
+mode before warming a missing container, retaining cached custom and composed
+images before apply. Existing stopped containers keep their recorded-generation
+route; an unprepared recipe discovered after apply still refuses. [34](#source-34) [35](#source-35) [36](#source-36)
 
 [FACT] A managed request keeps its inherited view channel open across image
 preparation and npm-probe revalidation. The request owns one descriptor and
@@ -137,3 +142,7 @@ not retry. Lost application replies retain the normal fence contract.
 31. <a id="source-31"></a> [image_sources.go](../../internal/controller/image_sources.go#L19) — `dockerfileStageContexts`, frontend parser and normalized alias exclusions.
 32. <a id="source-32"></a> [image_frontend_test.go](../../internal/controller/image_frontend_test.go#L62) — `TestImageNamedContextsPreserveDockerfileStageInstructions`, actual frontend graph with synthetic metadata and production policy.
 33. <a id="source-33"></a> [box_edit_native_warm_test.go](../../cmd/yoloctl/box_edit_native_warm_test.go#L1) — `TestNativeBoxEditPreEffectCheckRetainsWhatReconcileRequires`, `TestBoxMutationPreEffectChecksUseTheCreationMode`; call sites in `controller_documents.go` (edit apply) and `agentbox_reconcile.go` (`runSet`, `mutateAndReconcile`) on main `1d265df3` and accompanying changes.
+
+34. <a id="source-34"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L403) — `ensureAgentSession` missing-container warm context.
+35. <a id="source-35"></a> [session_native_image_test.go](../../cmd/yoloctl/session_native_image_test.go#L27) — `TestMissingSessionRetainsExistingImageBeforeApply`.
+36. <a id="source-36"></a> [controller_native_images_test.go](../../cmd/yoloctl/controller_native_images_test.go#L351) — creation-mode and post-effect rejection controls.
