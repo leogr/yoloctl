@@ -17,7 +17,7 @@ const (
 
 func preview() Frame {
 	return Frame{Op: OpPreview, Generation: 1, Request: 7, RoomID: idA, DiskID: idA, HumanID: idA, ChannelID: idA,
-		Channel: "#space", MessageID: uuid, Artifact: uuid, Bytes: 1024, SHA256: hash, Chip: "[file a.png · 1 KiB]", MaxCols: 80}
+		Channel: "#space", MessageID: uuid, Artifact: uuid, Bytes: 1024, SHA256: hash, Chip: "[file a.png · 1 KiB]", MaxCols: 80, MaxRows: 40}
 }
 
 func pair(t *testing.T) (host, child *Conn, hostFile, childFile *os.File) {
@@ -88,6 +88,8 @@ func TestControlFrameValidation(t *testing.T) {
 	bad["preview chip placeholder"] = mutate(func(f *Frame) { f.Chip = "a\U0010EEEE" })
 	bad["preview no width"] = mutate(func(f *Frame) { f.MaxCols = 0 })
 	bad["preview too wide"] = mutate(func(f *Frame) { f.MaxCols = MaxPreviewCells + 1 })
+	bad["preview no height"] = mutate(func(f *Frame) { f.MaxRows = 0 })
+	bad["preview too tall"] = mutate(func(f *Frame) { f.MaxRows = MaxPreviewCells + 1 })
 	for name, f := range bad {
 		if f.Validate() == nil {
 			t.Errorf("%s accepted", name)

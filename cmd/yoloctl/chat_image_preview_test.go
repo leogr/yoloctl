@@ -35,13 +35,13 @@ func TestChatPreviewBridge(t *testing.T) {
 	}
 	req := chatui.PreviewRequest{Request: 4, Generation: 2, Channel: "#space", MessageID: "66eb4b77-cfbd-4b90-aec6-538014c4108d",
 		Artifact: chatui.ArtifactRef{ID: "01234567-89ab-cdef-0123-456789abcdef", Name: "cat.png", SHA256: img.SHA256, Bytes: img.Bytes},
-		Chip:     "[file cat.png · 1 KiB]", Cols: 72}
+		Chip:     "[file cat.png · 1 KiB]", Cols: 72, Rows: 30}
 	if msg := opts.PreviewImage(req)(); msg != nil {
 		t.Fatalf("request failed: %+v", msg)
 	}
 	f, err := host.Receive()
 	if err != nil || f.Op != chatimage.OpPreview || f.RoomID != room.ID || f.HumanID != room.Human.ID || f.ChannelID != img.ChannelID ||
-		f.MessageID != req.MessageID || f.Artifact != req.Artifact.ID || f.Chip != req.Chip || f.MaxCols != 72 || f.Generation != 2 || f.Request != 4 {
+		f.MessageID != req.MessageID || f.Artifact != req.Artifact.ID || f.Chip != req.Chip || f.MaxCols != 72 || f.MaxRows != 30 || f.Generation != 2 || f.Request != 4 {
 		t.Fatalf("frame %+v, %v", f, err)
 	}
 	_ = opts.ReleasePreview("tok")()

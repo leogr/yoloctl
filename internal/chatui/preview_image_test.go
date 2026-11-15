@@ -530,17 +530,22 @@ func TestShowImageStepsThroughSeveralImages(t *testing.T) {
 	}
 }
 
-// A shown preview keeps filling the message width: a new width asks again
-// and frees the old image. A request still pending is not repeated; its
+// A preview asks for the message width and the transcript's steady height.
+// A shown preview the width bound is asked for again at a new width, and
+// the old image freed; one bound only by its own size keeps its cells until
+// the area no longer holds it. A request still pending is not repeated; its
 // answer is checked when it arrives.
 func TestPreviewFollowsTheTextWidth(t *testing.T) {
 	m, h := previewModel(t)
 	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 256, MaxRows: 256})
+	m.View()
 	m.runAction("image")
-	m.Update(PreviewReadyMsg{Request: h.requests[0].Request, Generation: 1, Token: "wide", ID: 3, Cols: 2, Rows: 1})
-	if h.requests[0].Cols != m.textWidth() {
-		t.Fatalf("asked for %d cells of %d", h.requests[0].Cols, m.textWidth())
+	if h.requests[0].Cols != m.textWidth() || h.requests[0].Rows != m.lastImageHeight-1 {
+		t.Fatalf("asked for %d×%d cells, text width %d, image height %d", h.requests[0].Cols, h.requests[0].Rows, m.textWidth(), m.lastImageHeight)
 	}
+	// Filling the width: the width bound it.
+	w := h.requests[0].Cols
+	m.Update(PreviewReadyMsg{Request: h.requests[0].Request, Generation: 1, Token: "wide", ID: 3, Cols: w, Rows: 4})
 	m.Update(tea.WindowSizeMsg{Width: 70, Height: 30})
 	if len(h.requests) != 2 || h.requests[1].Cols != m.textWidth() || strings.Join(h.released, ",") != "wide" {
 		t.Fatalf("after a resize: requests %+v released %v", h.requests, h.released)
@@ -549,15 +554,69 @@ func TestPreviewFollowsTheTextWidth(t *testing.T) {
 	if len(h.requests) != 2 {
 		t.Fatal("a pending request was repeated")
 	}
-	m.Update(PreviewReadyMsg{Request: h.requests[1].Request, Generation: 1, Token: "mid", ID: 4, Cols: 2, Rows: 1})
+	m.Update(PreviewReadyMsg{Request: h.requests[1].Request, Generation: 1, Token: "mid", ID: 4, Cols: h.requests[1].Cols, Rows: 3})
 	if len(h.requests) != 3 || h.requests[2].Cols != m.textWidth() || strings.Join(h.released, ",") != "wide,mid" {
 		t.Fatalf("answer at an old width: requests %+v released %v", h.requests, h.released)
 	}
 	// The host's widest preview bounds the request.
-	m.Update(PreviewReadyMsg{Request: h.requests[2].Request, Generation: 1, Token: "narrow", ID: 5, Cols: 2, Rows: 1})
+	m.Update(PreviewReadyMsg{Request: h.requests[2].Request, Generation: 1, Token: "narrow", ID: 5, Cols: h.requests[2].Cols, Rows: 3})
 	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 20, MaxRows: 256})
 	if len(h.requests) != 4 || h.requests[3].Cols != 20 {
 		t.Fatalf("capped request %+v", h.requests)
+	}
+}
+
+// A small image keeps its own cells whatever the pane does, until the pane
+// becomes too narrow or too short to hold it.
+func TestPreviewOfASmallImageIsNotAskedAgain(t *testing.T) {
+	m, h := previewModel(t)
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 256, MaxRows: 256})
+	m.View()
+	m.runAction("image")
+	m.Update(PreviewReadyMsg{Request: h.requests[0].Request, Generation: 1, Token: "small", ID: 3, Cols: 8, Rows: 2})
+	for _, size := range []tea.WindowSizeMsg{{Width: 70, Height: 30}, {Width: 120, Height: 40}, {Width: 60, Height: 20}} {
+		m.Update(size)
+		m.View()
+	}
+	if len(h.requests) != 1 || len(h.released) != 0 {
+		t.Fatalf("a small image was asked again: requests %+v released %v", h.requests, h.released)
+	}
+	// Narrower than the image: it is asked again at the new width.
+	m.Update(tea.WindowSizeMsg{Width: bodyIndent + 1 + 6, Height: 20})
+	m.View()
+	if len(h.requests) != 2 || h.requests[1].Cols != 6 || strings.Join(h.released, ",") != "small" {
+		t.Fatalf("too narrow: requests %+v released %v", h.requests, h.released)
+	}
+}
+
+// A tall image fills the transcript's steady height less the chip row; a
+// taller or shorter pane asks again, while a multi-line draft or a notice,
+// which do not change that height, never do.
+func TestPreviewFollowsTheTranscriptHeight(t *testing.T) {
+	m, h := previewModel(t)
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 256, MaxRows: 256})
+	m.View()
+	m.runAction("image")
+	rows := h.requests[0].Rows
+	if rows < 1 || rows != m.lastImageHeight-1 || rows >= m.lastBodyHeight {
+		t.Fatalf("asked for %d rows; image height %d, body %d", rows, m.lastImageHeight, m.lastBodyHeight)
+	}
+	// Taller than wide: the height bound it.
+	m.Update(PreviewReadyMsg{Request: h.requests[0].Request, Generation: 1, Token: "tall", ID: 3, Cols: 10, Rows: rows})
+	if err := m.SetDraft("one\ntwo\nthree\nfour"); err != nil {
+		t.Fatal(err)
+	}
+	m.say(levelWarn, "a notice")
+	m.View()
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if len(h.requests) != 1 {
+		t.Fatalf("a draft or a notice asked again: %+v", h.requests)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m.View()
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	if len(h.requests) != 2 || h.requests[1].Rows != rows+10 || strings.Join(h.released, ",") != "tall" {
+		t.Fatalf("a taller pane: requests %+v released %v", h.requests, h.released)
 	}
 }
 
@@ -595,5 +654,64 @@ func TestPreviewFollowsItsChipsRowInAWrappedParagraph(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// The pointer over a shown image marks nothing: its placeholder rows are
+// never underlined, neither when the image itself is hovered nor when its
+// chip is, and a click on the image still hides it.
+func TestHoveringAPreviewDoesNotUnderlineIt(t *testing.T) {
+	m, h := previewModel(t)
+	m.Update(PreviewCapabilityMsg{Supported: true, Generation: 1, MaxCols: 256, MaxRows: 256})
+	m.View()
+	m.runAction("image")
+	m.Update(PreviewReadyMsg{Request: h.requests[0].Request, Generation: 1, Token: "tok", ID: 3, Cols: 4, Rows: 2})
+	m.View()
+	var image, chip [2]int
+	found := false
+	for _, c := range targetCells(m, actPreview, previewMsgID) {
+		if row := m.lastTranscript[c[1]-m.layout.bodyTop+m.scroll]; isPreviewRow(row) {
+			if !found {
+				image, found = c, true
+			}
+		} else {
+			chip = c
+		}
+	}
+	if !found || chip == ([2]int{}) {
+		t.Fatalf("no image or chip cells: %v", targetCells(m, actPreview, previewMsgID))
+	}
+	// targetCells gives each row's first action cell; for the image that is
+	// its indent's end, so step onto the image itself.
+	image[0]++
+	underlined := func() (imageRows, chipRuns int) {
+		for _, row := range m.lastTranscript {
+			for _, r := range m.hoverRow(row) {
+				if r.Style.Underline && isPreviewRow(row) {
+					imageRows++
+				}
+				if r.Style.Underline && !isPreviewRow(row) && r.Act.Kind == actPreview {
+					chipRuns++
+				}
+			}
+		}
+		return
+	}
+	move(m, image[0], image[1])
+	m.View()
+	if got := m.activeHover(); got != (hoverKey{}) {
+		t.Fatalf("hovering the image is a target: %+v", got)
+	}
+	if rows, _ := underlined(); rows != 0 {
+		t.Fatalf("hovering the image underlines %d image runs", rows)
+	}
+	move(m, chip[0], chip[1])
+	m.View()
+	if rows, chips := underlined(); rows != 0 || chips == 0 {
+		t.Fatalf("hovering the chip: %d image runs underlined, %d chip runs", rows, chips)
+	}
+	clickCell(m, image)
+	if m.preview != nil || strings.Join(h.released, ",") != "tok" {
+		t.Fatalf("a click on the image did not hide it: %+v released %v", m.preview, h.released)
 	}
 }

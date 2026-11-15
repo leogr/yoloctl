@@ -251,7 +251,7 @@ func (m *model) answerPreview(msg imageMsg) tea.Cmd {
 		data, err := read(ctx, msg.space, msg.frame)
 		var prepared chatimage.Prepared
 		if err == nil {
-			prepared, err = chatimage.Prepare(data, job.cellW, job.cellH, msg.frame.MaxCols)
+			prepared, err = chatimage.Prepare(data, job.cellW, job.cellH, msg.frame.MaxCols, msg.frame.MaxRows)
 		}
 		b.mu.Lock()
 		job.prepared, job.err, job.done = prepared, err, true

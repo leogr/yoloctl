@@ -36,15 +36,17 @@ type Prepared struct {
 	Cols, Rows int
 }
 
-// Prepare checks the dimensions before a single full decode and lays the
-// image out cols cells wide (at most MaxPreviewCells) at the measured cell
-// size, its height following the aspect ratio; a picture taller than
-// MaxPreviewCells rows is narrowed instead. It re-encodes the image with Go's
-// encoder at the pixel size of that area, never enlarged (the terminal scales
-// a smaller picture into its cells), and smaller still when the PNG would
+// Prepare checks the dimensions before a single full decode and fits the
+// image, keeping its aspect ratio, inside at most cols×rows cells (each at
+// most MaxPreviewCells) at the measured cell size and inside its own pixel
+// size: whichever bound binds first, the area's width, its height or the
+// image itself, sets the scale, so a small picture is never enlarged and a
+// tall one never overflows the rows it was given. The cell area it fills is
+// the scaled picture rounded up to whole cells. It re-encodes the image with
+// Go's encoder at that scaled size, and smaller still when the PNG would
 // exceed MaxPreviewBytes; the uploader's bytes never reach the terminal.
-func Prepare(data []byte, cellW, cellH, cols int) (Prepared, error) {
-	if cellW < 1 || cellH < 1 || cols < 1 {
+func Prepare(data []byte, cellW, cellH, cols, rows int) (Prepared, error) {
+	if cellW < 1 || cellH < 1 || cols < 1 || rows < 1 {
 		return Prepared{}, errors.New("chatimage: unknown cell geometry")
 	}
 	cfg, err := png.DecodeConfig(bytes.NewReader(data))
@@ -58,21 +60,8 @@ func Prepare(data []byte, cellW, cellH, cols int) (Prepared, error) {
 	if err != nil {
 		return Prepared{}, ErrNotPNG
 	}
-	w, h := cfg.Width, cfg.Height
-	cols = min(cols, MaxPreviewCells)
-	boxW := cols * cellW
-	boxH := max(1, h*boxW/w)
-	rows := (boxH + cellH - 1) / cellH
-	if rows > MaxPreviewCells {
-		rows = MaxPreviewCells
-		boxH = rows * cellH
-		boxW = max(1, w*boxH/h)
-		cols = (boxW + cellW - 1) / cellW
-	}
-	tw, th := w, h
-	if w > boxW {
-		tw, th = boxW, max(1, h*boxW/w)
-	}
+	tw, th := fit(cfg.Width, cfg.Height, min(cols, MaxPreviewCells)*cellW, min(rows, MaxPreviewCells)*cellH)
+	cols, rows = (tw+cellW-1)/cellW, (th+cellH-1)/cellH
 	b := src.Bounds()
 	rgba := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 	draw.Draw(rgba, rgba.Bounds(), src, b.Min, draw.Src)
@@ -91,6 +80,22 @@ func Prepare(data []byte, cellW, cellH, cols int) (Prepared, error) {
 		f := math.Sqrt(float64(MaxPreviewBytes)/float64(buf.Len())) * 0.9
 		tw, th = max(1, int(float64(tw)*f)), max(1, int(float64(th)*f))
 	}
+}
+
+// fit scales a w×h picture, keeping its aspect ratio, to the largest size
+// within boxW×boxH and within w×h itself (never enlarged): the binding bound
+// is whichever leaves the smaller scale. Both results are at least 1.
+func fit(w, h, boxW, boxH int) (int, int) {
+	tw, th := w, h
+	// Compare w/boxW with h/boxH without division: the larger ratio binds.
+	if tw > boxW || th > boxH {
+		if int64(w)*int64(boxH) >= int64(h)*int64(boxW) {
+			tw, th = boxW, int(int64(h)*int64(boxW)/int64(w))
+		} else {
+			tw, th = int(int64(w)*int64(boxH)/int64(h)), boxH
+		}
+	}
+	return max(tw, 1), max(th, 1)
 }
 
 // downscale averages each target pixel's source area (premultiplied), so

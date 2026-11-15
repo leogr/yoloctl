@@ -33,6 +33,12 @@ const (
 	lineSpacer   = 1 << 20
 )
 
+// isPreviewRow reports whether row is one of an image preview's placeholder
+// rows.
+func isPreviewRow(row transcriptRow) bool {
+	return row.line >= linePreview && row.line < lineSpacer
+}
+
 // bodyIndent puts message text under its author's name: a selection or
 // mention marker, then the author's glyph hanging in a three-cell margin.
 // One trailing column keeps text off the panel divider.

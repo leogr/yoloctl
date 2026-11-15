@@ -30,7 +30,7 @@ body = json.dumps({"v":1,"op":"preview","generation":1,"request":7,
     "room_id":"0123456789abcdef0123456789abcdef","disk_id":"0123456789abcdef0123456789abcdef",
     "human_id":"0123456789abcdef0123456789abcdef","channel_id":"0123456789abcdef0123456789abcdef","channel":"#space",
     "message_id":"01234567-89ab-cdef-0123-456789abcdef","artifact":"01234567-89ab-cdef-0123-456789abcdef",
-    "bytes":1024,"sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","chip":"[file a.png]","max_cols":60}).encode()
+    "bytes":1024,"sha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","chip":"[file a.png]","max_cols":60,"max_rows":30}).encode()
 f.write(struct.pack(">I", len(body)) + body)
 while True:
     hdr = f.read(4)
@@ -194,7 +194,7 @@ func previewFrame(request uint64) chatimage.Frame {
 		RoomID: "0123456789abcdef0123456789abcdef", DiskID: "0123456789abcdef0123456789abcdef",
 		HumanID: "0123456789abcdef0123456789abcdef", ChannelID: "0123456789abcdef0123456789abcdef", Channel: "#space",
 		MessageID: "01234567-89ab-cdef-0123-456789abcdef", Artifact: "01234567-89ab-cdef-0123-456789abcdef",
-		Bytes: 1, SHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Chip: "[file cat.png · 1 KiB]", MaxCols: 60}
+		Bytes: 1, SHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Chip: "[file cat.png · 1 KiB]", MaxCols: 60, MaxRows: 30}
 }
 
 // supportedBroker is a broker whose host terminal supports previews and
@@ -251,10 +251,11 @@ func TestBrokerFetchesPreparesTransmitsAndRegisters(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	p, _ := m.imageRegistry.Active(s)
-	if p.Cols != 60 || p.Rows != 15 || p.Token == "" || space != "" {
+	// A 40×20 picture keeps its own size: 4×1 cells, not the 60-cell width.
+	if p.Cols != 4 || p.Rows != 1 || p.Token == "" || space != "" {
 		t.Fatalf("placement %+v space %q", p, space)
 	}
-	if !strings.Contains(raw.String(), "\x1b_Ga=T,f=100,t=d,q=2,U=1,i="+strconv.Itoa(int(p.ID))+",c=60,r=15,") {
+	if !strings.Contains(raw.String(), "\x1b_Ga=T,f=100,t=d,q=2,U=1,i="+strconv.Itoa(int(p.ID))+",c=4,r=1,") {
 		t.Fatalf("no transmit for id %d: %q", p.ID, raw.String())
 	}
 	if m.imageLedger.Chip(p.ID) != "[file cat.png · 1 KiB]" {
@@ -410,7 +411,7 @@ func TestBrokerReshowsACachedPreviewWithoutAnotherRead(t *testing.T) {
 		t.Fatalf("%d reads, want 1: a cached preview was read again", reads.Load())
 	}
 	if again.ID == first.ID || again.Token == first.Token ||
-		!strings.Contains(raw, "\x1b_Ga=T,f=100,t=d,q=2,U=1,i="+strconv.Itoa(int(again.ID))+",c=60,r=15,") {
+		!strings.Contains(raw, "\x1b_Ga=T,f=100,t=d,q=2,U=1,i="+strconv.Itoa(int(again.ID))+",c=4,r=1,") {
 		t.Fatalf("cached preview not transmitted under a new ID: %+v %q", again, raw)
 	}
 	// An ended chat pane clears the cache: the next show reads again.

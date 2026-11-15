@@ -217,7 +217,7 @@ func (m *Model) pointAt(x, y int) (selPoint, bool) {
 		return selPoint{key: row.key}, true
 	case row.line < len(lines): // a fence frame inside the body
 		return selPoint{key: row.key, line: row.line}, true
-	case row.line >= linePreview && row.line < lineSpacer:
+	case isPreviewRow(row):
 		// An image snaps to the end of the displayed row it follows.
 		body := m.body(&m.messages[msg], max(m.lastTextWidth, 1))
 		if n := m.previewRow(&m.messages[msg], lines, body.rows); n >= 0 {

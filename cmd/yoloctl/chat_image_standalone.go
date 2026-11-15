@@ -266,7 +266,7 @@ func (img *standaloneImages) answer(msg standalonePreviewMsg) tea.Cmd {
 		defer cancel()
 		data, err := read(ctx, space, job.frame)
 		if err == nil {
-			job.prepared, err = chatimage.Prepare(data, job.cellW, job.cellH, job.frame.MaxCols)
+			job.prepared, err = chatimage.Prepare(data, job.cellW, job.cellH, job.frame.MaxCols, job.frame.MaxRows)
 		}
 		job.err = err
 		if send != nil {

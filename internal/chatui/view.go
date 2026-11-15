@@ -149,6 +149,7 @@ func (m *Model) View() tea.View {
 	bodyHeight := max(h-top-1-boxRows-statusRows-inputRows-1, 0)
 
 	m.lastRows, m.lastBodyHeight = len(transcript), bodyHeight
+	m.lastImageHeight = max(h-top-1-padRows-blankRows-1-1, 0)
 	m.place(transcript, bodyHeight)
 	m.lastTranscript = transcript
 	m.layout = viewLayout{bodyTop: top, bodyHeight: bodyHeight, transcriptWidth: tw}

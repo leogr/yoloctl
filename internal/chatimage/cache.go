@@ -14,7 +14,7 @@ const (
 // CacheKey identifies a prepared preview: the artifact, the identities it
 // was read under, the cell size it was scaled for and the width it fills.
 func CacheKey(f Frame, cellW, cellH int) string {
-	return strings.Join([]string{f.Artifact, f.SHA256, f.RoomID, f.DiskID, f.HumanID, f.ChannelID, strconv.Itoa(cellW), strconv.Itoa(cellH), strconv.Itoa(f.MaxCols)}, "|")
+	return strings.Join([]string{f.Artifact, f.SHA256, f.RoomID, f.DiskID, f.HumanID, f.ChannelID, strconv.Itoa(cellW), strconv.Itoa(cellH), strconv.Itoa(f.MaxCols), strconv.Itoa(f.MaxRows)}, "|")
 }
 
 // Cache is an in-memory LRU of host-made preview PNGs, bounded by entries

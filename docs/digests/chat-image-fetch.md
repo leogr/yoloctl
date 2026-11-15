@@ -1,6 +1,6 @@
 # Chat image fetch
 
-Verification: `fc48bca38d7777c07e13bb1610611f9a15c8c17d` and accompanying changes.
+Verification: `fc48bca38d7777c07e13bb1610611f9a15c8c17d` and accompanying changes; preview area on `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes.
 
 [FACT] A fixed, embedded Python relay reads one artifact inside the confined
 chat runtime: it runs only `airc artifact download --config CONFIG UUID PATH`
@@ -29,20 +29,19 @@ relay failure is reported with its one printable line. It never stages,
 uploads, joins or retries. [2](#source-2)
 
 [FACT] In the TUI, a preview request from a chat pane (which also carries its
-chip text, one printable line of at most 512 bytes, and the width to fill,
-1–256 cells) starts the single fetch
+chip text, one printable line of at most 512 bytes, and the area it may
+fill, 1–256 cells wide and 1–256 rows tall) starts the single fetch
 job of the whole TUI when previews are supported; a second request meanwhile
 gets `busy`. The job (30 s) calls the reader that `cmd/yoloctl` installs: it
 resolves the pane's space like the CLI (its `--space`, else the TUI's pinned
 space, else the default) and runs `chat.artifact.read` with output bounded to
 the requested size, accepting only those exact bytes. `chatimage.Prepare`
 then checks the PNG dimensions (at most 16 Mi pixels) before one full decode
-and lays the image out on the requested width at the measured cell size, its
-height following the aspect ratio (a picture taller than 256 rows is narrowed:
-each placeholder cell names its row and column with a Kitty diacritic). It
-re-encodes it by area averaging at the pixels of that area, never more than
-the source's (the terminal scales a smaller picture into the cells), and with
-fewer pixels until the PNG is at most 2 MiB. The cache key includes the width.
+and fits the image, aspect kept, inside that area at the measured cell size
+and inside its own pixel size, so it is never enlarged (a Kitty diacritic
+names each cell's row and column, hence at most 256 of each). Its cells are
+the scaled picture rounded up. It re-encodes it by area averaging at that
+size, with fewer pixels until the PNG is at most 2 MiB.
 [3](#source-3) [4](#source-4)
 
 [FACT] Back on the event loop a result is dropped if its pane is gone, and
@@ -59,7 +58,7 @@ job, and the TUI deletes every image it still owns when it exits.
 
 [FACT] Each prepared PNG is kept in an in-memory LRU (`chatimage.Cache`, one
 per image host) of at most 8 entries and 16 MiB, keyed by the artifact ID and hash, the room, disk, human and channel
-IDs, and the cell size. A later request with the same key, still current and
+IDs, the cell size and the requested area. A later request with the same key, still current and
 supported, is transmitted again from the cache under a new ID and token without
 another read, even while a job runs. The end of any chat pane with an image
 channel and every new capability generation empty it; it lives only as long as
@@ -72,7 +71,7 @@ reported yet can re-show an image this human already opened in this TUI.
 
 1. <a id="source-1"></a> [chat_artifact_relay.py](../../cmd/yoloctl/chat_artifact_relay.py#L1) — relay program, embedded by chat_artifact_relay.go; chat_artifact_relay_test.go runs it against fake clients (success, mismatches, symlink, mode, failure, output flood, cancel, deadline with a TERM-ignoring child, invalid arguments).
 2. <a id="source-2"></a> [chat_artifact_read.go](../../cmd/yoloctl/chat_artifact_read.go#L1) — `chatArtifactReadRequest`, `decodeChatArtifactReadRequest`, `matchesRoom`, `runControllerChatArtifactRead`, `executeChatArtifactRead`, `runChatArtifactRelay`, `verifyChatArtifactFrame`; registry and dispatch in controller_internal.go; chat_artifact_read_test.go.
-3. <a id="source-3"></a> [prepare.go](../../internal/chatimage/prepare.go#L1) — `Prepare`, `downscale`, `TransmitSequence`, `DeleteSequence`; prepare_test.go.
+3. <a id="source-3"></a> [prepare.go](../../internal/chatimage/prepare.go#L1) — `Prepare`, `fit`, `downscale`, `TransmitSequence`, `DeleteSequence`; prepare_test.go.
 4. <a id="source-4"></a> [image_broker.go](../../internal/tui/image_broker.go#L1) — `ReadChatArtifact`, `answerPreview`, `finishImageJob`, `showPrepared`, `endImagePane`, `flushImageDeletes`, `chatPaneSpace`; chat_artifact_host.go `readChatArtifactForPreview`; image_broker_test.go.
 5. <a id="source-5"></a> [preview_image.go](../../internal/chatui/preview_image.go#L1) — `canPreview` (truecolor, `connected`, `canSend`), `previewUpdate` collapse on disconnect or membership loss; preview_image_test.go.
 6. <a id="source-6"></a> [cache.go](../../internal/chatimage/cache.go#L1) — `Cache`, `CacheKey`, `CacheEntries`, `CacheBytes`; cache_test.go.

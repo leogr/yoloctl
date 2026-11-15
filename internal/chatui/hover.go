@@ -43,7 +43,9 @@ func (m *Model) hoverAt(x, y int) hoverKey {
 		}
 		return hoverKey{area: h.area, item: h.item, id: h.id}
 	}
-	if row, ok := m.rowAt(y); ok && m.inTranscript(x, y) {
+	// An image preview is not a highlighted target: a click on it still
+	// hides it, but the pointer over it marks nothing.
+	if row, ok := m.rowAt(y); ok && m.inTranscript(x, y) && !isPreviewRow(row) {
 		if act := actionAt(m.widthMethod, row.runs, x); act.Kind != actNone {
 			return hoverKey{area: hitTranscript, msg: row.key, act: act}
 		}
@@ -116,10 +118,12 @@ func hoverRuns(runs []run, on bool) []run {
 }
 
 // hoverRow underlines the hovered action's runs in one transcript row; a
-// wrapped link is underlined in every row of its message.
+// wrapped link is underlined in every row of its message. An image
+// preview's placeholder rows keep their click action but are never
+// underlined: the underline would be drawn across the image.
 func (m *Model) hoverRow(row transcriptRow) []run {
 	h := m.activeHover()
-	if h.area != hitTranscript || h.msg != row.key {
+	if h.area != hitTranscript || h.msg != row.key || isPreviewRow(row) {
 		return row.runs
 	}
 	var out []run

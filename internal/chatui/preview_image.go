@@ -49,9 +49,10 @@ type PreviewRequest struct {
 	Channel, MessageID  string
 	Artifact            ArtifactRef
 	Chip                string
-	// Cols is the width the pane shows the preview at, in cells: the
-	// preview fills it.
-	Cols int
+	// Cols×Rows is the area the pane can show the preview in, in cells:
+	// the host fits the image inside it, keeping its aspect ratio, and
+	// never enlarges it beyond its own size.
+	Cols, Rows int
 }
 
 // imagePreview is the pane's one requested or shown preview: the image of
@@ -63,6 +64,7 @@ type imagePreview struct {
 	request    uint64
 	generation uint64
 	want       int    // the width in cells it was requested at
+	wantRows   int    // the height in cells it was requested at
 	token      string // empty while pending
 	id         uint32
 	cols, rows int
@@ -90,10 +92,34 @@ func chipAction(id string, k int) action {
 	return action{Kind: actPreview, Value: id, Extra: strconv.Itoa(k)}
 }
 
-// previewWidth is the width a preview fills: the message text's width, at
+// previewWidth is the widest a preview may be: the message text's width, at
 // most the host's widest preview.
 func (m *Model) previewWidth() int {
 	return max(min(m.textWidth(), m.previewCap.MaxCols), 1)
+}
+
+// previewHeight is the tallest a preview may be: the transcript's steady
+// height less one row, so the chip line it hangs under stays in view with
+// the whole image, at most the host's tallest preview. A draft's extra lines
+// or a notice do not shrink it, so typing never asks for the image again.
+func (m *Model) previewHeight() int {
+	if m.lastImageHeight < 1 {
+		return max(m.previewCap.MaxRows, 1)
+	}
+	return max(min(m.lastImageHeight-1, m.previewCap.MaxRows), 1)
+}
+
+// fits reports whether shown preview p, placed on p.cols×p.rows cells for
+// its request, is still what a request for a cols×rows area would place: it
+// is when it fits the area and was not held smaller by an area bound that
+// has since changed. An image bound only by its own size keeps its cells
+// whatever the pane does.
+func (p *imagePreview) fits(cols, rows int) bool {
+	if p.cols > cols || p.rows > rows {
+		return false
+	}
+	widthBound, heightBound := p.cols >= p.want, p.rows >= p.wantRows
+	return (!widthBound || cols == p.want) && (!heightBound || rows == p.wantRows)
 }
 
 // canPreview reports whether a "Show image" action applies to msg now.
@@ -168,20 +194,21 @@ func (m *Model) requestPreview(msg *Message, k int) tea.Cmd {
 	art := previewArtifacts(msg)[k]
 	m.previewSeq++
 	m.preview = &imagePreview{key: messageKey(*msg), chip: k, channel: msg.Channel, request: m.previewSeq,
-		generation: m.previewCap.Generation, want: m.previewWidth()}
+		generation: m.previewCap.Generation, want: m.previewWidth(), wantRows: m.previewHeight()}
 	m.touch()
 	return m.opts.PreviewImage(PreviewRequest{
 		Request: m.previewSeq, Generation: m.previewCap.Generation, Channel: msg.Channel,
-		MessageID: msg.ID, Artifact: art, Chip: artifactLabel(&art), Cols: m.preview.want,
+		MessageID: msg.ID, Artifact: art, Chip: artifactLabel(&art), Cols: m.preview.want, Rows: m.preview.wantRows,
 	})
 }
 
-// resizePreview asks again for a shown preview whose width no longer is
-// the pane's, so it keeps filling it. A pending request is left to finish;
-// its answer is checked here in turn.
+// resizePreview asks again for a shown preview the pane's current area
+// would place differently: it no longer fits, or an area bound that held it
+// smaller has changed. A pending request is left to finish; its answer is
+// checked here in turn.
 func (m *Model) resizePreview() tea.Cmd {
 	p := m.preview
-	if p == nil || p.token == "" || p.want == m.previewWidth() || m.opts.PreviewImage == nil {
+	if p == nil || p.token == "" || p.fits(m.previewWidth(), m.previewHeight()) || m.opts.PreviewImage == nil {
 		return nil
 	}
 	i := m.indexOf(p.key)

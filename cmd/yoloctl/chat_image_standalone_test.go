@@ -90,8 +90,8 @@ func standalonePNG(t *testing.T) []byte {
 
 func standaloneRequest(request uint64) standalonePreviewMsg {
 	req := chatui.PreviewRequest{Request: request, Generation: 1, Channel: "#space", MessageID: "01234567-89ab-cdef-0123-456789abcdef",
-		Artifact: chatui.ArtifactRef{ID: "01234567-89ab-cdef-0123-456789abcdef"}, Chip: "[file cat.png · 1 KiB]", Cols: 60}
-	return standalonePreviewMsg{req: req, frame: chatimage.Frame{Artifact: req.Artifact.ID, SHA256: "h", RoomID: "r", DiskID: "d", HumanID: "u", ChannelID: "c", MaxCols: req.Cols}}
+		Artifact: chatui.ArtifactRef{ID: "01234567-89ab-cdef-0123-456789abcdef"}, Chip: "[file cat.png · 1 KiB]", Cols: 60, Rows: 30}
+	return standalonePreviewMsg{req: req, frame: chatimage.Frame{Artifact: req.Artifact.ID, SHA256: "h", RoomID: "r", DiskID: "d", HumanID: "u", ChannelID: "c", MaxCols: req.Cols, MaxRows: req.Rows}}
 }
 
 // shown answers request through a finished job and returns the transmit and
@@ -150,10 +150,10 @@ func TestStandaloneReadsPreparesTransmitsAndReleases(t *testing.T) {
 		return data, nil
 	})
 	out, ready := showStandalone(t, img, sent, 7)
-	if ready.Request != 7 || ready.Generation != 1 || ready.Cols != 60 || ready.Rows != 15 || ready.Token == "" || space != "dev" {
+	if ready.Request != 7 || ready.Generation != 1 || ready.Cols != 4 || ready.Rows != 1 || ready.Token == "" || space != "dev" {
 		t.Fatalf("ready %+v space %q", ready, space)
 	}
-	if !strings.HasPrefix(out, "\x1b_Ga=T,f=100,t=d,q=2,U=1,i="+strconv.Itoa(int(ready.ID))+",c=60,r=15,") {
+	if !strings.HasPrefix(out, "\x1b_Ga=T,f=100,t=d,q=2,U=1,i="+strconv.Itoa(int(ready.ID))+",c=4,r=1,") {
 		t.Fatalf("transmit %q", out)
 	}
 	// A stale or unknown release deletes nothing; the right token deletes
