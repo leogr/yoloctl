@@ -34,8 +34,8 @@ list and the token as last line (exactly two token lines after the header);
 otherwise it exits 93 and runs nothing. A listed name it lacks: one line
 naming it, exit 94. It removes inherited names not listed (shell identifiers
 by `unset`, others by `env -u`, skipped if that `env` cannot), keeps `TERM`
-from the record, then `exec "$SHELL" -lc` the command: the command is the
-main process. Names with a control character are on neither side; values
+from the record, then runs the command with `-lc` in the login shell, by
+`exec`: the command is the main process. Names with a control character are on neither side; values
 are never copied or put in argv. The launcher's own shell assigns no
 variable: its work runs in a subshell that answers a refusal or a quoted
 script (unset, `TERM`, `exec`) that the shell evaluates, so every inherited
