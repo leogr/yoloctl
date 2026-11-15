@@ -1,6 +1,6 @@
 # Controller interrupted-outcome recovery
 
-Verification: `a4322a8c233da5f9eeb51239db68fab34d55f9b0` plus accompanying N1/N2 changes;
+Verification: `a4322a8c233da5f9eeb51239db68fab34d55f9b0` plus accompanying N1/N2 changes; acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes;
 re-read cited symbols when changing behavior.
 
 [FACT] Registered mutations use typed effect gates and recorded footprints.
@@ -31,8 +31,8 @@ jobs also close interrupted, not as success. [5](#source-5) [8](#source-8) [20](
 [FACT] Finished outcomes hold nothing. Running permitted executions still reserve
 their footprints and conflicting gates wait; completed setups and authorized
 exec commands do not reserve controller-managed state. Public receipt views omit
-private proofs. Both acknowledgment options are compatibility no-ops: they do not
-change records or claim success. An interrupted result is a failed command with
+private proofs. No option or method acknowledges an outcome; none changes
+records or claims success. An interrupted result is a failed command with
 its method and current observation or state-read advice. [9](#source-9)
 [10](#source-10) [15](#source-15)
 
@@ -65,7 +65,7 @@ prepare that bind. Image working facts remain strict. See
 [receipt recording](controller-recording.md). [11](#source-11) [14](#source-14)
 [17](#source-17)
 
-[FACT] Source tests cover classification, legacy migration, no-op acknowledgment,
+[FACT] Source tests cover classification, legacy migration, the absent acknowledgment methods,
 bounded scope/disk selection and a single persisted observation; they do not
 establish native VM/power-loss qualification. [16](#source-16) [19](#source-19)
 
@@ -79,13 +79,13 @@ establish native VM/power-loss qualification. [16](#source-16) [19](#source-19)
 6. <a id="source-6"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L1) — wrapper gate and completion placement.
 7. <a id="source-7"></a> [cmd/yoloctl/operation_completion_test.go](../../cmd/yoloctl/operation_completion_test.go#L1) — wrapper completion predicate; dispatcher ordering in document_completion_test.go, chat_completion_owner_test.go and `completeBeforeUnlock`.
 8. <a id="source-8"></a> [internal/controller/recovery_test.go](../../internal/controller/recovery_test.go#L1) — real-worker evidence, validation, eviction and key custody.
-9. <a id="source-9"></a> [internal/controller/holds.go](../../internal/controller/holds.go#L1) — running reservations, interrupted rendering and compatibility acknowledgment.
+9. <a id="source-9"></a> [internal/controller/holds.go](../../internal/controller/holds.go#L1) — running reservations, interrupted rendering and legacy `acknowledged` records.
 10. <a id="source-10"></a> [internal/controller/holds_test.go](../../internal/controller/holds_test.go#L1) — running reservation and public inspection regressions.
 11. <a id="source-11"></a> [internal/controller/recovery_scheduler.go](../../internal/controller/recovery_scheduler.go#L1) — ledger, `RunRecovery`, `repairStorage`, `publishApplied`.
 12. <a id="source-12"></a> [internal/controller/verifier.go](../../internal/controller/verifier.go#L1) — `RunVerifier` descriptors and bounds.
 13. <a id="source-13"></a> [cmd/yoloctl/controller_verify.go](../../cmd/yoloctl/controller_verify.go#L25) — read-only verifier worker.
 14. <a id="source-14"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L327) — `serveController` current identity verification and degraded recovery.
-15. <a id="source-15"></a> [internal/controller/server.go](../../internal/controller/server.go#L1) — admission, gate, ping, acknowledgment and finalization.
+15. <a id="source-15"></a> [internal/controller/server.go](../../internal/controller/server.go#L1) — admission, gate, ping, receipt views and finalization.
 16. <a id="source-16"></a> [internal/controller/recovery_scheduler_test.go](../../internal/controller/recovery_scheduler_test.go#L1) — storage identity loss/restoration, responsive reads, repair and drain regressions.
 
 17. <a id="source-17"></a> [runtime.go](../../internal/controller/runtime.go#L19) — read-only loading/verification; explicit lifecycle preparation.

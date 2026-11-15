@@ -1,6 +1,6 @@
 # Opt-in space operator authority
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Native bind startup re-read at `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Native bind startup re-read at `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes. Acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes.
 
 [FACT] Feature `yolo.space.operator` installs a `yoloctl` PATH symlink and requires the
 same-name positive capability. That grant provides helper read access and the
@@ -47,7 +47,7 @@ inherits no endpoint. [4](#source-4) [5](#source-5) [6](#source-6)
 [FACT] Host and operator mutations use the same running reservations and recheck
 them at the effect gate; ended interrupted outcomes hold nothing. Availability
 never grants authority. Operator refusals omit other receipts and principals.
-Host-only acknowledgment options are compatibility no-ops. [25](#source-25) [5](#source-5)
+No option or method acknowledges an outcome. [25](#source-25) [5](#source-5)
 
 [FACT] Replacement/removal retires old registrations. Fixed root controller startup
 first restores the verified native account bind, including after a guest reboot;

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"strings"
 	"testing"
 )
@@ -106,22 +105,6 @@ func TestRecoverLegacyOutcomesBecomesInterruptedWithoutReplay(t *testing.T) {
 	}
 }
 
-func TestAcknowledgmentCompatibilityDoesNotWrite(t *testing.T) {
-	s := storeServer(t)
-	r := seedReceipt(t, s, "noop-receipt-0123456789", "interrupted", writes(box("web")), nil)
-	before, _ := s.Receipts.Read(r.ID)
-	old := writeReceipt
-	writeReceipt = func(string, string, []byte, os.FileMode) error { return errors.New("must not publish") }
-	defer func() { writeReceipt = old }()
-	if _, err := s.acknowledgeAll(); err != nil {
-		t.Fatal(err)
-	}
-	after, _ := s.Receipts.Read(r.ID)
-	if !sameReceipt(before, after) {
-		t.Fatal("acknowledgment changed receipt")
-	}
-}
-
 func TestInterruptedPublicInspectionRedactsProofs(t *testing.T) {
 	s := storeServer(t)
 	r, _ := provenReceipt(t, s, "private-postimage-never-public")
@@ -147,17 +130,19 @@ func TestInterruptedPublicInspectionRedactsProofs(t *testing.T) {
 	}
 }
 
-func TestInterruptedSingleAcknowledgmentIsNoop(t *testing.T) {
+func TestAcknowledgeMethodsAreGone(t *testing.T) {
 	s := storeServer(t)
-	r := seedReceipt(t, s, "noop-one-0123456789", "interrupted", writes(box("web")), nil)
-	req := request("control.acknowledge")
-	req.Payload, _ = json.Marshal(map[string]string{"id": r.ID})
-	if err := invoke(t, s, req, nil, io.Discard, io.Discard); err != nil {
-		t.Fatal(err)
+	r := seedReceipt(t, s, "gone-ack-0123456789", "interrupted", writes(box("web")), nil)
+	for _, method := range []string{"control.acknowledge", "control.acknowledge-all"} {
+		req := request(method)
+		req.Payload, _ = json.Marshal(map[string]string{"id": r.ID})
+		var exit *ExitError
+		if err := invoke(t, s, req, nil, io.Discard, io.Discard); !errors.As(err, &exit) || exit.Status != 2 {
+			t.Fatal(method, "was answered", err)
+		}
 	}
-	got, err := s.Receipts.Read(r.ID)
-	if err != nil || !sameReceipt(r, got) {
-		t.Fatal("ack changed receipt", err)
+	if got, err := s.Receipts.Read(r.ID); err != nil || !sameReceipt(r, got) {
+		t.Fatal("a refused method changed the record", err)
 	}
 }
 

@@ -69,8 +69,8 @@ Interrupting a `box attach`/`box use` client does not end an owned setup: before
 authorization it cancels cleanly; afterward the controller finishes setup, which
 may start a session after the client left. A signal before handoff ends the
 client (status75), never the setup. [12](#source-12)
-Running executions still exclude conflicting work. Both acknowledgment options
-are compatibility no-ops, not recovery authority. [1](#source-1) [3](#source-3)
+Running executions still exclude conflicting work. `space operation` only
+reads: no option or method acknowledges an outcome. [1](#source-1) [3](#source-3)
 
 [FACT] Image preparation is a separate controller-owned phase, outside native
 space/entity apply guards. Each attempt exports privately; only the controller

@@ -1,6 +1,6 @@
 # VM controller, transport and recovery
 
-Verification: `272abb082790962572505495756706d40d73f06c` and accompanying N1/N2 changes; re-read cited sources when changing behavior.
+Verification: `272abb082790962572505495756706d40d73f06c` and accompanying N1/N2 changes; acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Public clients reuse the service's Cobra definitions and route registered
 operations to one root controller inside the selected VM. Host clients use a
@@ -75,7 +75,7 @@ maintenance after export without restarting workers or clearing receipt failures
 restart. The guest supervisor terminates old controller workers before a new
 instance starts; startup then recovers pending receipts with the finalization
 classifier. No request is automatically replayed after a lost reply.
-Acknowledgment options are compatibility no-ops; interrupted outcomes hold
+`space operation` only reads (no acknowledgment option or method); interrupted outcomes hold
 nothing and nothing is retried or undone. Gating, evidence, automatic observation,
 running reservations and receipt-storage repair are in
 [interrupted-outcome recovery](controller-recovery.md).
@@ -124,7 +124,7 @@ this test seam does not change server authorization. [19](#source-19)
 9. <a id="source-9"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L29) — native mutation guard and fast attach.
 10. <a id="source-10"></a> [cmd/yoloctl/controller_documents.go](../../cmd/yoloctl/controller_documents.go#L47) — revision checks and editor apply.
 11. <a id="source-11"></a> [internal/controller/catalogs.go](../../internal/controller/catalogs.go#L16) — CatalogSnapshot.
-12. <a id="source-12"></a> [internal/controller/server.go](../../internal/controller/server.go#L62) — Drain, admission, recovery refusal, `acknowledgeAll`, receipts and stream dispatch.
+12. <a id="source-12"></a> [internal/controller/server.go](../../internal/controller/server.go#L62) — Drain, admission, recovery refusal, receipts and stream dispatch.
 13. <a id="source-13"></a> [internal/controller/receipts.go](../../internal/controller/receipts.go#L79) — authorizedCommand, interrupt, Recover, Begin, retention.
 14. <a id="source-14"></a> [internal/controller/protocol_test.go](../../internal/controller/protocol_test.go#L22) — recovery, framing, stream, drain and publication regressions.
 15. <a id="source-15"></a> [internal/controller/worker_test.go](../../internal/controller/worker_test.go#L77) — worker byte streams, PTY and cancellation regressions.
@@ -140,7 +140,7 @@ this test seam does not change server authorization. [19](#source-19)
 23. <a id="source-23"></a> [Effect protocol](../../internal/controller/effects.go#L34) — trusted gate, checkpoints and completion.
 24. <a id="source-24"></a> [Effect regressions](../../internal/controller/effects_test.go#L18) — real workers, locks, malformed/stdout bytes, durable checkpoint failures, recovery, exec outcomes and retention.
 25. <a id="source-25"></a> [cmd/yoloctl/run.go](../../cmd/yoloctl/run.go#L95) — `execInAgentboxInteractive`; production-registry regressions in exec_receipt_test.go.
-26. <a id="source-26"></a> [Batch acknowledgment](../../internal/controller/acknowledge_test.go#L54) — `acknowledgeAll` regressions; CLI in `newSpaceOperationCmd`.
+26. <a id="source-26"></a> [No acknowledgment](../../internal/controller/interrupted_test.go#L1) — `TestAcknowledgeMethodsAreGone`; CLI `newSpaceOperationCmd` and `TestSpaceOperationHasNoAcknowledgeOptions` in exec_receipt_test.go.
 27. <a id="source-27"></a> [Owned attach setup](attach-setup.md) — gate order, error-free output, held input and acknowledged handoff.
 
 28. <a id="source-28"></a> [Early worker intake](../../cmd/yoloctl/controller_worker_intake.go#L106) — pre-runtime capture; runtime/auth/effect checks still apply.

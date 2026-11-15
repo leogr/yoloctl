@@ -212,14 +212,6 @@ func TestStorageRepairFlushesWithoutSettlingExecutions(t *testing.T) {
 	}
 }
 
-func TestAcknowledgmentDoesNotEnterFailureLedger(t *testing.T) {
-	s := storeServer(t)
-	seedReceipt(t, s, "review-noop-0123456789", "interrupted", writes(box("web")), nil)
-	if _, err := s.acknowledgeAll(); err != nil || len(s.ledger) != 0 || s.receiptFailure != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestFailedAdmissionFlushRunsAndRecordsResultLater(t *testing.T) {
 	s := storeServer(t)
 	calls := 0

@@ -98,3 +98,17 @@ func TestNativePhaseControlHasNoInputStream(t *testing.T) {
 		t.Fatal("trace read would send EOF/reset an administrative response")
 	}
 }
+
+func saveOutcome(t *testing.T, store Receipts, id, method, state string, age time.Duration) {
+	t.Helper()
+	r := Receipt{ID: id, Method: method, State: state, Started: time.Now().UTC().Add(-age), Generation: "generation"}
+	if state == "command-uncertain" {
+		r.EffectPhase = EffectStarted
+	}
+	if state == "setup-complete" {
+		r.SetupComplete = true
+	}
+	if err := store.Save(r); err != nil {
+		t.Fatal(err)
+	}
+}

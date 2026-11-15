@@ -304,12 +304,6 @@ func TestExecClientLossAfterPermissionStaysQueryableWithoutFence(t *testing.T) {
 	if r, err := s.Receipts.Read(next.ID); err != nil || r.State != "complete" || r.Status != 7 || readEffects(t, path) != 2 {
 		t.Fatal(r, err)
 	}
-	ack := request("control.acknowledge")
-	ack.ID = "ack-request-0123456789"
-	ack.Payload = query.Payload
-	if err := invoke(t, s, ack, nil, io.Discard, io.Discard); err != nil {
-		t.Fatal("optional review of an unknown command result failed", err)
-	}
 	if r, err := s.Receipts.Read(req.ID); err != nil || r.State != "interrupted" || readEffects(t, path) != 2 {
 		t.Fatal(r, err)
 	}

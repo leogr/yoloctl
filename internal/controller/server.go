@@ -233,38 +233,6 @@ func (s *Server) admitOperation(req Request, principal Principal, operation Oper
 	return release, r, nil
 }
 
-// reviewedOutcome identifies a receipt in an acknowledge-all summary.
-type reviewedOutcome struct {
-	ID     string `json:"id"`
-	Method string `json:"method"`
-	State  string `json:"state"`
-}
-
-type acknowledgeAllResult struct {
-	Acknowledged []reviewedOutcome `json:"acknowledged"`
-	// Failed may or may not have been saved; Unattempted were not touched.
-	Failed        *reviewedOutcome  `json:"failed,omitempty"`
-	Unattempted   []reviewedOutcome `json:"unattempted,omitempty"`
-	Pending       []string          `json:"pending,omitempty"`
-	Maintenance   bool              `json:"maintenance,omitempty"`
-	ChangesPaused bool              `json:"changes_paused"`
-}
-
-// acknowledgeAll records one explicit host decision over the finished
-// unknown outcomes in the current inventory. Running work is untouched; a
-// later outcome that needs controller recovery may pause changes again.
-// Maintenance is independent and stays in effect. A save failure stops with
-// the saved prefix; nothing is retried, rolled back or reported as success.
-func (s *Server) acknowledgeAll() (*acknowledgeAllResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return &acknowledgeAllResult{Acknowledged: []reviewedOutcome{}, Maintenance: s.draining, ChangesPaused: s.draining || s.nativeStorageFailure != nil}, nil
-}
-
-func (r *acknowledgeAllResult) explain(space string) string {
-	return "Interrupted operations hold nothing; acknowledgment changes nothing.\n"
-}
-
 func (s *Server) check(ctx context.Context, p Principal) error {
 	if s.CheckPrincipal != nil {
 		return s.CheckPrincipal(ctx, p)
@@ -416,25 +384,12 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		_ = wire.Write(Frame{Type: "exit"})
 		return
 
-	case "control.status", "control.acknowledge":
+	case "control.status":
 		var query struct {
 			ID string `json:"id"`
 		}
 		if err := json.Unmarshal(req.Payload, &query); err != nil {
 			fail(errors.New("invalid outcome query"))
-			return
-		}
-		if req.Method == "control.acknowledge" {
-			if !principal.Admin() {
-				fail(errors.New("only host administration can acknowledge operations"))
-				return
-			}
-			if err := (Request{ID: query.ID, Dash: -1}).Validate(); err != nil {
-				fail(err)
-				return
-			}
-			_ = wire.Write(Frame{Type: "stderr", Data: []byte("Interrupted operations hold nothing; acknowledgment changes nothing.\n")})
-			_ = wire.Write(Frame{Type: "exit"})
 			return
 		}
 		s.mu.Lock()
@@ -462,23 +417,6 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		_ = wire.Write(Frame{Type: "exit"})
 		return
 
-	case "control.acknowledge-all":
-		if !principal.Admin() {
-			fail(errors.New("only host administration can acknowledge operations"))
-			return
-		}
-		result, err := s.acknowledgeAll()
-		if result != nil {
-			raw, _ := json.Marshal(result)
-			_ = wire.Write(Frame{Type: "stdout", Data: append(raw, '\n')})
-			_ = wire.Write(Frame{Type: "stderr", Data: []byte(result.explain(s.Hello.Space))})
-		}
-		if err != nil {
-			fail(err)
-			return
-		}
-		_ = wire.Write(Frame{Type: "exit"})
-		return
 	}
 	if err := Authorize(principal, req, s.Hello.Space, s.Operations); err != nil {
 		fail(err)

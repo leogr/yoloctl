@@ -479,14 +479,13 @@ func (m *Model) published(msg Message) {
 
 // inspect leads guidance about a host operation with the command that
 // inspects it, so the ID stays visible where a row is cut short. Publication
-// is evidence for the user; the view never acknowledges an operation or
-// claims what its receipt says. Without an ID it is just the sentence.
+// is evidence for the user; the view never claims what its receipt says.
+// Without an ID it is just the sentence.
 func (m *Model) inspect(requestID, sentence string) string {
 	if requestID == "" {
 		return strings.ToUpper(sentence[:1]) + sentence[1:]
 	}
-	return "Inspect yoloctl space operation " + m.opts.Space + " " + requestID + ": " + sentence +
-		"; acknowledge it only if the inspected outcome requires review"
+	return "Inspect yoloctl space operation " + m.opts.Space + " " + requestID + ": " + sentence
 }
 
 // lateOutcome reports the host's outcome for an image that already left its

@@ -228,7 +228,7 @@ func invoke(t *testing.T, s *Server, req Request, in io.Reader, out, stderr io.W
 func TestControlCallsDoNotSendUnreadStreamFrames(t *testing.T) {
 	// Control methods return directly, without the worker's input pump. Bytes
 	// left unread at close make a Unix bridge report ECONNRESET after success.
-	for _, method := range []string{"control.ping", "control.drain", "control.resume", "control.receipts", "control.status", "control.acknowledge", "control.acknowledge-all"} {
+	for _, method := range []string{"control.ping", "control.drain", "control.resume", "control.receipts", "control.status"} {
 		t.Run(method, func(t *testing.T) {
 			client, server := net.Pipe()
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)

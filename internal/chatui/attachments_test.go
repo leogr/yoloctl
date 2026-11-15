@@ -451,7 +451,7 @@ func TestChangedReplyKeepsTheCaptionUnsent(t *testing.T) {
 }
 
 // An uncertain outcome keeps the host's operation ID so its recorded outcome
-// can be inspected; publication evidence never acknowledges it (QA phase-2).
+// can be inspected; publication evidence settles nothing about it (QA phase-2).
 func TestUncertainImageNamesItsOperation(t *testing.T) {
 	m, _, h := imageModel(t)
 	pasteImg(t, m, h, "png")
@@ -466,7 +466,7 @@ func TestUncertainImageNamesItsOperation(t *testing.T) {
 	}
 	m.Update(IncomingMsg{Message: announcement("mhuman", "#space", img0(m).name, "png")})
 	if img0(m) != nil || !strings.HasPrefix(m.notice, "Inspect yoloctl space operation trial REQ7: the image's announcement was observed") ||
-		!strings.Contains(m.notice, "acknowledge it only if") || strings.Contains(m.notice, "stays uncertain") {
+		strings.Contains(m.notice, "acknowledge") || strings.Contains(m.notice, "stays uncertain") {
 		t.Fatalf("publication resolves the draft but leaves the review to the user: %q", m.notice)
 	}
 	if len(m.late) != 0 {
@@ -630,14 +630,14 @@ func TestOperationGuidanceIsReadableAtNarrowWidth(t *testing.T) {
 		}
 	}
 	joined := strings.Join(note, " ")
-	if !strings.Contains(joined, command) || !strings.Contains(joined, "acknowledge it only if the inspected outcome requires review") {
+	if !strings.Contains(joined, command) || !strings.Contains(joined, "the published image's upload did not finish") {
 		t.Fatalf("the transcript note wraps to show the whole command and guidance:\n%s", view(m))
 	}
 	found := false
 	for _, line := range strings.Split(view(m), "\n") {
 		text, _, _ := strings.Cut(line, "│")
 		found = found || strings.Contains(line, id)
-		if strings.Contains(text, "outcome") && !strings.HasSuffix(text, " ") {
+		if strings.Contains(text, "upload") && !strings.HasSuffix(text, " ") {
 			t.Fatalf("a wrapped note keeps a column before the panel divider: %q", line)
 		}
 	}

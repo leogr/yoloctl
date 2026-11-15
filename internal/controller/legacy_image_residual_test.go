@@ -47,14 +47,6 @@ func TestLegacyImageResidualRetainsAliasesAndLeasesWithoutHoldingWork(t *testing
 	if err != nil || got.State != "interrupted" || !got.Image.Residual || got.Image.OrphanRecorded || !got.Image.AbandonedAt.IsZero() || got.terminal() || got.reserving() || got.unresolved() {
 		t.Fatal(got, err)
 	}
-	before := got
-	if _, err := s.acknowledgeAll(); err != nil {
-		t.Fatal(err)
-	}
-	got, err = s.Receipts.Read(r.ID)
-	if err != nil || !sameReceipt(before, got) {
-		t.Fatal("acknowledgment released image ownership", err)
-	}
 	f := newLocalRetainFixture(t, false, false)
 	alias := "docker.io/" + r.Image.PreparedRef + ":latest"
 	lease := "yoloctl-image-" + r.ID

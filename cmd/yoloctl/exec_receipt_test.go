@@ -288,27 +288,25 @@ func TestSpaceOperationHelpNamesHostReviewPath(t *testing.T) {
 	if err := cmd.Help(); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"interrupted", "observation", "Nothing is replayed", "hold nothing", "compatibility no-ops", "Running operations"} {
+	for _, want := range []string{"interrupted", "observation", "Nothing is replayed", "hold nothing", "Running operations"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("help lacks %q:\n%s", want, out.String())
 		}
 	}
 }
 
-func TestSpaceOperationRefusesConflictingAcknowledgmentBeforeContact(t *testing.T) {
+func TestSpaceOperationHasNoAcknowledgeOptions(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // no space exists to contact
 	for _, args := range [][]string{
-		{"work", "0123456789abcdef", "--acknowledge-all"},
-		{"work", "--acknowledge", "--acknowledge-all"},
-		{"work", "--acknowledge"},
+		{"work", "--acknowledge-all"},
+		{"work", "0123456789abcdef", "--acknowledge"},
 	} {
 		cmd := newSpaceOperationCmd()
 		cmd.SetContext(t.Context())
 		cmd.SetArgs(args)
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		err := cmd.Execute()
-		if !IsUserError(err) || !strings.Contains(err.Error(), "--acknowledge") {
+		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "unknown flag: "+args[len(args)-1]) {
 			t.Fatal(args, err)
 		}
 	}

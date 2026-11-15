@@ -404,19 +404,11 @@ func retireControllerSeed(space string) error {
 
 func newSpaceOperationCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "operation SPACE [ID]", Short: "Inspect recorded controller mutation outcomes", Args: cobra.RangeArgs(1, 2),
-		Long: "Inspect recorded controller operations. An operation without a proven result is interrupted, with an observation of current state when available. Current state never proves historical success. Nothing is replayed. Interrupted operations hold nothing. --acknowledge and --acknowledge-all are compatibility no-ops. Running operations still exclude conflicting work.",
+		Long: "Inspect recorded controller operations. An operation without a proven result is interrupted, with an observation of current state when available. Current state never proves historical success. Nothing is replayed. Interrupted operations hold nothing. Running operations still exclude conflicting work.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := ""
 			if len(args) == 2 {
 				id = args[1]
-			}
-			acknowledge, _ := cmd.Flags().GetBool("acknowledge")
-			acknowledgeAll, _ := cmd.Flags().GetBool("acknowledge-all")
-			switch {
-			case acknowledgeAll && (acknowledge || id != ""):
-				return asUserError(errors.New("--acknowledge-all takes no request ID and cannot be combined with --acknowledge"))
-			case acknowledge && id == "":
-				return asUserError(errors.New("--acknowledge requires one request ID"))
 			}
 			boot, err := checkControllerSpace(cmd.Context(), args[0])
 			if err != nil {
@@ -426,18 +418,11 @@ func newSpaceOperationCmd() *cobra.Command {
 				ID string `json:"id"`
 			}{id})
 			req := controller.Request{ID: rand.Text(), Method: "control.status", Space: boot.Name, Dash: -1, Payload: payload}
-			switch {
-			case acknowledgeAll:
-				req.Method, req.Payload = "control.acknowledge-all", nil
-			case acknowledge:
-				req.Method = "control.acknowledge"
-			case id == "":
+			if id == "" {
 				req.Method = "control.receipts"
 			}
 			return callHostController(cmd.Context(), boot, req, controller.ClientIO{Out: cmd.OutOrStdout(), Err: cmd.ErrOrStderr()})
 		},
 	}
-	cmd.Flags().Bool("acknowledge", false, "Compatibility no-op: interrupted operations hold nothing")
-	cmd.Flags().Bool("acknowledge-all", false, "Compatibility no-op: interrupted operations hold nothing")
 	return cmd
 }

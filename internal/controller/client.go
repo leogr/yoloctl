@@ -342,7 +342,7 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 // does run a worker and keeps the ordinary streaming path.
 func methodHasInput(method string) bool {
 	switch method {
-	case "control.ping", "control.drain", "control.resume", "control.receipts", "control.status", "control.acknowledge", "control.acknowledge-all", "control.native-trace":
+	case "control.ping", "control.drain", "control.resume", "control.receipts", "control.status", "control.native-trace":
 		return false
 	default:
 		return true
