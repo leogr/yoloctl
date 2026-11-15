@@ -6,14 +6,15 @@
 - macro: yolo_openshell_setup
   condition: (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and container.label[yoloctl.openshell.protocol] = "2" and proc.exepath in (/opt/yoloctl/openshell-helper/yoloctl-openshell-helper, /.openshell/runtime/openshell-sandbox, /.openshell/runtime/openshell-supervisor))
 
-# Suppress only successful network-argument reads by the fixed broker.
+# Suppress expected successful task-argument reads by the fixed broker.
+# File-open mediation remains active with unmediated workload sockets.
 # Names/paths/labels narrow noise; they are not executable-authenticity proof.
 - macro: yolo_openshell_netproxy_read
   condition: >-
     evt.type = process_vm_readv and evt.res = SUCCESS and
     container.label[yoloctl.audit.schema] = "1" and
     container.label[yoloctl.audit.runtime_mode] = confined and
-    container.label[yoloctl.audit.network_unconfined] = "false" and
+    container.label[yoloctl.audit.network_unconfined] in ("false", "true") and
     container.label[yoloctl.openshell.protocol] = "2" and
     proc.exepath = /.openshell/runtime/openshell-sandbox and
     proc.name = openshell-netwo

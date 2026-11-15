@@ -3,6 +3,7 @@ package audit
 import (
 	"maps"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -35,21 +36,30 @@ func TestOpenShellBrokerReadException(t *testing.T) {
 	if inspection != original+" and not "+macro {
 		t.Fatal("process inspection scope changed", inspection)
 	}
-	// Evaluate only the conjunction of equalities actually read from the YAML.
+	// Evaluate the fixed equalities and the one explicit network-mode set read from the YAML.
 	// Reject any other grammar rather than pretending to implement Falco. These
 	// fixtures are predicate regressions, not engine/live-event qualification;
 	// TestPinnedArchivesInstallVerifyAndRuleSyntax separately compiles all rules.
 	equality := regexp.MustCompile(`^([^\s=]+) = ("[^"\s]*"|[^\s"=]+)$`)
-	required := make(map[string]string)
+	const networkField = "container.label[yoloctl.audit.network_unconfined]"
+	required := make(map[string][]string)
 	for _, clause := range strings.Split(predicate, " and ") {
-		match := equality.FindStringSubmatch(strings.TrimSpace(clause))
+		clause = strings.TrimSpace(clause)
+		if clause == networkField+` in ("false", "true")` {
+			if _, duplicate := required[networkField]; duplicate {
+				t.Fatal("duplicate predicate field", networkField)
+			}
+			required[networkField] = []string{"false", "true"}
+			continue
+		}
+		match := equality.FindStringSubmatch(clause)
 		if match == nil {
-			t.Fatal("exception is not a conjunction of fixed equalities", clause)
+			t.Fatal("exception has an unexpected predicate clause", clause)
 		}
 		if _, duplicate := required[match[1]]; duplicate {
 			t.Fatal("duplicate predicate field", match[1])
 		}
-		required[match[1]] = strings.Trim(match[2], `"`)
+		required[match[1]] = []string{strings.Trim(match[2], `"`)}
 	}
 	broker := map[string]string{
 		"evt.type": "process_vm_readv", "evt.res": "SUCCESS",
@@ -64,15 +74,21 @@ func TestOpenShellBrokerReadException(t *testing.T) {
 		t.Fatal("broker context lost or expanded", required)
 	}
 	matches := func(event map[string]string) bool {
-		for field, value := range required {
-			if actual, present := event[field]; !present || actual != value {
+		for field, values := range required {
+			if actual, present := event[field]; !present || !slices.Contains(values, actual) {
 				return false
 			}
 		}
 		return true
 	}
-	if !matches(broker) {
-		t.Fatal("expected successful broker read is not excluded", required)
+	for _, network := range []string{"false", "true"} {
+		t.Run("network-"+network, func(t *testing.T) {
+			event := maps.Clone(broker)
+			event[networkField] = network
+			if !matches(event) {
+				t.Fatal("expected successful broker read is not excluded", network, required)
+			}
+		})
 	}
 	for field := range broker {
 		t.Run("missing/"+field, func(t *testing.T) {
@@ -96,7 +112,8 @@ func TestOpenShellBrokerReadException(t *testing.T) {
 		{"failed-read", "evt.res", "EFAULT"},
 		{"denied-read", "evt.res", "EPERM"},
 		{"privileged", "container.label[yoloctl.audit.runtime_mode]", "privileged"},
-		{"unconfined-network", "container.label[yoloctl.audit.network_unconfined]", "true"},
+		{"empty-network", networkField, ""},
+		{"invalid-network", networkField, "unknown"},
 		{"wrong-schema", "container.label[yoloctl.audit.schema]", "2"},
 		{"wrong-protocol", "container.label[yoloctl.openshell.protocol]", "3"},
 		{"renamed-python", "proc.exepath", "/usr/bin/python3"},

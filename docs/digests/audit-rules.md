@@ -1,6 +1,6 @@
 # Audit rule paths and container recognition
 
-Verification: `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes.
+Verification: `2c026472b804300bb877d317fc912451777aa53a` and accompanying changes.
 
 [FACT] Filesystem rules distinguish the path changed by a syscall from the
 payload of a new symbolic link. In pinned libs 0.26.1, `fs.path.source` for
@@ -21,10 +21,15 @@ and protocol-2 context as the namespace rule. Missing context does not grant
 that exception. These remain detection heuristics, not authenticity proofs.
 [1](#source-1) [3](#source-3)
 
-[FACT] Process inspection additionally excludes only successful
+[FACT] Process inspection excludes successful
 `process_vm_readv` events from `/.openshell/runtime/openshell-sandbox` with
 `proc.name=openshell-netwo`, schema 1, protocol 2, confined runtime mode and
-`network_unconfined=false`. Failed reads, ptrace, writes, startup thread names,
+an explicit `network_unconfined` label of `false` or `true`. Unmediated sockets
+retain file-open mediation: this broker reads pathname arguments through
+`task_memory::read_exact`/`process_vm_readv`. [17](#source-17) [18](#source-18)
+[19](#source-19) [20](#source-20)
+
+[FACT] Failed reads, ptrace, writes, startup thread names,
 other executable paths, privileged mode and unknown/missing context gain no
 exception. Existing debugger and host-scope rules are unchanged. A renamed
 ordinary executable still remains eligible. The predicate does not verify
@@ -82,25 +87,30 @@ establish escape. [1](#source-1) [12](#source-12) [13](#source-13) [14](#source-
 labels. Unconfined-network descendants remain eligible for the enabled
 UID/control rules. Labels and ancestry remain selection heuristics; the rules
 provide alerts without remediation or tamper-proof guarantees.
-Existing rules/broker exception stay byte-identical. Compilation and fixtures
+Escape candidates retain their existing enablement and selectors. Compilation and fixtures
 do not prove live selection or noise rates.
 [1](#source-1) [12](#source-12)
 
 ## Sources
 
 1. <a id="source-1"></a> [Pinned rules](../../internal/audit/rules.yaml#L1) — `yolo_fs_target_mutation`, persistence/infrastructure and setup context.
-2. <a id="source-2"></a> [libs 0.26.1 filesystem fields](https://github.com/falcosecurity/libs/blob/0.26.1/userspace/libsinsp/sinsp_filtercheck_fspath.cpp) — `create_fspath_checks`, symlink linkpath/target and rename/hard-link mappings.
-3. <a id="source-3"></a> [Rule regressions](../../internal/audit/rules_test.go#L1) — privacy boundaries and `TestProtectedPathsIgnoreOnlySymlinkPayloads` structural checks.
-4. <a id="source-4"></a> [Configuration](../../internal/audit/config.go#L1) — `Configuration`, enabled engines and explicit socket paths.
-5. <a id="source-5"></a> [Container 0.7.6 CRI matcher](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/src/matchers/cri.cpp) — nerdctl scope pattern; native-containerd matching is separate.
-6. <a id="source-6"></a> [Container 0.7.6 matcher selection](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/src/matchers/matcher.cpp) — engines select matchers; unmatched cgroups become host.
-7. <a id="source-7"></a> [Container 0.7.6 metadata fetcher](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/go-worker/pkg/container/fetcher.go) — enabled-provider lookup and retry bounds.
-8. <a id="source-8"></a> [Metadata extraction](../../third_party/audit-plugin/plugin.cpp#L1) — thread container ID lookup and bounded snapshot extraction.
-9. <a id="source-9"></a> [Broker-read regressions](../../internal/audit/process_inspection_test.go#L1) — `TestOpenShellBrokerReadException`, positive/negative equality fixtures and unchanged inspection scope; not a Falco evaluator.
-10. <a id="source-10"></a> [Native audit handlers](../../cmd/yoloctl/controller_audit_linux.go#L1) — explicit enable installs the pinned `RulesDigest`.
+2. <a id="source-2"></a> [libs 0.26.1 filesystem fields](https://github.com/falcosecurity/libs/blob/0.26.1/userspace/libsinsp/sinsp_filtercheck_fspath.cpp) — `create_fspath_checks`.
+3. <a id="source-3"></a> [Rule regressions](../../internal/audit/rules_test.go#L1) — `TestProtectedPathsIgnoreOnlySymlinkPayloads`.
+4. <a id="source-4"></a> [Configuration](../../internal/audit/config.go#L1) — `Configuration`.
+5. <a id="source-5"></a> [Container 0.7.6 CRI matcher](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/src/matchers/cri.cpp) — nerdctl scope recognition.
+6. <a id="source-6"></a> [Container 0.7.6 matcher selection](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/src/matchers/matcher.cpp).
+7. <a id="source-7"></a> [Container 0.7.6 metadata fetcher](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/go-worker/pkg/container/fetcher.go).
+8. <a id="source-8"></a> [Metadata extraction](../../third_party/audit-plugin/plugin.cpp#L1).
+9. <a id="source-9"></a> [Broker-read regressions](../../internal/audit/process_inspection_test.go#L1) — known modes/unknown context; not a Falco evaluator.
+10. <a id="source-10"></a> [Native audit handlers](../../cmd/yoloctl/controller_audit_linux.go#L1) — `enable` deployment.
 11. <a id="source-11"></a> [Configuration](../../internal/audit/config.go#L1) — automatic file reloads disabled.
-12. <a id="source-12"></a> [Escape regressions](../../internal/audit/escape_rules_test.go#L1) — enablement, selectors, original-rule hash, PATH parity and network/device boundaries.
-13. <a id="source-13"></a> [Composer](../../internal/agentbox/compose.go#L200) — extra mounts, `pathDirs`, `lintPathOverlap`.
+12. <a id="source-12"></a> [Escape regressions](../../internal/audit/escape_rules_test.go#L1) — selectors, enablement and rule hash.
+13. <a id="source-13"></a> [Composer](../../internal/agentbox/compose.go#L200) — `lintPathOverlap`.
 14. <a id="source-14"></a> [PTY capability](../../internal/capabilities/capabilities.go#L1) — permitted PTY aliases.
-15. <a id="source-15"></a> [libs 0.26.1 event extraction](https://github.com/falcosecurity/libs/blob/0.26.1/userspace/libsinsp/sinsp_filtercheck_event.cpp#L1070) — `TYPE_ARGS` retains numeric and resolved forms; `TYPE_ARGSTR` prefers resolved text.
-16. <a id="source-16"></a> [libs 0.26.1 UID formatting](https://github.com/falcosecurity/libs/blob/0.26.1/userspace/libsinsp/event.cpp#L1164) — `PT_UID` resolves to names or placeholders.
+15. <a id="source-15"></a> [libs 0.26.1 event extraction](https://github.com/falcosecurity/libs/blob/0.26.1/userspace/libsinsp/sinsp_filtercheck_event.cpp#L1070) — `TYPE_ARGS`/`TYPE_ARGSTR`.
+16. <a id="source-16"></a> [libs 0.26.1 UID formatting](https://github.com/falcosecurity/libs/blob/0.26.1/userspace/libsinsp/event.cpp#L1164) — `PT_UID`.
+
+17. <a id="source-17"></a> [Unmediated mode](../../third_party/openshell/patches/0001-unmediated-network.patch#L167) — file-open notifications retained.
+18. <a id="source-18"></a> [Pinned broker](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/network_broker.rs#L586) — dispatch; thread L292.
+19. <a id="source-19"></a> [Pinned file handler](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/provider_files.rs#L65).
+20. <a id="source-20"></a> [Pinned task-memory read](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/task_memory.rs#L48) — readv.
