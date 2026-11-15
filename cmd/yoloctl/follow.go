@@ -116,10 +116,12 @@ and q closes the view. A failed read retains the last display marked stale.
 		if requests != nil {
 			defer func() { _ = requests.Close() }()
 		}
-		var path, space string
+		var path, space, workdir string
 		var reader followview.Reader
 		if host {
-			path, err = absoluteFollowPath(args[0], "")
+			// A title base is optional for an already absolute host target.
+			workdir, _ = os.Getwd()
+			path, err = absoluteFollowPath(args[0], workdir)
 			reader = followview.HostReader{Path: path}
 		} else {
 			space, err = selectedSpace(cmd)
@@ -127,16 +129,20 @@ and q closes the view. A failed read retains the last display marked stale.
 				return asUserError(err)
 			}
 			// Resolve the absolute name once. Polls use only that pinned name and space.
-			base := ""
-			if !filepath.IsAbs(args[0]) && !strings.HasPrefix(args[0], "~") {
-				ctx, cancel := context.WithTimeout(cmd.Context(), 7*time.Second)
-				base, err = followDefault(ctx, space)
-				cancel()
-				if err != nil {
+			// The same pinned default workdir also supplies the title base for
+			// absolute paths; it never changes the path used by the reader.
+			ctx, cancel := context.WithTimeout(cmd.Context(), 7*time.Second)
+			workdir, err = followDefault(ctx, space)
+			cancel()
+			if err != nil {
+				if !filepath.IsAbs(args[0]) && !strings.HasPrefix(args[0], "~") {
 					return err
 				}
+				// Absolute/home targets do not need settings to resolve; retain
+				// their existing reader path when the title base is unavailable.
+				workdir = ""
 			}
-			path, err = absoluteFollowPath(args[0], base)
+			path, err = absoluteFollowPath(args[0], workdir)
 			reader = followVMReader(space, path)
 		}
 		if err != nil {
@@ -155,7 +161,7 @@ and q closes the view. A failed read retains the last display marked stale.
 			return err
 		}
 
-		opts := followview.Options{Reader: reader, Path: path, Space: space, Format: selectedFormat}
+		opts := followview.Options{Reader: reader, Path: path, Workdir: workdir, Space: space, Format: selectedFormat}
 		if prefs.ClipboardEnabled() {
 			opts.Copy = func(text string) tea.Cmd {
 				sequence, notice := termio.EvaluateOSC52(termio.OSC52{Selection: "c", Payload: base64.StdEncoding.EncodeToString([]byte(text))}, true)

@@ -58,7 +58,7 @@ func TestFollowPinsRelativeVMNameAndSpaceAtLaunch(t *testing.T) {
 	if err := executeFollow(t, "notes.md"); err != nil {
 		t.Fatal(err)
 	}
-	if selected.Path != filepath.Join(root, "notes.md") || selected.Space != "first" || selected.Format != followview.Markdown {
+	if selected.Path != filepath.Join(root, "notes.md") || selected.Workdir != root || selected.Space != "first" || selected.Format != followview.Markdown {
 		t.Fatal("target not pinned", selected)
 	}
 	ctx.Space = "second"
@@ -231,5 +231,92 @@ func TestFollowCompletionAdvancesFromGrantRootIntoGuestChildren(t *testing.T) {
 	out, directive = cmd.ValidArgsFunction(cmd, nil, root+"/")
 	if calls != 1 || len(out) != 0 || directive&cobra.ShellCompDirectiveNoFileComp == 0 {
 		t.Fatal("removed grant reached the reader or fell back to host completion", calls, out, directive)
+	}
+}
+
+func TestFollowPinsTitleBaseForAbsoluteVMPaths(t *testing.T) {
+	followSeams(t)
+	base := filepath.Join(t.TempDir(), "project")
+	followDefault = func(_ context.Context, space string) (string, error) {
+		if space != "fixed" {
+			t.Fatalf("selected space %q", space)
+		}
+		return base, nil
+	}
+	var selected followview.Options
+	followRun = func(_ context.Context, opts followview.Options) error { selected = opts; return nil }
+	for _, path := range []string{filepath.Join(base, "notes.md"), filepath.Join(base, "..", "other.md")} {
+		if err := executeFollow(t, "--space", "fixed", path); err != nil {
+			t.Fatal(err)
+		}
+		if selected.Workdir != base || selected.Path != path {
+			t.Fatalf("title base or pinned reader path differs: %+v", selected)
+		}
+	}
+}
+
+func TestHostFollowTitleBaseIsLaunchDirectory(t *testing.T) {
+	followSeams(t)
+	t.Chdir(t.TempDir())
+	base, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	followDefault = func(context.Context, string) (string, error) { t.Fatal("host title contacted VM"); return "", nil }
+	var selected followview.Options
+	followRun = func(_ context.Context, opts followview.Options) error { selected = opts; return nil }
+	if err := executeFollow(t, "--host", "docs/notes.md"); err != nil {
+		t.Fatal(err)
+	}
+	if selected.Workdir != base || selected.Path != filepath.Join(base, "docs/notes.md") {
+		t.Fatalf("host title base or path differs: %+v", selected)
+	}
+}
+
+func TestFollowAbsoluteAndHomeTargetsSurviveUnavailableTitleBase(t *testing.T) {
+	followSeams(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	unavailable := errors.New("settings unavailable")
+	followDefault = func(context.Context, string) (string, error) { return "", unavailable }
+	var selected followview.Options
+	called := false
+	followRun = func(_ context.Context, opts followview.Options) error { selected = opts; called = true; return nil }
+	for _, tc := range []struct{ arg, path string }{
+		{filepath.Join(home, "absolute.md"), filepath.Join(home, "absolute.md")},
+		{"~/home.md", filepath.Join(home, "home.md")},
+	} {
+		called = false
+		if err := executeFollow(t, "--space", "fixed", tc.arg); err != nil {
+			t.Fatal(err)
+		}
+		if !called || selected.Path != tc.path || selected.Workdir != "" {
+			t.Fatalf("absolute title fallback differs: %+v", selected)
+		}
+	}
+	called = false
+	if err := executeFollow(t, "--space", "fixed", "relative.md"); !errors.Is(err, unavailable) || called {
+		t.Fatalf("relative target lost required base: %v, launched %v", err, called)
+	}
+}
+
+func TestHostAbsoluteFollowSurvivesUnavailableLaunchDirectory(t *testing.T) {
+	followSeams(t)
+	removed := t.TempDir()
+	t.Chdir(removed)
+	if err := os.Remove(removed); err != nil {
+		t.Skipf("cannot unlink current-directory fixture: %v", err)
+	}
+	if _, err := os.Getwd(); err == nil {
+		t.Fatal("fixture did not make the launch directory unavailable")
+	}
+	var selected followview.Options
+	followRun = func(_ context.Context, opts followview.Options) error { selected = opts; return nil }
+	path := filepath.Join(t.TempDir(), "absolute.md")
+	if err := executeFollow(t, "--host", path); err != nil {
+		t.Fatal(err)
+	}
+	if selected.Path != path || selected.Workdir != "" {
+		t.Fatalf("host absolute fallback differs: %+v", selected)
 	}
 }

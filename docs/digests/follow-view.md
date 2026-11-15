@@ -1,6 +1,6 @@
 # Live file view
 
-Verification: `6eaae0184488765df1d718b4f2381e4dff228e6f` and accompanying changes.
+Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes.
 
 [FACT] Host-only `yoloctl follow PATH [--space SPACE] [--format auto|text|markdown]`
 opens one live pane. Default mode pins the selected space and absolute VM path;
@@ -9,7 +9,12 @@ rechecks the running VM and current bootstrap grants. It never boots a VM,
 changes mounts, updates a controller or falls back to host reads. `--host`
 explicitly reads an ordinarily readable host regular file, relative to launch
 cwd, without a VM; it rejects an explicit `--space`. In-box and operator
-invocations are refused. Auto mode recognizes `.md` and `.markdown` regardless
+invocations are refused. The title contains only the path: relative inside the
+space default workdir (launch cwd for `--host`), absolute outside. This display
+base is pinned at launch; the reader keeps its absolute path. If the base is
+unavailable, an absolute or home-expanded target keeps its absolute title; a
+relative VM target still requires its default workdir. [12](#source-12)
+Auto mode recognizes `.md` and `.markdown` regardless
 of case. [1](#source-1) [2](#source-2)
 
 [FACT] VM reads use existing `vm.ShellCommand` with a fixed finite Python
@@ -92,3 +97,5 @@ and light themes. [7](#source-7) [8](#source-8)
 10. <a id="source-10"></a> [Copy on release](../../internal/followview/model.go#L394) — `copyText`, `clearSelection`, `mouse` (L433); `TestDragCopiesOnReleaseAndControlsStayInert`, `TestReleaseCopyFollowsChatPolicy`, `TestClearingMidDragEndsTheGesture` in model_test.go; host callback in cmd/yoloctl/follow.go applies `seams.clipboard` and OSC 52 evaluation.
 
 11. <a id="source-11"></a> [Compact follow rows](../../internal/followview/table_compact.go#L1) — `toggleTableRows`, `followKey`; table_compact_test.go.
+
+12. <a id="source-12"></a> [Path title](../../internal/followview/model.go#L665) — `Options.Workdir`, `Model.View`, `Within`; cmd/yoloctl/follow.go `newFollowCmd` pins the title base. Component title cases in internal/followview/title_test.go and CLI base/path checks in cmd/yoloctl/follow_test.go.

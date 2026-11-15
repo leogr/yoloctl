@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -33,11 +34,12 @@ func ParseFormat(value string) (Format, error) {
 }
 
 type Options struct {
-	Reader Reader
-	Path   string               // already absolute and pinned by the CLI
-	Space  string               // empty is explicit host mode
-	Format Format               // auto has already been resolved from the selected name
-	Copy   func(string) tea.Cmd // caller applies the existing host clipboard policy
+	Reader  Reader
+	Path    string               // already absolute and pinned by the CLI
+	Workdir string               // title base only; selected space workdir or host launch cwd
+	Space   string               // empty is explicit host mode
+	Format  Format               // auto has already been resolved from the selected name
+	Copy    func(string) tea.Cmd // caller applies the existing host clipboard policy
 	// Mermaid draws admitted mermaid fences of Markdown files; nil
 	// (markdown.mermaid off) keeps them as code cards.
 	Mermaid Renderer
@@ -665,7 +667,13 @@ func (m *Model) View() tea.View {
 		return tea.NewView("")
 	}
 	// The title names the file only; the space is already shown by the TUI.
-	title := "follow · " + strings.ReplaceAll(markdownview.Plain(m.opts.Path), "\n", " ")
+	path := m.opts.Path
+	if Within(path, m.opts.Workdir) {
+		if relative, err := filepath.Rel(m.opts.Workdir, path); err == nil {
+			path = relative
+		}
+	}
+	title := strings.ReplaceAll(markdownview.Plain(path), "\n", " ")
 	titleStyle := spaceview.Style{FG: m.theme.Brand, BG: spaceview.FirstRowBG, Bold: true}
 	rows := []string{markdownview.Paint(m.method, []markdownview.Run{markdownview.Deco(title, titleStyle)}, m.width, spaceview.FirstRowBG, nil, spaceview.Style{})}
 	a, b, selected := m.selectedBounds()
