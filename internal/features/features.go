@@ -43,6 +43,8 @@ type Feature struct {
 	// (e.g. "network.anthropic"). The policy composer resolves these against
 	// internal/capabilities and inherits them into the effective set.
 	RequiresCapabilities []string `yaml:"requires_capabilities,omitempty"`
+	// CacheDirectories are relative directories needed inside the generic .cache bind.
+	CacheDirectories []string `yaml:"cache_directories,omitempty"`
 }
 
 // InstallKind enumerates how a feature is installed.
@@ -74,10 +76,8 @@ const NPMGlobalPrefix = "/home/sandbox/.npm-global"
 // Catalog naming: lowercase kebab-case, with yolo.* for yoloctl integrations.
 // Version-pinned variants MAY append
 // `-<version>` (`python-3.12`), but the built-in `go` is deliberately
-// UNVERSIONED: it installs latest stable Go and relies on GOTOOLCHAIN=auto to
-// fetch whatever toolchain a repository's go.mod pins (the download rides the same
-// network.go-modules grant — proxy.golang.org serves the golang.org/toolchain
-// module). Policy-only features (`github`, `pypi`) carry no install —
+// UNVERSIONED: it installs latest stable Go and keeps GOTOOLCHAIN=local;
+// a module requiring a newer toolchain needs an explicit image refresh/recreate. Policy-only features (`github`, `pypi`) carry no install —
 // their tools live in the base image.
 var registry = map[string]Feature{
 	"aws": {
@@ -141,7 +141,8 @@ RUN install -d -o sandbox -g sandbox /home/sandbox/.agents /home/sandbox/.agents
     && ln -sf /usr/local/go/bin/go /usr/local/bin/go \
     && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt \
     && sed -i 's/^GOTOOLCHAIN=.*/GOTOOLCHAIN=local/' /usr/local/go/go.env \
-    && grep -qx 'GOTOOLCHAIN=local' /usr/local/go/go.env`,
+    && grep -qx 'GOTOOLCHAIN=local' /usr/local/go/go.env \
+    && printf '%s\n' 'GOCACHE=/home/sandbox/.cache/go/build' 'GOMODCACHE=/home/sandbox/.cache/go/mod' >> /usr/local/go/go.env`,
 		},
 		RequiresCapabilities: []string{"network.go-modules"},
 	},
@@ -233,10 +234,14 @@ RUN install -d -o sandbox -g sandbox /home/sandbox/.agents /home/sandbox/.agents
 		Name:        "cargo",
 		Description: "Rust toolchain (cargo + rustc) + crates.io egress, restricted to /usr/bin/cargo",
 		Install: &Install{
-			Kind:       InstallDockerfile,
-			Dockerfile: aptInstallDockerfile("cargo rustc"),
+			Kind: InstallDockerfile,
+			Dockerfile: aptInstallDockerfile("cargo rustc") + `RUN install -d -m 0700 -o sandbox -g sandbox /home/sandbox/.cargo /home/sandbox/.cache/cargo/git /home/sandbox/.cache/cargo/registry \
+    && ln -sT /home/sandbox/.cache/cargo/git /home/sandbox/.cargo/git \
+    && ln -sT /home/sandbox/.cache/cargo/registry /home/sandbox/.cargo/registry \
+    && chown -h sandbox:sandbox /home/sandbox/.cargo/git /home/sandbox/.cargo/registry`,
 		},
 		RequiresCapabilities: []string{"network.cargo"},
+		CacheDirectories:     []string{"cargo/git", "cargo/registry"},
 	},
 }
 

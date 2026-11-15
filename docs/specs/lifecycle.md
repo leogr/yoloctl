@@ -201,7 +201,9 @@ and import starts disabled. [21](#source-21)
 
 [FACT] Storage reports distinguish a box's separate cache from its writable layer;
 older unbound boxes report caches "in the layer". Failed cache measurements stay
-unknown and are not hidden in the remainder. [25](#source-25)
+unknown and are not hidden in the remainder. Feature-declared cache directories
+are prepared at creation/start and restored after explicit clearing. Go and Cargo
+features place their caches inside this bind by default. [25](#source-25)
 
 ## Sources
 

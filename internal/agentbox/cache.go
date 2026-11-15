@@ -1,6 +1,7 @@
 package agentbox
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path"
@@ -54,8 +55,17 @@ func addCacheOptions(c *Config, opts *container.RunOptions, uid, gid int) error 
 	if err != nil {
 		return err
 	}
+	dirs, err := requiredCacheDirectories(c)
+	if err != nil {
+		return err
+	}
 	if err := ensureCacheDirectory(c.Name, uid, gid); err != nil {
 		return fmt.Errorf("prepare box cache: %w", err)
+	}
+	if len(dirs) > 0 {
+		if err := prepareFeatureCacheDirectories(context.Background(), c.Name, uid, gid, dirs); err != nil {
+			return err
+		}
 	}
 	opts.Mounts = append(opts.Mounts, container.Mount{Source: source, Destination: boxcache.Target})
 	return nil
@@ -112,5 +122,15 @@ func PrepareCacheRuntime(c *Config, details *container.Details) error {
 	if err := spaceenv.RequireSpace(c.Space); err != nil {
 		return err
 	}
-	return ensureCacheDirectory(c.Name, native.UID, native.GID)
+	dirs, err := requiredCacheDirectories(c)
+	if err != nil {
+		return err
+	}
+	if err := ensureCacheDirectory(c.Name, native.UID, native.GID); err != nil {
+		return err
+	}
+	if len(dirs) > 0 {
+		return prepareFeatureCacheDirectories(context.Background(), c.Name, native.UID, native.GID, dirs)
+	}
+	return nil
 }

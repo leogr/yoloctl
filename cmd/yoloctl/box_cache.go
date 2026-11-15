@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
-	"github.com/leogr/yoloctl/internal/boxcache"
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/logging"
@@ -57,8 +56,11 @@ its tool's own cache commands, for example: box exec NAME go clean -cache -modca
 					return newBoxStateResolver().ResolveOne(ctx, space, name, boxstate.RuntimeInventory)
 				},
 				func(ctx context.Context, name string) (uint64, error) {
-					native := spaceenv.Current()
-					return boxcache.Clear(ctx, name, native.UID, native.GID)
+					cfg, err := agentbox.Load(space, name)
+					if err != nil {
+						return 0, err
+					}
+					return agentbox.ClearCacheRuntime(ctx, cfg)
 				})
 			if err != nil {
 				return err

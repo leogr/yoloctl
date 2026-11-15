@@ -17,7 +17,16 @@ func Clear(ctx context.Context, name string, uid, gid int) (uint64, error) {
 	return clear(ctx, Root, name, uid, gid)
 }
 
-func clear(ctx context.Context, root, name string, uid, gid int) (uint64, error) {
+// ClearWithDirectories restores the feature directories before measuring the
+// final footprint, so reported freed bytes exclude their recreated allocation.
+func ClearWithDirectories(ctx context.Context, name string, uid, gid int, dirs []string) (uint64, error) {
+	return clear(ctx, Root, name, uid, gid, dirs...)
+}
+
+func clear(ctx context.Context, root, name string, uid, gid int, dirs ...string) (uint64, error) {
+	if err := validateDirectoryPaths(dirs); err != nil {
+		return 0, err
+	}
 	if _, err := Path(name); err != nil {
 		return 0, err
 	}
@@ -63,6 +72,9 @@ func clear(ctx context.Context, root, name string, uid, gid int) (uint64, error)
 	if err := ensure(root, name, uid, gid); err != nil {
 		return 0, err
 	}
+	if err := prepareDirectories(ctx, root, name, uid, gid, dirs); err != nil {
+		return 0, err
+	}
 	leaf, err = parent.OpenRoot(name)
 	if err != nil {
 		return 0, err
@@ -73,6 +85,10 @@ func clear(ctx context.Context, root, name string, uid, gid int) (uint64, error)
 		return 0, err
 	}
 	if after > before {
+		// Restoring newly declared empty directories can itself allocate blocks.
+		if len(dirs) > 0 {
+			return 0, nil
+		}
 		return 0, errors.New("cache usage grew while clearing; inspect it before further action")
 	}
 	return before - after, nil

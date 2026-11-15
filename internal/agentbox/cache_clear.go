@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/leogr/yoloctl/internal/boxcache"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 )
 
@@ -72,7 +71,6 @@ func (a LiveApplier) clearCacheBeforeReplacementCreate(ctx context.Context, c *C
 			return nil
 		},
 		func(check context.Context, name string) (uint64, error) {
-			native := spaceenv.Current()
-			return boxcache.Clear(check, name, native.UID, native.GID)
+			return ClearCacheRuntime(check, c)
 		})
 }

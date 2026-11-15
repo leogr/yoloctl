@@ -87,6 +87,9 @@ func LoadUserFeatures() (map[string]Feature, error) {
 // Network/filesystem access is no longer inline (it lives in
 // internal/capabilities); a feature references capabilities by name.
 func validateUserFeature(f Feature) error {
+	if err := validateCacheDirectories(f.CacheDirectories); err != nil {
+		return err
+	}
 	if f.Install != nil {
 		switch f.Install.Kind {
 		case InstallDockerfile:

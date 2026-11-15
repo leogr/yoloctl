@@ -57,6 +57,22 @@ share the remaining collector budget before global walks, retaining completed
 layer/cache measurements when a later read fails.
 [16](#source-16) [17](#source-17)
 
+[FACT] A catalog feature may declare relative `cache_directories`; invalid
+absolute/dot/parent paths are refused. Generic cache setup creates the selected
+features' directories at create and retained-bound start, and restores them
+after either explicit clear before measuring final freed bytes. Each component
+is opened no-follow, owned by the space UID/GID, mode0700; a missing cache on
+clear remains a no-op. Cargo declares `cargo/git` and `cargo/registry`.
+[18](#source-18) [19](#source-19) [20](#source-20)
+
+[FACT] The Go feature sets `GOCACHE=/home/sandbox/.cache/go/build` and
+`GOMODCACHE=/home/sandbox/.cache/go/mod` in its installation's `go.env`, retaining
+`GOTOOLCHAIN=local`. Cargo's image creates the two cache targets and symlinks
+only `.cargo/git` and `.cargo/registry` to them; `.cargo/bin`, configuration and
+credentials remain in the layer. npm and pip retain their existing `.cache`
+locations. Explicit tool/environment overrides can still write elsewhere.
+[21](#source-21)
+
 [FACT] Tests cover retained contents, exact-leaf deletion, foreign root/leaf
 rejection, symlink targets surviving removal, declared target overlap,
 unchanged policy bytes and no recreation drift with or without the bind.
@@ -86,3 +102,8 @@ a process can still write outside `.cache`.
 
 16. <a id="source-16"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L1) — `storageBoxCache`, native bind inspection, bounded cache observations and report partition.
 17. <a id="source-17"></a> [space_storage_cache_test.go](../../cmd/yoloctl/space_storage_cache_test.go#L1) — separate sums, legacy/foreign rows, failed cache reads and completed-layer retention.
+
+18. <a id="source-18"></a> [cache.go](../../internal/features/cache.go#L1) — catalog directory validation, lookup and deduplication.
+19. <a id="source-19"></a> [directories.go](../../internal/boxcache/directories.go#L1) — descriptor-relative, no-follow component preparation and strict owner/mode checks.
+20. <a id="source-20"></a> [cache_directories.go](../../internal/agentbox/cache_directories.go#L1) — effective feature selection and clear restoration.
+21. <a id="source-21"></a> [features.go](../../internal/features/features.go#L1) — Go installation defaults and Cargo image targets/symlinks/catalog paths.
