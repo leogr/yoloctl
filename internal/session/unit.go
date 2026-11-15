@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/container"
@@ -40,6 +41,11 @@ type UnitSpec struct {
 	StartMain bool
 	// MarkMain marks a privileged box's session as its main session.
 	MarkMain bool
+	// MainRecord and MainRecordSHA256 name a main start's selected
+	// generation (its record.json and the verified record's hash), for the
+	// holder's exit-status fallback.
+	MainRecord       string
+	MainRecordSHA256 string
 }
 
 // StartHolderUnit starts the session holder for spec.Agentbox as a
@@ -100,6 +106,12 @@ func holderUnitArgs(spec UnitSpec) ([]string, error) {
 	}
 	if spec.MarkMain {
 		args = append(args, "--mark-main")
+	}
+	if spec.MainRecord != "" || spec.MainRecordSHA256 != "" {
+		if !spec.StartMain || !filepath.IsAbs(spec.MainRecord) || filepath.Clean(spec.MainRecord) != spec.MainRecord || !validSHA256Hex(spec.MainRecordSHA256) {
+			return nil, fmt.Errorf("session: holder unit for %s has an invalid main record", spec.Agentbox)
+		}
+		args = append(args, "--main-record", spec.MainRecord, "--main-record-sha256", spec.MainRecordSHA256)
 	}
 	if spec.HostIntegration {
 		args = append(args, "--host-integration")
@@ -212,4 +224,16 @@ func ReadVMTombstone(ctx context.Context, c *container.Client, agentbox string) 
 		return ts, false
 	}
 	return ts, true
+}
+
+func validSHA256Hex(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }

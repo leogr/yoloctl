@@ -605,20 +605,30 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 				return err
 			}
 		}
+		var mainRecord, mainRecordSHA string
+		if mode == startMain {
+			// The holder's exit-status fallback reads PID 1's record for
+			// exactly this run's generation, selected and verified here.
+			if mainRecord, mainRecordSHA, err = mainRecordFn(ctx, c, name); err != nil {
+				return fmt.Errorf("read the runtime generation of box %s: %w", name, err)
+			}
+		}
 		return startSessionHolder(ctx, c, name, session.UnitSpec{
-			Agentbox:        name,
-			Argv:            sessionTerminalIdentity(ctx).Command(argv),
-			Term:            termName,
-			Cols:            cols,
-			Rows:            rows,
-			RingBytes:       ringBytes,
-			TitleTemplate:   titleTemplate,
-			TitleStrip:      titleStrip,
-			HostIntegration: true,
-			HostWorkdir:     sessionHostWorkdir(cfg.Workdir),
-			LaunchToken:     token,
-			StartMain:       mode == startMain,
-			MarkMain:        mode == startMarked,
+			Agentbox:         name,
+			Argv:             sessionTerminalIdentity(ctx).Command(argv),
+			Term:             termName,
+			Cols:             cols,
+			Rows:             rows,
+			RingBytes:        ringBytes,
+			TitleTemplate:    titleTemplate,
+			TitleStrip:       titleStrip,
+			HostIntegration:  true,
+			HostWorkdir:      sessionHostWorkdir(cfg.Workdir),
+			LaunchToken:      token,
+			StartMain:        mode == startMain,
+			MarkMain:         mode == startMarked,
+			MainRecord:       mainRecord,
+			MainRecordSHA256: mainRecordSHA,
 		})
 	}
 	if tracked != nil {
@@ -833,6 +843,16 @@ const (
 	// endpoint's main-session request; the endpoint stops the box after it.
 	startMarked
 )
+
+// mainRecordFn names a main start's selected generation (record.json and the
+// verified record's hash) for the box's current container; tests replace it.
+var mainRecordFn = func(ctx context.Context, c *container.Client, name string) (string, string, error) {
+	d, err := c.Inspect(ctx, name)
+	if err != nil {
+		return "", "", fmt.Errorf("read box %s before its session: %w", name, err)
+	}
+	return agentbox.MainRecord(ctx, c, name, d)
+}
 
 // boxLauncherFn reads what a box offers a managed session; tests replace it.
 var boxLauncherFn = agentbox.BoxLauncher

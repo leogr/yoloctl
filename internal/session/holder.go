@@ -61,6 +61,11 @@ type HolderOptions struct {
 	StartMain bool
 	// RefusalPath receives the startup refusal record (directive 61).
 	RefusalPath string
+	// MainRecord and MainRecordSHA256 name a main start's selected
+	// generation: when the main channel ends without an exit status, PID 1's
+	// runtime status for exactly that generation supplies the exit code.
+	MainRecord       string
+	MainRecordSHA256 string
 	// MarkMain marks a privileged box's session as its main session (contract
 	// section 7) before today's exec; its endpoint stops the box after it.
 	MarkMain bool
@@ -387,6 +392,16 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	// before local viewer finalization, so the box's supervisor sees this
 	// attachment end promptly (section 5's main-attachments-ended).
 	_ = client.Close()
+	if werr != nil && opts.StartMain && opts.MainRecord != "" {
+		// The exit status never depends on the connection: PID 1's runtime
+		// status for this exact generation holds the main process's code.
+		if code, ok, err := mainExitFn(opts.MainRecord, opts.MainRecordSHA256); ok {
+			logf("the connection ended without an exit status (%v); PID 1 recorded the main process's exit code %d", werr, code)
+			status, werr = code, nil
+		} else if err != nil {
+			logf("PID 1's exit record unavailable: %v", err)
+		}
+	}
 	connLost := werr != nil
 	h.markDone()
 

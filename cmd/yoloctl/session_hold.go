@@ -35,6 +35,8 @@ func newSessionHoldCmd() *cobra.Command {
 		launchToken     string
 		startMain       bool
 		markMain        bool
+		mainRecord      string
+		mainRecordSHA   string
 		keepalive       time.Duration
 	)
 	cmd := &cobra.Command{
@@ -92,6 +94,8 @@ func newSessionHoldCmd() *cobra.Command {
 				StartMain:         startMain,
 				RefusalPath:       session.RefusalPath(agentbox),
 				MarkMain:          markMain,
+				MainRecord:        mainRecord,
+				MainRecordSHA256:  mainRecordSHA,
 				KeepaliveInterval: keepalive,
 				Logf:              logf,
 			})
@@ -126,6 +130,8 @@ func newSessionHoldCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&hostIntegration, "host-integration", false, "Enable session-scoped browser requests and sandbox image transfer")
 	cmd.Flags().StringVar(&hostWorkdir, "host-workdir", "", "Canonical host workdir for verified image reuse (empty for ephemeral boxes)")
 	cmd.Flags().BoolVar(&startMain, "start-main", false, "Start the session as the box's main process: attach to it and hand it the launch (managed launches into a box created with the launcher)")
+	cmd.Flags().StringVar(&mainRecord, "main-record", "", "A main start's selected generation record (record.json), for reading PID 1's exit code when the connection ends without a status")
+	cmd.Flags().StringVar(&mainRecordSHA, "main-record-sha256", "", "SHA-256 of the selected generation record verified by the caller")
 	cmd.Flags().BoolVar(&markMain, "mark-main", false, "Mark the session as a privileged box's main session before it starts (its endpoint stops the box after it)")
 	cmd.Flags().DurationVar(&keepalive, "keepalive", 0, "SSH keepalive interval (default 4m; must stay < 600s)")
 	return cmd

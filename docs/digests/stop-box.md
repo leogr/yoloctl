@@ -56,7 +56,15 @@ its refusal record (`refused`, beside the marker); the caller removes any
 earlier one before each holder start and, when the holder dies during
 startup, reads it and fails with `box NAME's image has no mkfifo (install
 coreutils in the image); a session cannot be started in it`. Anything else: not known,
-marker kept, ends as a lost connection. Never sent twice. A marked start
+marker kept, ends as a lost connection. Never sent twice. For a main
+start the caller passes the holder the selected generation (its `record.json`
+and the hash of the record it verified for the exact container); when the
+main channel ends without an exit status, the holder reads PID 1's runtime
+status of exactly that generation (no-follow, root-owned, decoded against that
+record) and, if it holds the main process's code (`main-exited`), writes the
+tombstone with it and removes the marker. Otherwise it ends as a lost
+connection, as before; reading a code claims nothing about the container
+having stopped. A marked start
 sends `yoloctl-main-session` before today's exec; a refusal starts nothing.
 [15](#source-15)
 
@@ -110,4 +118,4 @@ nothing here was run on a VM. [7](#source-7) [9](#source-9) [14](#source-14) [15
 12. <a id="source-12"></a> [internal/openshell/launch.go](../../internal/openshell/launch.go#L1) — `MainLauncher`, `SupervisorArgs`, `LauncherShells`, `SupervisorMainExitMarker`; `launch_test.go`.
 13. <a id="source-13"></a> [internal/openshell/launcher_shell_linux.go](../../internal/openshell/launcher_shell_linux.go#L1) — `launcherShell`; `runtime_exec_linux.go`, `prepare_linux.go`; `helperinputs.go`.
 14. <a id="source-14"></a> [internal/mainlaunch/mainlaunch.go](../../internal/mainlaunch/mainlaunch.go#L1) — `LauncherScript`, `HandoverScript`, `Record`, `NewToken`, statuses; `mainlaunch_linux_test.go`.
-15. <a id="source-15"></a> [internal/session/handover.go](../../internal/session/handover.go#L1) — `openMainChannel`, `handOver`, `markMainSession`, `mainChannel.wait`; `holder.go` `RunHolder`; `holder_main_test.go`; the refusal record in `tombstone.go`, `unit.go` `ReadVMRefusal`, `cmd/yoloctl/session_client.go` `waitForAttachSocket`, `session_refusal_test.go`.
+15. <a id="source-15"></a> [internal/session/handover.go](../../internal/session/handover.go#L1) — `openMainChannel`, `handOver`, `markMainSession`, `mainChannel.wait`, `mainExitFn`; `holder.go` `RunHolder` (status fallback); `holder_main_test.go` (`TestHolderMainStartStatusFallback`); `internal/openshell/main_exit_read_linux.go` `ReadMainExit` and its tests; `internal/agentbox/launcher_linux.go` `MainRecord`; the refusal record in `tombstone.go`, `unit.go` `ReadVMRefusal`, `cmd/yoloctl/session_client.go` `waitForAttachSocket`, `session_refusal_test.go`.

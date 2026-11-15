@@ -8,6 +8,7 @@ import (
 
 	"github.com/leogr/yoloctl/internal/boxendpoint"
 	"github.com/leogr/yoloctl/internal/mainlaunch"
+	"github.com/leogr/yoloctl/internal/openshell"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"golang.org/x/crypto/ssh"
 )
@@ -33,6 +34,10 @@ func markMainSession(s *ssh.Session, mark bool) error {
 	}
 	return nil
 }
+
+// mainExitFn reads PID 1's recorded exit code for a selected generation;
+// tests replace it.
+var mainExitFn = openshell.ReadMainExit
 
 // ErrNoMkfifo is directive 61's refusal: the image cannot take a managed
 // session through the launcher.

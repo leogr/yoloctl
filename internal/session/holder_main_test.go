@@ -202,3 +202,66 @@ func TestHolderMainStartClosesItsConnectionAfterTheStatus(t *testing.T) {
 	}
 	_ = a.wait(t)
 }
+
+// The exit status never depends on the connection: a main channel that ends
+// without a status takes PID 1's recorded code for the selected generation
+// (tombstone, marker removed); without a recorded code it is lost as today.
+func TestHolderMainStartStatusFallback(t *testing.T) {
+	previous := mainExitFn
+	t.Cleanup(func() { mainExitFn = previous })
+	for _, tc := range []struct {
+		name   string
+		code   int
+		ok     bool
+		err    error
+		record string
+	}{
+		{"recorded 23", 23, true, nil, "/x/generations/g/record.json"},
+		{"recorded 0", 0, true, nil, "/x/generations/g/record.json"},
+		{"no code yet", 0, false, nil, "/x/generations/g/record.json"},
+		{"unreadable", 0, false, errors.New("permission denied"), "/x/generations/g/record.json"},
+		{"no selected record", 23, true, nil, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opts, _ := testPaths(t)
+			opts.StartMain = true
+			opts.MainRecord, opts.MainRecordSHA256 = tc.record, strings.Repeat("a", 64)
+			var asked []string
+			mainExitFn = func(record, sum string) (int, bool, error) {
+				asked = append(asked, record+"@"+sum)
+				return tc.code, tc.ok, tc.err
+			}
+			fs := startFakeSandbox(t, opts.SSHSocket)
+			res := runHolderAsync(context.Background(), opts)
+			<-fs.started
+			fs.closeStatusless()
+			r := <-res
+			recorded := tc.ok && tc.err == nil && tc.record != ""
+			if recorded {
+				if r.err != nil || r.status != tc.code {
+					t.Fatalf("RunHolder = %d, %v; want %d", r.status, r.err, tc.code)
+				}
+				ts, err := readSessionFile[Tombstone](opts.TombstonePath)
+				if err != nil || ts.ExitCode != tc.code {
+					t.Fatalf("tombstone %+v, %v", ts, err)
+				}
+				if _, err := readSessionFile[Marker](opts.MarkerPath); !os.IsNotExist(err) {
+					t.Fatal("the marker was kept")
+				}
+				if len(asked) != 1 || asked[0] != tc.record+"@"+strings.Repeat("a", 64) {
+					t.Fatalf("asked %q", asked)
+				}
+				return
+			}
+			if !errors.Is(r.err, ErrHolderConnLost) {
+				t.Fatalf("RunHolder err %v, want ErrHolderConnLost", r.err)
+			}
+			if _, err := readSessionFile[Marker](opts.MarkerPath); err != nil {
+				t.Fatal("the marker of a lost session was removed")
+			}
+			if tc.record == "" && len(asked) != 0 {
+				t.Fatal("a fallback was read without a selected record")
+			}
+		})
+	}
+}

@@ -160,6 +160,11 @@ exit 93`,
 	previousMode := sessionStartModeFn
 	t.Cleanup(func() { sessionStartModeFn = previousMode })
 	sessionStartModeFn = func(context.Context, *container.Client, string) (sessionStartMode, error) { return startMain, nil }
+	previousRecord := mainRecordFn
+	t.Cleanup(func() { mainRecordFn = previousRecord })
+	mainRecordFn = func(context.Context, *container.Client, string) (string, string, error) {
+		return "/var/lib/yoloctl/fixture/generations/g1/record.json", strings.Repeat("b", 64), nil
+	}
 	var notice bytes.Buffer
 	t.Cleanup(bindCLITestLogger(t, &notice))
 	if _, err := ensureAgentSession(t.Context(), c, cfg.Space, cfg.Name, &notice, true, nil, sessionStartOptions{}); err == nil || !strings.Contains(err.Error(), "publication is pending") {
@@ -195,6 +200,10 @@ exit 93`,
 	launched, err := os.ReadFile(starts)
 	if err != nil || bytes.Count(launched, []byte{'\n'}) != 1 || !bytes.Contains(launched, []byte("session-hold "+cfg.Name)) {
 		t.Fatal("expected one holder launch after explicit recovery", err)
+	}
+	// A main start names its selected generation for the status fallback.
+	if !bytes.Contains(launched, []byte("--start-main")) || !bytes.Contains(launched, []byte("--main-record /var/lib/yoloctl/fixture/generations/g1/record.json --main-record-sha256 "+strings.Repeat("b", 64))) {
+		t.Fatalf("the main start lacks its selected generation: %s", launched)
 	}
 	// The agentless server is never conversation-tracked: no launch token,
 	// no record and no box lock (chat ensure may already hold it).
