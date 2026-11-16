@@ -10,7 +10,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/leogr/yoloctl/internal/layout"
@@ -68,7 +67,7 @@ type Server struct {
 	Execute    Handler
 	// StorageWarning is an optional statfs-only observation for an admin ping.
 	StorageWarning func() string
-	// CheckPrincipal revalidates the endpoint's runtime grant/incarnation.
+	// CheckPrincipal validates the endpoint's runtime grant/incarnation at admission.
 	CheckPrincipal func(context.Context, Principal) error
 	Receipts       Receipts
 	// Maintenance persists admission closure before drain is acknowledged.
@@ -578,36 +577,6 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			}
 		}
 	}()
-	var selfRetired atomic.Bool
-	if !principal.Admin() {
-		// Authority is rechecked without a client; failure is a controller
-		// decision that ends the execution, owned or not.
-		go func() {
-			ticker := time.NewTicker(time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-execCtx.Done():
-					return
-				case <-ticker.C:
-					probe, stop := context.WithTimeout(execCtx, 5*time.Second)
-					err := s.check(probe, principal)
-					stop()
-					if err != nil && selfRetired.Load() {
-						// This execution retired its own box's listener: losing
-						// the grant is its expected self-retirement, not an
-						// unrelated revocation. Nothing new is admitted on it.
-						return
-					}
-					if err != nil {
-						cancelExec()
-						cancelConn()
-						return
-					}
-				}
-			}
-		}()
-	}
 	setupDone := func() error {
 		attached, err := owner.handoff(func() error {
 			if receipt == nil || !setupThenAttach(req.Method) {
@@ -871,7 +840,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 	if nativeNonces != nil {
 		nativeNonceCall = nativeNonces.allocate
 		operatorRetire = func(ctx context.Context, box, incarnation string) error {
-			return nativeNonces.retireOperatorListener(ctx, box, incarnation, conn, func() { selfRetired.Store(true) })
+			return nativeNonces.retireOperatorListener(ctx, box, incarnation, conn, nil)
 		}
 		pidAnchor = nativeNonces.pidAnchor
 		workerHandoff = newNativeWorkerHandoffOwner(nativeNonces)

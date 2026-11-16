@@ -303,30 +303,117 @@ func TestStreamInputFlowControlBeyondWindow(t *testing.T) {
 	}
 }
 
-func TestOperatorRevocationCancelsExistingConnection(t *testing.T) {
-	var revoked atomic.Bool
-	s := &Server{Hello: hello(), Operations: map[string]Operation{"box.logs": {BoxAllowed: true}},
-		CheckPrincipal: func(_ context.Context, _ Principal) error {
-			if revoked.Load() {
-				return errors.New("revoked")
+func TestOperatorAdmissionIsNotRepeatedForInFlightExecution(t *testing.T) {
+	for _, method := range []string{"box.exec", "box.logs"} {
+		t.Run(method, func(t *testing.T) {
+			var revoked atomic.Bool
+			var checks, executions atomic.Int32
+			s := &Server{Hello: hello(), Operations: map[string]Operation{method: {BoxAllowed: true}},
+				CheckPrincipal: func(_ context.Context, _ Principal) error {
+					checks.Add(1)
+					if revoked.Load() {
+						return errors.New("revoked")
+					}
+					return nil
+				},
+				Execute: func(ctx context.Context, _ Principal, _ Request, streams Streams) (int, error) {
+					executions.Add(1)
+					revoked.Store(true)
+					// Outlive the removed one-second authority timer. Grant changes
+					// refuse new requests, but do not end this admitted execution.
+					timer := time.NewTimer(1300 * time.Millisecond)
+					defer timer.Stop()
+					select {
+					case <-ctx.Done():
+						return 2, ctx.Err()
+					case <-timer.C:
+						_, err := io.WriteString(streams.Out, "admitted command completed\n")
+						return 0, err
+					}
+				},
 			}
-			return nil
-		},
-		Execute: func(ctx context.Context, _ Principal, _ Request, _ Streams) (int, error) {
-			revoked.Store(true)
-			<-ctx.Done()
-			return 2, ctx.Err()
-		},
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			call := func(out io.Writer) error {
+				left, right := net.Pipe()
+				done := make(chan struct{})
+				go func() {
+					s.ServeConn(ctx, right, Principal{Box: "operator", Incarnation: "incarnation"})
+					close(done)
+				}()
+				err := Call(ctx, left, hello(), request(method), ClientIO{Out: out, Err: io.Discard})
+				<-done
+				return err
+			}
+			var out bytes.Buffer
+			if err := call(&out); err != nil {
+				t.Fatalf("grant change ended admitted execution: %v", err)
+			}
+			if out.String() != "admitted command completed\n" || checks.Load() != 1 || executions.Load() != 1 {
+				t.Fatalf("output=%q checks=%d executions=%d", out.String(), checks.Load(), executions.Load())
+			}
+			if err := call(io.Discard); err == nil || !strings.Contains(err.Error(), "revoked") {
+				t.Fatalf("new request after revocation: %v", err)
+			}
+			if checks.Load() != 2 || executions.Load() != 1 {
+				t.Fatalf("revoked request executed: checks=%d executions=%d", checks.Load(), executions.Load())
+			}
+		})
 	}
-	left, right := net.Pipe()
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	done := make(chan struct{})
-	go func() { s.ServeConn(ctx, right, Principal{Box: "operator", Incarnation: "incarnation"}); close(done) }()
-	err := Call(ctx, left, hello(), request("box.logs"), ClientIO{Out: io.Discard, Err: io.Discard})
-	<-done
-	if err == nil || ctx.Err() != nil {
-		t.Fatalf("revocation did not promptly close connection: %v / %v", err, ctx.Err())
+}
+
+func TestOperatorExecutionStillHonorsExplicitCancellation(t *testing.T) {
+	for _, cause := range []string{"client-disconnect", "controller-context"} {
+		t.Run(cause, func(t *testing.T) {
+			started, stopped := make(chan struct{}), make(chan struct{})
+			var checks atomic.Int32
+			s := &Server{Hello: hello(), Operations: map[string]Operation{"box.exec": {BoxAllowed: true}},
+				CheckPrincipal: func(context.Context, Principal) error { checks.Add(1); return nil },
+				Execute: func(ctx context.Context, _ Principal, _ Request, _ Streams) (int, error) {
+					close(started)
+					<-ctx.Done()
+					close(stopped)
+					return 2, ctx.Err()
+				},
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			serverCtx, stopServer := context.WithCancel(ctx)
+			defer stopServer()
+			left, right := net.Pipe()
+			defer func() { _ = left.Close() }()
+			done := make(chan struct{})
+			go func() {
+				s.ServeConn(serverCtx, right, Principal{Box: "operator", Incarnation: "incarnation"})
+				close(done)
+			}()
+			result := make(chan error, 1)
+			go func() {
+				result <- Call(ctx, left, hello(), request("box.exec"), ClientIO{Out: io.Discard, Err: io.Discard})
+			}()
+			select {
+			case <-started:
+			case <-ctx.Done():
+				t.Fatal("execution did not start")
+			}
+			if cause == "client-disconnect" {
+				_ = left.Close()
+			} else {
+				stopServer()
+			}
+			select {
+			case <-stopped:
+			case <-ctx.Done():
+				t.Fatal("explicit cancellation did not stop execution")
+			}
+			if err := <-result; err == nil {
+				t.Fatal("canceled request succeeded")
+			}
+			<-done
+			if checks.Load() != 1 {
+				t.Fatalf("authority checks=%d", checks.Load())
+			}
+		})
 	}
 }
 

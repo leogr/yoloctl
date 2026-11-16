@@ -41,8 +41,8 @@ func (c *operatorPublicationClaim) attachNativeListener(l operator.NativeListene
 // no republication in this controller lifetime) BEFORE the listener Close, then
 // settles the listener, its pending Accept and every other accepted request.
 // When this execution targets its own box, self is its exact connection: it is
-// exempted and selfRetired lets ServeConn tell the expected self-retirement
-// from an unrelated revocation. Any failure after marking is uncertain.
+// exempted, and the optional selfRetired observer is notified after retirement.
+// Any failure after marking is uncertain.
 func (o *nativeNonceOwner) retireOperatorListener(ctx context.Context, box, incarnation string, self net.Conn, selfRetired func()) error {
 	if o == nil || o.server == nil || o.ctx == nil {
 		return errors.New("original native removal execution unavailable")

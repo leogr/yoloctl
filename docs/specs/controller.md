@@ -117,8 +117,10 @@ output, and the view keeps its existing thresholds. [20](#source-20)
 
 [FACT] `yolo.space.operator` is opt-in full box authority within one space, including
 existing accounts, stronger capabilities and delegation. Per-incarnation socket
-access and live server checks enforce scope; CLI help and skills do not enforce
-security. Binary copies and shared account state do not transfer authority.
+access and live server checks enforce scope at request and pre-effect admission.
+In-flight commands are not periodically re-authorized; stream, controller and
+lifecycle cancellation still applies. CLI help and skills do not enforce security.
+Binary copies and shared account state do not transfer authority.
 [4](#source-4)
 
 [FACT] A privileged box (`privileged: true`) limits that authority only at

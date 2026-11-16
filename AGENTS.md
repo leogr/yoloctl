@@ -200,8 +200,10 @@ operator authority. See [interrupted-outcome recovery](docs/digests/controller-r
 `yolo.space.operator` is opt-in authority over all boxes in the current space, including
 other existing accounts, stronger grants, delegation and destructive operations.
 Keep its warning explicit. Authorization belongs to the server's operation
-registry plus current grant/running-container/incarnation/bind checks. Neither a
-copied helper, shared account nor installed skill grants authority. Do not expose
+registry plus current grant/running-container/incarnation/bind checks at request
+and pre-effect admission. In-flight commands are not periodically re-authorized;
+explicit stream, controller and lifecycle cancellation remain. Neither a copied
+helper, shared account nor installed skill grants authority. Do not expose
 admin/session sockets or whole native/config disks to an operator. Reuse the
 same CLI surface and lifecycle services for host and in-box clients.
 

@@ -410,7 +410,7 @@ var revalidateOperatorFn = revalidateOperator
 
 // revalidateOperator rechecks an operator's live grant and incarnation once
 // the native mutation lock is held, before any effect. Admission checked it
-// before the lock, and the listener's periodic recheck can lag a revocation or
+// before the lock; this pre-effect admission check catches a revocation or
 // replacement that happened while the request waited.
 func revalidateOperator(ctx context.Context) error {
 	p := currentControllerPrincipal(ctx)

@@ -82,8 +82,9 @@ path. They run in different enforcement contexts. [1](#source-1)
 
 [FACT] `yolo.space.operator` explicitly grants broad box authority in the current space:
 other existing accounts, granted projects, stronger capabilities and delegation.
-A VM controller revalidates the live caller's grant/incarnation. Account, space
-and catalog administration remain outside that endpoint. [2](#source-2)
+The VM controller validates the live caller's grant/incarnation at request and
+pre-effect admission; in-flight commands are not periodically re-authorized.
+Account, space and catalog administration remain outside that endpoint. [2](#source-2)
 
 [FACT] A privileged box (`privileged: true`, `--privileged`) is the one
 exception to the sandbox, and no capability or feature selects it: the box runs

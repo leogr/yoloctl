@@ -1,6 +1,6 @@
 # Opt-in space operator authority
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Native bind startup re-read at `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes. Acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Native bind startup re-read at `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes. Acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes. Admission-only authorization re-read at `0bfec5a3ac693f226a04d280634025bf35d66e1a` and accompanying changes.
 
 [FACT] Feature `yolo.space.operator` installs a `yoloctl` PATH symlink and requires the
 same-name positive capability. That grant provides helper read access and the
@@ -38,10 +38,11 @@ recreate one the same request proved running. [23](#source-23)
 box. The socket listener supplies identity; client metadata only supplies
 routing. Authorization checks the current declaration's effective grant, a
 running container, identity/incarnation labels and its exact read-only endpoint
-bind. Existing connections are rechecked periodically and canceled on failure;
-box and attach commands and box edit apply recheck the grant once the native
-mutation lock is held, before effects. A copied binary or same-account peer
-inherits no endpoint. [4](#source-4) [5](#source-5) [6](#source-6)
+bind at request admission. Box and attach commands and box edit apply also
+recheck the grant once the native mutation lock is held, before effects.
+In-flight commands are not periodically re-authorized; ordinary stream,
+controller and lifecycle cancellation still applies. A copied binary or
+same-account peer inherits no endpoint. [4](#source-4) [5](#source-5) [6](#source-6)
 [24](#source-24)
 
 [FACT] Host and operator mutations use the same running reservations and recheck
@@ -83,7 +84,8 @@ advisory; installed guidance itself grants no session authority.
 [9](#source-9) [18](#source-18)
 
 [FACT] Tests cover the shared command inventory, flag fidelity, caller-path
-mapping, stopped/replaced endpoint rejection and connection revocation. The
+mapping, stopped/replaced endpoint rejection, admitted-command survival after
+grant changes, refusal of new requests and explicit cancellation. The
 isolated live script exercises helper calls, denied scopes, concurrent writers,
 controller restart, grant removal, offline errors and VM replacement.
 [3](#source-3) [12](#source-12) [13](#source-13)
@@ -108,14 +110,14 @@ continues to come from the controller grant. [17](#source-17)
 2. <a id="source-2"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L121) — operator filesystem grant.
 3. <a id="source-3"></a> [cmd/yoloctl/controller_test.go](../../cmd/yoloctl/controller_test.go#L184) — CLI fidelity, authority and path tests.
 4. <a id="source-4"></a> [cmd/yoloctl/controller_operator.go](../../cmd/yoloctl/controller_operator.go#L28) — authorization, provisioning support, warnings and path translation.
-5. <a id="source-5"></a> [internal/controller/server.go](../../internal/controller/server.go#L126) — trusted principal and periodic revocation.
+5. <a id="source-5"></a> [internal/controller/server.go](../../internal/controller/server.go#L249) — `ServeConn`: trusted principal, request admission and execution cancellation.
 6. <a id="source-6"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L168) — operator mounts and incarnation labels.
 7. <a id="source-7"></a> [internal/operator/endpoint.go](../../internal/operator/endpoint.go#L58) — registration lifecycle and endpoint provisioning.
 8. <a id="source-8"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L96) — shared frontend routing and cross-space copy.
 9. <a id="source-9"></a> [assets/embed.go](../../assets/embed.go#L13) — embedded BoxOperatorSkill.
 10. <a id="source-10"></a> [OpenAI skills documentation](https://learn.chatgpt.com/docs/build-skills) — administrator scope `/etc/codex/skills`, consulted 2026-09-30.
 11. <a id="source-11"></a> [Claude Code skills documentation](https://code.claude.com/docs/en/skills) — managed Linux skills path, consulted 2026-09-30.
-12. <a id="source-12"></a> [internal/controller/protocol_test.go](../../internal/controller/protocol_test.go#L330) — active-connection revocation regression.
+12. <a id="source-12"></a> [internal/controller/protocol_test.go](../../internal/controller/protocol_test.go#L306) — admitted-command survival, new-request refusal and explicit cancellation regressions.
 13. <a id="source-13"></a> [scripts/smoke/controller-operator.sh](../../scripts/smoke/controller-operator.sh#L3) — isolated runtime gate.
 
 14. <a id="source-14"></a> [Gemini v0.62.0 skill discovery](https://github.com/google-gemini/gemini-cli/blob/v0.62.0/packages/core/src/skills/skillManager.ts#L71) — user skills and `.agents/skills` alias.
@@ -131,7 +133,7 @@ continues to come from the controller grant. [17](#source-17)
 21. <a id="source-21"></a> [Preset regressions](../../cmd/yoloctl/agentbox_operator_test.go#L17) — decoded controller requests, saved settings, validation and real Cobra completion.
 22. <a id="source-22"></a> [Operator chat boundary](operator-chat.md) — allowed administration, participation and protected human server.
 23. <a id="source-23"></a> [Privileged development boxes](privileged-boxes.md) — host-started launch boundary.
-24. <a id="source-24"></a> [cmd/yoloctl/controller_operator.go](../../cmd/yoloctl/controller_operator.go#L253-L265) — `revalidateOperator`, called under the lock by `registerSpaceOperations` and box edit apply.
+24. <a id="source-24"></a> [cmd/yoloctl/controller_operator.go](../../cmd/yoloctl/controller_operator.go#L411-L421) — `revalidateOperator`, called under the lock by `registerSpaceOperations` and box edit apply.
 
 25. <a id="source-25"></a> [internal/controller/holds.go](../../internal/controller/holds.go#L1) — `heldError`, `loadHolds` and dependency intersections.
 

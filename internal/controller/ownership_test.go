@@ -815,6 +815,41 @@ func TestOwnedAttachSettledOutcomesNeverFence(t *testing.T) {
 	})
 }
 
+// A grant change refuses future admission without canceling an owned setup
+// that has already started, including after the client leaves.
+func TestOwnedAttachSetupSurvivesOperatorGrantChange(t *testing.T) {
+	h := newOwnedHarness(t, Principal{Box: "caller", Incarnation: "live"})
+	var revoked atomic.Bool
+	var checks atomic.Int32
+	h.s.CheckPrincipal = func(context.Context, Principal) error {
+		checks.Add(1)
+		if revoked.Load() {
+			return errors.New("operator grant removed")
+		}
+		return nil
+	}
+	req := h.request("owned", false)
+	_, conn := h.rawOwnedClient(req)
+	h.await("arrived")
+	_ = conn.Close()
+	h.wait(h.detached, "the client's departure")
+	revoked.Store(true)
+	select {
+	case <-h.served:
+		t.Fatal("grant change ended an admitted owned setup")
+	case <-time.After(1300 * time.Millisecond):
+	}
+	h.releaseBarriers()
+	r, err := h.s.Receipts.Read(req.ID)
+	if err != nil || r.State != "complete" || r.Status != 0 || !r.SetupComplete || !r.ClientDetached || h.s.RecoveryRequired || h.holders() != 1 {
+		t.Fatal(r, h.s.RecoveryRequired, err)
+	}
+	got := h.result()
+	if len(got.Signals) != 0 || len(got.WriteErrors) != 0 || got.Release != "detached" || checks.Load() != 1 {
+		t.Fatalf("worker=%+v checks=%d", got, checks.Load())
+	}
+}
+
 // A6: genuine controller-side failures keep today's recovery rules.
 func TestOwnedAttachGenuineFailuresStillFence(t *testing.T) {
 	t.Run("worker killed after effects", func(t *testing.T) {
@@ -826,27 +861,6 @@ func TestOwnedAttachGenuineFailuresStillFence(t *testing.T) {
 		h.releaseBarriers()
 		r, err := h.s.Receipts.Read(req.ID)
 		if err != nil || r.State != "interrupted" || h.s.RecoveryRequired {
-			t.Fatal(r, h.s.RecoveryRequired, err)
-		}
-	})
-	t.Run("operator authority revoked", func(t *testing.T) {
-		h := newOwnedHarness(t, Principal{Box: "caller", Incarnation: "live"})
-		var revoked atomic.Bool
-		h.s.CheckPrincipal = func(context.Context, Principal) error {
-			if revoked.Load() {
-				return errors.New("operator grant removed")
-			}
-			return nil
-		}
-		req := h.request("owned", false)
-		_, conn := h.rawOwnedClient(req)
-		h.await("arrived")
-		_ = conn.Close()
-		h.wait(h.detached, "the client's departure")
-		revoked.Store(true)
-		h.wait(h.served, "the revoked setup to end")
-		r, err := h.s.Receipts.Read(req.ID)
-		if err != nil || r.State != "interrupted" || h.s.RecoveryRequired || h.holders() != 0 {
 			t.Fatal(r, h.s.RecoveryRequired, err)
 		}
 	})
