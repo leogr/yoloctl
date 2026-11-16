@@ -147,6 +147,10 @@ This compatibility mode has only bounded transcript replay and forwards
 recognized UTF-8 display/input controls. The holder answers queries once;
 queries and opaque extensions (including graphics/DCS/APC) are not forwarded.
 It cannot promise complete screen restoration or every host terminal feature.
+
+A live session of a box on the pre-native runtime can still be attached; a
+stopped one is never started again, and recreation is offered once at a
+terminal (default No).
 Inside a TUI tab it still uses that tab's renderer. A passthrough-only session
 cannot supply measured host colors for otherwise unknown color queries.
 Its resizes report unknown pixel dimensions; pixel mouse input is not rescaled
@@ -681,6 +685,8 @@ reconciles port forwards from the declaration.
 
 An existing container is preserved. Changes requiring its replacement are
 refused; inspect the box and explicitly use box recreate to apply them.
+A stopped box on the pre-native runtime is never started: the start is refused
+and, at a terminal, recreation is offered once (default No).
 
 The container's bridge IP can change between runs, so any forward
 systemd units that survived the previous stop are torn down before
@@ -825,7 +831,7 @@ func startAgentboxCore(cmd *cobra.Command, spaceName, name string, noAutoupdate,
 		}
 	}
 	if err := preflightAgentboxRuntimeQualified(preflightCtx, c, cfg, true, qualify); err != nil {
-		return err
+		return refuseLegacyRun(cmd.Context(), c, spaceName, name, errw, err, legacyStart)
 	}
 
 	autoupdate := func(ctx context.Context) error {
@@ -2174,6 +2180,17 @@ func startExistingAgentboxContainerPrepared(ctx context.Context, c *container.Cl
 	} else if err := prepared.Check(ctx, cfg); err != nil {
 		return err
 	}
+	// Only a privileged launch takes the non-native start below; a pre-native
+	// confined box is refused here too, before any effect.
+	if !native {
+		legacy, err := agentbox.LegacyRuntime(details)
+		if err != nil {
+			return err
+		}
+		if legacy {
+			return &agentbox.LegacyRuntimeError{Space: cfg.Space, Box: cfg.Name}
+		}
+	}
 	if native {
 		if err := withdrawNativeStartForwards(ctx, c, cfg.Name); err != nil {
 			return err
@@ -2370,6 +2387,9 @@ fresh bridge IP. The box manifest and its runtime declaration are
 preserved; this is the same machinery as ` + "`box stop` followed by `box start`" + `,
 not a recreate (use ` + "`box recreate`" + ` to rebuild the container).
 Changes requiring recreation are refused before stopping the existing box.
+A box on the pre-native runtime is never restarted: a running one is stopped
+(its exact run) and refused, and recreation is offered once at a terminal
+(default No).
 
 After the restart the agent CLI is autoupdated to registry-latest
 (best-effort); pass --no-autoupdate to keep the version baked into the image.
@@ -2412,8 +2432,10 @@ After the restart the agent CLI is autoupdated to registry-latest
 			if err != nil {
 				return err
 			}
+			// A pre-native confined box is stopped (its exact run, session-aware)
+			// and refused: recreation is its only route to a new run.
 			if err := preflightAgentboxRestart(cmd.Context(), c, spaceName, name); err != nil {
-				return err
+				return refuseLegacyRun(cmd.Context(), c, spaceName, name, cmd.ErrOrStderr(), err, legacyRestart)
 			}
 			if err := stopAgentboxRuntime(cmd.Context(), c, spaceName, name, cmd.ErrOrStderr()); err != nil {
 				if !isContainerGone(err) {
@@ -3027,8 +3049,16 @@ func qualifyNativeRuntimePreparation(ctx context.Context, c *container.Client, c
 		return native, err
 	}
 	if !native {
+		// A stopped pre-native confined box is never started again; a running
+		// one keeps running (this prepares no new run of it).
 		if !details.Running {
-			return false, agentbox.CheckRetainedLegacyStart(ctx, details, c.CheckRetainedLegacyOpenShell)
+			legacy, err := agentbox.LegacyRuntime(details)
+			if err != nil {
+				return false, err
+			}
+			if legacy {
+				return false, &agentbox.LegacyRuntimeError{Space: cfg.Space, Box: cfg.Name}
+			}
 		}
 		return false, nil
 	}

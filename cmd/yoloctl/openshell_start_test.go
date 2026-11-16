@@ -20,7 +20,10 @@ import (
 
 type preparedStartFixture struct {
 	check, start func() error
-	closed       int
+	// startCtx, when set, replaces start and sees the call's context (its
+	// engine-call record).
+	startCtx func(context.Context) error
+	closed   int
 }
 
 func (s *preparedStartFixture) Check(context.Context, *agentbox.Config) error {
@@ -29,8 +32,13 @@ func (s *preparedStartFixture) Check(context.Context, *agentbox.Config) error {
 	}
 	return nil
 }
-func (s *preparedStartFixture) Start(context.Context, *agentbox.Config) error { return s.start() }
-func (s *preparedStartFixture) Close() error                                  { s.closed++; return nil }
+func (s *preparedStartFixture) Start(ctx context.Context, _ *agentbox.Config) error {
+	if s.startCtx != nil {
+		return s.startCtx(ctx)
+	}
+	return s.start()
+}
+func (s *preparedStartFixture) Close() error { s.closed++; return nil }
 
 // Only the native checkpoint is substituted; inventory/stop/session teardown
 // use the real Client + Lima argv adapters against this finite executable.

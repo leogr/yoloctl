@@ -128,6 +128,9 @@ type boxDriftView struct {
 	Reasons    []boxstate.Reason   `json:"reasons,omitempty"`
 	DriftError string              `json:"drift_error,omitempty"`
 	Error      string              `json:"error,omitempty"`
+	// LegacyRuntime: the box runs the pre-native runtime. Its restart stops
+	// it and refuses with the recreation remedy; it is never set aside.
+	LegacyRuntime bool `json:"legacy_runtime,omitempty"`
 }
 
 func collectBoxDrift(ctx context.Context, space string, names []string) ([]boxDriftView, error) {
@@ -153,6 +156,7 @@ func collectBoxDrift(ctx context.Context, space string, names []string) ([]boxDr
 			view[i].Error = err.Error()
 		case i < len(boxes) && boxes[i].Name == name:
 			view[i].Drift, view[i].Reasons, view[i].DriftError = boxes[i].Drift, boxes[i].Reasons, boxes[i].DriftError
+			view[i].LegacyRuntime = boxes[i].LegacyRuntime
 		default:
 			view[i].Error = "not resolved"
 		}

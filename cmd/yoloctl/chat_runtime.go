@@ -416,9 +416,9 @@ func ensureManagedServer(ctx context.Context, space string, store managedchat.St
 	if err := preflightAgentboxRuntimeQualified(ctx, c, cfg, true, func(check context.Context, declared *agentbox.Config) (bool, error) {
 		return qualifyNativeRuntimePreparation(check, c, declared, &prepared)
 	}); err != nil {
-		return err
+		return refuseLegacyRun(ctx, c, space, cfg.Name, notice, err, legacyStart)
 	}
-	plan, policy, err := managedServerPlan(ctx, c, cfg)
+	plan, policy, err := managedServerPlanFn(ctx, c, cfg)
 	if err != nil {
 		return err
 	}

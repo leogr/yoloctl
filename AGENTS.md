@@ -156,6 +156,12 @@ a warning on every operation and, for a new interactive agent session, the
 offer to recreate it; it is never recreated automatically, because that loses
 data stored only in the container. One that needs only a restart is restarted
 automatically at its next session start when nothing else runs in it.
+A pre-native (old upstream runtime) box is never started or restarted, not
+even to apply a policy: a restart or policy apply stops its exact run through
+the session-aware stop, a start never stops, and each returns the recreation
+remedy; recreation needs separate explicit consent, also under
+`--restart-sessions`. A new native run launches only the saved policy and never
+restores the previous one (see [pre-native boxes](docs/digests/pre-native-boxes.md)).
 
 `space recreate` preserves disk/accounts/declarations and starts a fresh VM;
 boxes require explicit starts. Ephemeral workdirs and sessions are lost.

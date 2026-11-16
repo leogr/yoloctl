@@ -23,7 +23,7 @@ func newAgentboxUseCmd() *cobra.Command {
 		Short: "Observe or steer a persistent session, then detach (JSON Lines)",
 		Long: `Run a finite request or batch through box attach --box-use. This has the
 same authorization and ensure semantics: it may start a missing session or
-restart a stopped box. By default this convenience skips agent autoupdate.
+restart a stopped box (never one on the pre-native runtime). By default this convenience skips agent autoupdate.
 It leaves the persistent session and other attachments running. A signal or
 timeout before the attachment starts exits 75 without cancelling a session start
 in progress; check box session before retrying.

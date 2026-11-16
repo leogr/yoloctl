@@ -469,7 +469,7 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 	if resolved.Runtime == boxstate.RuntimeStopped {
 		prepared, stoppedNative, err = prepareNativeExistingStart(ctx, c, cfg, true)
 		if err != nil {
-			return "", err
+			return "", refuseLegacyRun(ctx, c, space, name, io.Discard, err, legacyStart)
 		}
 	}
 	if tracking != nil {
@@ -945,7 +945,7 @@ func restartForMainSession(ctx context.Context, c *container.Client, space, name
 		return err
 	}
 	if err := preflightAgentboxRestart(ctx, c, space, name); err != nil {
-		return err
+		return refuseLegacyRun(ctx, c, space, name, errw, err, legacyRestart)
 	}
 	if err := stopAgentboxRuntime(ctx, c, space, name, errw); err != nil && !isContainerGone(err) {
 		return err

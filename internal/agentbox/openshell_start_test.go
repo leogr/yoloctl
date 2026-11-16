@@ -3,6 +3,7 @@ package agentbox
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,9 +14,9 @@ import (
 )
 
 // Real Client inventory/inspect decoding via a finite subprocess. Native root
-// is unavailable here: failure must precede launch/legacy effects. The legacy
-// control supplies the retained-byte verifier read while proving the native
-// gate adds no policy/catalog or native mutation requirement to that route.
+// is unavailable here: failure must precede launch effects. A pre-native
+// confined box is refused with LegacyRuntimeError before any effect, without
+// reading the retired binary.
 func TestNativeStartActualAPIRefusesUnavailableQualificationWithoutLegacyEffects(t *testing.T) {
 	for _, native := range []bool{false, true} {
 		t.Run(map[bool]string{false: "legacy", true: "native-unavailable"}[native], func(t *testing.T) {
@@ -57,8 +58,9 @@ esac
 				if prepared != nil {
 					_ = prepared.Close()
 				}
-				if handled != native || (err != nil) != native || prepared != nil {
-					t.Fatal("native API fell back or changed legacy qualification", observed, handled, err)
+				var legacy *LegacyRuntimeError
+				if handled != native || err == nil || errors.As(err, &legacy) == native || prepared != nil {
+					t.Fatal("native API fell back or the legacy box was not refused", observed, handled, err)
 				}
 			}
 
@@ -66,8 +68,8 @@ esac
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := strings.Contains(string(raw), "binary=/opt/openshell/bin/openshell-sandbox"); got != !native {
-				t.Fatalf("retained-byte verifier selected for wrong runtime: native=%v calls=%s", native, raw)
+			if strings.Contains(string(raw), "binary=/opt/openshell/bin/openshell-sandbox") {
+				t.Fatalf("the refusal read the retired binary: native=%v calls=%s", native, raw)
 			}
 			if calls != 0 || strings.Contains(string(raw), "nerdctl start") || strings.Contains(string(raw), "mkdir") || strings.Contains(string(raw), "sudo cat") || strings.Contains(string(raw), "systemctl") {
 				t.Fatal("unqualified native API reached runtime or legacy effects", calls, string(raw))

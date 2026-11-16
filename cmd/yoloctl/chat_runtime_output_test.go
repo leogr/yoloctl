@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/managedchat"
+	"github.com/leogr/yoloctl/internal/openshell"
 	"github.com/leogr/yoloctl/internal/resources"
 	"github.com/leogr/yoloctl/internal/sandbox"
 )
@@ -21,7 +23,7 @@ import (
 // Only the VM subprocess is substituted. Like a controller worker, stdout is
 // the structured response, while nerdctl emits IDs/names and build progress.
 func TestChatRuntimeLifecycleKeepsStructuredOutput(t *testing.T) {
-	for _, action := range []string{"create", "start", "recreate-member", "build", "storage-cleanup", "start-failure"} {
+	for _, action := range []string{"create", "start-legacy", "recreate-member", "build", "storage-cleanup"} {
 		t.Run(action, func(t *testing.T) {
 			cfg, callsPath := chatOutputFixture(t, action)
 			response, err := os.CreateTemp(t.TempDir(), "response")
@@ -44,7 +46,10 @@ func TestChatRuntimeLifecycleKeepsStructuredOutput(t *testing.T) {
 				if err == nil {
 					err = newManagedLiveApplier(c, notice).Create(t.Context(), cfg, policy)
 				}
-			case "start", "start-failure":
+			case "start-legacy":
+				// A stopped pre-native box is never started: the real native
+				// preparation refuses it before effects.
+				prepareNativeExistingStart = actualPrepareNativeExistingStart
 				err = startExistingAgentboxContainer(t.Context(), c, cfg)
 			case "recreate-member":
 				err = recreateChatMember(t.Context(), cfg.Space, managedchat.Member{ID: managedchat.NewID(), Name: cfg.Name, BoxID: cfg.ID}, notice)
@@ -57,7 +62,8 @@ func TestChatRuntimeLifecycleKeepsStructuredOutput(t *testing.T) {
 			case "build":
 				err = c.Build(t.Context(), container.BuildOptions{Tag: "fixture:1", ContextTar: strings.NewReader("")})
 			}
-			if (err != nil) != (action == "start-failure") {
+			var legacy *agentbox.LegacyRuntimeError
+			if (err != nil) != (action == "start-legacy") || action == "start-legacy" && !errors.As(err, &legacy) {
 				t.Fatalf("unexpected lifecycle result: %v", err)
 			}
 			if err == nil {
@@ -70,7 +76,7 @@ func TestChatRuntimeLifecycleKeepsStructuredOutput(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if action == "start-failure" {
+			if action == "start-legacy" {
 				if len(raw) != 0 {
 					t.Fatalf("failed mutation emitted a response: %q", raw)
 				}
@@ -83,23 +89,22 @@ func TestChatRuntimeLifecycleKeepsStructuredOutput(t *testing.T) {
 			}
 			// stderr diagnostics stay; nerdctl's stdout ID/name echo is not
 			// shown, while build output is.
-			if !strings.Contains(string(diagnostics), "fixture stderr") || strings.Contains(string(diagnostics), "fixture stdout") != (action == "build") {
+			// A refused legacy start runs no engine command and emits nothing.
+			if (action != "start-legacy") != strings.Contains(string(diagnostics), "fixture stderr") || strings.Contains(string(diagnostics), "fixture stdout") != (action == "build") {
 				t.Errorf("lifecycle diagnostics changed: %q", diagnostics)
 			}
 			calls, err := os.ReadFile(callsPath)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if action == "start" || action == "start-failure" {
-				assertChatRetainedRuntimeBeforeStart(t, string(calls))
+			if action == "start-legacy" && (strings.Contains(string(calls), "nerdctl start") || strings.Contains(string(calls), "binary=/opt/openshell/bin/openshell-sandbox")) {
+				t.Fatalf("the refused legacy start ran an effect or read the retired binary: %s", calls)
 			}
 			want := map[string][]string{
 				"create":          {"nerdctl --cgroup-manager systemd run"},
-				"start":           {"nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
 				"recreate-member": {"nerdctl stop --time 30 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "nerdctl rm ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "nerdctl --cgroup-manager systemd run"},
 				"build":           {"nerdctl build -t fixture:1"},
 				"storage-cleanup": {"nerdctl rmi yoloctl/agentbox-composed:obsolete"},
-				"start-failure":   {"nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
 			}[action]
 			for _, command := range want {
 				if strings.Count(string(calls), command) != 1 {
@@ -162,9 +167,23 @@ func runChatEnsureLifecycle(t *testing.T, stopped, expected bool) {
 				t.Fatal(err)
 			}
 			command := sandbox.EntrypointArgs(cfg.Workdir.ContainerPath(), false, "sleep", "infinity")
+			// A stopped server box is started again only as a native run. The
+			// expected-run case carries a native runtime signal, with the native
+			// prepared start and the server plan substituted (full native evidence
+			// is the agentbox tests' concern); the stopped case stays pre-native
+			// and is refused.
+			labels := map[string]string{agentbox.LabelAgent: "none", resources.WorkloadLabel: resources.WorkloadVersion}
+			if expected {
+				labels[openshell.LabelProtocol] = openshell.HelperProtocol
+				restore := managedServerPlanFn
+				managedServerPlanFn = func(context.Context, *container.Client, *agentbox.Config) (agentbox.DiffPlan, []byte, error) {
+					return agentbox.DiffPlan{}, policy, nil
+				}
+				t.Cleanup(func() { managedServerPlanFn = restore })
+			}
 			inspect, err := json.Marshal([]any{map[string]any{
 				"Id": strings.Repeat("f", 64), "Name": cfg.Name, "Path": command[0], "Args": command[1:], "State": map[string]any{"Running": !stopped},
-				"Config": map[string]any{"Image": image, "Labels": map[string]string{agentbox.LabelAgent: "none", resources.WorkloadLabel: resources.WorkloadVersion}},
+				"Config": map[string]any{"Image": image, "Labels": labels},
 				"Mounts": []any{map[string]any{"Source": cfg.Workdir.Source, "Destination": cfg.Workdir.ContainerPath(), "RW": false}},
 			}})
 			if err != nil {
@@ -174,7 +193,7 @@ func runChatEnsureLifecycle(t *testing.T, stopped, expected bool) {
 			// operation's expected run (container.ExpectedRuns).
 			running, err := json.Marshal([]any{map[string]any{
 				"Id": strings.Repeat("f", 64), "Name": cfg.Name, "Path": command[0], "Args": command[1:], "State": map[string]any{"Running": true, "Pid": 42, "StartedAt": "2026-11-14T10:00:00.1Z"},
-				"Config": map[string]any{"Image": image, "Labels": map[string]string{agentbox.LabelAgent: "none", resources.WorkloadLabel: resources.WorkloadVersion}},
+				"Config": map[string]any{"Image": image, "Labels": labels},
 				"Mounts": []any{map[string]any{"Source": cfg.Workdir.Source, "Destination": cfg.Workdir.ContainerPath(), "RW": false}},
 			}})
 			if err != nil {
@@ -211,6 +230,17 @@ func runChatEnsureLifecycle(t *testing.T, stopped, expected bool) {
 				}
 				return
 			}
+			if stopped {
+				// A stopped pre-native server box is refused before any effect and
+				// stays stopped; recreation is its route.
+				calls, _ := os.ReadFile(callsPath)
+				var legacy *agentbox.LegacyRuntimeError
+				if !errors.As(err, &legacy) || !strings.Contains(err.Error(), "It is stopped. Recreate it to continue: yoloctl box recreate coder --space default.") ||
+					strings.Contains(string(calls), "nerdctl start ") || strings.Contains(string(calls), " run ") || strings.Contains(string(calls), "nerdctl stop") || strings.Contains(string(calls), "binary=/opt/openshell/bin/openshell-sandbox") {
+					t.Fatalf("stopped legacy server box was not refused before effects: %v\n%s", err, calls)
+				}
+				return
+			}
 			if err == nil || !strings.Contains(err.Error(), "managed server image lacks required AIRC interfaces: managed chat requires the native controller") {
 				t.Fatalf("did not reach the deliberate post-lifecycle probe failure: %v", err)
 			}
@@ -232,16 +262,16 @@ func runChatEnsureLifecycle(t *testing.T, stopped, expected bool) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if stopped {
-				assertChatRetainedRuntimeBeforeStart(t, string(calls))
-			}
-			runs, starts := strings.Count(string(calls), "nerdctl --cgroup-manager systemd run"), strings.Count(string(calls), "nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-			if (!stopped && (runs != 1 || starts != 0)) || (stopped && (runs != 0 || starts != 1)) {
+			if runs, starts := strings.Count(string(calls), "nerdctl --cgroup-manager systemd run"), strings.Count(string(calls), "nerdctl start "); runs != 1 || starts != 0 {
 				t.Errorf("unexpected ensure create/start/replay: runs=%d starts=%d", runs, starts)
 			}
 		}
 	}
 }
+
+// actualPrepareNativeExistingStart is the production preparation, kept before
+// fixtures substitute it.
+var actualPrepareNativeExistingStart = prepareNativeExistingStart
 
 func chatOutputFixture(t *testing.T, action string) (*agentbox.Config, string) {
 	t.Helper()
@@ -283,15 +313,4 @@ esac
 		t.Fatal(err)
 	}
 	return cfg, calls
-}
-
-// A stopped legacy fixture must pass the same read-only retained-byte guard as
-// a real launch, before exercising its original lifecycle/output assertions.
-func assertChatRetainedRuntimeBeforeStart(t *testing.T, calls string) {
-	t.Helper()
-	verified := strings.Index(calls, "binary=/opt/openshell/bin/openshell-sandbox")
-	started := strings.Index(calls, "nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-	if verified < 0 || started < 0 || verified > started {
-		t.Fatalf("chat legacy start skipped retained-byte verification: %s", calls)
-	}
 }

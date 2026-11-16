@@ -7,6 +7,10 @@ type LauncherSupport struct {
 	// process is the launcher (created before it), or one on the old
 	// upstream runtime.
 	NeedsRecreate bool
+	// LegacyRuntime: the NeedsRecreate box runs the pre-native upstream
+	// runtime. It is never started or restarted again (LegacyRuntimeError);
+	// a running one keeps its current run.
+	LegacyRuntime bool
 	// NeedsRestart: a running privileged box whose endpoint refuses the
 	// main-session request (started before it).
 	NeedsRestart bool

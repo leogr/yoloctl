@@ -68,14 +68,12 @@ func TestBoxStartAndRestartPreserveExistingContainer(t *testing.T) {
 				if rollback && strings.Count(calls, "nerdctl stop") != 1 {
 					t.Fatalf("rollback did not stop exactly once: %s", calls)
 				}
-				if got, want := strings.Contains(calls, "nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"), drift != "before start"; got != want {
+				_, statErr := os.Stat(filepath.Join(filepath.Dir(callsPath), "started"))
+				if got, want := statErr == nil, drift != "before start"; got != want {
 					t.Fatalf("started=%v want=%v; calls=%s", got, want, calls)
 				}
-				if strings.Contains(calls, "nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") {
-					verified := strings.Index(calls, "binary=/opt/openshell/bin/openshell-sandbox")
-					if verified < 0 || verified > strings.Index(calls, "nerdctl start ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") {
-						t.Fatalf("legacy start skipped retained-byte verification: %s", calls)
-					}
+				if strings.Contains(calls, "nerdctl start") || strings.Contains(calls, "binary=/opt/openshell/bin/openshell-sandbox") {
+					t.Fatalf("a legacy start path ran: %s", calls)
 				}
 				if operation == "restart" && drift != "before start" {
 					if !slices.Equal(*stops, []string{"holder", "ports", "container", "session", "netns"}) {
@@ -164,6 +162,19 @@ esac
 	if err := os.WriteFile(filepath.Join(bin, "limactl"), []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
+	// A new run of an existing box is a native start (a pre-native box is never
+	// started). Only the native prepared start is substituted: it marks the
+	// container started as the engine start would, and records the launch.
+	restore := prepareNativeExistingStart
+	prepareNativeExistingStart = func(context.Context, *container.Client, *agentbox.Config, bool) (nativePreparedStart, bool, error) {
+		return &preparedStartFixture{startCtx: func(ctx context.Context) error {
+			if record := container.EngineCallsFrom(ctx); record != nil {
+				record.MarkStart() // as the native launch's engine start marks it
+			}
+			return os.WriteFile(filepath.Join(bin, "started"), nil, 0o600)
+		}}, true, nil
+	}
+	t.Cleanup(func() { prepareNativeExistingStart = restore })
 	return filepath.Join(bin, "calls")
 }
 

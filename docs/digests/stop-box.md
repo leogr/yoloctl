@@ -13,7 +13,9 @@ before any unlink). [1](#source-1) [2](#source-2)
 [FACT] A managed launch (an agent or a declared `session_command`) reads its
 box's start mode before the holder starts; a plain shell reads nothing.
 Confined box with the record: **main** (the holder's `--start-main`). Without
-it, or on the old upstream runtime: needs recreate, warned, **exec**. A
+it, or on the old upstream runtime: needs recreate, warned, **exec** (a
+[pre-native box](pre-native-boxes.md) is never started again, so this applies
+only to its current run). A
 privileged box: **marked** (`--mark-main`) when `agentbox.ProbeMainSession`
 (`yoloctl-main-session`, empty, reply required, on a fresh channel then
 closed) is accepted; an explicit refusal needs a restart; unavailable
@@ -82,7 +84,8 @@ before and after; otherwise it warns and starts with exec. [4](#source-4) [5](#s
 destroy, list, create and copy prints it once, whatever its result. Before
 dispatch a host terminal asks "Recreate now? [y/N]" for a new managed session
 in a box that needs recreate (joining a running session asks nothing); yes
-sends one ordinary recreate, then the request. [6](#source-6) [7](#source-7) [8](#source-8)
+sends one ordinary recreate, then the request. A pre-native box is not asked
+before dispatch: its refusal is followed by [its own offer](pre-native-boxes.md). [6](#source-6) [7](#source-7) [8](#source-8)
 
 [FACT] The resolver reads the container first: a box that is not running is
 `stopped`, its last exit or lost session beside it. A stopped container with

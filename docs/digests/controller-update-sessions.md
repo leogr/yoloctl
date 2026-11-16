@@ -31,7 +31,8 @@ that inventory and `chat.status`. Sessions it could not check or identify
 (`unknown`, `other` without a holder, or a declared `session_command` when the
 room cannot be read) are named as left running. Boxes that also require
 recreation are set aside next with their explicit commands, also left running
-([remedies](session-remedies.md)). It lists the remaining `other` boxes, warning that a restart ends the agent's current process and that its
+([remedies](session-remedies.md)); a [pre-native box](pre-native-boxes.md) is
+never set aside: its restart stops and refuses it. It lists the remaining `other` boxes, warning that a restart ends the agent's current process and that its
 conversation must be resumed explicitly. The room's server box is named as
 restarting the room for every connected chat client, and another
 `session_command` box as a managed workload started again. Only when stdin and

@@ -13,6 +13,7 @@ import (
 // PreflightPolicyRestart qualifies the ACTUAL desired policy before a managed
 // caller ends its holder/session. It creates no per-container state. The
 // actual Restart repeats this check and captures its own original checkpoint.
+// A pre-native confined box returns *LegacyRuntimeError.
 func (a LiveApplier) PreflightPolicyRestart(ctx context.Context, c *Config, policy []byte) error {
 	_, err := a.preflightPolicyRestart(ctx, c, policy)
 	return err
@@ -42,7 +43,16 @@ func (a LiveApplier) qualifyNativeRuntimeRoute(ctx context.Context, c *Config, q
 	if err != nil || native {
 		return native, err
 	}
-	return false, CheckRetainedLegacyStart(ctx, details, a.Client.CheckRetainedLegacyOpenShell)
+	// A pre-native confined box is never started or restarted: refuse before
+	// any effect. A privileged box keeps its own endpoint route.
+	legacy, err := LegacyRuntime(details)
+	if err != nil {
+		return false, err
+	}
+	if legacy {
+		return false, &LegacyRuntimeError{Space: c.Space, Box: c.Name}
+	}
+	return false, nil
 }
 func preflightPolicyRestartRoute(ctx context.Context, details *container.Details, native func(context.Context) error) (bool, error) {
 	if details == nil || native == nil {

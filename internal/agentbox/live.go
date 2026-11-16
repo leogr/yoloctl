@@ -281,9 +281,9 @@ func launchWorkdir(command []string) (string, error) {
 //     socket, apply every declared port forward.
 //   - Recreate: tear down forwards, stop+remove the container, then
 //     do Create.
-//   - Restart: snapshot policy for rollback, tear down forwards,
-//     stop, write new policy, start, wait for socket (rollback on
-//     timeout), re-apply forwards.
+//   - Restart: native only: qualify the saved policy, withdraw
+//     forwards, stop, launch the saved policy as a fresh generation;
+//     a pre-native confined box is refused (LegacyRuntimeError).
 //   - AddPortForward / RemovePortForward: thin wrappers over
 //     internal/port for the live-update path.
 type LiveApplier struct {
@@ -418,52 +418,19 @@ func (a LiveApplier) Recreate(ctx context.Context, c *Config, policy []byte) err
 
 // Restart swaps policy without recreating the container. Native runtimes
 // launch the saved policy as a fresh generation and never relaunch the
-// previous one. The labelled legacy route retains its existing
-// policy-file/socket behavior.
+// previous one. A pre-native confined box is refused before any effect
+// (*LegacyRuntimeError): it is never restarted, only explicitly recreated. A
+// privileged box has no enforced policy to swap.
 func (a LiveApplier) Restart(ctx context.Context, c *Config, policy []byte) error {
 	policy = bytes.Clone(policy)
 	native, err := a.preflightPolicyRestart(ctx, c, policy)
 	if err != nil {
 		return err
 	}
-	if native {
-		return a.restartNativeGeneration(ctx, c, policy)
+	if !native {
+		return errors.New("box " + c.Name + " has no native runtime whose policy a restart could swap")
 	}
-	policyPath := sandbox.AgentboxPolicyHostPath(c.Name)
-	if err := port.UnforwardAgentbox(ctx, a.Client, c.Name); err != nil {
-		return fmt.Errorf("teardown port forwards: %w", err)
-	}
-	if err := a.Stop(ctx, c.Name); err != nil {
-		return fmt.Errorf("stop container: %w", err)
-	}
-	// Best-effort: collect any netns/veth a SIGKILL-escalated stop
-	// orphaned. The restarted supervisor creates a fresh netns, so
-	// the old one is residue either way.
-	_ = sandbox.ReapOrphanedNetns(ctx, c.Space, os.Stderr)
-	if err := a.Client.WriteFile(ctx, policyPath, policy, "0644"); err != nil {
-		// Never started the swap; restart with old policy still in
-		// place so the agentbox isn't left stopped.
-		_ = a.Client.Start(ctx, c.Name)
-		return fmt.Errorf("write new policy: %w", err)
-	}
-	if err := a.Client.Start(ctx, c.Name); err != nil {
-		return fmt.Errorf("start container: %w", err)
-	}
-	if err := WaitForSandboxSocket(ctx, c.Space, c.Name, SandboxSocketTimeout); err != nil {
-		// The new run's engine start was submitted: nothing tells a policy
-		// the sandbox rejected from a stop beside it, so the previous
-		// policy is not started again (decision R1). This start's own run
-		// is stopped; the box's state is what a read shows.
-		if stopErr := a.Stop(ctx, c.Name); stopErr != nil {
-			var uncertain *NativeEffectsUncertain
-			if errors.As(stopErr, &uncertain) {
-				return fmt.Errorf("new policy failed; its stop did not finish: %w", errors.Join(err, stopErr))
-			}
-			return fmt.Errorf("new policy failed after its start; the previous policy is not restored automatically and the stop failed: %w", errors.Join(err, stopErr))
-		}
-		return fmt.Errorf("new policy failed after its start; the previous policy is not restored automatically: %w", err)
-	}
-	return a.applyPortForwards(ctx, c, c.Ports)
+	return a.restartNativeGeneration(ctx, c, policy)
 }
 
 // AddPortForward installs one forward against an already-running

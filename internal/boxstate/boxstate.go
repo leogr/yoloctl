@@ -160,6 +160,10 @@ type Box struct {
 	RuntimeText string               `json:"runtime_status,omitempty"`
 	DiffPlan    *agentbox.DiffPlan   `json:"-"`
 	DriftError  string               `json:"drift_error,omitempty"`
+	// LegacyRuntime: the container runs the pre-native runtime and is never
+	// started or restarted again; recreation is its only route to a new run.
+	// Set from the launcher read, with its launcher_recreate reason.
+	LegacyRuntime bool `json:"-"`
 }
 
 type Resolver struct {
@@ -440,6 +444,7 @@ func (r Resolver) resolveSpace(ctx context.Context, space string, depth Depth, s
 				switch {
 				case support.NeedsRecreate:
 					b.Reasons = append(b.Reasons, Reason{Code: ReasonLauncherRecreate, Message: agentbox.RecreateWarning(b.Name)})
+					b.LegacyRuntime = support.LegacyRuntime
 				case support.NeedsRestart:
 					b.Reasons = append(b.Reasons, Reason{Code: ReasonMainSessionRestart, Message: agentbox.RestartWarning(b.Name)})
 				}

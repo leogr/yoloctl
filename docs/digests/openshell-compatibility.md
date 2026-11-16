@@ -4,7 +4,8 @@ Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying change
 
 [FACT] On the upgrade integration tree a native space selects the embedded
 0.1.6 runtime for every new ordinary (non-privileged) box and for an explicit
-`box recreate` of such a box; `restart` keeps a box's recorded runtime. The
+`box recreate` of such a box; `restart` keeps a native box's runtime and
+refuses a pre-native one. The
 ordinary creation path validates an operator grant and, when enabled, creates
 the box with a controller-served native registration (see the safety model below).
 The active 0.0.72 pins, the legacy Rego embed and the Lima/Firecracker
@@ -12,16 +13,12 @@ provisioning of `/opt/openshell` are retired in the same build; the reported
 target version becomes v0.1.6. These are constraints of the trial integration,
 not a qualified release. [1](#source-1) [2](#source-2) [17](#source-17) [18](#source-18) [19](#source-19)
 
-[FACT] Existing old-runtime containers keep starting through the legacy branch
-only while their historical bytes are present: a bounded read-only
-compatibility guard holds the two historical binary hashes and refuses a
-missing, corrupt or substituted legacy binary before launch or teardown with
-"recreate this box to move it to the new OpenShell". Native and privileged
-starts skip that guard; privileged creation drops only its unused legacy
-interpreter/Rego binds. There is no automatic conversion and no return to the
-old runtime. Such a box needs recreate for the session launcher: it warns on
-every one-box command and is offered recreation for a new interactive managed
-session (see [stop-box](stop-box.md)). [19](#source-19) [20](#source-20)
+[FACT] Existing old-runtime containers are never started or restarted again:
+recreation is their only route to a new run, with no automatic conversion and
+no return to the old runtime ([pre-native boxes](pre-native-boxes.md)). The
+historical-binary compatibility guard is removed; privileged creation drops
+only its unused legacy interpreter/Rego binds. Such a box warns on every
+one-box command (see [stop-box](stop-box.md)). [19](#source-19) [20](#source-20)
 
 [FACT] Safety model of the native path on the integration tree, as decided by
 the user: an operator-enabled box gets a native registration published at
@@ -246,9 +243,9 @@ operator-box case was not rerun separately. [26](#source-26)
 15. <a id="source-15"></a> [cmd/yoloctl/controller_images.go](../../cmd/yoloctl/controller_images.go#L272-L291) — `imageWarmState.consume` returns the retained OCI target digest.
 16. <a id="source-16"></a> [nerdctl 2.3.5 ImageFromNative](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/inspecttypes/dockercompat/dockercompat.go#L650-L692) — target aliases, distinct platform configuration ID and bound image configuration.
 17. <a id="source-17"></a> [cmd/yoloctl/openshell_default.go](../../cmd/yoloctl/openshell_default.go#L13-L48) — `defaultCreationContext`, `qualifyDefaultNativeCreation`, `checkDefaultNativeCreation` (native space, not privileged; the operator grant is validated, no longer refused).
-18. <a id="source-18"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L378-L400) — `LiveApplier.Recreate` ends in `Create`, which takes the native selection when bound; `Restart` keeps the recorded runtime.
-19. <a id="source-19"></a> [internal/container](../../internal/container/container.go#L1) — historical compatibility guard in `legacy_openshell.go` (added by the retirement delta): script L16, the two historical hashes L20–L21, bounded VM read L30; `cmd/yoloctl/version.go` reports v0.1.6 (retirement tree `3cc5e841`).
-20. <a id="source-20"></a> [internal/agentbox](../../internal/agentbox/live.go#L1) — `ErrLegacyOpenShellUnavailable` in `openshell_legacy.go` (added by the retirement delta) ("recreate this box to move it to the new OpenShell"), legacy launch/teardown preflight; privileged bind trimming in live.go.
+18. <a id="source-18"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L378-L400) — `LiveApplier.Recreate` ends in `Create`, which takes the native selection when bound; `Restart` is native-only.
+19. <a id="source-19"></a> [cmd/yoloctl/version.go](../../cmd/yoloctl/version.go#L1) — reports v0.1.6 (retirement tree `3cc5e841`).
+20. <a id="source-20"></a> [internal/agentbox/openshell_legacy.go](../../internal/agentbox/openshell_legacy.go#L1) — `LegacyRuntimeError`, `LegacyRuntime`, `withoutLegacyOpenShellBinds` (privileged bind trimming).
 21. <a id="source-21"></a> [internal/agentbox/openshell_policy_read.go](../../internal/agentbox/openshell_policy_read.go#L1) — `LiveInspector.ReadRuntimePolicy`; `buildInspectRuntime` in cmd/yoloctl/agentbox_inspect.go (policy-view tree `ad168599`); `TestRuntimePolicyViewNeverHashesLegacyMirrorForNativeFailure`.
 22. <a id="source-22"></a> [internal/controller](../../internal/controller/server.go#L1) — `ServeNativeOperator`, `CloseNativeOperators` in `operator_native_serve.go`, `retireOperatorListener` in `operator_retire.go`; `operator.ProvisionNative` in internal/operator/native_publisher_linux.go; warning-only operator cleanup steps in internal/agentbox/openshell_remove_linux.go.
 23. <a id="source-23"></a> [internal/agentbox/openshell_container_plan_linux.go](../../internal/agentbox/openshell_container_plan_linux.go#L1) — literal env snapshot merged under private/chat envelope values; `openshell_literal_environment_linux_test.go` (sol native-literal-env tree `e17b88f6`).

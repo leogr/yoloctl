@@ -46,8 +46,9 @@ func BoxLauncher(ctx context.Context, client *container.Client, name string, det
 		}
 		return LauncherSupport{NeedsRecreate: !capable}, nil
 	case classifyLaunch(details.Command).confined:
-		// The old upstream runtime (legacy branch): never the launcher.
-		return LauncherSupport{NeedsRecreate: true}, nil
+		// The old upstream runtime (legacy branch): never the launcher, and
+		// never started or restarted again.
+		return LauncherSupport{NeedsRecreate: true, LegacyRuntime: true}, nil
 	}
 	return LauncherSupport{}, errors.New("launcher: the box's runtime cannot be classified (" + ev.Reason + ")")
 }

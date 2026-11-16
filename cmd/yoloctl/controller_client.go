@@ -345,7 +345,7 @@ func reportClientDetached(cmd *cobra.Command, req controller.Request, err error)
 	return err
 }
 
-func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req controller.Request) error {
+func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req controller.Request) (result error) {
 	passthrough, _ := cmd.Flags().GetBool("passthrough")
 	boxUse, _ := cmd.Flags().GetBool("box-use")
 	if boxUse {
@@ -382,6 +382,17 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 	if box, kind, ok := boxRecreateOffer(req); ok {
 		if err := offerRecreate(cmd, target, box, kind, flagTrue(req.Flags, "no-autoupdate")); err != nil {
 			return err
+		}
+	}
+	if box, apply, ok := boxLegacyRecreateOffer(req); ok && recreateOfferInteractive(cmd) {
+		// A policy apply refuses only a running pre-native box (it stops it
+		// first): it is offered only when it was read running before.
+		if !apply || legacyRuntimeRunning(cmd, target, box) {
+			// Registered before raw mode and the reader: it runs after both
+			// are released, once the refusal has been printed.
+			defer func() {
+				result = offerLegacyRecreate(cmd, target, box, flagTrue(req.Flags, "no-autoupdate"), result)
+			}()
 		}
 	}
 	ctx, cancel := context.WithCancel(cmd.Context())

@@ -1,36 +1,42 @@
 package agentbox
 
 import (
-	"context"
 	"errors"
 
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/sandbox"
 )
 
-// CheckRetainedLegacyStart is read-only preflight, not launch/admission. Actual
-// native and explicit privileged commands never require the retired binary.
-func CheckRetainedLegacyStart(ctx context.Context, details *container.Details, check func(context.Context) error) error {
-	if ctx == nil || details == nil {
-		return errors.New("legacy start lacks inspected runtime evidence")
+// LegacyRuntimeError refuses a new run of a box whose existing container runs
+// the pre-native OpenShell runtime: such a box is never started or restarted
+// again, and explicit recreation is its only route to a new run. It names the
+// inspected box only and grants nothing; it does not need the retired binary.
+type LegacyRuntimeError struct{ Space, Box string }
+
+func (e *LegacyRuntimeError) Error() string {
+	return "box " + e.Box + " predates the native runtime and cannot be started or restarted"
+}
+
+// RecreateCommand is the one command that moves the box to the native runtime.
+func (e *LegacyRuntimeError) RecreateCommand() string {
+	return "yoloctl box recreate " + e.Box + " --space " + e.Space
+}
+
+// LegacyRuntime reports whether inspected evidence is a pre-native confined
+// launch: an existing container with no native runtime signals that is not a
+// privileged launch. Mixed or incomplete native evidence stays native, and a
+// privileged box uses yoloctl's own endpoint, never this classification.
+func LegacyRuntime(details *container.Details) (bool, error) {
+	if details == nil {
+		return false, errors.New("legacy runtime classification lacks inspected evidence")
 	}
-	if err := ctx.Err(); err != nil {
-		return err
+	if hasOpenShellRuntimeSignals(details) {
+		return false, nil
 	}
-	if details.Privileged != nil && *details.Privileged {
-		return nil
+	if details.Privileged != nil && *details.Privileged || ClassifyRuntime(details).AnyPrivileged {
+		return false, nil
 	}
-	args := details.Command
-	if len(args) > 0 && args[0] == sandbox.EntrypointShimPath {
-		args = args[1:]
-	}
-	if len(args) == 0 || args[0] != sandbox.BinaryDirContainerPath+"/openshell-sandbox" {
-		return nil
-	}
-	if check == nil {
-		return container.ErrLegacyOpenShellUnavailable
-	}
-	return check(ctx)
+	return true, nil
 }
 
 // Privileged boxes use yoloctl's own endpoint. They must not acquire binds to

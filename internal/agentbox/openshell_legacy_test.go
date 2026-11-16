@@ -1,8 +1,6 @@
 package agentbox
 
 import (
-	"context"
-	"errors"
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/container"
@@ -10,34 +8,32 @@ import (
 	"github.com/leogr/yoloctl/internal/sandbox"
 )
 
-func TestRetainedLegacyStartKeepsMigrationRefusalAndNativePrivilegedRoutes(t *testing.T) {
+// Route classification from actual inspected evidence: a pre-native confined
+// launch is legacy; native (complete or mixed evidence) and privileged never
+// are, and the retired binary is not consulted to refuse.
+func TestLegacyRuntimeClassifiesOnlyPreNativeConfinedLaunches(t *testing.T) {
 	legacy := &container.Details{Command: sandbox.EntrypointArgs("/workdir", false, "sleep", "infinity")}
-	calls := 0
-	refused := func(context.Context) error { calls++; return container.ErrLegacyOpenShellUnavailable }
-	if err := CheckRetainedLegacyStart(t.Context(), legacy, refused); !errors.Is(err, container.ErrLegacyOpenShellUnavailable) || calls != 1 {
-		t.Fatal("missing legacy bytes reached launch", err, calls)
-	}
-	allowed := func(context.Context) error { calls++; return nil }
-	if err := CheckRetainedLegacyStart(t.Context(), legacy, allowed); err != nil || calls != 2 {
-		t.Fatal("retained historical bytes refused", err, calls)
-	}
-	native := &container.Details{Command: []string{sandbox.EntrypointShimPath, openshell.HelperBinary, openshell.HelperCommand}}
-	if err := CheckRetainedLegacyStart(t.Context(), native, refused); err != nil || calls != 2 {
-		t.Fatal("native start depended on retired runtime", err)
-	}
+	native := &container.Details{Command: []string{sandbox.EntrypointShimPath, openshell.HelperBinary, openshell.HelperCommand}, Labels: map[string]string{openshell.LabelProtocol: "1"}}
+	mixed := &container.Details{Command: legacy.Command, Labels: map[string]string{openshell.LabelControlRoot: "/x"}}
 	privileged := *legacy
 	yes := true
 	privileged.Privileged = &yes
-	if err := CheckRetainedLegacyStart(t.Context(), &privileged, refused); err != nil || calls != 2 {
-		t.Fatal("privileged start depended on retired runtime", err)
+	for _, c := range []struct {
+		name    string
+		details *container.Details
+		want    bool
+	}{{"legacy confined", legacy, true}, {"native", native, false}, {"mixed native evidence", mixed, false}, {"privileged", &privileged, false}} {
+		got, err := LegacyRuntime(c.details)
+		if err != nil || got != c.want {
+			t.Fatalf("%s: legacy=%v err=%v", c.name, got, err)
+		}
 	}
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	if err := CheckRetainedLegacyStart(ctx, legacy, allowed); !errors.Is(err, context.Canceled) || calls != 2 {
-		t.Fatal("cancelled check invoked runtime reader", err)
+	if _, err := LegacyRuntime(nil); err == nil {
+		t.Fatal("missing evidence classified")
 	}
-	if err := CheckRetainedLegacyStart(t.Context(), legacy, nil); !errors.Is(err, container.ErrLegacyOpenShellUnavailable) {
-		t.Fatal("missing legacy observation permitted start", err)
+	e := &LegacyRuntimeError{Space: "work", Box: "coder"}
+	if e.Error() != "box coder predates the native runtime and cannot be started or restarted" || e.RecreateCommand() != "yoloctl box recreate coder --space work" {
+		t.Fatal(e.Error(), e.RecreateCommand())
 	}
 }
 

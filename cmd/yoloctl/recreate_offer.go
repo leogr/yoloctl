@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -63,6 +64,11 @@ func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind
 	if err != nil || json.Unmarshal(raw.Bytes(), &report) != nil {
 		return nil // not evidence: the worker's early refusal still applies
 	}
+	if report.Identity.LegacyRuntime {
+		// A pre-native box is never started or restarted: the worker refuses
+		// (stopping a running one first), and offerLegacyRecreate asks then.
+		return nil
+	}
 	running := report.Identity.RuntimeState == string(boxstate.RuntimeRunning)
 	strategy := report.Drift.Strategy
 	affirmative := strategy == "recreate" || (kind == offerChatServer && strategy == "restart")
@@ -92,6 +98,85 @@ func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind
 		return err
 	}
 	return sendOfferedRecreate(cmd, target, box, noAutoupdate)
+}
+
+// boxLegacyRecreateOffer selects a request whose refusal for a pre-native box
+// is offered recreation: one that needs a new run (start, restart, attach,
+// whatever its attach flags) or, with apply, a policy apply (set, reconcile)
+// that restarts a running box. A chat-guarded attach is never offered.
+func boxLegacyRecreateOffer(req controller.Request) (box string, apply, ok bool) {
+	if len(req.Args) == 0 {
+		return "", false, false
+	}
+	switch req.Method {
+	case "box.start", "box.restart":
+	case "box.attach":
+		for _, name := range append([]string{"chat-allow-start"}, chatAttachIdentityFlags...) {
+			if len(req.Flags[name]) > 0 {
+				return "", false, false
+			}
+		}
+	case "box.set", "box.reconcile":
+		if flagTrue(req.Flags, "dry-run") {
+			return "", false, false
+		}
+		apply = true
+	default:
+		return "", false, false
+	}
+	return req.Args[0], apply, true
+}
+
+// readLegacyIdentity reads the box's identity through the read-only
+// box.inspect; ok is false when it cannot be read.
+func readLegacyIdentity(cmd *cobra.Command, target controllerTarget, box string) (inspectIdentity, bool) {
+	var report struct {
+		Identity inspectIdentity `json:"identity"`
+	}
+	raw := boundedBuffer{Limit: 4 << 20}
+	ctx, cancel := context.WithTimeout(cmd.Context(), recreateOfferInspectTimeout)
+	defer cancel()
+	inspect := controller.Request{ID: rand.Text(), Method: "box.inspect", Space: target.Space, Args: []string{box}, Dash: -1, Flags: map[string][]string{"json": {"true"}}}
+	if err := target.Call(ctx, inspect, controller.ClientIO{Out: &raw, Err: &boundedBuffer{Limit: 64 << 10}}); err != nil || json.Unmarshal(raw.Bytes(), &report) != nil {
+		return inspectIdentity{}, false
+	}
+	return report.Identity, true
+}
+
+// legacyRuntimeRunning reports a read showing a running pre-native box.
+func legacyRuntimeRunning(cmd *cobra.Command, target controllerTarget, box string) bool {
+	id, ok := readLegacyIdentity(cmd, target, box)
+	return ok && id.LegacyRuntime && id.RuntimeState == string(boxstate.RuntimeRunning)
+}
+
+// offerLegacyRecreate runs after a selected request for a pre-native box
+// failed and its refusal was printed. It asks only a person at the terminal,
+// only when a fresh read shows the box pre-native and stopped (the refusal
+// stopped it, or found it stopped); a read that fails or shows it running (an
+// unconfirmed stop) asks nothing. A yes sends one ordinary `box recreate NAME
+// --force --no-attach`; the original request is never sent again. A no, EOF
+// or any other case keeps the refusal.
+func offerLegacyRecreate(cmd *cobra.Command, target controllerTarget, box string, noAutoupdate bool, refusal error) error {
+	if refusal == nil || !recreateOfferInteractive(cmd) || cmd.Context().Err() != nil {
+		return refusal
+	}
+	id, ok := readLegacyIdentity(cmd, target, box)
+	if !ok || !id.LegacyRuntime || id.RuntimeState != string(boxstate.RuntimeStopped) {
+		return refusal
+	}
+	yes, err := promptYesNo(legacyRecreatePrompt(box), cmd.InOrStdin(), cmd.ErrOrStderr())
+	if err != nil {
+		return errors.Join(refusal, err)
+	}
+	if !yes {
+		return refusal
+	}
+	return sendOfferedRecreate(cmd, target, box, noAutoupdate)
+}
+
+// legacyRecreatePrompt is the one confirmation for a pre-native box.
+func legacyRecreatePrompt(box string) string {
+	return "Recreation deletes files stored only in the container. Workdir, declared cache and account state are preserved. Recreate " + box + " now? [y/N]: "
 }
 
 // launcherRecreateOffered: the box carries the launcher_recreate reason

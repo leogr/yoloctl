@@ -173,7 +173,10 @@ launched command becomes the main process (its exit is the box's). A
 privileged box's main session is marked on its endpoint. A box created before
 warns and is offered recreation; a stopped box with a marker and no holder
 records its lost launch before a fresh start. The agent daemon reaper is
-gone. [19](#source-19)
+gone. [19](#source-19) A pre-native box's live session can still be attached,
+but its revival or any new run is refused with the recreation remedy and,
+at a terminal, one recreation question after a read shows it stopped.
+[24](#source-24)
 
 ## Sources
 
@@ -203,3 +206,4 @@ gone. [19](#source-19)
 21. <a id="source-21"></a> [Tracked agent launches and settlement](../digests/agent-launches.md).
 22. <a id="source-22"></a> [OpenShell compatibility](../digests/openshell-compatibility.md) — mediated signal delivery and listener flags.
 23. <a id="source-23"></a> [Saved conversation presence](../digests/resume-file-presence.md).
+24. <a id="source-24"></a> [Pre-native boxes](../digests/pre-native-boxes.md).

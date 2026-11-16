@@ -23,6 +23,10 @@ An operation that finds its box's expected run gone (absent, stopped, replaced
 or restarted) performs no further effect on it and never starts again a run it
 had started; a new native run (start or policy restart) launches only the saved
 policy and never restores the previous one. [23](#source-23)
+A pre-native box is never started or restarted: a restart or policy apply first
+stops its exact run through the session-aware stop (a start never stops), then
+returns the recreation remedy; only an explicit, separately confirmed recreate
+moves it to the native runtime. [27](#source-27)
 Leftovers of an ended run are removed by the next start or stop under
 exact ownership checks. An interrupted start or stop is `interrupted`, holding
 nothing; restart, recreate and teardown keep today's mode. [22](#source-22)
@@ -117,7 +121,8 @@ session start; a failure exits nonzero with the recovery command. Scripts only
 get the commands, with those recovery steps. A restart ends the agent process;
 conversations are resumed explicitly. A listed box that also requires
 recreation, which a restart refuses, is left running with its explicit
-recreation commands, and an attach refused by an older holder names the remedy
+recreation commands; a pre-native box is not set aside, but stopped and refused
+by its restart, and the run fails naming its recreate command [27](#source-27); and an attach refused by an older holder names the remedy
 full drift inspection proves (restart, explicit recreation, or undetermined
 with `box inspect`). [11](#source-11) [13](#source-13)
 
@@ -246,3 +251,5 @@ features place their caches inside this bind by default. [25](#source-25)
 
 25. <a id="source-25"></a> [Per-box cache ownership and lifecycle](../digests/box-caches.md).
 26. <a id="source-26"></a> [Build reserve](../digests/build-reserve.md).
+
+27. <a id="source-27"></a> [Pre-native boxes](../digests/pre-native-boxes.md).

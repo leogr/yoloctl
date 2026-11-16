@@ -251,8 +251,9 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 	for _, b := range boxes {
 		conversations[b.Name] = b.Conversation
 	}
+	legacy := map[string]bool{}
 	if len(stale) > 0 {
-		stale = setAsideRecreations(ctx, space, o, stale, conversations)
+		stale, legacy = setAsideRecreations(ctx, space, o, stale, conversations)
 	}
 	if len(stale) == 0 {
 		return nil
@@ -303,6 +304,7 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 		}
 	}
 	restarted := 0
+	var refused []string
 	for i, s := range stale {
 		notAttempted := func(err error) error {
 			if rest := names[i+1:]; len(rest) > 0 {
@@ -334,6 +336,16 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 			}
 		}
 		if err := o.restart(ctx, s.name, s.holder, s.kind == workloadSession); err != nil {
+			if legacy[s.name] && ctx.Err() == nil {
+				// A pre-native box: its restart stopped it (or said why not)
+				// and refused with the recreation remedy it printed. Consent to
+				// restart is not consent to recreate: the others still run.
+				refused = append(refused, s.name)
+				if what := map[sessionKind]string{chatServerSession: "The chat room", workloadSession: "The managed workload of " + s.name}[s.kind]; what != "" {
+					cliWarn(logging.Host, "%s may be down. Recover it after recreating the box:\nyoloctl box recreate %s --space %s\n%s", what, s.name, space, s.recovery(space))
+				}
+				continue
+			}
 			down(map[sessionKind]string{chatServerSession: "The chat room", workloadSession: "The managed workload of " + s.name}[s.kind])
 			return notAttempted(err)
 		}
@@ -349,6 +361,13 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 	if restarted > 0 {
 		cliNotice(logging.Host, "Restarted %s on this build. A tracked conversation is requested on the box's next attach and stays unverified until its agent reports it; resume an untracked one yourself.", boxCount(restarted))
 	}
+	if len(refused) > 0 {
+		commands := make([]string, len(refused))
+		for i, name := range refused {
+			commands[i] = fmt.Sprintf("yoloctl box recreate %s --space %s", name, space)
+		}
+		return fmt.Errorf("%s predate the native runtime and cannot be restarted; nothing was recreated. Recreate to continue: %s", strings.Join(refused, ", "), strings.Join(commands, "; "))
+	}
 	return nil
 }
 
@@ -356,8 +375,11 @@ func offerSessionRestarts(ctx context.Context, space string, o sessionRestartOff
 // boxes whose declarations also require recreation, which a restart refuses;
 // the rest stay in the offer. It never recreates anything. When drift cannot
 // be read every box stays: each restart still refuses recreation drift
-// before its teardown.
-func setAsideRecreations(ctx context.Context, space string, o sessionRestartOffer, stale []staleSession, conversations map[string]*agentsession.Status) []staleSession {
+// before its teardown. A pre-native box is never set aside: its restart
+// stops it and refuses with the recreation remedy (consent to restart is not
+// consent to recreate).
+func setAsideRecreations(ctx context.Context, space string, o sessionRestartOffer, stale []staleSession, conversations map[string]*agentsession.Status) ([]staleSession, map[string]bool) {
+	legacy := map[string]bool{}
 	names := make([]string, len(stale))
 	for i, s := range stale {
 		names[i] = s.name
@@ -365,7 +387,7 @@ func setAsideRecreations(ctx context.Context, space string, o sessionRestartOffe
 	view, err := o.drift(ctx, names)
 	if err != nil {
 		cliWarn(logging.Host, "could not check whether %s also require recreation (%v); a restart refuses a box that does", strings.Join(names, ", "), err)
-		return stale
+		return stale, legacy
 	}
 	drift := make(map[string]boxDriftView, len(view))
 	for _, v := range view {
@@ -375,6 +397,11 @@ func setAsideRecreations(ctx context.Context, space string, o sessionRestartOffe
 	for _, s := range stale {
 		remedy, reason := remedyUnknown, "not reported"
 		if v, ok := drift[s.name]; ok {
+			if v.LegacyRuntime {
+				legacy[s.name] = true
+				keep = append(keep, s)
+				continue
+			}
 			remedy, reason = v.remedy()
 		}
 		switch remedy {
@@ -401,7 +428,7 @@ func setAsideRecreations(ctx context.Context, space string, o sessionRestartOffe
 			cliNotice(logging.Host, "Box %s: %s", s.name, restartConversationNote(conversations[s.name]))
 		}
 	}
-	return keep
+	return keep, legacy
 }
 
 // restartConversationNote says what the next session of a restarted agent

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -40,6 +41,8 @@ type managedApplier struct {
 const (
 	sessionEndedByRestart  = "the container was restarted to reload its policy"
 	sessionEndedByRecreate = "the container was recreated to apply its declaration"
+	// A pre-native box is stopped, not restarted, when its policy changes.
+	sessionEndedByLegacyRefusal = "the container predates the native runtime and was stopped; recreate it to continue"
 )
 
 func newManagedLiveApplier(c *container.Client, notice io.Writer) agentbox.Applier {
@@ -183,6 +186,16 @@ func (a managedApplier) Restart(ctx context.Context, c *agentbox.Config, policy 
 		PreflightPolicyRestart(context.Context, *agentbox.Config, []byte) error
 	}); ok {
 		if err := prepare.PreflightPolicyRestart(ctx, c, bytes.Clone(policy)); err != nil {
+			// The saved policy stays saved. A running pre-native confined box is
+			// stopped and refused: only explicit recreation applies it. Its
+			// session ends first, recorded as a restart would record it.
+			var legacy *agentbox.LegacyRuntimeError
+			if a.client != nil && errors.As(err, &legacy) {
+				if endErr := a.endSession(ctx, c, sessionEndedByLegacyRefusal); endErr != nil {
+					return fmt.Errorf("%w; ending its session failed: %w", err, endErr)
+				}
+				return refuseLegacyRun(ctx, a.client, c.Space, c.Name, a.notice, err, legacyPolicyApply)
+			}
 			return err
 		}
 	} else if prepare, ok := a.inner.(interface {

@@ -135,6 +135,9 @@ type inspectIdentity struct {
 	SchemaVersion int    `json:"schema_version,omitempty"`
 	ConfigPath    string `json:"config_path,omitempty"`
 	ManifestHash  string `json:"manifest_hash,omitempty"`
+	// LegacyRuntime: the box runs the pre-native runtime; it is never started
+	// or restarted again, only recreated.
+	LegacyRuntime bool `json:"legacy_runtime,omitempty"`
 }
 
 type inspectWorkdir struct {
@@ -267,13 +270,14 @@ type inspectDrift struct {
 func buildInspectReport(ctx context.Context, space, name string, b boxstate.Box) inspectReport {
 	r := inspectReport{
 		Identity: inspectIdentity{
-			Space:        space,
-			Name:         name,
-			State:        string(b.State),
-			Declaration:  string(b.Declaration),
-			RuntimeState: string(b.Runtime),
-			SessionState: string(b.Session.State),
-			DriftState:   string(b.Drift),
+			Space:         space,
+			Name:          name,
+			State:         string(b.State),
+			Declaration:   string(b.Declaration),
+			RuntimeState:  string(b.Runtime),
+			SessionState:  string(b.Session.State),
+			DriftState:    string(b.Drift),
+			LegacyRuntime: b.LegacyRuntime,
 		},
 		Drift: buildInspectDrift(b),
 	}

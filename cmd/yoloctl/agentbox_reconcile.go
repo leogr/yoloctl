@@ -44,9 +44,11 @@ declaration is an error; use box edit to change an existing declaration.
 
   - Create   — container doesn't exist (initial provisioning).
   - Recreate — an immutable field changed (image, resources, mounts).
-  - Restart  — the computed policy changed; sandbox is stopped and
-               restarted with the new policy.yaml (snapshot + rollback
-               on failure).
+  - Restart  — the computed policy changed; the saved policy is
+               qualified, then the sandbox is stopped and started with
+               only that policy (the previous one is never restored).
+               A pre-native box is stopped and refused instead: the
+               saved policy stays, and only box recreate applies it.
   - Live     — only port forwards changed; no container disturbance.
 
   yoloctl box reconcile coder
