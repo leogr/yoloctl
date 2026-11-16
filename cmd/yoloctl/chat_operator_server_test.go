@@ -152,6 +152,7 @@ func TestChatOperatorServerUncertainScopeRefusesExecution(t *testing.T) {
 
 func TestChatOperatorTargetSelectionPrecedesSetupRelease(t *testing.T) {
 	stubProtectedChatServer(t, false, nil)
+	stubRunningExecTarget(t)
 	want := errors.New("fixture selected target refused connection")
 	for _, action := range []string{"attach", "exec"} {
 		t.Run(action, func(t *testing.T) {
@@ -331,32 +332,28 @@ func (c *chatReleaseTransport) SetDeadline(time.Time) error {
 func TestChatOperatorReleaseFailureClosesSelectedTransportBeforeStreaming(t *testing.T) {
 	stubProtectedChatServer(t, false, nil)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	for _, action := range []string{"select", "attach", "exec"} {
+	// Exec release failure uses an authenticated SSH fixture in TestExecReleaseFailureSendsNoCommand.
+	for _, action := range []string{"select", "attach"} {
 		t.Run(action, func(t *testing.T) {
-			previousDial, previousSSH, previousNative := dialSessionVMFn, dialOperatorSSH, nativeSessionTransportFn
+			previousDial, previousNative := dialSessionVMFn, nativeSessionTransportFn
 			nativeSessionTransportFn = func() bool { return true }
 			t.Cleanup(func() {
-				dialSessionVMFn, dialOperatorSSH, nativeSessionTransportFn = previousDial, previousSSH, previousNative
+				dialSessionVMFn, nativeSessionTransportFn = previousDial, previousNative
 			})
 			local, remote := net.Pipe()
 			selected := &chatReleaseTransport{Conn: local}
 			t.Cleanup(func() { _ = local.Close(); _ = remote.Close() })
-			selectionDone, permitted, releaseCalls := false, false, 0
+			selectionDone, releaseCalls := false, 0
 			want := errors.New("role publication failed before streaming")
 			ctx := withControllerPrincipal(t.Context(), controller.Principal{Box: "caller", Incarnation: "live"})
 			ctx = context.WithValue(ctx, spaceReleaseKey{}, func() error {
 				releaseCalls++
-				if !selectionDone || action == "exec" && !permitted {
+				if !selectionDone {
 					t.Fatal("setup released before transport selection or command permission")
 				}
 				return want
 			})
-			ctx = controller.WithEffectGate(ctx, func(context.Context, controller.EffectIntent) error { permitted = true; return nil })
 			dialSessionVMFn = func(context.Context, string, string) (io.ReadWriteCloser, error) {
-				selectionDone = true
-				return selected, nil
-			}
-			dialOperatorSSH = func(context.Context, string) (net.Conn, error) {
 				selectionDone = true
 				return selected, nil
 			}
@@ -370,8 +367,6 @@ func TestChatOperatorReleaseFailureClosesSelectedTransportBeforeStreaming(t *tes
 				}
 			case "attach":
 				err = attachToSession(ctx, "work", "peer")
-			case "exec":
-				err = execInAgentboxInteractive(ctx, "work", "peer", []string{"true"})
 			}
 			if !errors.Is(err, want) || releaseCalls != 1 || !selected.closed || selected.streamed {
 				t.Fatal("failed release leaked a transport or reached streaming", err, releaseCalls, selected.closed, selected.streamed)

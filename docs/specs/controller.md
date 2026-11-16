@@ -64,7 +64,9 @@ Receipt-storage recovery rechecks current UUID, ownership and live bind read-onl
 workers and verifiers never prepare that bind. [15](#source-15)
 Fixed root service startup prepares the verified disk’s bind before serving,
 including after a guest reboot. [17](#source-17)
-An authorized `box exec` whose result is lost is interrupted and never replayed.
+`box exec` requires a declared, running box before SSH setup. Target and SSH
+setup failures return known refusals before the command request. An authorized
+exec whose result is lost is interrupted and never replayed. [1](#source-1)
 Interrupting a `box attach`/`box use` client does not end an owned setup: before
 authorization it cancels cleanly; afterward the controller finishes setup, which
 may start a session after the client left. A signal before handoff ends the

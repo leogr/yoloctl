@@ -1,6 +1,6 @@
 # VM controller, transport and recovery
 
-Verification: `272abb082790962572505495756706d40d73f06c` and accompanying N1/N2 changes; acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `272abb082790962572505495756706d40d73f06c` and accompanying N1/N2 changes; acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes; re-read cited sources when changing behavior. Exec-preflight re-read at `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes.
 
 [FACT] Public clients reuse the service's Cobra definitions and route registered
 operations to one root controller inside the selected VM. Host clients use a
@@ -99,8 +99,12 @@ Only `box.attach` also owns authorized setup: its client's loss detaches
 instead of canceling, and finalization follows the execution, not the client.
 [23](#source-23) [24](#source-24) [8](#source-8) [12](#source-12) [27](#source-27)
 
-[FACT] Gated `box.exec` permits its command before setup release. Later
-interruption or a missing remote exit status records non-fencing
+[FACT] `box.exec` checks its declaration and authoritative runtime inventory
+before any SSH dial, without session probes or implicit starts. Missing, invalid,
+stopped or unavailable targets return known refusals. SSH handshake, channel and
+PTY preparation precede command permission; setup releases immediately before the
+exec request. Setup failures say the command was not started. A lost exec-request
+reply, later interruption or missing remote exit status records non-fencing
 `interrupted`: queryable, never replayed and never reserving its box. Known
 remote exits keep their status; legacy exec outcomes migrate on controller startup. [2](#source-2) [13](#source-13) [25](#source-25)
 
@@ -146,7 +150,7 @@ this test seam does not change server authorization. [19](#source-19)
 22. <a id="source-22"></a> [Guest supervisor](controller-supervision.md) — failure-only restart, verified cgroup cleanup, stop joining and VM-image rollout.
 23. <a id="source-23"></a> [Effect protocol](../../internal/controller/effects.go#L34) — trusted gate, checkpoints and completion.
 24. <a id="source-24"></a> [Effect regressions](../../internal/controller/effects_test.go#L18) — real workers, locks, malformed/stdout bytes, durable checkpoint failures, recovery, exec outcomes and retention.
-25. <a id="source-25"></a> [cmd/yoloctl/run.go](../../cmd/yoloctl/run.go#L95) — `execInAgentboxInteractive`; production-registry regressions in exec_receipt_test.go.
+25. <a id="source-25"></a> [cmd/yoloctl/run.go](../../cmd/yoloctl/run.go#L95) — `execInAgentboxInteractive`; `preflightBoxExec` in exec_preflight.go; production-registry and real SSH regressions in exec_receipt_test.go and exec_preflight_test.go.
 26. <a id="source-26"></a> [No acknowledgment](../../internal/controller/interrupted_test.go#L1) — `TestAcknowledgeMethodsAreGone`; CLI `newSpaceOperationCmd` and `TestSpaceOperationHasNoAcknowledgeOptions` in exec_receipt_test.go.
 27. <a id="source-27"></a> [Owned attach setup](attach-setup.md) — gate order, error-free output, held input and acknowledged handoff.
 

@@ -31,12 +31,15 @@ func TestBoxExecRegistrationGatesCommandEffects(t *testing.T) {
 // reports exit, sends no exit status when exit is negative, or holds the
 // command until its transport closes.
 type execEndpointFixture struct {
-	config   *ssh.ServerConfig
-	commands atomic.Int32
-	dials    atomic.Int32
-	exit     int
-	hold     bool
-	running  chan struct{}
+	config         *ssh.ServerConfig
+	commands       atomic.Int32
+	dials          atomic.Int32
+	exit           int
+	hold           bool
+	running        chan struct{}
+	closed         chan struct{}
+	rejectSession  bool
+	loseStartReply bool
 }
 
 func (f *execEndpointFixture) dial() (net.Conn, error) {
@@ -58,7 +61,12 @@ func (f *execEndpointFixture) dial() (net.Conn, error) {
 		}
 	}
 	go func() {
-		defer func() { _ = conns[1].Close() }()
+		defer func() {
+			_ = conns[1].Close()
+			if f.closed != nil {
+				close(f.closed)
+			}
+		}()
 		server, channels, requests, err := ssh.NewServerConn(conns[1], f.config)
 		if err != nil {
 			return
@@ -66,6 +74,10 @@ func (f *execEndpointFixture) dial() (net.Conn, error) {
 		defer func() { _ = server.Close() }()
 		go ssh.DiscardRequests(requests)
 		for channel := range channels {
+			if f.rejectSession {
+				_ = channel.Reject(ssh.Prohibited, "session refused")
+				continue
+			}
 			ch, requests, err := channel.Accept()
 			if err != nil {
 				return
@@ -76,6 +88,10 @@ func (f *execEndpointFixture) dial() (net.Conn, error) {
 					continue
 				}
 				f.commands.Add(1)
+				if f.loseStartReply {
+					_ = server.Close()
+					return
+				}
 				_ = req.Reply(true, nil)
 				if hold {
 					close(f.running)
@@ -96,6 +112,7 @@ func (f *execEndpointFixture) dial() (net.Conn, error) {
 // stubExecEndpoint routes an operator exec to fixture with no terminal input.
 func stubExecEndpoint(t *testing.T, fixture *execEndpointFixture) {
 	t.Helper()
+	stubRunningExecTarget(t)
 	_, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -149,7 +166,7 @@ func execReceiptServer(t *testing.T, loseLifecycle bool) *controller.Server {
 		if errors.As(err, &uncertain) {
 			return classifyError(err), err // the worker's private uncertain checkpoint
 		}
-		return classifyError(err), nil
+		return classifyError(err), err
 	}
 	return server
 }
@@ -259,21 +276,21 @@ func TestExecStillWaitsForStructuralRecovery(t *testing.T) {
 }
 
 func TestExecDeniedPermissionClosesEndpointBeforeCommand(t *testing.T) {
-	stubProtectedChatServer(t, false, nil)
-	local, remote := net.Pipe()
-	t.Cleanup(func() { _ = local.Close(); _ = remote.Close() })
-	selected := &chatReleaseTransport{Conn: local}
-	previous := dialOperatorSSH
-	dialOperatorSSH = func(context.Context, string) (net.Conn, error) { return selected, nil }
-	t.Cleanup(func() { dialOperatorSSH = previous })
+	fixture := &execEndpointFixture{closed: make(chan struct{})}
+	stubExecEndpoint(t, fixture)
 	want := errors.New("receipt could not authorize the command")
 	released := false
 	ctx := withControllerPrincipal(t.Context(), controller.Principal{Box: "caller", Incarnation: "live"})
 	ctx = context.WithValue(ctx, spaceReleaseKey{}, func() error { released = true; return nil })
 	ctx = controller.WithEffectGate(ctx, func(context.Context, controller.EffectIntent) error { return want })
 	err := execInAgentboxInteractive(ctx, "work", "peer", []string{"true"})
-	if !errors.Is(err, want) || released || !selected.closed || selected.streamed {
-		t.Fatal("denied command released setup or reached its endpoint", err, released, selected.closed, selected.streamed)
+	if !errors.Is(err, want) || released || fixture.commands.Load() != 0 || fixture.dials.Load() != 1 {
+		t.Fatal("denied command released setup or reached its endpoint", err, released, fixture.commands.Load(), fixture.dials.Load())
+	}
+	select {
+	case <-fixture.closed:
+	case <-time.After(time.Second):
+		t.Fatal("denied command leaked its authenticated endpoint")
 	}
 	var uncertain *controller.EffectsUncertain
 	if errors.As(err, &uncertain) {

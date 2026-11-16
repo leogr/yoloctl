@@ -8,9 +8,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/sshtransport"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
@@ -97,12 +99,14 @@ func execInAgentboxInteractive(ctx context.Context, env, agentbox string, cmdArg
 	if err := guardOperatorChatExecution(ctx, env, agentbox); err != nil {
 		return err
 	}
+	if err := preflightBoxExec(ctx, env, agentbox); err != nil {
+		return err
+	}
 	var conn net.Conn
 	var err error
-	if !currentControllerPrincipal(ctx).Admin() {
-		// The verified native worker can select the confined endpoint directly.
-		// Starting a proxy process is not proof that its target was connected;
-		// retain the setup lock until this actual socket has been selected.
+	if spaceenv.Native() || !currentControllerPrincipal(ctx).Admin() {
+		// Native host and operator workers select the same confined endpoint
+		// directly, without a second VM/stdio proxy and its raw helper errors.
 		conn, err = dialOperatorSSH(ctx, agentbox)
 	} else {
 		yoloctlPath, pathErr := os.Executable()
@@ -114,28 +118,48 @@ func execInAgentboxInteractive(ctx context.Context, env, agentbox string, cmdArg
 		conn, err = sshtransport.ProcessConn(ctx, proxy)
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot connect to box %q in space %q; command was not started: %w", agentbox, env, err)
 	}
-	// The receipt durably permits the command before it can run. A denied
-	// checkpoint closes the selected endpoint without running anything.
-	if err := controller.BeginScopedEffects(ctx, execIntent(agentbox)); err != nil {
-		_ = conn.Close()
-		return err
+	client, err := sshtransport.Connect(ctx, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()})
+	if err != nil {
+		return fmt.Errorf("cannot establish an SSH connection to box %q in space %q; command was not started: %w", agentbox, env, err)
 	}
-	if err := releaseSpaceOperation(ctx); err != nil {
-		_ = conn.Close()
-		return err
+	defer func() { _ = client.Close() }()
+	// Keep channel/PTY preparation bounded while setup is still held. The
+	// deadline is removed before command permission, never applied to the run.
+	deadline := time.Now().Add(operatorTargetSetupTimeout)
+	if parentDeadline, ok := ctx.Deadline(); ok && parentDeadline.Before(deadline) {
+		deadline = parentDeadline
 	}
-	// The authorized controller proxy proves the root-owned OpenShell socket;
-	// it is the same auth_none endpoint used by persistent session holders.
-	err = sshtransport.Run(ctx, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()}, remoteCommandString(sessionTerminalIdentity(ctx).Command(cmdArgs)), execWantsPTY(os.Stdin, os.Stdout), os.Stdin, os.Stdout, os.Stderr)
+	if err := conn.SetDeadline(deadline); err != nil {
+		return fmt.Errorf("cannot prepare SSH connection to box %q in space %q; command was not started: %w", agentbox, env, err)
+	}
+	commandAttempted := false
+	err = sshtransport.RunClientWithStartGate(ctx, client, remoteCommandString(sessionTerminalIdentity(ctx).Command(cmdArgs)), execWantsPTY(os.Stdin, os.Stdout), os.Stdin, os.Stdout, os.Stderr, func() error {
+		// Handshake/channel/PTY setup cannot run the requested command. Keep
+		// their failures before permission, and retain setup until selection.
+		if err := conn.SetDeadline(time.Time{}); err != nil {
+			return err
+		}
+		if err := controller.BeginScopedEffects(ctx, execIntent(agentbox)); err != nil {
+			return err
+		}
+		if err := releaseSpaceOperation(ctx); err != nil {
+			return err
+		}
+		commandAttempted = true
+		return nil
+	})
 	if code, ok := sshtransport.ExitStatus(err); ok {
 		return passthroughExitError{err: err, code: code}
 	}
 	if err != nil {
-		// The permitted command may have run. Without its remote exit status
-		// the result is unknown, not this local error's exit code.
-		return &controller.EffectsUncertain{Cause: err}
+		if !commandAttempted {
+			return fmt.Errorf("cannot prepare command in box %q in space %q; command was not started: %w", agentbox, env, err)
+		}
+		// A request can run even if its reply is lost. Keep true result loss
+		// uncertain, never infer a safe retry from the transport error alone.
+		return &controller.EffectsUncertain{Cause: fmt.Errorf("connection to box %q in space %q ended without a command exit status: %w", agentbox, env, err)}
 	}
 	return nil
 }

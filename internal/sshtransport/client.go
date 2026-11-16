@@ -31,6 +31,14 @@ func Run(ctx context.Context, conn net.Conn, config *ssh.ClientConfig, command s
 // connection. Cancellation closes that connection, including a blocked channel
 // open or exec request; the caller may reuse it only after a successful run.
 func RunClient(ctx context.Context, client *ssh.Client, command string, pty bool, stdin *os.File, stdout, stderr io.Writer) error {
+	return RunClientWithStartGate(ctx, client, command, pty, stdin, stdout, stderr, nil)
+}
+
+// RunClientWithStartGate prepares the SSH channel and terminal before calling
+// beforeStart exactly once, immediately before attempting the command request.
+// A failed gate sends no exec/shell request; an error after it succeeds can
+// include a lost request reply and does not prove the command never ran.
+func RunClientWithStartGate(ctx context.Context, client *ssh.Client, command string, pty bool, stdin *os.File, stdout, stderr io.Writer, beforeStart func() error) error {
 	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
 	defer stop()
 	s, err := client.NewSession()
@@ -58,6 +66,11 @@ func RunClient(ctx context.Context, client *ssh.Client, command string, pty bool
 		defer func() { _ = term.Restore(int(stdin.Fd()), state) }()
 		stopResize := resizeSession(s, stdin)
 		defer stopResize()
+	}
+	if beforeStart != nil {
+		if err := beforeStart(); err != nil {
+			return err
+		}
 	}
 	if command == "" {
 		err = s.Shell()
