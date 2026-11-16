@@ -394,7 +394,7 @@ func TestRestartPreflightRefusesRecreateDriftBeforeImageWork(t *testing.T) {
 		return controller.ImageReply{}, errors.New("image work must not start")
 	}}
 	ctx := context.WithValue(t.Context(), warmKey{}, state)
-	_, err := preflightAgentboxRestartWithIntent(ctx, container.New(cfg.Space), cfg.Space, cfg.Name)
+	err := preflightAgentboxRestart(ctx, container.New(cfg.Space), cfg.Space, cfg.Name)
 	want := agentbox.StartRecreateError(cfg, "image: yoloctl/agentbox-composed:old -> yoloctl/agentbox-composed:new").Error()
 	if err == nil || err.Error() != want || len(imageCalls) != 0 {
 		t.Fatalf("got %v (image calls %v), want %q", err, imageCalls, want)
@@ -415,7 +415,7 @@ func TestStartRefusesRecreateDriftBeforeImageWork(t *testing.T) {
 	cmd.SetContext(context.WithValue(held(t.Context()), warmKey{}, state))
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
-	err := startAgentboxWithForwardIntent(cmd, cfg.Space, cfg.Name, true, true, false, nil, nil, false)
+	err := startAgentboxCore(cmd, cfg.Space, cfg.Name, true, true, false, nil, false)
 	want := agentbox.StartRecreateError(cfg, "image: yoloctl/agentbox-composed:old -> yoloctl/agentbox-composed:new").Error()
 	if err == nil || err.Error() != want || len(imageCalls) != 0 {
 		t.Fatalf("got %v (image calls %v), want %q", err, imageCalls, want)

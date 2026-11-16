@@ -411,7 +411,7 @@ func ensureManagedServer(ctx context.Context, space string, store managedchat.St
 		}
 	}
 	c := newChatRuntimeClient(space, notice)
-	var prepared recordedNativeStart
+	var prepared nativePreparedStart
 	defer func() { closeNativeStart(prepared) }()
 	if err := preflightAgentboxRuntimeQualified(ctx, c, cfg, true, func(check context.Context, declared *agentbox.Config) (bool, error) {
 		return qualifyNativeRuntimePreparation(check, c, declared, &prepared)

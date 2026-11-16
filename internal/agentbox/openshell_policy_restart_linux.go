@@ -11,11 +11,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Private until the policy-aware managed/CLI prerequisite and public lifecycle
-// wiring are reviewed. Caller holds space/entity/port admission and has ended
-// its holder AFTER independent preflight. This repeats qualification before
-// withdrawing forwards or stopping the runtime, and retains one original SDK
-// checkpoint through at most one rollback to its original private environment.
+// Caller holds space/entity/port admission and has ended its holder AFTER
+// independent preflight. This repeats qualification before withdrawing
+// forwards or stopping the runtime, then launches the saved policy once with
+// the box's declared forwards. The previous policy is never launched again.
 func (a LiveApplier) restartNativeGeneration(ctx context.Context, c *Config, policy []byte) error {
 	selected, checkpoint, err := a.snapshotNativeGeneration(ctx, c)
 	if err != nil {
@@ -26,32 +25,25 @@ func (a LiveApplier) restartNativeGeneration(ctx context.Context, c *Config, pol
 	copy.Ports = append([]Port(nil), c.Ports...)
 	c = &copy
 	policy = bytes.Clone(policy)
-	original := checkpoint.OriginalPolicy()
-	var rollback *Config
-	return completeNativePolicyRestart(ctx, original, policy, nativePolicyRestartActions{
+	return completeNativePolicyRestart(ctx, policy, nativePolicyRestartActions{
 		preflight: func(check context.Context) error {
-			var err error
-			rollback, err = a.qualifyNativePolicyRestart(check, c, policy, selected, checkpoint)
+			_, err := a.qualifyNativePolicyRestart(check, c, policy, selected, checkpoint)
 			return err
 		},
 		withdraw: func(withdraw context.Context) error { return WithdrawNativeForwards(withdraw, a.Client, c.Name) },
 		stop:     func(stop context.Context) error { return a.stopNativeRuntime(stop, c.Name, selected.ContainerID) },
-		launch: func(start context.Context, next []byte, restore bool) error {
-			launch, err := nativePolicyLaunchConfig(c, rollback, restore)
-			if err != nil {
-				return err
-			}
-			return a.startNativeStoppedGenerationWithCheckpoint(start, launch, next, checkpoint, selected.ContainerID)
+		launch: func(start context.Context, next []byte) error {
+			return a.startNativeStoppedGenerationWithCheckpoint(start, c, next, checkpoint, selected.ContainerID)
 		},
 	})
 }
 
-// Capture the complete original numeric forward set before withdrawal, even
-// when desired ports changed with policy. Ambiguous duplicate publications or
-// mixed direct/ordinary evidence cannot prove a restorable original set.
-func nativePolicyRollbackConfig(desired *Config, known []port.ForwardService) (*Config, error) {
+// Capture the complete observed numeric forward set before withdrawal (revive
+// relaunches it). Ambiguous duplicate publications or mixed direct/ordinary
+// evidence cannot prove a usable observed set.
+func nativeObservedForwards(desired *Config, known []port.ForwardService) (*Config, error) {
 	if desired == nil || desired.Privileged {
-		return nil, errors.New("native policy rollback requires an ordinary original declaration")
+		return nil, errors.New("native observed forwards require an ordinary declaration")
 	}
 	result := *desired
 	result.Ports = nil
@@ -69,18 +61,6 @@ func nativePolicyRollbackConfig(desired *Config, known []port.ForwardService) (*
 		result.Ports = append(result.Ports, Port{Published: spec.HostPort, Target: spec.ContainerPort})
 	}
 	return &result, nil
-}
-func nativePolicyLaunchConfig(desired, rollback *Config, restore bool) (*Config, error) {
-	selected := desired
-	if restore {
-		selected = rollback
-	}
-	if selected == nil {
-		return nil, errors.New("native policy launch lacks its original forward snapshot")
-	}
-	copy := *selected
-	copy.Ports = append([]Port(nil), selected.Ports...)
-	return &copy, nil
 }
 
 // Read current selected identity/policy and qualify immutable caches before
@@ -114,11 +94,7 @@ func (a LiveApplier) qualifyNativePolicyRestart(check context.Context, c *Config
 	if err != nil {
 		return nil, err
 	}
-	rollback, err := nativePolicyRollbackConfig(c, known)
-	if err != nil {
-		return nil, err
-	}
-	rollback, err = a.nativeRollbackConfig(c, rollback)
+	observed, err := nativeObservedForwards(c, known)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +111,7 @@ func (a LiveApplier) qualifyNativePolicyRestart(check context.Context, c *Config
 		}
 		published[pf.Published] = true
 	}
-	for _, pf := range append(append([]Port(nil), c.Ports...), rollback.Ports...) {
+	for _, pf := range append(append([]Port(nil), c.Ports...), observed.Ports...) {
 		spec := portSpec(c, pf)
 		if _, err := port.OpenShellUnitName(spec); err != nil {
 			return nil, err
@@ -144,7 +120,7 @@ func (a LiveApplier) qualifyNativePolicyRestart(check context.Context, c *Config
 			return nil, err
 		}
 	}
-	if len(c.Ports) > 0 || len(rollback.Ports) > 0 {
+	if len(c.Ports) > 0 || len(observed.Ports) > 0 {
 		if err := preflightForwardCLI(check); err != nil {
 			return nil, err
 		}
@@ -168,7 +144,7 @@ func (a LiveApplier) qualifyNativePolicyRestart(check context.Context, c *Config
 	}
 	directory, err := openForwardSocketDirectory(c.Name)
 	if errors.Is(err, unix.ENOENT) && !selected.Running {
-		return rollback, nil
+		return observed, nil
 	}
 	if err != nil {
 		return nil, err
@@ -176,5 +152,5 @@ func (a LiveApplier) qualifyNativePolicyRestart(check context.Context, c *Config
 	if directory == nil {
 		return nil, errors.New("native policy restart lacks its protected SSH directory")
 	}
-	return rollback, directory.Close()
+	return observed, directory.Close()
 }

@@ -956,7 +956,7 @@ func TestTrackedStoppedBoxRecordsItsLostHolder(t *testing.T) {
 	guardFreshSessionImageFn = func(context.Context, string, string) error { return nil }
 	previousPrepare := prepareNativeExistingStart
 	t.Cleanup(func() { prepareNativeExistingStart = previousPrepare })
-	prepareNativeExistingStart = func(context.Context, *container.Client, *agentbox.Config, bool) (recordedNativeStart, bool, error) {
+	prepareNativeExistingStart = func(context.Context, *container.Client, *agentbox.Config, bool) (nativePreparedStart, bool, error) {
 		return nil, false, nil
 	}
 	removed := 0

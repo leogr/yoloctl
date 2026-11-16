@@ -287,9 +287,8 @@ func launchWorkdir(command []string) (string, error) {
 //   - AddPortForward / RemovePortForward: thin wrappers over
 //     internal/port for the live-update path.
 type LiveApplier struct {
-	nativeForwardRestoration *nativeForwardRestoration
-	nativeCreation           *nativeCreationRelease
-	Client                   *container.Client
+	nativeCreation *nativeCreationRelease
+	Client         *container.Client
 	// VerifyStorage is the admitted controller's current native disk proof.
 	// It is required by new OpenShell effects, never inferred from labels.
 	VerifyStorage func(context.Context) error
@@ -417,9 +416,10 @@ func (a LiveApplier) Recreate(ctx context.Context, c *Config, policy []byte) err
 	return a.Create(ctx, c, policy)
 }
 
-// Restart swaps policy without recreating the container. Native runtimes use
-// a fresh generation and original private checkpoint for bounded rollback. The
-// labelled legacy route retains its existing policy-file/socket behavior.
+// Restart swaps policy without recreating the container. Native runtimes
+// launch the saved policy as a fresh generation and never relaunch the
+// previous one. The labelled legacy route retains its existing
+// policy-file/socket behavior.
 func (a LiveApplier) Restart(ctx context.Context, c *Config, policy []byte) error {
 	policy = bytes.Clone(policy)
 	native, err := a.preflightPolicyRestart(ctx, c, policy)

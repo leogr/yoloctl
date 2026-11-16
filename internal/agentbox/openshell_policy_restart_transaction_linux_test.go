@@ -4,24 +4,24 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
+	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/port"
 )
 
 // Scripted policy orchestration only. Actual SDK preparation/file readback and
 // finite engine Start boundaries are covered separately; no root/VM claim.
-func TestNativeGenerationPolicyRestartSingleFreshRollbackRetainsOriginalPolicy(t *testing.T) {
-	for _, stage := range []string{"success", "preflight", "withdraw", "stop", "launch-known", "launch-uncertain", "rollback-known", "rollback-uncertain"} {
+// The saved policy is the only policy ever launched: a failure at any stage,
+// before or after the new engine start, never launches the previous one.
+func TestNativeGenerationPolicyRestartLaunchesOnlyTheSavedPolicy(t *testing.T) {
+	for _, stage := range []string{"success", "preflight", "withdraw", "stop", "launch-before-engine", "launch-after-engine", "launch-uncertain"} {
 		t.Run(stage, func(t *testing.T) {
-			original, newPolicy := []byte("original-private-policy"), []byte("new-private-policy")
-			cause, rollbackCause := errors.New("new policy refused"), errors.New("rollback failed")
+			newPolicy := []byte("new-private-policy")
+			cause := errors.New("new policy refused")
 			var events []string
-			launches := 0
 			step := func(name string) func(context.Context) error {
 				return func(context.Context) error {
 					events = append(events, name)
@@ -31,39 +31,25 @@ func TestNativeGenerationPolicyRestartSingleFreshRollbackRetainsOriginalPolicy(t
 					return nil
 				}
 			}
-			a := nativePolicyRestartActions{preflight: step("preflight"), withdraw: step("withdraw"), stop: step("stop"), launch: func(_ context.Context, policy []byte, restore bool) error {
-				launches++
-				events = append(events, fmt.Sprintf("launch-%d", launches))
-				expected := newPolicy
-				if launches == 2 {
-					expected = original
-				}
-				if restore != (launches == 2) {
-					t.Fatal("rollback launch role differed from original call order")
-				}
-				if !bytes.Equal(policy, expected) {
-					t.Fatal("rollback lost original policy or launched recursively", launches, string(policy))
-				}
-				policy[0] = 'X' // Callback cannot mutate checkpoint/caller policy.
-				if launches == 1 {
-					if stage == "success" {
-						return nil
-					}
-					if stage == "launch-uncertain" {
-						return &NativeEffectsUncertain{Cause: cause}
-					}
+			outer := &container.EngineCalls{}
+			var launched [][]byte
+			a := nativePolicyRestartActions{preflight: step("preflight"), withdraw: step("withdraw"), stop: step("stop"), launch: func(ctx context.Context, policy []byte) error {
+				events = append(events, "launch")
+				launched = append(launched, bytes.Clone(policy))
+				policy[0] = 'X' // the callback cannot mutate the caller's policy
+				switch stage {
+				case "success":
+					return nil
+				case "launch-after-engine":
+					container.EngineCallsFrom(ctx).MarkStart()
 					return cause
+				case "launch-uncertain":
+					return &NativeEffectsUncertain{Cause: cause}
 				}
-				if stage == "rollback-known" {
-					return rollbackCause
-				}
-				if stage == "rollback-uncertain" {
-					return &NativeEffectsUncertain{Cause: rollbackCause}
-				}
-				return nil
+				return cause
 			}}
-			err := completeNativePolicyRestart(t.Context(), original, newPolicy, a)
-			want := []string{"preflight", "withdraw", "stop", "launch-1"}
+			err := completeNativePolicyRestart(container.WithEngineCalls(t.Context(), outer), newPolicy, a)
+			want := []string{"preflight", "withdraw", "stop", "launch"}
 			switch stage {
 			case "preflight":
 				want = want[:1]
@@ -71,12 +57,14 @@ func TestNativeGenerationPolicyRestartSingleFreshRollbackRetainsOriginalPolicy(t
 				want = want[:2]
 			case "stop":
 				want = want[:3]
-			case "success", "launch-uncertain":
-			default:
-				want = append(want, "launch-2")
 			}
-			if !reflect.DeepEqual(events, want) || string(original) != "original-private-policy" || string(newPolicy) != "new-private-policy" {
-				t.Fatal("policy restart lost ordering/original bytes", events, want)
+			if !reflect.DeepEqual(events, want) || string(newPolicy) != "new-private-policy" {
+				t.Fatal("policy restart lost ordering or bytes", events, want)
+			}
+			for _, policy := range launched {
+				if string(policy) != "new-private-policy" {
+					t.Fatal("a launch used another policy", string(policy))
+				}
 			}
 			var uncertain *NativeEffectsUncertain
 			switch stage {
@@ -85,37 +73,35 @@ func TestNativeGenerationPolicyRestartSingleFreshRollbackRetainsOriginalPolicy(t
 					t.Fatal(err)
 				}
 			case "launch-uncertain":
-				if !errors.As(err, &uncertain) || !errors.Is(err, cause) || launches != 1 {
-					t.Fatal("uncertain policy launch retried/rolled back", err, launches)
+				if !errors.As(err, &uncertain) || !errors.Is(err, cause) {
+					t.Fatal("uncertain launch lost its marker", err)
 				}
-			case "rollback-known", "rollback-uncertain":
-				if !errors.As(err, &uncertain) || !errors.Is(err, cause) || !errors.Is(err, rollbackCause) || launches != 2 || strings.Contains(err.Error(), "restored with") {
-					t.Fatal("unproved rollback claimed restoration or lost uncertainty", err, launches)
-				}
-			case "launch-known":
-				if err == nil || errors.As(err, &uncertain) || !errors.Is(err, cause) || !strings.Contains(err.Error(), "restored with a fresh generation") {
-					t.Fatal("known restored rollback result was not truthful", err)
+			case "launch-before-engine", "launch-after-engine":
+				if !errors.Is(err, cause) || errors.As(err, &uncertain) || !strings.Contains(err.Error(), "previous policy is not restored") {
+					t.Fatal("known launch failure was not reported truthfully", err)
 				}
 			default:
-				if !errors.Is(err, cause) || launches != 0 {
-					t.Fatal("pre-launch failure continued effects", err, launches)
+				if !errors.Is(err, cause) {
+					t.Fatal("pre-launch failure lost its cause", err)
 				}
+			}
+			// The enclosing operation (box start) still sees the launch's engine start.
+			if outer.Started() != (stage == "launch-after-engine") {
+				t.Fatal("the enclosing record missed or invented an engine start")
 			}
 		})
 	}
 }
 
-func TestNativeGenerationPolicyRestartCancellationAfterOldACKUsesBoundedOriginalAdmission(t *testing.T) {
-	for _, point := range []string{"before-preflight", "after-preflight", "after-withdraw", "after-stop", "after-new-cleanup"} {
+// Cancellation never launches anything after the old runtime stopped: no
+// previous policy, and no saved policy either.
+func TestNativeGenerationPolicyRestartCancellationLaunchesNothing(t *testing.T) {
+	for _, point := range []string{"before-preflight", "after-preflight", "after-withdraw", "after-stop"} {
 		t.Run(point, func(t *testing.T) {
-			key := nativeStopContextKey{}
-			ctx, cancel := context.WithCancel(context.WithValue(t.Context(), key, "admitted"))
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			events := []string{}
-			launches := 0
 			step := func(name string) func(context.Context) error {
 				return func(context.Context) error {
-					events = append(events, name)
 					if point == "after-"+name {
 						cancel()
 					}
@@ -125,49 +111,27 @@ func TestNativeGenerationPolicyRestartCancellationAfterOldACKUsesBoundedOriginal
 			if point == "before-preflight" {
 				cancel()
 			}
-			a := nativePolicyRestartActions{preflight: step("preflight"), withdraw: step("withdraw"), stop: step("stop"), launch: func(c context.Context, p []byte, restore bool) error {
-				launches++
-				if string(p) == "new" {
-					if restore {
-						t.Fatal("new policy marked as rollback")
-					}
-					if point != "after-new-cleanup" {
-						t.Fatal("cancelled new launch executed")
-					}
-					cancel()
-					return context.Canceled
-				}
-				deadline, ok := c.Deadline()
-				if !restore || string(p) != "old" || c.Err() != nil || c.Value(key) != "admitted" || !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 90*time.Second {
-					t.Fatal("rollback lost original bounded admission")
-				}
-				return nil
-			}}
-			err := completeNativePolicyRestart(ctx, []byte("old"), []byte("new"), a)
-			if !errors.Is(err, context.Canceled) {
-				t.Fatal("cancellation lost", err)
+			launches := 0
+			a := nativePolicyRestartActions{preflight: step("preflight"), withdraw: step("withdraw"), stop: step("stop"),
+				launch: func(context.Context, []byte) error { launches++; return nil }}
+			err := completeNativePolicyRestart(ctx, []byte("new"), a)
+			if !errors.Is(err, context.Canceled) || launches != 0 {
+				t.Fatal("cancellation launched or lost", err, launches)
 			}
-			expected := 0
-			if point == "after-stop" {
-				expected = 1
-			}
-			if point == "after-new-cleanup" {
-				expected = 2
-			}
-			if launches != expected {
-				t.Fatal("rollback ran without old Stop ACK or repeated launch", events, launches, expected)
+			if point == "after-stop" && !strings.Contains(err.Error(), "previous policy is not restored") {
+				t.Fatal("stopped-and-canceled result hid the stopped state", err)
 			}
 		})
 	}
 }
 
 func TestNativeGenerationPolicyRestartRequiresCompleteWiringBeforeEffects(t *testing.T) {
-	for _, missing := range []string{"preflight", "withdraw", "stop", "launch", "old-policy", "new-policy"} {
+	for _, missing := range []string{"preflight", "withdraw", "stop", "launch", "new-policy"} {
 		t.Run(missing, func(t *testing.T) {
 			effects := 0
 			effect := func(context.Context) error { effects++; return nil }
-			a := nativePolicyRestartActions{preflight: effect, withdraw: effect, stop: effect, launch: func(context.Context, []byte, bool) error { effects++; return nil }}
-			old, next := []byte("old"), []byte("new")
+			a := nativePolicyRestartActions{preflight: effect, withdraw: effect, stop: effect, launch: func(context.Context, []byte) error { effects++; return nil }}
+			next := []byte("new")
 			switch missing {
 			case "preflight":
 				a.preflight = nil
@@ -177,12 +141,10 @@ func TestNativeGenerationPolicyRestartRequiresCompleteWiringBeforeEffects(t *tes
 				a.stop = nil
 			case "launch":
 				a.launch = nil
-			case "old-policy":
-				old = nil
 			case "new-policy":
 				next = nil
 			}
-			if err := completeNativePolicyRestart(t.Context(), old, next, a); err == nil || effects != 0 {
+			if err := completeNativePolicyRestart(t.Context(), next, a); err == nil || effects != 0 {
 				t.Fatal("incomplete policy transaction reached effects", missing, err, effects)
 			}
 		})
@@ -200,7 +162,9 @@ func TestNativeGenerationPolicyRestartActualAdapterRequiresNativeRootBeforeCallb
 	}
 }
 
-func TestNativeGenerationPolicyRestartComposesOriginalForwardSnapshotWithChangedDesiredPorts(t *testing.T) {
+// The observed forward snapshot (revive relaunches it) is the actual
+// inventory of this box, never the desired mappings.
+func TestNativeObservedForwardsReadTheActualInventory(t *testing.T) {
 	desired := &Config{Name: "fixture", Ports: []Port{{Published: 9000, Target: 8000}, {Published: 9300, Target: 8300}}}
 	old := []Port{{Published: 9000, Target: 7000}, {Published: 9100, Target: 7100}}
 	var known []port.ForwardService
@@ -218,53 +182,17 @@ func TestNativeGenerationPolicyRestartComposesOriginalForwardSnapshotWithChanged
 	foreign := port.Spec{Agentbox: "other", HostPort: 9200, ContainerPort: 7200}
 	unit, _ := port.OpenShellUnitName(foreign)
 	known = append(known, port.ForwardService{Spec: foreign, Unit: unit, OpenShell: true})
-	rollback, err := nativePolicyRollbackConfig(desired, known)
-	if err != nil || !reflect.DeepEqual(rollback.Ports, old) {
-		t.Fatal("original inventory was replaced by desired mappings", rollback, err)
+	observed, err := nativeObservedForwards(desired, known)
+	if err != nil || !reflect.DeepEqual(observed.Ports, old) {
+		t.Fatal("observed inventory was replaced by desired mappings", observed, err)
 	}
-	cause := errors.New("known new-policy refusal after original cleanup")
-	launches := 0
-	err = completeNativePolicyRestart(t.Context(), []byte("old"), []byte("new"), nativePolicyRestartActions{
-		preflight: func(context.Context) error { return nil }, withdraw: func(context.Context) error { return nil }, stop: func(context.Context) error { return nil },
-		launch: func(_ context.Context, _ []byte, restore bool) error {
-			launches++
-			config, err := nativePolicyLaunchConfig(desired, rollback, restore)
-			if err != nil {
-				t.Fatal(err)
-			}
-			want := desired.Ports
-			if restore {
-				want = old
-			}
-			if !reflect.DeepEqual(config.Ports, want) {
-				t.Fatal("rollback lost original observed forwards", restore, config.Ports, want)
-			}
-			config.Ports[0].Target = 1
-			if restore {
-				return nil
-			}
-			return cause
-		},
-	})
-	if !errors.Is(err, cause) || launches != 2 || !reflect.DeepEqual(rollback.Ports, old) || desired.Ports[0].Target != 8000 {
-		t.Fatal("policy/port snapshot composition lost original or repeated rollback", err, launches)
-	}
-	// An originally empty set stays empty during rollback, even if new ports
-	// were requested. Missing snapshot is never silently replaced by desired.
-	empty, err := nativePolicyRollbackConfig(desired, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	selected, err := nativePolicyLaunchConfig(desired, empty, true)
-	if err != nil || len(selected.Ports) != 0 {
-		t.Fatal("empty original forwards became desired mappings", selected, err)
-	}
-	if _, err := nativePolicyLaunchConfig(desired, nil, true); err == nil {
-		t.Fatal("missing original forward snapshot adopted desired ports")
+	empty, err := nativeObservedForwards(desired, nil)
+	if err != nil || len(empty.Ports) != 0 {
+		t.Fatal("empty observed forwards became desired mappings", empty, err)
 	}
 }
 
-func TestNativeGenerationPolicyRestartOriginalForwardsRefuseAmbiguousIdentity(t *testing.T) {
+func TestNativeObservedForwardsRefuseAmbiguousIdentity(t *testing.T) {
 	for _, change := range []string{"duplicate", "foreign-unit", "direct", "bad-port", "bad-native-flag"} {
 		t.Run(change, func(t *testing.T) {
 			spec := port.Spec{Agentbox: "fixture", HostPort: 9000, ContainerPort: 7000}
@@ -283,8 +211,8 @@ func TestNativeGenerationPolicyRestartOriginalForwardsRefuseAmbiguousIdentity(t 
 			case "bad-native-flag":
 				known[0].OpenShell = false
 			}
-			if _, err := nativePolicyRollbackConfig(&Config{Name: "fixture"}, known); err == nil {
-				t.Fatal("ambiguous original forwards granted rollback mapping", change)
+			if _, err := nativeObservedForwards(&Config{Name: "fixture"}, known); err == nil {
+				t.Fatal("ambiguous observed forwards accepted", change)
 			}
 		})
 	}

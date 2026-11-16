@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
@@ -19,14 +18,15 @@ func withdrawNativeStartForwards(ctx context.Context, c *container.Client, name 
 }
 
 // The actual constructor has no caller-controlled launcher or qualification
-// bypass. It captures observed ports before any caller withdraws them.
-type recordedNativeStart interface {
+// bypass. It qualifies the box's saved policy and captures observed ports
+// before any caller withdraws them.
+type nativePreparedStart interface {
 	Check(context.Context, *agentbox.Config) error
 	Start(context.Context, *agentbox.Config) error
 	Close() error
 }
 
-var prepareNativeExistingStart = func(ctx context.Context, c *container.Client, cfg *agentbox.Config, observed bool) (recordedNativeStart, bool, error) {
+var prepareNativeExistingStart = func(ctx context.Context, c *container.Client, cfg *agentbox.Config, observed bool) (nativePreparedStart, bool, error) {
 	prepared, native, err := (agentbox.LiveApplier{Client: c, VerifyStorage: controller.VerifyRuntimeStorage}).PrepareNativeStart(ctx, cfg, observed)
 	if prepared == nil {
 		return nil, native, err
@@ -34,28 +34,17 @@ var prepareNativeExistingStart = func(ctx context.Context, c *container.Client, 
 	return prepared, native, err
 }
 
-func closeNativeStart(prepared recordedNativeStart) {
+func closeNativeStart(prepared nativePreparedStart) {
 	if prepared != nil {
 		_ = prepared.Close()
 	}
 }
-func copyStartForwardIntent(c *agentbox.Config) *agentbox.Config {
-	if c == nil {
-		return nil
-	}
-	return &agentbox.Config{Space: c.Space, Name: c.Name, ID: c.ID, Ports: append([]agentbox.Port(nil), c.Ports...)}
-}
-func checkStartForwardIntent(c, intent *agentbox.Config) error {
-	if c == nil || intent == nil || c.Space != intent.Space || c.Name != intent.Name || c.ID != intent.ID {
-		return errors.New("explicit Start forward intent belongs to another box")
-	}
-	return nil
-}
 
-// Explicit start/restart alone follows recorded-policy startup with desired
-// reconciliation. Revive/chat use the shared start directly and never call
-// this suffix. Return immediately on startup or policy/cleanup uncertainty.
-func startAndReconcileExistingAgentbox(ctx context.Context, client *container.Client, cfg *agentbox.Config, prepared recordedNativeStart, inspector agentbox.StateInspector, applier agentbox.Applier) error {
+// Explicit start/restart alone follows the saved-policy start with its desired
+// reconciliation (forwards; the policy already matches). Revive/chat use the
+// shared start directly and never call this suffix. Return immediately on
+// startup or policy/cleanup uncertainty.
+func startAndReconcileExistingAgentbox(ctx context.Context, client *container.Client, cfg *agentbox.Config, prepared nativePreparedStart, inspector agentbox.StateInspector, applier agentbox.Applier) error {
 	if err := startExistingAgentboxContainerPrepared(ctx, client, cfg, prepared); err != nil {
 		if isContainerGone(err) {
 			return asUserError(fmt.Errorf("box %q has no container to start in space %q — materialize it from its declaration: yoloctl box start %s", cfg.Name, cfg.Space, cfg.Name))

@@ -18,6 +18,6 @@ func (a LiveApplier) startNativeStoppedGeneration(context.Context, *Config, []by
 	return errors.New("fresh native generation Start requires the Linux VM controller")
 }
 
-func (a LiveApplier) prepareNativeRecordedStart(context.Context, *Config, bool) (*NativeRecordedStart, error) {
-	return nil, errors.New("native recorded-policy Start requires the Linux VM controller")
+func (a LiveApplier) prepareNativeSavedStart(context.Context, *Config, bool) (*NativePreparedStart, error) {
+	return nil, errors.New("native saved-policy Start requires the Linux VM controller")
 }

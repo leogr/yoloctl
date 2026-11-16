@@ -732,13 +732,13 @@ the version baked into the image.
 // (stop-box slice 2). box restart's second leg calls the shared core with
 // today's policy.
 func startAgentbox(cmd *cobra.Command, spaceName, name string, noAutoupdate, noAttach, newSession bool, updated *bool) error {
-	return startAgentboxWithForwardIntent(cmd, spaceName, name, noAutoupdate, noAttach, newSession, updated, nil, true)
+	return startAgentboxCore(cmd, spaceName, name, noAutoupdate, noAttach, newSession, updated, true)
 }
 
 // resultPolicy, set only by `box start`, removes a previous run's leftovers
 // first and decides an existing container's start from a read of it after
 // one attempt, rolling back what this call started with box stop's policy.
-func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, noAutoupdate, noAttach, newSession bool, updated *bool, forwardIntent *agentbox.Config, resultPolicy bool) error {
+func startAgentboxCore(cmd *cobra.Command, spaceName, name string, noAutoupdate, noAttach, newSession bool, updated *bool, resultPolicy bool) error {
 	lock, err := lockSessionBoxFn(spaceName, name)
 	if err != nil {
 		return fmt.Errorf("acquire reconcile lock: %w", err)
@@ -790,12 +790,6 @@ func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, 
 		return nil
 	}
 	stopped := resolved.Runtime == boxstate.RuntimeStopped
-	if forwardIntent == nil {
-		forwardIntent = copyStartForwardIntent(cfg)
-	}
-	if err := checkStartForwardIntent(cfg, forwardIntent); err != nil {
-		return err
-	}
 
 	// Preflight BEFORE touching the container, so a workdir /
 	// agent-state / extra mount that isn't live yet surfaces the
@@ -809,7 +803,7 @@ func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, 
 			return err
 		}
 	}
-	var prepared recordedNativeStart
+	var prepared nativePreparedStart
 	defer func() { closeNativeStart(prepared) }()
 	nativeStart := false
 	var qualify func(context.Context, *agentbox.Config) (bool, error)
@@ -893,7 +887,7 @@ func startAgentboxWithForwardIntent(cmd *cobra.Command, spaceName, name string, 
 	// Existing stopped container: `nerdctl start` it, then reconcile
 	// port forwards against its fresh bridge IP.
 	start := func(ctx context.Context) error {
-		if err := startAndReconcileExistingAgentbox(ctx, c, cfg, prepared, inspector, newManagedLiveApplierForStart(c, errw, forwardIntent)); err != nil {
+		if err := startAndReconcileExistingAgentbox(ctx, c, cfg, prepared, inspector, newManagedLiveApplier(c, errw)); err != nil {
 			return err
 		}
 		if err := applySessionStart(lock, tracking, stopped, newSession, errw); err != nil {
@@ -2159,7 +2153,7 @@ func ensureAgentboxAbsent(ctx context.Context, space, name string) error {
 func startExistingAgentboxContainer(ctx context.Context, c *container.Client, cfg *agentbox.Config) error {
 	return startExistingAgentboxContainerPrepared(ctx, c, cfg, nil)
 }
-func startExistingAgentboxContainerPrepared(ctx context.Context, c *container.Client, cfg *agentbox.Config, prepared recordedNativeStart) error {
+func startExistingAgentboxContainerPrepared(ctx context.Context, c *container.Client, cfg *agentbox.Config, prepared nativePreparedStart) error {
 	details, err := c.Inspect(ctx, cfg.Name)
 	if err != nil {
 		return err
@@ -2332,31 +2326,27 @@ func stopAgentboxRuntimePartsObserved(ctx context.Context, c *container.Client, 
 // Preflight while the original session and container still exist. The native
 // space operation lock excludes other managed mutations; startAgentbox obtains
 // its own box lock and repeats the preservation check after this lock is released.
-func preflightAgentboxRestartWithIntent(ctx context.Context, c *container.Client, space, name string) (*agentbox.Config, error) {
+func preflightAgentboxRestart(ctx context.Context, c *container.Client, space, name string) error {
 	release, err := agentbox.LockConfig(space, name)
 	if err != nil {
-		return nil, fmt.Errorf("acquire reconcile lock: %w", err)
+		return fmt.Errorf("acquire reconcile lock: %w", err)
 	}
 	defer release()
 	cfg, err := loadManagedAgentbox(space, name)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// Refuse recreate-only drift before preflight's image work; the check
 	// after preflight stays as the race guard.
 	if err := refuseRecreateBeforeImageWork(ctx, space, cfg); err != nil {
-		return nil, err
+		return err
 	}
 	if err := preflightAgentboxRuntimeQualified(ctx, c, cfg, true, func(check context.Context, declared *agentbox.Config) (bool, error) {
 		return qualifyNativeExistingStart(check, c, declared)
 	}); err != nil {
-		return nil, err
+		return err
 	}
-
-	if err := agentbox.CheckStart(ctx, cfg, agentbox.LiveInspector{Client: c}); err != nil {
-		return nil, err
-	}
-	return copyStartForwardIntent(cfg), nil
+	return agentbox.CheckStart(ctx, cfg, agentbox.LiveInspector{Client: c})
 }
 
 // newAgentboxRestartCmd reuses session-aware stop+start after preflight. Private
@@ -2422,8 +2412,7 @@ After the restart the agent CLI is autoupdated to registry-latest
 			if err != nil {
 				return err
 			}
-			forwardIntent, err := preflightAgentboxRestartWithIntent(cmd.Context(), c, spaceName, name)
-			if err != nil {
+			if err := preflightAgentboxRestart(cmd.Context(), c, spaceName, name); err != nil {
 				return err
 			}
 			if err := stopAgentboxRuntime(cmd.Context(), c, spaceName, name, cmd.ErrOrStderr()); err != nil {
@@ -2435,7 +2424,7 @@ After the restart the agent CLI is autoupdated to registry-latest
 			var agentUpdated bool
 			previous := cmd.Context()
 			cmd.SetContext(restartCtx)
-			err = startAgentboxWithForwardIntent(cmd, spaceName, name, noAutoupdate, noAttach, newSession, &agentUpdated, forwardIntent, false)
+			err = startAgentboxCore(cmd, spaceName, name, noAutoupdate, noAttach, newSession, &agentUpdated, false)
 			cmd.SetContext(previous)
 			if err != nil {
 				return err
@@ -3021,7 +3010,7 @@ func qualifyNativeExistingStart(ctx context.Context, c *container.Client, cfg *a
 // Existing running native services remain observable after controller/helper
 // updates without demanding a new launch artifact. Qualify only a stopped
 // launch; both native cases skip unsafe legacy socket-directory preparation.
-func qualifyNativeRuntimePreparation(ctx context.Context, c *container.Client, cfg *agentbox.Config, prepared *recordedNativeStart) (bool, error) {
+func qualifyNativeRuntimePreparation(ctx context.Context, c *container.Client, cfg *agentbox.Config, prepared *nativePreparedStart) (bool, error) {
 	known, err := c.List(ctx, agentbox.LabelAgentbox+"="+cfg.Name)
 	if err != nil {
 		return false, err

@@ -18,19 +18,19 @@ import (
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 )
 
-type recordedStartFixture struct {
+type preparedStartFixture struct {
 	check, start func() error
 	closed       int
 }
 
-func (s *recordedStartFixture) Check(context.Context, *agentbox.Config) error {
+func (s *preparedStartFixture) Check(context.Context, *agentbox.Config) error {
 	if s.check != nil {
 		return s.check()
 	}
 	return nil
 }
-func (s *recordedStartFixture) Start(context.Context, *agentbox.Config) error { return s.start() }
-func (s *recordedStartFixture) Close() error                                  { s.closed++; return nil }
+func (s *preparedStartFixture) Start(context.Context, *agentbox.Config) error { return s.start() }
+func (s *preparedStartFixture) Close() error                                  { s.closed++; return nil }
 
 // Only the native checkpoint is substituted; inventory/stop/session teardown
 // use the real Client + Lima argv adapters against this finite executable.
@@ -74,7 +74,7 @@ func TestNativeStartSharedCallerWithdrawsRetainedTransportsBeforeSessionEffects(
 			cfg, client, log := nativeStartCallerFixture(t, failed)
 			old := prepareNativeExistingStart
 			t.Cleanup(func() { prepareNativeExistingStart = old })
-			prepared := &recordedStartFixture{}
+			prepared := &preparedStartFixture{}
 			launches := 0
 			prepared.start = func() error {
 				launches++
@@ -84,7 +84,7 @@ func TestNativeStartSharedCallerWithdrawsRetainedTransportsBeforeSessionEffects(
 				}
 				return nil
 			}
-			prepareNativeExistingStart = func(ctx context.Context, _ *container.Client, _ *agentbox.Config, observed bool) (recordedNativeStart, bool, error) {
+			prepareNativeExistingStart = func(ctx context.Context, _ *container.Client, _ *agentbox.Config, observed bool) (nativePreparedStart, bool, error) {
 				if !observed {
 					t.Fatal("revive selected explicit desired-forward route")
 				}
@@ -161,7 +161,7 @@ func TestNativeStartReviveQualificationPrecedesTrackedRecordAndTombstone(t *test
 	t.Cleanup(func() { prepareNativeExistingStart = old })
 	cause := errors.New("recorded-policy qualification refused")
 	calls := 0
-	prepareNativeExistingStart = func(context.Context, *container.Client, *agentbox.Config, bool) (recordedNativeStart, bool, error) {
+	prepareNativeExistingStart = func(context.Context, *container.Client, *agentbox.Config, bool) (nativePreparedStart, bool, error) {
 		calls++
 		return nil, true, cause
 	}
@@ -208,11 +208,12 @@ func (a *startCallerApplier) RemovePortForward(context.Context, *agentbox.Config
 }
 
 // Actual explicit caller core + shared start + ReconcileForStart. The native
-// launch/policy effects are synthetic; the agentbox composition test runs the
-// real one-rollback protocol. This fixture proves caller selection/order and
-// typed result propagation, not root or engine behavior.
-func TestNativeStartExplicitCallerReconcilesAfterRecordedStartOnly(t *testing.T) {
-	for _, failure := range []string{"known-policy-failure", "uncertain-policy", "uncertain-start", "success"} {
+// launch is synthetic: the prepared start launches the saved policy B, so the
+// desired reconcile that follows restarts nothing (no A-then-B second leg).
+// This fixture proves caller order and typed result propagation, not root or
+// engine behavior.
+func TestNativeStartExplicitCallerLaunchesSavedPolicyThenReconcilesWithoutRestart(t *testing.T) {
+	for _, failure := range []string{"uncertain-start", "success"} {
 		t.Run(failure, func(t *testing.T) {
 			cfg, client, _ := nativeStartCallerFixture(t, false)
 			policy, err := agentbox.ComposePolicy(cfg)
@@ -224,49 +225,35 @@ func TestNativeStartExplicitCallerReconcilesAfterRecordedStartOnly(t *testing.T)
 				t.Fatal(err)
 			}
 			inspector := &startCallerInspector{state: agentbox.ActualState{Exists: true, Image: image, PolicyContent: append([]byte("# A\n"), policy...), ReadOnlyWD: !cfg.WorkdirWritable(), WorkloadPoolKnown: true, WorkloadPool: true}}
-			cause := errors.New("B readiness failed; original restoration result")
+			cause := errors.New("lost start reply")
 			starts, restarts := 0, 0
-			prepared := &recordedStartFixture{start: func() error {
+			prepared := &preparedStartFixture{start: func() error {
 				starts++
 				if inspector.calls != 0 {
-					t.Fatal("reconcile preceded recorded start")
+					t.Fatal("reconcile preceded the prepared start")
 				}
 				if failure == "uncertain-start" {
 					return &agentbox.NativeEffectsUncertain{Cause: cause}
 				}
+				inspector.state.PolicyContent = bytes.Clone(policy) // B is what runs now
 				return nil
 			}}
-			applier := &startCallerApplier{restart: func(_ context.Context, _ *agentbox.Config, p []byte) error {
+			applier := &startCallerApplier{restart: func(context.Context, *agentbox.Config, []byte) error {
 				restarts++
-				if starts != 1 || !bytes.Equal(p, policy) {
-					t.Fatal("explicit start lost A-then-B composition", starts, string(p))
-				}
-				switch failure {
-				case "success":
-					return nil
-				case "uncertain-policy":
-					return &agentbox.NativeEffectsUncertain{Cause: cause}
-				default:
-					return cause
-				}
+				return errors.New("unexpected policy restart after a saved-policy start")
 			}}
 			err = startAndReconcileExistingAgentbox(t.Context(), client, cfg, prepared, inspector, applier)
-			if starts != 1 || applier.unexpected != 0 {
-				t.Fatal("explicit caller repeated effects", starts, applier.unexpected)
+			if starts != 1 || restarts != 0 || applier.unexpected != 0 {
+				t.Fatal("explicit caller repeated effects or restarted the policy", starts, restarts, applier.unexpected)
 			}
 			if failure == "uncertain-start" {
-				if restarts != 0 || inspector.calls != 0 || !workerEffectsUncertain(err) {
-					t.Fatal("uncertain recorded Start reached policy reconcile", err, restarts, inspector.calls)
+				if inspector.calls != 0 || !workerEffectsUncertain(err) || !errors.Is(err, cause) {
+					t.Fatal("uncertain start reached reconcile or lost its uncertainty", err, inspector.calls)
 				}
-			} else if restarts != 1 {
-				t.Fatal("explicit caller skipped desired reconciliation", err, restarts)
+				return
 			}
-			if failure == "success" {
-				if err != nil {
-					t.Fatal(err)
-				}
-			} else if !errors.Is(err, cause) || workerEffectsUncertain(err) != (failure == "uncertain-start" || failure == "uncertain-policy") {
-				t.Fatal("explicit caller lost original failure/uncertainty", err)
+			if err != nil || inspector.calls == 0 {
+				t.Fatal("explicit caller skipped its desired reconciliation", err, inspector.calls)
 			}
 		})
 	}

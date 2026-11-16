@@ -19,7 +19,7 @@ import (
 // Caller holds native space/entity/port admission, has ended its holder and
 // withdrawn retained forwards AFTER separate prerequisite qualification. This
 // method repeats qualification, preserves CID/private files, and starts only
-// the fresh generation it prepares itself. Policy rollback is separate.
+// the fresh generation it prepares itself.
 func (a LiveApplier) startNativeStoppedGeneration(ctx context.Context, c *Config, policy []byte) error {
 	selected, checkpoint, err := a.snapshotNativeGeneration(ctx, c)
 	if err != nil {
@@ -29,9 +29,9 @@ func (a LiveApplier) startNativeStoppedGeneration(ctx context.Context, c *Config
 	return a.startNativeStoppedGenerationWithCheckpoint(ctx, c, policy, checkpoint, selected.ContainerID)
 }
 
-// The caller retains ONE original checkpoint across an initial policy launch
-// and any authorized single rollback. This method never closes/zeros it, never
-// replaces its original policy/environment and never selects a different CID.
+// The caller retains ONE original checkpoint for its one launch. This method
+// never closes/zeros it, never replaces its original environment and never
+// selects a different CID.
 func (a LiveApplier) startNativeStoppedGenerationWithCheckpoint(ctx context.Context, c *Config, policy []byte, checkpoint *openshell.NativeGeneration, id string) error {
 	if checkpoint == nil || !nativeLowerHex(id, 32) {
 		return errors.New("native generation Start requires its original checkpoint and fixed CID")

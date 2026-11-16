@@ -68,14 +68,6 @@ func defaultCreationApplier(c *container.Client) (agentbox.LiveApplier, error) {
 	return a.WithNativeCreationRelease(release, rego), nil
 }
 
-// Only explicit start/restart uses declared-forward restoration. Other live
-// policy reconciliation keeps its original observed-forward snapshot.
-func newManagedLiveApplierForStart(c *container.Client, notice io.Writer, intent *agentbox.Config) agentbox.Applier {
-	a := newManagedLiveApplier(c, notice).(managedApplier)
-	a.inner = a.inner.(agentbox.LiveApplier).WithDeclaredForwardRestoration(intent)
-	return a
-}
-
 func (a managedApplier) Create(ctx context.Context, c *agentbox.Config, policy []byte) error {
 	if err := guardPrivilegedLaunch(ctx, c, launchCreate, nil, nil); err != nil {
 		return err

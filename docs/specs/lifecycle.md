@@ -21,8 +21,8 @@ steps. When another operation holds the space lock, `box stop` stops the exact
 container beside it without waiting and leaves cleanup to the next stop or start.
 An operation that finds its box's expected run gone (absent, stopped, replaced
 or restarted) performs no further effect on it and never starts again a run it
-had started; a policy restart restores the previous policy only before its new
-engine start. [23](#source-23)
+had started; a new native run (start or policy restart) launches only the saved
+policy and never restores the previous one. [23](#source-23)
 Leftovers of an ended run are removed by the next start or stop under
 exact ownership checks. An interrupted start or stop is `interrupted`, holding
 nothing; restart, recreate and teardown keep today's mode. [22](#source-22)

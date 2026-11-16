@@ -82,8 +82,8 @@ func (a LiveApplier) stopNativeStartedGeneration(ctx context.Context, name strin
 	if err := a.stopNativeRuntimeWithGeneration(ctx, name, g.cid, g); err != nil {
 		return err
 	}
-	// Release this incarnation's retained namespace lock before a separately
-	// authorized rollback can create another generation. Close deletes nothing.
+	// Release this incarnation's retained namespace lock before a later
+	// operation can create another generation. Close deletes nothing.
 	if g.preparation != nil {
 		if err := g.preparation.Close(); err != nil {
 			return &NativeEffectsUncertain{Cause: err}

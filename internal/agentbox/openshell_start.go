@@ -6,12 +6,12 @@ import (
 	"errors"
 )
 
-// NativeRecordedStart retains a private original-policy/environment checkpoint
-// and the caller's pre-withdrawal forward intent. It is not admission, receipt
-// or launch authority: actual Start repeats current ownership/artifact checks
-// and mints new credentials through the native SDK. Zero values cannot launch.
-// The enclosing native mutation serializes access; it must defer Close.
-type NativeRecordedStart struct {
+// NativePreparedStart retains the saved desired policy qualified against a
+// private native checkpoint. It is not admission, receipt or launch authority:
+// actual Start repeats current ownership/artifact checks and mints new
+// credentials through the native SDK. Zero values cannot launch. The enclosing
+// native mutation serializes access; it must defer Close.
+type NativePreparedStart struct {
 	space, name, boxID string
 	check              func(context.Context) error
 	start              func(context.Context) error
@@ -19,28 +19,28 @@ type NativeRecordedStart struct {
 	consumed           bool
 }
 
-func (*NativeRecordedStart) String() string     { return "native recorded-policy start (private)" }
-func (s *NativeRecordedStart) GoString() string { return s.String() }
-func (s *NativeRecordedStart) Check(ctx context.Context, c *Config) error {
+func (*NativePreparedStart) String() string     { return "native saved-policy start (private)" }
+func (s *NativePreparedStart) GoString() string { return s.String() }
+func (s *NativePreparedStart) Check(ctx context.Context, c *Config) error {
 	if s == nil || s.check == nil || s.consumed || c == nil || c.Space != s.space || c.Name != s.name || c.ID != s.boxID {
-		return errors.New("native recorded Start lacks its original box checkpoint")
+		return errors.New("native prepared Start lacks its original box checkpoint")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	return s.check(ctx)
 }
-func (s *NativeRecordedStart) Start(ctx context.Context, c *Config) error {
+func (s *NativePreparedStart) Start(ctx context.Context, c *Config) error {
 	if err := s.Check(ctx, c); err != nil {
 		return err
 	}
 	if s.start == nil {
-		return errors.New("native recorded Start has no original launcher")
+		return errors.New("native prepared Start has no launcher")
 	}
 	s.consumed = true // never retry this checkpoint after any attempted launch
 	return s.start(ctx)
 }
-func (s *NativeRecordedStart) Close() error {
+func (s *NativePreparedStart) Close() error {
 	if s == nil {
 		return nil
 	}
@@ -53,15 +53,16 @@ func (s *NativeRecordedStart) Close() error {
 	return nil
 }
 
-// PrepareNativeStart reads/qualifies the recorded policy before caller session,
-// forward or path effects. Legacy is lazy and acquires no new policy requirement.
+// PrepareNativeStart qualifies the box's saved desired policy against its
+// selected native generation before caller session, forward or path effects:
+// a new run always launches the saved policy first, never the recorded one.
 // observedForwards selects revive's captured observed ports; explicit start
 // launches without forwards, then performs its existing desired reconcile.
-func (a LiveApplier) PrepareNativeStart(ctx context.Context, c *Config, observedForwards bool) (*NativeRecordedStart, bool, error) {
-	var prepared *NativeRecordedStart
+func (a LiveApplier) PrepareNativeStart(ctx context.Context, c *Config, observedForwards bool) (*NativePreparedStart, bool, error) {
+	var prepared *NativePreparedStart
 	native, err := a.qualifyNativeRuntimeRoute(ctx, c, func(check context.Context) error {
 		var err error
-		prepared, err = a.prepareNativeRecordedStart(check, c, observedForwards)
+		prepared, err = a.prepareNativeSavedStart(check, c, observedForwards)
 		return err
 	})
 	if err != nil {
@@ -71,49 +72,24 @@ func (a LiveApplier) PrepareNativeStart(ctx context.Context, c *Config, observed
 	return prepared, native, nil
 }
 
-// WithDeclaredForwardRestoration carries explicit start/restart's declaration
-// captured BEFORE withdrawal. Ordinary running-policy reconcile leaves this
-// unset and retains its original observed inventory. This is copied data only.
-func (a LiveApplier) WithDeclaredForwardRestoration(c *Config) LiveApplier {
-	if c != nil {
-		a.nativeForwardRestoration = &nativeForwardRestoration{space: c.Space, name: c.Name, boxID: c.ID, ports: append([]Port(nil), c.Ports...)}
-	}
-	return a
-}
-
-type nativeForwardRestoration struct {
-	space, name, boxID string
-	ports              []Port
-}
-
-func (a LiveApplier) nativeRollbackConfig(c, observed *Config) (*Config, error) {
-	intent := a.nativeForwardRestoration
-	if intent == nil {
-		return observed, nil
-	}
-	if c == nil || c.Space != intent.space || c.Name != intent.name || c.ID != intent.boxID {
-		return nil, errors.New("native rollback forward intent belongs to another box")
-	}
-	result := *c
-	result.Ports = append([]Port(nil), intent.ports...)
-	return &result, nil
-}
-
-// Original-call wiring only; no public request or native admission is supplied
-// by this core. The Linux constructor alone captures actual SDK authority.
-type nativeRecordedCheckpoint interface {
-	OriginalPolicy() []byte
+// The checkpoint is original-call provenance and generation/storage/CID
+// authority only; the launched policy is the caller's saved desired policy.
+// No public request or native admission is supplied by this core. The Linux
+// constructor alone captures actual SDK authority.
+type nativeStartCheckpoint interface {
 	Close() error
 }
-type nativeRecordedStartActions struct {
+type nativePreparedStartActions struct {
 	qualify  func(context.Context, *Config, []byte) (*Config, error)
 	preserve func(context.Context) error
 	launch   func(context.Context, *Config, []byte) error
 }
 
-func retainNativeRecordedStart(ctx context.Context, c *Config, observed bool, checkpoint nativeRecordedCheckpoint, a nativeRecordedStartActions) (*NativeRecordedStart, error) {
+// retainNativePreparedStart composes the saved desired policy exactly as
+// create and apply compose it; the checkpoint's recorded policy is never read.
+func retainNativePreparedStart(ctx context.Context, c *Config, observed bool, checkpoint nativeStartCheckpoint, a nativePreparedStartActions) (*NativePreparedStart, error) {
 	if checkpoint == nil {
-		return nil, errors.New("recorded Start lacks its original checkpoint")
+		return nil, errors.New("prepared Start lacks its original checkpoint")
 	}
 	retained := false
 	defer func() {
@@ -122,18 +98,21 @@ func retainNativeRecordedStart(ctx context.Context, c *Config, observed bool, ch
 		}
 	}()
 	if c == nil || a.qualify == nil || a.preserve == nil || a.launch == nil {
-		return nil, errors.New("recorded Start lacks complete original-call wiring")
+		return nil, errors.New("prepared Start lacks complete original-call wiring")
 	}
-	policy := bytes.Clone(checkpoint.OriginalPolicy())
+	policy, err := ComposePolicy(c)
+	if err != nil {
+		return nil, err
+	}
 	if len(policy) == 0 {
-		return nil, errors.New("recorded Start lacks original policy")
+		return nil, errors.New("prepared Start lacks the saved policy")
 	}
 	ports, err := a.qualify(ctx, c, bytes.Clone(policy))
 	if err != nil {
 		return nil, err
 	}
 	if ports == nil {
-		return nil, errors.New("recorded Start lacks its original observed forward snapshot")
+		return nil, errors.New("prepared Start lacks its original observed forward snapshot")
 	}
 	if err := a.preserve(ctx); err != nil {
 		return nil, err
@@ -143,7 +122,7 @@ func retainNativeRecordedStart(ctx context.Context, c *Config, observed bool, ch
 	if observed {
 		boot.Ports = append([]Port(nil), ports.Ports...)
 	}
-	prepared := &NativeRecordedStart{space: c.Space, name: c.Name, boxID: c.ID, close: checkpoint.Close}
+	prepared := &NativePreparedStart{space: c.Space, name: c.Name, boxID: c.ID, close: checkpoint.Close}
 	prepared.check = func(check context.Context) error { _, err := a.qualify(check, &boot, bytes.Clone(policy)); return err }
 	prepared.start = func(start context.Context) error { return a.launch(start, &boot, bytes.Clone(policy)) }
 	retained = true

@@ -463,7 +463,7 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 			return "", err
 		}
 	}
-	var prepared recordedNativeStart
+	var prepared nativePreparedStart
 	defer func() { closeNativeStart(prepared) }()
 	stoppedNative := false
 	if resolved.Runtime == boxstate.RuntimeStopped {
@@ -944,13 +944,12 @@ func restartForMainSession(ctx context.Context, c *container.Client, space, name
 	if err != nil {
 		return err
 	}
-	forwardIntent, err := preflightAgentboxRestartWithIntent(ctx, c, space, name)
-	if err != nil {
+	if err := preflightAgentboxRestart(ctx, c, space, name); err != nil {
 		return err
 	}
 	if err := stopAgentboxRuntime(ctx, c, space, name, errw); err != nil && !isContainerGone(err) {
 		return err
 	}
 	cmd.SetContext(restartCtx)
-	return startAgentboxWithForwardIntent(cmd, space, name, true, true, false, nil, forwardIntent, false)
+	return startAgentboxCore(cmd, space, name, true, true, false, nil, false)
 }

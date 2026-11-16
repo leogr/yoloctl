@@ -24,7 +24,7 @@ type nativeGenerationStartActions struct {
 
 // Failed/lost preparation, Start or nested effect result halts every suffix.
 // A known post-ACK failure gets one bounded cleanup of this original attempt;
-// no CID removal or automatic second launch/rollback is supplied here.
+// no CID removal or automatic second launch is supplied here.
 func completeNativeGenerationStart(ctx context.Context, a nativeGenerationStartActions) error {
 	if a.preflight == nil || a.stopPrevious == nil || a.prepare == nil || a.beforeStart == nil || a.start == nil || a.activate == nil || a.ready == nil || a.forwards == nil || a.cleanup == nil {
 		return errors.New("native generation Start requires complete admitted wiring")
