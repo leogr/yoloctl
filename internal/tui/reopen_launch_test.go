@@ -51,7 +51,7 @@ func TestPaneReopenKeepsActualLaunchTarget(t *testing.T) {
 			}
 			p := m.startPane(args, 20, 100)
 			if p == nil {
-				t.Fatalf("start: %s", m.status)
+				t.Fatalf("start: %s", m.noticeText())
 			}
 			t.Cleanup(p.Session.Close)
 			if err := p.Session.Wait(5 * time.Second); err != nil {

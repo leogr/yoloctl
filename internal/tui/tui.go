@@ -114,14 +114,17 @@ type model struct {
 	focusPalette     bool
 	scrollOff        int  // lines back into the focused surface's scrollback; 0 = live
 	consoleHistory   bool // the palette shows every retained command (Ctrl+R), not the last one
-	status           string
-	statusKind       prettylog.Kind
+	notices          []toastNotice
+	noticeIndex      int
+	nextNoticeOwner  uint64
+	attachError      error
 	osc52NoticeShown bool
 	browserPrompts   map[*term.Session]browserPrompt
 	browserDialog    *browserDialog
 	chrome           *chromeGesture // a held left press on strip, bar or border
 	confirm          *closeConfirm  // the open "close a running command?" popup
 	keyOwners        map[rune]keyTerminal
+	toastKeys        map[rune]bool // toast-owned physical presses through release
 	consumedKeys     map[rune]bool // keys the prefix layers took, until their release
 	hostKitty        bool
 	hostGraphemes    bool // mirrors Bubble Tea's mode-2027 width negotiation
@@ -198,9 +201,10 @@ func Run(ctx context.Context) error {
 	}
 	m := &model{pending: &atomic.Bool{}, focusPalette: true, cfg: cfg, imageLedger: chatimage.NewLedger()}
 	m.imageRegistry = chatimage.NewRegistry(m.imageLedger)
-	m.prefixChord, m.status = resolvePanePrefix(cfg) // a fallback says so once
+	var fallback string
+	m.prefixChord, fallback = resolvePanePrefix(cfg) // a fallback says so once
 	m.prefixResolved = true
-	m.statusKind = prettylog.KindWarn
+	m.postNotice(prettylog.KindWarn, fallback)
 	defer m.resetHostMouse(os.Stdout)
 	// runProgram owns context cancellation and graceful terminal cleanup.
 	p := tea.NewProgram(m, m.programOptions()...)
@@ -258,7 +262,7 @@ func (m *model) wake() {
 // handleOSC52Output crosses from a PTY pump goroutine to Bubble Tea's event
 // loop. An allowed write becomes RawMsg directly: Bubble Tea executes those
 // synchronously in receive order, so two rapid copies cannot land reversed.
-// Block notices remain model messages because the status line is model state.
+// Block notices remain model messages because the notice queue is model state.
 func (m *model) handleOSC52Output(event termio.OSC52) {
 	if m.program == nil {
 		return
@@ -773,12 +777,12 @@ func (m *model) dispatch(args []string) tea.Cmd {
 	}
 	self, err := executable()
 	if err != nil {
-		m.setStatus(prettylog.KindError, "cannot locate yoloctl binary: "+err.Error())
+		m.startNotice(fmt.Errorf("cannot locate yoloctl binary: %w", err))
 		return nil
 	}
 	started, err := m.console.Run(m.childEnv(), promptLine(args), append([]string{self}, args...)...)
 	if !started {
-		m.setStatus(prettylog.KindWarn, "a palette command is still running — wait for it")
+		m.postNotice(prettylog.KindWarn, "a palette command is still running — wait for it")
 		return nil
 	}
 	m.showConsoleCommand() // a new command shows alone, also when Run echoed an error
@@ -786,7 +790,6 @@ func (m *model) dispatch(args []string) tea.Cmd {
 		return nil // Run echoed the error; nothing is running to spin for
 	}
 	m.scrollToLive()
-	m.status = ""
 	return m.startSpinner()
 }
 
@@ -810,7 +813,6 @@ func (m *model) openTab(args []string) {
 	if wasPalette {
 		m.console.ClearShown()
 	}
-	m.status = ""
 	m.watchPaneExit(p)
 }
 
@@ -832,7 +834,7 @@ var executable = os.Executable
 func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 	exe, err := executable()
 	if err != nil {
-		m.setStatus(prettylog.KindError, "cannot locate yoloctl binary: "+err.Error())
+		m.startNotice(fmt.Errorf("cannot locate yoloctl binary: %w", err))
 		return nil
 	}
 	if !m.standalone {
@@ -870,7 +872,7 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 		Palette:          m.hostPalette,
 	})
 	if err != nil {
-		m.setStatus(prettylog.KindError, err.Error())
+		m.startNotice(err)
 		return nil
 	}
 	self.Store(s)
@@ -935,7 +937,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		h := &m.hostMouseEncoding
 		if uint64(msg) == h.epoch && h.negotiating {
 			h.negotiating, h.failed = false, true
-			m.setStatus(prettylog.KindWarn, "host mouse encoding was not confirmed; reopen yoloctl to restore mouse reporting")
+			m.postNotice(prettylog.KindWarn, "host mouse encoding was not confirmed; reopen yoloctl to restore mouse reporting")
 			return m, tea.Raw(mouseTrackingOff + mouseEncodingOff)
 		}
 		return m, nil
@@ -983,7 +985,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 			}
 			m.osc52NoticeShown = true
 		}
-		m.setStatus(prettylog.KindWarn, msg.notice)
+		m.postNotice(prettylog.KindWarn, msg.notice)
 		return m, nil
 
 	case tea.ForegroundColorMsg:
@@ -1063,7 +1065,9 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		m.handleTabRequest(msg.req, msg.chat, msg.from)
 		if modal {
 			if i := m.tabs.Index(current); i >= 0 {
+				attention := current.NoticeAttention
 				m.tabs.Select(i)
+				current.NoticeAttention = attention
 				if focused != nil && hasPane(current, focused) {
 					current.Layout.SetFocus(focused)
 				}
@@ -1109,6 +1113,15 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		return m, m.measureHostGeometry()
 
 	case tea.KeyPressMsg:
+		key := normalizeHostKey(msg.Key(), m.hostKitty)
+		if !key.IsRepeat {
+			if m.toastKeys[keyIdentity(key)] {
+				delete(m.consumedKeys, keyIdentity(key))
+			}
+			delete(m.toastKeys, keyIdentity(key))
+		} else if m.toastKeys[keyIdentity(key)] {
+			return m, nil
+		}
 		if cmd, handled := m.browserKey(normalizeHostKey(msg.Key(), m.hostKitty)); handled {
 			return m, cmd
 		}
@@ -1136,11 +1149,12 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 	case browserFinishedMsg:
 		m.finishBrowserPrompt(msg.surface, msg.id)
 		if msg.err != nil {
-			m.setStatus(prettylog.KindError, msg.err.Error())
+			m.postNotice(prettylog.KindError, msg.err.Error())
 		}
 		return m, nil
 	case tea.KeyReleaseMsg:
 		k := normalizeHostKey(msg.Key(), m.hostKitty)
+		delete(m.toastKeys, keyIdentity(k))
 		if m.takeConsumedRelease(k) {
 			return m, nil
 		}
@@ -1162,7 +1176,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 			m.pal.Insert(msg.Content)
 			m.refreshSuggestions()
 		} else if t := m.tabs.Focused(); t != nil && t.Empty() {
-			m.setStatus(prettylog.KindWarn, "nothing takes input here") // the empty pane's input is the palette
+			m.postNotice(prettylog.KindWarn, "nothing takes input here") // the empty pane's input is the palette
 		} else if t != nil && !t.Exited {
 			// Bracket only when the child enabled DECSET 2004
 			// (mode tracker; H2).
@@ -1183,19 +1197,19 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 // asynchronous PTY failures are collected on a wake from the writer.
 func (m *model) sendInput(surface interface{ SendInput([]byte) error }, p []byte) {
 	if err := surface.SendInput(p); err != nil {
-		m.setStatus(prettylog.KindError, err.Error())
+		m.postSurfaceNotice(surface, prettylog.KindError, err.Error())
 	}
 }
 
 func (m *model) reportInputErrors() {
 	if m.console != nil {
 		if err := m.console.TakeInputError(); err != nil {
-			m.setStatus(prettylog.KindError, "console: "+err.Error())
+			m.postNotice(prettylog.KindError, "console: "+err.Error())
 		}
 	}
 	m.eachSession(func(p *panes.Pane) {
 		if err := p.Session.TakeInputError(); err != nil {
-			m.setStatus(prettylog.KindError, p.Title()+": "+err.Error())
+			m.postSurfaceNotice(p.Session, prettylog.KindError, p.Title()+": "+err.Error())
 		}
 	})
 	m.reportViewErrors()
@@ -1206,7 +1220,7 @@ func (m *model) reportInputErrors() {
 // steal input focus from another live tab for a background failure. One
 // exception: a stream that ended without an exit status
 // (session.ErrSessionClosed, as when the box under an attached view stops) is
-// reported with its exact text in the status line, so the palette does not
+// reported with its exact text in a notice toast, so the palette does not
 // open over the ended view. That error is not proof of a normal stop; the
 // view is still handled as failed.
 func (m *model) reportViewErrors() {
@@ -1222,7 +1236,7 @@ func (m *model) reportViewErrors() {
 		if err := p.Session.TakeViewError(); err != nil {
 			message := p.Title() + ": " + err.Error()
 			if m.standalone || errors.Is(err, session.ErrSessionClosed) {
-				m.setStatus(prettylog.KindWarn, message)
+				m.postTabNotice(tab, prettylog.KindWarn, message)
 				return
 			}
 			messages = append(messages, message)
@@ -1236,7 +1250,6 @@ func (m *model) reportViewErrors() {
 	if len(messages) > 0 && m.console.ShowError(strings.Join(messages, "\n\n")) {
 		m.showConsoleCommand()
 		m.clearSuggestions()
-		m.status = ""
 		m.focusPalette = focus
 		if focus {
 			m.scrollToLive()
@@ -1893,13 +1906,12 @@ func (m *model) View() tea.View {
 
 	if m.standalone {
 		lines = base
-		if m.status != "" && len(lines) > 0 {
-			lines[len(lines)-1] = ansi.Truncate(m.statusLine(), max(m.width, 1), "")
-		}
 		if prompt := m.browserPopup(len(lines)); len(prompt) > 0 {
 			copy(lines[len(lines)-len(prompt):], prompt)
 		}
 	}
+	m.applyToast(lines)
+	m.applyDockHint(lines)
 	m.applySpacePicker(lines)
 	v := tea.NewView(strings.Join(lines, "\n"))
 	v.AltScreen = true
@@ -1912,6 +1924,9 @@ func (m *model) View() tea.View {
 		v.WindowTitle = windowTitle(t.Title())
 	}
 	v.Cursor = m.hostCursor()
+	if o := m.toastLayout(); v.Cursor != nil && o.contains(v.Cursor.X, v.Cursor.Y) {
+		v.Cursor = nil
+	}
 	return v
 }
 
@@ -2276,8 +2291,6 @@ func (m *model) inputLine() string {
 	switch {
 	case newTab && line != "":
 		legend = "new tab · Esc cancels" // the placeholder went with the first character
-	case m.status != "":
-		legend, legendStyle = m.statusLine(), ""
 	case m.focusPalette:
 		legend = "Esc hide palette · ^R history · " + prefix + " panes · ^←/→ tabs · ^D quit"
 		switch {
@@ -2527,7 +2540,9 @@ func (m *model) tabStripLabels() []string {
 		}
 		title := tabIconTitle(strings.TrimPrefix(m.tabs.Tabs[i].Title(), titleWrapper), icons, method)
 		l := circledNumber(i+1) + " " + truncateTabText(title, titleMax, method)
-		if m.tabs.Tabs[i].Badge {
+		if m.tabs.Tabs[i].NoticeAttention {
+			l += " !"
+		} else if m.tabs.Tabs[i].Badge {
 			l += " •"
 		}
 		labels[i] = l

@@ -75,6 +75,9 @@ func menuRows(prefix string) []menuRow {
 		row("Pick a tab", "w"),
 		info("Tab by number", "1…9 0"),
 		row("Detach whole tab", "d"),
+		row("Previous notice", "["),
+		row("Next notice", "]"),
+		info("Scroll notice", "PgUp/PgDn"),
 		sep,
 		info("Send "+prefix, prefix),
 	}

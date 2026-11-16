@@ -167,7 +167,7 @@ func (m *model) deliverMouse(owner mouseOwner, mo tea.Mouse, action terminal.Mou
 			event.Pixels = &point
 		}
 		if err := owner.surface.SendMouse(event); err != nil {
-			m.setStatus(prettylog.KindError, err.Error())
+			m.postSurfaceNotice(owner.surface, prettylog.KindError, err.Error())
 		}
 	}
 }
@@ -189,13 +189,16 @@ func (m *model) handleMouse(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.hostMouseEncoding.pixels {
 		cw, ch := m.hostGeometry.width, m.hostGeometry.height
 		if cw <= 0 || ch <= 0 {
-			m.setStatus(prettylog.KindWarn, "pixel mouse report has no measured host cell size")
+			m.postNotice(prettylog.KindWarn, "pixel mouse report has no measured host cell size")
 			return m, nil
 		}
 		// UV preserves its cell-coordinate convention for every SGR report.
 		// Mode1016 uses zero-origin pixels, so undo that subtraction exactly.
 		pixels = &terminal.MousePixels{X: mo.X + 1, Y: mo.Y + 1, CellWidth: cw, CellHeight: ch}
 		mo.X, mo.Y = floorCell(pixels.X, cw), floorCell(pixels.Y, ch)
+	}
+	if m.toastMouse(msg, mo) {
+		return m, nil
 	}
 	// The pane menu and the inert notice take presses and the wheel before
 	// the prefix and chrome/child routing (R2).

@@ -76,7 +76,7 @@ func assertPaletteViewError(t *testing.T, m *model) {
 		t.Fatal("failed attachment did not reveal the palette result")
 	}
 	rows := strings.Split(ansi.Strip(m.View().Content), "\n")
-	if strings.Contains(rows[0], "mismatch") || strings.Contains(m.status, "mismatch") {
+	if strings.Contains(rows[0], "mismatch") || strings.Contains(m.noticeText(), "mismatch") {
 		t.Fatalf("failure leaked into one-line status: %q", rows[0])
 	}
 	// Remove layout whitespace: native wrapping can split a word at any column.
@@ -149,7 +149,7 @@ func TestStandaloneRejectedAttachmentRetainsActionableError(t *testing.T) {
 	m.standalone = true
 	tab := rejectedView(t, m)
 	_, _ = m.Update(wakeMsg{})
-	if m.focusPalette || !strings.Contains(m.status, rejectedViewMessage) {
+	if m.focusPalette || !strings.Contains(m.noticeText(), rejectedViewMessage) {
 		t.Fatal("standalone error lost its visible notice")
 	}
 	if err := tab.Focused().Session.Wait(time.Second); err == nil || !strings.Contains(err.Error(), rejectedViewMessage) {

@@ -135,6 +135,9 @@ func (m *model) prefixRoute(k tea.Key, modifier bool) (tea.Cmd, bool) {
 		m.armPrefix()
 		return nil, true
 	}
+	if m.toastEscape(k) {
+		return nil, true
+	}
 	return nil, false
 }
 
@@ -184,6 +187,12 @@ func (m *model) checkPrefix() {
 // refusal in its footer. Repeats do nothing.
 func (m *model) prefixedKey(k tea.Key) tea.Cmd {
 	p := m.prefix
+	m.prefix = nil
+	if m.toastCommand(k) {
+		m.consumeToastKey(k)
+		return nil
+	}
+	m.prefix = p
 	mod := k.Mod &^ (tea.ModCapsLock | tea.ModNumLock)
 	switch {
 	case m.panePrefix().matches(k):
@@ -419,6 +428,10 @@ func resizeAct(d panes.Dir, cells int) func(*model, tea.Key) tea.Cmd {
 
 // paneKeys is PLAN-r2.3's R2 key table.
 var paneKeys = []paneBinding{
+	{key: "[", help: "previous notice", text: "[", act: func(m *model, _ tea.Key) tea.Cmd { m.moveToast(-1); return nil }},
+	{key: "]", help: "next notice", text: "]", act: func(m *model, _ tea.Key) tea.Cmd { m.moveToast(1); return nil }},
+	{key: "PgUp", help: "scroll notice up", code: tea.KeyPgUp, act: func(m *model, _ tea.Key) tea.Cmd { m.scrollToast(-max(m.toastLayout().capacity, 1)); return nil }},
+	{key: "PgDn", help: "scroll notice down", code: tea.KeyPgDown, act: func(m *model, _ tea.Key) tea.Cmd { m.scrollToast(max(m.toastLayout().capacity, 1)); return nil }},
 	{key: "s", help: "switch this TUI space", text: "s", act: func(m *model, _ tea.Key) tea.Cmd { m.openSpacePicker(); return nil }},
 	{key: "|", help: "split right: an empty pane opens beside the focused pane, for a command or a tab", text: "|", act: splitAct(true)},
 	{key: "-", help: "split below", text: "-", act: splitAct(false)},

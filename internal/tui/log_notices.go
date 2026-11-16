@@ -62,17 +62,6 @@ func (m *model) noticePalette() prettylog.Palette {
 	return logtheme.Palette(m.bgIsDark, m.background)
 }
 
-func (m *model) setStatus(kind prettylog.Kind, text string) {
-	m.status, m.statusKind = text, kind
-}
-
-func (m *model) statusLine() string {
-	if m.status == "" {
-		return ""
-	}
-	return m.noticeLine(m.statusKind, m.status)
-}
-
 // Popup wrapping and hit geometry operate on plain text. Apply the shared tone
 // after wrapping, without adding a second glyph or changing any cell widths.
 func (m *model) noticeFooter(kind prettylog.Kind) func(string, int) string {
@@ -83,7 +72,7 @@ func (m *model) noticeFooterOptions(kind prettylog.Kind, settings logging.Settin
 	return func(line string, _ int) string {
 		// A pretty record starts with the kind's styled glyph. Use that
 		// renderer-owned style prefix, from the same resolved palette as the
-		// status line, rather than reinterpreting Color's private encoding.
+		// notice renderer, rather than reinterpreting Color's private encoding.
 		// The empty record is ours, never child PTY output. Preserve already
 		// wrapped text and the popup's own reverse-video button highlighting.
 		prefix, _, found := strings.Cut(m.noticeLineOptions(kind, "", settings), prettylog.DefaultGlyphs.For(kind))

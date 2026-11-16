@@ -21,7 +21,7 @@ Focus landing on it, or a press on it, opens the palette: its input.
 - **Remove:** Esc on its empty palette line with no suggestion shown, its
   ✕, prefix `x` or `Ctrl+W`; the sibling takes the space. Esc in a draft
   only hides the palette; the next key opens it again.
-- **Unchanged:** a failed start (status line), a tab switch and back.
+- **Unchanged:** a failed start (persistent toast), a tab switch and back.
 - A tab left with only its empty pane closes.
 [1](#source-1) [4](#source-4) [5](#source-5)
 
@@ -57,9 +57,9 @@ reverse video. The target is the visible pane under the pointer and its
 nearest edge, a column counting half a row; the empty pane is whole. Each
 motion runs the preflight: a passing half is tinted 256-colour 94 with the
 pane's border orange; a refused one is hatched grey with the reason on the
-status line, otherwise `drop on a pane: left · right · top · bottom · Esc
+ephemeral content hint, otherwise `drop on a pane: left · right · top · bottom · Esc
 cancels`. Borders, bars, the strip and the palette are no target; the active
-tab gets `drop needs another tab`. The release re-resolves and re-checks. Esc, host blur, a tab switch, another button, the
+tab gets `drop needs another tab`. The release re-resolves and re-checks; a refusal becomes a persistent global toast. Esc, host blur, a tab switch, another button, the
 dragged tab going or its layout changing cancel. No child receives it. [2](#source-2) [10](#source-10) [11](#source-11)
 
 [FACT] Tests cover graft sides, filling, refusal, drop sides and drawing

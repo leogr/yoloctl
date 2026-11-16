@@ -263,7 +263,7 @@ func TestSpacePinActualChildrenAndCompletion(t *testing.T) {
 	m.ctxSpace = "first"
 	p := m.startPane([]string{"space", "view"}, 10, 60)
 	if p == nil {
-		t.Fatal(m.status)
+		t.Fatal(m.noticeText())
 	}
 	t.Cleanup(p.Session.Close)
 	waitFor(t, func() bool { return strings.Contains(p.Session.GridText(), "pin=first") })

@@ -38,8 +38,8 @@ func TestHolderClosedEndsTheViewWithoutOpeningThePalette(t *testing.T) {
 	if len(m.reattachSlots()) != 1 {
 		t.Fatal("the ended view's re-attach button is not on screen")
 	}
-	if m.status != "box attach coder: session: connection to holder closed without an exit status" {
-		t.Fatalf("the status line lost the exact diagnostic: %q", m.status)
+	if m.noticeText() != "box attach coder: session: connection to holder closed without an exit status" {
+		t.Fatalf("the status line lost the exact diagnostic: %q", m.noticeText())
 	}
 }
 
@@ -65,7 +65,7 @@ func TestOtherViewFailureStillOpensThePalette(t *testing.T) {
 	<-s.Done() // the refusal kills the relay client
 	_, _ = m.Update(tabExitMsg{session: s})
 	text := m.console.GridText()
-	if !m.focusPalette || !strings.Contains(text, "✗ box attach coder: ") || strings.Contains(text, "holder closed") || m.status != "" {
-		t.Fatalf("a view refusal must stay a palette result: focus=%v status=%q\n%s", m.focusPalette, m.status, m.console.GridText())
+	if !m.focusPalette || !strings.Contains(text, "✗ box attach coder: ") || strings.Contains(text, "holder closed") || m.noticeText() != "" {
+		t.Fatalf("a view refusal must stay a palette result: focus=%v status=%q\n%s", m.focusPalette, m.noticeText(), m.console.GridText())
 	}
 }

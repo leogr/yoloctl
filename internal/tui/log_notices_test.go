@@ -28,8 +28,9 @@ func TestErrorOnlyStillExplainsDirectPaneRefusal(t *testing.T) {
 	if !strings.Contains(shown, "! one pane: nothing to swap") {
 		t.Fatalf("refusal hidden at error level: %q", shown)
 	}
-	m.setStatus(prettylog.KindUnknown, "outcome remains uncertain")
-	if got := m.inputLine(); !strings.Contains(got, "? outcome remains uncertain") {
+	m.postNotice(prettylog.KindUnknown, "outcome remains uncertain")
+	m.notice = nil
+	if got := m.View().Content; !strings.Contains(got, "? outcome remains uncertain") {
 		t.Fatalf("unknown status misclassified: %q", got)
 	}
 }
@@ -127,4 +128,18 @@ func TestWrappedNoticePreservesResolvedPaletteAndGeometry(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (m *model) noticeText() string {
+	if n := m.currentToast(); n != nil {
+		return n.text
+	}
+	return ""
+}
+
+func (m *model) dockHintText() string {
+	if m.chrome != nil {
+		return m.chrome.status
+	}
+	return ""
 }

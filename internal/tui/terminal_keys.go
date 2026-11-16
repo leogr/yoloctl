@@ -40,12 +40,12 @@ func (m *model) sendKey(target keyTerminal, k tea.Key, release bool) {
 	target = m.imageKey(target, k, release)
 	b, err := childKey(target, k, release)
 	if err != nil {
-		m.setStatus(prettylog.KindError, err.Error())
+		m.postSurfaceNotice(target, prettylog.KindError, err.Error())
 		return
 	}
 	if len(b) > 0 {
 		if err := target.SendInput(b); err != nil {
-			m.setStatus(prettylog.KindError, err.Error())
+			m.postSurfaceNotice(target, prettylog.KindError, err.Error())
 			return
 		}
 		_, imageOwner := target.(*imagePasteKey)

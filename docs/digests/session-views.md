@@ -11,8 +11,10 @@ also when the configured key is Ctrl+D or `d` (Ctrl+W keeps its old detach
 precedence). Inside the TUI only the prefix
 then Ctrl+W closes a pane; the prefix then Ctrl+D on an empty command line
 quits the TUI. An explicit browser `ask` opens a dialog immediately;
-Ctrl+O/Esc answers without a prefix. Other prefix combinations reach the child.
-A notice can overlay the last row until the next non-modifier key. Child exit
+Ctrl+O/Esc answers without a prefix. With notices present, prefix `[`/`]` and PgUp/PgDn navigate/scroll the
+persistent top-right toast; ordinary keys retain it. Bare Esc dismisses it
+below modal/gesture precedence. Other combinations reach the child.
+Startup errors remain independent of dismissible presentation. Child exit
 status reaches the invoking shell. [1](#source-1) [2](#source-2) [3](#source-3) [20](#source-20)
 
 [FACT] The CLI owns process signals and cancels the frontend context. Both

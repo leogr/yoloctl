@@ -109,8 +109,8 @@ func TestOversizedPasteIsReportedAndPaletteStillResponds(t *testing.T) {
 	m.tabs.Add(testTab(s, "input test", false))
 	m.focusPalette = false
 	_, _ = m.Update(tea.PasteMsg{Content: strings.Repeat("x", 5<<20)})
-	if !strings.Contains(m.status, "not queued") {
-		t.Fatalf("rejected paste was silent: %q", m.status)
+	if !strings.Contains(m.noticeText(), "not queued") {
+		t.Fatalf("rejected paste was silent: %q", m.noticeText())
 	}
 	_, _ = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
 	if !m.focusPalette {
@@ -2074,8 +2074,8 @@ func TestOSC52PolicyAtHostTUIBoundary(t *testing.T) {
 		t.Fatalf("disabled route returned %T, want osc52NoticeMsg", blocked.osc52HostMsg(event))
 	}
 	_, _ = blocked.Update(blockedMsg)
-	if blocked.status != termio.OSC52DisabledNotice {
-		t.Fatalf("disabled status = %q", blocked.status)
+	if blocked.noticeText() != termio.OSC52DisabledNotice {
+		t.Fatalf("disabled status = %q", blocked.noticeText())
 	}
 
 	allowed := newTestModel(t, 80, 20)

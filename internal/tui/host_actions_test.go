@@ -18,6 +18,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/creack/pty"
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/hostintegration"
@@ -209,7 +210,13 @@ func TestBrowserPromptsSurviveRepeatedRequestsAndDisconnect(t *testing.T) {
 			m.standalone, m.focusPalette = standalone, false
 			m.pending = &atomic.Bool{}
 			m.cfg.Seams.Browser = "ask"
-			pr, pw := io.Pipe()
+			// Real host PTY input avoids the pipe-only cooked ONLCR assumption
+			// in Bubble Tea's renderer; captured output feeds a raw core.
+			master, slave, err := pty.Open()
+			if err != nil {
+				t.Fatal(err)
+			}
+			pr, pw := slave, master
 			defer func() { _ = pr.Close(); _ = pw.Close() }()
 			out := &observedOutput{ready: make(chan struct{})}
 			ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)

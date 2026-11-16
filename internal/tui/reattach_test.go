@@ -142,8 +142,8 @@ func TestReattachOnlyEndedAttachViews(t *testing.T) {
 	tab2, _ := splitWithEnded(t, m, ended)
 	executable = func() (string, error) { return "", errors.New("gone") }
 	_, _ = m.Update(key('r', 0, "r"))
-	if tab2.Focused() != ended || !ended.Exited || !strings.Contains(m.status, "cannot locate") {
-		t.Fatalf("a failed start keeps the ended view: %q", m.status)
+	if tab2.Focused() != ended || !ended.Exited || !strings.Contains(m.noticeText(), "cannot locate") {
+		t.Fatalf("a failed start keeps the ended view: %q", m.noticeText())
 	}
 	_, _ = m.Update(key(tea.KeyEnter, 0, ""))
 	if len(tab2.Layout.Panes()) != 1 {

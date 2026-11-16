@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/leogr/yoloctl/pkg/prettylog"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/config"
@@ -188,8 +190,8 @@ func TestDoublePrefixGoesToTheCapturedSurface(t *testing.T) {
 		m.pal.Insert("abc")
 		_, _ = m.Update(ctrlQ)
 		_, _ = m.Update(ctrlQ)
-		if line, _ := m.pal.Line(); line != "abc" || m.prefix != nil || m.status != "" {
-			t.Fatalf("the editor ignores a double prefix: %q %q", line, m.status)
+		if line, _ := m.pal.Line(); line != "abc" || m.prefix != nil || m.noticeText() != "" {
+			t.Fatalf("the editor ignores a double prefix: %q %q", line, m.noticeText())
 		}
 	})
 	t.Run("exited pane", func(t *testing.T) {
@@ -210,7 +212,7 @@ func TestDoublePrefixGoesToTheCapturedSurface(t *testing.T) {
 		_, _ = m.Update(ctrlQ)
 		m.detachPane(m.tabs.Current(), right)
 		_, _ = m.Update(ctrlQ)
-		if m.prefix != nil || m.status != "" {
+		if m.prefix != nil || m.noticeText() != "" {
 			t.Fatal("the second tap is consumed")
 		}
 		if got := left(); got != "" {
@@ -524,10 +526,10 @@ func TestPrefixNewTabEntry(t *testing.T) {
 		_, _ = m.Update(key(r, 0, string(r)))
 	}
 	_, _ = m.Update(key(tea.KeyEnter, 0, ""))
-	if line, _ := m.pal.Line(); len(m.tabs.Tabs) != 2 || !strings.Contains(m.status, "cannot locate") || line != "box ls --dra" || m.newTab != nil {
-		t.Fatalf("a failed start keeps the draft: %q %q", line, m.status)
+	if line, _ := m.pal.Line(); len(m.tabs.Tabs) != 2 || !strings.Contains(m.noticeText(), "cannot locate") || line != "box ls --dra" || m.newTab != nil {
+		t.Fatalf("a failed start keeps the draft: %q %q", line, m.noticeText())
 	}
-	m.status = ""
+	m.notices = nil
 
 	if started, err := m.console.Run(nil, "$ wait", "sh", "-c", "read answer"); err != nil || !started {
 		t.Fatal("console start")
@@ -630,7 +632,7 @@ func TestTabPicker(t *testing.T) {
 	m.tabs.CloseTab(m.tabs.Tabs[9]) // nine tabs left: 0 names none
 	prefixed(m, key('w', 0, "w"))
 	_, _ = m.Update(key('0', 0, "0"))
-	if m.picker == nil || !strings.Contains(ansi.Strip(m.View().Content), "no tab 10") || m.status != "" {
+	if m.picker == nil || !strings.Contains(ansi.Strip(m.View().Content), "no tab 10") || m.noticeText() != "" {
 		t.Fatal("a missing number is refused in the picker's footer; it stays open")
 	}
 	_, _ = m.Update(key('k', 0, "k"))
@@ -927,10 +929,10 @@ func TestPickerRefusalIsVisible(t *testing.T) {
 	addExitedTab(t, m, "only")
 	addExitedTab(t, m, "other") // w needs another tab
 	m.tabs.Select(0)
-	m.status = "an earlier notice"
+	m.postNotice(prettylog.KindNotice, "an earlier notice")
 	prefixed(m, key('w', 0, "w"))
 	_, _ = m.Update(key('0', 0, "0"))
-	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "no tab 10") || m.picker == nil || m.status != "an earlier notice" {
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "no tab 10") || m.picker == nil || m.noticeText() != "an earlier notice" {
 		t.Fatalf("the refusal shows in the picker:\n%s", view)
 	}
 	narrow := newTestModel(t, 24, 12)

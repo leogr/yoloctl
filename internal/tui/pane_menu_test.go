@@ -318,7 +318,7 @@ func TestPaneMenuRefusalDuringAnAction(t *testing.T) {
 	}
 	_, _ = m.Update(key(tea.KeyEscape, 0, ""))
 	m.paneNotice("no tab 7")
-	if m.notice == nil || shownNotice(m) != "no tab 7" || !strings.Contains(ansi.Strip(m.View().Content), "no tab 7") || m.status != "" {
+	if m.notice == nil || shownNotice(m) != "no tab 7" || !strings.Contains(ansi.Strip(m.View().Content), "no tab 7") || m.noticeText() != "" {
 		t.Fatal("no popup open: the inert notice popup, never the palette line")
 	}
 }

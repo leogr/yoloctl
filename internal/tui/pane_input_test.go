@@ -270,7 +270,7 @@ func TestPrefixPaneKeys(t *testing.T) {
 	small.layoutTab(small.tabs.Current())
 	small.focusPalette = true
 	prefixed(small, key('|', tea.ModShift, "|"))
-	if len(small.tabs.Current().Layout.Panes()) != 1 || !strings.Contains(shownNotice(small), "not enough room") || small.status != "" {
+	if len(small.tabs.Current().Layout.Panes()) != 1 || !strings.Contains(shownNotice(small), "not enough room") || small.noticeText() != "" {
 		t.Fatalf("a split below the minimum is refused: %q", shownNotice(small))
 	}
 }
@@ -334,7 +334,7 @@ func TestEmptyPaneTransitions(t *testing.T) {
 		prefixed(m, key(rune(text[0]), tea.ModShift, text))
 		e := tab.Layout.Empty()
 		if e == nil || tab.Focused() != e || !m.focusPalette || !m.inChooser() {
-			t.Fatalf("%s opens a focused empty pane with the palette for it (status %q)", text, m.status)
+			t.Fatalf("%s opens a focused empty pane with the palette for it (status %q)", text, m.noticeText())
 		}
 		return e
 	}
@@ -375,10 +375,10 @@ func TestEmptyPaneTransitions(t *testing.T) {
 		t.Fatal("a request from another tab's pane opens a new tab and leaves the empty pane")
 	}
 	_, _ = m.Update(tabRequestMsg{req: request, from: view})
-	if m.tabs.Active != 2 || m.status != "already open in tab 3" || tab.Layout.Empty() != e {
-		t.Fatalf("reuse wins over the empty pane and says where: active %d, %q", m.tabs.Active, m.status)
+	if m.tabs.Active != 2 || m.noticeText() != "already open in tab 3" || tab.Layout.Empty() != e {
+		t.Fatalf("reuse wins over the empty pane and says where: active %d, %q", m.tabs.Active, m.noticeText())
 	}
-	m.status = ""
+	m.notices = nil
 	m.tabs.CloseCurrent()
 	m.tabs.Select(0)
 	slot := e.Rect()
@@ -408,8 +408,8 @@ func TestEmptyPaneTransitions(t *testing.T) {
 	_, _ = m.Update(key(tea.KeyBackspace, 0, ""))
 	executable = func() (string, error) { return "", errors.New("gone") }
 	typeLine("box attach web")
-	if tab.Layout.Empty() != e || !strings.Contains(m.status, "cannot locate") {
-		t.Fatalf("a failed start keeps the empty pane: %q", m.status)
+	if tab.Layout.Empty() != e || !strings.Contains(m.noticeText(), "cannot locate") {
+		t.Fatalf("a failed start keeps the empty pane: %q", m.noticeText())
 	}
 	executable = func() (string, error) { return truePath(t), nil }
 	m.focusPalette = true

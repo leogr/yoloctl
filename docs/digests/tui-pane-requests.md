@@ -6,7 +6,7 @@ Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying change
 order:
 1. **Reuse:** a pane in any tab whose argv is identical is reused; its tab is
    selected and the pane focused.
-   When the requesting pane's tab has an empty pane, the status line says
+   When the requesting pane's tab has an empty pane, its notice toast says
    `already open in tab N` and the empty pane stays.
 2. **Empty pane:** otherwise, if the requesting pane's tab (where it is now)
    has an empty pane, the attach fills it
@@ -22,7 +22,11 @@ every tab. A browser prompt still opens at once, as for a background tab.
 A tab other than the current one is badged, and a pane other than the
 focused one is marked. [3](#source-3)
 
-[FACT] Attention marks:
+[FACT] Tab-owned notices use a separate `!`, cleared by an explicit tab visit,
+with the persistent toast retained; it takes precedence over the dot below.
+See [persistent notices](tui-notice-toasts.md) for source ownership. [12](#source-12)
+
+[FACT] Existing bell/exit/request attention marks:
 - **Triggers:** a bell, an exit or a browser request in a pane that is not
   the focused pane of the current tab (or while the palette has focus).
 - **Mark:** that pane gets a mark, drawn as a bold orange `●` leading its bar
@@ -61,7 +65,7 @@ Browser and image requests and real host rendering are not covered.
 
 ## Sources
 
-1. <a id="source-1"></a> [Tab requests](../../internal/tui/tab_requests.go#L1-L78) — `tabRequestMsg.from`, `tabRequestHandler`, `handleTabRequest`.
+1. <a id="source-1"></a> [Tab requests](../../internal/tui/tab_requests.go#L1-L81) — `tabRequestMsg.from`, `tabRequestHandler`, `handleTabRequest`.
 2. <a id="source-2"></a> [Empty pane](../../internal/tui/placeholder.go#L36-L54) — `fillPlaceholder`; `Layout.Empty` in panes/layout.go.
 3. <a id="source-3"></a> [Browser requests](../../internal/tui/host_actions.go#L51-L83) — `browserRequest`: badge and mark.
 4. <a id="source-4"></a> [Bells and marks](../../internal/tui/bell.go#L1-L48) — `paneBellMsg`, `paneBellHandler`, `markUnfocused`; exits in tui.go `Update` (`tabExitMsg`).
@@ -72,3 +76,5 @@ Browser and image requests and real host rendering are not covered.
 9. <a id="source-9"></a> [Holder fixture](../../internal/tui/holder_fixture_test.go#L1-L217) — fake sandbox, `startManagedHolder`, `TestManagedRelayChild`, `managedView`.
 10. <a id="source-10"></a> [Pixel conversion](../../internal/tui/mouse.go#L131-L169) — `deliverMouse`; `TestPixelChildInAnUnfocusedPaneGetsTheCellCentre` in pane_input_test.go.
 11. <a id="source-11"></a> [Acceptance driver](../../internal/tui/panes_acceptance_test.go#L1-L493) — `TestPanesAcceptanceDriver`, `fakeHost`, `driverScript`, `TestFakeSpaceViewChild`.
+
+12. <a id="source-12"></a> [Notice ownership](../../internal/tui/notices.go#L26) — `postTabNotice`, `postSurfaceNotice`; tabs.go `Select`; tui.go `tabStripLabels`.

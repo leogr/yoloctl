@@ -248,8 +248,8 @@ func TestEmptyPaneOnEverySessionPath(t *testing.T) {
 	}
 	m.syncFocus()
 	_, _ = m.Update(tea.PasteMsg{Content: "x"})
-	if m.status != "nothing takes input here" {
-		t.Fatalf("paste is refused: %q", m.status)
+	if m.noticeText() != "nothing takes input here" {
+		t.Fatalf("paste is refused: %q", m.noticeText())
 	}
 	er := e.Rect()
 	_, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp, X: er.X + 2, Y: m.tabTop() + er.Y + 1})
@@ -298,8 +298,8 @@ func TestDockDragSequence(t *testing.T) {
 	}
 	r, top := ap[0].Rect(), m.tabTop()
 	_, _ = m.Update(motionAt(r.X+r.W-4, top+r.H/2))
-	if m.chrome.kind != chromeDock || m.tabs.Active != 0 || m.status != dockStatus {
-		t.Fatalf("motion starts a dock drag with A still visible: %q", m.status)
+	if m.chrome.kind != chromeDock || m.tabs.Active != 0 || m.dockHintText() != dockStatus {
+		t.Fatalf("motion starts a dock drag with A still visible: %q", m.noticeText())
 	}
 	v := m.View().Content
 	if !strings.Contains(v, "48;5;94") || !strings.Contains(v, "\x1b[7m") {
@@ -307,8 +307,8 @@ func TestDockDragSequence(t *testing.T) {
 	}
 	_, _ = m.Update(releaseAt(r.X+r.W-4, top+r.H/2))
 	ps := a.Layout.Panes()
-	if len(m.tabs.Tabs) != 1 || len(ps) != 3 || ps[1] != bp[0] || ps[2] != bp[1] || m.status != "" || m.chrome != nil {
-		t.Fatalf("B docked right of A: %d tabs, %d panes, %q", len(m.tabs.Tabs), len(ps), m.status)
+	if len(m.tabs.Tabs) != 1 || len(ps) != 3 || ps[1] != bp[0] || ps[2] != bp[1] || m.noticeText() != "" || m.chrome != nil {
+		t.Fatalf("B docked right of A: %d tabs, %d panes, %q", len(m.tabs.Tabs), len(ps), m.noticeText())
 	}
 	if ap[0].Rect().X != 0 || bp[0].Rect().X <= ap[0].Rect().X+ap[0].Rect().W || a.Focused() != bp[1] {
 		t.Fatal("the docked tree is on the right and its focused pane is focused")
@@ -332,15 +332,15 @@ func TestDockDragTargets(t *testing.T) {
 	r := ap[0].Rect()
 	_, _ = m.Update(click(tabClickX(m, 1), row))
 	_, _ = m.Update(motionAt(r.X+r.W-2, top+r.H/2))
-	if m.status != "too small for tab ❷'s panes" || !strings.Contains(ansi.Strip(m.View().Content), "╱╱╱") {
-		t.Fatalf("right of a 60-column pane, two 20-column panes do not fit: %q", m.status)
+	if m.dockHintText() != "too small for tab ❷'s panes" || !strings.Contains(ansi.Strip(m.View().Content), "╱╱╱") {
+		t.Fatalf("right of a 60-column pane, two 20-column panes do not fit: %q", m.noticeText())
 	}
 	_, _ = m.Update(motionAt(r.X+r.W/2, top+r.H-1))
-	if m.status != dockStatus || !strings.Contains(m.View().Content, "48;5;94") {
-		t.Fatalf("below it they fit: %q", m.status)
+	if m.dockHintText() != dockStatus || !strings.Contains(m.View().Content, "48;5;94") {
+		t.Fatalf("below it they fit: %q", m.noticeText())
 	}
 	_, _ = m.Update(motionAt(5, row))
-	if strings.Contains(m.View().Content, "48;5;94") || m.status != dockStatus {
+	if strings.Contains(m.View().Content, "48;5;94") || m.dockHintText() != dockStatus {
 		t.Fatal("the strip is no target")
 	}
 	_, _ = m.Update(releaseAt(5, row))
@@ -350,17 +350,17 @@ func TestDockDragTargets(t *testing.T) {
 	_, _ = m.Update(click(tabClickX(m, 1), row))
 	_, _ = m.Update(motionAt(r.X+r.W-2, top+r.H/2))
 	_, _ = m.Update(releaseAt(r.X+r.W-2, top+r.H/2))
-	if len(m.tabs.Tabs) != 2 || m.status != "too small for tab ❷'s panes" {
+	if len(m.tabs.Tabs) != 2 || m.noticeText() != "too small for tab ❷'s panes" {
 		t.Fatal("a refused drop changes nothing and says why")
 	}
-	m.status = ""
+	m.notices = nil
 	_, _ = m.Update(click(tabClickX(m, 0), row))
 	_, _ = m.Update(motionAt(r.X+5, top+3))
-	if m.status != "drop needs another tab" {
-		t.Fatalf("the active tab has no target: %q", m.status)
+	if m.dockHintText() != "drop needs another tab" {
+		t.Fatalf("the active tab has no target: %q", m.noticeText())
 	}
 	_, _ = m.Update(releaseAt(r.X+5, top+3))
-	if len(m.tabs.Tabs) != 2 || m.status != "" {
+	if len(m.tabs.Tabs) != 2 || m.noticeText() != "" {
 		t.Fatal("dropping the active tab does nothing")
 	}
 	// The empty pane is a whole target: dropping on it fills it.
@@ -372,7 +372,7 @@ func TestDockDragTargets(t *testing.T) {
 	_, _ = m.Update(motionAt(er.X+1, m.tabTop()+er.Y))
 	_, _ = m.Update(releaseAt(er.X+1, m.tabTop()+er.Y))
 	if a.Layout.Empty() != nil || len(a.Layout.Panes()) != 3 || m.tabs.Index(b) >= 0 {
-		t.Fatalf("a drop on the empty pane fills it: %q", m.status)
+		t.Fatalf("a drop on the empty pane fills it: %q", m.noticeText())
 	}
 }
 
@@ -406,7 +406,7 @@ func TestDockDragCancels(t *testing.T) {
 		x, y := drag()
 		_, _ = m.Update(c.cancel)
 		_, _ = m.Update(releaseAt(x, y))
-		if m.chrome != nil || len(m.tabs.Tabs) != 2 || m.status != "" || strings.Contains(m.View().Content, "48;5;94") {
+		if m.chrome != nil || len(m.tabs.Tabs) != 2 || m.noticeText() != "" || strings.Contains(m.View().Content, "48;5;94") {
 			t.Fatalf("%s cancels the dock drag", c.name)
 		}
 		_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseRight, X: 3, Y: 5})
@@ -428,10 +428,10 @@ func TestDockDragCancels(t *testing.T) {
 	}
 	m.layoutTab(a)
 	_, _ = m.Update(releaseAt(x, y))
-	if len(m.tabs.Tabs) != 2 || len(a.Layout.Panes()) != 2 || !strings.HasPrefix(m.status, "too small") {
-		t.Fatalf("the preflight repeated at release refuses: %q", m.status)
+	if len(m.tabs.Tabs) != 2 || len(a.Layout.Panes()) != 2 || !strings.HasPrefix(m.noticeText(), "too small") {
+		t.Fatalf("the preflight repeated at release refuses: %q", m.noticeText())
 	}
-	m.status = ""
+	m.notices = nil
 	// A host resize mid-drag: the drop still lands by the current geometry.
 	a.Layout.Remove(a.Layout.Panes()[1])
 	m.layoutTab(a)
@@ -457,7 +457,7 @@ func TestDockDragSourceGone(t *testing.T) {
 	m.detachTab(b)
 	_, _ = m.Update(motionAt(r.X+r.W-5, m.tabTop()+r.H/2))
 	_, _ = m.Update(releaseAt(r.X+r.W-5, m.tabTop()+r.H/2))
-	if m.chrome != nil || len(m.tabs.Tabs) != 1 || len(m.tabs.Current().Layout.Panes()) != 1 || m.status != "" {
+	if m.chrome != nil || len(m.tabs.Tabs) != 1 || len(m.tabs.Current().Layout.Panes()) != 1 || m.noticeText() != "" {
 		t.Fatal("the dragged tab going cancels the drag")
 	}
 }

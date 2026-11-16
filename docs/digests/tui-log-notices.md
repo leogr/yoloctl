@@ -1,13 +1,15 @@
 # TUI log notices
 
-Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes.
+Verification: `16684468ac1f193e1ee81155621dd08fec236391` and accompanying changes; console-history facts retained from `e05d46a4`.
 
-[FACT] Host-owned TUI status messages, pane-menu refusals and terminal exit
+[FACT] Host-owned TUI interaction messages, pane-menu refusals and terminal exit
 notices use `prettylog` kinds, glyphs and bounded message escaping. Errors use
 `✗`, warnings `!`, notices `•`, successes `✓` and unknown outcomes `?`.
 Direct-action feedback is displayed at every command-log level; choosing
 `--log-level error` does not hide why a pane action was refused. Command output
 retains the child logger's filtering. [1](#source-1) [2](#source-2) [4](#source-4)
+
+[FACT] Outer interaction feedback now uses [persistent notice toasts](tui-notice-toasts.md): a separate tab `!` for tab-owned feedback plus a dismissible queue for every notice. Header/last-row placement and incidental typing/success clears are removed. Pane-menu refusal popups and terminal exit notices retain their own existing presentation. [15](#source-15)
 
 [FACT] The outer TUI reports its existing background-colour response through
 `logtheme.SetBackground`; it adds no terminal query or input reader. Existing
@@ -47,7 +49,7 @@ clears when the palette was already closed. [4](#source-4) [7](#source-7) [8](#s
 
 ## Sources
 
-1. <a id="source-1"></a> [Notice records](../../internal/tui/log_notices.go#L19) — `noticeRecord`, `noticeLineOptions`, `setStatus`, `statusLine`, `noticeFooter`.
+1. <a id="source-1"></a> [Notice records](../../internal/tui/log_notices.go#L19) — `noticeRecord`, `noticeLineOptions`, `noticeFooter`.
 2. <a id="source-2"></a> [Notice regressions](../../internal/tui/log_notices_test.go#L23) — error-level refusal, escaping, bounds, shared light/dark theme.
 3. <a id="source-3"></a> [TUI](../../internal/tui/tui.go#L289) — `updateTerminalColors`, `startPane`, background response, `inputLine`.
 4. <a id="source-4"></a> [Terminal notices](../../internal/tui/term/log_notices.go#L16) — `SetLogPalette`, `logNoticeOptions`; console.go `Run`, `ShowError`, `pump`; session.go `writeExitBanner`.
@@ -61,3 +63,5 @@ clears when the palette was already closed. [4](#source-4) [7](#source-7) [8](#s
 12. <a id="source-12"></a> [Console history](../../internal/tui/term/console.go#L1) — `Console.history`, `begin`, `ClearShown`, `HistoryFrame`, `History`, the pump/echo writes to both; emulator.go `ClearKeepHistory`, `reset`; native `Terminal.ResetKeepHistory`.
 13. <a id="source-13"></a> [Consecutive-command regression](../../internal/tui/term/console_test.go#L57) — last output shown alone; history order, exit notices, blank lines and fresh input modes; `TestConsoleHistoryRotatesByLines`, `TestConsoleClearShownKeepsHistory`; lifecycle_test.go keeps old direct-child text in history only and rejects the late descendant's output and clipboard tail.
 14. <a id="source-14"></a> [History view and UI transitions](../../internal/tui/tui.go#L1) — the Ctrl+R case, `consoleHistory`, `showConsoleCommand`, `resetConsoleView`, `closeConsoleView`, `paletteClosed`, `activatePane`, `openTab`, `leavePaletteForTab`, `refreshSuggestions`, the palette legend; frames.go `consoleDisplayFrame`, `scroller`; `menuShown`; tui_test.go `TestOverlayShowsOneCommandAndCtrlRShowsHistory`, `TestConsoleHistoryWinsOverCompletionMenu`, `TestClickTabIdlePreservesConsoleHistory`, `TestClosingPaletteKeepsARunningCommandsOutput`, `TestPaneRoutesClosingThePaletteClearIt`, `TestRequestWithPaletteClosedKeepsItsOutput`, `TestRequestReuseLeavesTheHistoryView`; pane_prefix.go `x`; confirm_close.go `clearPalette`, `cancelConfirm`, `acceptConfirm`.
+
+15. <a id="source-15"></a> [Persistent outer feedback](../../internal/tui/notices.go#L24) — captured emission, queue/layout and input; notices_test.go covers ownership and dismissal.

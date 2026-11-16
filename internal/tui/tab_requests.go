@@ -42,33 +42,33 @@ func isChatView(args []string) bool {
 }
 
 func (m *model) handleTabRequest(r termio.TabRequest, chat bool, from *term.Session) {
+	var home *tabs.Tab
+	if from != nil {
+		home, _ = m.tabs.Owner(func(p *panes.Pane) bool { return p.Session == from })
+	}
 	var args []string
 	switch {
 	case chat:
 		if r.ValidateChat() != nil {
-			m.setStatus(prettylog.KindWarn, "chat sent an invalid attach request; nothing was opened")
+			m.postTabNotice(home, prettylog.KindWarn, "chat sent an invalid attach request; nothing was opened")
 			return
 		}
 		args = r.ChatAttachArgs()
 	case r.Chat() || r.NoAutoupdate || r.Passthrough || r.Op != "attach" || layout.ValidateExistingSpaceName(r.Space) != nil || layout.ValidateName("agentbox", r.Box) != nil:
-		m.setStatus(prettylog.KindWarn, "space view sent an invalid request; nothing was opened")
+		m.postTabNotice(home, prettylog.KindWarn, "space view sent an invalid request; nothing was opened")
 		return
 	default:
 		args = []string{"box", "attach", r.Box, "--space", r.Space}
 	}
 	// The requesting pane's tab, as it is now: its empty pane takes the
 	// attach. A request never moves an existing view.
-	var home *tabs.Tab
-	if from != nil {
-		home, _ = m.tabs.Owner(func(p *panes.Pane) bool { return p.Session == from })
-	}
 	// A pane (in any tab) is reused only for the identical argv. For chat that
 	// includes the identities the click just resolved afresh; any change opens
 	// a new guarded attach, which validates again before it touches a session.
 	command := "yoloctl " + strings.Join(args, " ")
 	if t, p := m.tabs.Owner(func(p *panes.Pane) bool { return p.Command == command && !p.Exited }); p != nil {
 		if home != nil && home.Layout.Empty() != nil {
-			m.setStatus(prettylog.KindNotice, fmt.Sprintf("already open in tab %d", m.tabs.Index(t)+1))
+			m.postTabNotice(home, prettylog.KindNotice, fmt.Sprintf("already open in tab %d", m.tabs.Index(t)+1))
 		}
 		m.activatePane(t, p)
 		return

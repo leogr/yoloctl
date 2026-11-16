@@ -1,6 +1,6 @@
 # TUI routing, keyboard, mouse, and paste
 
-Verification: `d4da1dc09daf8766074409600c1433534913c43b` and accompanying changes (holder-closed status line); other facts at `1d265df3`; re-read cited sources when changing behavior.
+Verification: `d4da1dc09daf8766074409600c1433534913c43b` and accompanying changes (holder-closed feedback); notice placement re-verified at `16684468` plus accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior.
 
 [FACT] `opensLiveSurface` routes box attach, exec/edit, space shells, catalog
 editors and following logs to tabs; lifecycle commands use attachment flags.
@@ -46,7 +46,7 @@ command group. Leaving the overlay does not stop that command. [4](#source-4)
 palette command delays their display; background failures mark their tabs
 without stealing focus. A stream that ended without an exit status
 (`session.ErrSessionClosed`, as when the box under a view stops) is instead
-shown with its exact text in the status line, so the palette does not open over
+shown with its exact text in a persistent toast and a tab `!`, so the palette does not open over
 the ended view; the view is still handled as failed. Standalone attachment
 retains its error notice and returned diagnostic. [6](#source-6) [17](#source-17)
 

@@ -30,12 +30,11 @@ func (m *model) openPlaceholder(t *tabs.Tab, vertical bool) {
 		return
 	}
 	m.layoutTab(t)
-	m.status = ""
 }
 
 // fillPlaceholder starts args in t's empty pane e: the new pane takes its
 // place and focus. When the command does not start, the empty pane stays
-// and the status line says why.
+// and a notice toast says why.
 func (m *model) fillPlaceholder(t *tabs.Tab, e *panes.Pane, args []string) {
 	m.laidOut(t)
 	r := e.Rect()
@@ -47,7 +46,6 @@ func (m *model) fillPlaceholder(t *tabs.Tab, e *panes.Pane, args []string) {
 	m.layoutTab(t)
 	m.activatePane(t, p) // clears the shown output if the palette closes
 	m.resetConsoleView()
-	m.status = ""
 	m.watchPaneExit(p)
 }
 
@@ -101,7 +99,7 @@ func (m *model) placeholderRows() []string {
 }
 
 // joinTab moves tab src's whole layout into dst: into dst's empty pane, or
-// below target. It reports a refusal for the status line or a picker, and
+// below target. It reports a refusal for a notice toast or a picker, and
 // "" when the move is done.
 func (m *model) joinTab(src, dst *tabs.Tab, target *panes.Pane, d panes.Dir) string {
 	if m.tabs.Index(dst) >= 0 {
@@ -167,7 +165,6 @@ func (m *model) breakPane() {
 		m.layoutTab(t)
 	}
 	m.layoutTab(n)
-	m.status = ""
 	m.returnToPane()
 	m.scrollToLive()
 }

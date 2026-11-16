@@ -147,7 +147,7 @@ var prefixFallbacks = []string{config.DefaultPanePrefix, "ctrl+^"}
 
 // resolvePanePrefix validates tui.yaml pane_prefix against the palette key:
 // an unparsable prefix, or one equal to the palette key, is replaced by the
-// first fallback that differs from it, with a notice for the status line.
+// first fallback that differs from it, with a persistent startup notice.
 func resolvePanePrefix(cfg *config.TUI) (prefix chord, notice string) {
 	want := cfg.GetPanePrefix()
 	palette, paletteOK := parseChord(cfg.GetPaletteKey())

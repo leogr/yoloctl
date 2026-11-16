@@ -24,7 +24,7 @@ const (
 	chromeBarBreak                        // ↑: breaks the pane out into its own tab on release
 )
 
-// dockStatus is the status line while a dock drag has no refused target.
+// dockStatus is the ephemeral hint while a dock drag has no refused target.
 const dockStatus = "drop on a pane: left · right · top · bottom · Esc cancels"
 
 // chromeGesture is a left-button gesture owned by the chrome: a consumed
@@ -41,7 +41,7 @@ type chromeGesture struct {
 	grab     int         // pointer minus border along the axis, kept while dragging
 	gen      int         // the layout generation at the press, for bar and border gestures
 	x, y     int         // the press cell, for a label's first motion
-	status   string      // the status line a dock drag set, cleared with it
+	status   string      // the hint a dock drag set, cleared with it
 }
 
 // chromeAt is the chrome gesture a left press at a screen cell starts, if
@@ -186,7 +186,7 @@ func (m *model) dockTarget(g *chromeGesture, mo tea.Mouse) (p *panes.Pane, side 
 }
 
 // dockMotion shows the dock drag's target: tinted when the drop would be
-// taken, hatched with the reason on the status line when it would not. A
+// taken, hatched with the reason in an ephemeral hint when it would not. A
 // drag of the active tab has no target.
 func (m *model) dockMotion(mo tea.Mouse) {
 	g := m.chrome
@@ -202,9 +202,6 @@ func (m *model) dockMotion(mo tea.Mouse) {
 		if why != "" {
 			text = why
 		}
-	}
-	if g.status == "" || m.status == g.status {
-		m.setStatus(prettylog.KindNotice, text)
 	}
 	g.status = text
 }
@@ -223,18 +220,15 @@ func (m *model) dockRelease(g chromeGesture, mo tea.Mouse) {
 		why = m.joinTab(g.tab, m.tabs.Current(), p, side)
 	}
 	if why != "" {
-		m.setStatus(prettylog.KindWarn, why)
+		m.postNotice(prettylog.KindWarn, why)
 	}
 }
 
 // endDock removes a dock drag's target, drawn on the tab shown at its
-// press, and its status line.
+// press, and its hint.
 func (m *model) endDock(g *chromeGesture) {
 	if g.current != nil {
 		g.current.Layout.ClearDrop()
-	}
-	if g.status != "" && m.status == g.status {
-		m.status = ""
 	}
 }
 

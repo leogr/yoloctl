@@ -132,7 +132,7 @@ func (d driverModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			cursor = "no host cursor"
 		}
-		c.reply <- [2]string{v.Content, fmt.Sprintf("title %q; %s; status %q", v.WindowTitle, cursor, d.status)}
+		c.reply <- [2]string{v.Content, fmt.Sprintf("title %q; %s; status %q", v.WindowTitle, cursor, d.noticeText())}
 		return d, nil
 	}
 	_, cmd := d.model.Update(msg)

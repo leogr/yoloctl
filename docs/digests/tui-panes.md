@@ -10,7 +10,7 @@ holds two panes, each pane's bar ([pane chrome](tui-pane-chrome.md)).
 
 - **Re-flow:** a host resize re-flows splits proportionally.
 - **Minimum:** a pane is at least 20×5 cells of content, bars counted. A split
-  that would go below that is refused on the status line before any session
+  that would go below that is refused in a notice toast before any session
   starts. There is no fixed pane count.
 - **Zoom:** shows the focused pane alone with its bar and keeps the tree.
 - **Remove:** a removed pane's sibling takes its space; the last pane closes

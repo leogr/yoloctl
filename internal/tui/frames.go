@@ -158,7 +158,7 @@ func (m *model) syncFocus() {
 	}
 	if m.console != nil {
 		if err := m.console.UpdateFocus(!m.hostBlurred && m.browserDialog == nil && palette && m.console.Busy()); err != nil {
-			m.setStatus(prettylog.KindError, "console focus: "+err.Error())
+			m.postNotice(prettylog.KindError, "console focus: "+err.Error())
 		}
 	}
 	// Only the current tab's focused pane is focused: one source of focus.
@@ -168,7 +168,7 @@ func (m *model) syncFocus() {
 			return
 		}
 		if err := p.Session.UpdateFocus(!m.hostBlurred && !palette && p == focused); err != nil {
-			m.setStatus(prettylog.KindError, "tab focus: "+err.Error())
+			m.postSurfaceNotice(p.Session, prettylog.KindError, "tab focus: "+err.Error())
 		}
 	})
 }

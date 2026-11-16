@@ -143,7 +143,7 @@ func (m *model) reattachable(t *tabs.Tab, p *panes.Pane) bool {
 
 // reattachPane runs an eligible ended view again in its place: the same
 // rectangle, split, zoom and focus. If the new view cannot start locally,
-// the ended view stays as it was and the status line says why.
+// the ended view stays as it was and a notice toast says why.
 func (m *model) reattachPane(t *tabs.Tab, old *panes.Pane) {
 	if !m.reattachable(t, old) {
 		return
@@ -161,7 +161,6 @@ func (m *model) reattachPane(t *tabs.Tab, old *panes.Pane) {
 	m.layoutTab(t)
 	m.activatePane(t, p)
 	m.scrollToLive()
-	m.status = ""
 	m.watchPaneExit(p)
 }
 

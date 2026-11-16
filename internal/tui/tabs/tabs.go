@@ -13,8 +13,10 @@ import (
 
 // Tab is one pane layout. A tab with one pane is a tab as it always was.
 type Tab struct {
-	Layout *panes.Layout
-	Badge  bool // attention: bell/OSC 9/exit/request while unfocused
+	Layout          *panes.Layout
+	NoticeID        uint64 // assigned by the outer model, never a session reference
+	NoticeAttention bool   // a tab-owned notice; cleared by an explicit visit only
+	Badge           bool   // attention: bell/OSC 9/exit/request while unfocused
 }
 
 // New starts a tab with one pane.
@@ -231,6 +233,7 @@ func (m *Model) Select(i int) {
 	if i >= 0 && i < len(m.Tabs) {
 		m.Active = i
 		m.Tabs[i].Badge = false
+		m.Tabs[i].NoticeAttention = false
 		if p := m.Tabs[i].Focused(); p != nil {
 			p.Mark = false
 		}

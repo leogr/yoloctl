@@ -334,7 +334,6 @@ func (m *model) acceptSpaceSwitch() {
 	m.pal.Restore(palette.Draft{}) // history belongs to the palette, not the draft
 	m.resetConsoleView()
 	m.focusPalette = true
-	m.status = ""
 }
 
 func (m *model) switchSummary() []string {

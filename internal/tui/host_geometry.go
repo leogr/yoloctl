@@ -88,7 +88,7 @@ func (m *model) layoutTab(t *tabs.Tab) {
 		}
 		r := p.Rect()
 		if err := p.Session.ResizeGeometry(m.surfaceGeometry(r.H, r.W)); err != nil {
-			m.setStatus(prettylog.KindError, err.Error())
+			m.postTabNotice(t, prettylog.KindError, err.Error())
 		}
 	}
 }

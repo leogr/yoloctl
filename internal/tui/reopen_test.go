@@ -127,7 +127,7 @@ func TestReopenExcludesLiveAndRetainsFailedStart(t *testing.T) {
 	ended.Exited = true
 	executable = func() (string, error) { return "", errors.New("cannot launch") }
 	m.Update(key('r', 0, "r"))
-	if tab.Focused() != ended || !ended.Exited || m.status == "" {
+	if tab.Focused() != ended || !ended.Exited || m.noticeText() == "" {
 		t.Fatal("local failure lost old pane or error")
 	}
 	m.console.ShowError("palette fixture")

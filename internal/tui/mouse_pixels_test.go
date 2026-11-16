@@ -156,7 +156,7 @@ func TestUnacknowledgedMouseEncodingCannotMisrouteInput(t *testing.T) {
 	_, _ = m.Update(m.initHostMouse()())
 	_, _ = m.Update(tea.ModeReportMsg{Mode: ansi.ModeMouseExtSgrPixel, Value: ansi.ModeReset})
 	_, cmd := m.Update(mouseEncodingTimeout(m.hostMouseEncoding.epoch))
-	if !m.hostMouseEncoding.failed || cmd == nil || m.status == "" {
+	if !m.hostMouseEncoding.failed || cmd == nil || m.noticeText() == "" {
 		t.Fatal("missing bounded negotiation failure")
 	}
 	_, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 100, Y: 200})

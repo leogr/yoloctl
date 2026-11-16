@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/leogr/yoloctl/pkg/prettylog"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -30,10 +32,10 @@ func TestStandaloneGeometryMouseAndDetach(t *testing.T) {
 		t.Fatalf("mouse/prefix reached wrong row or child: %q", got)
 	}
 	_, _ = s.Write([]byte("\x1bcTOP"))
-	m.status = "copy blocked"
+	m.postNotice(prettylog.KindNotice, "copy blocked")
 	view := m.View()
 	text := ansi.Strip(view.Content)
-	if !strings.HasPrefix(text, "TOP") || !strings.Contains(text, "copy blocked") {
+	if !strings.Contains(text, "copy blocked") || strings.Contains(strings.Split(text, "\n")[7], "copy blocked") {
 		t.Fatalf("standalone frame=%q", text)
 	}
 }

@@ -9,11 +9,11 @@ refused. It matches with lock bits masked, by a layout's base key, by Kitty's
 shifted symbol (`Ctrl+Shift+6` for `Ctrl+^`) and by the raw C0 byte of any
 Ctrl chord. An unparsable prefix, or one equal to the palette key as a chord,
 falls back to the first of `Ctrl+Q`, `Ctrl+^` that differs from the palette
-key, with a status notice at startup. [1](#source-1) [2](#source-2)
+key, with a persistent toast at startup. [1](#source-1) [2](#source-2)
 
 [FACT] Key precedence, first match wins: a browser prompt; the close popup;
 an open tab picker; the inert notice popup; an armed prefix; a resize repeat
-window; the prefix key; then the ordinary routes. It arms from a child, a busy
+window; the prefix key; toast Esc dismissal; then ordinary routes. It arms from a child, a busy
 console, the palette or an exited pane, not standalone, and opens the
 [pane menu](tui-pane-menu.md), which owns the keys, clicks, refusals and
 closing; the input line keeps its idle legend. Modifier reports do not
@@ -39,6 +39,7 @@ key tests:
 | `!`, `j` | Break the focused pane out to a new tab; bring a tab in (picker in join mode). |
 | `c` | New-tab command entry. |
 | `n`, `p`, `1`…`9`, `0` | Next, previous, tab N (`0` is tab 10; a missing N is refused). |
+| `[`, `]`, PgUp/PgDn | Navigate/scroll persistent notices. |
 | `w`, `d`, `?` | Tab picker; detach the whole tab; keep the menu open. |
 
 Pane keys return focus to the pane. A border moves as far as a trial layout
@@ -75,8 +76,8 @@ narrow sizes, the idle legend and standalone. PTY tests skip without `fs.pty.all
 
 1. <a id="source-1"></a> [Config](../../internal/config/tui.go#L19-L130) — `PanePrefix`, `DefaultPanePrefix`, `GetPanePrefix`; the documented default in `defaultTUIYAML`.
 2. <a id="source-2"></a> [Chords](../../internal/tui/keys.go#L56-L170) — `chord`, `parseChord`, `matches`, `controlByte`, `resolvePanePrefix`; `Run` reports the notice.
-3. <a id="source-3"></a> [Prefix](../../internal/tui/pane_prefix.go#L1-L355) — `prefixLayer`, `armPrefix`, `disarmPrefix`, `checkPrefix`, `prefixedKey`, `forwardPrefix`, `takeConsumedRelease`, `resizeBorder`, `startNewTab`, `cancelNewTab`, `endNewTab`; `dispatch` and `inputLine` in tui.go.
-4. <a id="source-4"></a> [Key table](../../internal/tui/pane_prefix.go#L356-L498) — `paneBinding`, `paneKeys`, `splitAct`; disarm calls in `Update` and `handleMouse`.
+3. <a id="source-3"></a> [Prefix](../../internal/tui/pane_prefix.go#L1-L365) — `prefixLayer`, `armPrefix`, `disarmPrefix`, `checkPrefix`, `prefixedKey`, `forwardPrefix`, `takeConsumedRelease`, `resizeBorder`, `startNewTab`, `cancelNewTab`, `endNewTab`; `dispatch` and `inputLine` in tui.go.
+4. <a id="source-4"></a> [Key table](../../internal/tui/pane_prefix.go#L366) — `paneBinding`, `paneKeys`, `splitAct`; disarm calls in `Update` and `handleMouse`.
 5. <a id="source-5"></a> [Layout](../../internal/tui/panes/layout.go#L580-L660) — `FocusNext`, `SwapFocused`, `ResizeFocused`; `fits` at L912.
 6. <a id="source-6"></a> [Prefix tests](../../internal/tui/pane_prefix_test.go#L1-L969) — `TestConsumedKeysStayConsumedThroughRepeatAndRelease`, `TestResizeRepeatWindow`, `TestOverlaysFollowTheRenderedLayout`, `TestPaneKeyTableIsTheMapping` and others.
 7. <a id="source-7"></a> [Tab picker](../../internal/tui/tab_picker.go#L1-L268) — `tabPicker`, `checkPicker`, `pickerOverlay`, `pickerLayout`, `pickerKey`, `pickerClick`.

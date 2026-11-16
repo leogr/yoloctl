@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -43,7 +42,7 @@ func RunAttached(ctx context.Context, args []string) (detached bool, err error) 
 		}
 		p.Session.Close()
 	} else if err == nil {
-		err = errors.New(m.status)
+		err = m.attachError
 	}
 	if ctx.Err() != nil {
 		return true, nil
@@ -67,11 +66,14 @@ func (m *model) attachedKey(k tea.Key) (tea.Model, tea.Cmd) {
 		m.sendKey(t.Session, k, false)
 		return m, nil
 	}
-	m.status = "" // dismiss a notice overlay on the next non-modifier key
 	prefix := isPaletteKey(tea.KeyPressMsg(k), m.cfg.GetPaletteKey())
 	if m.attachPrefix != nil {
 		previous := *m.attachPrefix
 		m.attachPrefix = nil
+		if !prefix && !isStandaloneDetachKey(k) && m.toastCommand(k) {
+			m.consumeToastKey(k)
+			return m, nil
+		}
 		// Ctrl+W keeps its old precedence; the tmux-style keys yield to a
 		// doubled configured prefix (e.g. palette_key ctrl+d), which forwards it.
 		if isStandaloneCloseKey(k) || !prefix && isStandaloneDetachKey(k) {
@@ -83,6 +85,11 @@ func (m *model) attachedKey(k tea.Key) (tea.Model, tea.Cmd) {
 		if prefix {
 			return m, nil
 		}
+	} else if m.toastEscape(k) {
+		m.consumeToastKey(k)
+		return m, nil
+	} else if k.IsRepeat && m.consumedKeys[keyIdentity(k)] {
+		return m, nil
 	} else if prefix {
 		m.attachPrefix = &k
 		return m, nil

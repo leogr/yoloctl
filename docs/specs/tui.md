@@ -85,7 +85,7 @@ explicit retry; telemetry-only loss does not request IRC reconnect.
 [FACT] Private attachment failures use the palette's wrapped result area,
 deferred while a palette command runs. Background failures leave another live
 tab's input focus intact. A stream that ended without an exit status (for
-example, the holder of a stopped box) is shown in the status line instead,
+example, the holder of a stopped box) is shown in a persistent toast with a tab `!` instead,
 without opening the palette over the ended view. [1](#source-1)
 
 [FACT] `space view` opens in a tab unless help is requested. Only that tab
@@ -360,7 +360,14 @@ get no box evidence. A connection never promises that an agent wakes.
 output, resizes, an unread viewer, detach/rejoin and final status. Its guest audit
 checks transport behavior; it does not measure graphical parity. [4](#source-4)
 
-[FACT] Host status, pane refusals and exit notices share the log glyphs and
+[FACT] Outer notices appear in a persistent top-right queue with previous/next,
+a counter and explicit dismissal; nothing remains in the header. Tab-owned
+notices add `!` until that tab is visited; visiting retains the toast.
+Prefix `[`/`]` navigates, prefix PgUp/PgDn scrolls, and bare Esc dismisses below
+existing modal/gesture precedence. Standalone attachment uses its existing
+prefix and the same toast, preserving exit results. [55](#source-55)
+
+[FACT] Host notices, pane refusals and exit notices share the log glyphs and
 semantic theme roles. Direct-action feedback remains visible at every log
 level; command logs keep their own filter. The console shows one command at a
 time and resets transient terminal/input state before the next prompt. Its
@@ -447,3 +454,5 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 53. <a id="source-53"></a> [Tolerant Markdown rules](../digests/markdown-tolerant.md).
 
 54. <a id="source-54"></a> [Expanding a running step](../digests/step-expand.md).
+
+55. <a id="source-55"></a> [Persistent TUI notices](../digests/tui-notice-toasts.md) — queue, tab ownership, input precedence and standalone behavior.

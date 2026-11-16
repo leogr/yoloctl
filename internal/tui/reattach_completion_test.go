@@ -64,7 +64,7 @@ func TestReattachAfterRealAttachCompletion(t *testing.T) {
 				if !p.Exited {
 					t.Fatal("actual completion did not end the pane")
 				}
-				t.Logf("before diagnostic dismissal: palette=%v slots=%d status=%q", m.focusPalette, len(m.reattachSlots()), m.status)
+				t.Logf("before diagnostic dismissal: palette=%v slots=%d status=%q", m.focusPalette, len(m.reattachSlots()), m.noticeText())
 				if end == "admission-refused" {
 					if !m.focusPalette || !strings.Contains(m.console.GridText(), "✗") {
 						t.Fatal("admission error lost its diagnostic")

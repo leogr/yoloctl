@@ -35,8 +35,8 @@ func TestTabRequestValidation(t *testing.T) {
 	} {
 		m := &model{}
 		m.handleTabRequest(r, false, nil)
-		if len(m.tabs.Tabs) != 0 || m.status == "" {
-			t.Errorf("request %+v: tabs=%d status=%q", r, len(m.tabs.Tabs), m.status)
+		if len(m.tabs.Tabs) != 0 || m.noticeText() == "" {
+			t.Errorf("request %+v: tabs=%d status=%q", r, len(m.tabs.Tabs), m.noticeText())
 		}
 	}
 }
@@ -76,8 +76,8 @@ func TestChatTabRequestsMustCarryEveryIdentity(t *testing.T) {
 	} {
 		m := &model{}
 		m.handleTabRequest(tc.r, tc.chat, nil)
-		if len(m.tabs.Tabs) != 0 || m.status == "" {
-			t.Errorf("request %+v from chat=%v: tabs=%d status=%q", tc.r, tc.chat, len(m.tabs.Tabs), m.status)
+		if len(m.tabs.Tabs) != 0 || m.noticeText() == "" {
+			t.Errorf("request %+v from chat=%v: tabs=%d status=%q", tc.r, tc.chat, len(m.tabs.Tabs), m.noticeText())
 		}
 	}
 	want := "box attach api --space dev --chat-room-id " + testRoomID + " --chat-member-id " + testMemberID + " --chat-box-id " + testBoxID
