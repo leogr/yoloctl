@@ -6,7 +6,7 @@
 - macro: yolo_openshell_setup
   condition: (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and container.label[yoloctl.openshell.protocol] = "2" and proc.exepath in (/opt/yoloctl/openshell-helper/yoloctl-openshell-helper, /.openshell/runtime/openshell-sandbox, /.openshell/runtime/openshell-supervisor))
 
-# Suppress expected successful task-argument reads by the fixed broker.
+# Suppress expected broker reads and main-thread startup qualification reads.
 # File-open mediation remains active with unmediated workload sockets.
 # Names/paths/labels narrow noise; they are not executable-authenticity proof.
 - macro: yolo_openshell_netproxy_read
@@ -17,7 +17,8 @@
     container.label[yoloctl.audit.network_unconfined] in ("false", "true") and
     container.label[yoloctl.openshell.protocol] = "2" and
     proc.exepath = /.openshell/runtime/openshell-sandbox and
-    proc.name = openshell-netwo
+    proc.name in (openshell-netwo, openshell-sandb) and
+    proc.pexepath = /opt/yoloctl/openshell-helper/yoloctl-openshell-helper
 
 - macro: yolo_fs_mutation
   condition: (evt.type in (open, openat, openat2, creat, truncate, ftruncate, rename, renameat, renameat2, unlink, unlinkat, mkdir, mkdirat, rmdir, symlink, symlinkat, link, linkat) and (evt.is_open_write = true or not evt.type in (open, openat, openat2)))

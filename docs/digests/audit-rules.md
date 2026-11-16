@@ -1,42 +1,40 @@
 # Audit rule paths and container recognition
 
-Verification: `2c026472b804300bb877d317fc912451777aa53a` and accompanying changes.
+Verification: `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes.
 
 [FACT] Filesystem rules distinguish the path changed by a syscall from the
-payload of a new symbolic link. In pinned libs 0.26.1, `fs.path.source` for
+payload of a new symbolic link. In libs 0.26.1, `fs.path.source` for
 symlink/symlinkat is the new link location; `fs.path.target` is its destination
 text. An image layer's link under containerd/BuildKit storage pointing at
-`/usr/lib/systemd/...` does not modify that VM path. Both persistence and
-infrastructure rules therefore exclude symbolic-link payloads from target
-matching, while checking the created link's source path. Rename/hard-link
+`/usr/lib/systemd/...` does not modify that path. Rules exclude link payloads from target
+matching while checking the created source. Rename/hard-link
 targets remain covered. [1](#source-1) [2](#source-2)
 
-[FACT] The exception is based on syscall semantics, with no blanket exemption
-for containerd, buildkitd, nerdctl or containerd-shim. Real protected name/source
-paths remain eligible regardless of which runtime process touches them; this
-includes VM units, cron, SSH keys, loader configuration and infrastructure.
+[FACT] Syscall semantics give no blanket exemption
+for containerd, buildkitd, nerdctl or containerd-shim. Protected name/source paths remain eligible, including units, cron, SSH keys,
+loader configuration and infrastructure.
 The existing host package/controller exceptions remain. Known OpenShell setup
 infrastructure writes use the same fixed-executable, schema-1 confined-container
 and protocol-2 context as the namespace rule. Missing context does not grant
-that exception. These remain detection heuristics, not authenticity proofs.
+that exception. These are heuristics, not authenticity proofs.
 [1](#source-1) [3](#source-3)
 
-[FACT] Process inspection excludes successful
-`process_vm_readv` events from `/.openshell/runtime/openshell-sandbox` with
-`proc.name=openshell-netwo`, schema 1, protocol 2, confined runtime mode and
-an explicit `network_unconfined` label of `false` or `true`. Unmediated sockets
-retain file-open mediation: this broker reads pathname arguments through
-`task_memory::read_exact`/`process_vm_readv`. [17](#source-17) [18](#source-18)
-[19](#source-19) [20](#source-20)
+[FACT] Process inspection excludes successful `process_vm_readv` from exactly
+`/.openshell/runtime/openshell-sandbox`, with helper parent
+`/opt/yoloctl/openshell-helper/yoloctl-openshell-helper`, name `openshell-netwo`
+or `openshell-sandb`, schema 1, protocol 2, confined runtime and explicit
+`network_unconfined=false/true`. Both modes retain the named broker's file-open
+mediation: `ProviderFiles` copies pathname bytes through `task_memory::read_exact`.
+Main-thread startup qualification also reads child memory/socket arguments before
+either mode starts. Unmediated networking does not rename the broker.
+[17](#source-17) [18](#source-18) [19](#source-19) [20](#source-20) [21](#source-21)
 
-[FACT] Failed reads, ptrace, writes, startup thread names,
-other executable paths, privileged mode and unknown/missing context gain no
-exception. Existing debugger and host-scope rules are unchanged. A renamed
-ordinary executable still remains eligible. The predicate does not verify
-the target PID/address or executable authenticity: a substituted or compromised
-runtime matching this context can hide successful reads. Predicate fixtures
-do not prove live event attribution or noise reduction. Explicit updated
-`audit enable` installs changed pinned rules; there is no automatic reload.
+[FACT] Failed reads, ptrace, writes, other names/paths/parents, privileged mode
+and missing/unknown context gain no exception. Debugger and host-scope rules
+stay unchanged. Target PID/address and executable authenticity are not verified:
+a compromised matching runtime can hide successful reads. Fixtures do not prove
+live attribution/noise reduction; observed main-thread reads alone do not prove
+file mediation. Updated `audit enable` installs changed rules; no automatic reload.
 [1](#source-1) [9](#source-9) [10](#source-10) [11](#source-11)
 
 [FACT] Container plugin 0.7.6 registers nerdctl systemd-scope recognition in its
@@ -114,3 +112,5 @@ do not prove live selection or noise rates.
 18. <a id="source-18"></a> [Pinned broker](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/network_broker.rs#L586) — dispatch; thread L292.
 19. <a id="source-19"></a> [Pinned file handler](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/provider_files.rs#L65).
 20. <a id="source-20"></a> [Pinned task-memory read](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/task_memory.rs#L48) — readv.
+
+21. <a id="source-21"></a> [Pinned startup qualification](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/main.rs#L112) — `qualify_runtime`, socket reads L656/854, `run_boundary` L1761; patch0001 retains both modes.

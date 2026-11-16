@@ -36,12 +36,13 @@ func TestOpenShellBrokerReadException(t *testing.T) {
 	if inspection != original+" and not "+macro {
 		t.Fatal("process inspection scope changed", inspection)
 	}
-	// Evaluate the fixed equalities and the one explicit network-mode set read from the YAML.
+	// Evaluate the fixed equalities and the explicit network-mode and thread-name sets read from the YAML.
 	// Reject any other grammar rather than pretending to implement Falco. These
 	// fixtures are predicate regressions, not engine/live-event qualification;
 	// TestPinnedArchivesInstallVerifyAndRuleSyntax separately compiles all rules.
 	equality := regexp.MustCompile(`^([^\s=]+) = ("[^"\s]*"|[^\s"=]+)$`)
 	const networkField = "container.label[yoloctl.audit.network_unconfined]"
+	const threadNames = "proc.name in (openshell-netwo, openshell-sandb)"
 	required := make(map[string][]string)
 	for _, clause := range strings.Split(predicate, " and ") {
 		clause = strings.TrimSpace(clause)
@@ -50,6 +51,13 @@ func TestOpenShellBrokerReadException(t *testing.T) {
 				t.Fatal("duplicate predicate field", networkField)
 			}
 			required[networkField] = []string{"false", "true"}
+			continue
+		}
+		if clause == threadNames {
+			if _, duplicate := required["proc.name"]; duplicate {
+				t.Fatal("duplicate predicate field", "proc.name")
+			}
+			required["proc.name"] = []string{"openshell-netwo", "openshell-sandb"}
 			continue
 		}
 		match := equality.FindStringSubmatch(clause)
@@ -67,11 +75,12 @@ func TestOpenShellBrokerReadException(t *testing.T) {
 		"container.label[yoloctl.audit.runtime_mode]":       "confined",
 		"container.label[yoloctl.audit.network_unconfined]": "false",
 		"container.label[yoloctl.openshell.protocol]":       "2",
-		"proc.exepath": "/.openshell/runtime/openshell-sandbox",
-		"proc.name":    "openshell-netwo",
+		"proc.exepath":  "/.openshell/runtime/openshell-sandbox",
+		"proc.name":     "openshell-netwo",
+		"proc.pexepath": "/opt/yoloctl/openshell-helper/yoloctl-openshell-helper",
 	}
 	if len(required) != len(broker) {
-		t.Fatal("broker context lost or expanded", required)
+		t.Error("broker context lost or expanded", required)
 	}
 	matches := func(event map[string]string) bool {
 		for field, values := range required {
@@ -82,13 +91,16 @@ func TestOpenShellBrokerReadException(t *testing.T) {
 		return true
 	}
 	for _, network := range []string{"false", "true"} {
-		t.Run("network-"+network, func(t *testing.T) {
-			event := maps.Clone(broker)
-			event[networkField] = network
-			if !matches(event) {
-				t.Fatal("expected successful broker read is not excluded", network, required)
-			}
-		})
+		for _, name := range []string{"openshell-netwo", "openshell-sandb"} {
+			t.Run("network-"+network+"/"+name, func(t *testing.T) {
+				event := maps.Clone(broker)
+				event[networkField] = network
+				event["proc.name"] = name
+				if !matches(event) {
+					t.Fatal("expected successful broker/qualification read is not excluded", event, required)
+				}
+			})
+		}
 	}
 	for field := range broker {
 		t.Run("missing/"+field, func(t *testing.T) {
@@ -120,7 +132,11 @@ func TestOpenShellBrokerReadException(t *testing.T) {
 		{"ordinary-process", "proc.exepath", "/usr/bin/curl"},
 		{"supervisor", "proc.exepath", "/.openshell/runtime/openshell-supervisor"},
 		{"helper", "proc.exepath", "/opt/yoloctl/openshell-helper/yoloctl-openshell-helper"},
-		{"startup-probe", "proc.name", "openshell-sandb"},
+		{"unrelated-thread", "proc.name", "openshell-workl"},
+		{"sandbox-prefix", "proc.exepath", "/.openshell/runtime/openshell-sandbox-copy"},
+		{"wrong-parent", "proc.pexepath", "/usr/bin/bash"},
+		{"sandbox-parent", "proc.pexepath", "/.openshell/runtime/openshell-sandbox"},
+		{"helper-prefix", "proc.pexepath", "/opt/yoloctl/openshell-helper/yoloctl-openshell-helper-copy"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			event := maps.Clone(broker)
