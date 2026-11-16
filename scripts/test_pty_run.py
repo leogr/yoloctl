@@ -22,7 +22,47 @@ harness = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(harness)
 
 
+def wait_pty_exit(child, master, timeout=5):
+    """Drain terminal output while waiting for the shell's actual settlement."""
+    deadline = time.monotonic() + timeout
+    eof = False
+    while child.poll() is None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(child.args, timeout)
+        readable, _, _ = select.select([] if eof else [master], [], [], min(.1, remaining))
+        if readable:
+            eof = not harness.read_pty(master)
+    return child.returncode
+
+
 class PTYRunnerTests(unittest.TestCase):
+    def start_retained_pty_child(self, command, env=None):
+        master, slave = pty.openpty()
+        descriptors = {master, slave}
+
+        def close_pty():
+            for fd in tuple(descriptors):
+                os.close(fd)
+                descriptors.remove(fd)
+
+        self.addCleanup(close_pty)
+        # Retain the slave without a controlling terminal so Darwin cannot
+        # revoke/flush output before the test reads it.
+        child = subprocess.Popen(command, stdin=slave, stdout=slave, stderr=slave,
+                                 env=env, start_new_session=True)
+
+        def stop():
+            # Release terminal I/O before waiting, including on assertion or
+            # timeout: a pending terminal drain must not hold failure cleanup.
+            close_pty()
+            if child.poll() is None:
+                child.kill()
+            child.wait(timeout=5)
+
+        self.addCleanup(stop)
+        return child, master
+
     def test_attach_smoke_fixture_retains_ready_marker(self):
         # Exercise the ACTUAL smoke commands against readline. A long title
         # and colored default prompt must not evict readiness from its 128-byte
@@ -39,25 +79,11 @@ class PTYRunnerTests(unittest.TestCase):
         resume = fixture_input("smoke_replay_resume_input")
         self.assertTrue(setup.endswith(b"\r"))
         self.assertTrue(resume.endswith(b"\r"))
-        master, slave = pty.openpty()
-        self.addCleanup(os.close, master)
-        self.addCleanup(os.close, slave)
         env = dict(os.environ, TERM="xterm-256color", INPUTRC="/dev/null",
                    HISTFILE="/dev/null", PS1="\\[\\e[32m\\]sandbox@probe$ \\[\\e[0m\\]",
                    PROMPT_COMMAND="printf '\\033]0;%0256d\\007' 0")
-        # Retain a slave without a controlling terminal so Darwin cannot
-        # revoke/flush the last output when the shell exits. The test concerns
-        # readline bytes, not job control (the live smoke supplies that).
-        child = subprocess.Popen(["bash", "--noprofile", "--norc", "-i"],
-                                 stdin=slave, stdout=slave, stderr=slave, env=env,
-                                 start_new_session=True)
-
-        def stop():
-            if child.poll() is None:
-                child.kill()
-            child.wait(timeout=5)
-
-        self.addCleanup(stop)
+        child, master = self.start_retained_pty_child(
+            ["bash", "--noprofile", "--norc", "-i"], env=env)
 
         def read_until(marker):
             output = bytearray()
@@ -89,7 +115,22 @@ class PTYRunnerTests(unittest.TestCase):
         self.assertNotIn(b"REATTACH_OK", resume)
         os.write(master, resume)
         read_until(b"REATTACH_OK")
-        self.assertEqual(child.wait(timeout=5), 0)
+        self.assertEqual(wait_pty_exit(child, master), 0)
+
+    def test_exit_wait_drains_output_after_the_ready_marker(self):
+        # A marker is not EOF. Force finite trailing output beyond PTY capacity
+        # so waiting without reading cannot complete, independently of OS speed.
+        child, master = self.start_retained_pty_child([
+            sys.executable, "-c",
+            "import os; os.write(1,b'READY\\n'); os.write(1,b'x'*(2*1024*1024))",
+        ])
+        ready = bytearray()
+        deadline = time.monotonic() + 5
+        while b"READY\n" not in ready.replace(b"\r", b""):
+            self.assertLess(time.monotonic(), deadline, "child did not print READY")
+            if select.select([master], [], [], .1)[0]:
+                ready.extend(harness.read_pty(master))
+        self.assertEqual(wait_pty_exit(child, master), 0)
 
     def test_exit_between_select_and_waitpid_keeps_final_output(self):
         """Schedule the formerly lossy interleaving with a real PTY child."""
