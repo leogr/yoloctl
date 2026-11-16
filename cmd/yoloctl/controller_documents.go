@@ -203,6 +203,12 @@ func runControllerDocument(ctx context.Context, req controller.Request, catalogD
 		printSecretPickupNote(os.Stderr, name)
 		return true, nil
 	}
+	// The old bytes are from the locked revision, not the edited payload.
+	// A malformed old declaration must remain repairable; this diagnostic
+	// comparison must not add a new save/apply admission check.
+	if previous, parseErr := agentbox.ParseManifest(doc.Data); parseErr == nil {
+		ctx = withPreviousBoxPermissions(ctx, previous)
+	}
 	cfg, err := agentbox.ParseManifest(edited.Data)
 	if err != nil {
 		return true, asUserError(fmt.Errorf("invalid edited box declaration: %w", err))

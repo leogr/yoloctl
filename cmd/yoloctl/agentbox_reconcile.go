@@ -325,6 +325,7 @@ func runEdit(ctx context.Context, out io.Writer, spaceName, name string) error {
 		return err
 	}
 
+	ctx = withPreviousBoxPermissions(ctx, cfg)
 	manifestSnapshot, err := snapshotEditFile(cfg.Path())
 	if err != nil {
 		return err
@@ -496,7 +497,9 @@ inspect the resulting policy with ` + "`box inspect`" + `.
 
 A capability or feature name no catalog defines is rejected before anything
 is saved. Values the manifest already holds are not rewritten, but the box is
-still reconciled — so repeating a set that failed midway applies it.
+still reconciled. If applying saved settings fails, inspect the current box
+state and fix the reported cause before running
+yoloctl box reconcile BOX --space SPACE to retry those settings.
 
 ` + "`--agent-extra-args`" + ` replaces the persisted argv suffix used when
 yoloctl next starts the managed agent session; restart the box/session to affect
@@ -616,6 +619,7 @@ func runSet(ctx context.Context, out io.Writer, spaceName, name string, opts set
 		return nil
 	}
 
+	ctx = withPreviousBoxPermissions(ctx, cfg)
 	mutated, err := applySetOptions(cfg, opts)
 	if err != nil {
 		return err
@@ -624,8 +628,8 @@ func runSet(ctx context.Context, out io.Writer, spaceName, name string, opts set
 	if !mutated {
 		// The manifest already holds what was asked, but it can be ahead of
 		// the runtime: a set that died between its save and its reconcile
-		// leaves exactly that. Converge anyway, so repeating a set is how you
-		// recover from one; an in-sync box is reported as such.
+		// leaves exactly that. Converge anyway; an in-sync box is reported as
+		// such, and a failed apply names the explicit reconcile command.
 		cliInfo(logging.Box, "box %s: manifest already holds the requested values", name)
 		return setReconcile(ctx, lock, out, client, cfg, name)
 	}
@@ -762,7 +766,7 @@ var (
 func reconcileAndPrint(ctx context.Context, lock *agentsession.BoxLock, out io.Writer, client *container.Client, cfg *agentbox.Config, name string) error {
 	result, err := reconcileManaged(ctx, lock, client, cfg, out)
 	if err != nil {
-		return savedDeclarationError(cfg, err)
+		return savedDeclarationError(ctx, cfg, err)
 	}
 	return printReconcileResult(out, name, result)
 }
@@ -828,6 +832,7 @@ func mutateAndReconcile(
 	if err != nil {
 		return agentbox.ReconcileResult{}, err
 	}
+	ctx = withPreviousBoxPermissions(ctx, cfg)
 	if err := mutate(cfg); err != nil {
 		return agentbox.ReconcileResult{}, err
 	}
@@ -847,7 +852,7 @@ func mutateAndReconcile(
 		return agentbox.ReconcileResult{}, fmt.Errorf("save config: %w", err)
 	}
 	result, err := reconcileManaged(ctx, lock, client, cfg, io.Discard)
-	return result, savedDeclarationError(cfg, err)
+	return result, savedDeclarationError(ctx, cfg, err)
 }
 
 // printReconcileResult writes the apply summary in the same shape

@@ -353,13 +353,13 @@ func TestOperatorPrivilegedDeclarationsAndCreate(t *testing.T) {
 		t.Fatalf("ordinary operator create refused: %v", err)
 	}
 	refused := guardPrivilegedLaunch(operatorCtx, explicit, launchCreate, nil, nil)
-	saved := savedDeclarationError(explicit, fmt.Errorf("create container: %w", refused))
-	if !strings.Contains(saved.Error(), "box dev declaration is saved but not applied") || !IsUserError(saved) || !errors.As(saved, new(*privilegedLaunchError)) {
+	saved := savedDeclarationError(context.Background(), explicit, fmt.Errorf("create container: %w", refused))
+	if !strings.Contains(saved.Error(), "box dev declaration is saved; applying it failed") || !IsUserError(saved) || !errors.As(saved, new(*privilegedLaunchError)) {
 		t.Fatalf("saved refusal = %v", saved)
 	}
 	other := errors.New("port in use")
-	if savedDeclarationError(explicit, other) != other || savedDeclarationError(explicit, nil) != nil {
-		t.Fatal("unrelated reconcile errors were rewritten")
+	if !errors.Is(savedDeclarationError(context.Background(), explicit, other), other) || savedDeclarationError(context.Background(), explicit, nil) != nil {
+		t.Fatal("saved reconcile cause or nil success was lost")
 	}
 }
 

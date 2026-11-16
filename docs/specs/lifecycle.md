@@ -17,7 +17,13 @@ Start/restart preserves existing containers; starting an already-running box is
 a no-op. Starting a stopped box or restarting refuses changes requiring
 replacement, before teardown where detected. Post-start failures are returned
 without replacement; explicit reconcile/recreate applies replacement changes.
-Missing containers can still materialize on start/restart.
+Missing containers can still materialize on start/restart. When apply fails after
+`box set` or `box edit` saved a declaration, the error says it is saved and
+applying it failed,
+with the cause and an explicit reconcile command. Inspect current state and
+fix the cause before retrying: effects may be partial. If the saved change
+removed permissions, the previous container may retain them until reconcile,
+recreate or stop succeeds. The error does not imply rollback.
 [1](#source-1) [2](#source-2)
 
 [FACT] `box stop` and `box start` decide only from a read of the container after

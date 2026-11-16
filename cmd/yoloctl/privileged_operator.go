@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -188,14 +187,17 @@ func guardOperatorPrivilegedCreate(ctx context.Context, cfg *agentbox.Config) er
 	return nil
 }
 
-// savedDeclarationError reports a privileged launch refused after a command
-// saved the declaration, so the saved change is not mistaken for a rollback.
-func savedDeclarationError(cfg *agentbox.Config, err error) error {
-	var refused *privilegedLaunchError
-	if errors.As(err, &refused) {
-		return asUserError(fmt.Errorf("box %s declaration is saved but not applied: %w", cfg.Name, err))
+// savedDeclarationError reports any reconcile failure after a command saved
+// the declaration, retaining its cause and naming the explicit retry command.
+func savedDeclarationError(ctx context.Context, cfg *agentbox.Config, err error) error {
+	if err == nil {
+		return nil
 	}
-	return err
+	message := fmt.Errorf("box %s declaration is saved; applying it failed: %w; inspect the current box state and fix the cause before running yoloctl box reconcile %s --space %s to retry", cfg.Name, err, cfg.Name, cfg.Space)
+	if removedDeclarationPermissions(ctx, cfg) {
+		message = fmt.Errorf("%w; the previous container may still run with the removed permission(s) until 'yoloctl box reconcile %s' (or recreate/stop) succeeds", message, cfg.Name)
+	}
+	return asUserError(message)
 }
 
 // warnBoxAuthority states every space-wide authority a saved declaration

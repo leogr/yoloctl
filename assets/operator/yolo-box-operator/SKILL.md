@@ -31,9 +31,12 @@ the user's task. It does not grant space, account, catalog, or host management.
   Prefer `--no-attach` for creation in automation.
 - `box set` edits desired settings and reconciles them. `box edit` uses the
   caller's editor and rejects a save if the declaration changed meanwhile.
-  A failed apply can leave the new settings saved: inspect the declaration,
-  never assume rollback. Image, mount, workdir, account, resource, network and
-  operator changes recreate the container, as does flipping `fs.workdir.write`;
+  If applying saved settings fails, the error says the declaration is saved
+  and applying it failed. Inspect the current box state, fix the cause, then run
+  `yoloctl box reconcile NAME --space SPACE` to retry; never assume rollback or that no effects occurred.
+  When the change removed permissions, the previous container may retain them
+  until reconcile, recreate or stop succeeds.
+  Image, mount, workdir, account, resource, network and operator changes recreate the container, as does flipping `fs.workdir.write`;
   other policy-only changes restart a confined box, not a proved privileged
   one; agent extra args apply at the next managed session start, and the
   model and effort among them are only the defaults of a new conversation

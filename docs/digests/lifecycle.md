@@ -1,6 +1,6 @@
 # Reconcile, native locks and space lifecycle
 
-Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; runtime target selection at `9169119ca6b27e530064dc49b8b7a1d06c17397b` and accompanying changes; box start/stop results at `19fe5134273d38642397a288132586b4e94dcd10` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior.
+Verification: `0bfec5a3ac693f226a04d280634025bf35d66e1a` and accompanying changes (saved-declaration errors); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; runtime target selection at `9169119ca6b27e530064dc49b8b7a1d06c17397b` and accompanying changes; box start/stop results at `19fe5134273d38642397a288132586b4e94dcd10` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior.
 
 [FACT] Explicit reconcile selects create, recreate, restart, then live port changes. Account,
 agent, mounts/workdir access, image, literal env and network mode can require
@@ -9,6 +9,15 @@ restart. Extra agent args affect the next session. The live inspector reports
 normalized CPU/memory limits; changing or removing caps recreates, while equivalent
 units converge. Old containers recreate to join the workload memory pool.
 [1](#source-1) [2](#source-2)
+
+[FACT] When reconciliation fails after `box set` or `box edit` saved the
+declaration, a user error says it is saved and applying it failed, preserving
+the cause
+and naming `yoloctl box reconcile NAME --space SPACE` to retry after inspecting
+current state and fixing the cause. Partial effects are possible. Removing a
+permission adds a warning that the previous container may retain it until
+reconcile, recreate or stop succeeds. Save/validation failures before that boundary do not claim a saved change. No automatic retry
+or rollback is added. [33](#source-33) [34](#source-34) [35](#source-35) [36](#source-36)
 
 [FACT] Primary workdir inspection uses the recorded sandbox `--workdir` from
 `Path`/`Args`, independent of desired paths and mount order. Other `/workdir`
@@ -133,3 +142,9 @@ physical power loss.
 30. <a id="source-30"></a> [Runtime target](../../internal/container/target.go#L1) — `ValidateContainerID`, `ResolveContainerID`; `Client.Start/Stop/Remove` in container.go; collision/refusal/fixed-ID/error controls in target_test.go; named SSH with retained CID in sandbox/stop.go `StopContainerID`.
 31. <a id="source-31"></a> [Maintenance](../../cmd/yoloctl/autoupdate.go#L90) — npm/version helpers; native install in agent_distribution.go and process probe in agent.go; container_target_test.go covers target argv and refusals.
 32. <a id="source-32"></a> [Legacy forwarding](../../internal/port/port.go#L94) — retained inspected bridge/CID and `legacyDNATTarget`; port/target_test.go covers target argv, mode, refusals and best-effort removal.
+
+33. <a id="source-33"></a> [Saved apply errors](../../cmd/yoloctl/privileged_operator.go#L192) — `savedDeclarationError`.
+34. <a id="source-34"></a> [Set/edit apply tail](../../cmd/yoloctl/agentbox_reconcile.go#L766) — `reconcileAndPrint`.
+35. <a id="source-35"></a> [Controller edit apply](../../cmd/yoloctl/controller_documents.go#L250) — saved declaration enters the shared reconcile tail.
+
+36. <a id="source-36"></a> [Declaration permission comparison](../../cmd/yoloctl/saved_permissions.go#L16) — immutable prior snapshot and removal warning, not runtime proof.
