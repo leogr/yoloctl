@@ -1,6 +1,6 @@
 # Pre-native boxes
 
-Verification: `bd6cd2806548668014ad9e7ef773a0d4de4f5bf1` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `d7637173ad541fc85a6a225a59a5dc4e71f42644` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] A pre-native box is an existing container whose inspected evidence has
 no native OpenShell runtime signal and is not a privileged launch. Mixed or
@@ -52,11 +52,13 @@ again. [5](#source-5) [6](#source-6)
 
 [FACT] The hidden `--legacy-remedy` marker only adds cleanup: a failure after
 that recreate's replacement started (session start or autoupdate) is settled
-by box start's result policy, which stops only the exact container ID the
-operation recorded starting. A same-name container that is not that run, or a
-run without a recorded identity, is not stopped and the failure says so. No
-previous runtime or policy is launched; other recreates are unchanged.
-[9](#source-9) [6](#source-6)
+by box start's result policy, bound to the run the operation started
+(`ExpectedRuns.Started`, kept across its own stops, which clear the
+expectation). A running read must be that run (`SameRun`: ID, start time and
+PID when known); a stopped read of that container is the replacement after its
+stop. Another container, another run of it or an unknown/incomplete identity
+is refused before any cleanup effect and the failure says so. No previous
+runtime or policy is launched; other recreates are unchanged. [9](#source-9) [6](#source-6)
 
 [FACT] `--restart-sessions` never sets a pre-native box aside as "left
 running": its restart is attempted, the other boxes continue, a chat or
@@ -77,4 +79,4 @@ validation on a retained pre-native VM. [6](#source-6)
 6. <a id="source-6"></a> [cmd/yoloctl/legacy_runtime_test.go](../../cmd/yoloctl/legacy_runtime_test.go#L96) — stop/refusal, unconfirmed stop, policy apply, offer, terminal path, restart-sessions and revival; `chat_runtime_output_test.go` chat server refusal.
 7. <a id="source-7"></a> [cmd/yoloctl/controller_sessions.go](../../cmd/yoloctl/controller_sessions.go#L339) — refused legacy restart leg; `setAsideRecreations`; `session_remedy.go` `boxDriftView.LegacyRuntime`.
 8. <a id="source-8"></a> [internal/controller/client.go](../../internal/controller/client.go#L31) — `ExitError.Remedy` set in `Call` from the last outcome; `pkg/prettylog` `KeyRemedy`, `Structure.Remedy`; `cmd/yoloctl/legacy_runtime.go` `outcomeRemedy` used by `cli_logging.go` outcomes; `client_log_test.go` `TestCallExitCarriesOnlyTheLastOutcomeRemedyOfAKnownFailure`.
-9. <a id="source-9"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2616) — `recreateAgentbox` remedy path through `runStartForResult`; `legacy_runtime.go` `exactRunStopSteps`, `legacyRemedyFlag`, `legacyRuntimeFirst`; `internal/container` `ExpectedRuns.Expected`.
+9. <a id="source-9"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2616) — `recreateAgentbox` remedy path through `runStartForResult`; `legacy_runtime.go` `exactRunStopSteps`, `legacyRemedyFlag`, `legacyRuntimeFirst`; `internal/container/expected_runs.go` `ExpectedRuns.Started`, `SameRun`, `recordStarted`; `box_stop_result.go` `boxTarget.Run`.

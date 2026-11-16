@@ -32,6 +32,10 @@ func RunOf(d *Details) Run {
 type ExpectedRuns struct {
 	mu   sync.Mutex
 	runs map[string]*Run // nil value: none expected (after the operation's own stop)
+	// started is the last run of each box the operation started itself,
+	// kept across its own stops (which clear runs): the identity a cleanup
+	// of that attempt is bound to.
+	started map[string]Run
 }
 
 type expectedRunsKey struct{}
@@ -42,7 +46,7 @@ func WithExpectedRuns(ctx context.Context) context.Context {
 	if ExpectedRunsFrom(ctx) != nil {
 		return ctx
 	}
-	return context.WithValue(ctx, expectedRunsKey{}, &ExpectedRuns{runs: map[string]*Run{}})
+	return context.WithValue(ctx, expectedRunsKey{}, &ExpectedRuns{runs: map[string]*Run{}, started: map[string]Run{}})
 }
 
 // ExpectedRunsFrom returns the operation's record, or nil.
@@ -89,19 +93,35 @@ func (e *ExpectedRuns) stopped(id string) {
 	}
 }
 
-// Expected returns the run the operation expects of box, read or started by
-// itself; ok is false without one (none recorded, or none after its own stop).
-func (e *ExpectedRuns) Expected(box string) (Run, bool) {
+// Started returns the last run of box the operation started itself, as read
+// back after that start (incomplete when it could not be read), whether or
+// not the operation stopped it since; ok is false when it started none.
+func (e *ExpectedRuns) Started(box string) (Run, bool) {
 	if e == nil {
 		return Run{}, false
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	run, ok := e.runs[box]
-	if !ok || run == nil {
-		return Run{}, false
+	run, ok := e.started[box]
+	return run, ok
+}
+
+// SameRun reports whether a read run is the identified run: the same
+// container ID and start time, and the same PID when both are known; an
+// identity without its ID or start time matches nothing (Check's rule).
+func SameRun(identified, read Run) bool {
+	return identified.ID != "" && identified.StartedAt != "" && read.ID == identified.ID && read.StartedAt == identified.StartedAt &&
+		(identified.PID == 0 || read.PID == 0 || read.PID == identified.PID)
+}
+
+func (e *ExpectedRuns) recordStart(box string, run Run) {
+	e.Expect(box, run)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.started == nil {
+		e.started = map[string]Run{}
 	}
-	return *run, true
+	e.started[box] = run
 }
 
 // Has reports an expectation for box.
@@ -222,10 +242,10 @@ func (c *Client) recordStarted(ctx context.Context, target, box string) {
 	}
 	d, err := c.Inspect(ctx, target)
 	if err != nil || d.Name != box {
-		runs.Expect(box, Run{ID: target})
+		runs.recordStart(box, Run{ID: target})
 		return
 	}
-	runs.Expect(box, RunOf(d))
+	runs.recordStart(box, RunOf(d))
 }
 
 func recordStopped(ctx context.Context, id string) {

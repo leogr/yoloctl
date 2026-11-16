@@ -30,6 +30,9 @@ type boxStopResult struct {
 type boxTarget struct {
 	ID                       string
 	Present, Running, Native bool
+	// Run is the read run's identity (ID, start time, PID) when the read
+	// knows it; used only to bind a cleanup to an exact run.
+	Run container.Run
 }
 
 // boxStopSteps are the operations of the result-mode stop, injectable for
@@ -59,7 +62,7 @@ func liveBoxStopSteps(c *container.Client, spaceName, name string, errw io.Write
 			if err := container.ValidateContainerID(details.ID); err != nil {
 				return boxTarget{}, err
 			}
-			target := boxTarget{ID: details.ID, Present: true, Running: details.Running}
+			target := boxTarget{ID: details.ID, Present: true, Running: details.Running, Run: container.RunOf(details)}
 			if spaceenv.Native() {
 				if target.Native, err = agentbox.NativeRuntimeRoute(details); err != nil {
 					return boxTarget{}, err

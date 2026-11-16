@@ -132,9 +132,12 @@ func actualLegacyRuntimeFirst(ctx context.Context, c *container.Client, space, n
 const legacyRemedyFlag = "legacy-remedy"
 
 // exactRunStopSteps binds box start's result-policy rollback to the exact run
-// this operation started: a read showing another container, or another run of
-// it, is not stopped, and without a recorded identity nothing is stopped
-// either. The failure is reported, never hidden.
+// this operation started (container.ExpectedRuns.Started, kept across the
+// operation's own stops). A read showing another container, or a running
+// container in another run (container.SameRun), is refused before any cleanup
+// effect, as is an unknown or incomplete started identity; the failure is
+// reported, never hidden. A stopped read of the started container is that
+// replacement after its stop (by the rollback or the attempt's own cleanup).
 func exactRunStopSteps(steps boxStopSteps, name string) boxStopSteps {
 	read := steps.read
 	steps.read = func(ctx context.Context) (boxTarget, error) {
@@ -142,12 +145,14 @@ func exactRunStopSteps(steps boxStopSteps, name string) boxStopSteps {
 		if err != nil || !target.Present {
 			return target, err
 		}
-		started, ok := container.ExpectedRunsFrom(ctx).Expected(name)
+		started, ok := container.ExpectedRunsFrom(ctx).Started(name)
 		switch {
-		case !ok || started.ID == "":
-			return boxTarget{}, fmt.Errorf("the identity of the replacement this recreate started is unknown, so box %s was not stopped", name)
-		case started.ID != target.ID:
+		case !ok || started.ID == "" || started.StartedAt == "":
+			return boxTarget{}, fmt.Errorf("the identity of the run this recreate started is unknown or incomplete, so box %s was not stopped", name)
+		case target.ID != started.ID:
 			return boxTarget{}, fmt.Errorf("box %s is now another container than the replacement this recreate started, so it was not stopped", name)
+		case target.Running && !container.SameRun(started, target.Run):
+			return boxTarget{}, fmt.Errorf("box %s runs another run of its container than the one this recreate started, so it was not stopped", name)
 		}
 		return target, nil
 	}

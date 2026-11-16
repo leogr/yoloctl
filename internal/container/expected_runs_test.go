@@ -182,3 +182,55 @@ func TestStartAllowedOnlyForAFirstStartOrAfterOwnStop(t *testing.T) {
 		t.Fatal("start after the operation's own stop refused", err)
 	}
 }
+
+// The run an operation started stays its identity across its own stop (which
+// clears the expectation); an unreadable read-back keeps it incomplete; a
+// read is never a start.
+func TestStartedRunSurvivesTheOperationsOwnStop(t *testing.T) {
+	c, set, _ := expectedRunEngine(t)
+	set("by-id", runT)
+	ctx := WithExpectedRuns(t.Context())
+	runs := ExpectedRunsFrom(ctx)
+	runs.Expect("coder", Run{ID: runC, StartedAt: "x"}) // a read, not a start
+	if _, ok := runs.Started("coder"); ok {
+		t.Fatal("a read was recorded as a start")
+	}
+	if err := c.Start(ctx, runT); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Stop(ctx, runT); err != nil {
+		t.Fatal(err)
+	}
+	if runs.Has("coder") && runs.Check("coder", details(runT, "2026-11-14T10:00:00.1Z", 42, true), "x") == nil {
+		t.Fatal("the expectation survived the operation's own stop")
+	}
+	started, ok := runs.Started("coder")
+	if !ok || started != (Run{ID: runT, StartedAt: "2026-11-14T10:00:00.1Z", PID: 42}) {
+		t.Fatalf("started run lost: %+v %v", started, ok)
+	}
+	if _, ok := (*ExpectedRuns)(nil).Started("coder"); ok {
+		t.Fatal("nil record reported a start")
+	}
+}
+
+func TestSameRunFollowsTheCheckIdentity(t *testing.T) {
+	run := Run{ID: runT, StartedAt: "t1", PID: 42}
+	for _, tc := range []struct {
+		name       string
+		identified Run
+		read       Run
+		want       bool
+	}{
+		{"same", run, run, true},
+		{"read without PID", run, Run{ID: runT, StartedAt: "t1"}, true},
+		{"another container", run, Run{ID: runC, StartedAt: "t1", PID: 42}, false},
+		{"same container, new start", run, Run{ID: runT, StartedAt: "t2", PID: 42}, false},
+		{"same start, other PID", run, Run{ID: runT, StartedAt: "t1", PID: 43}, false},
+		{"incomplete identity", Run{ID: runT}, Run{ID: runT}, false},
+		{"empty identity", Run{}, Run{}, false},
+	} {
+		if got := SameRun(tc.identified, tc.read); got != tc.want {
+			t.Fatalf("%s: %v", tc.name, got)
+		}
+	}
+}

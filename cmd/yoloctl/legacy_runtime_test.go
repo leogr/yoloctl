@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -525,57 +526,143 @@ func TestPreNativeRemedyPrecedesRecreateDrift(t *testing.T) {
 	}
 }
 
-// F2: a recreation accepted from the pre-native remedy that fails after its
-// replacement started (session start or autoupdate) is rolled back by box
-// start's shared result policy, stopping only the exact run it started: a
-// same-name container that is not that run, or a run without a recorded
-// identity, is never stopped, and the failure says so. Nothing relaunches a
-// previous runtime or policy: the rollback only stops.
-func TestRemedyRecreateFailureStopsOnlyItsExactReplacement(t *testing.T) {
-	failure := errors.New("autoupdate coder: npm failed")
-	attempt := func(id string) func(context.Context) error {
-		return func(ctx context.Context) error {
-			container.EngineCallsFrom(ctx).MarkStart()
-			if id != "" {
-				container.ExpectedRunsFrom(ctx).Expect("coder", container.Run{ID: id, StartedAt: "2026-11-16T10:00:00Z", PID: 7})
-			}
-			return failure
+// remedyEngine is a finite engine for one container "coder": inspect prints
+// state.json, start and stop switch it to running.json / stopped.json. The
+// real container.Client start and stop record the operation's runs.
+func remedyEngine(t *testing.T) (*container.Client, func(file, id, started string, running bool)) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("LIMA_HOME", t.TempDir())
+	dir := t.TempDir()
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("REMEDY_ENGINE", dir)
+	script := `#!/bin/sh
+case "$*" in
+ *"sudo nerdctl inspect "*) cat "$REMEDY_ENGINE/state.json" ;;
+ *"sudo nerdctl start "*) cp "$REMEDY_ENGINE/running.json" "$REMEDY_ENGINE/state.json" ;;
+ *"sudo nerdctl stop --time 30 "*) cp "$REMEDY_ENGINE/stopped.json" "$REMEDY_ENGINE/state.json" ;;
+ *) exit 97 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(dir, "limactl"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	set := func(file, id, started string, running bool) {
+		state := map[string]any{"Running": running, "Status": map[bool]string{true: "running", false: "exited"}[running]}
+		if running {
+			state["Pid"] = 42
+		}
+		if started != "" {
+			state["StartedAt"] = started
+		}
+		raw, err := json.Marshal([]any{map[string]any{"Id": id, "Name": "coder", "Config": map[string]any{"Labels": map[string]string{}}, "State": state}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, file), raw, 0o600); err != nil {
+			t.Fatal(err)
 		}
 	}
+	return container.NewWithOutput("fixture", io.Discard, io.Discard), set
+}
+
+// F2: a recreation accepted from the pre-native remedy that fails after its
+// replacement started is rolled back by box start's shared result policy,
+// bound to the exact run it started. The production client's own stops clear
+// the expectation, but the started identity is kept, so a successful rollback
+// stop (or the attempt's own earlier cleanup) ends in a truthful stopped read.
+// Another container, another run of the same container and an incomplete
+// identity are refused before any cleanup effect. Nothing is relaunched.
+func TestRemedyRecreateFailureStopsOnlyItsExactReplacement(t *testing.T) {
+	const t1, t2 = "2026-11-16T10:00:00.1Z", "2026-11-16T10:05:00.2Z"
+	failure := errors.New("autoupdate coder: npm failed")
 	for _, tc := range []struct {
-		name     string
-		started  string // the run this recreate recorded starting
-		replaced bool   // later reads show another same-name container
-		stopped  []string
-		message  string
+		name string
+		// after the start: "" none, "own-stop" the attempt's own cleanup stop,
+		// "new-run" the same container in another run, "other" another container.
+		after      string
+		incomplete bool // the started run's start time cannot be read back
+		fail       bool
+		effects    []string
+		stillRuns  bool
+		message    string
+		forbidden  string
 	}{
-		{"its replacement", firstID, false, []string{firstID}, "start failed: autoupdate coder: npm failed"},
-		{"another same-name container", firstID, true, nil, "is now another container than the replacement this recreate started, so it was not stopped"},
-		{"unknown identity", "", false, nil, "the identity of the replacement this recreate started is unknown"},
+		{name: "rollback stops its replacement", fail: true, effects: []string{"holder", "forwards", "stop", "session", "reap"}, message: "start failed: autoupdate coder: npm failed", forbidden: "not stopped"},
+		{name: "after its own cleanup stop", after: "own-stop", fail: true, effects: []string{"holder", "forwards", "session", "reap"}, message: "start failed: autoupdate coder: npm failed", forbidden: "not stopped"},
+		{name: "another run of the container", after: "new-run", fail: true, stillRuns: true, message: "runs another run of its container than the one this recreate started, so it was not stopped"},
+		{name: "another container", after: "other", fail: true, stillRuns: true, message: "is now another container than the replacement this recreate started, so it was not stopped"},
+		{name: "incomplete identity", incomplete: true, fail: true, stillRuns: true, message: "unknown or incomplete, so box coder was not stopped"},
+		{name: "success", effects: nil, stillRuns: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f := &fakeStop{present: true, running: true, replaced: tc.replaced}
-			if tc.replaced {
-				f.reads = 1 // every read after the attempt shows the other container
+			c, set := remedyEngine(t)
+			started := t1
+			if tc.incomplete {
+				started = ""
+			}
+			set("state.json", firstID, "", false)
+			set("running.json", firstID, started, true)
+			set("stopped.json", firstID, t1, false)
+			var effects []string
+			step := func(name string) func(context.Context) error {
+				return func(context.Context) error { effects = append(effects, name); return nil }
+			}
+			steps := boxStopSteps{
+				read: func(ctx context.Context) (boxTarget, error) {
+					d, err := c.Inspect(ctx, "coder")
+					if err != nil {
+						return boxTarget{}, err
+					}
+					return boxTarget{ID: d.ID, Present: true, Running: d.Running, Run: container.RunOf(d)}, nil
+				},
+				holder:       func(ctx context.Context, _ bool) error { return step("holder")(ctx) },
+				listedHolder: step("listedHolder"),
+				forwards:     func(ctx context.Context, _ bool) error { return step("forwards")(ctx) },
+				stop: func(ctx context.Context, target boxTarget) error {
+					effects = append(effects, "stop")
+					return c.Stop(ctx, target.ID) // production bookkeeping: clears the expectation
+				},
+				endpoint:       step("endpoint"),
+				sessionState:   step("session"),
+				reapNamespaces: step("reap"),
+			}
+			attempt := func(ctx context.Context) error {
+				if err := c.Start(ctx, "coder"); err != nil {
+					return err
+				}
+				switch tc.after {
+				case "own-stop":
+					if err := c.Stop(ctx, firstID); err != nil {
+						return err
+					}
+				case "new-run":
+					set("state.json", firstID, t2, true)
+				case "other":
+					set("state.json", replacementID, t1, true)
+				}
+				if tc.fail {
+					return failure
+				}
+				return nil
 			}
 			ctx := container.WithExpectedRuns(t.Context())
-			err := runStartForResult(ctx, "coder", exactRunStopSteps(f.steps(), "coder"), attempt(tc.started))
-			if err == nil || !strings.Contains(err.Error(), tc.message) || !slices.Equal(f.stopped, tc.stopped) {
-				t.Fatalf("err %v stopped %v", err, f.stopped)
+			err := runStartForResult(ctx, "coder", exactRunStopSteps(steps, "coder"), attempt)
+			if tc.message == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.message) || tc.forbidden != "" && strings.Contains(err.Error(), tc.forbidden) {
+				t.Fatalf("err %v", err)
+			}
+			if !slices.Equal(effects, tc.effects) {
+				t.Fatalf("effects %v, want %v", effects, tc.effects)
+			}
+			d, readErr := c.Inspect(t.Context(), "coder")
+			if readErr != nil || d.Running != tc.stillRuns {
+				t.Fatalf("running %v, want %v (%v)", d.Running, tc.stillRuns, readErr)
 			}
 		})
-	}
-	// A successful remedy recreate whose replacement runs stops nothing.
-	f := &fakeStop{present: true, running: true, after: true}
-	f.reads = 1
-	ctx := container.WithExpectedRuns(t.Context())
-	ok := func(ctx context.Context) error {
-		container.EngineCallsFrom(ctx).MarkStart()
-		container.ExpectedRunsFrom(ctx).Expect("coder", container.Run{ID: firstID, StartedAt: "2026-11-16T10:00:00Z"})
-		return nil
-	}
-	if err := runStartForResult(ctx, "coder", exactRunStopSteps(f.steps(), "coder"), ok); err != nil || len(f.stopped) != 0 {
-		t.Fatalf("success: %v stopped %v", err, f.stopped)
 	}
 }
 

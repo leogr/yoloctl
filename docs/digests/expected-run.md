@@ -11,6 +11,9 @@ time. Inspect decodes both from `State` for every runtime.
 per-box record of the run they expect. The container client records the run it
 started (read back by ID) and "none" on its own stop; reads record a run only
 when nothing is recorded yet. A box without a record is checked by nothing.
+It also keeps the last run it started for each box across its own stops
+(`Started`), which binds the [pre-native](pre-native-boxes.md) remedy
+recreate's cleanup; `SameRun` applies `Check`'s identity rule to a read.
 [1](#source-1) [2](#source-2)
 
 [FACT] Before a port forward, the agent version read and install, the session
