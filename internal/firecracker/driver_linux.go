@@ -142,6 +142,10 @@ func (d Driver) Create(ctx context.Context, name string, spec vmapi.Spec) error 
 	if e = formatDisk(ctx, filepath.Join(dir, "system.ext4")); e != nil {
 		return e
 	}
+	// Record that no VMM has opened this disk yet (see seedSystemDisk).
+	if e = recordPristine(dir); e != nil {
+		return e
+	}
 	return createKeys(dir)
 }
 func (d Driver) SetMounts(name string, m []vmapi.Mount) error {

@@ -239,16 +239,21 @@ func formatDisk(ctx context.Context, path string) error {
 	if e != nil {
 		return e
 	}
-	_, e = ext4.Create(backendfile.New(&contextDisk{File: f, ctx: ctx}, false), st.Size(), 0, 512, &ext4.Params{
-		SectorsPerBlock: 8, InodeRatio: vmapi.FormatInodeRatio,
-		// The library's reserved-GDT option does not create a valid resize
-		// inode on these sizes. Capacity is explicit; preserve journalled ext4.
-		Features: []ext4.FeatureOpt{ext4.WithFeatureReservedGDTBlocksForExpansion(false)},
-	})
+	_, e = ext4.Create(backendfile.New(&contextDisk{File: f, ctx: ctx}, false), st.Size(), 0, 512, systemDiskParams())
 	if e != nil {
 		return e
 	}
 	return f.Sync()
+}
+
+// systemDiskParams formats native disks: journalled ext4. The library's
+// reserved-GDT option does not create a valid resize inode on these sizes;
+// capacity is explicit.
+func systemDiskParams() *ext4.Params {
+	return &ext4.Params{
+		SectorsPerBlock: 8, InodeRatio: vmapi.FormatInodeRatio,
+		Features: []ext4.FeatureOpt{ext4.WithFeatureReservedGDTBlocksForExpansion(false)},
+	}
 }
 
 // Formatting stays cancellable without an external process. This wrapper also

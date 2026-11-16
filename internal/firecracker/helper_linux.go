@@ -25,7 +25,6 @@ import (
 
 	"github.com/containers/gvisor-tap-vsock/pkg/types"
 	"github.com/containers/gvisor-tap-vsock/pkg/virtualnetwork"
-	"github.com/leogr/yoloctl/internal/guestbinary"
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/rotatelog"
 	"github.com/leogr/yoloctl/internal/safepath"
@@ -67,7 +66,7 @@ func createKeys(dir string) error {
 	return nil
 }
 func bootImage(ctx context.Context, dir string, c Config) error {
-	artifact, e := guestbinary.Resolve(c.Executable, "amd64")
+	artifact, e := bootArtifact(c)
 	if e != nil {
 		return e
 	}
@@ -204,6 +203,11 @@ func Helper(parent context.Context, name string) (result error) {
 		return e
 	}
 	defer func() { _ = dataLock.Close() }()
+	// Under the instance lock and before the backing storage is opened, so
+	// the VMM only ever sees the final system disk.
+	if e = seedSystemDisk(ctx, dir, c); e != nil {
+		return e
+	}
 	storage, e := openBackingStorage(filepath.Join(dir, "system.ext4"), filepath.Join(dataDir, "data.ext4"))
 	if e != nil {
 		return e
@@ -327,6 +331,11 @@ func Helper(parent context.Context, name string) (result error) {
 	fc := exec.Command(filepath.Join(c.Spec.Image, "firecracker"), "--api-sock", filepath.Join(runtime, "api.sock"))
 	fc.Stdout, fc.Stderr = os.Stdout, os.Stderr
 	fc.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	// Last action before any VMM can open the system disk: from here on it is
+	// never replaced again. Fail closed.
+	if e = invalidatePristine(dir); e != nil {
+		return e
+	}
 	state.LaunchPending = true
 	if e = writeState(dir, state); e != nil {
 		return e

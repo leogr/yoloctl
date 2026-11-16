@@ -1,6 +1,6 @@
 # VM system disk size
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; first-start seeding at `e1201505` and accompanying changes.
 
 [FACT] A new space's system disk is `--disk SIZE` or, by default, `auto`:
 half of the bytes available on the host filesystem that will hold the VM
@@ -40,6 +40,20 @@ space recreate`), `space show --json` adds `saved_disk_bytes`, and recreate
 prints `system disk 30 → 50 GiB (the saved setting)`. [2](#source-2)
 [3](#source-3) [6](#source-6)
 
+[FACT] Create records `system.pristine.json` (state `formatted` and the system
+disk's device, inode, size, mode and mtime) right after formatting. Under its
+instance lock and before it opens the backing storage, the Firecracker helper
+may then replace that never-opened disk with a seed: the same size and format
+parameters, plus `upper/opt/yoloctl/bin/yoloctl` (0755 root) from the start's
+guest artifact, verified by size, owner, mode and SHA-256 and renamed over
+`system.ext4`. The guest then skips its in-VM copy of that binary. A missing,
+unparsable or mismatched record, or an unexplained `system.seed-*` file,
+skips seeding and deletes nothing. A seeded disk is re-seeded only for a
+different build. The helper removes the record durably as its last action
+before starting the VMM and starts no VMM if that fails. Seeding costs a second
+format allocation and the binary on the host for a moment. After boot,
+`EnsureVMBinary` still installs the starting build. [8](#source-8)
+
 [FACT] Regressions cover the sizing table (80→40, 120→50, 50→30, 20→30 with
 the notice, 4.2 GiB refused, 200→50, explicit sizes and floors), the format
 estimate against the measurements, the metadata-aware create headroom,
@@ -55,3 +69,4 @@ grow-only set with its refusals and notice, and the show/list wording.
 5. <a id="source-5"></a> [Measured cost](../../cmd/yoloctl/space_disk_test.go#L57-L67) — `TestFormatAllocationMatchesTheMeasuredCost` holds the 2026-10-28 measurement (go-diskfs `ext4.Create`, `SectorsPerBlock: 8, InodeRatio: 16384`, sparse file); the format notice precedes `CreateWithSpec` in cmd/yoloctl/controller_deploy.go.
 6. <a id="source-6"></a> [Views and recreate](../../cmd/yoloctl/space.go#L1125-L1588) — `spaceShowData.SavedDisk`, `writeSpaceShow`, `writeSpaceShowJSON`, `printInstances`; `controllerSpaceShow`/`controllerSpaceList` in controller_views.go; the recreate line in controller_lifecycle.go.
 7. <a id="source-7"></a> [Regressions](../../cmd/yoloctl/space_disk_test.go#L1-L139) — CLI sizing, set and views; internal/spaceconfig/disk_test.go; `TestCreateHeadroomCountsTheFormatAllocation` in internal/firecracker/host_storage_linux_test.go.
+8. <a id="source-8"></a> [First-start seeding](../../internal/firecracker/seed_linux.go#L1) — `recordPristine`, `seedSystemDisk`, `buildSeed`, `verifySeed`, `invalidatePristine`; called from `Driver.Create` (driver_linux.go) and `Helper` (helper_linux.go, before `openBackingStorage` and before the VMM start); `session.EnsureVMBinary` in cmd/yoloctl/controller_deploy.go; tests in internal/firecracker/seed_linux_test.go.

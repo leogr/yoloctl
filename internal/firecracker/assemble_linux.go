@@ -394,13 +394,33 @@ func (t imageTree) ext4(ctx context.Context, target string, size int64) error {
 		return err
 	}
 	defer func() { _ = f.Close() }()
-	if err = f.Truncate(size); err != nil {
-		return err
-	}
-	filesystem, err := ext4.Create(backendfile.New(&contextDisk{File: f, ctx: ctx}, false), size, 0, 512, &ext4.Params{
+	return t.writeNames(ctx, f, size, names, &ext4.Params{
 		SectorsPerBlock: 8, InodeRatio: 16384,
 		Features: []ext4.FeatureOpt{ext4.WithFeatureReservedGDTBlocksForExpansion(false), ext4.WithFeatureHasJournal(false)},
 	})
+}
+
+// writeExt4 formats the already created, empty file f with params and writes
+// the tree into it, including missing parent directories (0755 root:root).
+func (t imageTree) writeExt4(ctx context.Context, f *os.File, size int64, params *ext4.Params) error {
+	for name := range t {
+		for dir := path.Dir(name); dir != "."; dir = path.Dir(dir) {
+			t.directory(dir)
+		}
+	}
+	names := make([]string, 0, len(t))
+	for name := range t {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return t.writeNames(ctx, f, size, names, params)
+}
+
+func (t imageTree) writeNames(ctx context.Context, f *os.File, size int64, names []string, params *ext4.Params) error {
+	if err := f.Truncate(size); err != nil {
+		return err
+	}
+	filesystem, err := ext4.Create(backendfile.New(&contextDisk{File: f, ctx: ctx}, false), size, 0, 512, params)
 	if err != nil {
 		return err
 	}
