@@ -77,7 +77,7 @@ func ownedSetupWorker(released *os.File, req Request) {
 	_, _ = os.Stdout.Write([]byte("setup-started\n"))
 	awaitFile(filepath.Join(dir, "start"))
 	if action == "owned-kill" {
-		_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+		killTestWorker(exit, func() error { return syscall.Kill(os.Getpid(), syscall.SIGKILL) })
 	}
 	var result ownedResult
 	record := func(total *int, n int, err error) {

@@ -9,12 +9,15 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/controller"
 )
 
-const diskRefusal = "VM system disk has 28.3 GiB free after cleanup; at least 28.9 GiB (20%) is required before a build or pull; retained images and box data were preserved; free space or increase the VM system disk"
+// An opaque fixture result, never a measurement of the runner or its reserve.
+const preflightRefusalFixture = "synthetic preflight refusal; not a VM disk measurement"
 
 func TestImagePreflightResultHelper(t *testing.T) {
 	mode := os.Getenv("YOLO_TEST_PREFLIGHT_RESULT")
@@ -31,19 +34,35 @@ func TestImagePreflightResultHelper(t *testing.T) {
 		var signal [1]byte
 		_, _ = io.ReadFull(permit, signal[:])
 	}
-	fmt.Fprintln(os.Stderr, "Error:", diskRefusal)
+	fmt.Fprintln(os.Stderr, "Error:", preflightRefusalFixture)
 	switch mode {
 	case "refusal":
-		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"error": diskRefusal})
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"error": preflightRefusalFixture})
 	case "malformed":
 		_, _ = fmt.Fprintln(os.Stdout, `{"error":`)
 	case "oversized":
-		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"error": diskRefusal})
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"error": preflightRefusalFixture})
 		_, _ = io.WriteString(os.Stdout, strings.Repeat(" ", controller.MaxDocument))
-	case "signal":
-		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"error": diskRefusal})
-		p, _ := os.FindProcess(os.Getpid())
-		_ = p.Kill()
+	case "signal", "signal-delayed":
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"error": preflightRefusalFixture})
+		p, err := os.FindProcess(os.Getpid())
+		if err != nil {
+			t.Fatal(err)
+		}
+		killPreflightTestHelper(t, func() error {
+			if mode == "signal-delayed" {
+				// A successful send can return before asynchronous process death.
+				go func() {
+					time.Sleep(100 * time.Millisecond)
+					if err := p.Kill(); err != nil {
+						fmt.Fprintln(os.Stderr, "delayed fixture self-kill:", err)
+						os.Exit(3)
+					}
+				}()
+				return nil
+			}
+			return p.Kill()
+		})
 	case "success":
 		os.Exit(0)
 	}
@@ -51,7 +70,7 @@ func TestImagePreflightResultHelper(t *testing.T) {
 }
 
 func TestImagePreflightReturnedRefusalReachesCaller(t *testing.T) {
-	for _, mode := range []string{"refusal", "stderr-only", "malformed", "oversized", "signal", "success", "worker"} {
+	for _, mode := range []string{"refusal", "stderr-only", "malformed", "oversized", "signal", "signal-delayed", "success", "worker"} {
 		t.Run(mode, func(t *testing.T) {
 			cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestImagePreflightResultHelper$")
 			cmd.Env = append(os.Environ(), "YOLO_TEST_PREFLIGHT_RESULT="+mode)
@@ -60,7 +79,7 @@ func TestImagePreflightReturnedRefusalReachesCaller(t *testing.T) {
 			err := runImagePreflightCommand(t.Context(), cmd, nil)
 			var failed *controller.ImageBuildFailure
 			if mode == "refusal" || mode == "worker" {
-				want := diskRefusal
+				want := preflightRefusalFixture
 				if mode == "worker" {
 					want = "unexpected EOF"
 				}
@@ -71,6 +90,16 @@ func TestImagePreflightReturnedRefusalReachesCaller(t *testing.T) {
 			}
 			if errors.As(err, &failed) || (err == nil) != (mode == "success") {
 				t.Fatalf("%s misclassified: %v", mode, err)
+			}
+			if mode == "signal" || mode == "signal-delayed" {
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) {
+					t.Fatalf("signal did not return a process exit: %v", err)
+				}
+				status, ok := exit.Sys().(syscall.WaitStatus)
+				if !ok || !status.Signaled() || status.Signal() != syscall.SIGKILL {
+					t.Fatalf("fixture must actually die by SIGKILL, not merely fail: %v", err)
+				}
 			}
 		})
 	}
@@ -114,7 +143,19 @@ func TestImagePreflightDoesNotUseStderrAsResult(t *testing.T) {
 	cmd.Stderr = &stderr
 	err := runImagePreflightCommand(t.Context(), cmd, nil)
 	var failed *controller.ImageBuildFailure
-	if err == nil || errors.As(err, &failed) || !strings.Contains(stderr.String(), diskRefusal) {
+	if err == nil || errors.As(err, &failed) || !strings.Contains(stderr.String(), preflightRefusalFixture) {
 		t.Fatalf("stderr/result boundary changed: stderr=%q err=%v", stderr.String(), err)
+	}
+}
+
+// Signal submission is not process settlement. Stay out of the helper's normal
+// exit2 path until SIGKILL actually ends it; the parent verifies WaitStatus.
+func killPreflightTestHelper(t *testing.T, send func() error) {
+	t.Helper()
+	if err := send(); err != nil {
+		t.Fatal("fixture self-kill:", err)
+	}
+	for {
+		time.Sleep(time.Hour)
 	}
 }
