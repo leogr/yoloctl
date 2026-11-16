@@ -43,8 +43,10 @@ file into a directory. Parent paths containing ordinary symlinks refuse;
 macOS's system `/tmp`, `/var`, `/etc` aliases are normalized. [6](#source-6)
 [7](#source-7)
 
-[FACT] Extracted files belong to the host caller (the directory may supply its
-inherited group). Ordinary file/directory mode and mtime survive; VM UID/GID,
+[FACT] Extracted files belong to the host caller and retain their staging
+inode's group after rename. The OS may inherit the staging parent's group,
+notably on macOS; an existing final destination's setgid group is not adopted.
+Ordinary file/directory mode and mtime survive; VM UID/GID,
 setid bits, capabilities and xattrs do not. Absolute/traversal/duplicate names,
 link parents, escaping or cyclic symlinks, unsupported special entries and
 invalid hardlinks refuse before publication. Relative links stay within the
