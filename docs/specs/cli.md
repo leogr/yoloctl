@@ -8,6 +8,12 @@ switch it through its space menu after confirming local tab closure. `box create
 the space before resolving account defaults. `box run` and root `run`/`ps` are
 unavailable; use named `box create`, `box attach` and `box list`. [1](#source-1) [2](#source-2) [24](#source-24)
 
+[FACT] Host-only `box cp BOX:PATH DEST|-` recovers retained container files
+from running or stopped boxes through a running matching controller, without
+starting the box. `box copy` still copies settings only. Filesystem destinations
+use constrained staging/publication; `-` emits the upstream tar unchanged.
+Operators cannot use this endpoint. [34](#source-34)
+
 [FACT] Command warnings, notices and mutation-result prose go through the
 shared logger to stderr; data tables, JSON, dry-run plans and raw session
 streams keep their writers. Clipboard-policy attachment warnings use the same
@@ -333,3 +339,5 @@ the writable layer require their tool's cache command or explicit recreation
 32. <a id="source-32"></a> [Expanding a running step](../digests/step-expand.md).
 
 33. <a id="source-33"></a> [Per-box caches](../digests/box-caches.md).
+
+34. <a id="source-34"></a> [Host box-file recovery](../digests/box-files.md).

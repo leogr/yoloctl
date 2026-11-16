@@ -37,6 +37,7 @@ import (
 // These are operation identities, not shell commands. New commands require an
 // explicit entry and an explicit operator authorization decision.
 var controllerOperations = map[string]controller.Operation{
+	"box.files.export":      {}, // host-only streamed recovery; no box/operator authority
 	"audit.status":          {},
 	"audit.rules.list":      {},
 	"audit.rules.import":    {Mutates: true, EffectGated: true, Footprint: controller.FootprintAudit},
@@ -739,6 +740,9 @@ func executeControllerWorker(ctx context.Context, work controller.WorkerInput) e
 	}
 	if work.Request.Method == "chat.artifact.upload" {
 		return runControllerChatImage(ctx, work.Request, os.Stdin, os.Stdout)
+	}
+	if work.Request.Method == "box.files.export" {
+		return runControllerBoxFiles(ctx, work.Request, os.Stdout, os.Stderr)
 	}
 	if work.Request.Method == "chat.artifact.read" {
 		return runControllerChatArtifactRead(ctx, work.Request, os.Stdout)

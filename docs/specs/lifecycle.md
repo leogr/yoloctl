@@ -1,5 +1,11 @@
 # Lifecycle and concurrency
 
+[FACT] Host `box cp` reads files from an owned retained container, running or
+stopped, without a lifecycle mutation or a session start. It requires a running
+matching controller and never substitutes a new container after concurrent
+removal/recreation. It is file recovery, separate from settings-only `box copy`
+and whole-space archives. [28](#source-28)
+
 [FACT] Explicit box reconcile is driven by its manifest and inspected runtime. Material
 container changes recreate; policy changes generally restart, with workdir
 read-only transitions requiring recreation; ports can update live. Agent args
@@ -253,3 +259,5 @@ features place their caches inside this bind by default. [25](#source-25)
 26. <a id="source-26"></a> [Build reserve](../digests/build-reserve.md).
 
 27. <a id="source-27"></a> [Pre-native boxes](../digests/pre-native-boxes.md).
+
+28. <a id="source-28"></a> [Host box-file recovery](../digests/box-files.md).

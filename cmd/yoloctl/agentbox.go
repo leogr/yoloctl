@@ -55,6 +55,7 @@ func newAgentboxCmd() *cobra.Command {
 	cmd.AddCommand(
 		newAgentboxCreateCmd(),
 		newAgentboxCopyCmd(),
+		newAgentboxCPCmd(),
 		newAgentboxStartCmd(),
 		newAgentboxStopCmd(),
 		newAgentboxRestartCmd(),

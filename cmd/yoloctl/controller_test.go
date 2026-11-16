@@ -316,7 +316,7 @@ func TestControllerBoxCommandInventoryAndSharedSurface(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	service, client := newRootCmd(), newClientRootCmd()
 	box := findByPath(service, "box")
-	if len(box.Commands()) != 20 {
+	if len(box.Commands()) != 21 {
 		t.Fatalf("update controller inventory for %d box commands", len(box.Commands()))
 	}
 	for _, cmd := range box.Commands() {
@@ -328,6 +328,10 @@ func TestControllerBoxCommandInventoryAndSharedSurface(t *testing.T) {
 		}
 		method := commandMethod(cmd)
 		switch method {
+		case "box.cp":
+			if _, registered := controllerOperations[method]; registered {
+				t.Fatal("box.cp must stay host-local")
+			}
 		case "box.use":
 			// Finite box use is a local driver of public attach, not another
 			// controller operation or independent authority grant.
@@ -338,7 +342,7 @@ func TestControllerBoxCommandInventoryAndSharedSurface(t *testing.T) {
 		case "box.edit":
 			method += ".apply"
 		}
-		if !controllerOperations[method].BoxAllowed {
+		if method != "box.cp" && !controllerOperations[method].BoxAllowed {
 			t.Fatalf("%s not authorized", method)
 		}
 		other := findByPath(client, strings.Split(commandMethod(cmd), ".")...)
