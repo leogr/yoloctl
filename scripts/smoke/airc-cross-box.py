@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Three isolated boxes: a room server with its human account and two proxy-confined AIRC clients."""
+"""Three isolated boxes: a room server with its human account and two network-confined AIRC clients."""
 import argparse
 from collections import deque
 import hashlib
@@ -142,6 +142,7 @@ def main():
     try:
         # Only the server fixture opts out of network isolation so other boxes
         # can reach its listener. SSH, filesystem and process confinement remain.
+        # Its local human uses loopback; confined peers use the bridge address.
         # Plaintext is explicit on this disposable VM bridge; no ports are published.
         subprocess.run(command('create', room, '--agent', 'none', '--account', 'none',
             '--workdir-mode', 'ephemeral', '--features', 'yolo.chat.skill', '--unconfined-network',
@@ -155,9 +156,11 @@ from pathlib import Path
 address = json.load(sys.stdin)
 path = Path('.airc/server.toml')
 text = path.read_text().replace('127.0.0.1', address).replace('allow_insecure = false', 'allow_insecure = true')
+for port in (6667, 8080):
+    text = text.replace(f'listen = "{address}:{port}"', f'listen = "0.0.0.0:{port}"')
 path.write_text(text)
 path = Path('.airc/human.toml')
-path.write_text(path.read_text().replace('127.0.0.1', address).replace('allow_insecure = false', 'allow_insecure = true'))
+path.write_text(path.read_text().replace('allow_insecure = false', 'allow_insecure = true'))
 ''', address)
         capability = config / 'capabilities/network.smoke-airc.yaml'
         capability.parent.mkdir(parents=True, exist_ok=True)
@@ -187,12 +190,9 @@ print(json.dumps({'config': (root / (account + '.toml')).read_text(), 'token': (
             execute(box, '''import json, os, sys
 from pathlib import Path
 data = json.load(sys.stdin)
-proxy = os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy') or os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy')
-assert proxy, 'missing confined network proxy'
 root = Path('.airc')
 root.mkdir(mode=0o700)
 text = data['config'].replace('127.0.0.1', data['address']).replace('allow_insecure = false', 'allow_insecure = true')
-text += '\\nproxy = ' + json.dumps(proxy) + '\\n'
 for name, value in [('client.toml', text), (data['account'] + '.token', data['token'])]:
     fd = os.open(root / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, 'w') as stream:
@@ -200,19 +200,6 @@ for name, value in [('client.toml', text), (data['account'] + '.token', data['to
 assert sorted(p.name for p in root.iterdir()) == [data['account'] + '.token', 'client.toml']
 ''', bundle)
             del bundle
-            # A different executable cannot borrow airc's endpoint grant.
-            execute(box, '''import json, os, socket, sys, urllib.parse
-address = json.load(sys.stdin)
-proxy = urllib.parse.urlsplit(os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy') or os.environ.get('HTTP_PROXY') or os.environ['http_proxy'])
-with socket.create_connection((proxy.hostname, proxy.port or 80), timeout=10) as sock:
-    sock.sendall(f'CONNECT {address}:6667 HTTP/1.1\\r\\nHost: {address}:6667\\r\\n\\r\\n'.encode())
-    reply = b''
-    while b'\\r\\n' not in reply and len(reply) < 8192:
-        part = sock.recv(1024)
-        assert part, 'proxy closed without a denial'
-        reply += part
-    assert reply.split(b'\\r\\n', 1)[0].split()[1] == b'403', 'ungranted executable was not denied'
-''', address)
         session, first_ready = view('session')
         human = start_human('human')
         alice, bob = [start_client(box, label) for box, label in zip(participants, ['alice', 'bob'])]
@@ -222,6 +209,21 @@ with socket.create_connection((proxy.hostname, proxy.port or 80), timeout=10) as
             text = marker + '-' + account
             request(client, 'send', target='#work', text=text)
             message(human, text, account=account)
+        # The endpoint is live and reachable by both granted clients. Native
+        # OpenShell denies an ungranted executable's direct connect with a
+        # permission error; a timeout/refused listener is not a policy denial.
+        for box in participants:
+            execute(box, '''import errno, json, socket, sys
+address = json.load(sys.stdin)
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.settimeout(10)
+    try:
+        sock.connect((address, 6667))
+    except OSError as error:
+        assert error.errno in (errno.EACCES, errno.EPERM), f'expected policy denial, got {error}'
+    else:
+        raise AssertionError('ungranted executable reached the AIRC endpoint')
+''', address)
         steering = marker + '-steer'
         request(human, 'send', target='#work', text=steering)
         anchor = message(alice, steering, account='human')['tags']['msgid']
@@ -284,7 +286,7 @@ path.write_text(path.read_text().replace(old, new))
         assert transfer['sha256'] == hashlib.sha256(payload).hexdigest()
         quit_client(bob)
         detach(session)
-        print('PASS: separate confined clients, binary-scoped proxy policy, human steering, reconnect history, artifacts and server restart')
+        print('PASS: separate confined clients, executable-scoped network policy, human steering, reconnect history, artifacts and server restart')
     except Exception:
         if session is not None and session.process.poll() is None:
             try:

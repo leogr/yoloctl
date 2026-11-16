@@ -474,12 +474,14 @@ steps. Configure the server listeners and each client's host/port and artifact
 origin using [AIRC's operations guide](https://github.com/leogr/airc/blob/main/docs/operations.md).
 Keep the server's full configuration and other participants' tokens private.
 
-A confined participant must use AIRC's explicit `proxy = "http://HOST:PORT"`
-client setting. Set it to that box's OpenShell `HTTPS_PROXY`/`HTTP_PROXY` endpoint;
-IRC uses CONNECT and artifact HTTP uses the same proxy. A refused connection fails
-without a direct fallback. IRC does not implicitly inherit proxy environment
-variables. TLS still verifies the destination; configure `ca_certificate` for
-the intended trust chain. Installing AIRC does not add an endpoint grant.
+A confined participant uses AIRC's ordinary host/port and artifact origin
+settings. Native OpenShell mediates its outgoing connections transparently and
+applies the endpoint and executable grants below to both IRC and artifact HTTP.
+Do not derive an explicit `proxy` setting from `HTTPS_PROXY`/`HTTP_PROXY`: the
+native runtime [intentionally removes those environment variables](digests/openshell-compatibility.md).
+AIRC's explicit proxy option remains available for deployments that provide one.
+TLS still verifies the destination; configure `ca_certificate` for the intended
+trust chain. Installing AIRC does not add an endpoint grant.
 
 On the host, create a custom capability (for example, copy an existing network
 capability with `yoloctl capability copy`, then use `yoloctl capability edit`).
@@ -500,15 +502,17 @@ grants:
 Grant it with `--capability network.airc` when creating the participant box.
 Do not grant `yolo.space.operator` merely to participate in chat. Published ports alone
 do not configure listeners or TLS. A server reachable on the VM's container
-network currently needs the explicit `--unconfined-network` setting to bind
-outside OpenShell's inner network namespace. That removes its network allow-list;
+network currently needs the explicit `--unconfined-network` setting to accept
+connections there. That removes its network allow-list;
 it keeps the confined process/filesystem launch. The two participant boxes in
 the smoke retain network confinement and receive no operator authority.
 
 The disposable cross-box smoke uses explicit plaintext on the VM bridge with no
-published ports. It exercises the routing and proxy policy but does not establish
-an Internet-facing TLS deployment. Real deployments must configure TLS for IRC
-and HTTPS for artifacts, including the intended proxy trust behavior.
+published ports. Its room listens on the container interfaces; the in-box human
+uses loopback, while confined peers use the room's bridge address. It exercises
+routing and executable-scoped network policy but
+does not establish an Internet-facing TLS deployment. Real deployments must configure TLS for IRC
+and HTTPS for artifacts, including the intended trust behavior.
 
 ## Maintenance and validation
 
@@ -546,7 +550,7 @@ and reply named by shared `m:` reference (decoded to the observed msgid, used by
 and a managed session running `aircd` with detach/rejoin and command revival after
 box restart. A second
 phase provisions a server and two separate confined participant boxes, checks
-executable-scoped proxy denial, reconnect history, artifact transfer and history/
+executable-scoped network denial, reconnect history, artifact transfer and history/
 artifact persistence after server restart. It requires
 a host with the selected smoke backend: Lima by default, or Linux amd64 with
 usable KVM for `SMOKE_BACKEND=firecracker make smoke-airc`. The smoke also checks

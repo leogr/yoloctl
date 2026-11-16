@@ -2,6 +2,9 @@
 
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; dialog note checked at yoloctl `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; selected source verified at AIRC `b76ba355863cc3eb51900a313d7647d9190eedfa`; release v0.1.2 (source `84ea507836e82ea0581180e794d289523788c373`; after `b76ba355` it changes the Claude plugin launcher and Claude recipe, and its one commit after `6af217cf` changes only Codex app-server turn selection; verified there) and its asset hashes verified against `SHA256SUMS` at yoloctl `2c026472` and accompanying changes.
 
+Direct-route smoke source verification: yoloctl `ee88de4d528a26a107e3f38384423565b8d773fe`
+and accompanying changes.
+
 [FACT] `yolo.chat.skill` installs the named/JSONL client, server, Codex delivery
 adapter, Claude delivery plugin and upstream skill. It requires no capabilities
 and creates no credentials. Skills use Codex/Claude system paths and shared
@@ -72,9 +75,13 @@ text; schema 4 adds staged attachments. Older servers refuse newer schemas. [16]
 `aircd` driver uses agent/human clients for steering, readiness/read replay,
 confirmed sends, reconnect history and shutdown. Isolated `smoke-airc` adds
 image/home identity, skills, absent removed tools, managed `aircd`, detach/rejoin
-and restart. Cross-box fixtures use an unconfined server/human client and
-separately authenticated proxy-confined participants for binary-scoped denial,
-steering, artifacts and persistence. Reruns update only the disposable
+and restart. Cross-box fixtures use an unconfined room (listeners on container
+interfaces, local human on loopback) and
+separately authenticated network-confined participants using ordinary direct
+AIRC endpoints. After both clients deliver messages, an ungranted Python
+executable must receive a permission denial connecting to the same live endpoint;
+timeout or connection refusal fails the control. Steering, artifacts and
+persistence checks remain. Reruns update only the disposable
 controller. Test existence proves no live pass; bridge plaintext proves no remote TLS.
 [15](#source-15) [9](#source-9) [10](#source-10) [11](#source-11)
 [12](#source-12) [13](#source-13) [14](#source-14)
