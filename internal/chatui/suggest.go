@@ -36,6 +36,8 @@ var commands = []command{
 	{"/join", " NAME", "Follow a channel and switch to it"},
 	{"/part", " [NAME]", "Leave a channel (its draft and history stay)"},
 	{"/topic", " [set TEXT | clear]", "Show, set or clear this channel's topic"},
+	{"/away", " [reason]", "Mark this chat connection away (default: away)"},
+	{"/back", "", "Clear this chat connection’s away state"},
 	{"/participants", "", "Show or hide the participants panel"},
 	{"/filter", " [me | all | NAME …]", "Show only messages from or mentioning someone"},
 	{"/thread", "", "Show only the selected message's thread"},

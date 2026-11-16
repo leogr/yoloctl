@@ -2,6 +2,14 @@
 
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
 
+[FACT] The human chat view can explicitly set `/away [reason]` or `/back` on
+its own IRC connection. Confirmed away shows `you: away` even without the
+participants panel; pending/unknown are separate, and disconnected availability
+is unavailable. The reason belongs to its exact account/live nickname, not all
+human connections or a box's observed activity. Typing and messages do not clear
+it; a new connection starts back without persisting/replaying intent.
+[19](#source-19)
+
 [FACT] Managed room membership is one shared, display-only snapshot under
 `/run/yoloctl/controller/chat-presence/<room-id>/`, because each controller
 request runs in its own worker. Every `space.telemetry` stream reads it while
@@ -104,3 +112,5 @@ exercised. [15](#source-15) [16](#source-16) [17](#source-17)
 16. <a id="source-16"></a> [presence_test.go](../../internal/spacetelemetry/presence_test.go#L1-L48) — rule and freshness gate.
 17. <a id="source-17"></a> [presence_panel_test.go](../../internal/chatui/presence_panel_test.go#L1-L347) — explicit availability, AWAY/back, participant details, activity and shared waveform.
 18. <a id="source-18"></a> [activity_test.go](../../internal/tui/spaceview/activity_test.go#L154-L327) — space view dot and `TestActiveToneBreathesGently`.
+
+19. <a id="source-19"></a> [Human availability](../../internal/chatui/availability.go#L1) — command/state/display; stream confirmation and exact self roster patch in internal/chatstream/availability.go; model.go `connection` clears unavailable state.

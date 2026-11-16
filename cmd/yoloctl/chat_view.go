@@ -339,7 +339,7 @@ func (s *chatSession) start(takeOver bool) {
 					return
 				}
 			}
-			if msg := chatViewEvent(e); msg != nil {
+			if msg := s.viewEvent(l, e); msg != nil {
 				s.program.Send(msg)
 			}
 		})
@@ -653,7 +653,7 @@ func (s *chatSession) control(a chatui.Action, readCatalog func(context.Context)
 		if l == nil {
 			return refuse(errors.New("no chat connection is available"))
 		}
-		action := chatstream.Action{ID: a.ID, Kind: a.Kind, Channel: a.Channel, Topic: a.Topic}
+		action := chatstream.Action{ID: a.ID, Kind: a.Kind, Channel: a.Channel, Topic: a.Topic, Reason: a.Reason}
 		if a.Kind == "join" {
 			if readCatalog == nil {
 				return refuse(errors.New("JOIN needs a trusted channel catalog refresh"))
@@ -798,6 +798,15 @@ func configureChatBrowser(ctx context.Context, opts *chatui.Options, policy stri
 	}
 }
 
+// viewEvent fences connection-scoped availability independently of channel
+// catalogs; a delayed ended-link observation cannot update its replacement.
+func (s *chatSession) viewEvent(link *chatLink, e chatstream.Event) tea.Msg {
+	if e.Kind == "availability" && s.current() != link {
+		return nil
+	}
+	return chatViewEvent(e)
+}
+
 func chatViewEvent(e chatstream.Event) tea.Msg {
 	switch e.Kind {
 	case "connection":
@@ -817,6 +826,8 @@ func chatViewEvent(e chatstream.Event) tea.Msg {
 			return nil
 		}
 		return chatCatalog(*e.Catalog)
+	case "availability":
+		return chatui.AvailabilityMsg{State: e.State, Reason: e.AwayReason}
 	case "members":
 		members := make([]chatui.Member, 0, len(e.Members))
 		for _, m := range e.Members {

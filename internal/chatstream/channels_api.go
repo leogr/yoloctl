@@ -5,10 +5,12 @@ package chatstream
 type HistoryRequest struct{ ID, Channel, Before string }
 
 // Action is a bounded human operation, never an arbitrary IRC command. Kind is
-// join, part, topic-read, topic-set or topic-clear; only topic-set supplies Topic.
+// join, part, topic-read, topic-set, topic-clear, away or back. Only topic-set
+// supplies Topic; only away supplies Reason; away/back carry no channel.
 type Action struct {
 	ID, Kind, Channel string
 	Topic             *string
+	Reason            *string // away only; connection-wide, no channel
 	// Catalog is an optional trusted host refresh for an explicit join. The
 	// driver validates and applies it before admitting that same action, so
 	// independent background catalog delivery cannot race a new-channel join.

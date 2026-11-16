@@ -158,6 +158,9 @@ per row, without the clipboard [30](#source-30),
 renderer-matched Unicode widths for layout and hits (wcwidth until a supported
 mode-2027 report; grapheme widths thereafter),
 older-history paging, per-channel views with typed join/part/topic actions,
+explicit connection-wide `/away [reason]` and `/back` with confirmed own status
+(pending/unknown/offline remain distinct, with no typing auto-back or reconnect
+replay; see [chat presence](../digests/chat-presence.md)),
 channel navigation retained at narrow widths (a one-row strip when no side panel
 is shown, outside the participant overlay) [17](#source-17),
 explicit human channel selection that requests JOIN when needed (with drafts

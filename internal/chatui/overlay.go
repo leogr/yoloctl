@@ -85,6 +85,7 @@ var helpSections = []struct {
 	rows  [][2]string
 }{
 	{"Sending", [][2]string{
+		{"/away [reason] · /back", "Set or clear your connection’s away state after server confirmation; sending never marks you back."},
 		{"Enter", "Send the draft. It shows “sending” until the room echoes it back; nothing is ever resent automatically."},
 		{"Alt+Enter  Shift+Enter  Ctrl+J", "Insert a new line"},
 		{"@name", "Notify someone. Agents wake only for an explicit @name or @all; a plain name notifies nobody."},
@@ -193,6 +194,7 @@ func (m *Model) settingRows() []settingRow {
 		{"copy", "Copy on select", onOff(m.copyOnSelect, "on", "off"), "Releasing a drag copies the selection", true},
 		{"clipboard", "Host clipboard", policy(m.opts.Clipboard), "seams.clipboard in ~/.config/yoloctl/tui.yaml", false},
 		{"browser", "Open links", policy(m.opts.Browser), "seams.browser (on · ask · off) in ~/.config/yoloctl/tui.yaml", false},
+		{"availability", "Availability", m.availabilityDetail(), "/away [reason] or /back. Connection-wide; typing does not change it.", false},
 	}
 }
 
@@ -832,6 +834,9 @@ func (m *Model) cardRows(inner int) []string {
 		case mem.Voice:
 			channel = "voiced (+)"
 		}
+	}
+	if mem := o.member; mem != nil && m.opts.Account != "" && mem.Account == m.opts.Account && mem.Nick == m.opts.Nick {
+		presence = m.availabilityDetail()
 	}
 	rows = append(rows, field("Presence", presence, spaceview.Style{FG: t.Text}))
 	if channel != "" {

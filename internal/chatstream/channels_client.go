@@ -28,6 +28,7 @@ type channelState struct {
 type pendingChannelAction struct {
 	Action
 	until time.Time
+	after uint64 // pre-submission event cursor fence
 }
 
 // channelDriver shares the existing logical AIRC decoder for each channel,
@@ -44,7 +45,11 @@ type channelDriver struct {
 	historyLost bool
 	// origin is the room generation this connection opened at; the relay
 	// refuses names deleted after it, and the driver mirrors that before Write.
-	origin uint64
+	origin            uint64
+	latest            uint64
+	availabilityKnown bool
+	ownAway           bool
+	ownReason         string
 }
 
 // RunChannels owns a single confined controller stream. Closed UI queues never
@@ -109,6 +114,8 @@ func (d *channelDriver) run(ctx context.Context, outgoing <-chan Send, older <-c
 	d.channels[h.Channel].until = time.Now().Add(15 * time.Second)
 	limits.MaxBytes = min(limits.MaxBytes, MaxMessageBytes)
 	emit(Event{Kind: "connection", Connected: true, Limits: limits, Attachments: d.wire.header.Attachments})
+	d.availabilityKnown = true
+	d.emitAvailability()
 	// The header establishes identity, not whether the server applied the
 	// desired catalog. Keep it unobserved until a selected catalog read arrives.
 	emit(Event{Kind: "catalog", Catalog: &Catalog{Header: normalizedHeader(d.catalog), RuntimeUnobserved: true}})
@@ -162,6 +169,9 @@ func (d *channelDriver) addChannel(name, membership string) {
 	state.adapter = &driver{header: h, batches: map[string]*historyBatch{}, roster: map[string]Member{}, exchangeFn: d.wire.exchange}
 	state.adapter.emit = func(event Event) {
 		event.Channel = name
+		if event.Kind == "members" {
+			d.patchSelfMembers(state, event.Members)
+		}
 		if event.Kind == "message" {
 			event.Message.Channel = name
 		}
@@ -208,6 +218,7 @@ func (d *channelDriver) readOne() error {
 		}
 	}
 	d.wire.cursor = page.Next // never skip to latest
+	d.latest = page.Latest
 	return nil
 }
 
@@ -288,6 +299,8 @@ func (d *channelDriver) deadlines() error {
 }
 
 func (d *channelDriver) gap() {
+	d.availabilityKnown = false
+	d.emitAvailability()
 	d.historyGap(errors.New("AIRC event buffer has a gap; missing history is not proof of failed delivery"))
 	for name, channel := range d.channels {
 		channel.membership, channel.bootstrap = "unknown", "unknown"

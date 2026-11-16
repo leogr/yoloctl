@@ -45,6 +45,15 @@ const presenceWindow = 10 * time.Second
 // observeMembers derives notices from consecutive roster snapshots. The
 // first snapshot after connecting is the existing room, not a change.
 func (m *Model) observeMembers(next []Member) {
+	if m.connected && m.opts.Account != "" && (m.ownState == "away" || m.ownState == "back") {
+		for i := range next {
+			if next[i].Account == m.opts.Account && next[i].Nick == m.opts.Nick {
+				next[i].Away = m.ownState == "away"
+				next[i].AwayReason = m.ownReason
+			}
+		}
+	}
+
 	prev := m.members
 	m.members = next
 	if prev == nil {

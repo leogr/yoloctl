@@ -30,6 +30,15 @@ placeholders and the default footer truthfully display blocking status and draft
 retention rather than advertising send, while local slash commands remain
 executable. [1](#source-1) [15](#source-15)
 
+[FACT] `/away [reason]` (default `away`) and `/back` control this human
+connection, independently of the selected channel. Reasons are at most 200
+UTF-8 bytes; `/back` refuses arguments. Pending/refused/uncertain commands keep
+the draft; confirmation clears only the unchanged origin draft, even after a
+channel switch. The top row shows `you: away`, pending or unknown independently
+of the panel; settings and the exact self roster entry include its reason.
+Typing/sending never marks back. Offline is unavailable; explicit reconnect
+starts back with no replay. [23](#source-23)
+
 [FACT] Chat uses the shared Markdown parser/layout through thin aliases and
 wrappers; identity decoration, loaded previews, caches and host effects remain
 in chat. [21](#source-21)
@@ -141,3 +150,5 @@ the adapter from `YOLOCTL_TEST_AIRC_BIN_DIR`. [13](#source-13) [14](#source-14)
 21. <a id="source-21"></a> [Shared renderer boundary](markdown-renderer.md).
 
 22. <a id="source-22"></a> [Disconnected reopen](../../internal/chatui/reopen.go#L10) — `reopenOffered`, `reopenKey`, `reopen`, `reopenFooter`; `connection` in model.go marks uncertain delivery before explicit reconnect. `reopen_test.go` covers draft/reply/history retention, input priority, errors, duplicate activation and telemetry/deleted-channel exclusion.
+
+23. <a id="source-23"></a> [Own availability](../../internal/chatui/availability.go#L1) — `availabilityCommand`, `availability`, `availabilitySummary`; `controlDone` in channels.go preserves the original draft.

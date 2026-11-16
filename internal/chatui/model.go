@@ -206,7 +206,7 @@ type Options struct {
 	// LoadOlder requests the page of a channel before its oldest message ID;
 	// the caller answers with older IncomingMsgs and one HistoryPageMsg.
 	LoadOlder func(HistoryRequest) tea.Cmd
-	// Control runs one channel action (join, part, topic) and answers with
+	// Control runs one channel or connection-availability action and answers with
 	// ControlMsg; membership and topic changes arrive as their own messages.
 	Control func(Action) tea.Cmd
 	// RefreshChannels asks the host for its trusted catalog (CatalogMsg).
@@ -307,6 +307,9 @@ type Model struct {
 	tele              boxTelemetry
 	rosterOpen        bool
 	rosterOverlay     bool
+
+	// Confirmed connection availability; offline/gaps are unknown, not back.
+	ownState, ownReason string
 	// The side panel's lists, each collapsed to its heading by the user.
 	channelsCollapsed     bool
 	participantsCollapsed bool
@@ -427,7 +430,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, cmd := m.update(msg)
 	cmd = tea.Batch(previewCmd, cmd)
 	switch msg.(type) {
-	case MembersMsg, IncomingMsg, DeliveryMsg, CatalogMsg, SessionMsg, ConnectionMsg, GapMsg, MembershipMsg:
+	case AvailabilityMsg, MembersMsg, IncomingMsg, DeliveryMsg, CatalogMsg, SessionMsg, ConnectionMsg, GapMsg, MembershipMsg:
 		m.reconcile()
 	}
 	if m.focus == focusReopen && !m.reopenOffered() {
@@ -510,6 +513,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.imagePrepared(msg)
 	case ImageUploadedMsg:
 		return m, m.imageUploaded(msg)
+	case AvailabilityMsg:
+		m.availability(msg)
 	case MembersMsg:
 		if m.deletedView(msg.Channel) {
 			break
@@ -674,6 +679,10 @@ func (m *Model) runPending(cmd tea.Cmd) tea.Cmd {
 func (m *Model) connection(msg ConnectionMsg) {
 	m.captureAnchor()
 	m.connected = msg.Connected
+	m.ownState, m.ownReason = "unknown", ""
+	if msg.Connected {
+		m.ownState = "back"
+	}
 	m.connectionEnded = !msg.Connected
 	if msg.Connected {
 		m.attachments = msg.Attachments
@@ -1384,6 +1393,8 @@ func (m *Model) slashCommand(text string) (tea.Cmd, bool) {
 		m.toggleSource()
 	case len(fields) == 1 && fields[0] == "/quit":
 		return tea.Quit, true
+	case fields[0] == "/away" || fields[0] == "/back":
+		return m.availabilityCommand(strings.TrimSpace(text), fields)
 	case fields[0] == "/channels" || fields[0] == "/join" || fields[0] == "/part" || fields[0] == "/topic":
 		// Channel actions go through typed, bounded host operations; this
 		// view never sends raw IRC.

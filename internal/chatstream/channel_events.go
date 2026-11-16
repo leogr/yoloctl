@@ -33,6 +33,12 @@ func (d *channelDriver) action(action Action) error {
 		return nil
 	}
 	refuse := func(message string) error { return refuseCode("", message) }
+	if action.Kind == "away" || action.Kind == "back" {
+		return d.availabilityAction(action)
+	}
+	if action.Reason != nil {
+		return refuse("unexpected reason field")
+	}
 	if !validReference(action.ID, 80) || managedchat.ValidateChannelName(action.Channel) != nil {
 		return refuse("invalid managed channel/action identity")
 	}
@@ -157,6 +163,9 @@ func (d *channelDriver) record(r record) error {
 	}
 	if numeric(r.Command) && (r.Prefix != d.serverPrefix() || len(r.Params) == 0 || r.Params[0] != d.wire.header.Nick) {
 		return errors.New("AIRC numeric does not match the current recipient/server")
+	}
+	if r.Command == "305" || r.Command == "306" {
+		return d.availabilityNumeric(r)
 	}
 	if r.Command == "422" {
 		// AIRC deliberately has no MOTD and preserves this welcome numeric in
@@ -359,6 +368,9 @@ func (d *channelDriver) topicEvent(name string, channel *channelState, r record)
 }
 
 func (d *channelDriver) refusal(r record) error {
+	if d.control != nil && (d.control.Kind == "away" || d.control.Kind == "back") {
+		return errors.New("IRC refusal while availability action is pending; outcome uncertain")
+	}
 	if d.control != nil {
 		if len(r.Params) < 2 || r.Params[1] != d.control.Channel {
 			return errors.New("uncorrelated IRC refusal while channel action is pending")

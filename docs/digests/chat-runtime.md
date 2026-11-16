@@ -107,7 +107,7 @@ durable effect gate and releases admission; cancellation closes stalled SSH.
 The OpenShell root supervisor owns the pinned Unix socket. [27](#source-27) [28](#source-28)
 Closing the view closes only its client. The controller canonicalizes an
 allowlist of room send/read/history/members/who/typing/quit and single-channel
-join/part/topic operations: no argv, artifact paths or raw IRC. The channel path
+join/part/topic operations and connection-wide away/back: no argv, artifact paths or raw IRC. The channel path
 requires `client-topic`; see [catalog and stream](chat-channels.md) for current
 ACL checks, reload prerequisites and typed multi-channel driving. Host frames are bounded; reads use `next`, not
 `latest`. A queued send is pending; complete correlated receipts confirm it.
@@ -150,6 +150,15 @@ effects runs under the same native creation context that ordinary creation
 uses (`defaultCreationContext`), so a cached server/member image is retained
 through the native image lease before any effect; the original post-apply
 refusal and no-replay rules are unchanged. [41](#source-41)
+
+[FACT] Human away/back uses the existing serialized control slot with a 20-second
+confirmation deadline. Strict decoding permits only ID/op and the away reason
+(1–200 UTF-8 bytes without CR/LF/NUL); it does not acquire a channel grant.
+Queue acceptance is not confirmation: only the current server/recipient's 306
+or 305 after the pre-submission cursor fence settles its matching action.
+Uncertain submission/event loss ends the link without replay. Confirmed own
+state patches the exact account plus live nick in roster refreshes/new channels,
+never every connection of the account. [42](#source-42)
 
 ## Sources
 
@@ -195,3 +204,5 @@ refusal and no-replay rules are unchanged. [41](#source-41)
 
 40. <a id="source-40"></a> [Native chat environment](../../internal/agentbox/openshell_chat_environment_linux.go#L10-L45) — `retainChatEnvironment`; called after chat option assembly in `openshell_create_linux.go`. `openshell_chat_environment_linux_test.go` covers actual plan/bootstrap, account secrecy, reserved collisions and unchanged no-injection/server selection.
 41. <a id="source-41"></a> [Native chat warming](../../cmd/yoloctl/chat_runtime.go#L152) — `runControllerChatRuntime` and `warmChatServer` call `warmBoxBeforeEffects` with `defaultCreationContext`; `TestNativeChatPrewarmRetainsCachedImageBeforeApply` in cmd/yoloctl/chat_native_warm_test.go (integration tree `ea2671d0`).
+
+42. <a id="source-42"></a> [Availability controls](../../internal/chatstream/availability.go#L1) — `availabilityAction`, `availabilityNumeric`, `patchSelfMembers`; protocol.go `decodeChannelRequest`/`FilterChannels`; `TestRealAIRCHumanAvailability` in airc_availability_integration_test.go exercises the managed filter with pinned binaries.

@@ -56,8 +56,9 @@ type Event struct {
 	Action               string
 	Catalog              *Catalog
 	Topic, TopicBy       string
+	AwayReason           string
 	TopicLive            bool
-	Kind                 string // connection, message, delivery, gap, members, history-page, history-latest
+	Kind                 string // connection, availability, message, delivery, gap, members, history-page, history-latest
 	Message              Message
 	ID, MessageID, State string
 	// Code is a machine-readable control refusal, independent of display text.

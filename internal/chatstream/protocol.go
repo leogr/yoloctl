@@ -76,6 +76,7 @@ type Request struct {
 	Direction string   `json:"direction,omitempty"`
 	Reference string   `json:"reference,omitempty"`
 	Active    *bool    `json:"active,omitempty"`
+	Reason    *string  `json:"reason,omitempty"`
 	Topic     *string  `json:"-"` // topic missing queries; pointer to empty clears
 	Attach    []Attach `json:"attach,omitempty"`
 }
@@ -169,6 +170,12 @@ func decodeChannelRequest(line []byte, allowedChannel func(string) bool, attachm
 			}
 			r.Topic = &r.Text
 		}
+	case "away":
+		allowed += " reason"
+		if r.Reason == nil || !validAwayReason(*r.Reason) {
+			return r, bad
+		}
+	case "back":
 	case "quit":
 	default:
 		return r, bad
@@ -194,7 +201,8 @@ func Filter(in io.Reader, out io.Writer, channel string) error {
 
 // FilterChannels revalidates current native membership for each channel-bearing
 // request. The callback releases its bounded native read lock before forwarding;
-// reads/quit carry no channel and do not take a per-poll storage lock.
+// Reads, quit and connection-wide away/back carry no channel and do not
+// acquire a channel grant or per-poll storage lock.
 // attachments forwards a send's attach list only when the confined client has
 // the AIRC message-attachments feature.
 func FilterChannels(in io.Reader, out io.Writer, authorize func(string) error, attachments bool) error {
@@ -227,4 +235,8 @@ func FilterChannels(in io.Reader, out io.Writer, authorize func(string) error, a
 			return err
 		}
 	}
+}
+
+func validAwayReason(reason string) bool {
+	return len(reason) > 0 && len(reason) <= 200 && utf8.ValidString(reason) && !strings.ContainsAny(reason, "\x00\r\n")
 }

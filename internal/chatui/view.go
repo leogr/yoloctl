@@ -405,6 +405,9 @@ func (m *Model) topBar(w int) string {
 		channel.runs = append(channel.runs, deco(" ▾", st(t.Dim, false)))
 	}
 	var extras []part
+	if label := m.availabilitySummary(); label != "" {
+		extras = append(extras, part{[]run{deco("  you: "+label, st(t.Dim, false))}, ""})
+	}
 	if m.members != nil {
 		count := fmt.Sprintf("  %d online", len(m.members))
 		away := 0

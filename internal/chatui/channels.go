@@ -348,11 +348,12 @@ type MembershipMsg struct {
 	Channel, State, ID string
 }
 
-// Action is one channel control: join, part, topic-read, topic-set or
-// topic-clear. Topic is set only for topic-set (it may be empty).
+// Action is one bounded control: join, part, topic-read, topic-set, topic-clear,
+// away or back. Topic is set only for topic-set; Reason only for away.
 type Action struct {
 	ID, Kind, Channel string
 	Topic             *string
+	Reason            *string // away only; channel is empty
 }
 
 // ControlMsg finishes an Action: confirmed, refused or uncertain. An
@@ -523,13 +524,17 @@ type joinSwitch struct{ id, from, channel, ref string }
 func (m *Model) controlReady() bool {
 	switch {
 	case m.opts.Control == nil:
-		m.say(levelWarn, "Channel actions are not available in this view")
+		m.say(levelWarn, "Chat actions are not available in this view")
 	case !m.connected:
 		m.say(levelWarn, "Chat is disconnected")
 	case m.pending != nil && m.pending.uncertain:
-		m.say(levelWarn, "An earlier "+m.pending.Kind+" in "+m.pending.Channel+" is uncertain; reconnect to resolve it")
+		target := m.pending.Kind
+		if m.pending.Channel != "" {
+			target += " in " + m.pending.Channel
+		}
+		m.say(levelWarn, "An earlier "+target+" is uncertain; reconnect to resolve it")
 	case m.pending != nil || m.inflight != "":
-		m.say(levelWarn, "Another send or channel action is still unresolved")
+		m.say(levelWarn, "Another send or action is still unresolved")
 	default:
 		return true
 	}
@@ -562,20 +567,29 @@ func (m *Model) control(kind, channel string, topic *string) (tea.Cmd, bool) {
 // view of its channel existed, so a refused join leaves nothing behind.
 type pendingAction struct {
 	Action
-	uncertain bool
-	created   bool
+	uncertain         bool
+	created           bool
+	origin, draftText string
+	draftRevision     uint64
 }
 
 func (m *Model) controlDone(msg ControlMsg) {
 	if m.pending == nil || msg.ID != m.pending.ID {
 		return
 	}
-	kind, channel := m.pending.Kind, m.pending.Channel
-	what := map[string]string{"join": "Joining " + channel, "part": "Leaving " + channel, "topic-read": "Reading the topic of " + channel, "topic-set": "Setting the topic of " + channel, "topic-clear": "Clearing the topic of " + channel}[kind]
+	pending := *m.pending
+	kind, channel := pending.Kind, pending.Channel
+	what := map[string]string{"join": "Joining " + channel, "part": "Leaving " + channel, "topic-read": "Reading the topic of " + channel, "topic-set": "Setting the topic of " + channel, "topic-clear": "Clearing the topic of " + channel, "away": "Setting away", "back": "Setting back"}[kind]
 	switch msg.State {
 	case "confirmed":
 		m.pending = nil
 		switch kind {
+		case "away", "back":
+			m.within(pending.origin, func() {
+				if m.editor.text == pending.draftText && m.editor.revision == pending.draftRevision {
+					m.edit(m.editor.replace(0, len(m.editor.text), ""))
+				}
+			})
 		case "join":
 			// The stream may confirm before reporting membership; switch only
 			// once the view is actually joined.
@@ -610,7 +624,15 @@ func (m *Model) controlDone(msg ControlMsg) {
 		}
 	case "uncertain":
 		m.pending.uncertain = true
-		m.say(levelWarn, what+" is uncertain; inspect the channel before trying again")
+		if kind == "away" || kind == "back" {
+			m.ownState = "unknown"
+			m.ownReason = ""
+		}
+		advice := "inspect the channel before trying again"
+		if kind == "away" || kind == "back" {
+			advice = "reconnect before changing availability"
+		}
+		m.say(levelWarn, what+" is uncertain; "+advice)
 		if kind == "join" {
 			m.noticeOwner = noticeJoin
 			m.joinSwitch = joinSwitch{}
