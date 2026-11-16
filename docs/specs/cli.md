@@ -239,6 +239,8 @@ as `warn`) and `--color=auto|always|never` select what the shared log renderer
 shows and whether it colours; they override `YOLOCTL_LOG` (same values) and
 `YOLOCTL_DEBUG=1` (`debug`). `-v` prints the version.
 Data output (`--json`, receipts, streams) is not rendered by it. [26](#source-26)
+Pretty terminal logs wrap at the current column count with hanging detail
+indentation; unknown-width and non-terminal output stay unchanged. [35](#source-35)
 
 [FACT] When a collapsed host step had Lima output lines, its summary is
 followed by `full output: yoloctl space logs SPACE --host`. [32](#source-32)
@@ -341,3 +343,5 @@ the writable layer require their tool's cache command or explicit recreation
 33. <a id="source-33"></a> [Per-box caches](../digests/box-caches.md).
 
 34. <a id="source-34"></a> [Host box-file recovery](../digests/box-files.md).
+
+35. <a id="source-35"></a> [Terminal log wrapping](../digests/log-wrapping.md).

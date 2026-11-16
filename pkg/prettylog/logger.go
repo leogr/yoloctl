@@ -130,6 +130,11 @@ type Options struct {
 	// Emit opts into structured presentation instead of the byte destination.
 	// FormatWire ignores this field. Sinks must not reenter this Logger.
 	Emit EmissionSink
+
+	// TerminalWidth supplies current terminal columns for pretty text. Nil or
+	// nonpositive leaves text unwrapped. The caller must return zero for a
+	// non-terminal or unknown size; the Logger itself never reads a terminal.
+	TerminalWidth func() int
 }
 
 // Logger owns one sink: its writer, its fold state and its step ids. It is

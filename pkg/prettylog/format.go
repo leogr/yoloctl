@@ -254,6 +254,22 @@ type line struct {
 	col  int
 }
 
+func (l *Logger) terminalWidth() int {
+	if l.o.Format == FormatPretty && l.o.TerminalWidth != nil {
+		return l.o.TerminalWidth()
+	}
+	return 0
+}
+
+// prettyText keeps the prefix on the first line and all following text at its
+// detail column. Wrap uses the same ANSI-aware grapheme widths as StringWidth.
+func prettyText(head, text string, col, width int) string {
+	if width > col {
+		text = ansi.Wrap(text, width-col, "")
+	}
+	return head + strings.ReplaceAll(text, "\n", "\n"+strings.Repeat(" ", col))
+}
+
 // render formats a record that passed the filter. depth is its step depth.
 func (l *Logger) render(r slog.Record, st Structure, depth int) line {
 	t := r.Time
@@ -262,12 +278,13 @@ func (l *Logger) render(r slog.Record, st Structure, depth int) line {
 	}
 	ts := l.timestamp(t)
 	indent := strings.Repeat("  ", depth)
+	width := l.terminalWidth()
 	msg := escape(cut(r.Message, l.o.Limits.message()), true)
 	if st.Detail && !st.transition() {
 		dim := l.pal.Dim
 		lines := strings.Split(msg, "\n")
 		for i := range lines {
-			lines[i] = ts + indent + l.style(lines[i], dim, false)
+			lines[i] = prettyText(ts+indent, l.style(lines[i], dim, false), ansi.StringWidth(ts)+len(indent), width)
 		}
 		return line{text: strings.Join(lines, "\n"), col: ansi.StringWidth(ts) + len(indent)}
 	}
@@ -311,7 +328,6 @@ func (l *Logger) render(r slog.Record, st Structure, depth int) line {
 	}
 	msgLines := strings.Split(msg, "\n")
 	var b strings.Builder
-	b.WriteString(head)
 	b.WriteString(l.style(msgLines[0], textColor, bold))
 	if st.State == string(StepSkipped) && st.Reason != "" {
 		b.WriteString("  " + l.style(escape(st.Reason, false), l.pal.Dim, false))
@@ -322,14 +338,13 @@ func (l *Logger) render(r slog.Record, st Structure, depth int) line {
 	if took != "" {
 		b.WriteString("  " + l.style(took, l.pal.Dim, false))
 	}
-	cont := strings.Repeat(" ", col)
 	for _, m := range msgLines[1:] {
-		b.WriteString("\n" + cont + l.style(m, textColor, bold))
+		b.WriteString("\n" + l.style(m, textColor, bold))
 	}
 	for _, e := range errLines {
-		b.WriteString("\n" + cont + l.style(e, textColor, false))
+		b.WriteString("\n" + l.style(e, textColor, false))
 	}
-	return line{text: b.String(), col: col}
+	return line{text: prettyText(head, b.String(), col, width), col: col}
 }
 
 func (l *Logger) renderPlain(r slog.Record, st Structure, ts, indent, actor, msg, fields, took string, errLines []string) line {
@@ -394,7 +409,7 @@ func (l *Logger) summary(run *foldRun) string {
 	if pad < 0 {
 		pad = 0
 	}
-	return ts + strings.Repeat(" ", pad) + l.style(text, l.pal.Dim, false)
+	return prettyText(ts+strings.Repeat(" ", pad), l.style(text, l.pal.Dim, false), ansi.StringWidth(ts)+pad, l.terminalWidth())
 }
 
 func plural(n int, one, many string) string {

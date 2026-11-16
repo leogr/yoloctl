@@ -129,7 +129,8 @@ func Init(s Settings) *prettylog.Logger {
 	format, color := prettylog.DecideColor(os.Stderr, s.Color, os.Getenv, IsTerminal)
 	l := prettylog.New(os.Stderr, prettylog.Options{
 		Format: format, Color: color, Palette: palette, Verbosity: s.Verbosity,
-		ActorWidth: actorWidth, Fields: defaultFields, Fold: prettylog.FoldOptions{Window: foldWindow},
+		TerminalWidth: terminalWidth(os.Stderr),
+		ActorWidth:    actorWidth, Fields: defaultFields, Fold: prettylog.FoldOptions{Window: foldWindow},
 	})
 	installLocked(l, s)
 	return l
@@ -228,7 +229,8 @@ func NewFollowLogger(w io.Writer, s Settings, key func(slog.Record) (string, boo
 	mu.Unlock()
 	return prettylog.New(w, prettylog.Options{
 		Format: format, Color: color, Palette: p, Verbosity: s.Verbosity, Time: prettylog.TimeClock,
-		ActorWidth: actorWidth, Fields: defaultFields, Fold: prettylog.FoldOptions{Window: foldWindow, Key: key},
+		TerminalWidth: terminalWidth(w),
+		ActorWidth:    actorWidth, Fields: defaultFields, Fold: prettylog.FoldOptions{Window: foldWindow, Key: key},
 	})
 }
 
@@ -249,4 +251,20 @@ func SetPalette(p prettylog.Palette) {
 func IsTerminal(w io.Writer) bool {
 	f, ok := w.(interface{ Fd() uintptr })
 	return ok && term.IsTerminal(int(f.Fd()))
+}
+
+// Query only terminal columns, anew for every rendered write, so resizing does
+// not leave the logger using its launch width. Files and failed probes opt out.
+func terminalWidth(w io.Writer) func() int {
+	return func() int {
+		if !IsTerminal(w) {
+			return 0
+		}
+		f := w.(interface{ Fd() uintptr })
+		width, _, err := term.GetSize(int(f.Fd()))
+		if err != nil {
+			return 0
+		}
+		return width
+	}
 }

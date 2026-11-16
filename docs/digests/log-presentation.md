@@ -15,7 +15,7 @@ kind has one glyph (`✗ ! • › ✓ ? · ○`) and one plain prefix (`error:`
 [FACT] Pretty lines are `glyph actor[ · executor]  message  fields  took`;
 plain lines are `[time ]prefix actor[/executor]: message fields (took)`,
 keeping the message's case. Controls in messages, keys, group names and values
-render as `\xNN`; a message newline becomes an aligned continuation line. An
+render as `\xNN`; a message newline becomes an aligned continuation line. Terminal width and hanging-wrap rules are in [terminal wrapping](log-wrapping.md). An
 `err` attribute is shown with its record at every verbosity, as a continuation
 line or `: err`. Display levels: `error` shows errors and uncertain results
 (failed and unknown outcomes included); `warn` adds warnings and every final
@@ -102,12 +102,12 @@ and the theme's `Warn` tone. [10](#source-10)
 
 1. <a id="source-1"></a> [Kinds and glyphs](../../pkg/prettylog/level.go#L104-L176) — `KindOf`, `kindOf`, `DefaultGlyphs`, `PlainPrefix`.
 2. <a id="source-2"></a> [Reserved parse](../../pkg/prettylog/structure.go#L26-L181) — `StructureOf`, `eachAttr`, `validReserved`, `apply`, `IsLossy`.
-3. <a id="source-3"></a> [Line grammar](../../pkg/prettylog/format.go#L50-L405) — `escape`, `cut`, `fieldsText`, `render`, `renderPlain`, `summary`.
-4. <a id="source-4"></a> [Logger](../../pkg/prettylog/logger.go#L43-L447) — `Verbosity`, `allows`, `wireAllows`, `New`, `Route`, `Close`, `emit`, `arm`, `endRun`, `handler`.
+3. <a id="source-3"></a> [Line grammar](../../pkg/prettylog/format.go#L50-L420) — `escape`, `cut`, `fieldsText`, `render`, `renderPlain`, `summary`.
+4. <a id="source-4"></a> [Logger](../../pkg/prettylog/logger.go#L43-L458) — `Verbosity`, `allows`, `wireAllows`, `New`, `Route`, `Close`, `emit`, `arm`, `endRun`, `handler`.
 5. <a id="source-5"></a> [Steps and Tracker](../../pkg/prettylog/tracker.go#L71-L311) — `Apply`, `restore`, `lineCost`, `addLine`, `victim`, `Snapshot`; step.go `StartStep`, `Detail`, `end`.
 6. <a id="source-6"></a> [Wire](../../pkg/prettylog/wire.go#L19-L328) — `Opaque`, `MarshalRecord`, `UnmarshalRecord`, `atEOF`, `writeWire`, `WireReader.Next`.
 7. <a id="source-7"></a> [Colour](../../pkg/prettylog/color.go#L38-L140) — `ANSIPalette`, `sgr`, `DecideColor`, `BackgroundFrom`.
-8. <a id="source-8"></a> [Adapter](../../internal/logging/logging.go#L79-L252) — `LogLevels`, `ParseLogLevel`, `FromEnv`, `Init`, `InitWorker`, `InitFile`, `SetLogger`, `SetPalette`; logtheme/logtheme.go `Palette`, `SetBackground`; spaceview visual.go `Color.Spec`.
+8. <a id="source-8"></a> [Adapter](../../internal/logging/logging.go#L79-L270) — `LogLevels`, `ParseLogLevel`, `FromEnv`, `Init`, `InitWorker`, `InitFile`, `SetLogger`, `SetPalette`; logtheme/logtheme.go `Palette`, `SetBackground`; spaceview visual.go `Color.Spec`.
 9. <a id="source-9"></a> [Root flags](../../cmd/yoloctl/logflags.go#L15-L81) — `addLogFlags`, `logSettings`, `renderCLIError`, `executeRoot`; main.go calls `executeRoot`.
 10. <a id="source-10"></a> [Holder and chat](../../internal/session/holder.go#L229) — `agentLaunchSummary` (L642); chatui view.go `noticeRuns`, transcript.go error and delivery labels.
 11. <a id="source-11"></a> [Rendering regressions](../../pkg/prettylog/render_test.go#L1-L160) — pretty/plain goldens, escaping, colour, quiet and error levels, `DecideColor` table; fold, blocking writer and interleaving in behavior_test.go.
