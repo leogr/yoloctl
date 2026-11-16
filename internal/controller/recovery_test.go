@@ -34,6 +34,7 @@ func TestRecoveryEvidenceThroughRealWorker(t *testing.T) {
 	}{
 		{"complete-kill", "recovered", DispositionRecordedCompletion, true, 3},
 		{"complete-ungated", "recovered", DispositionRecordedCompletion, false, 3},
+		{"complete-ungated-delayed-kill", "recovered", DispositionRecordedCompletion, false, 3},
 		{"complete-uncertain", "interrupted", "", true, 0},
 		{"complete-uncertain-hold", "interrupted", "", true, 0},
 		{"proof-kill", "interrupted", "", true, 0},

@@ -68,6 +68,9 @@ func TestMain(m *testing.M) {
 		}
 		released := os.NewFile(4, "release")
 		finishExit := func(code int) { _, _ = released.Write([]byte{checkpointFinish}); os.Exit(code) }
+		killSelf := func() {
+			killTestWorker(finishExit, func() error { return syscall.Kill(os.Getpid(), syscall.SIGKILL) })
+		}
 		if len(work.Request.Args) > 0 && work.Request.Args[0] == "recording-matrix" {
 			checkpoints := NewWorkerCheckpoints(released)
 			checkpoints.Gate()
@@ -220,12 +223,12 @@ func TestMain(m *testing.M) {
 				_, _ = os.Stdout.Write([]byte("running"))
 				time.Sleep(time.Minute)
 			case "kill":
-				_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+				killSelf()
 			case "panic":
 				panic("synthetic worker panic after effect")
 			case "setup-kill":
 				_ = checkpoints.Release()
-				_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+				killSelf()
 			case "uncertain":
 				_ = checkpoints.FinishUncertain()
 				os.Exit(2)
@@ -244,17 +247,31 @@ func TestMain(m *testing.M) {
 			if action == "proof-kill" {
 				verifier = VerifierAccountDocument
 			}
-			if action == "complete-ungated" {
+			if action == "complete-ungated" || action == "complete-ungated-delayed-kill" {
 				checkpoints = NewWorkerCheckpoints(released)
 			} else if err := checkpoints.BeginEffects(context.Background(), EffectIntent{Scope: scope, Verifier: verifier}); err != nil {
 				finishExit(2)
 			}
 			switch action {
-			case "complete-kill", "complete-ungated":
+			case "complete-kill", "complete-ungated", "complete-ungated-delayed-kill":
 				if err := checkpoints.CompleteEffects(context.Background(), 3); err != nil {
 					finishExit(2)
 				}
-				_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+				if action == "complete-ungated-delayed-kill" {
+					// Model a platform accepting the signal before process death.
+					killTestWorker(finishExit, func() error {
+						go func() {
+							time.Sleep(100 * time.Millisecond)
+							if err := syscall.Kill(os.Getpid(), syscall.SIGKILL); err != nil {
+								fmt.Fprintln(os.Stderr, "delayed fixture self-kill:", err)
+								finishExit(96)
+							}
+						}()
+						return nil
+					})
+				} else {
+					killSelf()
+				}
 			case "complete-uncertain", "complete-uncertain-hold":
 				if err := checkpoints.CompleteEffects(context.Background(), 0); err != nil {
 					finishExit(2)
@@ -271,12 +288,12 @@ func TestMain(m *testing.M) {
 				if err := checkpoints.RecordDocument(context.Background(), d); err != nil {
 					finishExit(2)
 				}
-				_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+				killSelf()
 			case "expand-kill":
 				if err := checkpoints.ExpandEffects(context.Background(), []Resource{{Kind: ResourceImages}}); err != nil {
 					finishExit(2)
 				}
-				_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+				killSelf()
 			case "proof-refused":
 				// Without a verifier the controller refuses the proof; the
 				// worker reports it and completes normally.
@@ -288,7 +305,7 @@ func TestMain(m *testing.M) {
 			}
 			finishExit(95)
 		case "test.signal":
-			_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+			killSelf()
 			finishExit(96)
 		case "test.echo":
 			_, _ = io.Copy(os.Stdout, os.Stdin)
@@ -416,5 +433,19 @@ func TestWorkerCancellationStopsProcess(t *testing.T) {
 	code, err := RunWorker(ctx, Principal{}, Request{Method: "test.cancel"}, Streams{In: strings.NewReader(""), Out: io.Discard, Err: io.Discard, Release: func() error { cancel(); return nil }})
 	if code == 0 && err == nil {
 		t.Fatal("cancelled worker succeeded")
+	}
+}
+
+// A successful signal send is not a wait for process death. Never fall through
+// to checkpointFinish while a posted SIGKILL is being delivered on another
+// thread (notably Darwin); the real-worker tests own process settlement.
+func killTestWorker(finishExit func(int), send func() error) {
+	if err := send(); err != nil {
+		fmt.Fprintln(os.Stderr, "fixture self-kill:", err)
+		finishExit(96) // Ordinary failure must not masquerade as a recovered crash.
+		return
+	}
+	for {
+		time.Sleep(time.Hour)
 	}
 }

@@ -26,6 +26,7 @@ import (
 )
 
 var (
+	followGetwd       = os.Getwd
 	followRun         = followview.Run
 	followHostAllowed = func() error {
 		if spaceenv.Native() || os.Getenv(spaceenv.ContextEnv) != "" {
@@ -120,7 +121,7 @@ and q closes the view. A failed read retains the last display marked stale.
 		var reader followview.Reader
 		if host {
 			// A title base is optional for an already absolute host target.
-			workdir, _ = os.Getwd()
+			workdir, _ = followGetwd()
 			path, err = absoluteFollowPath(args[0], workdir)
 			reader = followview.HostReader{Path: path}
 		} else {

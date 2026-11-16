@@ -85,7 +85,7 @@ and light themes. [7](#source-7) [8](#source-8)
 
 ## Sources
 
-1. <a id="source-1"></a> [CLI and completion](../../cmd/yoloctl/follow.go#L66) — `newFollowCmd`, `absoluteFollowPath`, `currentFollowGrants`, `completeFollowPaths`.
+1. <a id="source-1"></a> [CLI and completion](../../cmd/yoloctl/follow.go#L68) — `newFollowCmd`, `absoluteFollowPath`, `currentFollowGrants`, `completeFollowPaths`.
 2. <a id="source-2"></a> [Sources and transport](../../internal/followview/source.go#L26) — limits, `HostReader.Read`, `VMReader.Read`, `VMReader.call`, `Within`.
 3. <a id="source-3"></a> [VM descriptor reader](../../internal/followview/reader.py#L15) — `open_directory`, `open_selected`, `read`, `listing`.
 4. <a id="source-4"></a> [View and job ownership](../../internal/followview/model.go#L51) — `renderFile`, `jobs`, `Model.Update`, `scroll`, `View`, `Run`.

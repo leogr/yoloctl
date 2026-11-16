@@ -19,8 +19,10 @@ import (
 
 func followSeams(t *testing.T) {
 	t.Helper()
+	oldGetwd := followGetwd
 	oldHost, oldInteractive, oldRun, oldDefault, oldGrants, oldCommand := followHostAllowed, followInteractive, followRun, followDefault, followGrants, followCommand
 	t.Cleanup(func() {
+		followGetwd = oldGetwd
 		followHostAllowed, followInteractive, followRun, followDefault, followGrants, followCommand = oldHost, oldInteractive, oldRun, oldDefault, oldGrants, oldCommand
 	})
 	followHostAllowed = func() error { return nil }
@@ -302,13 +304,12 @@ func TestFollowAbsoluteAndHomeTargetsSurviveUnavailableTitleBase(t *testing.T) {
 
 func TestHostAbsoluteFollowSurvivesUnavailableLaunchDirectory(t *testing.T) {
 	followSeams(t)
-	removed := t.TempDir()
-	t.Chdir(removed)
-	if err := os.Remove(removed); err != nil {
-		t.Skipf("cannot unlink current-directory fixture: %v", err)
-	}
-	if _, err := os.Getwd(); err == nil {
-		t.Fatal("fixture did not make the launch directory unavailable")
+	// Unlinking cwd does not portably make Getwd fail (Darwin can still
+	// resolve it). Inject the unavailable lookup, not filesystem semantics.
+	lookups := 0
+	followGetwd = func() (string, error) {
+		lookups++
+		return "", &os.PathError{Op: "getwd", Path: ".", Err: os.ErrNotExist}
 	}
 	var selected followview.Options
 	followRun = func(_ context.Context, opts followview.Options) error { selected = opts; return nil }
@@ -316,7 +317,7 @@ func TestHostAbsoluteFollowSurvivesUnavailableLaunchDirectory(t *testing.T) {
 	if err := executeFollow(t, "--host", path); err != nil {
 		t.Fatal(err)
 	}
-	if selected.Path != path || selected.Workdir != "" {
-		t.Fatalf("host absolute fallback differs: %+v", selected)
+	if lookups != 1 || selected.Path != path || selected.Workdir != "" {
+		t.Fatalf("host absolute fallback differs: %+v, lookups %d", selected, lookups)
 	}
 }
