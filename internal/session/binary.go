@@ -36,9 +36,7 @@ func EnsureVMBinary(ctx context.Context, c *container.Client) error {
 }
 
 func ensureVMBinaryFrom(ctx context.Context, c *container.Client, self string) error {
-	probeCtx, cancel := context.WithTimeout(ctx, vmhost.GuestProbeTimeout)
-	out, err := c.ShellOutput(probeCtx, "sh", "-c", probeVMBinaryScript, "yoloctl-probe", VMBinaryPath)
-	cancel()
+	out, err := binaryInstallProbe(ctx, c.ShellOutput, "sh", "-c", probeVMBinaryScript, "yoloctl-probe", VMBinaryPath)
 	if err != nil {
 		return fmt.Errorf("session: probe VM binary: %w", err)
 	}
@@ -73,9 +71,7 @@ func ensureVMBinaryFrom(ctx context.Context, c *container.Client, self string) e
 		return fmt.Errorf("session: copy yoloctl into VM: %w", err)
 	}
 	if artifact.dynamic {
-		checkCtx, cancel := context.WithTimeout(ctx, vmhost.GuestProbeTimeout)
-		out, err := c.ShellOutput(checkCtx, "sh", "-c", checkVMBinaryScript, "yoloctl-check", staging, artifact.sum, BinaryCheckArgument)
-		cancel()
+		out, err := binaryInstallProbe(ctx, c.ShellOutput, "sh", "-c", checkVMBinaryScript, "yoloctl-check", staging, artifact.sum, BinaryCheckArgument)
 		if err != nil || strings.TrimSpace(out) != BinaryCheckResponse {
 			return fmt.Errorf("session: Linux executable cannot run in this VM (loader/library check: %v, response %q); rebuild with CGO_ENABLED=0 go build or make build", err, strings.TrimSpace(out))
 		}
@@ -84,6 +80,18 @@ func ensureVMBinaryFrom(ctx context.Context, c *container.Client, self string) e
 		return fmt.Errorf("session: install yoloctl in VM: %w", err)
 	}
 	return nil
+}
+
+// binaryInstallProbe retains caller cancellation and earlier deadlines while
+// allowing a silent full hash or loader check its installation-specific budget.
+func binaryInstallProbe(ctx context.Context, shell func(context.Context, ...string) (string, error), argv ...string) (string, error) {
+	probe, cancel := context.WithTimeout(ctx, vmhost.BinaryInstallProbeTimeout)
+	defer cancel()
+	out, err := shell(probe, argv...)
+	if probe.Err() != nil {
+		return out, probe.Err()
+	}
+	return out, err
 }
 
 const probeVMBinaryScript = `set -eu

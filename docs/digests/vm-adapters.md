@@ -75,6 +75,15 @@ Private sockets and pinned SSH keys authenticate transport.
 `box exec` uses the same native client over its controller-authorized OpenShell
 proxy. [31](#source-31)
 
+[FACT] Firecracker start waits for the guest ready-file probe, with a two-minute
+output inactivity window instead of a total boot deadline. Validated current
+private log growth or a nonempty rotated generation renews it; retained history,
+empty replacement and truncation alone do not. Helper exit, a proved dead VMM
+owned by this launch, and caller cancellation remain distinct failures. Storage
+pause retains the live runtime before destructive cleanup. Noisy output can
+prolong waiting; silence can expire without proving a hung guest.
+[9](#source-9) [12](#source-12) [46](#source-46)
+
 [FACT] Each host grant is served from its own `os.Root`; the share digest
 records read-only, symlink, descriptor and parent-sync limits. SSHFS disables
 caching so catalog snapshots observe replacements. Native accounts and
@@ -174,3 +183,5 @@ not Firecracker/KVM behavior. The adapter boots fresh; snapshots remain experime
 43. <a id="source-43"></a> [Nested resolution](../../internal/vmapi/nested_virtualization.go#L1) — `ResolveNestedVirtualization`, `NestedHostFacts.Eligible`; verified with accompanying changes on fc48bca3.
 44. <a id="source-44"></a> [Lima resource update](../../internal/lima/resources.go#L1) — `SetInstanceResources`, `setResourcesInYAML` guarded explicit boolean update.
 45. <a id="source-45"></a> [Host boot and display](../../cmd/yoloctl/space_nested_virtualization.go#L1) — `applySpaceBootResources`, `nestedBootNotice`, `fillNestedSpaceShow`.
+
+46. <a id="source-46"></a> [Boot activity](../../internal/firecracker/boot_activity_linux.go#L1) — `bootActivity`, `bootLogStat`; validated rotating generations.

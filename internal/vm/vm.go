@@ -25,6 +25,7 @@ type Spec = vmapi.Spec
 type Resources = vmapi.Resources
 
 const GuestProbeTimeout = lima.GuestProbeTimeout
+const BinaryInstallProbeTimeout = lima.BinaryInstallProbeTimeout
 const DefaultBinary = lima.DefaultBinary
 
 var registry = struct {

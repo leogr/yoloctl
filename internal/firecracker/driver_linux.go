@@ -281,22 +281,48 @@ func (d Driver) Start(ctx context.Context, name string) error {
 		return e
 	}
 	defer func() { _ = log.Close() }()
+	activity, e := newBootActivity(filepath.Join(dir, "vm.log"), time.Now())
+	if e != nil {
+		return e
+	}
 	helper := exec.Command(exe, "vm-internal", "helper", name)
 	helper.Stdout, helper.Stderr = log, log
 	helper.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	activity.last = time.Now()
 	if e = helper.Start(); e != nil {
 		return e
 	}
 	done := make(chan error, 1)
 	go func() { done <- helper.Wait() }()
-	ready, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
+	ready, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	owner, identityErr := identity(helper.Process.Pid)
+	if identityErr != nil {
+		cancel(fmt.Errorf("observe launched helper: %w", identityErr))
+	}
+	published := false
 	for {
+		if err := activity.observe(filepath.Join(dir, "vm.log"), time.Now()); err != nil {
+			cancel(err)
+		}
+		if err := bootVMAlive(dir, owner, &published); err != nil {
+			cancel(err)
+		}
 		probe, stop := context.WithTimeout(ready, time.Second)
 		out, err := d.Shell(probe, name, "", []string{"test", "-f", "/run/yoloctl-vm/ready"}).CombinedOutput()
 		stop()
-		if err == nil {
-			return nil
+		select {
+		case e := <-done:
+			return fmt.Errorf("VM helper exited (%v); inspect %s: %s", e, filepath.Join(dir, "vm.log"), out)
+		default:
+		}
+		if err == nil && ready.Err() == nil {
+			if err := bootVMAlive(dir, owner, &published); err != nil {
+				cancel(err)
+			}
+			if ready.Err() == nil {
+				return nil
+			}
 		}
 		// A paused boot remains live with its RAM intact. Never turn storage
 		// pressure into forced termination at the normal readiness deadline.
@@ -309,29 +335,23 @@ func (d Driver) Start(ctx context.Context, name string) error {
 		case e := <-done:
 			return fmt.Errorf("VM helper exited (%v); inspect %s: %s", e, filepath.Join(dir, "vm.log"), out)
 		case <-ready.Done():
-			// The caller may already be canceled. Use a separate bounded read
-			// before destroying a child which the storage guard may have paused.
-			if s, err := readState(dir); err == nil {
-				if err = checkHostStoragePause(context.WithoutCancel(ctx), s); err != nil {
-					return errors.Join(ready.Err(), err)
-				}
-			}
-			// The helper can still be preparing boot media before runtime.json
-			// exists. Stop the process we launched even in that publication gap.
-			_ = helper.Process.Signal(syscall.SIGTERM)
-			select {
-			case <-done:
-			case <-time.After(5 * time.Second):
-				_ = helper.Process.Kill()
+			cleanupErr := settleBootFailure(context.WithoutCancel(ctx), dir, owner, published, func() error {
+				// Only signal the child launched by this Start, even before publication.
+				_ = helper.Process.Signal(syscall.SIGTERM)
 				select {
 				case <-done:
 				case <-time.After(5 * time.Second):
-					return errors.Join(ready.Err(), errors.New("VM helper termination could not be established"))
+					_ = helper.Process.Kill()
+					select {
+					case <-done:
+					case <-time.After(5 * time.Second):
+						return errors.New("VM helper termination could not be established")
+					}
 				}
-			}
-			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			return errors.Join(ready.Err(), d.Stop(cleanup, name, true))
+				return nil
+			}, func(cleanup context.Context) error { return d.Stop(cleanup, name, true) })
+			return errors.Join(context.Cause(ready), cleanupErr)
+
 		case <-time.After(10 * time.Millisecond):
 		}
 	}

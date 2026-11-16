@@ -18,7 +18,10 @@ pass a bounded guest startup check before installation. That internal check
 returns before configuration initialization. Non-Linux hosts require a verified
 bundle. [10](#source-10) [13](#source-13) [28](#source-28)
 
-[FACT] One guest probe reads architecture and installed hash. Matching content
+[FACT] Installation architecture/full-hash and dynamic-loader probes each have a
+two-minute total budget; caller cancellation or an earlier deadline wins. Silent
+output does not renew this budget. Ordinary diagnostic probes remain ten seconds.
+One guest probe reads architecture and installed hash. Matching content
 skips transfer; otherwise an exclusively created private staging directory,
 checksum verification and atomic rename preserve live holder inodes. Cleanup
 uses a locally generated path, never parsed remote stdout. The holder still runs

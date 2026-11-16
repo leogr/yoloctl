@@ -3,6 +3,7 @@
 package firecracker
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/safepath"
 	"golang.org/x/sys/unix"
@@ -136,4 +138,79 @@ func lockFile(path string) (*os.File, error) {
 		return nil, fmt.Errorf("VM or disk is in use: %w", e)
 	}
 	return f, nil
+}
+
+// Only this helper's published record can establish death of its VMM. Missing
+// prepublication state and a prior boot's record are not evidence of death.
+func bootVMAlive(dir string, owner process, published *bool) error {
+	s, err := readState(dir)
+	if errors.Is(err, os.ErrNotExist) && !*published {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("observe boot runtime: %w", err)
+	}
+	if s.Helper != owner || owner.Start == "" {
+		if *published {
+			return errors.New("boot runtime ownership changed")
+		}
+		return nil
+	}
+	*published = true
+	if s.VM.PID == 0 {
+		return nil
+	}
+	live, err := s.VM.alive()
+	if err != nil {
+		return fmt.Errorf("observe boot VMM: %w", err)
+	}
+	if !live {
+		return errors.New("VM process exited before readiness")
+	}
+	return nil
+}
+
+// settleBootFailure is shared by idle/cancellation/observation failure. Before
+// publication an old record is unrelated to this Start's exact child: settle
+// that child, then only stop a runtime it actually published. After publication
+// losing ownership is uncertain, so retain it rather than signal a peer.
+func settleBootFailure(ctx context.Context, dir string, owner process, published bool, terminate func() error, stop func(context.Context) error) error {
+	s, err := readState(dir)
+	if err != nil && (!errors.Is(err, os.ErrNotExist) || published) {
+		return err
+	}
+	if err == nil {
+		if s.Helper == owner {
+			if err := checkHostStoragePause(ctx, s); err != nil {
+				return err
+			}
+			published = true
+		} else if published {
+			return errors.New("boot runtime ownership changed; retaining runtime")
+		}
+	}
+	if err := terminate(); err != nil {
+		return err
+	}
+	// Preparation could publish between the first observation and termination.
+	// Re-read after exact child settlement instead of ever stopping the old record.
+	s, err = readState(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if s.Helper != owner {
+		if published {
+			return errors.New("boot runtime ownership changed after helper settlement")
+		}
+		return nil
+	}
+	if err := checkHostStoragePause(ctx, s); err != nil {
+		return err
+	}
+	cleanup, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return stop(cleanup)
 }
