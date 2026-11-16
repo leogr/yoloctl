@@ -174,7 +174,9 @@ esac
 			return os.WriteFile(filepath.Join(bin, "started"), nil, 0o600)
 		}}, true, nil
 	}
-	t.Cleanup(func() { prepareNativeExistingStart = restore })
+	restoreFirst := legacyRuntimeFirst
+	legacyRuntimeFirst = func(context.Context, *container.Client, string, string) error { return nil }
+	t.Cleanup(func() { prepareNativeExistingStart, legacyRuntimeFirst = restore, restoreFirst })
 	return filepath.Join(bin, "calls")
 }
 

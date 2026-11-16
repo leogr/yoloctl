@@ -151,13 +151,20 @@ func legacyRuntimeRunning(cmd *cobra.Command, target controllerTarget, box strin
 
 // offerLegacyRecreate runs after a selected request for a pre-native box
 // failed and its refusal was printed. It asks only a person at the terminal,
-// only when a fresh read shows the box pre-native and stopped (the refusal
-// stopped it, or found it stopped); a read that fails or shows it running (an
-// unconfirmed stop) asks nothing. A yes sends one ordinary `box recreate NAME
-// --force --no-attach`; the original request is never sent again. A no, EOF
-// or any other case keeps the refusal.
+// only for the known outcome the worker typed on its final record (a
+// pre-native refusal whose box a read showed stopped: ExitError.Remedy, with
+// no uncertain state), and only when a fresh read still shows the box
+// pre-native and stopped. A lost reply, an unknown result, an unrelated error
+// or an unconfirmed stop asks nothing and is returned unchanged, whatever a
+// later read shows. A yes sends one ordinary `box recreate NAME --force
+// --no-attach --legacy-remedy`; the original request is never sent again. A
+// no, EOF or any other case keeps the refusal.
 func offerLegacyRecreate(cmd *cobra.Command, target controllerTarget, box string, noAutoupdate bool, refusal error) error {
-	if refusal == nil || !recreateOfferInteractive(cmd) || cmd.Context().Err() != nil {
+	var exit *controller.ExitError
+	if refusal == nil || !errors.As(refusal, &exit) || exit.State != "" || exit.Remedy != remedyLegacyRecreate {
+		return refusal
+	}
+	if !recreateOfferInteractive(cmd) || cmd.Context().Err() != nil {
 		return refusal
 	}
 	id, ok := readLegacyIdentity(cmd, target, box)
@@ -171,7 +178,7 @@ func offerLegacyRecreate(cmd *cobra.Command, target controllerTarget, box string
 	if !yes {
 		return refusal
 	}
-	return sendOfferedRecreate(cmd, target, box, noAutoupdate)
+	return sendRecreate(cmd, target, box, noAutoupdate, true)
 }
 
 // legacyRecreatePrompt is the one confirmation for a pre-native box.
@@ -201,7 +208,17 @@ func launcherRecreateOffered(id inspectIdentity, manifest *inspectManifest, drif
 // approved: `box recreate NAME --force --no-attach`; the caller then sends
 // its original request unchanged, only if this one succeeded.
 func sendOfferedRecreate(cmd *cobra.Command, target controllerTarget, box string, noAutoupdate bool) error {
+	return sendRecreate(cmd, target, box, noAutoupdate, false)
+}
+
+// sendRecreate sends that recreate; legacyRemedy marks one accepted from the
+// pre-native remedy, whose failure after its replacement started stops that
+// exact run.
+func sendRecreate(cmd *cobra.Command, target controllerTarget, box string, noAutoupdate, legacyRemedy bool) error {
 	flags := map[string][]string{"force": {"true"}, "no-attach": {"true"}}
+	if legacyRemedy {
+		flags[legacyRemedyFlag] = []string{"true"}
+	}
 	if noAutoupdate {
 		flags["no-autoupdate"] = []string{"true"}
 	}

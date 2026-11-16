@@ -54,6 +54,9 @@ const (
 	KeyOmitted   = "omitted"
 	KeyOverflow  = "overflow"
 	KeyTruncated = "truncated"
+	// KeyRemedy on an outcome record names a known, typed remedy for its
+	// failure (for example "legacy-recreate"); it is never shown as a field.
+	KeyRemedy = "remedy"
 )
 
 // Outcome marks a record as the final outcome of a command.

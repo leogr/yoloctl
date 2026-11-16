@@ -41,6 +41,10 @@ type ExitError struct {
 	// failure that holds nothing); empty for a known result. Message keeps
 	// the existing wording.
 	State string
+	// Remedy is the typed remedy the worker's last explicit outcome record
+	// named for a known failure (State empty), for example
+	// "legacy-recreate"; empty otherwise. It is never parsed from text.
+	Remedy string
 }
 
 // clientLogStreams picks where relayed records go when the caller chose no
@@ -179,6 +183,7 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 	streams = clientLogStreams(streams)
 	logSink := streams.Log
 	rendered, logFailed := false, false
+	remedy := "" // typed remedy of the last explicit outcome record
 	credits := make(chan struct{}, 8)
 	for range cap(credits) {
 		credits <- struct{}{}
@@ -314,8 +319,13 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 				logFailed = true
 				reportLogError(streams, handleErr)
 			}
-			if outcome := prettylog.StructureOf(record).Outcome; outcome != "" {
+			if structure := prettylog.StructureOf(record); structure.Outcome != "" {
+				outcome := structure.Outcome
 				rendered = handleErr == nil && (outcome == string(prettylog.OutcomeFailed) || outcome == string(prettylog.OutcomeUnknown))
+				remedy = ""
+				if outcome == string(prettylog.OutcomeFailed) {
+					remedy = structure.Remedy
+				}
 			}
 		case "exit":
 			if f.ImageRetryJob != "" {
@@ -327,7 +337,11 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 			if f.State != "" && f.State != "interrupted" && f.State != "uncertain" && f.State != "command-uncertain" {
 				return &OutcomeUnknown{ID: req.ID, Cause: errors.New("unexpected controller result state"), Method: req.Method, Space: req.Space}
 			}
-			return &ExitError{Status: f.Status, Message: f.Error, Rendered: rendered, State: f.State}
+			exit := &ExitError{Status: f.Status, Message: f.Error, Rendered: rendered, State: f.State}
+			if f.State == "" && f.Status != 0 {
+				exit.Remedy = remedy // a known failure only, never an unknown result
+			}
+			return exit
 		case "detached":
 			return &ClientDetached{ID: req.ID, Signal: f.Signal, Owned: f.Owned}
 		default:

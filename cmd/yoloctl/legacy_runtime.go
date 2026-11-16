@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
 // legacyRuntimeRefusal is the remedy for an operation that needed a new run of
@@ -15,6 +17,9 @@ import (
 type legacyRuntimeRefusal struct {
 	msg    string
 	legacy *agentbox.LegacyRuntimeError
+	// stopped: a read after the refusal (and after its own stop, if any)
+	// showed the box stopped. Only then is recreation offered.
+	stopped bool
 }
 
 func (e *legacyRuntimeRefusal) Error() string { return e.msg }
@@ -50,24 +55,39 @@ func refuseLegacyRun(ctx context.Context, c *container.Client, space, name strin
 	}
 	running, readErr := legacyRunning(ctx, c, name)
 	if readErr != nil {
-		return &legacyRuntimeRefusal{fmt.Sprintf("%s Its state could not be read: %v.%s", lead, readErr, saved), legacy}
+		return &legacyRuntimeRefusal{fmt.Sprintf("%s Its state could not be read: %v.%s", lead, readErr, saved), legacy, false}
 	}
 	if running && kind == legacyStart {
-		return &legacyRuntimeRefusal{fmt.Sprintf("%s It is running. Recreate it to continue: %s.", lead, legacy.RecreateCommand()), legacy}
+		return &legacyRuntimeRefusal{fmt.Sprintf("%s It is running. Recreate it to continue: %s.", lead, legacy.RecreateCommand()), legacy, false}
 	}
 	if running {
 		if stopErr := stopAgentboxRuntime(ctx, c, space, name, errw); stopErr != nil {
-			return &legacyRuntimeRefusal{fmt.Sprintf("%s Stopping it failed: %v.%s", lead, stopErr, saved), legacy}
+			return &legacyRuntimeRefusal{fmt.Sprintf("%s Stopping it failed: %v.%s", lead, stopErr, saved), legacy, false}
 		}
 		still, readErr := legacyRunning(ctx, c, name)
 		switch {
 		case readErr != nil:
-			return &legacyRuntimeRefusal{fmt.Sprintf("%s Its stop returned, but a read could not confirm that it stopped: %v.%s", lead, readErr, saved), legacy}
+			return &legacyRuntimeRefusal{fmt.Sprintf("%s Its stop returned, but a read could not confirm that it stopped: %v.%s", lead, readErr, saved), legacy, false}
 		case still:
-			return &legacyRuntimeRefusal{fmt.Sprintf("%s It is still running after its stop.%s", lead, saved), legacy}
+			return &legacyRuntimeRefusal{fmt.Sprintf("%s It is still running after its stop.%s", lead, saved), legacy, false}
 		}
 	}
-	return &legacyRuntimeRefusal{fmt.Sprintf("%s It is stopped. Recreate it to continue: %s.%s", lead, legacy.RecreateCommand(), saved), legacy}
+	return &legacyRuntimeRefusal{fmt.Sprintf("%s It is stopped. Recreate it to continue: %s.%s", lead, legacy.RecreateCommand(), saved), legacy, true}
+}
+
+// remedyLegacyRecreate is the typed remedy a worker's outcome record carries
+// for a known pre-native refusal whose box a read showed stopped.
+const remedyLegacyRecreate = "legacy-recreate"
+
+// outcomeRemedy returns the typed remedy attribute for an outcome record of
+// err: only a known pre-native refusal with a confirmed stopped box, never an
+// uncertain result; otherwise none.
+func outcomeRemedy(err error) []slog.Attr {
+	var refusal *legacyRuntimeRefusal
+	if err == nil || cliUncertain(err) || !errors.As(err, &refusal) || !refusal.stopped {
+		return nil
+	}
+	return []slog.Attr{slog.String(prettylog.KeyRemedy, remedyLegacyRecreate)}
 }
 
 // legacyRunning reads whether the box's container runs; an absent container
@@ -81,4 +101,55 @@ func legacyRunning(ctx context.Context, c *container.Client, name string) (bool,
 		return false, err
 	}
 	return details.Running, nil
+}
+
+// legacyRuntimeFirst classifies an existing container's actual runtime before
+// the generic recreate-drift refusals, so a pre-native box always takes its
+// own remedy (a restart stops it) instead of a drift refusal that leaves it as
+// it is. It only reads: an absent container, a failed read, and native or
+// uncertain native evidence return nil and leave the existing checks to
+// decide; native drift preservation is unchanged.
+// legacyRuntimeFirst is actualLegacyRuntimeFirst; fixtures that model a
+// native box through seams replace it.
+var legacyRuntimeFirst = actualLegacyRuntimeFirst
+
+func actualLegacyRuntimeFirst(ctx context.Context, c *container.Client, space, name string) error {
+	details, err := c.Inspect(ctx, name)
+	if err != nil {
+		return nil
+	}
+	if native, err := agentbox.NativeRuntimeRoute(details); err != nil || native {
+		return nil
+	}
+	if legacy, err := agentbox.LegacyRuntime(details); err != nil || !legacy {
+		return nil
+	}
+	return &agentbox.LegacyRuntimeError{Space: space, Box: name}
+}
+
+// legacyRemedyFlag marks the one box recreate the host sends after a person
+// accepted the pre-native recreation offer.
+const legacyRemedyFlag = "legacy-remedy"
+
+// exactRunStopSteps binds box start's result-policy rollback to the exact run
+// this operation started: a read showing another container, or another run of
+// it, is not stopped, and without a recorded identity nothing is stopped
+// either. The failure is reported, never hidden.
+func exactRunStopSteps(steps boxStopSteps, name string) boxStopSteps {
+	read := steps.read
+	steps.read = func(ctx context.Context) (boxTarget, error) {
+		target, err := read(ctx)
+		if err != nil || !target.Present {
+			return target, err
+		}
+		started, ok := container.ExpectedRunsFrom(ctx).Expected(name)
+		switch {
+		case !ok || started.ID == "":
+			return boxTarget{}, fmt.Errorf("the identity of the replacement this recreate started is unknown, so box %s was not stopped", name)
+		case started.ID != target.ID:
+			return boxTarget{}, fmt.Errorf("box %s is now another container than the replacement this recreate started, so it was not stopped", name)
+		}
+		return target, nil
+	}
+	return steps
 }

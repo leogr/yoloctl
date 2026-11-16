@@ -805,6 +805,10 @@ func startAgentboxCore(cmd *cobra.Command, spaceName, name string, noAutoupdate,
 	// Refuse recreate-only drift before any image work: the same read-only
 	// check repeats after preflight as the race guard.
 	if stopped {
+		// A pre-native box takes its own remedy before any drift refusal.
+		if err := legacyRuntimeFirst(cmd.Context(), c, spaceName, name); err != nil {
+			return refuseLegacyRun(cmd.Context(), c, spaceName, name, errw, err, legacyStart)
+		}
 		if err := refuseRecreateBeforeImageWork(cmd.Context(), spaceName, cfg); err != nil {
 			return err
 		}
@@ -2353,8 +2357,13 @@ func preflightAgentboxRestart(ctx context.Context, c *container.Client, space, n
 	if err != nil {
 		return err
 	}
-	// Refuse recreate-only drift before preflight's image work; the check
-	// after preflight stays as the race guard.
+	// A pre-native box is classified first: its restart stops it and takes
+	// its own remedy, whatever its drift. Then refuse recreate-only drift
+	// before preflight's image work; the check after preflight stays as the
+	// race guard.
+	if err := legacyRuntimeFirst(ctx, c, space, name); err != nil {
+		return err
+	}
 	if err := refuseRecreateBeforeImageWork(ctx, space, cfg); err != nil {
 		return err
 	}
@@ -2589,6 +2598,10 @@ base, run ` + "`yoloctl image refresh`" + ` and then
 	cmd.Flags().BoolVar(&noAutoupdate, "no-autoupdate", false, "Skip the post-create npm install -g <pkg>@latest that brings the agent CLI to current registry-latest")
 	addPassthroughFlag(cmd)
 	cmd.Flags().BoolVar(&noAttach, "no-attach", false, "Skip the automatic attach to the box's session when the command finishes")
+	// Set only by the host's pre-native recreation offer: a failure after the
+	// replacement started stops that exact run. It grants nothing.
+	cmd.Flags().Bool(legacyRemedyFlag, false, "Stop the exact replacement this recreate started if a later step fails (pre-native remedy)")
+	_ = cmd.Flags().MarkHidden(legacyRemedyFlag)
 	return cmd
 }
 
@@ -2660,21 +2673,31 @@ func recreateAgentbox(cmd *cobra.Command, spaceName, name string, force, noAutou
 		return err
 	}
 	applier := newManagedLiveApplier(c, errw)
-	if err := applier.Recreate(recreateCacheContext(cmd, name), cfg, policy); err != nil {
-		return fmt.Errorf("recreate %s: %w", name, err)
-	}
-	// The old container, its holder and its agent are gone: a launched or
-	// interrupted resume closes; the conversation stays current.
-	if err := applySessionStart(lock, tracking, true, false, errw); err != nil {
-		return err
-	}
-
-	if !noAutoupdate {
-		if err := autoupdateAgentboxIfNeeded(cmd.Context(), c, name, cfg.Agent, errw, updated); err != nil {
-			return fmt.Errorf("autoupdate %s: %w", name, err)
+	create := func(ctx context.Context) error {
+		if err := applier.Recreate(recreateCacheContextFrom(ctx, cmd, name), cfg, policy); err != nil {
+			return fmt.Errorf("recreate %s: %w", name, err)
 		}
+		// The old container, its holder and its agent are gone: a launched or
+		// interrupted resume closes; the conversation stays current.
+		if err := applySessionStart(lock, tracking, true, false, errw); err != nil {
+			return err
+		}
+		if !noAutoupdate {
+			if err := autoupdateAgentboxIfNeeded(ctx, c, name, cfg.Agent, errw, updated); err != nil {
+				return fmt.Errorf("autoupdate %s: %w", name, err)
+			}
+		}
+		return nil
 	}
-	return nil
+	// A recreation accepted from the pre-native remedy leaves no knowingly
+	// running replacement after a failure: box start's result policy decides
+	// from a read and stops only the exact run this recreate started. Every
+	// other recreate keeps its existing behavior.
+	if remedy, _ := cmd.Flags().GetBool(legacyRemedyFlag); remedy {
+		ctx := container.WithExpectedRuns(cmd.Context()) // keeps the operation's record
+		return runStartForResult(ctx, name, exactRunStopSteps(liveBoxStopSteps(c, spaceName, name, errw), name), create)
+	}
+	return create(cmd.Context())
 }
 
 func newAgentboxExecCmd() *cobra.Command {

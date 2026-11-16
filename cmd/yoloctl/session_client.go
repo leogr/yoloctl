@@ -401,6 +401,10 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 	// running branch begins effects only after its holder decisions and the
 	// fresh-session image guard below.
 	if !running {
+		// A pre-native box takes its own remedy before any drift refusal.
+		if err := legacyRuntimeFirst(ctx, c, space, name); err != nil {
+			return "", refuseLegacyRun(ctx, c, space, name, io.Discard, err, legacyStart)
+		}
 		if err := refuseRecreateBeforeImageWork(ctx, space, cfg); err != nil {
 			return "", err
 		}

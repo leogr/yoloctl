@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/termio"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"github.com/spf13/cobra"
 )
 
@@ -28,9 +30,15 @@ const legacyRemedy = "Box coder predates the native runtime and cannot be starte
 // classification decides. running starts it as a running container; the
 // shared stop's container leg stops it unless stop is given.
 func legacyStartFixture(t *testing.T, running bool, stop func() error) (calls string, stops *[]string) {
+	return legacyStartFixtureWithDrift(t, "none", running, stop)
+}
+
+// legacyStartFixtureWithDrift is legacyStartFixture whose declaration also
+// requires recreation when drift is "before start" (image img:old -> img:desired).
+func legacyStartFixtureWithDrift(t *testing.T, drift string, running bool, stop func() error) (calls string, stops *[]string) {
 	t.Helper()
-	calls = setupExistingStartFixture(t, "none")
-	prepareNativeExistingStart = actualPrepareNativeExistingStart
+	calls = setupExistingStartFixture(t, drift)
+	prepareNativeExistingStart, legacyRuntimeFirst = actualPrepareNativeExistingStart, actualLegacyRuntimeFirst
 	dir := filepath.Dir(calls)
 	if running {
 		if err := os.WriteFile(filepath.Join(dir, "started"), nil, 0o600); err != nil {
@@ -204,7 +212,8 @@ func TestLegacyRecreateOfferAsksOnlyAfterAVerifiedStop(t *testing.T) {
 	stopped := `{"identity":{"runtime":"stopped","legacy_runtime":true}}`
 	running := `{"identity":{"runtime":"running","legacy_runtime":true}}`
 	native := `{"identity":{"runtime":"stopped"}}`
-	refusal := errors.New(legacyRemedy)
+	// The known outcome as the client reads it from the worker's typed record.
+	refusal := &controller.ExitError{Status: 1, Message: legacyRemedy, Remedy: remedyLegacyRecreate}
 	prompt := "Recreation deletes files stored only in the container. Workdir, declared cache and account state are preserved. Recreate api now? [y/N]: "
 	for _, tc := range []struct {
 		name, report, answer string
@@ -219,6 +228,13 @@ func TestLegacyRecreateOfferAsksOnlyAfterAVerifiedStop(t *testing.T) {
 		{"native box", native, "y\n", refusal, false, false},
 		{"unreadable", "not json", "y\n", refusal, false, false},
 		{"no refusal", stopped, "y\n", nil, false, false},
+		// F3: present state never stands in for the operation's outcome. Each
+		// of these asks nothing although a read shows the box legacy/stopped.
+		{"text without typed remedy", stopped, "y\n", errors.New(legacyRemedy), false, false},
+		{"uncertain result", stopped, "y\n", &controller.ExitError{Status: 2, Message: legacyRemedy, State: "uncertain", Remedy: remedyLegacyRecreate}, false, false},
+		{"lost reply", stopped, "y\n", &controller.OutcomeUnknown{ID: "r", Cause: errors.New("reply lost")}, false, false},
+		{"unrelated error", stopped, "y\n", &controller.ExitError{Status: 1, Message: "image build failed"}, false, false},
+		{"failed stop", stopped, "y\n", &controller.ExitError{Status: 1, Message: "Box api predates the native runtime and cannot be started or restarted. Stopping it failed: engine refused."}, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var calls []offerCall
@@ -233,7 +249,7 @@ func TestLegacyRecreateOfferAsksOnlyAfterAVerifiedStop(t *testing.T) {
 			}
 			switch {
 			case tc.recreate:
-				if err != nil || strings.Join(methods, ",") != "box.inspect,box.recreate" || !flagTrue(calls[1].flags, "force") || !flagTrue(calls[1].flags, "no-attach") || !flagTrue(calls[1].flags, "no-autoupdate") {
+				if err != nil || strings.Join(methods, ",") != "box.inspect,box.recreate" || !flagTrue(calls[1].flags, "force") || !flagTrue(calls[1].flags, "no-attach") || !flagTrue(calls[1].flags, "no-autoupdate") || !flagTrue(calls[1].flags, legacyRemedyFlag) {
 					t.Fatalf("err %v calls %+v", err, calls)
 				}
 			case tc.refusal == nil:
@@ -241,7 +257,8 @@ func TestLegacyRecreateOfferAsksOnlyAfterAVerifiedStop(t *testing.T) {
 					t.Fatalf("err %v calls %+v", err, calls)
 				}
 			default:
-				if err != tc.refusal || slices.Contains(methods, "box.recreate") {
+				// Without the typed known refusal nothing is even read.
+				if err != tc.refusal || slices.Contains(methods, "box.recreate") || tc.refusal != error(refusal) && len(calls) != 0 {
 					t.Fatalf("err %v calls %+v", err, calls)
 				}
 			}
@@ -275,13 +292,21 @@ func TestLegacyRecreateOfferThroughTheTerminalPath(t *testing.T) {
 		before               string
 		failRecreate, asked  bool
 		want                 []string
+		result               error // the original request's result; nil: the typed known refusal
 	}{
-		{"start yes", "box.start", "y\n", map[string][]string{}, "stopped", false, true, []string{"box.inspect", "box.start", "box.inspect", "box.recreate"}},
-		{"start --no-attach no", "box.start", "n\n", map[string][]string{"no-attach": {"true"}}, "stopped", false, true, []string{"box.start", "box.inspect"}},
-		{"restart yes, failed recreate", "box.restart", "y\n", map[string][]string{}, "running", true, true, []string{"box.inspect", "box.restart", "box.inspect", "box.recreate"}},
-		{"attach no", "box.attach", "n\n", map[string][]string{}, "stopped", false, true, []string{"box.inspect", "box.attach", "box.inspect"}},
-		{"set on a running box", "box.set", "y\n", map[string][]string{}, "running", false, true, []string{"box.inspect", "box.set", "box.inspect", "box.recreate"}},
-		{"set on a stopped box", "box.set", "y\n", map[string][]string{}, "stopped", false, false, []string{"box.inspect", "box.set"}},
+		{"start yes", "box.start", "y\n", map[string][]string{}, "stopped", false, true, []string{"box.inspect", "box.start", "box.inspect", "box.recreate"}, nil},
+		{"start --no-attach no", "box.start", "n\n", map[string][]string{"no-attach": {"true"}}, "stopped", false, true, []string{"box.start", "box.inspect"}, nil},
+		{"restart yes, failed recreate", "box.restart", "y\n", map[string][]string{}, "running", true, true, []string{"box.inspect", "box.restart", "box.inspect", "box.recreate"}, nil},
+		{"attach no", "box.attach", "n\n", map[string][]string{}, "stopped", false, true, []string{"box.inspect", "box.attach", "box.inspect"}, nil},
+		{"set on a running box", "box.set", "y\n", map[string][]string{}, "running", false, true, []string{"box.inspect", "box.set", "box.inspect", "box.recreate"}, nil},
+		{"set on a stopped box", "box.set", "y\n", map[string][]string{}, "stopped", false, false, []string{"box.inspect", "box.set"}, nil},
+		// F3 controls: a later read shows the box legacy/stopped, but the
+		// request's own outcome is not the typed known refusal: nothing is
+		// read again, asked or recreated, and the result is unchanged.
+		{"lost reply", "box.start", "y\n", map[string][]string{}, "stopped", false, false, []string{"box.inspect", "box.start"}, &controller.OutcomeUnknown{ID: "r", Cause: errors.New("reply lost")}},
+		{"unrelated error", "box.start", "y\n", map[string][]string{}, "stopped", false, false, []string{"box.inspect", "box.start"}, &controller.ExitError{Status: 1, Message: "image build failed"}},
+		{"failed stop", "box.restart", "y\n", map[string][]string{}, "running", false, false, []string{"box.inspect", "box.restart"}, &controller.ExitError{Status: 1, Message: "Box api predates the native runtime and cannot be started or restarted. Stopping it failed: engine refused."}},
+		{"uncertain", "box.restart", "y\n", map[string][]string{}, "running", false, false, []string{"box.inspect", "box.restart"}, &controller.ExitError{Status: 2, State: "uncertain", Remedy: remedyLegacyRecreate}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var calls []offerCall
@@ -301,7 +326,10 @@ func TestLegacyRecreateOfferThroughTheTerminalPath(t *testing.T) {
 					}
 				default:
 					sent = true
-					return &controller.ExitError{Status: 1, Message: legacyRemedy}
+					if tc.result != nil {
+						return tc.result
+					}
+					return &controller.ExitError{Status: 1, Message: legacyRemedy, Remedy: remedyLegacyRecreate}
 				}
 				return nil
 			}}
@@ -326,6 +354,12 @@ func TestLegacyRecreateOfferThroughTheTerminalPath(t *testing.T) {
 			}
 			if recreated && !tc.failRecreate && err != nil || !recreated && err == nil || tc.failRecreate && (err == nil || err.Error() != "recreate failed") {
 				t.Fatalf("err %v", err)
+			}
+			if tc.result != nil && !errors.Is(err, tc.result) {
+				t.Fatalf("the original result was replaced: %v", err)
+			}
+			if recreated && !flagTrue(calls[len(calls)-1].flags, legacyRemedyFlag) {
+				t.Fatalf("the accepted recreate lacks its remedy marker: %+v", calls[len(calls)-1].flags)
 			}
 		})
 	}
@@ -452,5 +486,133 @@ func TestStartRefusalNeverStopsARunningPreNativeBox(t *testing.T) {
 	var legacy *agentbox.LegacyRuntimeError
 	if err == nil || err.Error() != want || !errors.As(err, &legacy) || len(*stops) != 0 {
 		t.Fatal(err, *stops)
+	}
+}
+
+// F1: a pre-native box whose declaration also requires recreation (a saved
+// image change) still takes its own remedy: a running one's restart stops its
+// exact run instead of returning the generic drift refusal, and a stopped
+// one's start is refused without a stop. The native drift preservation is
+// covered by TestBoxStartAndRestartPreserveExistingContainer.
+func TestPreNativeRemedyPrecedesRecreateDrift(t *testing.T) {
+	for _, tc := range []struct {
+		operation string
+		running   bool
+		stops     []string
+	}{
+		{"restart", true, []string{"holder", "ports", "container", "session", "netns"}},
+		{"start", false, nil},
+	} {
+		t.Run(tc.operation, func(t *testing.T) {
+			callsPath, stops := legacyStartFixtureWithDrift(t, "before start", tc.running, nil)
+			cmd := newAgentboxStartCmd()
+			if tc.operation == "restart" {
+				cmd = newAgentboxRestartCmd()
+			}
+			cmd.SetOut(io.Discard)
+			cmd.SetErr(io.Discard)
+			cmd.SetArgs([]string{"coder", "--space", "default", "--no-attach", "--no-autoupdate"})
+			err := cmd.Execute()
+			var legacy *agentbox.LegacyRuntimeError
+			if err == nil || err.Error() != legacyRemedy || !errors.As(err, &legacy) || strings.Contains(err.Error(), "requires recreation") {
+				t.Fatalf("got %v, want the pre-native remedy", err)
+			}
+			if !slices.Equal(*stops, tc.stops) {
+				t.Fatalf("stops %v, want %v", *stops, tc.stops)
+			}
+			assertNoLegacyRun(t, readCalls(t, callsPath))
+		})
+	}
+}
+
+// F2: a recreation accepted from the pre-native remedy that fails after its
+// replacement started (session start or autoupdate) is rolled back by box
+// start's shared result policy, stopping only the exact run it started: a
+// same-name container that is not that run, or a run without a recorded
+// identity, is never stopped, and the failure says so. Nothing relaunches a
+// previous runtime or policy: the rollback only stops.
+func TestRemedyRecreateFailureStopsOnlyItsExactReplacement(t *testing.T) {
+	failure := errors.New("autoupdate coder: npm failed")
+	attempt := func(id string) func(context.Context) error {
+		return func(ctx context.Context) error {
+			container.EngineCallsFrom(ctx).MarkStart()
+			if id != "" {
+				container.ExpectedRunsFrom(ctx).Expect("coder", container.Run{ID: id, StartedAt: "2026-11-16T10:00:00Z", PID: 7})
+			}
+			return failure
+		}
+	}
+	for _, tc := range []struct {
+		name     string
+		started  string // the run this recreate recorded starting
+		replaced bool   // later reads show another same-name container
+		stopped  []string
+		message  string
+	}{
+		{"its replacement", firstID, false, []string{firstID}, "start failed: autoupdate coder: npm failed"},
+		{"another same-name container", firstID, true, nil, "is now another container than the replacement this recreate started, so it was not stopped"},
+		{"unknown identity", "", false, nil, "the identity of the replacement this recreate started is unknown"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeStop{present: true, running: true, replaced: tc.replaced}
+			if tc.replaced {
+				f.reads = 1 // every read after the attempt shows the other container
+			}
+			ctx := container.WithExpectedRuns(t.Context())
+			err := runStartForResult(ctx, "coder", exactRunStopSteps(f.steps(), "coder"), attempt(tc.started))
+			if err == nil || !strings.Contains(err.Error(), tc.message) || !slices.Equal(f.stopped, tc.stopped) {
+				t.Fatalf("err %v stopped %v", err, f.stopped)
+			}
+		})
+	}
+	// A successful remedy recreate whose replacement runs stops nothing.
+	f := &fakeStop{present: true, running: true, after: true}
+	f.reads = 1
+	ctx := container.WithExpectedRuns(t.Context())
+	ok := func(ctx context.Context) error {
+		container.EngineCallsFrom(ctx).MarkStart()
+		container.ExpectedRunsFrom(ctx).Expect("coder", container.Run{ID: firstID, StartedAt: "2026-11-16T10:00:00Z"})
+		return nil
+	}
+	if err := runStartForResult(ctx, "coder", exactRunStopSteps(f.steps(), "coder"), ok); err != nil || len(f.stopped) != 0 {
+		t.Fatalf("success: %v stopped %v", err, f.stopped)
+	}
+}
+
+// The remedy marker exists only on box recreate, hidden, and is what the host
+// sends after an accepted offer; an ordinary recreate keeps its behavior.
+func TestRemedyRecreateMarkerIsHiddenOnRecreateOnly(t *testing.T) {
+	flag := newAgentboxRecreateCmd().Flags().Lookup(legacyRemedyFlag)
+	if flag == nil || !flag.Hidden || flag.DefValue != "false" {
+		t.Fatalf("recreate marker: %+v", flag)
+	}
+	for _, cmd := range []*cobra.Command{newAgentboxStartCmd(), newAgentboxRestartCmd(), newAgentboxAttachCmd()} {
+		if cmd.Flags().Lookup(legacyRemedyFlag) != nil {
+			t.Fatalf("%s carries the recreate marker", cmd.Name())
+		}
+	}
+}
+
+// The worker types the remedy only for a known pre-native refusal whose box a
+// read showed stopped; an unconfirmed stop, another error or an uncertain
+// result carries none.
+func TestOutcomeRemedyOnlyForAConfirmedStoppedRefusal(t *testing.T) {
+	legacy := &agentbox.LegacyRuntimeError{Space: "default", Box: "coder"}
+	for _, tc := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"stopped", &legacyRuntimeRefusal{msg: legacyRemedy, legacy: legacy, stopped: true}, true},
+		{"wrapped stopped", fmt.Errorf("reconcile coder: %w", &legacyRuntimeRefusal{msg: legacyRemedy, legacy: legacy, stopped: true}), true},
+		{"failed stop", &legacyRuntimeRefusal{msg: "Stopping it failed", legacy: legacy}, false},
+		{"bare typed error", legacy, false},
+		{"other", errors.New(legacyRemedy), false},
+		{"nil", nil, false},
+	} {
+		attrs := outcomeRemedy(tc.err)
+		if got := len(attrs) == 1 && attrs[0].Key == prettylog.KeyRemedy && attrs[0].Value.String() == remedyLegacyRecreate; got != tc.want || !tc.want && len(attrs) != 0 {
+			t.Fatalf("%s: %v", tc.name, attrs)
+		}
 	}
 }

@@ -175,7 +175,8 @@ warns and is offered recreation; a stopped box with a marker and no holder
 records its lost launch before a fresh start. The agent daemon reaper is
 gone. [19](#source-19) A pre-native box's live session can still be attached,
 but its revival or any new run is refused with the recreation remedy and,
-at a terminal, one recreation question after a read shows it stopped.
+at a terminal, one recreation question only for that typed known refusal with
+a read showing it stopped (never after a lost or uncertain result).
 [24](#source-24)
 
 ## Sources

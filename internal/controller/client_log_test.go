@@ -202,3 +202,40 @@ func TestCallExpandsAFailedStepInLineOutput(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// A known failure carries the typed remedy of the worker's LAST explicit
+// outcome record only: never from text, an earlier outcome, a non-failed
+// outcome, a step, or an uncertain/interrupted result.
+func TestCallExitCarriesOnlyTheLastOutcomeRemedyOfAKnownFailure(t *testing.T) {
+	remedy := slog.String(prettylog.KeyRemedy, "legacy-recreate")
+	failed := func(attrs ...slog.Attr) Frame {
+		return logFrame(t, slog.LevelError, "Command failed", append([]slog.Attr{prettylog.Outcome(prettylog.OutcomeFailed)}, attrs...)...)
+	}
+	for _, tc := range []struct {
+		name   string
+		frames []Frame
+		state  string
+		want   string
+	}{
+		{"typed remedy", []Frame{failed(remedy)}, "", "legacy-recreate"},
+		{"no remedy", []Frame{failed()}, "", ""},
+		{"text is not a remedy", []Frame{failed(slog.String("detail", "legacy-recreate"))}, "", ""},
+		{"a later outcome without it", []Frame{failed(remedy), failed()}, "", ""},
+		{"an unknown outcome", []Frame{logFrame(t, slog.LevelWarn, "unknown", prettylog.Outcome(prettylog.OutcomeUnknown), remedy)}, "", ""},
+		{"a step is not an outcome", []Frame{logFrame(t, slog.LevelError, "step", slog.String(prettylog.KeyStep, "s.1"), slog.String(prettylog.KeyState, "failed"), remedy)}, "", ""},
+		{"uncertain result", []Frame{failed(remedy)}, "uncertain", ""},
+		{"interrupted result", []Frame{failed(remedy)}, "interrupted", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			conn, _ := fakeController(t, append(tc.frames, Frame{Type: "exit", Status: 1, Error: "refused", State: tc.state})...)
+			err := Call(t.Context(), conn, hello(), request("box.start"), ClientIO{Err: &bytes.Buffer{}})
+			var exit *ExitError
+			if !errors.As(err, &exit) {
+				t.Fatalf("err %v", err)
+			}
+			if exit.Remedy != tc.want {
+				t.Fatalf("remedy %q, want %q", exit.Remedy, tc.want)
+			}
+		})
+	}
+}

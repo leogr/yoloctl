@@ -89,6 +89,21 @@ func (e *ExpectedRuns) stopped(id string) {
 	}
 }
 
+// Expected returns the run the operation expects of box, read or started by
+// itself; ok is false without one (none recorded, or none after its own stop).
+func (e *ExpectedRuns) Expected(box string) (Run, bool) {
+	if e == nil {
+		return Run{}, false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	run, ok := e.runs[box]
+	if !ok || run == nil {
+		return Run{}, false
+	}
+	return *run, true
+}
+
 // Has reports an expectation for box.
 func (e *ExpectedRuns) Has(box string) bool {
 	if e == nil {

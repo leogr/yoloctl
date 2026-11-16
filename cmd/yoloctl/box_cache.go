@@ -109,11 +109,17 @@ func clearStoppedBoxCache(ctx context.Context, space, name string, observe func(
 }
 
 func recreateCacheContext(cmd *cobra.Command, name string) context.Context {
+	return recreateCacheContextFrom(cmd.Context(), cmd, name)
+}
+
+// recreateCacheContextFrom is recreateCacheContext over ctx (for example one
+// that records the attempt's engine calls).
+func recreateCacheContextFrom(ctx context.Context, cmd *cobra.Command, name string) context.Context {
 	clear, _ := cmd.Flags().GetBool("clear-cache")
 	if !clear {
-		return cmd.Context()
+		return ctx
 	}
-	return agentbox.WithRecreateCacheClear(cmd.Context(), func(bytes uint64) {
+	return agentbox.WithRecreateCacheClear(ctx, func(bytes uint64) {
 		cliInfo(logging.Storage, "cleared %d bytes from box %s's separate cache", bytes, name)
 	})
 }

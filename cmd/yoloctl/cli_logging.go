@@ -97,7 +97,7 @@ func renderLoggedCLIError(err error) {
 		logging.Logger().Outcome(prettylog.OutcomeFailed, "Operation interrupted", prettylog.Actor(logging.Controller), prettylog.Err(err))
 		return
 	}
-	logging.Logger().Outcome(prettylog.OutcomeFailed, "Command failed", prettylog.Actor(logging.Host), prettylog.Err(err))
+	logging.Logger().Outcome(prettylog.OutcomeFailed, "Command failed", append([]slog.Attr{prettylog.Actor(logging.Host), prettylog.Err(err)}, outcomeRemedy(err)...)...)
 }
 
 // cliRenderedError relates a successfully rendered outcome to this exact
@@ -158,7 +158,7 @@ func cliOperation(cmd *cobra.Command, title, success, space string, run func() e
 				kind, message = prettylog.OutcomeFailed, "Operation interrupted"
 			}
 		}
-		logging.Logger().Outcome(kind, message, prettylog.Actor(logging.Host), slog.String(logging.KeySpace, space), prettylog.Err(result))
+		logging.Logger().Outcome(kind, message, append([]slog.Attr{prettylog.Actor(logging.Host), slog.String(logging.KeySpace, space), prettylog.Err(result)}, outcomeRemedy(result)...)...)
 		if result != nil && logging.Logger().Err() == nil {
 			result = &cliRenderedError{result}
 		}
@@ -195,7 +195,7 @@ func cliFinishOutcome(result error, success, actor string) error {
 			kind, message = prettylog.OutcomeFailed, "Operation interrupted"
 		}
 	}
-	logging.Logger().Outcome(kind, message, prettylog.Actor(actor), prettylog.Err(result))
+	logging.Logger().Outcome(kind, message, append([]slog.Attr{prettylog.Actor(actor), prettylog.Err(result)}, outcomeRemedy(result)...)...)
 	if result != nil && logging.Logger().Err() == nil {
 		return &cliRenderedError{result}
 	}
