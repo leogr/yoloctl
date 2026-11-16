@@ -46,9 +46,13 @@ Noncolliding contexts resolve immutable metadata directly. [30](#source-30)
 [31](#source-31) [32](#source-32)
 Builds, base refresh and pulls stay private until publication. [6](#source-6) [23](#source-23) [24](#source-24)
 
-[FACT] BuildKit connects after service startup and bounded readiness checks;
-pre-Solve connection failure reports not started. Its RPCs strip containerd's
-namespace header; direct containerd calls use default. [29](#source-29)
+[FACT] BuildKit connects after service startup and bounded readiness checks.
+Each service-start/worker phase and the following native connection/Wait phase
+has its own two-minute total budget; they are not build timeouts. Lima's
+systemctl start and worker probe share one budget. Caller cancellation/earlier
+deadlines win; this readiness policy never replays a build or explicit startup request.
+Pre-Solve connection failure reports not started. Its RPCs strip containerd's
+namespace header; direct containerd calls use default. [29](#source-29) [37](#source-37) [38](#source-38)
 
 [FACT] Only the controller publishes public tags after apply permission, scope
 expansion and the native guard. A newly prepared managed base is published under its canonical name with its composed output. Different recipes retain separate results. Create passes the retained OCI target digest to nerdctl; `yoloctl.runtime_image` records the desired recipe reference for drift.
@@ -146,3 +150,6 @@ not retry. Lost application replies retain the normal fence contract.
 34. <a id="source-34"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L403) — `ensureAgentSession` missing-container warm context.
 35. <a id="source-35"></a> [session_native_image_test.go](../../cmd/yoloctl/session_native_image_test.go#L27) — `TestMissingSessionRetainsExistingImageBeforeApply`.
 36. <a id="source-36"></a> [controller_native_images_test.go](../../cmd/yoloctl/controller_native_images_test.go#L351) — creation-mode and post-effect rejection controls.
+
+37. <a id="source-37"></a> [Builder service readiness](../../internal/container/container.go#L429) — `EnsureBuilder`; scoped shared policy in internal/vmapi/readiness.go.
+38. <a id="source-38"></a> [BuildKit connection readiness](../../internal/controller/image_connection.go#L40) — `readyBuilder`, known not-started failure and caller cancellation.

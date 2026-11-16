@@ -18,6 +18,7 @@ import (
 	"github.com/leogr/yoloctl/internal/resources"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
+	"github.com/leogr/yoloctl/internal/vmapi"
 )
 
 // Client runs container operations through the selected VM adapter and
@@ -427,20 +428,35 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) error {
 // build. Image pulls and cached container starts do not call this path.
 func (c *Client) EnsureBuilder(ctx context.Context) error {
 	systemd, err := c.workloadPool(ctx)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if err != nil {
 		return err
 	}
 	if !systemd {
-		return c.Shell(ctx, "sudo", "/sbin/yoloctl-init", "buildkit")
+		err := c.Shell(ctx, "sudo", "/sbin/yoloctl-init", "buildkit")
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
 	}
-	startCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	startCtx, cancel := c.withTimeout(ctx, vmapi.BuilderReadyTimeout)
 	defer cancel()
 	// Type=notify makes this wait for readiness even while an automatic
 	// restart is pending. An already running service is left alone.
-	if err := c.Shell(startCtx, "sudo", "systemctl", "start", "buildkit.service"); err != nil {
+	err = c.Shell(startCtx, "sudo", "systemctl", "start", "buildkit.service")
+	if startCtx.Err() != nil {
+		err = startCtx.Err()
+	}
+	if err != nil {
 		return fmt.Errorf("start BuildKit: %w", err)
 	}
-	if _, err := c.ShellOutputQuiet(startCtx, "sudo", "buildctl", "debug", "workers"); err != nil {
+	_, err = c.ShellOutputQuiet(startCtx, "sudo", "buildctl", "debug", "workers")
+	if startCtx.Err() != nil {
+		err = startCtx.Err()
+	}
+	if err != nil {
 		return fmt.Errorf("BuildKit worker unavailable: %w", err)
 	}
 	return nil

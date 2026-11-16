@@ -17,6 +17,7 @@ import (
 	"github.com/leogr/yoloctl/internal/resources"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/storagegc"
+	"github.com/leogr/yoloctl/internal/vmapi"
 	"golang.org/x/sys/unix"
 )
 
@@ -76,7 +77,7 @@ type lazyBuilder struct {
 var builder lazyBuilder
 
 func ensureBuilder() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), vmapi.BuilderReadyTimeout)
 	defer cancel()
 	return builder.ensure(ctx, func() (*exec.Cmd, error) {
 		group := resources.CgroupPath(false) + "/builder"
@@ -135,18 +136,31 @@ func (b *lazyBuilder) ensure(ctx context.Context, start func() (*exec.Cmd, error
 	tick := time.NewTicker(20 * time.Millisecond)
 	defer tick.Stop()
 	for {
+		if ctx.Err() != nil {
+			return fmt.Errorf("BuildKit worker unavailable: %w", ctx.Err())
+		}
 		select {
 		case <-b.process.done:
+			if ctx.Err() != nil {
+				return fmt.Errorf("BuildKit worker unavailable: %w", ctx.Err())
+			}
 			return fmt.Errorf("BuildKit exited during startup: %v", b.process.err)
 		default:
 		}
-		if err := probe(ctx); err == nil {
+		err := probe(ctx)
+		if ctx.Err() != nil {
+			return fmt.Errorf("BuildKit worker unavailable: %w", ctx.Err())
+		}
+		if err == nil {
 			return nil
 		}
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("BuildKit worker unavailable: %w", ctx.Err())
 		case <-b.process.done:
+			if ctx.Err() != nil {
+				return fmt.Errorf("BuildKit worker unavailable: %w", ctx.Err())
+			}
 			return fmt.Errorf("BuildKit exited during startup: %v", b.process.err)
 		case <-tick.C:
 		}

@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/containerd/containerd/v2/pkg/namespaces"
+	"github.com/leogr/yoloctl/internal/vmapi"
 	bk "github.com/moby/buildkit/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -51,8 +51,11 @@ func (b *NativeImageBackend) readyBuilder(ctx context.Context) (*bk.Client, erro
 		return notStarted(err)
 	}
 	// This is an initialization/readiness budget, not a build timeout or retry.
-	readyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	readyCtx, cancel := context.WithTimeout(ctx, vmapi.BuilderReadyTimeout)
 	defer cancel()
+	if readyCtx.Err() != nil {
+		return notStarted(readyCtx.Err())
+	}
 	b.builderMu.Lock()
 	if b.closed {
 		b.builderMu.Unlock()
@@ -74,7 +77,11 @@ func (b *NativeImageBackend) readyBuilder(ctx context.Context) (*bk.Client, erro
 	b.builderMu.Unlock()
 	// Wait only issues Info RPCs and resets reconnect backoff. No Solve has
 	// been sent yet; a failure here is a known not-started preparation.
-	if err := client.Wait(buildkitContext(readyCtx)); err != nil {
+	err := client.Wait(buildkitContext(readyCtx))
+	if readyCtx.Err() != nil {
+		err = readyCtx.Err()
+	}
+	if err != nil {
 		return notStarted(fmt.Errorf("BuildKit readiness: %w", err))
 	}
 	return client, nil

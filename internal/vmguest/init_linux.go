@@ -5,6 +5,7 @@
 package vmguest
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/resources"
+	"github.com/leogr/yoloctl/internal/vmapi"
 	"github.com/leogr/yoloctl/internal/vmwire"
 	"golang.org/x/sys/unix"
 )
@@ -301,15 +303,8 @@ func boot() error {
 	if e = start("/usr/local/bin/containerd", "--config", "/etc/containerd/config.toml"); e != nil {
 		return e
 	}
-	deadline := time.Now().Add(15 * time.Second)
-	for {
-		if e = run("nerdctl", "info"); e == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			return e
-		}
-		time.Sleep(5 * time.Millisecond)
+	if e = waitForContainerd(context.Background(), probeContainerd); e != nil {
+		return e
 	}
 	if e = start("/usr/sbin/sshd", "-D", "-e", "-f", "/etc/ssh/sshd_microvm_config"); e != nil {
 		return e
@@ -497,32 +492,7 @@ func listenControl() error {
 			if e != nil {
 				return
 			}
-			go func() {
-				defer func() { _ = c.Close() }()
-				_ = c.SetDeadline(time.Now().Add(30 * time.Second))
-				var req vmwire.ControlRequest
-				dec := json.NewDecoder(io.LimitReader(c, 1<<20))
-				dec.DisallowUnknownFields()
-				if dec.Decode(&req) != nil {
-					return
-				}
-				var state string
-				var e error
-				if req.Action == "unit" && req.Unit != nil {
-					state, e = manageUnit(*req.Unit)
-				} else {
-					state, e = service(req.Action)
-				}
-				result := vmwire.ControlReply{State: state}
-				if e != nil {
-					result.Error = e.Error()
-				}
-				_ = json.NewEncoder(c).Encode(result)
-
-				if req.Action == "poweroff" && e == nil {
-					go shutdown()
-				}
-			}()
+			go serveControl(c, service)
 		}
 	}()
 	return nil
@@ -613,4 +583,76 @@ func writableRoot() error {
 		}
 	}
 	return unix.Unmount("/.oldroot", unix.MNT_DETACH)
+}
+
+// waitForContainerd retains readiness polling, but every attempt shares one
+// total budget and an in-flight nerdctl command receives its cancellation.
+func waitForContainerd(ctx context.Context, probe func(context.Context) error) error {
+	ready, cancel := context.WithTimeout(ctx, vmapi.ContainerdReadyTimeout)
+	defer cancel()
+	for {
+		if ready.Err() != nil {
+			return ready.Err()
+		}
+		err := probe(ready)
+		if ready.Err() != nil {
+			return fmt.Errorf("containerd readiness: %w", errors.Join(ready.Err(), err))
+		}
+		if err == nil {
+			return nil
+		}
+		select {
+		case <-ready.Done():
+			return fmt.Errorf("containerd readiness: %w", errors.Join(ready.Err(), err))
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+}
+
+// serveControl changes only BuildKit's work/reply timing. Requests retain the
+// ordinary 30s intake deadline; other service/unit actions keep that deadline.
+func serveControl(c net.Conn, dispatch func(string) (string, error)) {
+	defer func() { _ = c.Close() }()
+	_ = c.SetDeadline(time.Now().Add(30 * time.Second))
+	var req vmwire.ControlRequest
+	dec := json.NewDecoder(io.LimitReader(c, 1<<20))
+	dec.DisallowUnknownFields()
+	if dec.Decode(&req) != nil {
+		return
+	}
+	if req.Action == "buildkit" {
+		_ = c.SetDeadline(time.Now().Add(vmapi.BuilderReadyTimeout))
+	}
+	var state string
+	var err error
+	if req.Action == "unit" && req.Unit != nil {
+		state, err = manageUnit(*req.Unit)
+	} else {
+		state, err = dispatch(req.Action)
+	}
+	result := vmwire.ControlReply{State: state}
+	if err != nil {
+		result.Error = err.Error()
+	}
+	// Work that reaches its complete budget must still return its outcome.
+	// This grants at most the existing 30s result-I/O grace, never more work.
+	if req.Action == "buildkit" {
+		_ = c.SetWriteDeadline(time.Now().Add(30 * time.Second))
+	}
+	_ = json.NewEncoder(c).Encode(result)
+	if req.Action == "poweroff" && err == nil {
+		go shutdown()
+	}
+}
+
+func probeContainerd(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "nerdctl", "info")
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		return fmt.Errorf("nerdctl: %w: %s", err, out)
+	}
+	return nil
 }

@@ -97,8 +97,14 @@ caching so catalog snapshots observe replacements. Native accounts and
 declarations are never transported through these shares. [4](#source-4) [14](#source-14)
 
 [FACT] The guest has a dedicated PID 1, system containerd and SSH;
-it does not run systemd or first-boot package installation. BuildKit starts on
-the first image build, once per VM lifetime; failures remain explicit. Its containerd worker uses nerdctl's `default` namespace for local base images. [24](#source-24)
+it does not run systemd or first-boot package installation. BuildKit starts lazily on
+an image-build request; an exited daemon can restart on a later explicit
+request, while failures remain explicit. Guest
+lazy-builder readiness and boot containerd readiness each use a two-minute
+budget; the latter cancels an in-flight nerdctl probe. Only decoded buildkit
+control requests extend their reply deadline: after at most two minutes of
+work, an ordinary 30-second write grace delivers success or timeout. Request
+intake and other control actions retain their 30-second deadline. Its containerd worker uses nerdctl's `default` namespace for local base images. [5](#source-5) [24](#source-24)
 Its cache root is `/var/lib/buildkit/default`. The guest configures shared GC
 budgets before readiness without starting BuildKit. [24](#source-24) [26](#source-26) Guest
 protocol 4 requires a rebuilt image. [20](#source-20) The immutable root
@@ -141,7 +147,7 @@ not Firecracker/KVM behavior. The adapter boots fresh; snapshots remain experime
 2. <a id="source-2"></a> [Adapter selection](../../internal/vm/vm.go#L1) — `Driver`, `ForSpace`, `lookup`, shell and lifecycle routing
 3. <a id="source-3"></a> [Per-VM helper](../../internal/firecracker/helper_linux.go#L1) — `Helper`, `Proxy`
 4. <a id="source-4"></a> [Host share evidence](vm-shares.md) — typed handles, creation modes, synchronization and limits
-5. <a id="source-5"></a> [Guest boot](../../internal/vmguest/init_linux.go#L1) — `boot`, `writableRoot`, Landlock and runtime readiness.
+5. <a id="source-5"></a> [Guest boot](../../internal/vmguest/init_linux.go#L1) — `boot`, `writableRoot`, Landlock/runtime readiness, `waitForContainerd`, `probeContainerd` and `serveControl`.
 6. <a id="source-6"></a> [Image assembly](../../internal/firecracker/assemble_linux.go#L1) — `assembleLocalImage`, dependency and kernel verification.
 7. <a id="source-7"></a> [Service selection](../../internal/vmservice/service.go#L1) — `microvm`, `Start`, `Stop`
 8. <a id="source-8"></a> [Linux fix 8e359920](https://github.com/torvalds/linux/commit/8e359920216689b3b79e0fe8961a77fe312a511f) — cgroup kill-sequence mismatch for `CLONE_INTO_CGROUP` children.
@@ -161,7 +167,7 @@ not Firecracker/KVM behavior. The adapter boots fresh; snapshots remain experime
 21. <a id="source-21"></a> [Deployment](../../cmd/yoloctl/controller_deployment.go#L1) — `deployController`.
 22. <a id="source-22"></a> [Readiness](../../internal/agentbox/readiness.go#L1) — `WaitForSandboxSocket`, `probeSandboxSSH`.
 23. <a id="source-23"></a> [Benchmark](../../scripts/vm/firecracker/benchmark.py#L1) — interactive and exec readiness endpoints, stop timings and memory accounting.
-24. <a id="source-24"></a> [Build service](../../internal/vmguest/init_linux.go#L522-L541) — `ensureBuilder`, explicit worker namespace and namespace-specific cache root.
+24. <a id="source-24"></a> [Build service](../../internal/vmguest/buildkit_linux.go#L78) — `ensureBuilder`, explicit worker namespace and namespace-specific cache root.
 
 25. <a id="source-25"></a> [Local VM image preparation](vm-images.md) — recipe, verification and host cache boundaries.
 26. <a id="source-26"></a> [Guest build policy](../../internal/vmguest/buildkit_linux.go#L1) — `configureBuilder`.

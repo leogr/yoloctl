@@ -11,6 +11,7 @@ import (
 
 	cd "github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/pkg/namespaces"
+	"github.com/leogr/yoloctl/internal/vmapi"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	bk "github.com/moby/buildkit/client"
 	"google.golang.org/grpc"
@@ -130,5 +131,30 @@ func TestPreSolveConnectionFailureIsNotStarted(t *testing.T) {
 	_, err = backend.Build(ctx, recipe("cancelled"), ImagePhase{})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation changed: %v", err)
+	}
+}
+
+func TestBuilderReadinessCancelledBeforeConnection(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	backend := &NativeImageBackend{EnsureBuilder: func(context.Context) error { cancel(); return nil }, newBuilder: func(context.Context) (*bk.Client, error) { t.Fatal("connection after cancellation"); return nil, nil }}
+	if _, err := backend.readyBuilder(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+}
+
+func TestBuilderReadinessScopedBudget(t *testing.T) {
+	calls := 0
+	sentinel := errors.New("fixture stops before connection")
+	backend := &NativeImageBackend{EnsureBuilder: func(context.Context) error { return nil }, newBuilder: func(ctx context.Context) (*bk.Client, error) {
+		calls++
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) <= 15*time.Second || time.Until(deadline) > vmapi.BuilderReadyTimeout {
+			t.Errorf("scoped readiness budget %v", deadline)
+		}
+		return nil, sentinel
+	}}
+	if _, err := backend.readyBuilder(t.Context()); !errors.Is(err, sentinel) || calls != 1 {
+		t.Fatalf("%v calls%d", err, calls)
 	}
 }
