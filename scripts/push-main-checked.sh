@@ -15,7 +15,7 @@
 #
 # Every GitHub call names the repository that the remote fetches from and pushes
 # to. A pull-request run checks out GitHub's merge of pre-main into main, not
-# the commit itself. A run counts only if each build job's checkout step logged
+# the commit itself. A run counts only if each build job's checkout command logged
 # exactly one checked-out commit and GitHub reports that commit's tree equal to
 # the tree of the commit being published.
 #
@@ -157,18 +157,19 @@ fi
 passed=$(gh run view "$run" --repo "$repo" --json jobs --jq '.jobs[] | select(.conclusion == "success") | .name') ||
 	fail "cannot read the jobs of CI run $run"
 log=$(gh run view "$run" --repo "$repo" --log) || fail "cannot read the log of CI run $run"
-# The checkout step logs `git log -1 --format=%H` and then the full commit it
-# checked out; read it per build job, from that step only.
+# Checkout logs `git log -1 --format=%H` and then the full commit it checked
+# out. gh can label the step UNKNOWN STEP, so bind evidence to that command
+# and its following payload within the same job, not to a display label.
 want_tree=$(git rev-parse --verify --quiet "$sha^{tree}") || fail "cannot read the tree of $sha"
 # Keep these generated job names aligned with ci.yml's build matrix.
 for os in ubuntu-24.04 macos-latest; do
 	job="build ($os)"
 	printf '%s\n' "$passed" | grep -Fxq -- "$job" || fail "CI run $run has no passing job \"$job\""
 	checked=$(printf '%s\n' "$log" | awk -F '\t' -v job="$job" -v q="'" '
-		$1 == job && index($2, "actions/checkout") > 0 {
+		$1 == job {
 			msg = $3; sub(/^[^ ]* /, "", msg); gsub(q, "", msg)
 			if (want) { want = 0; if (length(msg) == 40 && msg ~ /^[0-9a-f]+$/) print msg; next }
-			if (index(msg, "git log -1 --format") > 0) want = 1
+			if (msg ~ /^\[command\](\/[^[:space:]]*\/)?git log -1 --format=%H$/) want = 1
 		}' | sort -u)
 	case "$checked" in
 	'' | *"

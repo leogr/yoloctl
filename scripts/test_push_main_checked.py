@@ -53,11 +53,18 @@ FAKE_GH = textwrap.dedent('''\
                                env=dict(os.environ, GIT_AUTHOR_NAME='CI', GIT_AUTHOR_EMAIL='ci@example.invalid',
                                         GIT_COMMITTER_NAME='CI', GIT_COMMITTER_EMAIL='ci@example.invalid')).stdout.strip()
         for job in (os.environ.get('FAKE_GH_LINUX_JOB', 'build (ubuntu-24.04)'), 'build (macos-latest)', 'lint'):
-            step = job + '\\tRun actions/checkout@v5\\t2026-11-06T14:00:00.0Z '
+            step_name = os.environ.get('FAKE_GH_CHECKOUT_STEP', 'Run actions/checkout@v5')
+            step = job + '\\t' + step_name + '\\t2026-11-06T14:00:00.0Z '
             print(step + 'HEAD is now at ' + merge[:7] + ' Merge ' + head + ' into ' + base)
             evidence = os.environ.get('FAKE_GH_EVIDENCE', 'one')
+            if evidence == 'linux-missing':
+                evidence = 'missing' if job == 'build (ubuntu-24.04)' else 'one'
             if evidence != 'missing':
-                print(step + "[command]/usr/bin/git log -1 --format='%H'")
+                command = "[command]/usr/bin/git log -1 --format='%H'"
+                if evidence == 'prose-only': command = 'notice: ' + command
+                if evidence == 'wrong-format': command = command.replace('%H', '%h')
+                print(step + command)
+                if evidence == 'intervening-line': print(step + 'not a commit')
                 print(step + "'" + merge + "'")
             if evidence == 'ambiguous':
                 print(step + "[command]/usr/bin/git log -1 --format='%H'")
@@ -156,6 +163,22 @@ class PushMainCheckedTests(unittest.TestCase):
         self.assertEqual(git(self.remote, 'tag', '--list'), '')
         self.assertIn('pr create', self.calls())
 
+    def test_unknown_checkout_step_name_still_verifies_and_pushes(self):
+        head = self.commit('unknown checkout step')
+        result = self.run_script(FAKE_GH_CHECKOUT_STEP='UNKNOWN STEP')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.remote_ref('refs/heads/main'), head)
+        self.assertIn('api repos/' + REPO + '/git/commits/', self.calls())
+
+    def test_non_command_or_nonadjacent_hash_is_not_checkout_evidence(self):
+        self.commit('change')
+        for step in ('Run actions/checkout@v5', 'UNKNOWN STEP'):
+            for evidence in ('prose-only', 'wrong-format', 'intervening-line', 'linux-missing'):
+                with self.subTest(step=step, evidence=evidence):
+                    result = self.run_script(FAKE_GH_CHECKOUT_STEP=step, FAKE_GH_EVIDENCE=evidence)
+                    self.assert_main_untouched(result)
+                    self.assertIn('no single checked-out commit', result.stderr)
+
     def test_every_gh_call_names_the_remote_repository(self):
         self.commit('change')
         result = self.run_script(GH_REPO='someone/else', GH_HOST='evil.example')
@@ -227,9 +250,11 @@ class PushMainCheckedTests(unittest.TestCase):
     def test_stale_run_whose_checkout_has_another_tree_is_refused(self):
         # A run of the same head merged into another base checks out another tree.
         self.commit('change')
-        result = self.run_script(FAKE_GH_TESTED_TREE_OF='main')
-        self.assert_main_untouched(result)
-        self.assertIn('cannot vouch', result.stderr)
+        for step in ('Run actions/checkout@v5', 'UNKNOWN STEP'):
+            with self.subTest(step=step):
+                result = self.run_script(FAKE_GH_CHECKOUT_STEP=step, FAKE_GH_TESTED_TREE_OF='main')
+                self.assert_main_untouched(result)
+                self.assertIn('whose tree differs', result.stderr)
 
     def test_run_not_linked_to_the_draft_pull_request_is_refused(self):
         self.commit('change')
@@ -248,11 +273,12 @@ class PushMainCheckedTests(unittest.TestCase):
 
     def test_missing_or_ambiguous_checkout_evidence_is_refused(self):
         self.commit('change')
-        for evidence in ('missing', 'ambiguous'):
-            with self.subTest(evidence=evidence):
-                result = self.run_script(FAKE_GH_EVIDENCE=evidence)
-                self.assert_main_untouched(result)
-                self.assertIn('no single checked-out commit', result.stderr)
+        for step in ('Run actions/checkout@v5', 'UNKNOWN STEP'):
+            for evidence in ('missing', 'ambiguous'):
+                with self.subTest(step=step, evidence=evidence):
+                    result = self.run_script(FAKE_GH_CHECKOUT_STEP=step, FAKE_GH_EVIDENCE=evidence)
+                    self.assert_main_untouched(result)
+                    self.assertIn('no single checked-out commit', result.stderr)
 
     def test_main_moving_during_the_run_is_refused(self):
         self.commit('change')

@@ -1,6 +1,6 @@
 # Installation, releases and host homes
 
-Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes (CI runner/publication selection); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); CLI log routing re-read at `58d3f37b76e6509d8587dec36a7a4b6814a42f10` and accompanying changes; other sections at `1d265df3`.
+Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes (CI runner/publication selection); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); CLI log routing re-read at `58d3f37b76e6509d8587dec36a7a4b6814a42f10` and accompanying changes; checkout log parsing re-read at `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes; other sections at `1d265df3`.
 
 [FACT] Coordinated builds stamp hosts and Linux companions with one version and
 random bundle. Only strict `vMAJOR.MINOR.PATCH[-PRERELEASE]` selects release;
@@ -48,7 +48,11 @@ hash; qualify still runs); `dist` always builds OpenShell from source. [6](#sour
 [FACT] CI build and Linux release install-smoke use Ubuntu 24.04
 until the GNU-timeout test dependency is fixed and Ubuntu 26 is qualified.
 The checked-main script requires passing `build (ubuntu-24.04)` and
-`build (macos-latest)` jobs with matching checkout trees. [6](#source-6)
+`build (macos-latest)` jobs with matching checkout trees. Checkout evidence is
+per job: an actual `[command]…git log -1 --format=%H` line followed by a full
+40-hex commit line, with exactly one distinct commit after deduplication.
+Display step names (including `UNKNOWN STEP`) do not select evidence; a bare
+hash, unrelated prose or another job's hash cannot supply it. [6](#source-6)
 [11](#source-11)
 
 [FACT] Darwin bytes ship as linked; macOS CI requires arm64 `codesign -v`,
@@ -138,6 +142,6 @@ show only recovery guidance. [9](#source-9)
    [default metadata](../../internal/firecracker/recipe_linux.go#L60-L88), `ReadDefaultImage`.
 10. <a id="source-10"></a> [Install shell setup](install-shell-setup.md).
 
-11. <a id="source-11"></a> [Checked main publication](../../scripts/push-main-checked.sh#L157-L181) — required jobs and per-job checkout/tree verification; fixtures in scripts/test_push_main_checked.py.
+11. <a id="source-11"></a> [Checked main publication](../../scripts/push-main-checked.sh#L157-L182) — required jobs and per-job checkout/tree verification; fixtures in scripts/test_push_main_checked.py.
 
 12. <a id="source-12"></a> [CLI log routing](cli-logging.md) — installer presentation and data separation.
