@@ -555,18 +555,10 @@ func (m *Model) overlayLines(base []string, width int) []string {
 	boxW := inner + 4
 	x := max((width-boxW)/2, 0)
 	y := l.bodyTop + max((l.bodyHeight-height)/2, 0)
-	frame := spaceview.Style{FG: t.Frame, BG: t.Popup}
 	bg := spaceview.Style{BG: t.Popup}
-	title = truncate(m.widthMethod, oneLine(title), max(boxW-6, 1), "…")
-	box := []string{spaceview.StyleText("╭─ ", frame) + spaceview.StyleText(title, spaceview.Style{FG: t.Brand, BG: t.Popup, Bold: true}) +
-		spaceview.StyleText(" "+strings.Repeat("─", max(boxW-m.widthMethod.StringWidth(title)-5, 0))+"╮", frame)}
-	// Rows are styled by helpers that reset after each span; re-apply the
-	// panel background after every reset so no cell shows through.
-	panelBG := strings.TrimSuffix(spaceview.StyleText("", bg), "\x1b[0m")
-	line := func(s string) string {
-		s = panelBG + strings.ReplaceAll(s, "\x1b[0m", "\x1b[0m"+panelBG)
-		return spaceview.StyleText("│ ", frame) + s + spaceview.StyleText(strings.Repeat(" ", max(inner-m.widthMethod.StringWidth(s), 0)), bg) + spaceview.StyleText(" │", frame)
-	}
+	dialog := spaceview.DialogFrame{Theme: t, Method: m.widthMethod, Width: boxW}
+	box := []string{dialog.Header(oneLine(title))}
+	line := dialog.Row
 	box = append(box, line(""))
 	for i := range visible {
 		s := ""
@@ -583,10 +575,6 @@ func (m *Model) overlayLines(base []string, width int) []string {
 		var b strings.Builder
 		bx := x + 2
 		for i, label := range buttons {
-			st := spaceview.Style{FG: t.Text, BG: t.Raised}
-			if i == 0 {
-				st = spaceview.Style{FG: t.Bright, BG: t.Frame, Bold: true}
-			}
 			chip := " " + label + " "
 			gap := 0
 			if b.Len() > 0 {
@@ -600,17 +588,12 @@ func (m *Model) overlayLines(base []string, width int) []string {
 			b.WriteString(spaceview.StyleText(strings.Repeat(" ", gap), bg))
 			bx += gap
 			m.hits = append(m.hits, hit{x0: bx, x1: bx + m.widthMethod.StringWidth(chip), y: y + len(box), area: hitOverlayButton, item: i})
-			face := st
-			if m.hovered(hitOverlayButton, i, "") {
-				face = hoverStyle(st)
-			}
-			b.WriteString(spaceview.StyleText(" ", st) + spaceview.StyleText(label, face) + spaceview.StyleText(" ", st))
+			b.WriteString(spaceview.DialogButton(t, label, i == 0, m.hovered(hitOverlayButton, i, ""), false))
 			bx += m.widthMethod.StringWidth(chip)
 		}
 		box = append(box, line(b.String()))
 	}
-	footer := " " + hint + " "
-	box = append(box, spaceview.StyleText("╰", frame)+spaceview.StyleText(truncate(m.widthMethod, footer, boxW-2, ""), spaceview.Style{FG: t.Dim, BG: t.Popup})+spaceview.StyleText(strings.Repeat("─", max(boxW-2-m.widthMethod.StringWidth(truncate(m.widthMethod, footer, boxW-2, "")), 0))+"╯", frame))
+	box = append(box, dialog.Footer(hint))
 	for n, item := range rowItems {
 		if row := 2 + n - o.scroll; item >= 0 && row >= 2 && row < 2+visible {
 			m.hits = append(m.hits, hit{x0: x, x1: x + boxW, y: y + row, area: hitOverlayRow, item: item})

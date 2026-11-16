@@ -18,7 +18,7 @@ func TestToastQueuePersistentNavigationDismissal(t *testing.T) {
 	m.postNotice(prettylog.KindError, "second")
 	m.postNotice(prettylog.KindNotice, "third")
 	m.moveToast(99)
-	if m.noticeText() != "third" || !strings.Contains(ansi.Strip(m.View().Content), "3/3") {
+	if m.noticeText() != "third" || !strings.Contains(ansi.Strip(m.View().Content), "Notice 3 of 3") {
 		t.Fatal("newest/endpoint/counter lost")
 	}
 	m.moveToast(-1)
@@ -128,6 +128,7 @@ func TestToastEscapeNavigationAndOwnedKeys(t *testing.T) {
 	if len(m.notices) != 1 || m.prefix != nil {
 		t.Fatal("menu Escape dismissed toast")
 	}
+	prefixed(m, key('[', 0, "[")) // explicitly focus the remaining notice
 	_, _ = m.Update(key(tea.KeyEscape, 0, ""))
 	_, _ = m.Update(tea.KeyReleaseMsg{Code: tea.KeyEscape})
 	_, _ = m.Update(key(tea.KeyEscape, 0, ""))
@@ -258,7 +259,7 @@ func TestToastHeaderCursorAndControls(t *testing.T) {
 		t.Fatal("toast hid an uncovered cursor")
 	}
 	o := m.toastLayout()
-	_, _ = fmt.Fprintf(s, "\x1b[1;%dH", o.x+1)
+	_, _ = fmt.Fprintf(s, "\x1b[%d;%dH", o.y-m.chromeRows()+1, o.x+1)
 	if m.View().Cursor != nil {
 		t.Fatal("painted toast did not hide covered cursor")
 	}

@@ -1,8 +1,8 @@
 # Persistent TUI notices
 
-Verification: `16684468ac1f193e1ee81155621dd08fec236391` and accompanying changes.
+Verification: `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes.
 
-[FACT] Outer-model feedback uses a persistent, in-memory top-right toast queue,
+[FACT] Outer-model feedback uses a persistent, in-memory centered notice-dialog queue,
 never the header or standalone attachment's last row. A new notice selects the
 newest entry; previous/next stop at the ends. Dismiss removes the current entry
 and selects its successor, or its predecessor at the end. Ordinary typing,
@@ -12,7 +12,9 @@ different tab identities remain distinct even with identical titles. No disk
 history or automatic expiry/eviction is added. [1](#source-1) [2](#source-2)
 
 [FACT] Each captured notice retains bounded, escaped prettylog text and its
-space/tab display context. It does not retain a closed session. Pane input,
+space, source-pane title and emission time. Typed resume targets supply box/space
+fields; a title is never interpreted as a box identity. It does not retain a
+closed session. Pane input,
 key, mouse, selection, focus, resize and holder-closed notices resolve their
 actual session's current tab, including image-input wrappers and background
 errors. Invalid tab requests and existing-target feedback belong to the
@@ -27,17 +29,30 @@ Visiting clears the badge only; dismissing clears the toast only. Closed-tab
 notices retain captured labels without badging replacement tabs. [2](#source-2)
 [5](#source-5)
 
-[FACT] One geometry function drives paint, hits and cursor occlusion. The toast
-is below the fixed dashboard chrome, over palette output too; standalone uses
-the full viewport. Text wraps and scrolls without resizing the child. Prev/next,
-`i/N` and close controls stay above the body; tiny viewports use a clipped
-compact form. A fresh bare Esc dismisses the current toast when no stronger
-modal, prefix or held gesture owns it; with no toast it keeps its ordinary
-route. Mouse body/close clicks dismiss; prev/next clicks navigate; the wheel
-inside scrolls. Outside clicks retain the queue. A consumed key/press keeps its
-owner through repeats/releases and new arrivals; an earlier child gesture
-finishes at its original child. Unknown pixel geometry is still refused.
-[1](#source-1) [2](#source-2) [6](#source-6)
+[FACT] One geometry function drives paint, hits and cursor occlusion. The dialog
+is centered below dashboard chrome; standalone uses the full viewport. Width is
+about 70%, capped at 100 columns, with a usable narrow minimum. It shares the
+participant dialog's frame, title and button theme. The title shows `Notice N
+of M` and `×count` for repeats. Severity and captured Box/Space, Tab, Detail and
+When fields wrap at words/path separators under the value column; oversized
+tokens break to fit. Only the body scrolls, without resizing the child. Buttons
+and the bottom-border hint stay fixed; buttons flow onto rows when needed.
+Short viewports whose wrapped controls leave fewer than three body rows use
+a clipped compact form. Wrapped fields may still need scrolling. [1](#source-1) [8](#source-8)
+[9](#source-9)
+
+[FACT] Notices appear unfocused: all keys, including Enter, Esc and arrows,
+keep their pane/palette routes. Clicking the dialog or prefix `[`/`]` focuses
+it, highlighted by the border (compact form: title). Only then Enter runs the
+first action, Esc dismisses and Left/Right or `‹`/`›` navigate. Ordinary typing
+still follows its pane/palette route. A new arrival, dismissal or outside press
+returns focus. Go to tab appears only for the captured live owner; it visits
+without dismissing. Dismiss removes the current entry; Previous/Next stop at
+the ends. Buttons work without prior focus. Body clicks focus without dismissal;
+the wheel inside scrolls. Consumed presses keep ownership through repeats and
+releases; earlier child gestures finish at their original child. Existing
+modal/prefix owners win; unknown pixel geometry remains refused.
+[1](#source-1) [2](#source-2) [6](#source-6) [8](#source-8)
 
 [FACT] Dashboard prefix `[`/`]` navigates and prefix PgUp/PgDn scrolls the
 notice. Browser, space/close/tab pickers and pane-menu/inert popups temporarily
@@ -57,3 +72,5 @@ are ephemeral content overlays; a refused drop is a persistent global notice.
 5. <a id="source-5"></a> [Tab attention](../../internal/tui/tabs/tabs.go#L16) — `Tab`, `Select`; tui.go `tabStripLabels`.
 6. <a id="source-6"></a> [Prefix routes](../../internal/tui/pane_prefix.go#L183) — `prefixedKey`, `paneKeys`; tui.go `Update`, `View`; mouse.go `handleMouse`.
 7. <a id="source-7"></a> [Standalone](../../internal/tui/attach.go#L21) — `RunAttached`, `attachedKey`; chrome_gestures.go `dockMotion`, `dockRelease`, `endDock`.
+8. <a id="source-8"></a> [Dialog regressions](../../internal/tui/notice_dialog_test.go#L1) — geometry, field wrapping, repeated notices, exact owner actions and input ownership.
+9. <a id="source-9"></a> [Shared dialog frame](../../internal/tui/spaceview/dialog.go#L9) — participant/notice border, background and button faces; chatui/overlay.go uses the same components.

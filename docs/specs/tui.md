@@ -363,12 +363,17 @@ get no box evidence. A connection never promises that an agent wakes.
 output, resizes, an unread viewer, detach/rejoin and final status. Its guest audit
 checks transport behavior; it does not measure graphical parity. [4](#source-4)
 
-[FACT] Outer notices appear in a persistent top-right queue with previous/next,
-a counter and explicit dismissal; nothing remains in the header. Tab-owned
-notices add `!` until that tab is visited; visiting retains the toast.
-Prefix `[`/`]` navigates, prefix PgUp/PgDn scrolls, and bare Esc dismisses below
-existing modal/gesture precedence. Standalone attachment uses its existing
-prefix and the same toast, preserving exit results. [55](#source-55)
+[FACT] Outer notices appear in a persistent centered dialog sharing the chat
+participant theme, about 70% wide (maximum 100 columns). The border title shows
+`Notice N of M` and merged repeat counts. Captured fields wrap under their value
+column; only the body scrolls. Go to tab (live owner only), Dismiss and
+Previous/Next stay visible. Tab-owned notices add `!` until that tab is visited;
+visiting retains the notice. New notices are unfocused: Enter, Esc, arrows and
+typing retain their pane/palette routes. Click or prefix `[`/`]` focuses and
+highlights the dialog; only then Enter runs the first action, Esc dismisses and
+Left/Right or `‹`/`›` navigate below existing modal/gesture precedence. Outside
+clicks and dismissal return focus. Prefix PgUp/PgDn retains scrolling. Standalone uses the same dialog
+and its existing prefix, preserving exit results. [55](#source-55)
 
 [FACT] Host notices, pane refusals and exit notices share the log glyphs and
 semantic theme roles. Direct-action feedback remains visible at every log

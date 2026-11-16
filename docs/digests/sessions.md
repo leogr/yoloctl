@@ -75,6 +75,9 @@ buffers only where required; malformed/unfinished controls flush without loss.
 [7](#source-7) [20](#source-20) Preferences apply at holder start; existing
 `tui.yaml` values are preserved. The default is
 `{agent-icon} {account}\{box}: {title}`. [5](#source-5) [19](#source-19)
+For agentless/account-none boxes, the conventional `{account}\{box}` pair
+expands to the box alone; a standalone `{account}` token is unchanged. Existing
+holders are not relabeled. [7](#source-7) [20](#source-20)
 Only active icons receive agent color. Grapheme matching prefers the longest
 prefix, then agent name. Padding reserves two columns plus a separator before
 truncation/hit testing. Width negotiation and Unicode/layout tests do not
@@ -115,7 +118,7 @@ echo-independent readiness and preserved shell state.
 17. <a id="source-17"></a> [Authoritative state and compatibility replay](session-replay.md) — canonical snapshots, compatibility limits, output queues and tests.
 18. <a id="source-18"></a> [tabicon.go](../../internal/tui/tabicon.go#L1-L98) — icon matching, padding, coloring and width-aware truncation.
 19. <a id="source-19"></a> [internal/config/tui.go](../../internal/config/tui.go#L131-L339) — defaults, `GetAgentIcons`, `AgentIconGlyphs`, `LoadTUI` preservation.
-20. <a id="source-20"></a> [title_test.go](../../internal/session/title_test.go#L170-L236) — literal expansion and generic-box contracts.
+20. <a id="source-20"></a> [title_test.go](../../internal/session/title_test.go#L170) — literal expansion, generic-box and agentless conventional-label contracts.
 21. <a id="source-21"></a> [tabicon_test.go](../../internal/tui/tabicon_test.go#L1-L214) — inactive styles, icon spacing, negotiation, truncation and shared-glyph stability.
 22. <a id="source-22"></a> [tui.go](../../internal/tui/tui.go#L2202) — `tabSegments`, `tabStripLabels`, `tabStrip`, `tabAt`.
 23. <a id="source-23"></a> [width negotiation](../../internal/tui/tui.go#L760) — `Update` mirrors renderer mode-2027 support.

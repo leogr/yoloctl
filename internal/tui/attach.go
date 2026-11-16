@@ -85,7 +85,7 @@ func (m *model) attachedKey(k tea.Key) (tea.Model, tea.Cmd) {
 		if prefix {
 			return m, nil
 		}
-	} else if m.toastEscape(k) {
+	} else if m.toastEscape(k) || m.toastActionKey(k) {
 		m.consumeToastKey(k)
 		return m, nil
 	} else if k.IsRepeat && m.consumedKeys[keyIdentity(k)] {

@@ -116,6 +116,7 @@ type model struct {
 	consoleHistory   bool // the palette shows every retained command (Ctrl+R), not the last one
 	notices          []toastNotice
 	noticeIndex      int
+	noticeFocused    bool
 	nextNoticeOwner  uint64
 	attachError      error
 	osc52NoticeShown bool
@@ -1236,7 +1237,7 @@ func (m *model) reportViewErrors() {
 		if err := p.Session.TakeViewError(); err != nil {
 			message := p.Title() + ": " + err.Error()
 			if m.standalone || errors.Is(err, session.ErrSessionClosed) {
-				m.postTabNotice(tab, prettylog.KindWarn, message)
+				m.postPaneNotice(tab, p, prettylog.KindWarn, message)
 				return
 			}
 			messages = append(messages, message)

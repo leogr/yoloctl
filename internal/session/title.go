@@ -240,7 +240,8 @@ func isTitleIntroducer(pending []byte) bool {
 // and StartHolderUnit forwards to the VM-side holder. Valid placeholders:
 // {title} (the agent-set title, at most once), {box}, {space}, {agent},
 // {account}, {agent-icon}. A generic box's empty agent/account render as
-// "none", the same sentinel the manifest uses. An empty icon renders as
+// "none", the same sentinel the manifest uses; the conventional {account}\{box}
+// pair omits the account for an agentless box. An empty icon renders as
 // nothing and also drops the spaces after its placeholder. strip is the
 // text the holder removes from the front of agent titles: the icon when
 // {agent-icon} is used, otherwise "". Control characters are rejected:
@@ -258,6 +259,9 @@ func ExpandBoxTitleTemplate(tpl, box, space, agent, account, icon string) (expan
 	}
 	if account == "" {
 		account = "none"
+	}
+	if agent == "none" && account == "none" {
+		tpl = strings.ReplaceAll(tpl, "{account}\\{box}", "{box}")
 	}
 	var out strings.Builder
 	titles := 0

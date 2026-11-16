@@ -216,8 +216,8 @@ func TestExpandBoxTitleTemplate(t *testing.T) {
 	}
 }
 
-// A generic box has no agent/account; the placeholders render the "none"
-// sentinel rather than vanishing, and it has no icon.
+// A generic box has no agent/account. Explicit standalone placeholders keep
+// the sentinel; the conventional account\box label drops its none prefix.
 func TestExpandBoxTitleTemplateGenericBox(t *testing.T) {
 	got, strip, err := ExpandBoxTitleTemplate("{box} {agent} {account}", "shellbox", "default", "", "", "")
 	if err != nil {
@@ -230,7 +230,20 @@ func TestExpandBoxTitleTemplateGenericBox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "none\\shellbox: {title}"; got != want {
+	if want := "shellbox: {title}"; got != want {
 		t.Errorf("generic box default expansion = %q, want %q", got, want)
+	}
+}
+
+func TestAgentlessConventionalLabelOmitsNoneOnly(t *testing.T) {
+	for _, agent := range []string{"", "none"} {
+		got, _, err := ExpandBoxTitleTemplate("{agent-icon} {account}\\{box}: {title}", "t2", "qa", agent, "none", "")
+		if err != nil || got != "t2: {title}" {
+			t.Fatalf("agentless label = %q, %v", got, err)
+		}
+	}
+	got, _, err := ExpandBoxTitleTemplate("{account}\\{box}: {title}", "coder", "qa", "codex", "personal", "")
+	if err != nil || got != "personal\\coder: {title}" {
+		t.Fatalf("real account label changed: %q, %v", got, err)
 	}
 }

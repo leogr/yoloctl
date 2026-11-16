@@ -135,7 +135,7 @@ func (m *model) prefixRoute(k tea.Key, modifier bool) (tea.Cmd, bool) {
 		m.armPrefix()
 		return nil, true
 	}
-	if m.toastEscape(k) {
+	if m.toastEscape(k) || m.toastActionKey(k) {
 		return nil, true
 	}
 	return nil, false
