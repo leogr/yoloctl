@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	backendfile "github.com/diskfs/go-diskfs/backend/file"
 	"github.com/diskfs/go-diskfs/filesystem/ext4"
@@ -34,13 +33,12 @@ import (
 // before it starts any VMM. Selection is still settled after boot by
 // session.EnsureVMBinary, so seeding is only a speed optimization.
 const (
-	pristineName    = "system.pristine.json"
-	seedPrefix      = "system.seed-"
-	seedSuffix      = ".ext4"
-	seededBinary    = "upper/opt/yoloctl/bin/yoloctl"
-	pristineState   = "formatted"
-	seededState     = "seeded"
-	seedProgressGap = 30 * time.Second
+	pristineName  = "system.pristine.json"
+	seedPrefix    = "system.seed-"
+	seedSuffix    = ".ext4"
+	seededBinary  = "upper/opt/yoloctl/bin/yoloctl"
+	pristineState = "formatted"
+	seededState   = "seeded"
 )
 
 // diskIdentity excludes ctime: renaming the verified seed over system.ext4
@@ -61,16 +59,20 @@ type pristineMarker struct {
 }
 
 // bootArtifact is the guest CLI that bootImage places on the boot disk and
-// that seeding installs: the start invocation's companion.
-var bootArtifact = func(c Config) (guestbinary.Artifact, error) {
-	return guestbinary.Resolve(c.Executable, "amd64")
+// that seeding installs: the start invocation's companion. report receives
+// the hash's completed reads.
+var bootArtifact = func(c Config, report func(int)) (guestbinary.Artifact, error) {
+	return guestbinary.ResolveReporting(c.Executable, "amd64", report)
 }
 
-// seedReport writes stage records into the helper's log (vm.log). They are
-// actual progress: a stage begins, a bounded number of completed-work counts,
-// and a stage ends. Nothing is emitted while no work completes.
-var seedReport = func(format string, args ...any) {
-	_, _ = fmt.Fprintf(os.Stderr, "yoloctl: system disk: "+format+"\n", args...)
+// prepareSystemDisk seeds a never-opened system disk, then opens the backing
+// storage, so its descriptors and the VMM see only the final file. Helper
+// calls it under the instance lock after its running refusal.
+func prepareSystemDisk(ctx context.Context, dir, dataDir string, artifact guestbinary.Artifact) (*backingStorage, error) {
+	if err := seedSystemDisk(ctx, dir, artifact); err != nil {
+		return nil, err
+	}
+	return openBackingStorage(filepath.Join(dir, "system.ext4"), filepath.Join(dataDir, "data.ext4"))
 }
 
 func identityOf(path string) (diskIdentity, error) {
@@ -168,46 +170,41 @@ func seedOrphans(dir string) ([]string, error) {
 // when the helper must not start a VMM (cancellation, an unpublishable
 // marker, a failed publication); every other problem skips seeding and the
 // normal boot continues with the guest's own copy.
-func seedSystemDisk(ctx context.Context, dir string, c Config) error {
+func seedSystemDisk(ctx context.Context, dir string, artifact guestbinary.Artifact) error {
 	m, found, err := readPristine(dir)
 	if !found {
 		return nil
 	}
 	if err != nil {
-		seedReport("skipped: %v", err)
+		prepReport("system disk seed skipped: %v", err)
 		return nil
 	}
 	path := filepath.Join(dir, "system.ext4")
 	id, err := identityOf(path)
 	if err != nil || id != m.Identity {
-		seedReport("skipped: system.ext4 does not match its creation record")
+		prepReport("system disk seed skipped: system.ext4 does not match its creation record")
 		return nil
 	}
 	orphans, err := seedOrphans(dir)
 	if err != nil {
-		seedReport("skipped: %v", err)
+		prepReport("system disk seed skipped: %v", err)
 		return nil
 	}
 	if len(orphans) > 0 {
-		seedReport("skipped: unexplained %s left in place", strings.Join(orphans, ", "))
-		return nil
-	}
-	artifact, err := bootArtifact(c)
-	if err != nil {
-		seedReport("skipped: %v", err)
+		prepReport("system disk seed skipped: unexplained %s left in place", strings.Join(orphans, ", "))
 		return nil
 	}
 	if m.State == seededState && m.ArtifactSHA256 == artifact.Sum {
-		seedReport("already holds this build's guest binary")
+		prepReport("system disk seed: already holds this build's guest binary")
 		return nil
 	}
 	info, err := os.Stat(artifact.Path)
 	if err != nil {
-		seedReport("skipped: %v", err)
+		prepReport("system disk seed skipped: %v", err)
 		return nil
 	}
 	if err = requireHostStorageFor(vmapi.FormatAllocation(Driver{}.Kind(), uint64(id.Size))+uint64(info.Size()), dir); err != nil {
-		seedReport("skipped: %v", err)
+		prepReport("system disk seed skipped: %v", err)
 		return nil
 	}
 	seed, seedID, err := buildSeed(ctx, dir, id.Size, artifact, info.Size())
@@ -215,10 +212,10 @@ func seedSystemDisk(ctx context.Context, dir string, c Config) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		seedReport("skipped: %v", err)
+		prepReport("system disk seed skipped: %v", err)
 		return nil
 	}
-	seedReport("publish begin")
+	prepReport("system disk seed publish begin")
 	next := pristineMarker{Schema: 1, State: seededState, ArtifactSHA256: artifact.Sum, Identity: seedID}
 	if err = writePristine(dir, next); err != nil {
 		removeOwned(seed, seedID)
@@ -231,7 +228,7 @@ func seedSystemDisk(ctx context.Context, dir string, c Config) error {
 	if err = syncDir(dir); err != nil {
 		return fmt.Errorf("publish seeded system disk: %w", err)
 	}
-	seedReport("publish end")
+	prepReport("system disk seed publish end")
 	return nil
 }
 
@@ -263,26 +260,21 @@ func buildSeed(ctx context.Context, dir string, size int64, artifact guestbinary
 		removeOwned(path, owned)
 		return "", diskIdentity{}, err
 	}
-	seedReport("build begin (%d bytes of guest binary)", binarySize)
 	tree := imageTree{}
 	tree[seededBinary] = imageEntry{header: tar.Header{Name: seededBinary, Mode: 0755, Size: binarySize, Typeflag: tar.TypeReg},
-		open: func() (io.ReadCloser, error) {
-			in, err := os.Open(artifact.Path)
-			if err != nil {
-				return nil, err
-			}
-			return &seedProgress{ReadCloser: in, total: binarySize, last: time.Now()}, nil
-		}}
-	err = tree.writeExt4(ctx, f, size, systemDiskParams())
+		open: func() (io.ReadCloser, error) { return os.Open(artifact.Path) }}
+	build := newPrepProgress("system disk seed build")
+	err = tree.writeExt4(withPrepProgress(ctx, build), f, size, systemDiskParams())
 	_ = f.Close()
 	if err != nil {
 		return fail(err)
 	}
-	seedReport("build end; verify begin")
-	if err = verifySeed(ctx, path, artifact.Sum, binarySize); err != nil {
+	build.end()
+	verify := newPrepProgress("system disk seed verify")
+	if err = verifySeed(ctx, path, artifact.Sum, binarySize, verify); err != nil {
 		return fail(err)
 	}
-	seedReport("verify end")
+	verify.end()
 	id, err := identityOf(path)
 	if err != nil || id.Device != owned.Device || id.Inode != owned.Inode {
 		return fail(errors.Join(errors.New("seed changed during preparation"), err))
@@ -290,26 +282,9 @@ func buildSeed(ctx context.Context, dir string, size int64, artifact guestbinary
 	return path, id, nil
 }
 
-// seedProgress reports completed copy work at most once per seedProgressGap.
-type seedProgress struct {
-	io.ReadCloser
-	total, done int64
-	last        time.Time
-}
-
-func (p *seedProgress) Read(b []byte) (int, error) {
-	n, err := p.ReadCloser.Read(b)
-	p.done += int64(n)
-	if n > 0 && time.Since(p.last) >= seedProgressGap {
-		p.last = time.Now()
-		seedReport("build progress %d/%d bytes", p.done, p.total)
-	}
-	return n, err
-}
-
 // verifySeed re-reads the finished image: the directories and the binary
-// with root ownership and exact bytes. Its output is fsynced by writeExt4.
-func verifySeed(ctx context.Context, path, sum string, size int64) error {
+// with root ownership and exact bytes (writeExt4 already fsynced it).
+func verifySeed(ctx context.Context, path, sum string, size int64, progress *prepProgress) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -342,7 +317,7 @@ func verifySeed(ctx context.Context, path, sum string, size int64) error {
 	}
 	defer func() { _ = in.Close() }()
 	h := sha256.New()
-	if _, err = io.Copy(h, imageReader{ctx, in}); err != nil {
+	if _, err = io.Copy(h, prepReader{imageReader{ctx, in}, progress}); err != nil {
 		return err
 	}
 	if hex.EncodeToString(h.Sum(nil)) != sum {

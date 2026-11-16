@@ -1,6 +1,6 @@
 # VM system disk size
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; first-start seeding at `e1201505` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; first-start seeding at `c2dc6726` and accompanying changes.
 
 [FACT] A new space's system disk is `--disk SIZE` or, by default, `auto`:
 half of the bytes available on the host filesystem that will hold the VM
@@ -51,7 +51,8 @@ unparsable or mismatched record, or an unexplained `system.seed-*` file,
 skips seeding and deletes nothing. A seeded disk is re-seeded only for a
 different build. The helper removes the record durably as its last action
 before starting the VMM and starts no VMM if that fails. Seeding costs a second
-format allocation and the binary on the host for a moment. After boot,
+format allocation and the binary on the host for a moment; its stages report
+completed work to vm.log (see [VM adapters](vm-adapters.md)). After boot,
 `EnsureVMBinary` still installs the starting build. [8](#source-8)
 
 [FACT] Regressions cover the sizing table (80→40, 120→50, 50→30, 20→30 with

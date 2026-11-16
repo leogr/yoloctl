@@ -25,6 +25,7 @@ import (
 
 	"github.com/containers/gvisor-tap-vsock/pkg/types"
 	"github.com/containers/gvisor-tap-vsock/pkg/virtualnetwork"
+	"github.com/leogr/yoloctl/internal/guestbinary"
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/rotatelog"
 	"github.com/leogr/yoloctl/internal/safepath"
@@ -65,11 +66,8 @@ func createKeys(dir string) error {
 	}
 	return nil
 }
-func bootImage(ctx context.Context, dir string, c Config) error {
-	artifact, e := bootArtifact(c)
-	if e != nil {
-		return e
-	}
+func bootImage(ctx context.Context, dir string, c Config, artifact guestbinary.Artifact) error {
+	var e error
 	b := vmwire.Boot{Schema: vmwire.Protocol, Name: c.Name, DiskID: c.Spec.DiskID, UID: c.UID, GID: c.GID, Mounts: c.Spec.Mounts}
 	if b.DataDiskGrow, e = pendingDataDiskGrow(c); e != nil {
 		return e
@@ -112,9 +110,11 @@ func bootImage(ctx context.Context, dir string, c Config) error {
 	if e = os.Remove(tmp); e != nil && !errors.Is(e, os.ErrNotExist) {
 		return e
 	}
-	if e = tree.ext4(ctx, tmp, 256<<20); e != nil {
+	build := newPrepProgress("boot disk build")
+	if e = tree.ext4(withPrepProgress(ctx, build), tmp, 256<<20); e != nil {
 		return fmt.Errorf("prepare boot disk: %w", e)
 	}
+	build.end()
 	if e = os.Rename(tmp, filepath.Join(dir, "boot.ext4")); e != nil {
 		return e
 	}
@@ -203,12 +203,15 @@ func Helper(parent context.Context, name string) (result error) {
 		return e
 	}
 	defer func() { _ = dataLock.Close() }()
-	// Under the instance lock and before the backing storage is opened, so
-	// the VMM only ever sees the final system disk.
-	if e = seedSystemDisk(ctx, dir, c); e != nil {
+	// One resolution (and hash) of the start's guest artifact serves the
+	// system-disk seed and the boot disk.
+	hash := newPrepProgress("guest binary hash")
+	artifact, e := bootArtifact(c, hash.add)
+	if e != nil {
 		return e
 	}
-	storage, e := openBackingStorage(filepath.Join(dir, "system.ext4"), filepath.Join(dataDir, "data.ext4"))
+	hash.end()
+	storage, e := prepareSystemDisk(ctx, dir, dataDir, artifact)
 	if e != nil {
 		return e
 	}
@@ -256,15 +259,17 @@ func Helper(parent context.Context, name string) (result error) {
 		if !boot.Initializing || boot.DiskUUID != "" || boot.DataDiskGrow != nil {
 			return errors.New("data disk initialization authority missing")
 		}
-		if e = formatDisk(ctx, filepath.Join(dataDir, "data.ext4")); e != nil {
+		format := newPrepProgress("data disk format")
+		if e = formatDisk(withPrepProgress(ctx, format), filepath.Join(dataDir, "data.ext4")); e != nil {
 			return e
 		}
+		format.end()
 		c.Spec.Format = false
 		if e = WriteConfig(dir, c); e != nil {
 			return e
 		}
 	}
-	if e = bootImage(ctx, dir, c); e != nil {
+	if e = bootImage(ctx, dir, c, artifact); e != nil {
 		return e
 	}
 	if e = storage.require(hostStorageStartFree); e != nil {

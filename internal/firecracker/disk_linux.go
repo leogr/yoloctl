@@ -306,6 +306,7 @@ func (f *contextDisk) WriteAt(p []byte, off int64) (int, error) {
 	}
 	n, err := f.File.WriteAt(p, off)
 	if n > 0 {
+		prepProgressFrom(f.ctx).add(n)
 		for page := first; page <= (off+int64(n)-1)/4096; page++ {
 			f.written[page/64] |= 1 << uint(page%64)
 		}

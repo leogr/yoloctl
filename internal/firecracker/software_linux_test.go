@@ -126,7 +126,11 @@ install:
 	if e = WriteConfig(dir, c); e != nil {
 		t.Fatal(e)
 	}
-	if e = bootImage(ctx, dir, c); e != nil {
+	guestArtifact, e := bootArtifact(c, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = bootImage(ctx, dir, c, guestArtifact); e != nil {
 		t.Fatal(e)
 	}
 	rootfs := filepath.Join(artifact, "rootfs.ext4")

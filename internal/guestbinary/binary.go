@@ -47,6 +47,13 @@ func ResolveInit(self string) (Artifact, error) {
 // Bundles prefer the matching static companion. Standalone Linux executables
 // can copy themselves; dynamically linked ones must pass a guest startup probe.
 func Resolve(self, uname string) (Artifact, error) {
+	return ResolveReporting(self, uname, nil)
+}
+
+// ResolveReporting is Resolve that reports each completed read of the hash
+// (bytes) to report, which may be nil. VM preparation uses it so a slow host
+// shows actual progress while it hashes a large companion.
+func ResolveReporting(self, uname string, report func(int)) (Artifact, error) {
 	var arch string
 	var machine elf.Machine
 	var expected string
@@ -71,7 +78,7 @@ func Resolve(self, uname string) (Artifact, error) {
 	// also use itself when its same-architecture companion is absent.
 	_, pathErr := os.Stat(path)
 	if selfErr == nil && (expected == "" || os.IsNotExist(pathErr)) {
-		sum, err := SHA256File(resolved)
+		sum, err := sha256FileReporting(resolved, report)
 		return Artifact{resolved, sum, dynamic}, err
 	}
 	if expected == "" {
@@ -80,7 +87,7 @@ func Resolve(self, uname string) (Artifact, error) {
 	if _, err := LinuxExecutable(path, machine, false); err != nil {
 		return Artifact{}, fmt.Errorf("session: unusable Linux/%s guest binary %s: %w; run make build and install the complete bundle", arch, path, err)
 	}
-	sum, err := SHA256File(path)
+	sum, err := sha256FileReporting(path, report)
 	if err != nil {
 		return Artifact{}, err
 	}
@@ -110,15 +117,34 @@ func LinuxExecutable(path string, machine elf.Machine, allowDynamic bool) (bool,
 	return false, nil
 }
 
-func SHA256File(path string) (string, error) {
+func SHA256File(path string) (string, error) { return sha256FileReporting(path, nil) }
+
+func sha256FileReporting(path string, report func(int)) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = f.Close() }()
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	var r io.Reader = f
+	if report != nil {
+		r = reportingReader{f, report}
+	}
+	if _, err := io.Copy(h, r); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+type reportingReader struct {
+	r      io.Reader
+	report func(int)
+}
+
+func (r reportingReader) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	if n > 0 {
+		r.report(n)
+	}
+	return n, err
 }

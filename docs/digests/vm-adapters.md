@@ -1,6 +1,6 @@
 # VM adapters and the Firecracker guest
 
-Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); other facts at `1d265df3`; re-read cited sources when changing behavior.
+Verification: `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); preparation progress at `c2dc6726` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior.
 
 [FACT] `internal/vmapi.Driver` separates VM lifecycle, owned disks, shell/copy
 transport, process termination proof and the fixed controller service from
@@ -83,6 +83,13 @@ owned by this launch, and caller cancellation remain distinct failures. Storage
 pause retains the live runtime before destructive cleanup. Noisy output can
 prolong waiting; silence can expire without proving a hung guest.
 [9](#source-9) [12](#source-12) [46](#source-46)
+
+[FACT] Before the VMM exists, the helper's preparation writes its own records
+into that log: begin and end of the guest artifact hash (resolved once for the
+boot disk and the system-disk seed), a data-disk format, the seed build, verify
+and publish, and the boot disk build. While reads or writes complete, a byte
+count follows at most every 30 s. There is no heartbeat, so a blocked read,
+write or fsync still reaches the inactivity window. [47](#source-47)
 
 [FACT] Each host grant is served from its own `os.Root`; the share digest
 records read-only, symlink, descriptor and parent-sync limits. SSHFS disables
@@ -185,3 +192,4 @@ not Firecracker/KVM behavior. The adapter boots fresh; snapshots remain experime
 45. <a id="source-45"></a> [Host boot and display](../../cmd/yoloctl/space_nested_virtualization.go#L1) — `applySpaceBootResources`, `nestedBootNotice`, `fillNestedSpaceShow`.
 
 46. <a id="source-46"></a> [Boot activity](../../internal/firecracker/boot_activity_linux.go#L1) — `bootActivity`, `bootLogStat`; validated rotating generations.
+47. <a id="source-47"></a> [Preparation progress](../../internal/firecracker/prep_progress_linux.go#L1) — `prepReport`, `prepProgress`, `withPrepProgress` (counted in `contextDisk.WriteAt`), `prepReader`; `guestbinary.ResolveReporting`; the stages in `Helper`/`bootImage` (helper_linux.go) and seed_linux.go; `TestPrepRecordsFeedTheBootWatchUntilSilence`.
