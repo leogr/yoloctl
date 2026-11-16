@@ -21,6 +21,13 @@ post-replacement flush failure reports an uncertain commit. Native deletion
 also flushes its directory. Host shares carry no declaration lock or write.
 [3](#source-3) [4](#source-4) [5](#source-5) [6](#source-6)
 
+[FACT] After deployment the host polls controller readiness for up to two minutes
+in total. Each ping retains the ordinary ten-second guest diagnostic bound;
+caller cancellation or an earlier deadline wins, including over a simultaneous
+successful reply. Failed pings do not renew the total budget or imply process
+death, and the loop does not redeploy or restart the controller.
+[37](#source-37)
+
 [FACT] Protocol 3 uses bounded length-prefixed JSON frames. Handshake requires
 matching bundle, protocol, space and supplied generation. Methods and flags are
 validated against the explicit registry/shared Cobra surface; positional flag
@@ -157,3 +164,5 @@ this test seam does not change server authorization. [19](#source-19)
 
 35. <a id="source-35"></a> [Worker log pipe](../../internal/controller/worker.go#L73) — log pipe creation, last-slot `LogFD`/`LogPipe`, relay goroutine and `joinWorkerLog` before return; `OpenWorkerLog` in worker_log_linux.go; intake claim in cmd/yoloctl/controller_worker_intake.go and `InitWorker` in controller_internal.go `runControllerWorker`.
 36. <a id="source-36"></a> [Log frames](../../internal/controller/log_transport.go#L1) — `LogVerbosity`, `frameLog`, `relayWorkerLog`, `joinWorkerLog`; client.go `case "log"`/`"exit"`, `ExitError.Rendered`/`State`, `OutcomeRendered`; server.go exit `State`.
+
+37. <a id="source-37"></a> [Deployment readiness](../../cmd/yoloctl/controller_deploy.go#L349) — `controllerReadyTimeout`, `waitControllerReady`.

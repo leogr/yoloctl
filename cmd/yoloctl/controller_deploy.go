@@ -340,18 +340,35 @@ func startControllerSpaceImpl(ctx context.Context, boot *spaceconfig.Bootstrap, 
 	}); err != nil {
 		return err
 	}
-	readyCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	return waitControllerReady(ctx, func(probe context.Context) error {
+		return controllerControl(probe, boot, "control.ping", io.Discard)
+	})
+}
+
+// Controller readiness is a silent, total installation budget, not a measure
+// of guest progress. Each individual diagnostic ping keeps its ordinary bound.
+const controllerReadyTimeout = 2 * time.Minute
+
+func waitControllerReady(ctx context.Context, ping func(context.Context) error) error {
+	readyCtx, cancel := context.WithTimeout(ctx, controllerReadyTimeout)
 	defer cancel()
 	for {
+		if err := readyCtx.Err(); err != nil {
+			return fmt.Errorf("controller did not become ready: %w", err)
+		}
 		probe, stop := context.WithTimeout(readyCtx, vmhost.GuestProbeTimeout)
-		err = controllerControl(probe, boot, "control.ping", io.Discard)
+		err := ping(probe)
 		stop()
+		// Cancellation wins even if the transport returned a simultaneous success.
+		if cause := readyCtx.Err(); cause != nil {
+			return fmt.Errorf("controller did not become ready: %w", errors.Join(cause, err))
+		}
 		if err == nil {
 			return nil
 		}
 		select {
 		case <-readyCtx.Done():
-			return fmt.Errorf("controller did not become ready: %w", err)
+			return fmt.Errorf("controller did not become ready: %w", errors.Join(readyCtx.Err(), err))
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
