@@ -243,7 +243,8 @@ Pretty terminal logs wrap at the current column count with hanging detail
 indentation; unknown-width and non-terminal output stay unchanged. [35](#source-35)
 
 [FACT] When a collapsed host step had Lima output lines, its summary is
-followed by `full output: yoloctl space logs SPACE --host`. [32](#source-32)
+followed by `VM launcher log: yoloctl space logs SPACE --host`; this names
+launcher diagnostics, not transient restart/npm details. [32](#source-32)
 
 [FACT] `space logs` renders the VM log with the shared logger, follows its name
 across rotation, and preserves raw stdout bytes with `--log-level debug`.

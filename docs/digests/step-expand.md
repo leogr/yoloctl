@@ -1,6 +1,6 @@
 # Expanding a running step
 
-Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Every command a TUI pane starts gets one more private inherited
 socket, named by `YOLOCTL_TUI_STEP_FD`. It runs TUI→command and carries
@@ -21,19 +21,23 @@ removes its name from the environment, so a subprocess cannot inherit it.
 Without a steps block it closes the channel; otherwise a reader feeds
 `View.Click`. The block ends at the cursor, so the View maps the offset onto
 the step that owns that block row. Only a running step that has no
-sub-steps owns its title and output rows. A click toggles that step between
+running sub-steps owns its title and output rows. A click toggles that step between
 its latest line and as many of its kept lines (tracker `Retained`) as fit
 the block's existing Height−2 limit. The earlier lines are counted on one
-row and the other rows keep their place. A step that ended collapses as
-before; nothing is saved and the View still reads no terminal.
+row and the other rows keep their place. A live child completion is committed
+once above the active block and no longer owns a clickable row. Its successful
+detail collapses; failed/unknown tails retain existing bounds and print once.
+Snapshots do not invent child completion order; suspended output waits for
+Resume (or final Close). Nothing is saved and the View reads no terminal.
 [4](#source-4) [5](#source-5)
 
 [FACT] When a root step that had output lines ends, a `Pointer` may name
-where its full output is kept, and its answer is printed under the collapsed
-line. yoloctl answers only for a host step with a valid space: output lines
-under a host step are Lima launcher output, and `host.log` keeps each call's
-last 64 KiB. The line is `full output: yoloctl space logs SPACE --host`.
-Image build output is kept nowhere, so it gets no pointer. [5](#source-5)
+where output is kept, and its answer is printed under the collapsed line.
+For a host step with a valid space, yoloctl specifically names the separate
+Lima launcher log, retaining each call's last 64 KiB:
+`VM launcher log: yoloctl space logs SPACE --host`. Transient restart/npm
+maintenance details are not saved there; the pointer does not claim full
+maintenance retention. Image builds get no durable-output pointer. [5](#source-5)
 [6](#source-6) [7](#source-7)
 
 ## Sources

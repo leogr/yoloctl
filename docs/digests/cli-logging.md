@@ -1,6 +1,6 @@
 # CLI log routing and outcomes
 
-Verification: `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7` and accompanying changes.
+Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes; prior `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7` and accompanying changes.
 
 [FACT] CLI warnings, notices and mutation-result prose use the process
 `internal/logging` Logger; worker processes send records and the host renders
@@ -62,6 +62,14 @@ caller writer; the post-autoupdate hint is one notice whose commands are
 continuation lines. `cliLogLines` splits a lead and its listing lines over as
 many records as the message limit needs, never cutting a line. [16](#source-16)
 
+[FACT] Only with the default-info interactive step view, space start's
+restart callback owns a scoped child step. Its diagnostic stdout/stderr enter
+separate line buffers then the existing detail writer; final partial lines
+flush before that step ends. Typed worker records retain `HostLogSink`, not the
+replaced error writer. Plain/debug streams and records, exec/attach/data,
+controller results and lifecycle ordering are unchanged. No npm banner parsing
+or durable maintenance log is added. [17](#source-17)
+
 [FACT] Prompts, editors, host SSH and standalone attachments suspend the shared
 inline step view and resume after returning terminal ownership. They add no
 input reader. Exec/attach/chat-stream output and dry-run data bypass added
@@ -115,3 +123,5 @@ notice's existing once-per-attachment rule are unchanged.
 15. <a id="source-15"></a> [ID echoes](../../internal/container/container.go#L927) — `nerdctlEcho`, `Run` (detached), `Start`, `Stop`, `ImageRemove`, `Remove` (`ImagePull` keeps stdout); stop_id.go, remove_id.go; echo_output_test.go `TestNerdctlIDEchoesAreNotShown`.
 
 16. <a id="source-16"></a> [Report routing](../../cmd/yoloctl/cli_logging.go#L32-L73) — `cliLogLines`, `cliReportTo`, `cliNoticeSink`; chat_export.go `exportChat`, `finishChatExportChannel`, `writeChatExport`; controller_sessions.go and space.go listings; image.go, agentbox_reconcile.go; agentbox.go `warnPostAutoupdateFailure`; cli_report_test.go.
+
+17. <a id="source-17"></a> [Restart diagnostics](../../cmd/yoloctl/controller_restart_output.go#L16) — `restartSessionOutput`, `restartDetailStream`; controller_sessions.go `hostSessionRestartOffer`; controller_restart_output_test.go framed ownership/plain/debug/pinned-VT controls.

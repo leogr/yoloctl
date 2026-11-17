@@ -49,16 +49,16 @@ func installStepView(s logging.Settings) {
 	}
 }
 
-// hostLogPointer names where a host step's output is kept in full: output
-// lines under a host step are Lima launcher output (lima.WithProgress), and
-// each call's last 64 KiB is kept in host.log under its space.
+// hostLogPointer names the separate VM launcher log. A host step may also
+// own transient restart/maintenance diagnostics; those are not saved there.
+// Lima keeps each launcher call's last 64 KiB in host.log under its space.
 func hostLogPointer(actor string, root prettylog.StepView) string {
 	if actor != logging.Host {
 		return ""
 	}
 	for _, a := range root.Attrs {
 		if a.Key == logging.KeySpace && layout.ValidateExistingSpaceName(a.Value.String()) == nil {
-			return "full output: yoloctl space logs " + a.Value.String() + " --host"
+			return "VM launcher log: yoloctl space logs " + a.Value.String() + " --host"
 		}
 	}
 	return ""

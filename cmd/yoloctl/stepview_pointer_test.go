@@ -11,7 +11,7 @@ import (
 // Only a host step names host.log, with its own space.
 func TestHostLogPointer(t *testing.T) {
 	root := prettylog.StepView{Title: "Starting space dev", Attrs: []slog.Attr{slog.String(logging.KeySpace, "dev")}}
-	if got := hostLogPointer(logging.Host, root); got != "full output: yoloctl space logs dev --host" {
+	if got := hostLogPointer(logging.Host, root); got != "VM launcher log: yoloctl space logs dev --host" {
 		t.Fatal(got)
 	}
 	if got := hostLogPointer("builder", root); got != "" {

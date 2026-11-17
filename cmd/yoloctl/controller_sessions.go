@@ -72,8 +72,10 @@ func hostSessionRestartOffer(cmd *cobra.Command, boot *spaceconfig.Bootstrap) se
 			return status.Room.Server.Name, nil
 		},
 		restart: func(ctx context.Context, name, holder string, startWorkload bool) error {
-			return callHostController(ctx, boot, sessionRestartRequest(boot.Name, name, holder, startWorkload),
-				controller.ClientIO{Out: cmd.OutOrStdout(), Err: cmd.ErrOrStderr()})
+			streams := controller.ClientIO{Out: cmd.OutOrStdout(), Err: cmd.ErrOrStderr()}
+			return restartSessionOutput(ctx, name, streams, func(streams controller.ClientIO) error {
+				return callHostController(ctx, boot, sessionRestartRequest(boot.Name, name, holder, startWorkload), streams)
+			})
 		},
 		drift: func(ctx context.Context, names []string) ([]boxDriftView, error) {
 			var view []boxDriftView

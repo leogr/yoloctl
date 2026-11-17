@@ -1,6 +1,6 @@
 # Log presentation
 
-Verification: `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes.
+Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes.
 
 [FACT] `pkg/prettylog` is a public package of the yoloctl module that renders
 `log/slog` records. It imports no yoloctl or UI package and reads no terminal.
@@ -85,9 +85,13 @@ stderr-only command logs; data writers remain separate.
 stderr is the process stderr, else as plain lines to that writer; a rendering
 error is reported once without changing the result. On a terminal at the
 default `info` level, `stepview` draws running root steps as a block cut to the terminal (no
-terminal reads or keys), leaves one line per ended root plus a failed
-sub-step's last 20 lines, defers output while suspended and summarizes a
-replayed snapshot after its end record. It closes before the command's final
+terminal reads or keys). Live child completions are committed once above the
+block in arrival order and excluded from later redraws; roots retain their
+collapsed final summary. Failed/unknown child tails and omitted-byte counts
+appear once, under existing bounds. Suspension and partial raw lines defer
+completion output; snapshots restore state without inventing chronological
+child completions, retaining final failure diagnostics. [15](#source-15)
+It closes before the command's final
 error, showing a root step still running as `?` "did not finish before the
 command ended". Without a block, below debug, a failed relayed step's last 20
 lines follow as error records split under the message limit (the heading cuts
@@ -114,7 +118,7 @@ and the theme's `Warn` tone. [10](#source-10)
 12. <a id="source-12"></a> [Step and wire regressions](../../pkg/prettylog/behavior_test.go#L84-L397) — review1_test.go bounded empty lines, last reserved key, strict decoding, unambiguous fold keys; step lines, snapshot round trip through the wire at Quiet, monotonic states, eviction, typed round trip, caps, unrepresentable records, incomplete streams, `Route`.
 13. <a id="source-13"></a> [Adapter regressions](../../internal/logging/logging_test.go#L1) — env, `SetLogger` restore, palette, no UI imports; logtheme and cmd/yoloctl logflags_test.go; chatui level_glyph_test.go; session holder_argv_test.go.
 14. <a id="source-14"></a> [Host record routing](../../internal/controller/client.go#L45) — `clientLogStreams`, `HostLogSink`, `case "log"`; cmd/yoloctl stepview.go `installStepView`, controller_client.go `callControllerTerminal`.
-15. <a id="source-15"></a> [Steps block](../../pkg/prettylog/stepview/stepview.go#L1) — `Install`, `Apply`, `blockRows`, `summaryLocked`, `Writer`, `Suspend`, `Close`; failures.go `Failures`; cmd/yoloctl logflags.go `executeRoot` order; stepview_test.go screen regressions.
+15. <a id="source-15"></a> [Steps block](../../pkg/prettylog/stepview/stepview.go#L1) — `Install`, `Apply`, `blockRows`, `summaryLocked`, `Writer`, `Suspend`, `Close`; chronology_test.go completion/snapshot/partial-line controls; failures.go `Failures`; cmd/yoloctl logflags.go `executeRoot` order; stepview_test.go screen regressions.
 
 16. <a id="source-16"></a> [CLI routing](cli-logging.md) — command outcomes, stderr/data separation and input handoffs.
 

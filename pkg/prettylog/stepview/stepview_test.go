@@ -134,7 +134,7 @@ func TestBlockShowsRunningStepsAndCollapsesOnSuccess(t *testing.T) {
 	c.add(time.Second)
 	root.Done()
 	got = scr.text()
-	want := "✓ builder · buildkit    Building image a1b2c3  5.2s"
+	want := "  ✓ [1/3] FROM ubuntu  1.2s\n  ✓ [2/3] RUN npm install  3s\n✓ builder · buildkit    Building image a1b2c3  5.2s"
 	if got != want {
 		t.Fatalf("scrollback:\n%q\nwant:\n%q", got, want)
 	}
@@ -161,7 +161,7 @@ func TestFailedStepExpandsItsOutput(t *testing.T) {
 			t.Fatalf("missing %q:\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, "line 4\n") || strings.Contains(got, "FROM ubuntu") {
+	if strings.Contains(got, "line 4\n") || strings.Count(got, "FROM ubuntu") != 1 || strings.Count(got, "RUN make") != 1 {
 		t.Fatalf("expanded more than the failed step's last %d lines:\n%s", failedTail, got)
 	}
 }
@@ -216,14 +216,14 @@ func TestStreamWriterKeepsBytesAndWaitsForLineEnd(t *testing.T) {
 }
 
 func TestRowsAreCutToTheTerminal(t *testing.T) {
-	l, _, scr, _ := setup(t, func() (int, int) { return 30, 5 })
+	l, v, scr, _ := setup(t, func() (int, int) { return 30, 5 })
 	root := l.StartStep("Building image with a rather long description", prettylog.Actor("builder"))
 	for i := range 10 {
 		root.Step("step " + strconv.Itoa(i)).Done()
 	}
 	got := scr.text()
 	rows := strings.Split(got, "\n")
-	if len(rows) > 3 {
+	if v.shown > 3 {
 		t.Fatalf("block taller than height-2: %q", got)
 	}
 	for _, r := range rows {
@@ -246,7 +246,7 @@ func TestCloseMarksUnfinishedStepsAndRestoresTheLogger(t *testing.T) {
 		t.Fatal("still current after Close")
 	}
 	got := scr.text()
-	if !strings.Contains(got, "? builder") || !strings.Contains(got, "did not finish before the command ended") || strings.ContainsAny(got, "›✓⠋") {
+	if !strings.Contains(got, "? builder") || !strings.Contains(got, "did not finish before the command ended") || strings.ContainsAny(got, "›⠋") || strings.Count(got, "FROM ubuntu") != 1 {
 		t.Fatalf("%q", got)
 	}
 	l.Slog().Info("after close")
@@ -457,7 +457,7 @@ func TestFailuresKeepTheTailUnderALongTitle(t *testing.T) {
 	check(out.String())
 }
 
-// A build root that ends retitled collapses to that one line.
+// A build root that ends retitled leaves one final root line after committed children.
 func TestRetitledRootCollapsesToOneLine(t *testing.T) {
 	l, _, scr, _ := setup(t, nil)
 	root := slog.NewRecord(time.Now(), prettylog.LevelInfo, "Image for box ok1 (features: f1)", 0)
@@ -472,7 +472,7 @@ func TestRetitledRootCollapsesToOneLine(t *testing.T) {
 	ready := slog.NewRecord(time.Now(), prettylog.LevelInfo, "Image for box ok1 ready (features: f1)", 0)
 	ready.AddAttrs(prettylog.Actor("builder"), slog.String(prettylog.KeyStep, "r"), slog.String(prettylog.KeyState, "ok"), prettylog.Took(71*time.Second))
 	_ = l.Handle(context.Background(), ready)
-	if got := scr.text(); got != "✓ builder               Image for box ok1 ready (features: f1)  1m11s" {
+	if got := scr.text(); got != "  ✓ Building image local/c:1  1s\n✓ builder               Image for box ok1 ready (features: f1)  1m11s" {
 		t.Fatalf("%q", got)
 	}
 }
@@ -547,7 +547,7 @@ func TestPointerUnderACollapsedRoot(t *testing.T) {
 		t.Fatalf("asked only for the root with output: %q", asked)
 	}
 	lines := strings.Split(scr.text(), "\n")
-	if len(lines) != 3 || !strings.Contains(lines[2], "› host") || !strings.Contains(lines[2], "full output: yoloctl space logs dev --host") {
+	if len(lines) != 5 || !strings.Contains(lines[4], "› host") || !strings.Contains(lines[4], "full output: yoloctl space logs dev --host") {
 		t.Fatalf("pointer under the collapsed line:\n%s", scr.text())
 	}
 }
