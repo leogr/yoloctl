@@ -87,6 +87,20 @@ func (m *model) spaceSwitchWhy() string {
 	return ""
 }
 
+// beginPopup and restorePopupFocus are shared by the space picker and notice
+// history: explicit opening replaces sibling popups; closing restores its caller.
+func (m *model) beginPopup() (bool, bool) {
+	if m.browserDialog != nil || m.confirm != nil {
+		return false, false
+	}
+	m.closeSpacePicker()
+	m.closeToast()
+	m.disarmPrefix()
+	m.picker, m.notice = nil, nil
+	return m.focusPalette, true
+}
+func (m *model) restorePopupFocus(palette bool) { m.focusPalette = palette }
+
 func (m *model) openSpacePicker() {
 	if m.browserDialog != nil || m.confirm != nil {
 		return
@@ -95,11 +109,13 @@ func (m *model) openSpacePicker() {
 		m.paneNotice(why)
 		return
 	}
-	m.disarmPrefix()
-	m.picker, m.notice = nil, nil
+	returnPalette, ok := m.beginPopup()
+	if !ok {
+		return
+	}
 	m.spaceListRequest++
 	request, generation := m.spaceListRequest, m.spaceGeneration
-	m.spacePicker = &spacePicker{loading: true, request: request, returnPalette: m.focusPalette}
+	m.spacePicker = &spacePicker{loading: true, request: request, returnPalette: returnPalette}
 	if m.program != nil {
 		// Capture all model state and the inventory function before the goroutine.
 		program, list := m.program, listSwitchSpaces
@@ -134,7 +150,7 @@ func (m *model) receiveSpaceList(msg spaceListMsg) {
 
 func (m *model) closeSpacePicker() {
 	if p := m.spacePicker; p != nil {
-		m.focusPalette = p.returnPalette
+		m.restorePopupFocus(p.returnPalette)
 		m.spacePicker = nil
 	}
 }

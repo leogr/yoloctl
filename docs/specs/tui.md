@@ -365,18 +365,18 @@ get no box evidence. A connection never promises that an agent wakes.
 output, resizes, an unread viewer, detach/rejoin and final status. Its guest audit
 checks transport behavior; it does not measure graphical parity. [4](#source-4)
 
-[FACT] Outer notices appear in a persistent centered dialog sharing the chat
-participant theme, about 70% wide (maximum 100 columns). The border title shows
-`Notice N of M` and merged repeat counts. Captured fields wrap under their value
-column; only the body scrolls. Go to tab (live owner only), Dismiss and
-Previous/Next stay visible. Tab-owned notices add `!` until that tab is visited;
-visiting retains the notice. New notices are unfocused: Enter, Esc, arrows and
-typing retain their pane/palette routes. Click or prefix `[`/`]` focuses and
-highlights the dialog; only then Enter runs the first action, Esc dismisses and
-Left/Right or `‹`/`›` navigate below existing modal/gesture precedence. Other
-keys and paste are consumed while focused; they never type into the pane. Outside
-clicks and dismissal return focus. Prefix PgUp/PgDn retains scrolling. Standalone uses the same dialog
-and its existing prefix, preserving exit results. [55](#source-55)
+[FACT] New outer notices auto-open an unfocused centered dialog for about eight
+seconds, then hide while retained in history. The top-bar `(!N)` bell before the
+space switch counts unread entries; click it or use Ctrl+N in the palette to
+open focused history. Viewing marks the current entry read. Focused arrows/Tab
+select buttons (including Dismiss), Enter runs the selection, and `‹`/`›` page
+notices. Esc/outside click closes without erasing history; an auto-popup click
+focuses it. Popup opening/closing shares space-switch focus restoration. New
+arrivals do not disturb a focused review. Focused keys/paste are exclusive;
+unfocused input stays with the pane. The old prefix notice routes are removed.
+Dialogs retain repeated counts, captured fields, body scrolling, fixed controls
+and exact tab ownership. Standalone has auto-popup/click/expiry without a bell
+or reopen shortcut; final results remain independent. [55](#source-55)
 
 [FACT] Host notices, pane refusals and exit notices share the log glyphs and
 semantic theme roles. Direct-action feedback remains visible at every log

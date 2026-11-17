@@ -24,7 +24,8 @@ current space marked, including stopped spaces. Up/down or the wheel moves;
 Enter or a row click selects; Esc/outside click keeps. Loading, unavailable and
 empty inventories are shown explicitly. Selecting the current space does
 nothing. A bound native/operator client does not offer cross-space choices.
-This inventory does not probe or boot VMs. The footer names `yoloctl space use`
+Notice history reuses this popup opening/focus-restoration lifecycle; opening
+one closes the other without discarding notice history. This inventory does not probe or boot VMs. The footer names `yoloctl space use`
 as the command that changes the default. It wraps clauses first, keeping the
 command together when it fits, then wraps at word boundaries; words
 wider than the available width are ellipsized. Footer prose uses the shared

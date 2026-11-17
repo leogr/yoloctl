@@ -73,10 +73,6 @@ func (m *model) attachedKey(k tea.Key) (tea.Model, tea.Cmd) {
 	if m.attachPrefix != nil {
 		previous := *m.attachPrefix
 		m.attachPrefix = nil
-		if !prefix && !isStandaloneDetachKey(k) && m.toastCommand(k) {
-			m.consumeToastKey(k)
-			return m, nil
-		}
 		// Ctrl+W keeps its old precedence; the tmux-style keys yield to a
 		// doubled configured prefix (e.g. palette_key ctrl+d), which forwards it.
 		if isStandaloneCloseKey(k) || !prefix && isStandaloneDetachKey(k) {

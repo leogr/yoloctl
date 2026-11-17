@@ -23,6 +23,7 @@ type toastNotice struct {
 	repeats, scroll    int
 	box, space, tab    string
 	when               time.Time
+	unread             bool
 }
 
 func (m *model) postNotice(kind prettylog.Kind, text string) { m.postTabNotice(nil, kind, text) }
@@ -75,15 +76,28 @@ func (m *model) postPaneNotice(t *tabs.Tab, source *panes.Pane, kind prettylog.K
 		clean, _ = strings.CutPrefix(clean, prettylog.DefaultGlyphs.For(prettylog.KindNotice)+" ")
 		return clean
 	}
-	n := toastNotice{ownerID: ownerID, kind: kind, text: plain, body: body, origin: origin, repeats: 1, box: safe(box), space: safe(space), tab: safe(tab), when: time.Now()}
+	n := toastNotice{ownerID: ownerID, kind: kind, text: plain, body: body, origin: origin, repeats: 1, box: safe(box), space: safe(space), tab: safe(tab), when: time.Now(), unread: true}
 	last := len(m.notices) - 1
 	if last >= 0 && m.notices[last].ownerID == ownerID && m.notices[last].kind == kind && m.notices[last].body == body && m.notices[last].origin == origin {
 		m.notices[last].repeats++
+		m.notices[last].unread = true
 	} else {
 		m.notices = append(m.notices, n)
 	}
-	m.noticeIndex = len(m.notices) - 1
-	m.noticeFocused = false
+	if !m.noticeFocused {
+		m.noticeIndex = len(m.notices) - 1
+		m.noticeVisible = true
+		m.noticeSelected = 0
+		m.noticeUntil = clock().Add(noticeAutoTime)
+		m.noticeEpoch++
+		if m.noticeTimer != nil {
+			m.noticeTimer.Stop()
+		}
+		if m.program != nil {
+			program, epoch := m.program, m.noticeEpoch
+			m.noticeTimer = time.AfterFunc(noticeAutoTime, func() { program.Send(noticeExpireMsg(epoch)) })
+		}
+	}
 }
 
 func (m *model) postSurfaceNotice(surface any, kind prettylog.Kind, text string) {
@@ -119,18 +133,27 @@ func (m *model) currentToast() *toastNotice {
 func (m *model) moveToast(delta int) {
 	if m.currentToast() != nil {
 		m.noticeIndex = min(max(m.noticeIndex+delta, 0), len(m.notices)-1)
+		m.noticeSelected = 0
+		if m.noticeFocused {
+			m.notices[m.noticeIndex].unread = false
+		}
 	}
 }
 func (m *model) dismissToast() {
 	if m.currentToast() == nil {
 		return
 	}
-	m.noticeFocused = false
 	i := m.noticeIndex
 	copy(m.notices[i:], m.notices[i+1:])
 	m.notices[len(m.notices)-1] = toastNotice{}
 	m.notices = m.notices[:len(m.notices)-1]
 	m.noticeIndex = max(min(i, len(m.notices)-1), 0)
+	m.noticeSelected = 0
+	if len(m.notices) == 0 {
+		m.closeToast()
+	} else if m.noticeFocused {
+		m.notices[m.noticeIndex].unread = false
+	}
 }
 func (m *model) toastSuppressed() bool {
 	return m.browserDialog != nil || m.spacePicker != nil || m.confirm != nil || m.picker != nil || m.prefix != nil || m.activeNotice() != nil
@@ -156,7 +179,7 @@ func (o toastRect) contains(x, y int) bool {
 // Only the body scrolls; the title, buttons and hint remain fixed.
 func (m *model) toastLayout() toastRect {
 	n := m.currentToast()
-	if n == nil || m.toastSuppressed() || m.width <= 0 || m.height <= m.chromeRows() {
+	if n == nil || !m.noticeVisible || m.toastSuppressed() || m.width <= 0 || m.height <= m.chromeRows() {
 		return toastRect{}
 	}
 	w := min(m.width, max(min(100, m.width*7/10), min(32, m.width)))
@@ -245,15 +268,8 @@ func (m *model) toastLayout() toastRect {
 	if w < 24 || available < 7 {
 		return compact()
 	}
-	type button struct {
-		action, label string
-		disabled      bool
-	}
-	var choices []button
-	if m.toastTab(n) != nil {
-		choices = append(choices, button{action: "visit", label: "Go to tab"})
-	}
-	choices = append(choices, button{action: "dismiss", label: "Dismiss"}, button{action: "prev", label: "‹ Previous", disabled: m.noticeIndex == 0}, button{action: "next", label: "Next ›", disabled: m.noticeIndex == len(m.notices)-1})
+	choices := m.allToastChoices()
+	selected := m.selectedToastButtonFor(choices)
 	var buttonRows []string
 	var hits []toastButton
 	row, col := 0, 0
@@ -272,7 +288,7 @@ func (m *model) toastLayout() toastRect {
 		if row == len(buttonRows) {
 			buttonRows = append(buttonRows, "")
 		}
-		buttonRows[row] += style(strings.Repeat(" ", gap), theme.Text) + spaceview.DialogButton(theme, label, i == 0, false, c.disabled)
+		buttonRows[row] += style(strings.Repeat(" ", gap), theme.Text) + spaceview.DialogButton(theme, label, m.noticeFocused && i == selected, false, c.disabled)
 		col += gap
 		hits = append(hits, toastButton{action: c.action, x: o.x + 2 + col, y: row, w: size})
 		col += size
@@ -312,7 +328,7 @@ func (m *model) toastLayout() toastRect {
 	for _, row := range buttonRows {
 		o.rows = append(o.rows, frame.Row(row))
 	}
-	o.rows = append(o.rows, frame.Footer("click or prefix+[ to focus · Enter · Esc"))
+	o.rows = append(o.rows, frame.Footer("← → Tab select · Enter runs · ‹ › notices · Esc closes"))
 	return o
 }
 
@@ -337,6 +353,7 @@ func (m *model) toastAction(action string) {
 		m.dismissToast()
 	case "visit":
 		if t := m.toastTab(m.currentToast()); t != nil {
+			m.closeToast()
 			m.activateTab(m.tabs.Index(t))
 		}
 	}
@@ -354,17 +371,25 @@ func (m *model) toastActionKey(k tea.Key) bool {
 		return false
 	}
 	action := ""
-	if k.Mod & ^(tea.ModCapsLock|tea.ModNumLock) == 0 {
+	mod := k.Mod & ^(tea.ModCapsLock | tea.ModNumLock)
+	if !k.IsRepeat {
 		switch {
-		case k.Code == tea.KeyEnter:
-			action = "dismiss"
-			if m.toastTab(m.currentToast()) != nil {
-				action = "visit"
-			}
-		case k.Code == tea.KeyLeft || k.Text == "‹":
+		case mod == 0 && k.Code == tea.KeyEnter:
+			action = m.toastChoices()[m.selectedToastButton()].action
+		case mod == 0 && k.Code == tea.KeyLeft:
+			m.selectToastButton(-1)
+		case mod == 0 && (k.Code == tea.KeyRight || k.Code == tea.KeyTab):
+			m.selectToastButton(1)
+		case k.Code == tea.KeyTab && mod == tea.ModShift:
+			m.selectToastButton(-1)
+		case mod == 0 && k.Text == "‹":
 			action = "prev"
-		case k.Code == tea.KeyRight || k.Text == "›":
+		case mod == 0 && k.Text == "›":
 			action = "next"
+		case mod == 0 && k.Code == tea.KeyPgUp:
+			m.scrollToast(-max(m.toastLayout().capacity, 1))
+		case mod == 0 && k.Code == tea.KeyPgDown:
+			m.scrollToast(max(m.toastLayout().capacity, 1))
 		}
 	}
 	// Every other key belongs to this focused dialog too, including modifier
@@ -390,30 +415,6 @@ func (m *model) scrollToast(delta int) {
 		n.scroll = max(n.scroll, 0)
 	}
 }
-func (m *model) toastCommand(k tea.Key) bool {
-	if m.currentToast() == nil {
-		return false
-	}
-	mod := k.Mod &^ (tea.ModCapsLock | tea.ModNumLock)
-	if mod != 0 {
-		return false
-	}
-	switch {
-	case k.Text == "[" || k.Code == '[':
-		m.noticeFocused = true
-		m.moveToast(-1)
-	case k.Text == "]" || k.Code == ']':
-		m.noticeFocused = true
-		m.moveToast(1)
-	case k.Code == tea.KeyPgUp:
-		m.scrollToast(-max(m.toastLayout().capacity, 1))
-	case k.Code == tea.KeyPgDown:
-		m.scrollToast(max(m.toastLayout().capacity, 1))
-	default:
-		return false
-	}
-	return true
-}
 func (m *model) toastEscape(k tea.Key) bool {
 	if !m.toastInputFocused() {
 		return false
@@ -426,7 +427,7 @@ func (m *model) toastEscape(k tea.Key) bool {
 	}
 	if !k.IsRepeat {
 		m.consumeToastKey(k)
-		m.dismissToast()
+		m.closeToast()
 	}
 	return true
 }
@@ -446,9 +447,16 @@ func (m *model) toastMouse(msg tea.Msg, mo tea.Mouse) bool {
 		return false
 	}
 	o := m.toastLayout()
+	if _, press := msg.(tea.MouseClickMsg); press && mo.Button == tea.MouseLeft && m.noticeBellHit(mo) {
+		m.ownPopupPress(mo.Button)
+		m.toggleToast()
+		return true
+	}
 	if !o.contains(mo.X, mo.Y) {
-		if _, press := msg.(tea.MouseClickMsg); press {
-			m.noticeFocused = false
+		if _, press := msg.(tea.MouseClickMsg); press && o.w > 0 && mo.Button == tea.MouseLeft {
+			m.ownPopupPress(mo.Button)
+			m.closeToast()
+			return true
 		}
 		return false
 	}
@@ -468,9 +476,10 @@ func (m *model) toastMouse(msg tea.Msg, mo tea.Mouse) bool {
 	if mo.Button != tea.MouseLeft {
 		return true
 	}
-	m.noticeFocused = true
-	for _, button := range o.buttons {
+	m.focusToast()
+	for i, button := range o.buttons {
 		if mo.Y == button.y && mo.X >= button.x && mo.X < button.x+button.w {
+			m.noticeSelected = i
 			m.toastAction(button.action)
 			return true
 		}

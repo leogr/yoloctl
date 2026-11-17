@@ -112,23 +112,25 @@ func TestToastEscapeNavigationAndOwnedKeys(t *testing.T) {
 	_, capture := mouseCapture(t, m, "\x1b[>11u")
 	m.postNotice(prettylog.KindWarn, "first")
 	m.postNotice(prettylog.KindWarn, "second")
-	prefixed(m, key('[', 0, "["))
+	m.openToast()
+	m.moveToast(-1)
 	if m.noticeText() != "first" || m.prefix != nil {
-		t.Fatal("prefix [ did not navigate and close")
+		t.Fatal("explicit history open did not navigate")
 	}
 	_, _ = m.Update(key(tea.KeyEscape, 0, ""))
 	// Holding Escape must not dismiss the next notice, even if another UI opens.
 	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape, IsRepeat: true})
 	_, _ = m.Update(tea.KeyReleaseMsg{Code: tea.KeyEscape})
-	if len(m.notices) != 1 || m.noticeText() != "second" {
+	if len(m.notices) != 2 || m.noticeText() != "first" || m.noticeVisible {
 		t.Fatal("toast key lifecycle leaked or dismissed twice")
 	}
 	_, _ = m.Update(ctrlQ)
 	_, _ = m.Update(key(tea.KeyEscape, 0, ""))
-	if len(m.notices) != 1 || m.prefix != nil {
+	if len(m.notices) != 2 || m.prefix != nil {
 		t.Fatal("menu Escape dismissed toast")
 	}
-	prefixed(m, key('[', 0, "[")) // explicitly focus the remaining notice
+	m.openToast()
+	m.moveToast(-1) // explicitly focus the remaining notice
 	_, _ = m.Update(key(tea.KeyEscape, 0, ""))
 	_, _ = m.Update(tea.KeyReleaseMsg{Code: tea.KeyEscape})
 	_, _ = m.Update(key(tea.KeyEscape, 0, ""))
@@ -174,9 +176,10 @@ func TestToastMouseGeometryOwnershipAndScroll(t *testing.T) {
 				t.Fatalf("gesture ownership: %q", got)
 			}
 			m.moveToast(-1)
-			prefixed(m, key(tea.KeyPgDown, 0, ""))
+			m.openToast()
+			_, _ = m.Update(key(tea.KeyPgDown, 0, ""))
 			if m.currentToast().scroll == 0 {
-				t.Fatal("prefix scroll did not scroll overflow")
+				t.Fatal("focused page scroll did not scroll overflow")
 			}
 		})
 	}
@@ -216,8 +219,8 @@ func TestStandaloneToastPreservesScreenPrefixAndStartupResult(t *testing.T) {
 	_, _ = s.Write([]byte("\x1b[15;1HBOTTOM"))
 	m.postNotice(prettylog.KindWarn, "first")
 	m.postNotice(prettylog.KindError, "second")
-	_, _ = m.Update(key('y', tea.ModCtrl, ""))
-	_, _ = m.Update(key('[', 0, "["))
+	m.openToast()
+	m.moveToast(-1)
 	if m.noticeText() != "first" {
 		t.Fatal("standalone command leaked prefix")
 	}

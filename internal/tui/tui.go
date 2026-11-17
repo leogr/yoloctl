@@ -110,30 +110,36 @@ type model struct {
 	imageRegistry *chatimage.Registry
 	cfg           *config.TUI
 
-	width, height    int
-	focusPalette     bool
-	scrollOff        int  // lines back into the focused surface's scrollback; 0 = live
-	consoleHistory   bool // the palette shows every retained command (Ctrl+R), not the last one
-	notices          []toastNotice
-	noticeIndex      int
-	noticeFocused    bool
-	nextNoticeOwner  uint64
-	attachError      error
-	osc52NoticeShown bool
-	browserPrompts   map[*term.Session]browserPrompt
-	browserDialog    *browserDialog
-	chrome           *chromeGesture // a held left press on strip, bar or border
-	confirm          *closeConfirm  // the open "close a running command?" popup
-	keyOwners        map[rune]keyTerminal
-	toastKeys        map[rune]bool // toast-owned physical presses through release
-	consumedKeys     map[rune]bool // keys the prefix layers took, until their release
-	hostKitty        bool
-	hostGraphemes    bool // mirrors Bubble Tea's mode-2027 width negotiation
-	hostBlurred      bool
-	hostGeometry     hostGeometry
-	imageHost        imageHost
-	images           imageBroker
-	frames           *displayFrames // scoped to one View call
+	width, height       int
+	focusPalette        bool
+	scrollOff           int  // lines back into the focused surface's scrollback; 0 = live
+	consoleHistory      bool // the palette shows every retained command (Ctrl+R), not the last one
+	notices             []toastNotice
+	noticeIndex         int
+	noticeFocused       bool
+	noticeVisible       bool
+	noticeReturnPalette bool
+	noticeSelected      int
+	noticeUntil         time.Time
+	noticeEpoch         uint64
+	noticeTimer         *time.Timer
+	nextNoticeOwner     uint64
+	attachError         error
+	osc52NoticeShown    bool
+	browserPrompts      map[*term.Session]browserPrompt
+	browserDialog       *browserDialog
+	chrome              *chromeGesture // a held left press on strip, bar or border
+	confirm             *closeConfirm  // the open "close a running command?" popup
+	keyOwners           map[rune]keyTerminal
+	toastKeys           map[rune]bool // toast-owned physical presses through release
+	consumedKeys        map[rune]bool // keys the prefix layers took, until their release
+	hostKitty           bool
+	hostGraphemes       bool // mirrors Bubble Tea's mode-2027 width negotiation
+	hostBlurred         bool
+	hostGeometry        hostGeometry
+	imageHost           imageHost
+	images              imageBroker
+	frames              *displayFrames // scoped to one View call
 	// placeholderFocus is the empty pane the palette last opened for
 	// (placeholder.go).
 	placeholderFocus *panes.Pane
@@ -300,7 +306,7 @@ func (m *model) startSpinner() tea.Cmd {
 // Init measures host color defaults and enables mouse reporting. Color
 // requests are read-only; child palette changes never reach the host terminal.
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(tea.RequestForegroundColor, tea.RequestBackgroundColor, requestHostPalette, m.initHostMouse())
+	return tea.Batch(tea.RequestForegroundColor, tea.RequestBackgroundColor, requestHostPalette, m.initHostMouse(), m.noticeExpiryCmd())
 }
 
 func (m *model) updateTerminalColors() {
@@ -963,7 +969,12 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		m.reportInputErrors()
 		return m, nil
 
-	case prefixTickMsg: // a prefix window or notice expired: repaint
+	case noticeExpireMsg:
+		if uint64(msg) == m.noticeEpoch && !m.noticeFocused && !m.noticeUntil.IsZero() && !clock().Before(m.noticeUntil) {
+			m.closeToast()
+		}
+		return m, nil
+	case prefixTickMsg: // a prefix window expired: repaint
 		return m, nil
 
 	case spinnerTickMsg:
@@ -1291,6 +1302,10 @@ func (m *model) handleChromeClick(mo tea.Mouse) bool {
 	if m.standalone {
 		return false
 	}
+	if m.noticeBellHit(mo) {
+		m.toggleToast()
+		return true
+	}
 	if mo.Y == 0 && mo.X >= m.width-1-runewidth.StringWidth(m.contextChip()) && m.contextChip() != "" {
 		m.openSpacePicker()
 		return true
@@ -1442,6 +1457,14 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.sendKey(cur.Session, k, false)
 			return m, nil
 		}
+	}
+
+	if k.Code == 'n' && k.Mod & ^(tea.ModCapsLock|tea.ModNumLock) == tea.ModCtrl && m.keyOwners[keyIdentity(k)] == nil {
+		if !k.IsRepeat {
+			m.toggleToast()
+			m.consumeToastKey(k)
+		}
+		return m, nil
 	}
 
 	// Palette focus. While a console command runs, the overlay is its
@@ -2069,7 +2092,7 @@ func (m *model) suggestionRow(c yoloctlcli.Candidate, selected bool, valW int, b
 // the palette's edit point while the palette has focus, at the child's
 // cursor cell while a tab has focus, hidden when scrolled back.
 func (m *model) hostCursor() *tea.Cursor {
-	if m.browserDialog != nil || m.confirm != nil || m.picker != nil || m.activeOverlay() != nil {
+	if m.browserDialog != nil || m.confirm != nil || m.picker != nil || m.activeOverlay() != nil || m.toastInputFocused() {
 		return nil
 	}
 	if m.focusPalette {
@@ -2203,7 +2226,7 @@ func (m *model) contextChip() string {
 	if m.spaceBound {
 		chip = m.ctxSpace
 	}
-	return runewidth.Truncate(chip, max(m.width-len([]rune(brandPrefix()))-3, 0), "…")
+	return runewidth.Truncate(chip, max(m.width-len([]rune(brandPrefix()))-3-runewidth.StringWidth(m.noticeChip())-1, 0), "…")
 }
 
 // paletteRegion is the display width the editable line gets on row 0: the
@@ -2212,7 +2235,7 @@ func (m *model) contextChip() string {
 // final surface-paint column). The line is windowed into it (visibleLine)
 // so a long command slides instead of wrapping the row.
 func (m *model) paletteRegion() int {
-	region := m.width - len([]rune(brandPrefix())) - runewidth.StringWidth(m.contextChip()) - 2
+	region := m.width - len([]rune(brandPrefix())) - runewidth.StringWidth(m.headerChips()) - 2
 	if region < 1 {
 		region = 1
 	}
@@ -2297,7 +2320,7 @@ func (m *model) inputLine() string {
 	case newTab && line != "":
 		legend = "new tab · Esc cancels" // the placeholder went with the first character
 	case m.focusPalette:
-		legend = "Esc hide palette · ^R history · " + prefix + " panes · ^←/→ tabs · ^D quit"
+		legend = "Esc hide palette · ^R history · ^N notices · " + prefix + " panes · ^←/→ tabs · ^D quit"
 		switch {
 		case m.console.Busy(): // keys feed the running command, not the editor
 			legend = "running · ^C interrupt · ^Y detach · ^←/→ tabs"
@@ -2318,7 +2341,7 @@ func (m *model) inputLine() string {
 		legend = ""
 	}
 
-	chip := m.contextChip()
+	chip := m.headerChips()
 	chipW := runewidth.StringWidth(chip)
 	budget := max(m.width-brandW-lineW-2, 0) // leave a gap and the final painted column
 
@@ -2368,7 +2391,7 @@ func (m *model) inputLine() string {
 		if sep != "" {
 			right += cDim + sep + cReset
 		}
-		right += cBlue + cBold + chip + cReset
+		right += m.headerChipsStyled()
 	}
 	rightW := chipW + sepW + ansi.StringWidth(legend)
 

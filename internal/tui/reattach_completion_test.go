@@ -83,6 +83,7 @@ func TestReattachAfterRealAttachCompletion(t *testing.T) {
 				if action == "key" {
 					_, _ = m.Update(key('r', 0, "r"))
 				} else {
+					m.closeToast() // outside-click closure consumes the first popup gesture
 					x, y := slots[0].x+2, m.tabTop()+slots[0].y
 					_, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y})
 					_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: x, Y: y})

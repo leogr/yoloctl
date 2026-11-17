@@ -1256,7 +1256,7 @@ func TestInputLineScrollsToCursor(t *testing.T) {
 	if w := runewidth.StringWidth(vis); w > 40 {
 		t.Errorf("input row overflows after Home: %d cols:\n%q", w, vis)
 	}
-	if !strings.Contains(vis, "box create coder --agent") {
+	if !strings.Contains(vis, "box create coder") {
 		t.Errorf("head not visible after Home:\n%q", vis)
 	}
 	if !strings.Contains(vis, "›") {

@@ -13,7 +13,7 @@ key, with a persistent toast at startup. [1](#source-1) [2](#source-2)
 
 [FACT] Key precedence, first match wins: a browser prompt; the close popup;
 an open tab picker; the inert notice popup; an armed prefix; a resize repeat
-window; the prefix key; toast Esc dismissal; then ordinary routes. It arms from a child, a busy
+window; the prefix key; focused notice input; then ordinary routes. It arms from a child, a busy
 console, the palette or an exited pane, not standalone, and opens the
 [pane menu](tui-pane-menu.md), which owns the keys, clicks, refusals and
 closing; the input line keeps its idle legend. Modifier reports do not
@@ -39,7 +39,6 @@ key tests:
 | `!`, `j` | Break the focused pane out to a new tab; bring a tab in (picker in join mode). |
 | `c` | New-tab command entry. |
 | `n`, `p`, `1`…`9`, `0` | Next, previous, tab N (`0` is tab 10; a missing N is refused). |
-| `[`, `]`, PgUp/PgDn | Navigate/scroll persistent notices. |
 | `w`, `d`, `?` | Tab picker; detach the whole tab; keep the menu open. |
 
 Pane keys return focus to the pane. A border moves as far as a trial layout

@@ -23,7 +23,7 @@ func TestNoticeDialogApprovedLayout(t *testing.T) {
 	if o.w != 98 || o.x != (140-o.w)/2 || o.y <= m.chromeRows() {
 		t.Fatalf("not centered70%%: %+v", o)
 	}
-	for _, part := range []string{"Notice 1 of 1 · ×2", "Detail", "When", "Dismiss", "‹ Previous", "Next ›", "click or prefix+[ to focus · Enter · Esc"} {
+	for _, part := range []string{"Notice 1 of 1 · ×2", "Detail", "When", "Dismiss", "‹ Previous", "Next ›", "← → Tab select · Enter runs · ‹ › notices · Esc closes"} {
 		if !strings.Contains(text, part) {
 			t.Errorf("missing %q:\n%s", part, text)
 		}
@@ -42,7 +42,7 @@ func TestNoticeDialogEnterDismissesGlobalButDoesNotTypeIntoChild(t *testing.T) {
 	m := newTestModel(t, 100, 28)
 	_, capture := mouseCapture(t, m, "\x1b[>11u")
 	m.postNotice(prettylog.KindWarn, "global")
-	prefixed(m, key('[', 0, "["))
+	m.openToast()
 	_, _ = m.Update(key(tea.KeyEnter, 0, ""))
 	_, _ = m.Update(tea.KeyReleaseMsg{Code: tea.KeyEnter})
 	if len(m.notices) != 0 || capture() != "" {
@@ -55,7 +55,7 @@ func TestNoticeDialogVisitKeepsQueueAndExactOwner(t *testing.T) {
 	a, _ := sleepTab(t, m, 1)
 	b, _ := sleepTab(t, m, 1)
 	m.postTabNotice(a, prettylog.KindWarn, "background problem")
-	prefixed(m, key('[', 0, "["))
+	m.openToast()
 	text := ansi.Strip(strings.Join(m.toastLayout().rows, "\n"))
 	if !strings.Contains(text, "Go to tab") {
 		t.Fatal(text)
@@ -72,6 +72,7 @@ func TestNoticeDialogVisitKeepsQueueAndExactOwner(t *testing.T) {
 		t.Fatal("closed owner still actionable")
 	}
 	_, _ = m.Update(tea.KeyReleaseMsg{Code: tea.KeyEnter})
+	m.openToast() // reopening retained history must not adopt a replacement tab
 	_, _ = m.Update(key(tea.KeyEnter, 0, ""))
 	if len(m.notices) != 0 || m.tabs.Current() != b {
 		t.Fatal("replacement tab adopted old action")
@@ -236,10 +237,10 @@ func TestNoticeDialogClickFocusAndReturn(t *testing.T) {
 	if len(m.notices) != 1 || capture() == "" {
 		t.Fatal("unfocused Escape did not reach agent")
 	}
-	prefixed(m, key('[', 0, "["))
+	m.openToast()
 	_, _ = m.Update(key(tea.KeyEscape, 0, ""))
-	if len(m.notices) != 0 || m.noticeFocused {
-		t.Fatal("focused Escape did not dismiss and return focus")
+	if len(m.notices) != 1 || m.noticeFocused || m.noticeVisible {
+		t.Fatal("focused Escape did not hide and return focus")
 	}
 	m.postNotice(prettylog.KindWarn, "new arrival")
 	if m.noticeFocused {
@@ -274,7 +275,7 @@ func TestNoticeDialogFocusedInputIsExclusive(t *testing.T) {
 			_, _ = m.Update(tea.KeyPressMsg{Code: 'z', Text: "z", IsRepeat: true})
 			_, _ = m.Update(tea.KeyReleaseMsg{Code: 'z'})
 			_, _ = m.Update(tea.KeyReleaseMsg{Code: tea.KeyEscape})
-			if m.noticeFocused || len(m.notices) != 1 {
+			if m.noticeFocused || len(m.notices) != 2 {
 				t.Fatal("owned repeats/releases changed the new notice")
 			}
 			_, _ = m.Update(tea.PasteMsg{Content: "unfocused paste"})
@@ -325,7 +326,7 @@ func TestNoticeDialogFocusedPrefixRetainsPrecedence(t *testing.T) {
 			} else {
 				prefixed(m, key('[', 0, "["))
 			}
-			if m.noticeIndex != 0 || !m.noticeFocused || m.attachPrefix != nil || m.prefix != nil {
+			if m.noticeIndex != 1 || !m.noticeFocused || m.attachPrefix != nil || (!standalone && m.prefix == nil) {
 				t.Fatal("focused notice swallowed the existing prefix route")
 			}
 		})
@@ -338,14 +339,9 @@ func TestNoticeDialogKeepsMouseGestureButOwnsNewInput(t *testing.T) {
 			m := newTestModel(t, 100, 28)
 			m.standalone = standalone
 			_, capture := mouseCapture(t, m, "\x1b[>11u\x1b[?1002h\x1b[?1006h")
-			m.postNotice(prettylog.KindWarn, "notice")
 			_, _ = m.Update(click(1, m.height-1))
-			if standalone {
-				_, _ = m.Update(key('y', tea.ModCtrl, ""))
-				_, _ = m.Update(key('[', 0, "["))
-			} else {
-				prefixed(m, key('[', 0, "["))
-			}
+			m.postNotice(prettylog.KindWarn, "notice")
+			m.openToast()
 			if !m.noticeFocused {
 				t.Fatal("did not focus")
 			}
