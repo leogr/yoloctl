@@ -23,7 +23,7 @@ func followControl(t *testing.T, m *Model, value string) (int, int) {
 		x := 0
 		for _, run := range row.Runs {
 			if run.Act.Kind == markdownview.IntentToggleTableRow && run.Act.Value == value {
-				return x, i - m.top + 1
+				return x, i - m.top
 			}
 			x += m.method.StringWidth(run.Text)
 		}

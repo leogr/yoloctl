@@ -52,7 +52,7 @@ func TestBodyRowsKeepTerminalBackground(t *testing.T) {
 			card := cellBackground(t, spaceview.StyleText(" ", spaceview.Style{BG: markdownview.CodeCard(m.theme)}), 0)
 			rows := strings.Split(m.View().Content, "\n")
 			var cardRows, textRows int
-			for y, row := range rows[1 : len(rows)-1] { // title and status rows keep their own fills
+			for y, row := range rows[:len(rows)-1] { // only the footer keeps its own fill
 				buf := uv.NewScreenBuffer(m.width, 1)
 				uv.NewStyledString(row).Draw(buf, buf.Bounds())
 				onCard, text := false, false
@@ -69,7 +69,7 @@ func TestBodyRowsKeepTerminalBackground(t *testing.T) {
 					case sameColor(cell.Style.Bg, card):
 						onCard = true
 					default:
-						t.Fatalf("body row %d cell %d has background %v: %q", y+1, x, cell.Style.Bg, row)
+						t.Fatalf("body row %d cell %d has background %v: %q", y, x, cell.Style.Bg, row)
 					}
 				}
 				if onCard {

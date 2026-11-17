@@ -135,7 +135,9 @@ indented code cards and a small HTML subset (`<br>` in table cells included),
 with recorded deviations; source view applies none. [43](#source-43) [53](#source-53)
 
 [FACT] `follow PATH` titles its pane with the path relative to its main workdir
-(absolute outside), without a `follow` prefix. It uses the shared renderer for a live file pane, with source
+(absolute outside), without a `follow` prefix. The path is not repeated as a
+header inside the view; content begins on its first row and the status footer
+remains. It uses the shared renderer for a live file pane, with source
 toggle, drag selection copied on release as in chat (plus explicit `y`) and inert links. It polls once per second,
 refreshes off the input loop, follows the end until scrolling up and retains a
 stale display on read failure. Page keys browse the active plain window for

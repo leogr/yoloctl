@@ -8,22 +8,22 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// The title and window title name the followed file only, in host and space
+// The pane/window title names the followed file only, in host and space
 // mode alike (leogr: no space in the follow title).
 func TestTitleNamesOnlyThePath(t *testing.T) {
 	for _, space := range []string{"", "dev"} {
 		m, path := fileModel(t, "hello", Text)
 		m.opts.Space = space
 		want := path
-		// Size the view to the title, so a long temporary path is not clipped.
-		m.Update(tea.WindowSizeMsg{Width: ansi.StringWidth(want) + 8, Height: 12})
+		// Metadata keeps the full path even with a narrow, header-free body.
+		m.Update(tea.WindowSizeMsg{Width: 12, Height: 12})
 		v := m.View()
 		if v.WindowTitle != want {
 			t.Fatalf("space %q: window title %q, want %q", space, v.WindowTitle, want)
 		}
 		first := ansi.Strip(strings.SplitN(v.Content, "\n", 2)[0])
-		if !strings.HasPrefix(first, want) || strings.Contains(first, "host ·") || strings.Contains(first, "dev ·") {
-			t.Fatalf("space %q: title row %q", space, first)
+		if strings.TrimSpace(first) != "hello" {
+			t.Fatalf("space %q: first body row %q", space, first)
 		}
 	}
 }
@@ -46,8 +46,8 @@ func TestTitleUsesWorkdirRelativePathAndKeepsOutsideAbsolute(t *testing.T) {
 					t.Fatalf("title %q, want %q", v.WindowTitle, tc.want)
 				}
 				first := ansi.Strip(strings.SplitN(v.Content, "\n", 2)[0])
-				if !strings.HasPrefix(first, tc.want) {
-					t.Fatalf("title row %q", first)
+				if strings.TrimSpace(first) != "hello" {
+					t.Fatalf("first body row %q", first)
 				}
 				if m.opts.Path != tc.path {
 					t.Fatal("title changed the pinned reader path")

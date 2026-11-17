@@ -217,9 +217,9 @@ func TestDragCopiesOnReleaseAndControlsStayInert(t *testing.T) {
 	m.opts.Copy = func(text string) tea.Cmd { copied = append(copied, text); return nil }
 	m.top = 0
 	m.following = false
-	m.Update(tea.MouseClickMsg(tea.Mouse{X: 0, Y: 1, Button: tea.MouseLeft}))
-	m.Update(tea.MouseMotionMsg(tea.Mouse{X: 7, Y: 1, Button: tea.MouseLeft}))
-	m.Update(tea.MouseReleaseMsg(tea.Mouse{X: 7, Y: 1, Button: tea.MouseLeft}))
+	m.Update(tea.MouseClickMsg(tea.Mouse{X: 0, Y: 0, Button: tea.MouseLeft}))
+	m.Update(tea.MouseMotionMsg(tea.Mouse{X: 7, Y: 0, Button: tea.MouseLeft}))
+	m.Update(tea.MouseReleaseMsg(tea.Mouse{X: 7, Y: 0, Button: tea.MouseLeft}))
 	if len(copied) != 1 || copied[0] != "one two" || m.notice != "Copied 7 characters of displayed text · Esc clears the highlight" {
 		t.Fatalf("release copy %q, notice %q", copied, m.notice)
 	}
@@ -323,7 +323,7 @@ func TestReleaseCopyFollowsChatPolicy(t *testing.T) {
 		}
 		m.Update(tea.MouseReleaseMsg(tea.Mouse{X: x1, Y: y1, Button: tea.MouseLeft}))
 	}
-	drag(2, 1, 2, 1)
+	drag(2, 0, 2, 0)
 	if len(copied) != 0 {
 		t.Fatal("a click copied", copied)
 	}
@@ -351,7 +351,7 @@ func TestReleaseCopyFollowsChatPolicy(t *testing.T) {
 		t.Fatalf("copy button %q", copied)
 	}
 	m.opts.Copy = nil
-	drag(0, 1, 5, 1)
+	drag(0, 0, 5, 0)
 	if len(copied) != 2 || m.notice != "Host clipboard is off (seams.clipboard); nothing was copied" {
 		t.Fatalf("clipboard off: %q %q", copied, m.notice)
 	}
@@ -371,11 +371,11 @@ func TestClearingMidDragEndsTheGesture(t *testing.T) {
 			var copied []string
 			m.opts.Copy = func(text string) tea.Cmd { copied = append(copied, text); return nil }
 			m.top, m.following = 0, false
-			m.Update(tea.MouseClickMsg(tea.Mouse{X: 0, Y: 1, Button: tea.MouseLeft}))
-			m.Update(tea.MouseMotionMsg(tea.Mouse{X: 5, Y: 1, Button: tea.MouseLeft}))
+			m.Update(tea.MouseClickMsg(tea.Mouse{X: 0, Y: 0, Button: tea.MouseLeft}))
+			m.Update(tea.MouseMotionMsg(tea.Mouse{X: 5, Y: 0, Button: tea.MouseLeft}))
 			key(m, clear.code, clear.mod)
-			m.Update(tea.MouseMotionMsg(tea.Mouse{X: 9, Y: 1, Button: tea.MouseLeft}))
-			m.Update(tea.MouseReleaseMsg(tea.Mouse{X: 9, Y: 1, Button: tea.MouseLeft}))
+			m.Update(tea.MouseMotionMsg(tea.Mouse{X: 9, Y: 0, Button: tea.MouseLeft}))
+			m.Update(tea.MouseReleaseMsg(tea.Mouse{X: 9, Y: 0, Button: tea.MouseLeft}))
 			if len(copied) != 0 || m.selection != nil || m.drag {
 				t.Fatalf("copied %q, selection %v, drag %v", copied, m.selection, m.drag)
 			}

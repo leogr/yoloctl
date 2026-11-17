@@ -429,7 +429,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
-func (m *Model) bodyHeight() int { return max(0, m.height-2) }
+func (m *Model) bodyHeight() int { return max(0, m.height-1) }
 func (m *Model) maxTop() int {
 	if m.view == nil {
 		return 0
@@ -599,7 +599,7 @@ func (m *Model) pointAt(x, y int) (point, markdownview.Action, bool) {
 	if m.view == nil || len(m.view.rows) == 0 {
 		return point{}, markdownview.Action{}, false
 	}
-	index := min(max(m.top+y-1, 0), len(m.view.rows)-1)
+	index := min(max(m.top+y, 0), len(m.view.rows)-1)
 	row := m.view.rows[index]
 	line := min(max(row.Line, 0), len(m.view.doc.Lines)-1)
 	lo, hi := markdownview.HitRun(m.method, row.Runs, max(0, x), row.End)
@@ -617,7 +617,7 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			return m.scroll(1)
 		}
 	case tea.MouseClickMsg:
-		if mouse.Button != tea.MouseLeft || mouse.Y < 1 || mouse.Y >= m.height-1 {
+		if mouse.Button != tea.MouseLeft || mouse.Y < 0 || mouse.Y >= m.height-1 {
 			return nil
 		}
 		p, act, ok := m.pointAt(mouse.X, mouse.Y)
@@ -666,7 +666,7 @@ func (m *Model) View() tea.View {
 	if m.width == 0 || m.height == 0 {
 		return tea.NewView("")
 	}
-	// The title names the file only; the space is already shown by the TUI.
+	// The pane/window title names the file; it is not repeated in a body row.
 	path := m.opts.Path
 	if Within(path, m.opts.Workdir) {
 		if relative, err := filepath.Rel(m.opts.Workdir, path); err == nil {
@@ -674,8 +674,7 @@ func (m *Model) View() tea.View {
 		}
 	}
 	title := strings.ReplaceAll(markdownview.Plain(path), "\n", " ")
-	titleStyle := spaceview.Style{FG: m.theme.Brand, BG: spaceview.FirstRowBG, Bold: true}
-	rows := []string{markdownview.Paint(m.method, []markdownview.Run{markdownview.Deco(title, titleStyle)}, m.width, spaceview.FirstRowBG, nil, spaceview.Style{})}
+	rows := make([]string, 0, m.height)
 	a, b, selected := m.selectedBounds()
 	for y := 0; y < m.bodyHeight(); y++ {
 		i := m.top + y

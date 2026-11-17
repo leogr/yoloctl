@@ -1,6 +1,6 @@
 # Live file view
 
-Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes.
+Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; header-free layout re-read at `e46f7d4ced29695669ca5c30544a53752557c872` and accompanying changes.
 
 [FACT] Host-only `yoloctl follow PATH [--space SPACE] [--format auto|text|markdown]`
 opens one live pane. Default mode pins the selected space and absolute VM path;
@@ -9,9 +9,12 @@ rechecks the running VM and current bootstrap grants. It never boots a VM,
 changes mounts, updates a controller or falls back to host reads. `--host`
 explicitly reads an ordinarily readable host regular file, relative to launch
 cwd, without a VM; it rejects an explicit `--space`. In-box and operator
-invocations are refused. The title contains only the path: relative inside the
+invocations are refused. The pane/window title contains only the path: relative inside the
 space default workdir (launch cwd for `--host`), absolute outside. This display
-base is pinned at launch; the reader keeps its absolute path. If the base is
+base is pinned at launch; the reader keeps its absolute path. The file name is
+not repeated inside the view: body row zero starts the file viewport, all but
+the footer row are available to it, and pointer hits use that same origin.
+[4](#source-4) [10](#source-10) If the base is
 unavailable, an absolute or home-expanded target keeps its absolute title; a
 relative VM target still requires its default workdir. [12](#source-12)
 Auto mode recognizes `.md` and `.markdown` regardless
@@ -79,8 +82,8 @@ These establish component behavior, not native terminal or live backend parity.
 
 [FACT] Body rows keep the terminal background behind and after their text, as
 chat transcript rows do. Prose, headings, pipe text and tables have no row fill;
-only code cards (and a selection) carry their own background. The title and
-status rows keep their fills. A cell-level regression checks the default, dark
+only code cards (and a selection) carry their own background. Only the footer
+keeps its status-row fill. A cell-level regression checks the default, dark
 and light themes. [7](#source-7) [8](#source-8)
 
 ## Sources
@@ -91,11 +94,11 @@ and light themes. [7](#source-7) [8](#source-8)
 4. <a id="source-4"></a> [View and job ownership](../../internal/followview/model.go#L51) — `renderFile`, `jobs`, `Model.Update`, `scroll`, `View`, `Run`.
 5. <a id="source-5"></a> [Source regressions](../../internal/followview/source_test.go#L38) — temporary-file and fixed-reader transport tests; model_test.go covers rendering/input/state and cmd/yoloctl/follow_test.go covers selection/completion.
 6. <a id="source-6"></a> [Shared layout option](../../internal/markdownview/document.go#L1) — `LayoutOptions.UnlimitedRows`; internal/tui/confirm_close.go `closeEffect` and tui.go `opensLiveSurface` own pane routing/closing.
-7. <a id="source-7"></a> [Body row painting](../../internal/followview/model.go#L492) — `View`, body `Paint` fill.
+7. <a id="source-7"></a> [Body row painting](../../internal/followview/model.go#L665) — `View`, body `Paint` fill.
 8. <a id="source-8"></a> [Background regression](../../internal/followview/background_test.go#L18) — `TestBodyRowsKeepTerminalBackground`.
 9. <a id="source-9"></a> [Reopen classification](../../internal/tui/reopen_args.go#L24) — `parseReopenView` `follow` case, `pinReopenArgs`; `viewEndAction` in reattach.go; follow cases in reopen_args_test.go, reopen_test.go and reopen_launch_test.go.
-10. <a id="source-10"></a> [Copy on release](../../internal/followview/model.go#L394) — `copyText`, `clearSelection`, `mouse` (L433); `TestDragCopiesOnReleaseAndControlsStayInert`, `TestReleaseCopyFollowsChatPolicy`, `TestClearingMidDragEndsTheGesture` in model_test.go; host callback in cmd/yoloctl/follow.go applies `seams.clipboard` and OSC 52 evaluation.
+10. <a id="source-10"></a> [Copy on release](../../internal/followview/model.go#L570) — `copyText`, `clearSelection`, `mouse` (L609); `TestDragCopiesOnReleaseAndControlsStayInert`, `TestReleaseCopyFollowsChatPolicy`, `TestClearingMidDragEndsTheGesture` in model_test.go; host callback in cmd/yoloctl/follow.go applies `seams.clipboard` and OSC 52 evaluation.
 
 11. <a id="source-11"></a> [Compact follow rows](../../internal/followview/table_compact.go#L1) — `toggleTableRows`, `followKey`; table_compact_test.go.
 
-12. <a id="source-12"></a> [Path title](../../internal/followview/model.go#L665) — `Options.Workdir`, `Model.View`, `Within`; cmd/yoloctl/follow.go `newFollowCmd` pins the title base. Component title cases in internal/followview/title_test.go and CLI base/path checks in cmd/yoloctl/follow_test.go.
+12. <a id="source-12"></a> [Path title](../../internal/followview/model.go#L665) — `Options.Workdir`, `Model.View`, `Within`; cmd/yoloctl/follow.go `newFollowCmd` pins the title base. Header-free viewport/scroll/copy/footer cases in row_layout_test.go; title cases in internal/followview/title_test.go and CLI base/path checks in cmd/yoloctl/follow_test.go.
