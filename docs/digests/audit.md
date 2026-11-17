@@ -57,7 +57,7 @@ The noisy anonymous-executable rule is disabled; `yolo-audit-test` is the contro
 signal. The added escape family enables only successful UID-to-root requests
 and its separate `yolo-esc-test` ancestry control; six candidates stay disabled.
 Results distinguish success/refusal, not policy mechanism or escape proof. Fixed paths
-and explicit context narrow setup/debugger, successful broker-read and
+and explicit context narrow setup/debugger, broker/qualified startup-read, root-runc-init namespace and
 host-maintenance exceptions.
 [Rule paths and container recognition](audit-rules.md) explain symlink unpack
 noise, the broker-read predicate and the scope of these detection heuristics.

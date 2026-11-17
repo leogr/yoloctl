@@ -50,9 +50,9 @@ func TestEscapeFamilyPreservesExistingRulesExactly(t *testing.T) {
 	if !ok {
 		t.Fatal("escape family boundary missing")
 	}
-	// Pre-existing rules include the approved broker/main-qualification read exception
+	// Pre-existing rules include the broker/startup read and root-runc-init exceptions
 	// for both network modes; output_readability_test pins every output template token.
-	const old = "02932c7cd6bedd584dcce6bdf87f59898e938ac278a3af3101d5f907117dffd4"
+	const old = "05403638154969f6b8a53e13bf0db205a086e2bf0a55731079dde62c944228a6"
 	if got := fmt.Sprintf("%x", sha256.Sum256([]byte(before))); got != old {
 		t.Fatalf("pre-existing rules changed: %s", got)
 	}

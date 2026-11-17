@@ -6,6 +6,17 @@
 - macro: yolo_openshell_setup
   condition: (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and container.label[yoloctl.openshell.protocol] = "2" and proc.exepath in (/opt/yoloctl/openshell-helper/yoloctl-openshell-helper, /.openshell/runtime/openshell-sandbox, /.openshell/runtime/openshell-supervisor))
 
+# runc init stages can already carry the new container's cgroup identity.
+# Limit this heuristic to namespace setup; it grants no infrastructure exemption.
+- macro: yolo_runc_init_namespace
+  condition: >-
+    container.label[yoloctl.audit.schema] = "1" and
+    container.label[yoloctl.audit.runtime_mode] = confined and
+    container.label[yoloctl.openshell.protocol] = "2" and
+    proc.exepath = /usr/local/bin/runc and
+    proc.name in ("runc:[0:PARENT]", "runc:[1:CHILD]", "runc:[2:INIT]") and
+    user.uid = 0
+
 # Suppress expected broker reads and main-thread startup qualification reads.
 # File-open mediation remains active with unmediated workload sockets.
 # Names/paths/labels narrow noise; they are not executable-authenticity proof.
@@ -18,6 +29,19 @@
     container.label[yoloctl.openshell.protocol] = "2" and
     proc.exepath = /.openshell/runtime/openshell-sandbox and
     proc.name in (openshell-netwo, openshell-sandb) and
+    proc.pexepath = /opt/yoloctl/openshell-helper/yoloctl-openshell-helper
+
+# Keep the broker's failed reads visible. Only the main runtime thread's EPERM
+# startup read gets this separate exception; rawres avoids errno string formats.
+- macro: yolo_openshell_startup_read
+  condition: >-
+    evt.type = process_vm_readv and evt.rawres = -1 and
+    container.label[yoloctl.audit.schema] = "1" and
+    container.label[yoloctl.audit.runtime_mode] = confined and
+    container.label[yoloctl.audit.network_unconfined] in ("false", "true") and
+    container.label[yoloctl.openshell.protocol] = "2" and
+    proc.exepath = /.openshell/runtime/openshell-sandbox and
+    proc.name = openshell-sandb and
     proc.pexepath = /opt/yoloctl/openshell-helper/yoloctl-openshell-helper
 
 - macro: yolo_fs_mutation
@@ -60,9 +84,9 @@
   tags: [yoloctl]
 
 - rule: Yolo namespace change
-  desc: Workload namespace/mount operations outside the fixed OpenShell setup executables
+  desc: Workload namespace/mount operations outside fixed OpenShell setup and root runc init stages
   condition: >-
-    evt.type in (mount, umount, umount2, setns, unshare, pivot_root) and yolo_workload and not yolo_openshell_setup
+    evt.type in (mount, umount, umount2, setns, unshare, pivot_root) and yolo_workload and not yolo_openshell_setup and not yolo_runc_init_namespace
   output: "executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
   priority: WARNING
   tags: [yoloctl]
@@ -70,7 +94,7 @@
 - rule: Yolo process inspection
   desc: Workload cross-process inspection outside known debugger executable paths; names are context rather than authenticity proof
   condition: >-
-    evt.type in (ptrace, process_vm_readv, process_vm_writev) and yolo_workload and not (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and proc.exepath in (/usr/bin/gdb, /usr/bin/lldb, /usr/bin/strace, /usr/local/bin/dlv)) and not yolo_openshell_netproxy_read
+    evt.type in (ptrace, process_vm_readv, process_vm_writev) and yolo_workload and not (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and proc.exepath in (/usr/bin/gdb, /usr/bin/lldb, /usr/bin/strace, /usr/local/bin/dlv)) and not yolo_openshell_netproxy_read and not yolo_openshell_startup_read
   output: "executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
   priority: NOTICE
   tags: [yoloctl]

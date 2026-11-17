@@ -33,7 +33,7 @@ func TestOpenShellBrokerReadException(t *testing.T) {
 	// Keep the original host scope and debugger exception verbatim. The new
 	// predicate must be an additional exclusion, never a broader setup exemption.
 	const original = `evt.type in (ptrace, process_vm_readv, process_vm_writev) and yolo_workload and not (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and proc.exepath in (/usr/bin/gdb, /usr/bin/lldb, /usr/bin/strace, /usr/local/bin/dlv))`
-	if inspection != original+" and not "+macro {
+	if inspection != original+" and not "+macro+" and not yolo_openshell_startup_read" {
 		t.Fatal("process inspection scope changed", inspection)
 	}
 	// Evaluate the fixed equalities and the explicit network-mode and thread-name sets read from the YAML.

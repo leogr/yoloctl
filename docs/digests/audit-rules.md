@@ -1,58 +1,58 @@
 # Audit rule paths and container recognition
 
-Verification: `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes.
+Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes.
 
-[FACT] Filesystem rules distinguish the path changed by a syscall from the
-payload of a new symbolic link. In libs 0.26.1, `fs.path.source` for
-symlink/symlinkat is the new link location; `fs.path.target` is its destination
-text. An image layer's link under containerd/BuildKit storage pointing at
-`/usr/lib/systemd/...` does not modify that path. Rules exclude link payloads from target
-matching while checking the created source. Rename/hard-link
-targets remain covered. [1](#source-1) [2](#source-2)
+[FACT] Filesystem rules distinguish changed paths from symbolic-link payloads.
+In libs0.26.1, symlink/symlinkat `fs.path.source` is the new link location;
+`fs.path.target` is destination text. An unpacked link targeting `/usr/lib/systemd/...`
+does not modify that path. Source matching remains; only link payloads are excluded
+from target matching, not rename/hard-link targets. [1](#source-1) [2](#source-2)
 
-[FACT] Syscall semantics give no blanket exemption
-for containerd, buildkitd, nerdctl or containerd-shim. Protected name/source paths remain eligible, including units, cron, SSH keys,
-loader configuration and infrastructure.
-The existing host package/controller exceptions remain. Known OpenShell setup
-infrastructure writes use the same fixed-executable, schema-1 confined-container
-and protocol-2 context as the namespace rule. Missing context does not grant
-that exception. These are heuristics, not authenticity proofs.
-[1](#source-1) [3](#source-3)
+[FACT] Containerd, buildkitd, nerdctl and containerd-shim get no blanket exemption.
+Protected names/sources (units, cron, SSH keys, loader and infrastructure) remain
+eligible. Existing host package/controller exceptions remain. OpenShell setup
+infrastructure writes require fixed executables, schema1/confined/protocol2;
+missing context grants nothing. [1](#source-1) [3](#source-3)
 
-[FACT] Process inspection excludes successful `process_vm_readv` from exactly
-`/.openshell/runtime/openshell-sandbox`, with helper parent
+[FACT] Namespace operations additionally exclude root `/usr/local/bin/runc` with
+exact init names `runc:[0:PARENT]`, `runc:[1:CHILD]`, `runc:[2:INIT]` and
+schema1/confined/protocol2. Packaged runc sets these names during container setup;
+cgroup membership can already attribute it to the container. This namespace-only
+exception does not suppress runc infrastructure writes or inspection. Names,
+paths and labels authenticate neither executable nor creation timing.
+[1](#source-1) [22](#source-22) [23](#source-23)
+
+[FACT] Successful `process_vm_readv` is excluded only for
+`/.openshell/runtime/openshell-sandbox`, helper parent
 `/opt/yoloctl/openshell-helper/yoloctl-openshell-helper`, name `openshell-netwo`
-or `openshell-sandb`, schema 1, protocol 2, confined runtime and explicit
-`network_unconfined=false/true`. Both modes retain the named broker's file-open
-mediation: `ProviderFiles` copies pathname bytes through `task_memory::read_exact`.
-Main-thread startup qualification also reads child memory/socket arguments before
-either mode starts. Unmediated networking does not rename the broker.
+or `openshell-sandb`, schema1/confined/protocol2 and explicit
+`network_unconfined=false/true`. Both modes retain broker file-open mediation;
+`ProviderFiles` copies paths through `task_memory::read_exact`. Main-thread
+qualification reads child memory/socket arguments before either mode starts;
+unmediated networking retains the broker name.
 [17](#source-17) [18](#source-18) [19](#source-19) [20](#source-20) [21](#source-21)
 
-[FACT] Failed reads, ptrace, writes, other names/paths/parents, privileged mode
-and missing/unknown context gain no exception. Debugger and host-scope rules
-stay unchanged. Target PID/address and executable authenticity are not verified:
-a compromised matching runtime can hide successful reads. Fixtures do not prove
-live attribution/noise reduction; observed main-thread reads alone do not prove
-file mediation. Updated `audit enable` installs changed rules; no automatic reload.
-[1](#source-1) [9](#source-9) [10](#source-10) [11](#source-11)
+[FACT] A separate exception admits only main-thread `openshell-sandb` readv
+returning raw -1 (EPERM), with the same executable/helper/context guards.
+Task-memory reads support denied-read fallback; qualification also deliberately
+probes denial. This predicate proves neither a particular probe nor its target.
+Broker failures, other errors, ptrace, writes, other identities, privileged mode
+and unknown context remain eligible; debugger/host scope is unchanged. Matching
+compromised runtime reads can be hidden. Fixtures do not qualify live attribution
+or file mediation. Updated `audit enable` installs rules; no automatic reload.
+[1](#source-1) [9](#source-9) [10](#source-10) [11](#source-11) [20](#source-20) [21](#source-21)
 
-[FACT] Container plugin 0.7.6 registers nerdctl systemd-scope recognition in its
-CRI matcher; its native-containerd matcher handles namespace/ID layouts.
-Configuration enables both engines against only `/run/containerd/containerd.sock`,
-with the existing two-second per-engine timeout. Docker/Podman/other engines
-stay disabled. The native API still enumerates containerd namespaces, including
-default; the guest does not need its CRI service enabled. CRI RPCs may fail on
-that socket; the worker fetcher tries enabled metadata providers until one
-succeeds. No containerd configuration, runtime cgroup layout or yolo plugin ABI
-is changed. [4](#source-4) [5](#source-5) [6](#source-6) [7](#source-7)
+[FACT] Container plugin0.7.6's CRI matcher recognizes nerdctl systemd scopes;
+native-containerd handles namespace/ID layouts. Both engines use only
+`/run/containerd/containerd.sock`, with two-second timeouts. Other engines stay
+disabled. Native enumeration includes default namespace without requiring CRI;
+the fetcher tries providers until one succeeds. No containerd configuration,
+cgroup layout or plugin ABI changes. [4](#source-4) [5](#source-5) [6](#source-6) [7](#source-7)
 
-[FACT] The native-containerd matcher has no nerdctl systemd-scope pattern;
-unmatched thread cgroups are reported as host before snapshot enrichment.
-The C++ plugin joins a fresh, unambiguous snapshot only when the thread has a
-recognized container ID. These source contracts require native event
-qualification; a no-driver engine or structural rule test does not prove live
-cgroup identity or noise rates. [5](#source-5) [6](#source-6) [8](#source-8)
+[FACT] Native-containerd lacks the nerdctl scope pattern; unmatched thread cgroups
+are host before enrichment. The C++ plugin joins fresh, unambiguous snapshots
+only to recognized IDs. No-driver/structural tests do not qualify native identity
+or noise rates. [5](#source-5) [6](#source-6) [8](#source-8)
 
 ## Escape candidates
 
@@ -99,7 +99,7 @@ do not prove live selection or noise rates.
 6. <a id="source-6"></a> [Container 0.7.6 matcher selection](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/src/matchers/matcher.cpp).
 7. <a id="source-7"></a> [Container 0.7.6 metadata fetcher](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/go-worker/pkg/container/fetcher.go).
 8. <a id="source-8"></a> [Metadata extraction](../../third_party/audit-plugin/plugin.cpp#L1).
-9. <a id="source-9"></a> [Broker-read regressions](../../internal/audit/process_inspection_test.go#L1) — known modes/unknown context; not a Falco evaluator.
+9. <a id="source-9"></a> [Broker-read regressions](../../internal/audit/process_inspection_test.go#L1) — mode/context controls; restart_noise_test.go covers init/EPERM; not an engine.
 10. <a id="source-10"></a> [Native audit handlers](../../cmd/yoloctl/controller_audit_linux.go#L1) — `enable` deployment.
 11. <a id="source-11"></a> [Configuration](../../internal/audit/config.go#L1) — automatic file reloads disabled.
 12. <a id="source-12"></a> [Escape regressions](../../internal/audit/escape_rules_test.go#L1) — selectors, enablement and rule hash.
@@ -114,3 +114,6 @@ do not prove live selection or noise rates.
 20. <a id="source-20"></a> [Pinned task-memory read](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/task_memory.rs#L48) — readv.
 
 21. <a id="source-21"></a> [Pinned startup qualification](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/main.rs#L112) — `qualify_runtime`, socket reads L656/854, `run_boundary` L1761; patch0001 retains both modes.
+
+22. <a id="source-22"></a> [Packaged runc](https://github.com/containerd/nerdctl/blob/v2.3.5/Dockerfile#L19) — runc1.5.1 pin.
+23. <a id="source-23"></a> [runc init](https://github.com/opencontainers/runc/blob/8f2685a471d3347a686ad3909783d8aafc6bb208/libcontainer/nsenter/nsexec.c#L855) — stage names, namespace setup.
