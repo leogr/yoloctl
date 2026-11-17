@@ -14,6 +14,7 @@ import (
 const (
 	IntentNone           ActionKind = 0
 	IntentURL            ActionKind = 1
+	IntentLocalFile      ActionKind = 32
 	IntentCopyCode       ActionKind = 7
 	IntentToggleTableRow ActionKind = 8
 )
@@ -22,7 +23,11 @@ const (
 // synchronous and pure; Code pieces must retain their literal styling.
 type Decorator func(text string, pieces []Piece, theme spaceview.Theme, prose bool) []Piece
 
+type LinkPolicy func(destination string) Action
+
 type ParseOptions struct {
+	// Links classifies explicit Markdown destinations from caller admission data.
+	Links     LinkPolicy
 	Method    ansi.Method
 	Theme     spaceview.Theme
 	Source    bool
@@ -64,7 +69,7 @@ func Parse(text string, options ParseOptions) Document {
 	if !options.Source {
 		diagrams = options.Diagrams
 	}
-	doc.Lines = parseLines(options.Method, text, options.Source, options.Theme, options.Decorate, sources, diagrams)
+	doc.Lines = parseLines(options.Method, text, options.Source, options.Theme, options.Decorate, sources, diagrams, options.Links)
 	return doc
 }
 
@@ -117,6 +122,9 @@ func decorateTokens(text string, pieces []Piece, theme spaceview.Theme, decorate
 	for i := 0; i < len(text); {
 		if end, link, ok := URLAt(text, i); ok {
 			pieces = Overlay(pieces, i, i+len(link), func(p Piece) Piece {
+				if p.Act.Kind == IntentLocalFile || p.Act.Kind == IntentNone && p.Act.Value != "" {
+					return p
+				}
 				p.Style.FG, p.Style.Underline = theme.Label, true
 				p.Act = Action{Kind: IntentURL, Value: link}
 				return p

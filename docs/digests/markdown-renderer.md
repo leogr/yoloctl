@@ -1,10 +1,10 @@
 # Shared Markdown renderer
 
-Verification: `cd7ed7ef2b2c16e0e362e0f9073b8f82fccd89c8` and accompanying changes.
+Verification: `cd7ed7ef2b2c16e0e362e0f9073b8f82fccd89c8` and accompanying changes. Navigation symbols re-read at `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes.
 
 [FACT] `internal/markdownview` owns the existing Markdown subset's pure parser,
 lexer, logical lines, layout, source maps and copy/hit geometry. `Parse` takes
-text, source mode, theme, `ansi.Method` and an optional synchronous decorator;
+text, source mode, theme, `ansi.Method` and optional synchronous decorator and explicit-link policy;
 `Layout` produces styled rows with logical byte ranges, table fragments and
 an explicit display-limit flag. `Paint` converts those runs to terminal text.
 The package owns no model, transport, file reader, cache, clipboard or opener.
@@ -84,7 +84,14 @@ selected table cell text. Callers provide the matching pure renderer and
 retain selection eligibility, refusal messages and insertion effects.
 [6](#source-6) [7](#source-7)
 
-[FACT] Shared URL and code-copy regions are inert intents. Other action kinds
+[FACT] Caller admission can render an explicit clickable link's label once,
+with its destination retained in a typed local-file or URL intent. Inert links
+keep their destination echo; source mode remains literal. Replacement mapping
+preserves whole-link Quote. A pure raw-destination pass keeps removed controls from creating a new
+admissible path; code/escaped text stays excluded. The parser does no readability or opener work; see
+[Markdown navigation](markdown-navigation.md) for native-view authority.
+
+[FACT] Shared URL, local-file and code-copy regions are inert intents. Other action kinds
 and payload strings are opaque caller data. With no decorator, mentions and
 message references remain ordinary text. Chat supplies its existing token
 recognition/style ordering through a decorator and thin adapters. Identity

@@ -13,6 +13,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/leogr/yoloctl/internal/filelink"
+	"github.com/leogr/yoloctl/internal/linkview"
 	"github.com/leogr/yoloctl/internal/markdownview"
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
 )
@@ -34,18 +36,24 @@ func ParseFormat(value string) (Format, error) {
 }
 
 type Options struct {
-	Reader  Reader
-	Path    string               // already absolute and pinned by the CLI
-	Workdir string               // title base only; selected space workdir or host launch cwd
-	Space   string               // empty is explicit host mode
-	Format  Format               // auto has already been resolved from the selected name
-	Copy    func(string) tea.Cmd // caller applies the existing host clipboard policy
+	Navigation   *filelink.Navigator
+	OpenFile     func(filelink.Target) tea.Cmd
+	OpenLink     func(string) tea.Cmd
+	ConfirmLinks bool
+	Reader       Reader
+	Path         string               // already absolute and pinned by the CLI
+	Workdir      string               // title base only; selected space workdir or host launch cwd
+	Space        string               // empty is explicit host mode
+	Format       Format               // auto has already been resolved from the selected name
+	Copy         func(string) tea.Cmd // caller applies the existing host clipboard policy
 	// Mermaid draws admitted mermaid fences of Markdown files; nil
 	// (markdown.mermaid off) keeps them as code cards.
 	Mermaid Renderer
 }
 
 type rendered struct {
+	gen      uint64
+	drawn    drawResult
 	doc      markdownview.Document
 	rows     []markdownview.BodyRow
 	starts   []int
@@ -87,7 +95,7 @@ func (v *rendered) displayLine(line int) int {
 func renderFile(ctx context.Context, raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme, draw drawing) *rendered {
 	return renderFileTables(ctx, raw, large, source, format, width, method, theme, draw, nil)
 }
-func renderFileTables(ctx context.Context, raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme, draw drawing, opened map[followTableKey]bool) *rendered {
+func renderFileTables(ctx context.Context, raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme, draw drawing, opened map[followTableKey]bool, policies ...markdownview.LinkPolicy) *rendered {
 	text := markdownview.Plain(string(raw))
 	isMarkdown := format == Markdown && !large
 	options := markdownview.ParseOptions{Method: method, Theme: theme, Source: source || !isMarkdown}
@@ -95,6 +103,9 @@ func renderFileTables(ctx context.Context, raw []byte, large, source bool, forma
 		options.Decorate = func(_ string, pieces []markdownview.Piece, _ spaceview.Theme, _ bool) []markdownview.Piece {
 			return pieces
 		}
+	}
+	if len(policies) > 0 {
+		options.Links = policies[0]
 	}
 	var mermaidSources []string
 	if draw.renderer != nil && !options.Source {
@@ -151,7 +162,7 @@ func renderFileTables(ctx context.Context, raw []byte, large, source bool, forma
 			starts = append(starts, i+1)
 		}
 	}
-	view := &rendered{doc: doc, rows: layout.Rows, starts: starts, text: text, markdown: isMarkdown, records: records, refused: layout.RefusedTableRows, compact: compact, controls: controls, undrawn: result.undrawn, retry: result.retry}
+	view := &rendered{drawn: result, doc: doc, rows: layout.Rows, starts: starts, text: text, markdown: isMarkdown, records: records, refused: layout.RefusedTableRows, compact: compact, controls: controls, undrawn: result.undrawn, retry: result.retry}
 	if doc.Sources != nil {
 		view.lines = make([]int, len(doc.Sources))
 		for d, ls := range doc.Sources {
@@ -191,22 +202,43 @@ func (j *jobs) close()      { j.cancelWork(); j.wg.Wait() }
 
 type pollMsg struct{}
 type resultMsg struct {
-	read     bool
-	gen      uint64
-	snapshot Snapshot
-	raw      []byte
-	view     *rendered
-	err      error
+	read         bool
+	gen          uint64
+	snapshot     Snapshot
+	raw          []byte
+	view         *rendered
+	admissions   filelink.Admissions
+	observed     map[string]bool
+	linksPending bool
+	err          error
 	// continued: a continuation job (see continueDrawing) whose view had
 	// before undrawn fences.
 	continued bool
 	before    int
 }
 type CopyResultMsg struct{ Err error }
+type ActionResultMsg struct {
+	Err  error
+	Text string
+}
+type localCheckMsg struct {
+	gen    uint64
+	key    string
+	target filelink.Target
+	err    error
+}
 type point struct{ line, offset int }
 type selection struct{ anchor, focus point }
 
 type Model struct {
+	observed                        map[string]bool
+	hoverAction                     markdownview.Action
+	opening                         bool
+	admissions                      filelink.Admissions
+	linkPrompt                      *browserPrompt
+	pasting                         bool
+	pressKey                        string
+	pressGen                        uint64
 	opts                            Options
 	jobs                            *jobs
 	width, height                   int
@@ -268,7 +300,13 @@ func (m *Model) work(read, render bool) tea.Cmd {
 		draw.before = m.view.undrawn
 	}
 	m.pendingRead, m.pendingRender, m.pendingContinue = false, false, false
+	if !read && !continued && m.view != nil && m.view.gen == m.gen {
+		draw.reuse = &m.view.drawn
+	}
 	gen, q, raw, snapshot := m.gen, m.query, m.raw, m.snapshot
+	previous := m.admissions
+	previousSeen := m.observed
+	top, height, following := m.top, m.bodyHeight(), m.following
 	q.Previous = snapshot.Key
 	width, method, theme, source, format := m.width, m.method, m.theme, m.source, m.opts.Format
 	opened := map[followTableKey]bool{}
@@ -294,8 +332,59 @@ func (m *Model) work(read, render bool) tea.Cmd {
 			if ctx.Err() != nil {
 				return resultMsg{gen: gen, read: read, err: ctx.Err()}
 			}
+			if read && m.opts.Navigation != nil && format == Markdown && !source {
+				render = true
+			}
 			if render && (result.err == nil || snapshot.Key != "") {
-				result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, draw, opened)
+				result.admissions = filelink.Admissions{}
+				result.observed = map[string]bool{}
+				if !read || !result.snapshot.Changed {
+					for s, v := range previousSeen {
+						result.observed[s] = v
+					}
+					for s, t := range previous {
+						result.admissions[s] = t
+					}
+				}
+				result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, draw, opened, linkview.Policy(result.admissions, string(result.raw)))
+				if m.opts.Navigation != nil && !source && format == Markdown && !result.snapshot.Large {
+					start := min(top, max(0, len(result.view.rows)-height))
+					if following {
+						start = max(0, len(result.view.rows)-height)
+					}
+					var visible []string
+					seen := map[string]bool{}
+					for _, row := range result.view.rows[start:min(start+height, len(result.view.rows))] {
+						for _, run := range row.Runs {
+							a := run.Act
+							if (a.Kind == markdownview.IntentNone || a.Kind == markdownview.IntentLocalFile) && a.Value != "" && !seen[a.Value] {
+								seen[a.Value] = true
+								visible = append(visible, a.Value)
+							}
+						}
+					}
+					var batch []string
+					for _, s := range visible {
+						if !result.observed[s] {
+							if len(batch) < filelink.MaxTargets {
+								batch = append(batch, s)
+								result.observed[s] = true
+							} else {
+								result.linksPending = true
+							}
+						}
+					}
+					admitted := m.opts.Navigation.AdmitDestinations(ctx, batch)
+					for s, t := range admitted {
+						result.admissions[s] = t
+					}
+					finalDraw := draw
+					finalDraw.reuse = &result.view.drawn
+					result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, finalDraw, opened, linkview.Policy(result.admissions, string(result.raw)))
+				}
+			}
+			if result.view != nil {
+				result.view.gen = gen
 			}
 			return result
 		})
@@ -306,6 +395,30 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch msg := message.(type) {
+	case localCheckMsg:
+		m.opening = false
+		if msg.gen != m.gen || msg.key != m.snapshot.Key {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.notice = markdownview.Plain(msg.err.Error())
+			return m, nil
+		}
+		if m.opts.OpenFile == nil {
+			m.notice = "Open local files from the yoloctl TUI"
+			return m, nil
+		}
+		return m, m.opts.OpenFile(msg.target)
+	case ActionResultMsg:
+		m.notice = msg.Text
+		if msg.Err != nil {
+			m.notice = markdownview.Plain(msg.Err.Error())
+		}
+	case tea.PasteStartMsg:
+		m.pasting = true
+	case tea.PasteEndMsg:
+		m.pasting = false
+
 	case tea.WindowSizeMsg:
 		m.captureAnchor()
 		m.width, m.height = max(0, msg.Width), max(0, msg.Height)
@@ -350,7 +463,13 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.selection != nil && m.view != nil && !sameThrough(m.view.doc.Lines, msg.view.doc.Lines, max(m.selection.anchor.line, m.selection.focus.line)) {
 				m.clearSelection() // a drawing replaced rows at or above it
 			}
+			m.hoverAction = markdownview.Action{}
 			m.view = msg.view
+			m.admissions = msg.admissions
+			m.observed = msg.observed
+			if msg.linksPending {
+				m.pendingRender = true
+			}
 			if m.view.markdown && !m.source {
 				retained := map[followTableKey]bool{}
 				for _, record := range m.view.records {
@@ -374,12 +493,21 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.work(false, false)
 	case tea.KeyPressMsg:
+		if m.linkPrompt != nil {
+			return m, m.browserKey(msg)
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.closed = true
 			m.jobs.cancelWork()
 			return m, tea.Quit
 		case "r":
+			if m.opts.Navigation != nil {
+				m.observed = nil
+				m.admissions = nil
+				m.gen++
+				return m, m.work(true, true)
+			}
 			// A read, and a render when mermaid fences are undrawn or fell
 			// back for a transient reason.
 			return m, m.work(true, m.view != nil && m.view.retry > 0)
@@ -419,6 +547,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.notice = ""
 		}
 	case tea.MouseMsg:
+		if m.linkPrompt != nil {
+			return m, nil
+		}
 		return m, m.mouse(msg)
 	case CopyResultMsg:
 		if msg.Err != nil {
@@ -510,6 +641,9 @@ func (m *Model) scroll(delta int) tea.Cmd {
 		m.query.Offset = m.snapshot.End
 		m.gen++
 		return m.work(true, false)
+	}
+	if m.opts.Navigation != nil {
+		return m.work(false, true)
 	}
 	return nil
 }
@@ -627,9 +761,16 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		m.pause()
 		m.drag = true
 		m.pressed = act
+		m.pressKey, m.pressGen = m.snapshot.Key, m.gen
 		m.pressX, m.pressY, m.moved = mouse.X, mouse.Y, false
 		m.selection = &selection{anchor: p, focus: p}
 	case tea.MouseMotionMsg:
+		if !m.drag {
+			m.hoverAction = markdownview.Action{}
+			if mouse.Y >= 0 && mouse.Y < m.bodyHeight() {
+				_, m.hoverAction, _ = m.pointAt(mouse.X, mouse.Y)
+			}
+		}
 		if m.drag && m.selection != nil {
 			if mouse.X != m.pressX || mouse.Y != m.pressY {
 				m.moved = true
@@ -652,6 +793,9 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			if m.moved {
 				return m.copySelection()
 			}
+			if ok && act == m.pressed && m.pressGen == m.gen && m.pressKey == m.snapshot.Key && m.selection.anchor == p && (act.Kind == markdownview.IntentURL || act.Kind == markdownview.IntentLocalFile) {
+				return m.activateLink(act)
+			}
 			if ok && act.Kind == markdownview.IntentToggleTableRow && act == m.pressed && m.selection.anchor == p {
 				return m.toggleTableRows(act.Value, false)
 			}
@@ -665,6 +809,9 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 func (m *Model) View() tea.View {
 	if m.width == 0 || m.height == 0 {
 		return tea.NewView("")
+	}
+	if m.linkPrompt != nil {
+		return m.browserView()
 	}
 	// The pane/window title names the file; it is not repeated in a body row.
 	path := m.opts.Path
@@ -727,6 +874,21 @@ func (m *Model) View() tea.View {
 	if m.snapshot.Key == "" {
 		status = "Loading · " + status
 	}
+	if a := m.hoverAction; a.Value != "" {
+		what := "not admitted as a readable local file"
+		if a.Kind == markdownview.IntentLocalFile {
+			what = "click to open a new follow tab"
+		}
+		if a.Kind == markdownview.IntentURL {
+			what = "click to open host browser"
+			if m.opts.OpenLink == nil {
+				what = "opening links is off (seams.browser)"
+			} else if m.opts.ConfirmLinks {
+				what = "click, then Ctrl+O to open host browser"
+			}
+		}
+		status = a.Value + " · " + what + " · " + status
+	}
 	if m.notice != "" {
 		status = m.notice + " · " + status
 	}
@@ -741,6 +903,7 @@ func (m *Model) View() tea.View {
 	rows = append(rows, markdownview.Paint(m.method, []markdownview.Run{markdownview.Deco(strings.ReplaceAll(status, "\n", " "), style)}, m.width, m.theme.Surface, nil, spaceview.Style{}))
 	v := tea.NewView(strings.Join(rows[:min(len(rows), m.height)], "\n"))
 	v.AltScreen = true
+	v.KeyboardEnhancements.ReportEventTypes = true
 	v.MouseMode = tea.MouseModeAllMotion
 	v.WindowTitle = title
 	return v

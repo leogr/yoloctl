@@ -209,6 +209,7 @@ func (m *Model) switchTo(name string) {
 	}
 	m.captureAnchor()
 	m.channelView, m.cur = v, v
+	m.linkEpoch++
 	m.drag, m.suggest, m.dismissed = dragState{}, nil, ""
 	m.focus = focusComposer
 	if m.follow {

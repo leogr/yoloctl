@@ -83,6 +83,7 @@ type viewAnchor struct {
 // cachedBody keeps a message's display lines (dependent on the width method) and
 // their rows at the last width.
 type cachedBody struct {
+	links    markdownview.LinkPolicy
 	text, me string
 	source   bool
 	// base is the lines before reference previews; keys are the previews

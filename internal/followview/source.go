@@ -57,14 +57,23 @@ type Reader interface {
 
 // HostReader follows the pinned absolute name, permitting ordinary host
 // symlinks while refusing nonregular leaves without blocking on a FIFO.
-type HostReader struct{ Path string }
+type HostReader struct {
+	Path string
+	Root string
+}
 
 func (r HostReader) Read(ctx context.Context, q Query) (Snapshot, error) {
 	started := time.Now()
 	if err := ctx.Err(); err != nil {
 		return Snapshot{}, err
 	}
-	f, err := os.OpenFile(r.Path, os.O_RDONLY|unix.O_NONBLOCK, 0)
+	var f *os.File
+	var err error
+	if r.Root != "" {
+		f, err = openBounded(r.Path, r.Root)
+	} else {
+		f, err = os.OpenFile(r.Path, os.O_RDONLY|unix.O_NONBLOCK, 0)
+	}
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -146,21 +155,25 @@ type Authority func(context.Context) ([]string, error)
 type Command func(context.Context, ...string) *exec.Cmd
 
 type VMReader struct {
+	Root      string
 	Path      string
 	Authority Authority
 	Command   Command
 }
 type guestRequest struct {
 	Query
-	Op     string   `json:"op"`
-	Path   string   `json:"path"`
-	Roots  []string `json:"roots"`
-	Prefix string   `json:"prefix,omitempty"`
+	Op             string   `json:"op"`
+	Path           string   `json:"path"`
+	Roots          []string `json:"roots"`
+	Prefix         string   `json:"prefix,omitempty"`
+	NavigationRoot string   `json:"navigation_root,omitempty"`
+	Paths          []string `json:"paths,omitempty"`
 }
 type guestResponse struct {
 	Snapshot
-	Entries []string `json:"entries"`
-	Error   string   `json:"error"`
+	Entries []string          `json:"entries"`
+	Probes  map[string]string `json:"probes,omitempty"`
+	Error   string            `json:"error"`
 }
 
 func (r VMReader) Read(ctx context.Context, q Query) (Snapshot, error) {
@@ -212,14 +225,26 @@ func (r VMReader) call(ctx context.Context, req guestRequest) (guestResponse, er
 		return result, err
 	}
 	allowed := false
-	for _, root := range roots {
-		if Within(req.Path, root) {
-			allowed = true
-			break
+	paths := []string{req.Path}
+	if req.Op == "probe" {
+		paths = req.Paths
+	}
+	for _, path := range paths {
+		for _, root := range roots {
+			if Within(path, root) {
+				allowed = true
+				break
+			}
 		}
 	}
 	if !allowed {
 		return result, errors.New("path is outside the current space grants")
+	}
+	if r.Root != "" {
+		req.NavigationRoot = r.Root
+	}
+	if req.NavigationRoot != "" && (!Within(req.Path, req.NavigationRoot)) {
+		return result, errors.New("path is outside its navigation root")
 	}
 	req.Roots = roots
 	input, err := json.Marshal(req)

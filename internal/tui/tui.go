@@ -1061,6 +1061,9 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		return m, nil
 
 	case tabRequestMsg:
+		if msg.source != nil {
+			msg.from = msg.source.Load()
+		}
 		if msg.generation != m.spaceGeneration {
 			return m, nil
 		}
@@ -1074,7 +1077,15 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		// revalidate the complete pane/session set before closing anything.
 		modal := m.spacePicker != nil || m.confirm != nil && m.confirm.space != ""
 		current, focused, palette := m.tabs.Current(), m.tabs.Focused(), m.focusPalette
-		m.handleTabRequest(msg.req, msg.chat, msg.from)
+		if msg.req.Op == "follow-context" {
+			m.pinFollowSource(msg)
+			return m, nil
+		}
+		if msg.req.Op == "follow" {
+			m.handleFollowRequest(msg.req, msg.navigation, msg.from)
+		} else {
+			m.handleTabRequest(msg.req, msg.chat, msg.from)
+		}
 		if modal {
 			if i := m.tabs.Index(current); i >= 0 {
 				attention := current.NoticeAttention

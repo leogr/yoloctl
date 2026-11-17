@@ -15,6 +15,8 @@ type Span struct {
 	Style      spaceview.Style
 	Code       bool
 	Link       string
+	Act        Action
+	Classified bool
 	Strike     bool
 	Auto       bool // an angle autolink: shown and linked as a whole
 }
@@ -24,7 +26,8 @@ type Span struct {
 // *emphasis*/_emphasis_ (italic), ***both***/___both___, ~~strikethrough~~,
 // [text](url) and <http(s)://url>, shown without its brackets. The result
 // is display text with its style spans; markers are removed only when they
-// pair up, and a link always keeps its URL visible after the text. Code spans are literal. The original message text is never
+// pair up, and an explicit link keeps its target visible unless a caller policy admits a
+// label-only action. Code spans are literal. The original message text is never
 // changed.
 func InlineMarkdown(line string, base spaceview.Style, theme spaceview.Theme) (string, []Span) {
 	return InlineMarkdownMap(line, base, theme, nil)
@@ -32,7 +35,11 @@ func InlineMarkdown(line string, base spaceview.Style, theme spaceview.Theme) (s
 
 // inlineMarkdownMap is inlineMarkdown that, given src, also records where
 // each display byte comes from in line (see srcMap).
-func InlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme, src *SourceMap) (string, []Span) {
+func InlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme, src *SourceMap, policies ...LinkPolicy) (string, []Span) {
+	var policy LinkPolicy
+	if len(policies) > 0 {
+		policy = policies[0]
+	}
 	var out strings.Builder
 	var spans []Span
 	// emitSpan writes text, shown in place of line[from:to].
@@ -129,8 +136,21 @@ func InlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme,
 					url := line[textEnd+2 : textEnd+2+urlEnd]
 					if !strings.ContainsAny(url, " \t") {
 						flush(i)
-						emitSpan(line[i+1:textEnd], Span{Style: link, Link: url}, i+1, textEnd)
-						emitSpan(" ("+url+")", Span{Style: dim, Link: url}, textEnd, textEnd+2+urlEnd+1)
+						act := Action{Kind: IntentURL, Value: url}
+						if policy != nil {
+							act = policy(url)
+						}
+						end := textEnd + 2 + urlEnd + 1
+						if policy != nil && act.Kind != IntentNone {
+							emitSpan(line[i+1:textEnd], Span{Style: link, Link: url, Act: act, Classified: true}, i, end)
+						} else {
+							st := link
+							if policy != nil {
+								st = base
+							}
+							emitSpan(line[i+1:textEnd], Span{Style: st, Link: url, Act: act, Classified: policy != nil}, i+1, textEnd)
+							emitSpan(" ("+url+")", Span{Style: dim, Link: url, Act: act, Classified: policy != nil}, textEnd, end)
+						}
 						i = textEnd + 2 + urlEnd + 1
 						plain = i
 						continue

@@ -152,14 +152,14 @@ func (m *Model) body(msg *Message, width int) cachedBody {
 	cacheText := text + "\x00" + strings.Join(chips, "\x00") + "\x00" + previewID
 	body, ok := m.bodyCache[key]
 	if !ok || body.stale || body.text != cacheText || body.source != m.source || body.me != m.self || len(body.fences) > 0 && body.drawWidth != width {
-		next := cachedBody{text: cacheText, source: m.source, me: m.self, width: -1}
+		next := cachedBody{links: m.linkPolicy(key, msg.Text), text: cacheText, source: m.source, me: m.self, width: -1}
 		// parse is every parse of this body: with drawings (and the fence
 		// map for exactly the lines it returns) when chat draws diagrams.
 		parse := func(text string) []displayLine {
 			if m.opts.Mermaid != nil && !m.source {
 				return m.parseDiagrams(key, text, width, &next) // drawings are for this width
 			}
-			return displayLines(m.widthMethod, text, m.source, m.theme, m.self)
+			return displayLinesMap(m.widthMethod, text, m.source, m.theme, m.self, nil, nil, m.linkPolicy(key, msg.Text))
 		}
 		base := parse(text)
 		if len(tokens) > 0 {
@@ -320,6 +320,11 @@ func (m *Model) transcript(width int) []transcriptRow {
 				row.kind = rowDecor
 			}
 			row.runs = append(slicesCloneRuns(indent), br.Runs...)
+			for i := range row.runs {
+				if row.runs[i].Act.Kind == markdownview.IntentLocalFile {
+					row.runs[i].Act.Extra = key
+				}
+			}
 			if !m.canPreview(msg) && !m.previewShown(msg) {
 				// The file chip toggles a preview only where one applies now.
 				for i := range row.runs {

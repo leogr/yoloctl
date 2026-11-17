@@ -35,6 +35,8 @@ const (
 
 // drawing is how one render job draws mermaid fences.
 type drawing struct {
+	// reuse preserves the refresh outcome during link-only relayout.
+	reuse    *drawResult
 	renderer Renderer // nil: markdown.mermaid off, fences stay code cards
 	now      func() time.Time
 	budget   time.Duration // 0 means drawBudget
@@ -57,6 +59,9 @@ type drawResult struct {
 // counts as not attempted. Fences left over are undrawn: "drawing…" for a
 // continuation, or stalled when this continuation made no progress.
 func (d drawing) draw(ctx context.Context, sources []string, width int, method ansi.Method) drawResult {
+	if d.reuse != nil {
+		return *d.reuse
+	}
 	out := drawResult{diagrams: make([]markdownview.Diagram, len(sources))}
 	results := map[string]markdownview.Diagram{}
 	skipped, transient := map[string]bool{}, map[string]bool{}

@@ -14,8 +14,11 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/leogr/yoloctl/internal/chatui"
 	"github.com/leogr/yoloctl/internal/config"
+	"github.com/leogr/yoloctl/internal/filelink"
 	"github.com/leogr/yoloctl/internal/followview"
+	"github.com/leogr/yoloctl/internal/hostintegration"
 	"github.com/leogr/yoloctl/internal/mermaid"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -68,6 +71,7 @@ var (
 func newFollowCmd() *cobra.Command {
 	var host bool
 	var format string
+	var linkRoot, navigationRoot string
 	cmd := &cobra.Command{Use: "follow PATH", Short: "Watch a granted file in a live text or Markdown view", Long: `Read a file inside the selected running VM, below its current space grants.
 Relative paths use the space's default workdir. No VM is started and grants
 are never changed. Symlink components in VM paths are refused: use a direct
@@ -80,7 +84,11 @@ including with --format markdown. Page up/down browses older/newer windows.
 Edits refresh the active window; this is a live viewer, not lossless logging.
 Scroll up to pause end-follow; f or End resumes it. Ctrl+S toggles Markdown
 source, drag selects displayed text, y copies through host clipboard policy,
-and q closes the view. A failed read retains the last display marked stale.
+and q closes the view. Readable relative Markdown file links open a new follow
+ tab inside the TUI, retaining their original navigation root. Standalone local
+ file opening refuses without a tab channel. HTTP(S) links use host seams.browser
+ on/ask/off, including standalone; ask requires deliberate Ctrl+O and Esc cancels.
+ Fragments open the file only. A failed read retains the last display marked stale.
 
   yoloctl follow notes.md --space dev
   yoloctl follow --host --format text /tmp/service.log`, Args: func(cmd *cobra.Command, args []string) error {
@@ -92,6 +100,9 @@ and q closes the view. A failed read retains the last display marked stale.
 		}
 		if _, err := followview.ParseFormat(format); err != nil {
 			return err
+		}
+		if linkRoot != "" && navigationRoot != "" {
+			return errors.New("local navigation roots are mutually exclusive")
 		}
 		if host && cmd.Flags().Changed("space") {
 			return errors.New("--host and --space are mutually exclusive")
@@ -162,7 +173,51 @@ and q closes the view. A failed read retains the last display marked stale.
 			return err
 		}
 
+		mode := "vm"
+		if host {
+			mode = "host"
+		}
+		originalRoot := linkRoot
+		if originalRoot == "" {
+			originalRoot = navigationRoot
+		}
+		navigation, navErr := filelink.ForFile(mode, space, path, workdir, originalRoot)
+		if navErr != nil {
+			return asUserError(navErr)
+		}
+		if linkRoot != "" {
+			if host {
+				reader = followview.HostReader{Path: path, Root: linkRoot}
+			} else {
+				r := followVMReader(space, path)
+				r.Root = linkRoot
+				reader = r
+			}
+		}
 		opts := followview.Options{Reader: reader, Path: path, Workdir: workdir, Space: space, Format: selectedFormat}
+		nav, open, err := fileNavigation(cmd.Context(), navigation, requests, fileNavigationSource{Path: path, Bounded: linkRoot != ""})
+		if err != nil {
+			return err
+		}
+		opts.Navigation = nav
+		opts.OpenFile = func(t filelink.Target) tea.Cmd {
+			return func() tea.Msg { return followview.ActionResultMsg{Err: open(t), Text: "Opened file in follow"} }
+		}
+		var browser chatui.Options
+		configureChatBrowser(cmd.Context(), &browser, prefs.BrowserPolicy(), hostintegration.OpenURL)
+		opts.ConfirmLinks = browser.ConfirmLinks
+		if browser.OpenLink != nil {
+			opts.OpenLink = func(url string) tea.Cmd {
+				return func() tea.Msg {
+					result := browser.OpenLink(url)()
+					if r, ok := result.(chatui.ActionResultMsg); ok {
+						return followview.ActionResultMsg{Err: r.Err, Text: r.Text}
+					}
+					return result
+				}
+			}
+		}
+
 		if prefs.ClipboardEnabled() {
 			opts.Copy = func(text string) tea.Cmd {
 				sequence, notice := termio.EvaluateOSC52(termio.OSC52{Selection: "c", Payload: base64.StdEncoding.EncodeToString([]byte(text))}, true)
@@ -181,6 +236,10 @@ and q closes the view. A failed read retains the last display marked stale.
 	}}
 	cmd.Flags().String("space", "", "Space whose grants and VM contain the file")
 	cmd.Flags().BoolVar(&host, "host", false, "Read an explicitly selected host file instead of the VM")
+	cmd.Flags().StringVar(&linkRoot, "link-root", "", "Pinned local navigation boundary")
+	_ = cmd.Flags().MarkHidden("link-root")
+	cmd.Flags().StringVar(&navigationRoot, "navigation-root", "", "Pinned manual navigation context")
+	_ = cmd.Flags().MarkHidden("navigation-root")
 	cmd.Flags().StringVar(&format, "format", "auto", "Display format: auto, text or markdown")
 	_ = cmd.RegisterFlagCompletionFunc("space", completeSpaces)
 	_ = cmd.RegisterFlagCompletionFunc("format", func(*cobra.Command, []string, string) ([]cobra.Completion, cobra.ShellCompDirective) {

@@ -3,12 +3,15 @@
 package chatui
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/leogr/yoloctl/internal/filelink"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -183,7 +186,12 @@ type SessionMsg struct {
 // acceptance alone must not return Confirmed. Copy/OpenLink are explicit user
 // actions and must apply the outer host's clipboard/browser policy.
 type Options struct {
-	Space, Channel, Nick string
+	Context               context.Context
+	Navigation            *filelink.Navigator
+	LinkActions           bool
+	NavigationUnavailable string
+	OpenFile              func(filelink.Target) tea.Cmd
+	Space, Channel, Nick  string
 	// Account is the local human's authenticated account.
 	Account         string
 	MaxMessageBytes int
@@ -265,6 +273,12 @@ const (
 
 // Model implements tea.Model. Feed transport messages via the hosting program.
 type Model struct {
+	fileLinks     map[linkCacheKey]filelink.Admissions
+	linkJobs      *linkJobs
+	linksBusy     bool
+	linksOpening  bool
+	linksObserved map[linkCacheKey]map[string]bool
+	linkEpoch     uint64
 	// channelView is the visible channel; within embeds another one while
 	// applying its events. Per-channel state lives there.
 	*channelView
@@ -391,8 +405,13 @@ func New(opts Options) *Model {
 	if name, ok := canonicalChannel(opts.Channel); ok {
 		opts.Channel = name
 	}
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithCancel(ctx)
 	v := newChannelView(opts.Channel, opts.MaxMessageBytes)
-	return &Model{channelView: v, cur: v, views: map[string]*channelView{v.name: v}, order: []string{v.name},
+	return &Model{fileLinks: map[linkCacheKey]filelink.Admissions{}, linksObserved: map[linkCacheKey]map[string]bool{}, linkJobs: &linkJobs{ctx: ctx, cancel: cancel}, channelView: v, cur: v, views: map[string]*channelView{v.name: v}, order: []string{v.name},
 		opts: opts, rosterOpen: true, copyOnSelect: true, theme: spaceview.NewTheme(true, nil, opts.Icons)}
 }
 
@@ -411,7 +430,12 @@ func (m *Model) SetDraft(text string) error {
 // Messages returns a detached snapshot, including local delivery state.
 func (m *Model) Messages() []Message { return slices.Clone(m.messages) }
 
-func (m *Model) Init() tea.Cmd { return tea.RequestBackgroundColor }
+func (m *Model) Init() tea.Cmd {
+	if m.opts.NavigationUnavailable != "" {
+		m.say(levelWarn, m.opts.NavigationUnavailable)
+	}
+	return tea.RequestBackgroundColor
+}
 
 func (m *Model) say(level noticeLevel, text string) {
 	m.notice, m.noticeLevel = text, level
@@ -440,6 +464,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if next := m.resizePreview(); next != nil {
 		cmd = tea.Batch(cmd, next)
 	}
+	if next := m.settleFileLinks(); next != nil {
+		cmd = tea.Batch(cmd, next)
+	}
 	if next := m.settleDiagrams(); next != nil {
 		cmd = tea.Batch(cmd, next)
 	}
@@ -459,6 +486,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case linkAdmissionMsg:
+		m.receiveFileLinks(msg)
+	case fileOpenedMsg:
+		return m, m.checkedFile(msg)
 	case diagramResultMsg:
 		m.diagramResult(msg)
 	case diagramSettleMsg:

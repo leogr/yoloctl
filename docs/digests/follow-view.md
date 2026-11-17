@@ -1,6 +1,6 @@
 # Live file view
 
-Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; header-free layout re-read at `e46f7d4ced29695669ca5c30544a53752557c872` and accompanying changes.
+Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; header-free layout re-read at `e46f7d4ced29695669ca5c30544a53752557c872` and accompanying changes. Navigation symbols re-read at `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes.
 
 [FACT] Host-only `yoloctl follow PATH [--space SPACE] [--format auto|text|markdown]`
 opens one live pane. Default mode pins the selected space and absolute VM path;
@@ -70,10 +70,11 @@ notices (copied characters/lines, clipboard off, over 1 MiB). A click alone copi
 nothing; `y` or Ctrl+Shift+C copies the selection again; clearing the highlight
 mid-drag (Esc, Ctrl+S) ends that gesture without a copy. [10](#source-10) In the
 TUI an ended follow pane offers [Reopen](tui-reattach.md) with its exact launch
-argv (path, `--host`/`--space`, `--format`); an implicit space is the one pinned
+argv (absolute path, `--host`/`--space`, `--format`, original navigation root and actual reader mode); an implicit space is the one pinned
 at launch. Code-copy controls
-use the same policy. Terminal controls are sanitized; links have no opener,
-and there are no chat identities, Quote actions or implicit effects. Close
+use the same policy. Terminal controls are sanitized; relative Markdown file links and HTTP(S) use the explicit bounded
+[navigation actions](markdown-navigation.md). There are no chat identities,
+Quote actions or implicit effects. Close
 ends the local follow view. Component tests cover current-grant refusal,
 changed/unchanged wire payloads, edits/replacement/shrink, complete 2 MiB
 Markdown beyond chat's row limit, window browsing, slow reads and cancellation.
@@ -88,17 +89,17 @@ and light themes. [7](#source-7) [8](#source-8)
 
 ## Sources
 
-1. <a id="source-1"></a> [CLI and completion](../../cmd/yoloctl/follow.go#L68) — `newFollowCmd`, `absoluteFollowPath`, `currentFollowGrants`, `completeFollowPaths`.
+1. <a id="source-1"></a> [CLI and completion](../../cmd/yoloctl/follow.go#L71) — `newFollowCmd`, `absoluteFollowPath`, `currentFollowGrants`, `completeFollowPaths`.
 2. <a id="source-2"></a> [Sources and transport](../../internal/followview/source.go#L26) — limits, `HostReader.Read`, `VMReader.Read`, `VMReader.call`, `Within`.
 3. <a id="source-3"></a> [VM descriptor reader](../../internal/followview/reader.py#L15) — `open_directory`, `open_selected`, `read`, `listing`.
-4. <a id="source-4"></a> [View and job ownership](../../internal/followview/model.go#L51) — `renderFile`, `jobs`, `Model.Update`, `scroll`, `View`, `Run`.
+4. <a id="source-4"></a> [View and job ownership](../../internal/followview/model.go#L92) — `renderFile`, `jobs`, `Model.Update`, `scroll`, `View`, `Run`.
 5. <a id="source-5"></a> [Source regressions](../../internal/followview/source_test.go#L38) — temporary-file and fixed-reader transport tests; model_test.go covers rendering/input/state and cmd/yoloctl/follow_test.go covers selection/completion.
 6. <a id="source-6"></a> [Shared layout option](../../internal/markdownview/document.go#L1) — `LayoutOptions.UnlimitedRows`; internal/tui/confirm_close.go `closeEffect` and tui.go `opensLiveSurface` own pane routing/closing.
-7. <a id="source-7"></a> [Body row painting](../../internal/followview/model.go#L665) — `View`, body `Paint` fill.
+7. <a id="source-7"></a> [Body row painting](../../internal/followview/model.go#L772) — `View`, body `Paint` fill.
 8. <a id="source-8"></a> [Background regression](../../internal/followview/background_test.go#L18) — `TestBodyRowsKeepTerminalBackground`.
-9. <a id="source-9"></a> [Reopen classification](../../internal/tui/reopen_args.go#L24) — `parseReopenView` `follow` case, `pinReopenArgs`; `viewEndAction` in reattach.go; follow cases in reopen_args_test.go, reopen_test.go and reopen_launch_test.go.
-10. <a id="source-10"></a> [Copy on release](../../internal/followview/model.go#L570) — `copyText`, `clearSelection`, `mouse` (L609); `TestDragCopiesOnReleaseAndControlsStayInert`, `TestReleaseCopyFollowsChatPolicy`, `TestClearingMidDragEndsTheGesture` in model_test.go; host callback in cmd/yoloctl/follow.go applies `seams.clipboard` and OSC 52 evaluation.
+9. <a id="source-9"></a> [Reopen classification](../../internal/tui/reopen_args.go#L25) — `parseReopenView` `follow` case, `pinReopenArgs`; `viewEndAction` in reattach.go; follow cases in reopen_args_test.go, reopen_test.go and reopen_launch_test.go.
+10. <a id="source-10"></a> [Copy on release](../../internal/followview/model.go#L667) — `copyText`, `clearSelection`, `mouse`; `TestDragCopiesOnReleaseAndControlsStayInert`, `TestReleaseCopyFollowsChatPolicy`, `TestClearingMidDragEndsTheGesture` in model_test.go; host callback in cmd/yoloctl/follow.go applies `seams.clipboard` and OSC 52 evaluation.
 
 11. <a id="source-11"></a> [Compact follow rows](../../internal/followview/table_compact.go#L1) — `toggleTableRows`, `followKey`; table_compact_test.go.
 
-12. <a id="source-12"></a> [Path title](../../internal/followview/model.go#L665) — `Options.Workdir`, `Model.View`, `Within`; cmd/yoloctl/follow.go `newFollowCmd` pins the title base. Header-free viewport/scroll/copy/footer cases in row_layout_test.go; title cases in internal/followview/title_test.go and CLI base/path checks in cmd/yoloctl/follow_test.go.
+12. <a id="source-12"></a> [Path title](../../internal/followview/model.go#L772) — `Options.Workdir`, `Model.View`, `Within`; cmd/yoloctl/follow.go `newFollowCmd` pins the title base. Header-free viewport/scroll/copy/footer cases in row_layout_test.go; title cases in internal/followview/title_test.go and CLI base/path checks in cmd/yoloctl/follow_test.go.

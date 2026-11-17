@@ -30,6 +30,9 @@ def open_directory(path):
 
 def open_selected(request, directory=False):
     path = request['path']
+    boundary = request.get('navigation_root')
+    if boundary and (not os.path.isabs(boundary) or os.path.normpath(boundary) != boundary or not (path == boundary or path.startswith(boundary.rstrip('/') + '/'))):
+        raise ValueError('path leaves its navigation root')
     if not os.path.isabs(path) or os.path.normpath(path) != path:
         raise ValueError('an absolute, clean path is required')
     roots = [root for root in request['roots']
@@ -134,6 +137,25 @@ try:
     request = json.loads(sys.stdin.buffer.read(1 << 20))
     if request['op'] == 'read':
         result = read(request)
+    elif request['op'] == 'probe':
+        paths = request.get('paths', [])
+        if len(paths) > 64:
+            raise ValueError('too many navigation targets')
+        probes = {}
+        for path in paths:
+            fd = None
+            try:
+                candidate = dict(request, path=path)
+                fd = open_selected(candidate)
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    raise ValueError('select a readable regular file')
+                probes[path] = ''
+            except Exception as error:
+                probes[path] = str(error)
+            finally:
+                if fd is not None:
+                    os.close(fd)
+        result = dict(probes=probes)
     elif request['op'] == 'list':
         result = listing(request)
     else:

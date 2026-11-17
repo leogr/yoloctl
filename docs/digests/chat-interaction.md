@@ -1,6 +1,6 @@
 # Native chat input and message actions
 
-Verification: `6eaae0184488765df1d718b4f2381e4dff228e6f` and accompanying changes; re-read affected cited symbols when changing behavior.
+Verification: `6eaae0184488765df1d718b4f2381e4dff228e6f` and accompanying changes; re-read affected cited symbols when changing behavior. Navigation symbols re-read at `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes.
 
 [FACT] Chat uses the [Markdown fallback ladder](markdown-renderer.md): labelled
 records explain narrow tables; notices explain limits. Labels/notices preserve
@@ -9,6 +9,12 @@ copy, TAB-separated Quote and source mode. Wide-enough columns wrap open without
 mode and resize, dormant while wrapping open; eviction removes it. Budget refusal leaves the row closed
 with a notice without forgetting the requested state. Copy includes hidden reached cells; within-cell drags stay partial.
 [17](#source-17) [18](#source-18)
+
+Readable relative Markdown links open a new follow tab under the selected
+space's pinned workdir, independently of browser policy; source, draft and
+scroll remain in chat. Standalone local opening refuses without a TUI tab
+channel. See [Markdown navigation](markdown-navigation.md) for admission,
+original-source Quote, rechecks and typed parent routing.
 
 See [reading and selection](chat-reading.md) for drag copy and scrolling (the
 follow view shares its copy-on-release policy and notices), and

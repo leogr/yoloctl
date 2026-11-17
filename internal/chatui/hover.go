@@ -3,6 +3,8 @@ package chatui
 import (
 	"strings"
 
+	"github.com/leogr/yoloctl/internal/markdownview"
+
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
 )
@@ -235,6 +237,8 @@ func (m *Model) hoverHint() []run {
 			if m.opts.Copy == nil || m.opts.Clipboard == "off" {
 				what = "the host clipboard is off (seams.clipboard)"
 			}
+		case markdownview.IntentLocalFile:
+			name, what = h.act.Value, "click to open a new follow tab"
 		case actLink:
 			name = h.act.Value
 			switch {

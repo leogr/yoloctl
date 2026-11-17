@@ -18,6 +18,9 @@ func decorateTokens(text string, pieces []piece, theme spaceview.Theme, me strin
 		case strings.HasPrefix(text[i:], "https://") || strings.HasPrefix(text[i:], "http://"):
 			end, link, _ := markdownview.URLAt(text, i)
 			pieces = overlay(pieces, i, i+len(link), func(p piece) piece {
+				if p.Act.Kind == markdownview.IntentLocalFile || p.Act.Kind == markdownview.IntentNone && p.Act.Value != "" {
+					return p
+				}
 				p.Style.FG, p.Style.Underline = theme.Label, true
 				p.Act = action{Kind: actLink, Value: link}
 				return p

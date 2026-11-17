@@ -122,7 +122,7 @@ func (m *Model) mouseDown(mo tea.Mouse) tea.Cmd {
 	row, _ := m.rowAt(mo.Y)
 	p, ok := m.pointAt(mo.X, mo.Y)
 	m.sel = nil
-	m.drag = dragState{active: true, area: hitTranscript, x: mo.X, y: mo.Y, lastX: mo.X, lastY: mo.Y, press: p, pressOK: ok, act: actionAt(m.widthMethod, row.runs, mo.X), key: row.key}
+	m.drag = dragState{active: true, area: hitTranscript, x: mo.X, y: mo.Y, lastX: mo.X, lastY: mo.Y, press: p, pressOK: ok, generation: m.generation, act: actionAt(m.widthMethod, row.runs, mo.X), key: row.key}
 	if ok && row.kind != rowEvent {
 		m.drag.pick = p.key // a room notice row selects no message
 	}
@@ -221,7 +221,7 @@ func (m *Model) mouseUp(mo tea.Mouse) tea.Cmd {
 			return m.copySelection()
 		}
 		row, _ := m.rowAt(mo.Y)
-		if act := actionAt(m.widthMethod, row.runs, mo.X); act.Kind != actNone && act == d.act {
+		if act := actionAt(m.widthMethod, row.runs, mo.X); act.Kind != actNone && act == d.act && d.generation == m.generation {
 			return m.activate(act)
 		}
 		if row.key != "" && row.key == d.key && row.kind != rowEvent {
@@ -326,6 +326,8 @@ func (m *Model) activate(act action) tea.Cmd {
 	switch act.Kind {
 	case markdownview.IntentToggleTableRow:
 		return m.toggleTableRow(act)
+	case markdownview.IntentLocalFile:
+		return m.openFileLink(act)
 	case actLink:
 		return m.openLink(act.Value)
 	case actAuthor:

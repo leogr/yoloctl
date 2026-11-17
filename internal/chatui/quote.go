@@ -60,7 +60,7 @@ func (m *Model) quoteSource(i int) ([]quoteLine, bool, string) {
 	}
 	var srcs []lineSrc
 	body := m.body(msg, max(m.lastTextWidth, 1))
-	displayLinesMap(m.widthMethod, msg.Text, m.source, m.theme, m.self, &srcs, diagramLookup(body))
+	displayLinesMap(m.widthMethod, msg.Text, m.source, m.theme, m.self, &srcs, diagramLookup(body), m.linkPolicy(messageKey(*msg), msg.Text))
 	lines := body.lines // with previews and drawings
 	if len(lines) != len(srcs) {
 		return nil, false, quoteCut
@@ -189,7 +189,7 @@ func (q quoteSpans) exact(la, oa, lb, ob int, startEdge, endEdge bool) (string, 
 // rendered is the copyable text text shows as in the current view.
 func rendered(text string, source bool, m *Model, body cachedBody) string {
 	var out []string
-	for _, dl := range displayLinesMap(m.widthMethod, text, source, m.theme, m.self, nil, diagramBySource(body)) {
+	for _, dl := range displayLinesMap(m.widthMethod, text, source, m.theme, m.self, nil, diagramBySource(body), body.links) {
 		if !dl.Decor {
 			out = append(out, dl.Text)
 		}

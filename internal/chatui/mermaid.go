@@ -121,7 +121,7 @@ func (m *Model) parseDiagrams(key, text string, width int, body *cachedBody) []d
 		body.transient = append(body.transient, class == fenceEligible && !pending && d.Lines == nil && m.diagrams.transient[diagramKey{source, markdownview.DiagramWidth(width)}].Status != "")
 		return d, ok
 	}
-	lines := markdownview.Parse(text, markdownview.ParseOptions{Method: m.widthMethod, Theme: m.theme, Decorate: chatDecorator(m.self), Diagrams: lookup}).Lines
+	lines := markdownview.Parse(text, markdownview.ParseOptions{Method: m.widthMethod, Theme: m.theme, Decorate: chatDecorator(m.self), Diagrams: lookup, Links: m.linkPolicy(key, originalMessageText(m, key, text))}).Lines
 	body.fenceAt = fenceLines(lines, len(body.fences))
 	return lines
 }
@@ -435,4 +435,13 @@ func contentSpan(lines []displayLine, from, to int) int {
 		}
 	}
 	return n
+}
+
+func originalMessageText(m *Model, key, fallback string) string {
+	for _, v := range m.messages {
+		if messageKey(v) == key {
+			return v.Text
+		}
+	}
+	return fallback
 }

@@ -26,6 +26,7 @@ type selection struct {
 
 // dragState tracks one left-button gesture from press to release.
 type dragState struct {
+	generation   uint64
 	active       bool
 	moved        bool
 	x, y         int // press cell

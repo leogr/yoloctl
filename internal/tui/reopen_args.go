@@ -21,7 +21,9 @@ type reopenView struct {
 	spaceExplicit   bool
 	// host is follow's explicit host-file target: no space applies, so it
 	// is never pinned and needs no space to be replayed.
-	host bool
+	host               bool
+	path, root, format string
+	navigationRoot     string
 }
 
 func parseReopenView(args []string) (reopenView, bool) {
@@ -50,6 +52,8 @@ func parseReopenView(args []string) (reopenView, bool) {
 		f.String("space", "", "")
 		f.Bool("host", false, "")
 		f.String("format", "auto", "")
+		f.String("link-root", "", "")
+		f.String("navigation-root", "", "")
 	case "space", "sp":
 		if len(args) < 2 {
 			return reopenView{}, false
@@ -124,7 +128,13 @@ func parseReopenView(args []string) (reopenView, bool) {
 			// format and --host never combined with --space.
 			v.host, _ = f.GetBool("host")
 			format, _ := f.GetString("format")
-			if len(pos) != 1 || pos[0] == "" || v.host && v.spaceExplicit ||
+			v.root, _ = f.GetString("link-root")
+			v.navigationRoot, _ = f.GetString("navigation-root")
+			v.format = format
+			if len(pos) == 1 {
+				v.path = pos[0]
+			}
+			if v.root != "" && v.navigationRoot != "" || len(pos) != 1 || pos[0] == "" || v.host && v.spaceExplicit ||
 				format != "auto" && format != "text" && format != "markdown" {
 				return reopenView{}, false
 			}

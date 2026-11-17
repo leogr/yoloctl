@@ -153,11 +153,14 @@ const MaxBodyRows = 16384
 
 // parseLines optionally records where each display line comes from in
 // Plain(text), one LineSource per display line. Display is identical either way.
-func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme, decorate Decorator, srcs *[]LineSource, diagrams func(string) (Diagram, bool)) []DisplayLine {
+func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme, decorate Decorator, srcs *[]LineSource, diagrams func(string) (Diagram, bool), links LinkPolicy, preserveControls ...bool) []DisplayLine {
 	var out []DisplayLine
 	fence, fences := "", 0
 	openerSrcs := 0 // len(*srcs) right after the open fence's opener
-	lines := strings.Split(Plain(text), "\n")
+	if len(preserveControls) == 0 || !preserveControls[0] {
+		text = Plain(text)
+	}
+	lines := strings.Split(text, "\n")
 	opener := -1 // the open fence's display line
 	var block strings.Builder
 	var lang *syntax // the open fence's highlighter, nil for plain
@@ -199,7 +202,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 		}
 		// A rejected table's lines are text: scan them once, as the main
 		// loop does.
-		table, n := TableLines(wm, lines[k:], theme, decorate)
+		table, n := TableLines(wm, lines[k:], theme, decorate, links)
 		if table == nil && n > 0 {
 			noTable = k + n
 		}
@@ -293,7 +296,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 		tableLimit := false
 		// A fence opener always wins over a table, even with pipes in it.
 		if !source && fence == "" && idx >= literal && FenceMarker(strings.TrimLeft(line, " ")) == "" {
-			table, n := TableLines(wm, lines[idx:], theme, decorate)
+			table, n := TableLines(wm, lines[idx:], theme, decorate, links)
 			if table != nil {
 				// A blank or whitespace-only neighbour already separates the
 				// table; the message's own edges need nothing.
@@ -452,10 +455,12 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 			if srcs != nil || strip.tags {
 				inline = &SourceMap{Hi: len(dl.Text)}
 			}
-			dl.Text, spans = InlineMarkdownMap(dl.Text, st, theme, inline)
+			dl.Text, spans = InlineMarkdownMap(dl.Text, st, theme, inline, links)
 			for _, sp := range spans {
 				p := Piece{Start: sp.Start, End: sp.End, Style: sp.Style, Code: sp.Code, Strike: sp.Strike, Auto: sp.Auto}
-				if sp.Link != "" {
+				if sp.Classified {
+					p.Act = sp.Act
+				} else if sp.Link != "" {
 					p.Act = Action{Kind: IntentURL, Value: sp.Link}
 				}
 				dl.Pieces = append(dl.Pieces, p)
@@ -583,7 +588,7 @@ func quoteDepth(line string) int {
 
 // tableCell renders one table cell's text: inline Markdown and the inline
 // tags of C1, a <br> shown as one space recorded as a forced break.
-func tableCell(text string, st spaceview.Style, theme spaceview.Theme) struct {
+func tableCell(text string, st spaceview.Style, theme spaceview.Theme, links LinkPolicy) struct {
 	text   string
 	pieces []Piece
 	breaks []int
@@ -609,11 +614,13 @@ func tableCell(text string, st spaceview.Style, theme spaceview.Theme) struct {
 		text = b.String()
 		m = &SourceMap{Hi: len(text)}
 	}
-	shown, spans := InlineMarkdownMap(text, st, theme, m)
+	shown, spans := InlineMarkdownMap(text, st, theme, m, links)
 	out.text = shown
 	for _, sp := range spans {
 		p := Piece{Start: sp.Start, End: sp.End, Style: sp.Style, Code: sp.Code, Strike: sp.Strike, Auto: sp.Auto}
-		if sp.Link != "" {
+		if sp.Classified {
+			p.Act = sp.Act
+		} else if sp.Link != "" {
 			p.Act = Action{Kind: IntentURL, Value: sp.Link}
 		}
 		out.pieces = append(out.pieces, p)
@@ -904,7 +911,7 @@ func HeadingColor(theme spaceview.Theme, n int) spaceview.Color {
 // [start, end): a reference never replaces its destination.
 func Linked(pieces []Piece, start, end int) bool {
 	for _, p := range pieces {
-		if p.Act.Kind == IntentURL && p.Start < end && p.End > start {
+		if (p.Act.Kind == IntentURL || p.Act.Kind == IntentLocalFile || p.Act.Kind == IntentNone && p.Act.Value != "") && p.Start < end && p.End > start {
 			return true
 		}
 	}
@@ -1220,7 +1227,11 @@ const (
 // start one. A table over its bounds returns no lines but still its span,
 // which the caller then shows as text without detecting a table inside it,
 // so every line is examined a bounded number of times.
-func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate Decorator) (out []DisplayLine, n int) {
+func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate Decorator, policies ...LinkPolicy) (out []DisplayLine, n int) {
+	var links LinkPolicy
+	if len(policies) > 0 {
+		links = policies[0]
+	}
 	if len(lines) < 2 {
 		return nil, 0
 	}
@@ -1254,7 +1265,7 @@ func TableLines(wm ansi.Method, lines []string, theme spaceview.Theme, decorate 
 	for r, cells := range rows {
 		st := spaceview.Style{FG: theme.Text, Bold: r == 0}
 		for c, raw := range cells {
-			cl := tableCell(ExpandTabs(wm, raw), st, theme)
+			cl := tableCell(ExpandTabs(wm, raw), st, theme, links)
 			shown[r] = append(shown[r], cell{cl.text, cl.pieces, cl.breaks})
 			breaks = breaks || len(cl.breaks) > 0
 			for _, seg := range segments(cl.text, cl.breaks) {

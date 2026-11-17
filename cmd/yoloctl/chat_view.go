@@ -20,6 +20,7 @@ import (
 	"github.com/leogr/yoloctl/internal/chatstream"
 	"github.com/leogr/yoloctl/internal/chatui"
 	"github.com/leogr/yoloctl/internal/config"
+	"github.com/leogr/yoloctl/internal/filelink"
 	"github.com/leogr/yoloctl/internal/hostintegration"
 	"github.com/leogr/yoloctl/internal/managedchat"
 	"github.com/leogr/yoloctl/internal/mermaid"
@@ -104,6 +105,24 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 		return func() tea.Msg { return s.resolveAttach(cmd, account) }
 	}
 	opts.Attach = chatAttacher(target.Space, requests)
+	settingsCtx, settingsCancel := context.WithTimeout(ctx, 7*time.Second)
+	workdir, settingsErr := followDefault(settingsCtx, target.Space)
+	settingsCancel()
+	opts.Context = ctx
+	opts.LinkActions = true
+	if settingsErr == nil {
+		var open func(filelink.Target) error
+		opts.Navigation, open, settingsErr = fileNavigation(ctx, filelink.Context{Mode: "vm", Space: target.Space, Base: workdir, Root: workdir}, requests)
+		if settingsErr == nil {
+			opts.OpenFile = func(t filelink.Target) tea.Cmd {
+				return func() tea.Msg { return chatui.ActionResultMsg{Err: open(t), Text: "Opened file in follow"} }
+			}
+		}
+	}
+	if settingsErr != nil {
+		opts.NavigationUnavailable = "Local file links unavailable: " + settingsErr.Error()
+	}
+
 	opts.SaveNick = func(nick string) tea.Cmd {
 		return func() tea.Msg {
 			var status managedchat.Status
@@ -129,7 +148,9 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 	opts.RefreshChannels = func() tea.Cmd {
 		return func() tea.Msg { return s.refreshCatalog() }
 	}
-	var model tea.Model = chatui.New(opts)
+	nativeModel := chatui.New(opts)
+	defer nativeModel.CloseLinks()
+	var model tea.Model = nativeModel
 	if standalone != nil {
 		model = standalone.wrap(model)
 	}
@@ -747,7 +768,6 @@ func attachTargetView(account string, t managedchat.AttachTarget) chatui.AttachT
 // guarded `box attach`: in a TUI tab via the typed request channel,
 // otherwise by handing this terminal over until the session detaches.
 func chatAttacher(space string, requests *os.File) func(chatui.AttachTarget) tea.Cmd {
-	var mu sync.Mutex
 	return func(t chatui.AttachTarget) tea.Cmd {
 		req := termio.TabRequest{Op: "attach", Space: space, Box: t.Box, ChatRoomID: t.RoomID, ChatMemberID: t.MemberID, ChatBoxID: t.BoxID, ChatAllowStart: t.State == "stopped"}
 		if err := req.ValidateChat(); err != nil {
@@ -755,8 +775,8 @@ func chatAttacher(space string, requests *os.File) func(chatui.AttachTarget) tea
 		}
 		if requests != nil {
 			return func() tea.Msg {
-				mu.Lock()
-				defer mu.Unlock()
+				viewTabMu.Lock()
+				defer viewTabMu.Unlock()
 				if err := termio.WriteTabRequest(requests, req); err != nil {
 					return chatui.ActionResultMsg{Err: errors.New("could not open a tab for " + t.Box + ": " + err.Error())}
 				}
