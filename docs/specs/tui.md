@@ -371,7 +371,8 @@ Previous/Next stay visible. Tab-owned notices add `!` until that tab is visited;
 visiting retains the notice. New notices are unfocused: Enter, Esc, arrows and
 typing retain their pane/palette routes. Click or prefix `[`/`]` focuses and
 highlights the dialog; only then Enter runs the first action, Esc dismisses and
-Left/Right or `‹`/`›` navigate below existing modal/gesture precedence. Outside
+Left/Right or `‹`/`›` navigate below existing modal/gesture precedence. Other
+keys and paste are consumed while focused; they never type into the pane. Outside
 clicks and dismissal return focus. Prefix PgUp/PgDn retains scrolling. Standalone uses the same dialog
 and its existing prefix, preserving exit results. [55](#source-55)
 

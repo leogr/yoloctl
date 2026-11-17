@@ -246,3 +246,120 @@ func TestNoticeDialogClickFocusAndReturn(t *testing.T) {
 		t.Fatal("new arrival inherited notice focus")
 	}
 }
+
+func TestNoticeDialogFocusedInputIsExclusive(t *testing.T) {
+	for _, standalone := range []bool{false, true} {
+		t.Run(fmt.Sprintf("standalone%t", standalone), func(t *testing.T) {
+			m := newTestModel(t, 100, 28)
+			m.standalone = standalone
+			_, capture := mouseCapture(t, m, "\x1b[>11u")
+			m.postNotice(prettylog.KindWarn, "focused")
+			o := m.toastLayout()
+			_, _ = m.Update(click(o.x+3, o.y+1))
+			_, _ = m.Update(key('h', 0, "h")) // the notice owns this held click, not the child
+			_, _ = m.Update(tea.KeyReleaseMsg{Code: 'h'})
+			_, _ = m.Update(releaseAt(o.x+3, o.y+1))
+			for _, k := range []tea.Key{{Code: 'a', Text: "a"}, {Code: 'c', Mod: tea.ModCtrl}, {Code: tea.KeyEnter, Mod: tea.ModShift}, {Code: tea.KeyEscape, Mod: tea.ModAlt}, {Code: tea.KeyLeftShift}, {Code: tea.KeyLeftAlt}, {Code: tea.KeyLeft, Mod: tea.ModCtrl}} {
+				_, _ = m.Update(tea.KeyPressMsg(k))
+				_, _ = m.Update(tea.KeyReleaseMsg(k))
+			}
+			_, _ = m.Update(tea.PasteMsg{Content: "private pasted text"})
+			if len(m.notices) != 1 || !m.noticeFocused {
+				t.Fatal("focused input changed the notice")
+			}
+			// A press owned by the notice stays owned through dismissal/new arrivals.
+			_, _ = m.Update(key('z', 0, "z"))
+			_, _ = m.Update(key(tea.KeyEscape, 0, ""))
+			m.postNotice(prettylog.KindWarn, "new unfocused arrival")
+			_, _ = m.Update(tea.KeyPressMsg{Code: 'z', Text: "z", IsRepeat: true})
+			_, _ = m.Update(tea.KeyReleaseMsg{Code: 'z'})
+			_, _ = m.Update(tea.KeyReleaseMsg{Code: tea.KeyEscape})
+			if m.noticeFocused || len(m.notices) != 1 {
+				t.Fatal("owned repeats/releases changed the new notice")
+			}
+			_, _ = m.Update(tea.PasteMsg{Content: "unfocused paste"})
+			if got := capture(); got != "unfocused paste" {
+				t.Fatalf("focused input escaped or unfocused paste was stolen: %q", got)
+			}
+		})
+	}
+}
+
+func TestNoticeDialogKeepsChildOwnedInputAfterFocus(t *testing.T) {
+	for _, standalone := range []bool{false, true} {
+		t.Run(fmt.Sprintf("standalone%t", standalone), func(t *testing.T) {
+			m := newTestModel(t, 100, 28)
+			m.standalone = standalone
+			_, capture := mouseCapture(t, m, "\x1b[>11u")
+			_, _ = m.Update(key('a', 0, "a"))
+			m.postNotice(prettylog.KindWarn, "arrived")
+			o := m.toastLayout()
+			_, _ = m.Update(click(o.x+3, o.y+1))
+			_, _ = m.Update(releaseAt(o.x+3, o.y+1))
+			_, _ = m.Update(tea.KeyPressMsg{Code: 'a', Text: "a", IsRepeat: true})
+			_, _ = m.Update(tea.KeyReleaseMsg{Code: 'a'})
+			if !strings.Contains(capture(), ";1:2u") || !strings.Contains(capture(), ";1:3u") {
+				t.Fatalf("child-owned key was stolen: %q", capture())
+			}
+			if !m.noticeFocused {
+				t.Fatal("held child completion changed notice focus")
+			}
+		})
+	}
+}
+
+func TestNoticeDialogFocusedPrefixRetainsPrecedence(t *testing.T) {
+	for _, standalone := range []bool{false, true} {
+		t.Run(fmt.Sprintf("standalone%t", standalone), func(t *testing.T) {
+			m := newTestModel(t, 100, 28)
+			m.standalone = standalone
+			mouseCapture(t, m, "\x1b[>11u")
+			m.postNotice(prettylog.KindWarn, "first")
+			m.postNotice(prettylog.KindWarn, "second")
+			o := m.toastLayout()
+			_, _ = m.Update(click(o.x+3, o.y+1))
+			_, _ = m.Update(releaseAt(o.x+3, o.y+1))
+			if standalone {
+				_, _ = m.Update(key('y', tea.ModCtrl, ""))
+				_, _ = m.Update(key('[', 0, "["))
+			} else {
+				prefixed(m, key('[', 0, "["))
+			}
+			if m.noticeIndex != 0 || !m.noticeFocused || m.attachPrefix != nil || m.prefix != nil {
+				t.Fatal("focused notice swallowed the existing prefix route")
+			}
+		})
+	}
+}
+
+func TestNoticeDialogKeepsMouseGestureButOwnsNewInput(t *testing.T) {
+	for _, standalone := range []bool{false, true} {
+		t.Run(map[bool]string{false: "dashboard", true: "standalone"}[standalone], func(t *testing.T) {
+			m := newTestModel(t, 100, 28)
+			m.standalone = standalone
+			_, capture := mouseCapture(t, m, "\x1b[>11u\x1b[?1002h\x1b[?1006h")
+			m.postNotice(prettylog.KindWarn, "notice")
+			_, _ = m.Update(click(1, m.height-1))
+			if standalone {
+				_, _ = m.Update(key('y', tea.ModCtrl, ""))
+				_, _ = m.Update(key('[', 0, "["))
+			} else {
+				prefixed(m, key('[', 0, "["))
+			}
+			if !m.noticeFocused {
+				t.Fatal("did not focus")
+			}
+			_, _ = m.Update(key('z', 0, "z"))
+			_, _ = m.Update(tea.KeyReleaseMsg{Code: 'z'})
+			_, _ = m.Update(tea.PasteMsg{Content: "NEW-INPUT-LEAK"})
+			_, _ = m.Update(releaseAt(1, m.height-1))
+			got := capture()
+			if strings.Contains(got, "NEW-INPUT-LEAK") || strings.Contains(got, "[122u") {
+				t.Fatalf("new focused input leaked while old child mouse held: %q", got)
+			}
+			if !strings.Contains(got, "M") || !strings.Contains(got, "m") {
+				t.Fatalf("old mouse gesture did not complete: %q", got)
+			}
+		})
+	}
+}

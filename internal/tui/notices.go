@@ -342,25 +342,33 @@ func (m *model) toastAction(action string) {
 	}
 }
 
-// Bare dialog keys yield to existing modal/prefix and held-input owners.
+// Focused dialog input yields to existing modal/prefix and held-gesture owners.
+func (m *model) toastInputFocused() bool {
+	// Mouse/selection owners finish their own gestures in the mouse route;
+	// they do not own new keyboard input after explicit notice focus.
+	return m.noticeFocused && m.toastLayout().w != 0
+}
+
 func (m *model) toastActionKey(k tea.Key) bool {
-	if !m.noticeFocused || m.toastLayout().w == 0 || m.chrome != nil || m.selectionPointer != nil || len(m.mouseOwners) > 0 || m.keyOwners[keyIdentity(k)] != nil || k.Mod&^(tea.ModCapsLock|tea.ModNumLock) != 0 {
+	if !m.toastInputFocused() || m.keyOwners[keyIdentity(k)] != nil {
 		return false
 	}
 	action := ""
-	switch {
-	case k.Code == tea.KeyEnter:
-		action = "dismiss"
-		if m.toastTab(m.currentToast()) != nil {
-			action = "visit"
+	if k.Mod & ^(tea.ModCapsLock|tea.ModNumLock) == 0 {
+		switch {
+		case k.Code == tea.KeyEnter:
+			action = "dismiss"
+			if m.toastTab(m.currentToast()) != nil {
+				action = "visit"
+			}
+		case k.Code == tea.KeyLeft || k.Text == "‹":
+			action = "prev"
+		case k.Code == tea.KeyRight || k.Text == "›":
+			action = "next"
 		}
-	case k.Code == tea.KeyLeft || k.Text == "‹":
-		action = "prev"
-	case k.Code == tea.KeyRight || k.Text == "›":
-		action = "next"
-	default:
-		return false
 	}
+	// Every other key belongs to this focused dialog too, including modifier
+	// reports. Keep its press ownership after dismissal or another arrival.
 	if !k.IsRepeat {
 		m.consumeToastKey(k)
 		m.toastAction(action)
@@ -407,7 +415,7 @@ func (m *model) toastCommand(k tea.Key) bool {
 	return true
 }
 func (m *model) toastEscape(k tea.Key) bool {
-	if !m.noticeFocused || m.toastLayout().w == 0 || m.chrome != nil || m.selectionPointer != nil || len(m.mouseOwners) > 0 {
+	if !m.toastInputFocused() {
 		return false
 	}
 	if k.Code != tea.KeyEscape || k.Mod&^(tea.ModCapsLock|tea.ModNumLock) != 0 {

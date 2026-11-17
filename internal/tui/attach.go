@@ -63,6 +63,9 @@ func (m *model) attachedKey(k tea.Key) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if k.Code >= tea.KeyLeftShift && k.Code <= tea.KeyIsoLevel5Shift {
+		if m.toastActionKey(k) {
+			return m, nil
+		}
 		m.sendKey(t.Session, k, false)
 		return m, nil
 	}
@@ -85,7 +88,7 @@ func (m *model) attachedKey(k tea.Key) (tea.Model, tea.Cmd) {
 		if prefix {
 			return m, nil
 		}
-	} else if m.toastEscape(k) || m.toastActionKey(k) {
+	} else if !prefix && (m.toastEscape(k) || m.toastActionKey(k)) {
 		m.consumeToastKey(k)
 		return m, nil
 	} else if k.IsRepeat && m.consumedKeys[keyIdentity(k)] {

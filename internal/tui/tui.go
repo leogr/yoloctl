@@ -1166,7 +1166,11 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		return m, nil
 
 	case tea.PasteMsg:
+		noticeOwnsInput := m.toastInputFocused()
 		m.disarmPrefix()
+		if noticeOwnsInput {
+			return m, nil
+		}
 		if m.browserDialog != nil || m.confirm != nil || m.picker != nil || m.spacePicker != nil {
 			return m, nil
 		}

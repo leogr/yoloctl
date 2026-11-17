@@ -241,8 +241,8 @@ func TestStandaloneToastPreservesScreenPrefixAndStartupResult(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("toast intercepted standalone detach")
 	}
-	if got := capture(); got != "\x1b[97u" {
-		t.Fatalf("standalone key routes: %q", got)
+	if got := capture(); got != "" {
+		t.Fatalf("focused notice leaked standalone typing: %q", got)
 	}
 }
 

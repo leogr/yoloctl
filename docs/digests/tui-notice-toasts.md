@@ -44,8 +44,8 @@ a clipped compact form. Wrapped fields may still need scrolling. [1](#source-1) 
 [FACT] Notices appear unfocused: all keys, including Enter, Esc and arrows,
 keep their pane/palette routes. Clicking the dialog or prefix `[`/`]` focuses
 it, highlighted by the border (compact form: title). Only then Enter runs the
-first action, Esc dismisses and Left/Right or `‹`/`›` navigate. Ordinary typing
-still follows its pane/palette route. A new arrival, dismissal or outside press
+first action, Esc dismisses and Left/Right or `‹`/`›` navigate. All other key input and bracketed paste are consumed while focused; they do
+not reach the pane/palette. A new arrival, dismissal or outside press
 returns focus. Go to tab appears only for the captured live owner; it visits
 without dismissing. Dismiss removes the current entry; Previous/Next stop at
 the ends. Buttons work without prior focus. Body clicks focus without dismissal;
