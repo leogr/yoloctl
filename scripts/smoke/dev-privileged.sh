@@ -186,7 +186,15 @@ grep -q 'box recreate' <<<"$refused" || smoke_fail "set did not require an expli
 "$YOLOCTL" box recreate "$CONF" --space "$SMOKE_SPACE" --force --no-attach
 [[ "$(in_box "$CONF" sudo -n id -u)" == 0 ]] || smoke_fail "confined -> privileged recreate"
 editor="${SMOKE_ROOT}/drop-privileged-editor"
-printf '%s\n' '#!/bin/sh' "sed -i '/^privileged:/d' \"\$1\"" >"$editor"
+cat >"$editor" <<'PYEDITOR'
+#!/usr/bin/env python3
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+path.write_bytes(re.sub(rb"(?m)^privileged:[^\n]*(?:\n|$)", b"", path.read_bytes()))
+PYEDITOR
 chmod 0755 "$editor"
 export EDITOR="$editor"
 refused="$(expect_failure "$YOLOCTL" box edit "$PRIV" --space "$SMOKE_SPACE")"
