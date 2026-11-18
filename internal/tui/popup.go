@@ -6,6 +6,11 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// headerPopupOrigin places header dropdowns directly below the top-right chips.
+func (m *model) headerPopupOrigin(width int) (x, y int) {
+	return max(m.width-width, 0), 1
+}
+
 // popup renders plain text in a rounded, palette-colored frame. Callers own
 // placement and input handling. Footer choices keep their space when body text
 // overflows; clipping is marked inside the closing border.

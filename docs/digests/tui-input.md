@@ -1,6 +1,6 @@
 # TUI routing, keyboard, mouse, and paste
 
-Verification: `d4da1dc09daf8766074409600c1433534913c43b` and accompanying changes (holder-closed feedback); notice placement re-verified at `16684468` plus accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior.
+Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes.
 
 [FACT] `opensLiveSurface` routes box attach, exec/edit, space shells, catalog
 editors and following logs to tabs; lifecycle commands use attachment flags.
@@ -34,7 +34,8 @@ raw input through Bubble Tea, including releases. [7](#source-7)
 [FACT] A live tab reserves the configured palette chord and explicit copy of an
 existing local selection. Enabled managed PNG paste can consume Ctrl+V and
 insert a guest path through the ordered queue. Other keys reach its terminal encoder; the palette
-owns tab selection/closing and history. In the idle palette Ctrl+R toggles
+owns tab selection/closing and history. Its Ctrl+Left/Right tab shortcuts also
+close a focused notice; live agent/standalone input retains those keys. In the idle palette Ctrl+R toggles
 the console history view; a running overlay command and a focused tab receive
 Ctrl+R themselves. A running
 overlay sends Ctrl+C to its command; a second within two seconds kills the local

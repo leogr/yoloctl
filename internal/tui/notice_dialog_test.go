@@ -20,8 +20,8 @@ func TestNoticeDialogApprovedLayout(t *testing.T) {
 	m.postNotice(prettylog.KindWarn, "a clear detail message with ordinary words that should wrap without splitting any normal words")
 	o := m.toastLayout()
 	text := ansi.Strip(strings.Join(o.rows, "\n"))
-	if o.w != 98 || o.x != (140-o.w)/2 || o.y <= m.chromeRows() {
-		t.Fatalf("not centered70%%: %+v", o)
+	if o.w != 98 || o.x != 140-o.w || o.y != 1 {
+		t.Fatalf("not header-anchored70%%: %+v", o)
 	}
 	for _, part := range []string{"Notice 1 of 1 · ×2", "Detail", "When", "Dismiss", "‹ Previous", "Next ›", "← → Tab select · Enter runs · ‹ › notices · Esc closes"} {
 		if !strings.Contains(text, part) {

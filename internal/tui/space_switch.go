@@ -272,7 +272,8 @@ func (m *model) spacePickerOverlay() *overlay {
 	for _, label := range labels[p.scroll:end] {
 		frame.Lines = append(frame.Lines, ansi.Truncate(label, inner, "…"))
 	}
-	return &overlay{x: max(m.width-w, 0), y: 1 - m.tabTop(), w: w, h: h, frame: frame, scroll: p.scroll}
+	x, y := m.headerPopupOrigin(w)
+	return &overlay{x: x, y: y - m.tabTop(), w: w, h: h, frame: frame, scroll: p.scroll}
 }
 
 func (m *model) spacePickerClick(mo tea.Mouse) {

@@ -175,7 +175,7 @@ func (o toastRect) contains(x, y int) bool {
 	return o.w > 0 && x >= o.x && x < o.x+o.w && y >= o.y && y < o.y+o.h
 }
 
-// toastLayout owns the centered dialog's paint, hit and cursor geometry.
+// toastLayout owns the dialog's paint, hit and cursor geometry.
 // Only the body scrolls; the title, buttons and hint remain fixed.
 func (m *model) toastLayout() toastRect {
 	n := m.currentToast()
@@ -183,12 +183,16 @@ func (m *model) toastLayout() toastRect {
 		return toastRect{}
 	}
 	w := min(m.width, max(min(100, m.width*7/10), min(32, m.width)))
-	available := m.height - m.chromeRows()
+	x, top := m.headerPopupOrigin(w)
+	if m.standalone {
+		x, top = (m.width-w)/2, 0
+	}
+	available := m.height - top
 	title := fmt.Sprintf("Notice %d of %d", m.noticeIndex+1, len(m.notices))
 	if n.repeats > 1 {
 		title += fmt.Sprintf(" · ×%d", n.repeats)
 	}
-	o := toastRect{w: w, x: (m.width - w) / 2, prevX: -1, nextX: -1, closeX: -1}
+	o := toastRect{w: w, x: x, prevX: -1, nextX: -1, closeX: -1}
 	inner := max(w-4, 1)
 	theme := spaceview.NewTheme(!m.bgDetected || m.bgIsDark, m.background, nil)
 	if m.noticeFocused {
@@ -248,7 +252,10 @@ func (m *model) toastLayout() toastRect {
 	field("When", n.when.Format("15:04:05"))
 	compact := func() toastRect {
 		o.h = min(available, max(len(body)+1, 1))
-		o.y = m.chromeRows() + (available-o.h)/2
+		o.y = top
+		if m.standalone {
+			o.y += (available - o.h) / 2
+		}
 		o.controlY = o.y
 		o.closeX = o.x
 		o.capacity = max(o.h-1, 0)
@@ -299,7 +306,10 @@ func (m *model) toastLayout() toastRect {
 		return compact()
 	}
 	o.h = min(len(body)+4+len(buttonRows), available)
-	o.y = m.chromeRows() + (available-o.h)/2
+	o.y = top
+	if m.standalone {
+		o.y += (available - o.h) / 2
+	}
 	o.capacity = max(o.h-4-len(buttonRows), 0)
 	o.maxScroll = max(len(body)-o.capacity, 0)
 	o.rows = append(o.rows, frame.Header(title), frame.Row(""))

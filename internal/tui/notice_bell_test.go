@@ -19,7 +19,7 @@ func TestNoticeBellCtrlNOpensFocused(t *testing.T) {
 	if !m.noticeFocused {
 		t.Fatal("palette Ctrl+N did not focus notices")
 	}
-	if !strings.Contains(ansi.Strip(m.View().Content), "(!0)") {
+	if m.noticeChip() != "" {
 		t.Fatal("viewed notice did not mark bell read")
 	}
 }
@@ -95,7 +95,7 @@ func TestNoticeBellMouseOpenOutsideCloseAndSiblingPopup(t *testing.T) {
 	_, capture := mouseCapture(t, m, "\x1b[?1002h\x1b[?1006h")
 	m.postNotice(prettylog.KindWarn, "first")
 	x := m.width - 1 - ansi.StringWidth(m.headerChips())
-	if !strings.HasSuffix(m.headerChips(), "fixture ▾") || !strings.HasPrefix(m.headerChips(), "(!1) ") {
+	if !strings.HasSuffix(m.headerChips(), "fixture ▾") || !strings.HasPrefix(m.headerChips(), "❶! ") {
 		t.Fatal("bell is not before the space switch")
 	}
 	_, _ = m.Update(click(x, 0))
@@ -215,5 +215,82 @@ func TestNoticeBellCompactKeyboardMatchesPaintedControl(t *testing.T) {
 				t.Fatal("Enter did not run sole painted Dismiss")
 			}
 		})
+	}
+}
+
+func TestNoticePaletteControlArrowsCloseReview(t *testing.T) {
+	for _, code := range []rune{tea.KeyLeft, tea.KeyRight} {
+		m := newTestModel(t, 120, 30)
+		sleepTab(t, m, 1)
+		sleepTab(t, m, 2)
+		m.tabs.Select(0)
+		m.focusPalette = true
+		m.pal.Insert("kept draft")
+		m.postNotice(prettylog.KindWarn, "review")
+		m.openToast()
+		_, _ = m.Update(key(code, tea.ModCtrl, ""))
+		if m.tabs.Active != 1 || m.noticeVisible || !m.focusPalette {
+			t.Fatalf("palette control arrow did not close review and switch: active=%d visible=%v palette=%v", m.tabs.Active, m.noticeVisible, m.focusPalette)
+		}
+		if line, _ := m.pal.Line(); line != "kept draft" {
+			t.Fatal("tab navigation changed draft")
+		}
+	}
+}
+
+func TestNoticeBellCircledCountBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		count int
+		want  string
+	}{
+		{0, ""}, {1, "❶!"}, {9, "❾!"}, {10, "❿!"}, {11, "❿+!"}, {99, "❿+!"}, {100, "❶⓿⓿+!"}, {999, "❶⓿⓿+!"}, {1000, "❶⓿⓿⓿+!"},
+	} {
+		m := newTestModel(t, 120, 30)
+		for range tc.count {
+			m.notices = append(m.notices, toastNotice{unread: true})
+		}
+		if got := m.noticeChip(); got != tc.want {
+			t.Errorf("count %d: %q want %q", tc.count, got, tc.want)
+		}
+	}
+}
+
+func TestNoticeTabArrowsRemainChildInput(t *testing.T) {
+	for _, standalone := range []bool{false, true} {
+		m := newTestModel(t, 120, 30)
+		m.standalone = standalone
+		_, capture := mouseCapture(t, m, "\x1b[>11u")
+		m.postNotice(prettylog.KindWarn, "unfocused")
+		for _, code := range []rune{tea.KeyLeft, tea.KeyRight} {
+			_, _ = m.Update(key(code, tea.ModCtrl, ""))
+			_, _ = m.Update(tea.KeyReleaseMsg{Code: code, Mod: tea.ModCtrl})
+		}
+		if got := capture(); got == "" || m.noticeFocused {
+			t.Fatalf("standalone=%v: live Ctrl+arrows were stolen: %q", standalone, got)
+		}
+	}
+}
+
+func TestNoticeDropdownSharesSpacePickerAnchor(t *testing.T) {
+	for _, size := range [][2]int{{24, 9}, {40, 12}, {140, 40}} {
+		for _, palette := range []bool{false, true} {
+			m := newTestModel(t, size[0], size[1])
+			m.focusPalette = palette
+			m.postNotice(prettylog.KindWarn, "anchored detail")
+			n := m.toastLayout()
+			m.spacePicker = &spacePicker{names: []string{"fixture"}}
+			s := m.spacePickerOverlay()
+			if n.y != m.tabTop()+s.y || n.x+n.w != s.x+s.w || n.y != 1 {
+				t.Fatalf("size%v palette%v: notice%+v space%+v", size, palette, n, s)
+			}
+			if n.x < 0 || n.x+n.w > m.width || n.y+n.h > m.height || len(n.rows) != n.h {
+				t.Fatalf("notice exceeds dropdown bounds: %+v", n)
+			}
+			for _, b := range n.buttons {
+				if !n.contains(b.x, b.y) {
+					t.Fatalf("button outside dropdown: %+v", b)
+				}
+			}
+		}
 	}
 }

@@ -369,14 +369,16 @@ get no box evidence. A connection never promises that an agent wakes.
 output, resizes, an unread viewer, detach/rejoin and final status. Its guest audit
 checks transport behavior; it does not measure graphical parity. [4](#source-4)
 
-[FACT] New outer notices auto-open an unfocused centered dialog for about eight
-seconds, then hide while retained in history. The top-bar `(!N)` bell before the
-space switch counts unread entries; click it or use Ctrl+N in the palette to
+[FACT] New outer notices auto-open an unfocused dialog for about eight
+seconds (dashboard: top-right, below the header like the space switch), then hide while retained in history. The top-bar circled-count bell before the
+space switch counts unread entries (hidden at zero, circled buckets above ten);
+click it or use Ctrl+N in the palette to
 open focused history. Viewing marks the current entry read. Focused arrows/Tab
 select buttons (including Dismiss), Enter runs the selection, and `‹`/`›` page
 notices. Esc/outside click closes without erasing history; an auto-popup click
 focuses it. Popup opening/closing shares space-switch focus restoration. New
-arrivals do not disturb a focused review. Focused keys/paste are exclusive;
+arrivals do not disturb a focused review. Palette Ctrl+Left/Right closes the
+popup and switches tabs. Other focused keys/paste are exclusive;
 unfocused input stays with the pane. The old prefix notice routes are removed.
 Dialogs retain repeated counts, captured fields, body scrolling, fixed controls
 and exact tab ownership. Standalone has auto-popup/click/expiry without a bell

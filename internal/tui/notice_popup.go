@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"fmt"
+	"strconv"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -128,12 +128,32 @@ func (m *model) unreadNotices() int {
 	return count
 }
 
-// The ASCII fallback has stable cells on terminals with unknown emoji width.
+// Notice counts use the same circled glyphs as tab numbers.
 func (m *model) noticeChip() string {
-	if m.standalone {
+	count := m.unreadNotices()
+	if m.standalone || count == 0 {
 		return ""
 	}
-	return runewidth.Truncate(fmt.Sprintf("(!%d)", m.unreadNotices()), max(m.width-len([]rune(brandPrefix()))-3, 0), "")
+	label := circledNumber(count)
+	if count > 10 {
+		bucket := 10
+		for count/10 >= bucket {
+			bucket *= 10
+		}
+		label = circledNumber(10)
+		if bucket > 10 {
+			label = ""
+			for _, digit := range strconv.Itoa(bucket) {
+				if digit == '0' {
+					label += "⓿"
+				} else {
+					label += circledNumber(int(digit - '0'))
+				}
+			}
+		}
+		label += "+"
+	}
+	return runewidth.Truncate(label+"!", max(m.width-len([]rune(brandPrefix()))-3, 0), "")
 }
 func (m *model) headerChips() string {
 	bell, space := m.noticeChip(), m.contextChip()

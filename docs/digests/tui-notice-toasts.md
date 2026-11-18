@@ -1,6 +1,6 @@
 # TUI notice history and auto-popup
 
-Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes.
+Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes.
 
 [FACT] Outer feedback is an in-memory notice queue, separate from the header,
 standalone result and palette command output. Consecutive identical kind, text
@@ -8,7 +8,8 @@ and captured origin/owner merge with a repeat count. Different tab identities
 stay distinct. Dismiss removes the selected entry; closing a popup never removes
 history. No disk history or queue eviction is added. [1](#source-1)
 
-[FACT] A new notice opens an unfocused dialog for eight seconds. Keys continue
+[FACT] A new dashboard notice opens an unfocused top-right dropdown below the
+header, at the same anchor as the space switch, for eight seconds. Keys continue
 to their pane/palette. Expiry hides the dialog while retaining its unread entry;
 a newer arrival renews the interval. Timer generations reject stale expiry,
 including after manual opening. A notice emitted before the event loop gets
@@ -16,9 +17,10 @@ its expiry from Init. During focused review, arrivals only update history/the
 bell: they do not retarget selection, steal focus or restart expiry.
 [1](#source-1) [2](#source-2) [3](#source-3)
 
-[FACT] The top bar shows the ASCII bell fallback `(!N)` immediately before the
-space switch; N counts unread entries, not repeats. Zero is dim but remains
-clickable for retained read history. Its cells are reserved from palette editing
+[FACT] The top bar shows circled unread counts (`❶!` through `❿!`) before the
+space switch, counting entries rather than repeats. Above ten it shows circled
+buckets (`❿+!`, `❶⓿⓿+!`, and so on). Zero hides the badge; Ctrl+N still opens
+retained read history. Its cells are reserved from palette editing
 and shared by paint/hits. Click the bell, or Ctrl+N while the palette is open,
 to open focused history. Ctrl+N is not intercepted in an agent pane or standalone
 attachment. Viewing/paging a notice marks that entry read. [2](#source-2)
@@ -34,7 +36,8 @@ The old prefix bracket/scroll notice routes are removed. [1](#source-1)
 
 [FACT] Focused Left/Right and Tab/Shift+Tab select enabled buttons, including
 Dismiss; Enter runs the selected action. `‹`/`›` page notices; PgUp/PgDn scroll
-body content. Other focused keys/modifiers and paste are consumed. Per-key
+body content. Palette Ctrl+Left/Right closes the popup and switches tabs; other focused
+keys/modifiers and paste are consumed. Per-key
 ownership keeps consumed repeats/releases consumed after closing; earlier
 child-owned keys and mouse/selection gestures finish at their original owners,
 without granting new focused input to the child. Existing modal/prefix owners
@@ -42,14 +45,16 @@ retain precedence. Go to tab resolves the exact live owner and closes/visits;
 a closed owner cannot target a replacement tab. [1](#source-1) [2](#source-2)
 [5](#source-5)
 
-[FACT] The centered dialog shares participant frame/button theme, about 70%
+[FACT] The dialog shares participant frame/button theme, about 70%
 wide (maximum 100 columns). Its title shows position and repeat count. Severity
 and bounded escaped Box/Space, source Tab, Detail and When fields wrap at
 words/path separators under the value column; oversized tokens break to fit.
 Captured typed resume targets supply box/space, never a guessed title or retained
 closed session. Only the body scrolls; controls/hint stay fixed. Short viewports
 use bounded compact geometry; wrapped fields can still require scrolling.
-Unknown pixel geometry remains refused. [1](#source-1) [6](#source-6)
+Dashboard placement uses the space switch’s shared top-right header anchor;
+standalone retains its centered layout. Unknown pixel geometry remains refused.
+[1](#source-1) [6](#source-6) [8](#source-8)
 
 [FACT] Tab-owned notices retain separate `!` attention. Visiting clears the
 badge, while removing a notice does not pretend the tab was visited. Standalone
@@ -67,3 +72,4 @@ Source/PTy controls are not native graphical/macOS parity evidence.
 5. <a id="source-5"></a> [Input regressions](../../internal/tui/notices_test.go#L1) — notice_dialog_test.go and notice_bell_test.go add focus, expiry, button, gesture, standalone and retained history controls.
 6. <a id="source-6"></a> [Shared dialog frame](../../internal/tui/spaceview/dialog.go#L9) — participant/notice border, background and button faces.
 7. <a id="source-7"></a> [Standalone](../../internal/tui/attach.go#L21) — attachment prefix, input ownership and final result.
+8. <a id="source-8"></a> [Header dropdown anchor](../../internal/tui/popup.go#L9) — shared headerPopupOrigin for notice and space switch.

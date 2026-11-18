@@ -2331,7 +2331,7 @@ func (m *model) inputLine() string {
 	case newTab && line != "":
 		legend = "new tab · Esc cancels" // the placeholder went with the first character
 	case m.focusPalette:
-		legend = "Esc hide palette · ^R history · ^N notices · " + prefix + " panes · ^←/→ tabs · ^D quit"
+		legend = "Esc hide palette · ^←/→ tabs · ^R history · ^N notices · " + prefix + " panes · ^D quit"
 		switch {
 		case m.console.Busy(): // keys feed the running command, not the editor
 			legend = "running · ^C interrupt · ^Y detach · ^←/→ tabs"
