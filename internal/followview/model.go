@@ -608,9 +608,24 @@ func (m *Model) placeAnchor() {
 			break
 		}
 		target = i
-		if row.Line == display && (!exact || int64(v.starts[line]+row.End) >= relative) {
-			break
+		if row.Line != display {
+			continue
 		}
+		if exact {
+			end := int64(v.starts[line] + row.End)
+			if end < relative {
+				continue
+			}
+			// captureAnchor saves the top row's start. At a shared wrap
+			// boundary the byte belongs to the next row, not this row's end.
+			if end == relative && row.Start < row.End && i+1 < len(v.rows) {
+				next := v.rows[i+1]
+				if next.Line == display && next.Start == row.End && next.Start < next.End {
+					continue
+				}
+			}
+		}
+		break
 	}
 	m.top = min(target, m.maxTop())
 }

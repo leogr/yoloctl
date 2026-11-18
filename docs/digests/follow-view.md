@@ -1,6 +1,6 @@
 # Live file view
 
-Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; header-free layout re-read at `e46f7d4ced29695669ca5c30544a53752557c872` and accompanying changes. Navigation symbols re-read at `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes.
+Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; header-free layout re-read at `e46f7d4ced29695669ca5c30544a53752557c872` and accompanying changes. Navigation symbols re-read at `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes. Wrap anchors verified at `eddfb42a14f31c9f8d85069f2a861931367da86d` and accompanying changes.
 
 [FACT] Host-only `yoloctl follow PATH [--space SPACE] [--format auto|text|markdown]`
 opens one live pane. Default mode pins the selected space and absolute VM path;
@@ -47,9 +47,10 @@ view, not lossless logging or an atomic concurrent-write snapshot.
 job. Resizes coalesce, obsolete results are ignored, and close cancels and
 joins owned work; VM command cancellation kills/reaps its owned process group.
 Initial display follows the end; scrolling up pauses end-follow while refreshing
-the active bytes. `f`/End resumes; source-line position is retained best-effort
-and clamped after rewrites. Rename-save follows the pinned name, failures keep
-the last display marked unavailable until an actual successful read; cached
+the active bytes. `f`/End resumes. When two wrapped rows share a byte boundary,
+restoring the viewport at that boundary selects the row starting there.
+Positions remain best-effort and clamp after rewrites. Rename-save follows the
+pinned name. Failures keep the last display marked unavailable until an actual successful read; cached
 resize/source/theme rendering does not clear that state. Changed content clears
 selection.
 [2](#source-2) [4](#source-4)
@@ -92,7 +93,7 @@ and light themes. [7](#source-7) [8](#source-8)
 1. <a id="source-1"></a> [CLI and completion](../../cmd/yoloctl/follow.go#L71) — `newFollowCmd`, `absoluteFollowPath`, `currentFollowGrants`, `completeFollowPaths`.
 2. <a id="source-2"></a> [Sources and transport](../../internal/followview/source.go#L26) — limits, `HostReader.Read`, `VMReader.Read`, `VMReader.call`, `Within`.
 3. <a id="source-3"></a> [VM descriptor reader](../../internal/followview/reader.py#L15) — `open_directory`, `open_selected`, `read`, `listing`.
-4. <a id="source-4"></a> [View and job ownership](../../internal/followview/model.go#L92) — `renderFile`, `jobs`, `Model.Update`, `scroll`, `View`, `Run`.
+4. <a id="source-4"></a> [View and job ownership](../../internal/followview/model.go#L92) — `renderFile`, `jobs`, `Model.Update`, `scroll`, `captureAnchor`, `placeAnchor`, `View`, `Run`; wheel and rerender regression in wheel_test.go.
 5. <a id="source-5"></a> [Source regressions](../../internal/followview/source_test.go#L38) — temporary-file and fixed-reader transport tests; model_test.go covers rendering/input/state and cmd/yoloctl/follow_test.go covers selection/completion.
 6. <a id="source-6"></a> [Shared layout option](../../internal/markdownview/document.go#L1) — `LayoutOptions.UnlimitedRows`; internal/tui/confirm_close.go `closeEffect` and tui.go `opensLiveSurface` own pane routing/closing.
 7. <a id="source-7"></a> [Body row painting](../../internal/followview/model.go#L772) — `View`, body `Paint` fill.
