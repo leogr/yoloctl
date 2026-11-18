@@ -380,8 +380,8 @@ open focused history. Viewing marks the current entry read. Focused arrows/Tab
 select buttons (including Dismiss), Enter runs the selection, and `‹`/`›` page
 notices. Esc/outside click closes without erasing history; an auto-popup click
 focuses it. Popup opening/closing shares space-switch focus restoration. New
-arrivals do not disturb a focused review. Palette Ctrl+Left/Right closes the
-popup and switches tabs. Other focused keys/paste are exclusive;
+arrivals do not disturb a focused review. Palette Ctrl+Left/Right and
+Alt+Left/Right close the popup and switch tabs. Other focused keys/paste are exclusive;
 unfocused input stays with the pane. The old prefix notice routes are removed.
 Dialogs retain repeated counts, captured fields, body scrolling, fixed controls
 and exact tab ownership. Standalone has auto-popup/click/expiry without a bell

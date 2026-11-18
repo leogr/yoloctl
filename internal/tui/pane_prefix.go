@@ -139,7 +139,7 @@ func (m *model) prefixRoute(k tea.Key, modifier bool) (tea.Cmd, bool) {
 	// handleKey perform its existing idle/busy navigation after closing it;
 	// explicit prefix/resize layers and earlier child key owners still win.
 	if m.focusPalette && m.keyOwners[keyIdentity(k)] == nil &&
-		k.Mod&tea.ModCtrl != 0 && (k.Code == tea.KeyLeft || k.Code == tea.KeyRight) {
+		k.Mod&(tea.ModCtrl|tea.ModAlt) != 0 && (k.Code == tea.KeyLeft || k.Code == tea.KeyRight) {
 		m.closeToast()
 		return nil, false
 	}

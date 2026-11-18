@@ -1,6 +1,6 @@
 # TUI routing, keyboard, mouse, and paste
 
-Verification: `d4da1dc09daf8766074409600c1433534913c43b` and accompanying changes (holder-closed feedback); notice placement re-verified at `16684468` plus accompanying changes; other facts at `1d265df3`; palette tab shortcuts and idle-palette Ctrl+D re-verified at `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `d4da1dc09daf8766074409600c1433534913c43b` and accompanying changes (holder-closed feedback); notice placement re-verified at `16684468` plus accompanying changes; other facts at `1d265df3`; palette tab shortcuts and idle-palette Ctrl+D re-verified at `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes; modified arrow routing re-verified at `f75fb9b22c2a9db0644f328c05d55e426bbe7d18` and accompanying changes.
 
 [FACT] `opensLiveSurface` routes box attach, exec/edit, space shells, catalog
 editors and following logs to tabs; lifecycle commands use attachment flags.
@@ -34,8 +34,10 @@ raw input through Bubble Tea, including releases. [7](#source-7)
 [FACT] A live tab reserves the configured palette chord and explicit copy of an
 existing local selection. Enabled managed PNG paste can consume Ctrl+V and
 insert a guest path through the ordered queue. Other keys reach its terminal encoder; the palette
-owns tab selection/closing and history. Its Ctrl+Left/Right tab shortcuts also
-close a focused notice; live agent/standalone input retains those keys.
+owns tab selection/closing and history. Its Ctrl+Left/Right and Alt+Left/Right tab
+shortcuts also close a focused notice. Live agent and standalone input retain
+those keys. Literal xterm, SS3 and Kitty sequences exercise the host input
+loop. [29](#source-29) [30](#source-30)
 In the idle palette Ctrl+D quits the TUI even with an unsubmitted draft;
 it does not execute that draft. [28](#source-28)
 Ctrl+R toggles the console history view; a running overlay command and a focused tab receive
@@ -142,3 +144,5 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 26. <a id="source-26"></a> [Window title regressions](../../internal/tui/microfix_ui_test.go#L43) — `TestWindowTitleCollapsesOnlyExactGeneratedPrefixes`.
 27. <a id="source-27"></a> [TUI pane prefix](tui-pane-prefix.md) — precedence and pane keys.
 28. <a id="source-28"></a> [palette_quit_test.go](../../internal/tui/palette_quit_test.go#L9-L26) — empty/nonempty idle-palette draft quit regression.
+29. <a id="source-29"></a> [Palette arrow routing](../../internal/tui/pane_prefix.go#L138) — notice precedence before the palette handles modified arrows.
+30. <a id="source-30"></a> [Host arrow regression](../../internal/tui/palette_arrows_test.go#L10) — wire sequences with and without notice focus.

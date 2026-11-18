@@ -1,6 +1,6 @@
 # TUI notice history and auto-popup
 
-Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes.
+Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes. Palette arrow routing re-verified at `f75fb9b22c2a9db0644f328c05d55e426bbe7d18` and accompanying changes.
 
 [FACT] Outer feedback is an in-memory notice queue, separate from the header,
 standalone result and palette command output. Consecutive identical kind, text
@@ -36,8 +36,9 @@ The old prefix bracket/scroll notice routes are removed. [1](#source-1)
 
 [FACT] Focused Left/Right and Tab/Shift+Tab select enabled buttons, including
 Dismiss; Enter runs the selected action. `‹`/`›` page notices; PgUp/PgDn scroll
-body content. Palette Ctrl+Left/Right closes the popup and switches tabs; other focused
-keys/modifiers and paste are consumed. Per-key
+body content. Palette Ctrl+Left/Right and Alt+Left/Right close the popup and switch tabs.
+[9](#source-9)
+The popup consumes other focused keys, modifiers and paste. Per-key
 ownership keeps consumed repeats/releases consumed after closing; earlier
 child-owned keys and mouse/selection gestures finish at their original owners,
 without granting new focused input to the child. Existing modal/prefix owners
@@ -73,3 +74,4 @@ Source/PTy controls are not native graphical/macOS parity evidence.
 6. <a id="source-6"></a> [Shared dialog frame](../../internal/tui/spaceview/dialog.go#L9) — participant/notice border, background and button faces.
 7. <a id="source-7"></a> [Standalone](../../internal/tui/attach.go#L21) — attachment prefix, input ownership and final result.
 8. <a id="source-8"></a> [Header dropdown anchor](../../internal/tui/popup.go#L9) — shared headerPopupOrigin for notice and space switch.
+9. <a id="source-9"></a> [Palette arrow routing](../../internal/tui/pane_prefix.go#L138) — the notice yields to the palette shortcuts after earlier input owners.
