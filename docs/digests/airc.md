@@ -1,6 +1,6 @@
 # AIRC packaging and agentless sessions
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; dialog note checked at yoloctl `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; selected source verified at AIRC `b76ba355863cc3eb51900a313d7647d9190eedfa`; release v0.1.2 (source `84ea507836e82ea0581180e794d289523788c373`; after `b76ba355` it changes the Claude plugin launcher and Claude recipe, and its one commit after `6af217cf` changes only Codex app-server turn selection; verified there) and its asset hashes verified against `SHA256SUMS` at yoloctl `2c026472` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; dialog note checked at yoloctl `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream delivery source checked at AIRC `b76ba355863cc3eb51900a313d7647d9190eedfa` and `84ea507836e82ea0581180e794d289523788c373`. Release v0.1.3 (source `9a7953bb5e417974ae3a9300bda3853666d341c8`) and both archive hashes verified against the published `SHA256SUMS` at yoloctl `eddfb42a` and accompanying changes.
 
 Direct-route smoke source verification: yoloctl `ee88de4d528a26a107e3f38384423565b8d773fe`
 and accompanying changes.
@@ -15,7 +15,7 @@ removed. After custom-feature lookup, either feature name fails with managed-roo
 `yolo.chat.skill` guidance, not an alias; custom features may reuse those names.
 [2](#source-2) [13](#source-13)
 
-[FACT] AIRC remains standalone: recipes fetch the published v0.1.2 release
+[FACT] AIRC remains standalone: recipes fetch the published v0.1.3 release
 archive for the build architecture (`uname -m`), verified by its pinned SHA-256
 before extraction, not embedded source. A shebang heredoc bounds installer
 Dockerfile lines and shell arguments.

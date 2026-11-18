@@ -8,8 +8,8 @@
       "sha256": "389fb7e1d22c956a130e319858d62902dbd8264d5bd72715d23ac1929f2f2d6b"
     },
     "airc": {
-      "revision": "84ea507836e82ea0581180e794d289523788c373",
-      "lockfile_sha256": "c1e96cb974f23680d2a72dd2b5a6214df4da83a575f8a34b9d81b29e52cd3f22"
+      "revision": "9a7953bb5e417974ae3a9300bda3853666d341c8",
+      "lockfile_sha256": "35d9214dfa73b91b8159b1d4d04853015787190255701f1900ad561c3cac7533"
     },
     "openshell": {
       "revision": "e8605009bed50a05136efe106a0c1e2f283ee771",
