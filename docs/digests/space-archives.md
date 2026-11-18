@@ -1,11 +1,14 @@
 # Space archives and restore
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying fixes; archive-path expansion `1d265df3` and accompanying changes; grow guard `1d265df3cfae49026ec4202fe88e9cce83ad1ca9`; native links `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying fixes; audit rules payload `eddfb42a14f31c9f8d85069f2a861931367da86d`; archive-path expansion `1d265df3` and accompanying changes; grow guard `1d265df3cfae49026ec4202fe88e9cce83ad1ca9`; native links `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Host-only `space export SPACE ARCHIVE.tar.gz` stores a version-1
 manifest and `state.tar` in gzip. The manifest records source boot settings,
-payload size and SHA256. Native payloads contain declarations, account files and
-declared managed chat server data;
+payload size and SHA256. Native payloads contain declarations, account files,
+declared managed chat server data and, when the space selects audit rules, that
+rule generation's manifest and source files under `audit-rules/` (checked
+against the native settings' fingerprint; tools, logs and generated
+configuration are not kept) [18](#source-18);
 VM disks, container/image caches, sessions, ephemeral workdirs, host projects,
 global catalogs and old controller receipts are excluded. Archives contain
 account secrets in plaintext. Output is private (0600), flushed and published
@@ -109,3 +112,4 @@ and stopped-space export; `SMOKE_IMPORT_BACKEND` selects cross-adapter restore; 
 15. <a id="source-15"></a> [Managed chat archive implementation](../../internal/spacearchive/chat.go#L20) — `writeChatState`, `validateChatEntry`, `restoreChatState`.
 16. <a id="source-16"></a> [Managed chat archive regressions](../../internal/spacearchive/chat_test.go#L1) — independent identities, interrupted restore and unsafe inventories.
 17. <a id="source-17"></a> [Export grow guard](../../cmd/yoloctl/space_archive.go#L79-L81) — the `DataDiskGrow` refusal in `exportSpace`.
+18. <a id="source-18"></a> [Audit rules archive](../../internal/spacearchive/audit.go#L18) — `writeAuditRuleState`, `auditArchiveReader`; state.go reads `audit-rules/` beside `accounts` and `chat`.

@@ -307,11 +307,12 @@ existing behavior is the bar. Any guarantee, proof or check beyond what the
 current implementation provides needs leogr's explicit approval, with its cost
 shown, before plans, contracts or reviews may make it a requirement.
 
-Before every commit or push, run `make check` (docs, vet, darwin cross-vet,
-tests, lint). Use the CI-pinned lint fallback when no local linter exists. Run
-the relevant isolated live smoke for VM/image/policy/account/auth/lifecycle
-changes. Report unavailable host checks explicitly; do not treat a simulated
-test as runtime validation. Do not modify the VM/account hosting the active
+Before every commit or push, run `make check` (docs, script tests, vet,
+darwin cross-vet, tests, lint, native artifact reproducibility). Use the
+CI-pinned lint fallback when no local linter exists. Run the relevant isolated
+live smoke for VM/image/policy/account/auth/lifecycle changes. Report
+unavailable host checks explicitly; do not treat a simulated test as runtime
+validation. Do not modify the VM/account hosting the active
 coding session to test it. Keep ignored research/build artifacts out of source
 scans and commits. When large ignored trees are present, scope Go checks to the
 maintained packages:

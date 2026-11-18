@@ -40,8 +40,9 @@ stops its exact run through the session-aware stop (a start never stops), then
 returns the recreation remedy; only an explicit, separately confirmed recreate
 moves it to the native runtime. [27](#source-27)
 Leftovers of an ended run are removed by the next start or stop under
-exact ownership checks. An interrupted start or stop is `interrupted`, holding
-nothing; restart, recreate and teardown keep today's mode. [22](#source-22)
+exact ownership checks. Every operation that ended without a proven result,
+start and stop included, is `interrupted` and holds nothing. [22](#source-22)
+[17](#source-17)
 
 [FACT] Ordinary container start/stop/removal and maintenance/legacy-port execs
 use the exact inspected full ID, so a hex-like box name cannot select a peer's
@@ -62,8 +63,9 @@ its holder is gone; unmarked shell/exec exit does not stop the box.
 network cleanup. A running container does not prove a living agent session;
 a box that is not running is listed as stopped, its last exit or lost session
 beside it ([stop-box](../digests/stop-box.md)).
-Graceful stop signals workloads through confined SSH before the runtime's
-bounded stop/escalation; it does not depend on PID 1 forwarding SIGTERM.
+A current box's stop is the runtime's bounded stop of the exact container, with
+its checks; only a box on the old upstream runtime first signals its workloads
+through confined SSH, so its stop does not depend on PID 1 forwarding SIGTERM.
 A sandbox socket inode does not prove a listening SSH endpoint. Readiness
 returns a confirmed container exit promptly with its code and a logs hint.
 Use the managed applier, shared resolver and actual readiness probe. [1](#source-1)
@@ -86,10 +88,11 @@ uncertain Firecracker launch cannot authorize disk deletion.
 [1](#source-1) [6](#source-6)
 
 [FACT] Interrupted commands are never replayed. The controller resolves only
-reviewed durable evidence or exact read-only postconditions; unknown outcomes
-hold their affected resources and dependencies for host review, except box
-start/stop, which become `interrupted` and hold nothing. Receipt-storage
-failures hold all writes until reconciliation; maintenance stays explicit.
+reviewed durable evidence or exact read-only postconditions; an outcome it cannot
+prove is closed as `interrupted`, with what it recorded and an observation of
+current state, and holds nothing, for every operation. A receipt-storage
+failure keeps the record in controller memory, publishes it late and refuses
+no command; maintenance stays explicit.
 [17](#source-17)
 
 [FACT] Plain Firecracker recreation retains its selected VM image. Explicit

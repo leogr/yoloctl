@@ -1,6 +1,6 @@
 # Reconcile, native locks and space lifecycle
 
-Verification: `0bfec5a3ac693f226a04d280634025bf35d66e1a` and accompanying changes (saved-declaration errors); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; runtime target selection at `9169119ca6b27e530064dc49b8b7a1d06c17397b` and accompanying changes; box start/stop results at `19fe5134273d38642397a288132586b4e94dcd10` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior.
+Verification: `0bfec5a3ac693f226a04d280634025bf35d66e1a` and accompanying changes (saved-declaration errors); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; runtime target selection at `9169119ca6b27e530064dc49b8b7a1d06c17397b` and accompanying changes; box start/stop results at `19fe5134273d38642397a288132586b4e94dcd10` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior; holding and source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`.
 
 [FACT] Explicit reconcile selects create, recreate, restart, then live port changes. Account,
 agent, mounts/workdir access, image, literal env and network mode can require
@@ -99,8 +99,8 @@ and leaves boxes stopped. Schema-2 migration is removed.
 [8](#source-8) [12](#source-12) [13](#source-13)
 
 [FACT] Controller restart preserves session units. Interrupted mutations may
-resolve from durable evidence or an allowlisted read-only proof; unproved
-outcomes retain dependency holds for host review. Recovery never replays a
+resolve from durable evidence or an allowlisted read-only proof; an unproved
+outcome is closed as `interrupted` and holds nothing. Recovery never replays a
 command. [28](#source-28) Tests cover recovery and export/import/recreate, not
 physical power loss.
 [7](#source-7) [12](#source-12) [13](#source-13)
@@ -134,10 +134,10 @@ physical power loss.
     [tests](../../internal/container/inspect_select_test.go#L1-L99).
 24. <a id="source-24"></a> [nerdctl v2.3.5](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/inspecttypes/dockercompat/dockercompat.go#L339) — `Path`/`Args` from OCI argv.
 25. <a id="source-25"></a> [reconcile.go](../../internal/agentbox/reconcile.go#L91) — `ReconcileForStart`, `CheckStart`, shared planning.
-26. <a id="source-26"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L664) — `startAgentbox`, `preflightAgentboxRestartWithIntent`, `newAgentboxRestartCmd`.
+26. <a id="source-26"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L664) — `startAgentbox`, `preflightAgentboxRestart`, `newAgentboxRestartCmd`.
 27. <a id="source-27"></a> [Command regressions](../../cmd/yoloctl/agentbox_start_test.go#L24) — early/late drift refusal and teardown ordering.
 
-28. <a id="source-28"></a> [Interrupted-outcome recovery](controller-recovery.md) — durable proofs, dependency holds and storage reconciliation.
+28. <a id="source-28"></a> [Interrupted-outcome recovery](controller-recovery.md) — durable proofs, interrupted closing without holds and deferred records.
 29. <a id="source-29"></a> [nerdctl v2.3.5 container walker](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/idutil/containerwalker/containerwalker.go#L47-L74) — `Walk` matches the name label or an ID prefix; `container inspect` returns every match.
 30. <a id="source-30"></a> [Runtime target](../../internal/container/target.go#L1) — `ValidateContainerID`, `ResolveContainerID`; `Client.Start/Stop/Remove` in container.go; collision/refusal/fixed-ID/error controls in target_test.go; named SSH with retained CID in sandbox/stop.go `StopContainerID`.
 31. <a id="source-31"></a> [Maintenance](../../cmd/yoloctl/autoupdate.go#L90) — npm/version helpers; native install in agent_distribution.go and process probe in agent.go; container_target_test.go covers target argv and refusals.

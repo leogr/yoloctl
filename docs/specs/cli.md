@@ -78,7 +78,7 @@ grow finishes at the next start and is recorded at the next stop
 [15](#source-15). `space set --image-layer-compression none|gzip` (set only)
 chooses how newly built image layers are stored in the VM from the next start;
 none is the default and is saved as an omitted field [17](#source-17). [12](#source-12)
-Edit exposes only a flat `cpus`/`memory` YAML document. Editor waits release the lifecycle lock;
+Edit exposes a flat `cpus`/`memory`/`disk`/`data_disk` YAML document. Editor waits release the lifecycle lock;
 saving rechecks the original bootstrap and stopped state. Neither command boots
 or restarts a VM. Desired settings survive backend-application errors; the next
 explicit start synchronizes them before booting. [10](#source-10)

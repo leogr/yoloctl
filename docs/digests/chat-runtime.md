@@ -1,6 +1,6 @@
 # Managed chat runtime and human stream
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; output and recreate-offer claims re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; re-read cited symbols when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
 
 [FACT] Host-only `chat` inspects before opening; it ensures only absent,
 unprepared or provably stopped servers, including recreation of a deleted
@@ -14,7 +14,8 @@ creation defaults to box `chat`, channel `#space` and the host username;
 operators must supply `--human`. Existing human identity persists. Named-client
 connection is separate from membership. [24](#source-24) Typed mutations retain
 admission/receipts and reject partial inventories. Lifecycle/build diagnostics
-use stderr; stdout contains final JSON only. Failures produce no success or replay.
+use stderr; stdout carries only the final result: JSON with `--json`, otherwise
+plain text (`writeChatStatus`). Failures produce no success or replay.
 [1](#source-1) [2](#source-2) [21](#source-21) [22](#source-22)
 
 [FACT] Runtime opt-in is durable; dormant rooms acquire no ordinary-box binds.
@@ -36,8 +37,10 @@ Full inspection reads the actual envelope (exactly one JSON object of strings
 holding both values; an uninspected environment is unverified, never healthy)
 and requires recreation: `box diff`/`show`/`inspect` and `box.drift` report it,
 the start/restart preflight and `chat ensure` refuse (the latter naming the
-server box's exact `box diff` and `box recreate … --space` commands; it never
-recreates), and `chat status` sets
+server box's exact `box diff` and `box recreate … --space` commands). Only on a
+terminal, interactive `chat ensure` without `--json` and `yoloctl chat` first
+read `chat.status` and offer to recreate the room's own server box, sending that
+recreate on yes (`offerChatServerRecreate`); nothing else recreates it. `chat status` sets
 `server.recreate_pending` and `server.reason` beside an otherwise ready server.
 No value appears in a reason. [2](#source-2) [3](#source-3) [7](#source-7) [35](#source-35) [36](#source-36)
 
@@ -162,7 +165,7 @@ never every connection of the account. [42](#source-42)
 
 ## Sources
 
-1. <a id="source-1"></a> [CLI](../../cmd/yoloctl/chat.go#L18) — `newChatCmd`, `callChatController`.
+1. <a id="source-1"></a> [CLI](../../cmd/yoloctl/chat.go#L18) — `newChatCmd`, `callChatController`, `writeChatStatus`; chat_open.go `offerChatServerRecreate`, `openChatHeader`.
 2. <a id="source-2"></a> [Runtime service](../../cmd/yoloctl/chat_runtime.go#L39) — dispatcher, `ensureManagedRoom`, `ensureManagedServer`, membership apply/recreate.
 3. <a id="source-3"></a> [Box projection](../../internal/agentbox/chat.go#L15) — creation, discovery, drift and live verification.
 4. <a id="source-4"></a> [Native binds](../../internal/managedchat/projection.go#L13) — `Projection`, `EnableRuntime`, `PrepareEndpoints`.

@@ -10,8 +10,9 @@ and long-lived auxiliary workloads must preserve the sandbox boundary.
 an inherited `ENTRYPOINT`; rebuild the base without it or move setup into a
 feature/`RUN` step. It also removes private secret-provided proxy environment
 settings, even for unconfined boxes. These accepted limits are documented
-together; on the integration tree new ordinary boxes in a native space select
-0.1.6, while the legacy pins stay until the old path is retired. [15](#source-15)
+together; new ordinary boxes in a native space select 0.1.6, and the legacy
+0.0.72 pins, Rego embed and `/opt/openshell` provisioning are retired.
+[15](#source-15)
 
 [FACT] The patched canonical-main transport applies backpressure to a live
 process when its input-owning attachment is slow. Other viewers and absent

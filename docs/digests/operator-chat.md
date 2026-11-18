@@ -1,6 +1,6 @@
 # Operator managed-chat administration
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; the enroll-connect output re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; re-read cited symbols when changing behavior.
 
 [FACT] The server explicitly allows verified same-space operators to use
 `chat.ensure`, `.status`, `.enroll`, `.revoke`, `.connect` and `.disconnect`.
@@ -29,8 +29,9 @@ options before enrollment, then calls the existing typed connect only after an
 acknowledged active membership. Failed/uncertain enrollment never connects;
 connection failure retains membership and reports partial success without
 retry. `--client` requires `--connect`; omitted `--connect` preserves enrollment
-output. The shortcut emits one JSON result with enrollment plus connection or
-connection error. Agent wake listening remains separate. [19](#source-19)
+output. With `--json` the shortcut emits one JSON result with enrollment plus
+connection or connection error; otherwise it prints the plain room status and,
+after a successful connect, one "Connect acknowledged" info line. Agent wake listening remains separate. [19](#source-19)
 
 [FACT] Connect/disconnect is distinct from durable membership. It selects one
 active immutable member and matching running declaration/container, verifies

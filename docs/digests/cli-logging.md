@@ -1,6 +1,6 @@
 # CLI log routing and outcomes
 
-Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes; prior `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7` and accompanying changes.
+Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes; prior `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7` and accompanying changes. Interrupted outcomes and source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`.
 
 [FACT] CLI warnings, notices and mutation-result prose use the process
 `internal/logging` Logger; worker processes send records and the host renders
@@ -23,9 +23,10 @@ returned errors are unchanged. [11](#source-11)
 [FACT] A routed mutation reports its final outcome only after its controller
 call returns, including receipt finalization. Intermediate worker prose is not
 an OK outcome. Known failures retain their text and status; typed lost replies,
-interrupted image jobs and remote `uncertain`/`command-uncertain` states are
-Unknown. The latter keeps its existing query guidance without adding a hold
-or acknowledgment instruction. A remote error's own successful rendered-outcome
+interrupted image jobs and remote `interrupted`/`uncertain`/`command-uncertain`
+states end as a failed outcome, "Operation interrupted" (`cliUncertain`). The
+latter keeps its existing query guidance without adding a hold or
+acknowledgment instruction. A remote error's own successful rendered-outcome
 receipt can suppress a duplicate; an unrelated earlier `LastOutcome` cannot.
 Error reasons use the reserved `err` attribute, independently of the progress
 message cap. At `--log-level error`, failed/unknown outcomes remain visible
@@ -101,7 +102,7 @@ notice's existing once-per-attachment rule are unchanged.
 ## Sources
 
 1. <a id="source-1"></a> [CLI logging helpers](../../cmd/yoloctl/cli_logging.go#L17) — `cliLog`, `renderLoggedCLIError`, `cliOperation`, `cliFinishOutcome`, `cliRoutedOutcome`, `wrapHostLogCommand`, `suspendCLISteps`.
-2. <a id="source-2"></a> [Reconcile output](../../cmd/yoloctl/agentbox_reconcile.go#L209) — `printDryRun`, `printApplyResult`; account.go command results; internal/openshell/helper_pins.go `existingHelperNotice`.
+2. <a id="source-2"></a> [Reconcile output](../../cmd/yoloctl/agentbox_reconcile.go#L209) — `printDryRun`, `printReconcileResult`; account.go command results; internal/openshell/helper_pins.go `existingHelperNotice`.
 3. <a id="source-3"></a> [Controller routing](../../cmd/yoloctl/controller_client.go#L115) — `routeControllerCommands`, `reportClientDetached`; internal/controller/client.go `ExitError.State`, `OutcomeRendered`.
 4. <a id="source-4"></a> [CLI regressions](../../cmd/yoloctl/cli_logging_test.go#L47) — finalization, error identity/status, uncertainty, sink rejection, JSON/raw command routing and warning separation.
 5. <a id="source-5"></a> [Host lifecycle](../../cmd/yoloctl/controller_lifecycle.go#L83) — `hostControllerLifecycle`, `createControllerSpace`; controller_deploy.go `startControllerSpaceImpl`, `stopControllerSpace`; space_archive.go export/import wrappers.

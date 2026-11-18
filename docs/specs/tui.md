@@ -139,7 +139,8 @@ with recorded deviations; source view applies none. [43](#source-43) [53](#sourc
 (absolute outside), without a `follow` prefix. The path is not repeated as a
 header inside the view; content begins on its first row and the status footer
 remains. It uses the shared renderer for a live file pane, with source
-toggle, drag selection copied on release as in chat (plus explicit `y`) and inert links. It polls once per second,
+toggle, drag selection copied on release as in chat (plus explicit `y`) and the
+chat view's link handling (described below). It polls once per second,
 refreshes off the input loop, follows the end until scrolling up and retains a
 stale display on read failure. Page keys browse the active plain window for
 large files; the footer identifies omitted bytes. [45](#source-45) It draws admitted

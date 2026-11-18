@@ -1,6 +1,6 @@
 # Owned attach setup and client loss
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; late detach at `658ead276` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; late detach at `658ead276` and accompanying changes; re-read cited sources when changing behavior. Source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`.
 
 [FACT] `box.attach` (box attach/use, root attach, managed, passthrough and
 guarded chat attachments) is the only operation registered as `EffectGated`
@@ -83,7 +83,7 @@ the standalone `smoke-attach-interrupt` stage is the live gate.
 3. <a id="source-3"></a> [internal/controller/server.go](../../internal/controller/server.go#L470) — `ServeConn` execution context, input holding, signals, `setupDone`, gate and finalization.
 4. <a id="source-4"></a> [internal/controller/ownership.go](../../internal/controller/ownership.go#L1) — `setupOwner` (`detach`: `goneAtHandoff`), `clientOutput`, `clientSink`, `ErrClientDetached`, `ClientDetached`.
 5. <a id="source-5"></a> [internal/controller/effects.go](../../internal/controller/effects.go#L90) — acknowledged `WorkerCheckpoints.Release`, `serveWorkerCheckpoints`.
-6. <a id="source-6"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L29) — `releaseSpaceOperation`, `beginAttachEffects`, wrapper gate order.
+6. <a id="source-6"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L29) — `releaseSpaceOperation`, wrapper gate order; operation_scope.go `beginOperationEffects` (L430).
 7. <a id="source-7"></a> [cmd/yoloctl/attach_effects_test.go](../../cmd/yoloctl/attach_effects_test.go#L1) — registry, gate order, denial, role-sync failure and detached acknowledgment.
 8. <a id="source-8"></a> [internal/controller/receipts.go](../../internal/controller/receipts.go#L22) — receipt fields, `interrupt`, `Recover`.
 9. <a id="source-9"></a> [internal/controller/ownership_test.go](../../internal/controller/ownership_test.go#L1) — owned-setup client-loss, race (`TestSetupOwnerLateDetachKeepsDetachedHandoff`), stream and negative-recovery regressions.

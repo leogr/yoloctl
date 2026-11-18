@@ -1,13 +1,13 @@
 # Declarations, ownership and workdirs
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Native settings fields and source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`.
 
 [FACT] A space owns a selected-adapter VM and an independent ext4 data disk. Host
 `spaces/<space>/space.yaml` is schema-3 bootstrap only: identity, disk ID/UUID,
 initialization, developer UID/GID, host grants, VM boot settings, selected bundle
 and generation, with a temporary checkpoint during explicit VM-image replacement.
 Native `config/space.yaml` is schema-1 settings: name, default
-account and default workdir. VM workers refuse host bootstrap reads, so those
+account and default workdir, plus optional `storage` and `audit` sections. VM workers refuse host bootstrap reads, so those
 settings are never decoded as a bootstrap. Native `config/boxes` and `config/accounts` hold
 entity declarations. Normal clients never fall back to host entity files.
 Schema-2 records are rejected with a previous-build recovery hint. [1](#source-1)
@@ -119,7 +119,7 @@ rejected. This does not delete native state or change credential import.
 22. <a id="source-22"></a> [assets/lima/yoloctl.yaml.tmpl](../../assets/lima/yoloctl.yaml.tmpl#L6) — image pins and system provisioning.
 23. <a id="source-23"></a> [assets/embed.go](../../assets/embed.go#L32-L35) — `SandboxVersion` v0.1.6; executable/Rego bytes come from the compiled qualification and embedded artifacts, not a VM-side download.
 24. <a id="source-24"></a> [internal/lima/template_test.go](../../internal/lima/template_test.go#L67) — `TestTemplatePinsMinimalImagesForBothGuestArchitectures`.
-25. <a id="source-25"></a> [internal/lima/provision_test.go](../../internal/lima/provision_test.go#L59) — `TestVMRuntimePackageProvisioning`, `TestCACertificatesProvisioningUpgrade` at L129 and `TestOpenShellProvisioningVerificationAndRecovery`, package reuse, CA upgrade, corruption and retry coverage.
+25. <a id="source-25"></a> [internal/lima/provision_test.go](../../internal/lima/provision_test.go#L59) — `TestVMRuntimePackageProvisioning`, `TestCACertificatesProvisioningUpgrade` at L129 and `TestTemplateDoesNotProvisionRetiredOpenShell`, package reuse, CA upgrade, corruption and retry coverage.
 26. <a id="source-26"></a> [Canonical release checksums](https://cloud-images.ubuntu.com/minimal/releases/noble/release-20261001/SHA256SUMS) — pinned amd64/arm64 Minimal images.
 27. <a id="source-27"></a> [Lima stack](lima-stack.md) — archive selection and privilege evidence.
 28. <a id="source-28"></a> [internal/strictyaml/marshal.go](../../internal/strictyaml/marshal.go#L1) — `Marshal`; marshal_test.go and agentbox `TestSaveLoadsBackMultilineStrings`.

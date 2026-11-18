@@ -1,6 +1,6 @@
 # Chat participant model and effort
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; 10 s reads, Version row and reporter hint `f28bf6f93e5c002fd127e67c6c671c7aadc5bad2` and accompanying changes; state row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; conversation row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; card-only panel re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; 10 s reads, Version row and reporter hint `f28bf6f93e5c002fd127e67c6c671c7aadc5bad2` and accompanying changes; state row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; conversation row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
 
 [FACT] A roomy Participants panel's card detail line is exactly
 `Model (effort) · away reason`, such as `Opus 5.5 (max) · reviewing C`, below
@@ -14,8 +14,8 @@ or launch arguments. [1](#source-1) [2](#source-2) [6](#source-6)
 
 [FACT] The line shows a model only while it is an agent observation and the
 last read is current: a failed read or one over two minutes old empties model
-and effort with no marker. Compact one-row lists show
-only a ` you` tag and the away reason after the name. The details card keeps
+and effort with no marker. Every participant is a two-row card, also when the
+panel scrolls. The details card keeps
 its Identity (`agent` or `human`, omitted when unconfirmed) and Agent rows, shows
 each observed raw value with its report (status line, hook, or a read of the
 agent's own server for Codex), a Context row
@@ -31,8 +31,7 @@ stale values are left out. [1](#source-1) [2](#source-2) [6](#source-6)
 that line, one grapheme per step: a 600 ms hold, 120 ms steps until its end
 shows, a 1 s pause, then back to the clipped start while still hovered. An
 ellipsis marks text cut on either side; each frame keeps the line's width and
-splits no grapheme. Fitting or empty lines, compact one-row
-lists, hidden panels and lines with under six cells to move never start a tick.
+splits no grapheme. Fitting or empty lines, hidden panels and lines with under six cells to move never start a tick.
 One chain carries a generation bound to the channel, participant, text and
 width: any update that changes them (another hover, a press, resize, modal,
 channel switch or new label) resets it, and an older tick does nothing; moving
@@ -82,7 +81,7 @@ Codex boxes report through their hook reporter ([Codex reporter](codex-observati
 ## Sources
 
 1. <a id="source-1"></a> [Runtime display](../../internal/chatui/runtime.go#L13-L251) — `AgentRuntime`, `RuntimeValue`, `SourceHook`/`SourceStatusLine`/`SourceQuery`, `RuntimeContext`, `modelNames`, `agents`, `runtimeStale`, `runtimeSummary`, `reportedBy`, `tokens`, `RuntimeContext.text`, `runtimeRows`; card rows in overlay.go `cardRows` L726; Help row in overlay.go L121.
-2. <a id="source-2"></a> [Participant detail line](../../internal/chatui/roster.go#L178-L241) — `memberCard`, `memberRuns`; the line from `roleLine` in marquee.go L66; `agentBox` in runtime.go; model-first truncation and compact rows in presence_panel_test.go `TestParticipantAwayDetails` L159.
+2. <a id="source-2"></a> [Participant detail line](../../internal/chatui/roster.go#L178-L241) — `memberCard`; the line from `roleLine` in marquee.go L66; `agentBox` in runtime.go; model-first truncation and scrolled cards in presence_panel_test.go `TestParticipantAwayDetails` L160.
 3. <a id="source-3"></a> [Participant runtime](../../cmd/yoloctl/chat_participant_runtime.go#L11-L135) — `chatParticipantRuntime`, `participantRuntime`, `participantConversation`, `observedRuntime`.
 4. <a id="source-4"></a> [Serial reads](../../cmd/yoloctl/chat_view.go#L399-L500) — `refreshAgents`, `agentsLoop`, `loadAgents`, `adoptCatalogFor`.
 5. <a id="source-5"></a> [Host regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L73-L163) — box IDs, observed values with sources and context, launch arguments ignored, superseded and failed reads.

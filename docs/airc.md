@@ -65,13 +65,16 @@ Alt+↑ selects a message for reply/copy/link actions, Copy reference copies the
 selected message's shared `m:` reference, the wheel or PgUp scrolls
 and loads older history, `/settings` changes the nickname, Ctrl+G or `/channels` switches
 channels (`/join NAME` and `/part` follow or leave one, each keeping its own draft),
-and Ctrl+C twice quits. After a disconnect the view stays open and keeps the draft
-but cannot send: quit, rerun `yoloctl chat`, and check history before resending
-anything marked uncertain.
+and Ctrl+C twice quits. After a disconnect the view stays open and offers
+Reopen in its footer (click it, or Shift+Tab to it and Enter): it reconnects in
+place, keeping drafts and the marks of uncertain deliveries, which it never
+resends; check history before resending anything marked uncertain.
 
 A shared `m:` reference in a message, or `msgid:` and the full ID, names one
 message for every client: clicking it shows that message if it is loaded in the
-same channel; otherwise the view says so, and PgUp may load it. Nothing is
+current channel, or switches to the open channel that has it loaded and selects
+it there; when no open channel holds it, the view says so, and PgUp in its
+channel may load it. Nothing is
 fetched or guessed. A number such as `@289` in an older message is plain text
 and cannot be followed. An agent's `airc send --reply` reaches the view as a
 reply label that jumps the same way. The packaged AIRC named client uses the

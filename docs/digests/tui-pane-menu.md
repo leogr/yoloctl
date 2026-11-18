@@ -1,12 +1,12 @@
 # TUI pane menu
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; menu rows re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; re-read cited symbols when changing behavior.
 
 [FACT] The armed pane prefix shows the **pane menu**, a popup titled `panes`
 over the tab area. Its rows come from the key table, grouped: splits, zoom,
 spread, swaps, break out, bring a tab in, detach pane; focus, focus next,
-resize border; new, next, previous, pick a tab, tab by number, detach whole
-tab; send the prefix. Each row is a label with its keys at the right. Every
+resize border; new, switch space, next, previous, pick a tab, tab by number,
+detach whole tab; send the prefix. Each row is a label with its keys at the right. Every
 action row maps to exactly one `paneKeys` binding; the focus arrows, resize
 keys, tab digits and the prefix are dimmed information rows whose keys still
 act. A row whose binding cannot act now is dimmed (`bindingWhy`): splits that

@@ -1,6 +1,6 @@
 # Native chat participants, settings and attachment
 
-Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; collapsible lists re-read at `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; reconnect re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; collapsible lists re-read at `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Participants sort operators, voiced, then others, case-folded; observed
 `@`/`+` modes, never inferred, precede names. The panel opens from 80 columns
@@ -41,8 +41,9 @@ copy-on-select toggles, and read-only `seams.clipboard`/`seams.browser` naming
 their config. Nickname saves are refused during an unresolved send or for the saved name; after
 `SaveNick` succeeds the view requests one explicit reconnect, keeping draft,
 reply and position, resending nothing. Reconnecting, the host ends `chat.stream`
-and waits, runs `chat.ensure` for the new header, sends the new nick and
-identities, then streams again. After reconnect or a catalog refresh, current
+and waits, reads `chat.status` and runs `chat.ensure` only when the server is not
+ready (the same inspect-first open as `yoloctl chat`, `inspectOrEnsureChat`),
+sends the new nick and identities, then streams again. After reconnect or a catalog refresh, current
 author, panel, open card and suggestion labels use the new saved nickname;
 the selected suggestion follows its account or command while listed, otherwise
 its index is clamped. Retained presence notices keep their event-time text. [15](#source-15)
@@ -88,7 +89,7 @@ lock. [5](#source-5) [13](#source-13) [14](#source-14)
 12. <a id="source-12"></a> [Lookup regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L173) — bound and recheck.
 13. <a id="source-13"></a> [Attach lock wait](../../internal/spacelock/lock.go#L21-L64) — `AcquireWithWait`; the notice in cmd/yoloctl/space_operation.go L217-L224; the lookup in `callChatAttachTarget` (chat.go L110) and `resolveAttach`/`resolveAttachWith` (chat_view.go L650–L694).
 14. <a id="source-14"></a> [Opt-in live lookup](../../cmd/yoloctl/chat_attach_lock_live_test.go#L54) — `TestLiveChatAttachTargetAnswersWhileSpaceLockIsHeld`; run recipe in scripts/smoke/README.md.
-15. <a id="source-15"></a> [Nickname refresh](../../internal/chatui/overlay.go#L70-L80) — `refreshParticipantLabels` and suggest.go `refreshOpenSuggest` (L161–189), called by `SessionMsg` (model.go L559–575) and `catalog` (channels.go L358–370); `TestNicknameSaveReconnectRefreshesOpenLabels` and `TestCatalogRenameRefreshesOpenCardAndSuggestions` in nickname_display_test.go; retained names in presence.go `observeMembers`/`addPresence` (L42–145).
+15. <a id="source-15"></a> [Nickname refresh](../../internal/chatui/overlay.go#L70-L80) — `refreshParticipantLabels` and suggest.go `refreshOpenSuggest` (L161–189), called by `SessionMsg` (model.go L559–575) and `catalog` (channels.go L358–370); `TestNicknameSaveReconnectRefreshesOpenLabels` and `TestCatalogRenameRefreshesOpenCardAndSuggestions` in nickname_display_test.go; retained names in presence.go `observeMembers`/`addPresence` (L42–145); the host reconnect in cmd/yoloctl/chat_view.go `reconnect` and chat_open.go `inspectOrEnsureChat`.
 16. <a id="source-16"></a> [Scrolling regressions](../../internal/chatui/participants_scroll_test.go#L1) — `TestParticipantsScrollInsteadOfShrinking`, `TestParticipantsFitWithoutScrolling`, `TestParticipantsTinyPanelWithChannelRail`, `TestParticipantsPageKeysNeverSkip`: many participants at small heights, side panel and overlay, rail-squeezed panels, gap-free paging.
 
 17. <a id="source-17"></a> [Channel layout](../../internal/chatui/view.go#L79) — `View`, `compactChannels`; `channels_narrow_test.go` — width, clicks, overlay and minimum-height coverage.

@@ -25,12 +25,14 @@ above the start headroom. The data disk is 10 GiB unless `--data-disk` is
 given and only grows offline [15](#source-15). [7](#source-7) [13](#source-13) [14](#source-14)
 
 [FACT] Host `space set` and `space edit` change only a verified stopped space's
-VM RAM/CPU settings and its saved system disk size. Memory can be explicitly sized or recomputed with `auto`;
+VM RAM/CPU settings, its saved system disk size and its data disk size; `space
+set` also takes `--nested-virtualization` and the image layer compression. Memory can be explicitly sized or recomputed with `auto`;
 CPU changes are explicit counts. Changes retain the VM/data/container disks and identities,
 take effect at the next explicit start and do not restart workloads. The disk
 size only grows and applies at the next `space recreate`, which replaces the
-system disk anyway [14](#source-14). `space set` also saves the image layer
-compression the controller receives at the next start
+system disk anyway [14](#source-14). The data disk only grows, finishing at the
+next start [15](#source-15). The image layer compression reaches the controller
+at the next start
 ([image preparation](../digests/image-preparation.md)). Import
 retains archived resources; import with `--no-start`, then set resources before
 starting the restored space. [7](#source-7)

@@ -1,6 +1,6 @@
 # Managed chat presence and box activity
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; card-only panel re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; re-read cited sources when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
 
 [FACT] The human chat view can explicitly set `/away [reason]` or `/back` on
 its own IRC connection. Confirmed away shows `you: away` even without the
@@ -57,9 +57,8 @@ old and the room reports no error. Activity then comes from the shared
 connected, yellow away and gray not connected. A card's detail line puts
 a box's observed model and effort (else nothing) or a human's `human`
 before an away reason, so
-truncation cuts the reason; a compact row shows the reason after the name and
-any ` you` tag, with no kind or trust tag.
-Neither adds an `away` label; a reasonless AWAY adds no text and keeps its
+truncation cuts the reason; every participant is such a card, also when the
+panel scrolls. It adds no `away` label; a reasonless AWAY adds no text and keeps its
 yellow dot. [9](#source-9) [10](#source-10) [11](#source-11) [14](#source-14)
 
 [FACT] Both views animate activity with one helper, `Theme.ActiveTone`. The
@@ -80,7 +79,7 @@ shown; it never changes the glyph, hue or state. [12](#source-12)
 - availability unchanged by absent or lost sessions, room errors, and stale
   or lost telemetry;
 - AWAY and back, with and without a reason;
-- card and compact away details at widths 80 and 100;
+- card away details at widths 80 and 100, unscrolled and scrolled;
 - shared-tracker activity, including away, idle, input, network or brief
   disk, stale and lost evidence;
 - per-frame equality of both views' dots with `ActiveTone`;
@@ -107,7 +106,7 @@ exercised. [15](#source-15) [16](#source-16) [17](#source-17)
 11. <a id="source-11"></a> [activity.go](../../internal/spacetelemetry/activity.go#L1-L239) — `ActivityCurrent`, `ActivityTracker`; classification rules in the box-activity digest.
 12. <a id="source-12"></a> [theme.go](../../internal/tui/spaceview/theme.go#L95-L156) — `PulseCycle`, `PulseFrame`, `ActiveTone`, `lift`, `Color.rgb`; `Warn` at L20; `slowTick` in model.go L90.
 13. <a id="source-13"></a> [layout.go](../../internal/tui/spaceview/layout.go#L1105-L1113) — `statePill` active dot; LIVE mark at L213-L217.
-14. <a id="source-14"></a> [roster.go](../../internal/chatui/roster.go#L178-L274) — `memberCard` (its detail text from `roleLine` in marquee.go L66), `memberRuns`, `presenceDot`, `presenceLabel`.
+14. <a id="source-14"></a> [roster.go](../../internal/chatui/roster.go#L178-L274) — `memberCard` (its detail text from `roleLine` in marquee.go L66), `presenceDot`, `presenceLabel`.
 15. <a id="source-15"></a> [space_telemetry_chat_test.go](../../cmd/yoloctl/space_telemetry_chat_test.go#L1-L362) — mapping, sharing, validation, ownership and stream.
 16. <a id="source-16"></a> [presence_test.go](../../internal/spacetelemetry/presence_test.go#L1-L48) — rule and freshness gate.
 17. <a id="source-17"></a> [presence_panel_test.go](../../internal/chatui/presence_panel_test.go#L1-L347) — explicit availability, AWAY/back, participant details, activity and shared waveform.

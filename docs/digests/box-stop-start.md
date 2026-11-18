@@ -1,6 +1,6 @@
 # Box stop and start results
 
-Verification: `54e0df18de728fadc88d0fae984ece2cee237083` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `54e0df18de728fadc88d0fae984ece2cee237083` and accompanying changes; result-policy users, storage failure and source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; re-read cited sources when changing behavior.
 
 [FACT] `box stop` runs each step once, in order: read the box's exact container;
 withdraw the session holder; withdraw the box's forwards; one engine stop when the
@@ -46,8 +46,11 @@ recreate-only drift and pre-engine native refusals.
 [1](#source-1) [4](#source-4) [6](#source-6) [8](#source-8) [13](#source-13)
 
 [FACT] Restart, recreate, destroy, account and space teardown keep today's
-native stop with its forward precondition, endpoint removal and early returns;
-only the `box start` command passes the result policy. [4](#source-4) [5](#source-5) [8](#source-8)
+native stop with its forward precondition, endpoint removal and early returns.
+The `box start` command passes the result policy; the one other user is a
+recreate accepted from the pre-native recreation offer (hidden
+`--legacy-remedy`), whose failure after the replacement started stops only that
+exact run through `runStartForResult`. [4](#source-4) [5](#source-5) [8](#source-8)
 
 [FACT] A `box.start` or `box.stop` receipt that ended without a result after its
 effects were authorized (not setup-complete, scoped, no image writes) is
@@ -67,8 +70,9 @@ role sync. Absent, T or a replacement not running: stopped ("was not running" if
 already was), leftovers named;
 running: failure saying "this stop targeted container T". Engine errors stay
 diagnostics; a failed read fails. The `box.stop` gate never waits for running
-executions and is admitted during drain; ended outcomes hold nothing. Receipt-storage
-failures can still refuse at this implementation boundary. [14](#source-14) [15](#source-15) [16](#source-16)
+executions and is admitted during drain; ended outcomes hold nothing. A
+receipt-storage failure keeps the record in controller memory and never
+refuses the stop (`persistExecution`, `deferExecution` in live_receipts.go). [14](#source-14) [15](#source-15) [16](#source-16)
 
 [FACT] Tests stub the engine; they are not live VM validation.
 [6](#source-6) [7](#source-7) [11](#source-11)
@@ -78,7 +82,7 @@ failures can still refuse at this implementation boundary. [14](#source-14) [15]
 1. <a id="source-1"></a> [cmd/yoloctl/box_stop_result.go](../../cmd/yoloctl/box_stop_result.go#L40-L237) — `liveBoxStopSteps`, `stopAgentboxForResult`, `runBoxStop`, `removeStartLeftovers`, `runStartForResult`, `settleStartForResult`.
 2. <a id="source-2"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2250) — `box stop` RunE calls `runBoxStop`.
 3. <a id="source-3"></a> [internal/agentbox/openshell_stop_linux.go](../../internal/agentbox/openshell_stop_linux.go#L24-L280) — `stopNativeRuntimeForResult`, `stopForResultWithStorageFallback`, `stopExactContainerWithoutStorage`, `stopNativeRuntimeMode`; `RemoveStoppedEndpoint` and `removeStoppedEndpoint` at L321-L401.
-4. <a id="source-4"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L735-L900) — `startAgentboxWithForwardIntent` `resultPolicy`; `markStartSubmitted` in `startExistingAgentboxContainerPrepared`.
+4. <a id="source-4"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L745-L920) — `startAgentboxCore` `resultPolicy`; `startExistingAgentboxContainerPrepared`; the recreate's `legacyRemedyFlag` branch (legacy_runtime.go L132).
 5. <a id="source-5"></a> [internal/agentbox/openshell_stop.go](../../internal/agentbox/openshell_stop.go#L13-L70) — `Stop` (today's mode), `StopRuntimeForResult` and `ResultLeftover`.
 6. <a id="source-6"></a> [cmd/yoloctl/box_stop_result_test.go](../../cmd/yoloctl/box_stop_result_test.go#L46) — stop step failures, lost replies, reads, absent/exited, start leftovers and rollback.
 7. <a id="source-7"></a> [internal/agentbox/openshell_stop_endpoint_linux_test.go](../../internal/agentbox/openshell_stop_endpoint_linux_test.go#L52) — endpoint kept unless every check holds.
