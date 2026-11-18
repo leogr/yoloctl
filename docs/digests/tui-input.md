@@ -1,6 +1,6 @@
 # TUI routing, keyboard, mouse, and paste
 
-Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes.
+Verification: `d4da1dc09daf8766074409600c1433534913c43b` and accompanying changes (holder-closed feedback); notice placement re-verified at `16684468` plus accompanying changes; other facts at `1d265df3`; palette tab shortcuts and idle-palette Ctrl+D re-verified at `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] `opensLiveSurface` routes box attach, exec/edit, space shells, catalog
 editors and following logs to tabs; lifecycle commands use attachment flags.
@@ -35,8 +35,10 @@ raw input through Bubble Tea, including releases. [7](#source-7)
 existing local selection. Enabled managed PNG paste can consume Ctrl+V and
 insert a guest path through the ordered queue. Other keys reach its terminal encoder; the palette
 owns tab selection/closing and history. Its Ctrl+Left/Right tab shortcuts also
-close a focused notice; live agent/standalone input retains those keys. In the idle palette Ctrl+R toggles
-the console history view; a running overlay command and a focused tab receive
+close a focused notice; live agent/standalone input retains those keys.
+In the idle palette Ctrl+D quits the TUI even with an unsubmitted draft;
+it does not execute that draft. [28](#source-28)
+Ctrl+R toggles the console history view; a running overlay command and a focused tab receive
 Ctrl+R themselves. A running
 overlay sends Ctrl+C to its command; a second within two seconds kills the local
 command group. Leaving the overlay does not stop that command. [4](#source-4)
@@ -113,7 +115,7 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 1. <a id="source-1"></a> [tui.go](../../internal/tui/tui.go#L466) — `opensLiveSurface`, dispatch and `openTab`.
 2. <a id="source-2"></a> [palette.go](../../internal/tui/palette/palette.go#L25) — `Insert`, `set`, `singleLine`, `Submit`, `CompletionInput`.
 3. <a id="source-3"></a> [complete.go](../../internal/tui/yoloctlcli/complete.go#L1-L100) — `Complete` and result parsing.
-4. <a id="source-4"></a> [tui.go](../../internal/tui/tui.go#L1202) — `handleKey`, `handleRunningKey`, tab close.
+4. <a id="source-4"></a> [tui.go](../../internal/tui/tui.go#L1429-L1662) — `handleKey`, `handleRunningKey`, tab close.
 5. <a id="source-5"></a> [terminal_keys.go](../../internal/tui/terminal_keys.go#L1-L294) — host normalization, `sendKey`, `childKey`, `kittyKey` and functional mapping.
 6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L746) — `Update`, release/paste routing, `sendInput`, input notices and `reportViewErrors`.
 7. <a id="source-7"></a> [terminal_keys_test.go](../../internal/tui/terminal_keys_test.go#L1) — negotiated bytes, restored Enter/Ctrl+J, modifier matrix, release ownership, independent modifier oracle and palette Tab reports.
@@ -139,3 +141,4 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 25. <a id="source-25"></a> [Window title](../../internal/tui/tui.go#L1767-L1792) — `View` title, `titleWrapper` and `windowTitle`.
 26. <a id="source-26"></a> [Window title regressions](../../internal/tui/microfix_ui_test.go#L43) — `TestWindowTitleCollapsesOnlyExactGeneratedPrefixes`.
 27. <a id="source-27"></a> [TUI pane prefix](tui-pane-prefix.md) — precedence and pane keys.
+28. <a id="source-28"></a> [palette_quit_test.go](../../internal/tui/palette_quit_test.go#L9-L26) — empty/nonempty idle-palette draft quit regression.

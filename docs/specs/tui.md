@@ -4,6 +4,7 @@
 palette uses CLI subprocesses and completion, not an independent command API.
 Its editor keeps one row by converting whitespace to spaces and dropping other
 terminal controls; this normalization does not apply to live child input.
+Ctrl+D quits the idle palette even with an unsubmitted draft, without running it.
 Keyboard encoding, mouse forwarding and bracketed paste depend on child mode
 and focus. Live tabs reserve the palette chord and an explicit copy shortcut
 when local text is selected.

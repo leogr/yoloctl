@@ -1555,9 +1555,7 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.closeFocusedPane() // detach: the agent keeps running
 		m.scrollToLive()
 	case k.Code == 'd' && k.Mod&tea.ModCtrl != 0:
-		if line, _ := m.pal.Line(); line == "" {
-			return m, tea.Quit
-		}
+		return m, tea.Quit
 	case k.Code == 'r' && k.Mod&tea.ModCtrl != 0:
 		// Toggle the console between the last command and its history, both
 		// at their newest line. A running command gets Ctrl+R itself
