@@ -1,6 +1,6 @@
 # Managed channel catalog and stream
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Pre-JOIN read lifetime re-verified at `76bcf960c0d8d07faae06258f1fb1088bef24bdd` and accompanying changes.
 
 [FACT] `chat channel list/create/add/remove` use finite typed controller requests,
 ordinary admission/receipts and the existing verified host or operator principal.
@@ -99,8 +99,9 @@ probe result and cannot enable or disable it; a later image send still passes
 the shared exchange and relay filter. [19](#source-19) [24](#source-24) [25](#source-25)
 [12](#source-12) [13](#source-13) [14](#source-14) [16](#source-16)
 
-[FACT] Explicit host JOIN carries one bounded trusted refresh, accepted before
-admission in the same action envelope. Unknown names get create-first guidance
+[FACT] Explicit host JOIN reads its own trusted catalog under the captured
+link's context and carries it in the same action envelope. The driver accepts
+the catalog before admission. Unknown names get create-first guidance
 and no wire JOIN. Join refusal codes are `unknown-channel` and `acl-denied`
 (403). Authentic `422 No MOTD` is benign after server/recipient checks, never
 a history gap or unrelated control refusal.
@@ -138,7 +139,7 @@ Separate opt-in tests against real AIRC binaries are summarized in
 18. <a id="source-18"></a> [Native snapshot](../../internal/managedchat/store.go#L61) — `ReadManifestSnapshot`, shared private manifest reader; mutation callers retain locks.
 19. <a id="source-19"></a> [Host shape regression](../../cmd/yoloctl/chat_catalog_refresh_test.go#L18) — actual builders, JSON and `RunChannels` for legacy/schema-2 catalog generations and a nickname preference saved after the stream connected.
 20. <a id="source-20"></a> [Admission regressions](../../internal/chatstream/channel_admission_test.go#L10) — No MOTD, catalog ordering/conflicts, create-first and real refusal correlation.
-21. <a id="source-21"></a> [Host admission](../../cmd/yoloctl/chat_view.go#L598) — `control` captures link and refresh.
+21. <a id="source-21"></a> [Host admission](../../cmd/yoloctl/chat_view.go#L669-L705) — `control` reads and queues JOIN on the captured link.
 22. <a id="source-22"></a> [Wire fixture](../../cmd/yoloctl/chat_topic_wire_test.go#L26) — JOIN after opening and confirmed send.
 23. <a id="source-23"></a> [Admission tests](../../cmd/yoloctl/chat_join_admission_test.go#L13) — refresh, link and codes.
 24. <a id="source-24"></a> [Connection capability](../../cmd/yoloctl/chat_stream.go#L52) — the confined-client feature probe sets attachment support independently of room metadata.

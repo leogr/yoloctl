@@ -233,6 +233,7 @@ var chatLinkSequence atomic.Uint64
 
 type chatLink struct {
 	id       uint64 // immutable stream-link identity
+	ctx      context.Context
 	outgoing chan chatstream.Send
 	older    chan chatstream.HistoryRequest
 	actions  chan chatstream.Action
@@ -240,6 +241,8 @@ type chatLink struct {
 	cancel   context.CancelFunc
 	done     chan struct{}
 	stopping atomic.Bool
+	// Background triggers share one read. Explicit JOIN reads independently.
+	refreshing atomic.Bool
 	// mu orders queue admission with closing: once the driver has stopped,
 	// nothing more is queued, and what it never read is reported unsent.
 	mu     sync.Mutex
@@ -317,7 +320,7 @@ func (s *chatSession) current() *chatLink {
 func (s *chatSession) start(takeOver bool) {
 	ctx, cancel := context.WithCancel(s.ctx)
 	l := &chatLink{id: chatLinkSequence.Add(1), outgoing: make(chan chatstream.Send, 1), older: make(chan chatstream.HistoryRequest, 1), actions: make(chan chatstream.Action, 1),
-		catalogs: make(chan chatstream.Catalog, 1), cancel: cancel, done: make(chan struct{})}
+		catalogs: make(chan chatstream.Catalog, 1), ctx: ctx, cancel: cancel, done: make(chan struct{})}
 	s.mu.Lock()
 	s.link = l
 	s.mu.Unlock()
@@ -367,10 +370,11 @@ func (s *chatSession) start(takeOver bool) {
 		// Before l.done (and so before a reconnect's SessionMsg), report
 		// what the stopped driver never took; driver-taken sends keep their
 		// genuine uncertain outcome.
-		for _, msg := range l.close() {
+		unsent := l.close()
+		cancel()
+		for _, msg := range unsent {
 			s.program.Send(msg)
 		}
-		cancel()
 		_ = responseRead.Close()
 		_ = requestWrite.Close()
 		<-transportDone
@@ -581,23 +585,20 @@ func (s *chatSession) refreshCatalog() tea.Msg {
 func (s *chatSession) refreshCatalogRead(read func(context.Context) (chatstream.Catalog, error)) tea.Msg {
 	s.mu.Lock()
 	l := s.link
+	if l == nil || l.ctx.Err() != nil || !l.refreshing.CompareAndSwap(false, true) {
+		s.mu.Unlock()
+		return nil
+	}
 	s.refreshSequence++
 	sequence := s.refreshSequence
 	s.mu.Unlock()
-	if l == nil {
-		return nil
-	}
+	defer l.refreshing.Store(false)
 	origin := chatstream.CatalogRead{Link: l.id, Sequence: sequence}
 	failed := func(prefix string, err error) tea.Msg {
 		return chatui.RefreshResultMsg{Read: uiCatalogRead(origin), Err: fmt.Errorf("%s: %w", prefix, err)}
 	}
-	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
-	defer cancel()
-	c, err := read(ctx)
-	if err == nil {
-		err = ctx.Err()
-	}
-	if s.ctx.Err() != nil || s.current() != l {
+	c, err := read(l.ctx)
+	if l.ctx.Err() != nil || s.current() != l {
 		return nil
 	}
 	if err != nil {
@@ -679,11 +680,12 @@ func (s *chatSession) control(a chatui.Action, readCatalog func(context.Context)
 			if readCatalog == nil {
 				return refuse(errors.New("JOIN needs a trusted channel catalog refresh"))
 			}
-			ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
-			defer cancel()
-			catalog, err := readCatalog(ctx)
+			if err := l.ctx.Err(); err != nil {
+				return refuse(fmt.Errorf("channel catalog refresh failed before JOIN: %w", err))
+			}
+			catalog, err := readCatalog(l.ctx)
 			if err == nil {
-				err = ctx.Err()
+				err = l.ctx.Err()
 			}
 			if err != nil {
 				return refuse(fmt.Errorf("channel catalog refresh failed before JOIN: %w", err))

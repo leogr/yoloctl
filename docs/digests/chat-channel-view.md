@@ -1,6 +1,6 @@
 # Native chat channels and live identities
 
-Verification: `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes.
+Verification: `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes. Catalog read lifetime re-verified at `76bcf960c0d8d07faae06258f1fb1088bef24bdd` and accompanying changes.
 
 [FACT] The chat view keeps one view per channel, embedded as the visible one:
 draft/reply, messages/caches, reading position, selection,
@@ -72,6 +72,12 @@ and the host's attach member map, so new members become trusted without
 reopening and revoked ones stop being trusted or attachable. [1](#source-1)
 [6](#source-6)
 
+[FACT] Catalog reads use the current link's context. Closing the view or
+ending the link cancels its reads. Overlapping refresh triggers on one link
+share its in-flight refresh. Each explicit JOIN makes its own catalog read
+for the captured link. The controller still applies its observation budgets.
+[6](#source-6) [15](#source-15) [17](#source-17)
+
 [FACT] Interactive reads (including JOIN preparation) capture a private 2 KiB
 stderr tail, sanitize failure reasons and log diagnostics privately on success
 and failure; finite CLI stderr stays unchanged. See
@@ -114,7 +120,7 @@ view confirmation. [2](#source-2) [7](#source-7) [8](#source-8)
 3. <a id="source-3"></a> [Submit and routing](../../internal/chatui/model.go#L385-L1323) — `Update`, `submit`, `slashCommand`.
 4. <a id="source-4"></a> [Channel rail](../../internal/chatui/roster.go#L63) — `channelRail`.
 5. <a id="source-5"></a> [Channel picker](../../internal/chatui/overlay.go#L729) — `channelPickerRows`.
-6. <a id="source-6"></a> [Host channel view](../../cmd/yoloctl/chat_view.go#L166) — `chatSession`, `adoptCatalogFor`, `refreshCatalog`, `refreshLoop`, `control`, `chatViewEvent`, `chatCatalog`.
+6. <a id="source-6"></a> [Host channel view](../../cmd/yoloctl/chat_view.go#L215-L705) — link lifetime, `adoptCatalogFor`, `refreshCatalogRead`, `refreshLoop` and `control`.
 7. <a id="source-7"></a> [Host regressions](../../cmd/yoloctl/chat_view_test.go#L133-L196) — catalog identities/members and channel events.
 8. <a id="source-8"></a> [Topic wire regression](../../cmd/yoloctl/chat_topic_wire_test.go#L26) — `TestChatTopicCommandsReachWireThroughHostAndRelay`.
 9. <a id="source-9"></a> [Driver actions](../../internal/chatstream/channel_events.go#L24) — `action` refuses a topic field outside `topic-set` and encodes `topic-clear` as empty text.

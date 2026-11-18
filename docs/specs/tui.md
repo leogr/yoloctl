@@ -212,8 +212,9 @@ fixed URL for a second Ctrl+O, Esc cancels, and modal input leaves the draft
 untouched. See [Markdown navigation](../digests/markdown-navigation.md) for the local file
 admission and link action boundaries. Fixture tests establish component/adapter behavior, not final
 host/VM integration. [15](#source-15) [16](#source-16) [17](#source-17) [18](#source-18) [19](#source-19) [20](#source-20) [39](#source-39) [40](#source-40)
-[FACT] Catalog refresh and pre-JOIN reads use the same fixed mode. The channel
-picker says server application was not checked; `--catalog-read=observed`
+[FACT] Catalog refresh and pre-JOIN reads use the same fixed mode. Ending the
+chat connection cancels its reads. Background refresh triggers coalesce per
+connection, while each JOIN reads its own catalog. The channel picker says server application was not checked; `--catalog-read=observed`
 retains observed application diagnostics without automatic fallback. Catalogs
 grant no action authority. [18](#source-18)
 

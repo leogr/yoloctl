@@ -244,7 +244,7 @@ func TestChatCatalogModeRefreshAndPreJoin(t *testing.T) {
 				}
 				return json.NewEncoder(streams.Out).Encode(chatChannelSnapshot{RuntimeApplied: true})
 			}}
-			l := &chatLink{id: 1, catalogs: make(chan chatstream.Catalog, 1), actions: make(chan chatstream.Action, 1)}
+			l := &chatLink{id: 1, ctx: t.Context(), catalogs: make(chan chatstream.Catalog, 1), actions: make(chan chatstream.Action, 1)}
 			s := &chatSession{ctx: t.Context(), target: target, link: l, catalogRead: mode}
 			if msg := s.refreshCatalog(); msg != nil {
 				t.Fatal(msg)
@@ -383,7 +383,7 @@ func TestDesiredCatalogFailureHasPrivateDiagnosticsAndNoFallback(t *testing.T) {
 		_, _ = io.WriteString(streams.Err, "\x1b[31mError: strict storage failure\r\n")
 		return &controller.ExitError{Status: 2}
 	}}
-	l := &chatLink{id: 4, catalogs: make(chan chatstream.Catalog, 1), actions: make(chan chatstream.Action, 1)}
+	l := &chatLink{id: 4, ctx: t.Context(), catalogs: make(chan chatstream.Catalog, 1), actions: make(chan chatstream.Action, 1)}
 	s := &chatSession{ctx: t.Context(), target: target, link: l}
 	withoutCatalogTerminalWrites(t, func() {
 		msg := s.refreshCatalog().(chatui.RefreshResultMsg)

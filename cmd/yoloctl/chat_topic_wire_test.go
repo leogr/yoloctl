@@ -157,7 +157,7 @@ func TestChatTopicCommandsReachWireThroughHostAndRelay(t *testing.T) {
 			identities, members := chatIdentities(header)
 			s := &chatSession{ctx: ctx, members: members}
 			l := &chatLink{outgoing: make(chan chatstream.Send, 1), older: make(chan chatstream.HistoryRequest, 1), actions: make(chan chatstream.Action, 1),
-				catalogs: make(chan chatstream.Catalog, 1), cancel: cancel, done: make(chan struct{})}
+				catalogs: make(chan chatstream.Catalog, 1), ctx: ctx, cancel: cancel, done: make(chan struct{})}
 			s.link = l
 			events := make(chan chatstream.Event, 256)
 			runDone := make(chan error, 1)

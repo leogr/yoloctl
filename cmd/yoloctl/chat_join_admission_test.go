@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/chatstream"
 	"github.com/leogr/yoloctl/internal/chatui"
@@ -20,15 +19,14 @@ func TestChatJoinControlCarriesOneRefreshInOriginalAction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	l := &chatLink{actions: make(chan chatstream.Action, 1), catalogs: make(chan chatstream.Catalog, 1)}
+	l := &chatLink{ctx: t.Context(), actions: make(chan chatstream.Action, 1), catalogs: make(chan chatstream.Catalog, 1)}
 	s := &chatSession{ctx: t.Context(), link: l}
 	a := chatui.Action{ID: "explicit-join", Kind: "join", Channel: "#new"}
 	reads := 0
 	msg := s.control(a, func(ctx context.Context) (chatstream.Catalog, error) {
 		reads++
-		deadline, ok := ctx.Deadline()
-		if !ok || time.Until(deadline) > 10*time.Second {
-			t.Fatal("JOIN refresh is unbounded")
+		if ctx != l.ctx {
+			t.Fatal("JOIN refresh must use the link context directly")
 		}
 		return chatstream.Catalog{Header: header}, nil
 	})()
@@ -48,6 +46,7 @@ func TestChatJoinRefreshRefusalNeverMovesToReplacementLink(t *testing.T) {
 			next := &chatLink{actions: make(chan chatstream.Action, 1)}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
+			old.ctx = ctx
 			s := &chatSession{ctx: ctx, link: old}
 			reads := 0
 			read := func(context.Context) (chatstream.Catalog, error) {
