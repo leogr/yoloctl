@@ -381,8 +381,10 @@ select buttons (including Dismiss), Enter runs the selection, and `‹`/`›` pa
 notices. Esc/outside click closes without erasing history; an auto-popup click
 focuses it. Popup opening/closing shares space-switch focus restoration. New
 arrivals do not disturb a focused review. Palette Ctrl+Left/Right and
-Alt+Left/Right close the popup and switch tabs. Other focused keys/paste are exclusive;
-unfocused input stays with the pane. The old prefix notice routes are removed.
+Alt+Left/Right close the popup and switch tabs. The palette legend shows
+`⌃⌥←/→` on macOS and `^←/→` elsewhere. [1](#source-1) Focused notices consume
+the other keys and paste. Unfocused input stays with the pane. The old prefix
+notice routes are removed.
 Dialogs retain repeated counts, captured fields, body scrolling, fixed controls
 and exact tab ownership. Standalone has auto-popup/click/expiry without a bell
 or reopen shortcut; final results remain independent. [55](#source-55)

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"image/color"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -2329,10 +2330,14 @@ func (m *model) inputLine() string {
 	case newTab && line != "":
 		legend = "new tab · Esc cancels" // the placeholder went with the first character
 	case m.focusPalette:
-		legend = "Esc hide palette · ^←/→ tabs · ^R history · ^N notices · " + prefix + " panes · ^D quit"
+		tabHint := "^←/→ tabs"
+		if runtime.GOOS == "darwin" {
+			tabHint = "⌃⌥←/→ tabs"
+		}
+		legend = "Esc hide palette · " + tabHint + " · ^R history · ^N notices · " + prefix + " panes · ^D quit"
 		switch {
 		case m.console.Busy(): // keys feed the running command, not the editor
-			legend = "running · ^C interrupt · ^Y detach · ^←/→ tabs"
+			legend = "running · ^C interrupt · ^Y detach · " + tabHint
 		case m.consoleHistory:
 			legend = "console history · ^R last command · PgUp/PgDn scroll · Esc hide"
 		case m.suggNav && len(m.sugg) > 0: // steering the menu: Enter picks

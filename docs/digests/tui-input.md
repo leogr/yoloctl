@@ -1,6 +1,6 @@
 # TUI routing, keyboard, mouse, and paste
 
-Verification: `d4da1dc09daf8766074409600c1433534913c43b` and accompanying changes (holder-closed feedback); notice placement re-verified at `16684468` plus accompanying changes; other facts at `1d265df3`; palette tab shortcuts and idle-palette Ctrl+D re-verified at `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes; modified arrow routing re-verified at `f75fb9b22c2a9db0644f328c05d55e426bbe7d18` and accompanying changes.
+Verification: `d4da1dc09daf8766074409600c1433534913c43b` and accompanying changes (holder-closed feedback); notice placement re-verified at `16684468` plus accompanying changes; other facts at `1d265df3`; palette tab shortcuts and idle-palette Ctrl+D re-verified at `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes; modified arrow routing re-verified at `f75fb9b22c2a9db0644f328c05d55e426bbe7d18` and accompanying changes; tab legend re-verified at `76bcf960c0d8d07faae06258f1fb1088bef24bdd` and accompanying changes.
 
 [FACT] `opensLiveSurface` routes box attach, exec/edit, space shells, catalog
 editors and following logs to tabs; lifecycle commands use attachment flags.
@@ -38,6 +38,10 @@ owns tab selection/closing and history. Its Ctrl+Left/Right and Alt+Left/Right t
 shortcuts also close a focused notice. Live agent and standalone input retain
 those keys. Literal xterm, SS3 and Kitty sequences exercise the host input
 loop. [29](#source-29) [30](#source-30)
+The dashboard palette advertises `⌃⌥←/→` on macOS and `^←/→` elsewhere.
+The label applies to the idle and running legends. All three modifier
+combinations (Ctrl, Alt and Ctrl+Alt) still switch tabs. [21](#source-21)
+[30](#source-30)
 In the idle palette Ctrl+D quits the TUI even with an unsubmitted draft;
 it does not execute that draft. [28](#source-28)
 Ctrl+R toggles the console history view; a running overlay command and a focused tab receive
@@ -135,7 +139,7 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 18. <a id="source-18"></a> [Compatibility evidence](terminal-compatibility.md) — legacy input, committed text, focus/cursor coverage and limits.
 19. <a id="source-19"></a> [Host integrations](host-integrations.md) — explicit PNG paste ownership and live browser approval.
 20. <a id="source-20"></a> [palette_paste_test.go](../../internal/tui/palette_paste_test.go#L13) — host-reader paste/focus and cursor alignment regression.
-21. <a id="source-21"></a> [tui.go](../../internal/tui/tui.go#L1994) — `inputLine`, `contextChip` and `promptLine`.
+21. <a id="source-21"></a> [tui.go](../../internal/tui/tui.go#L2308) — `inputLine` renders the palette legends and budgets header width. Related helpers: `contextChip` and `promptLine`.
 22. <a id="source-22"></a> [tui_test.go](../../internal/tui/tui_test.go#L839) — wave width, context position and command echo regressions.
 
 23. <a id="source-23"></a> [Tab labels](../../internal/tui/tui.go#L2351) — `tabStripLabels`.
