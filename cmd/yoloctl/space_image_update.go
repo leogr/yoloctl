@@ -50,7 +50,7 @@ func recreateSpaceImage(cmd *cobra.Command, boot *spaceconfig.Bootstrap) error {
 	if err != nil {
 		return err
 	}
-	cliInfo(logging.Host, "recreated space %s with VM image %s; start boxes with box start --space %s", boot.Name, boot.VM.Image, boot.Name)
+	cliInfo(logging.Host, "recreated space %s with VM image %s. Start each box by name with yoloctl box start BOX --space %s", boot.Name, boot.VM.Image, boot.Name)
 	return nil
 }
 

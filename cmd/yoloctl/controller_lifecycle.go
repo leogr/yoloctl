@@ -86,7 +86,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 			}
 		}
 		titles := map[string]string{"create": "Creating", "start": "Starting", "stop": "Stopping", "recreate": "Recreating", "destroy": "Destroying"}
-		results := map[string]string{"create": "Created space " + space, "start": "Space " + space + " ready", "stop": "Stopped space " + space, "recreate": "recreated space " + space + "; start boxes with box start --space " + space, "destroy": "Destroyed space " + space}
+		results := map[string]string{"create": "Created space " + space, "start": "Space " + space + " ready", "stop": "Stopped space " + space, "recreate": "recreated space " + space + ". Start each box by name with yoloctl box start BOX --space " + space, "destroy": "Destroyed space " + space}
 		return cliOperation(cmd, titles[action]+" space "+space, results[action], space, func() error {
 			update, restartSessions := false, false
 			if action == "start" {

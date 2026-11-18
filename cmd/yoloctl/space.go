@@ -991,7 +991,7 @@ sessions do not. Start boxes explicitly afterward. --force skips confirmation.`,
 			if err := ensureSpaceRunning(cmd.Context(), name); err != nil {
 				return fmt.Errorf("replacement failed; accounts and declarations retained; retry space start %s: %w", name, err)
 			}
-			cliInfo(logging.Host, "recreated space %s; start its boxes with box start --space %s", name, name)
+			cliInfo(logging.Host, "recreated space %s. Start each box by name with yoloctl box start BOX --space %s", name, name)
 			return nil
 		}}
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Skip confirmation")
