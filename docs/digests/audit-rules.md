@@ -1,6 +1,6 @@
 # Audit rule paths and container recognition
 
-Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes.
+Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes.
 
 [FACT] Filesystem rules distinguish changed paths from symbolic-link payloads.
 In libs0.26.1, symlink/symlinkat `fs.path.source` is the new link location;
@@ -14,13 +14,13 @@ eligible. Existing host package/controller exceptions remain. OpenShell setup
 infrastructure writes require fixed executables, schema1/confined/protocol2;
 missing context grants nothing. [1](#source-1) [3](#source-3)
 
-[FACT] Namespace operations additionally exclude root `/usr/local/bin/runc` with
-exact init names `runc:[0:PARENT]`, `runc:[1:CHILD]`, `runc:[2:INIT]` and
-schema1/confined/protocol2. Packaged runc sets these names during container setup;
-cgroup membership can already attribute it to the container. This namespace-only
-exception does not suppress runc infrastructure writes or inspection. Names,
-paths and labels authenticate neither executable nor creation timing.
-[1](#source-1) [22](#source-22) [23](#source-23)
+[FACT] Namespace operations additionally exclude root `/usr/local/bin/runc`
+with the same exact parent and init names `runc:[0:PARENT]`, `runc:[1:CHILD]`,
+`runc:[2:INIT]`. This covers privileged setup too. Native labels may be
+unavailable on restart, so this namespace-only exception requires none; runc
+writes/inspection remain eligible. Path/name/parent heuristics authenticate
+neither binaries nor creation timing. [1](#source-1) [22](#source-22)
+[23](#source-23) [24](#source-24)
 
 [FACT] Successful `process_vm_readv` is excluded only for
 `/.openshell/runtime/openshell-sandbox`, helper parent
@@ -32,22 +32,22 @@ qualification reads child memory/socket arguments before either mode starts;
 unmediated networking retains the broker name.
 [17](#source-17) [18](#source-18) [19](#source-19) [20](#source-20) [21](#source-21)
 
-[FACT] A separate exception admits only main-thread `openshell-sandb` readv
-returning raw -1 (EPERM), with the same executable/helper/context guards.
-Task-memory reads support denied-read fallback; qualification also deliberately
-probes denial. This predicate proves neither a particular probe nor its target.
-Broker failures, other errors, ptrace, writes, other identities, privileged mode
-and unknown context remain eligible; debugger/host scope is unchanged. Matching
-compromised runtime reads can be hidden. Fixtures do not qualify live attribution
-or file mediation. Updated `audit enable` installs rules; no automatic reload.
-[1](#source-1) [9](#source-9) [10](#source-10) [11](#source-11) [20](#source-20) [21](#source-21)
+[FACT] Main-thread `openshell-sandb` readv returning raw -1 (EPERM) has a
+separate helper-parent exception with those context guards. Broker failures,
+other errors, ptrace and writes remain eligible. A second exception admits
+only readv/raw -1 with exact sandbox executable, sandbox parent and
+`openshell-sandb` name, without labels. It covers the deliberate child
+self-check in both network modes; matching same-binary inspections can also
+be hidden. Neither exception proves target/call site. Debugger/host scope,
+privacy outputs and successful-broker selection are unchanged. Updated
+`audit enable` installs rules; no automatic reload. [1](#source-1)
+[9](#source-9) [10](#source-10) [11](#source-11) [20](#source-20) [21](#source-21)
 
 [FACT] Container plugin0.7.6's CRI matcher recognizes nerdctl systemd scopes;
 native-containerd handles namespace/ID layouts. Both engines use only
 `/run/containerd/containerd.sock`, with two-second timeouts. Other engines stay
-disabled. Native enumeration includes default namespace without requiring CRI;
-the fetcher tries providers until one succeeds. No containerd configuration,
-cgroup layout or plugin ABI changes. [4](#source-4) [5](#source-5) [6](#source-6) [7](#source-7)
+disabled. Native enumeration covers default namespace without CRI; providers are tried
+until one succeeds. Containerd/cgroups/ABI are unchanged. [4](#source-4) [5](#source-5) [6](#source-6) [7](#source-7)
 
 [FACT] Native-containerd lacks the nerdctl scope pattern; unmatched thread cgroups
 are host before enrichment. The C++ plugin joins fresh, unambiguous snapshots
@@ -99,7 +99,7 @@ do not prove live selection or noise rates.
 6. <a id="source-6"></a> [Container 0.7.6 matcher selection](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/src/matchers/matcher.cpp).
 7. <a id="source-7"></a> [Container 0.7.6 metadata fetcher](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/go-worker/pkg/container/fetcher.go).
 8. <a id="source-8"></a> [Metadata extraction](../../third_party/audit-plugin/plugin.cpp#L1).
-9. <a id="source-9"></a> [Broker-read regressions](../../internal/audit/process_inspection_test.go#L1) — mode/context controls; restart_noise_test.go covers init/EPERM; not an engine.
+9. <a id="source-9"></a> [Broker-read regressions](../../internal/audit/process_inspection_test.go#L1) — mode/context controls; restart_noise_test.go and restart_noise_followup_test.go cover identities/EPERM; not an engine.
 10. <a id="source-10"></a> [Native audit handlers](../../cmd/yoloctl/controller_audit_linux.go#L1) — `enable` deployment.
 11. <a id="source-11"></a> [Configuration](../../internal/audit/config.go#L1) — automatic file reloads disabled.
 12. <a id="source-12"></a> [Escape regressions](../../internal/audit/escape_rules_test.go#L1) — selectors, enablement and rule hash.
@@ -113,7 +113,9 @@ do not prove live selection or noise rates.
 19. <a id="source-19"></a> [Pinned file handler](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/provider_files.rs#L65).
 20. <a id="source-20"></a> [Pinned task-memory read](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/task_memory.rs#L48) — readv.
 
-21. <a id="source-21"></a> [Pinned startup qualification](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/main.rs#L112) — `qualify_runtime`, socket reads L656/854, `run_boundary` L1761; patch0001 retains both modes.
+21. <a id="source-21"></a> [Pinned startup qualification](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/main.rs#L112) — `qualify_runtime`, socket reads L656/854, `probe_child_self_protection` L1177–1212; `run_boundary` L1761; both modes retained.
 
 22. <a id="source-22"></a> [Packaged runc](https://github.com/containerd/nerdctl/blob/v2.3.5/Dockerfile#L19) — runc1.5.1 pin.
 23. <a id="source-23"></a> [runc init](https://github.com/opencontainers/runc/blob/8f2685a471d3347a686ad3909783d8aafc6bb208/libcontainer/nsenter/nsexec.c#L855) — stage names, namespace setup.
+
+24. <a id="source-24"></a> [Container extraction](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/src/caps/extract/extract.cpp#L538-L624) — native metadata lookup; label extraction L769–776, separate from yolo snapshot.

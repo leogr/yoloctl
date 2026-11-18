@@ -57,10 +57,8 @@ func TestRuncInitNamespaceException(t *testing.T) {
 	const macro = "yolo_runc_init_namespace"
 	predicate := setupPredicate(t, entries[macro].Condition)
 	base := map[string]string{
-		"container.label[yoloctl.audit.schema]":       "1",
-		"container.label[yoloctl.audit.runtime_mode]": "confined",
-		"container.label[yoloctl.openshell.protocol]": "2",
-		"proc.exepath": "/usr/local/bin/runc", "proc.name": "runc:[0:PARENT]", "user.uid": "0",
+		"proc.exepath": "/usr/local/bin/runc", "proc.pexepath": "/usr/local/bin/runc",
+		"proc.name": "runc:[0:PARENT]", "user.uid": "0",
 	}
 	if len(predicate) != len(base) {
 		t.Fatal("runtime context changed", predicate)
@@ -93,8 +91,8 @@ func TestRuncInitNamespaceException(t *testing.T) {
 		{"proc.exepath", "/usr/bin/runc"}, {"proc.exepath", "/usr/local/bin/runc-copy"},
 		{"proc.exepath", "/usr/bin/unshare"}, {"proc.name", "runc"}, {"proc.name", "runc:[1:CHILD]-copy"},
 		{"proc.name", "runc:[3:OTHER]"}, {"user.uid", "502"},
-		{"container.label[yoloctl.audit.runtime_mode]", "privileged"},
-		{"container.label[yoloctl.audit.schema]", "2"}, {"container.label[yoloctl.openshell.protocol]", "3"},
+		{"proc.pexepath", "/usr/bin/runc"}, {"proc.pexepath", "/bin/sh"},
+		{"proc.pexepath", "/usr/local/bin/runc-copy"},
 	} {
 		event := maps.Clone(base)
 		event[tc.field] = tc.value
@@ -170,7 +168,7 @@ func TestOpenShellStartupDeniedReadException(t *testing.T) {
 		}
 	}
 	const original = `evt.type in (ptrace, process_vm_readv, process_vm_writev) and yolo_workload and not (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and proc.exepath in (/usr/bin/gdb, /usr/bin/lldb, /usr/bin/strace, /usr/local/bin/dlv)) and not yolo_openshell_netproxy_read`
-	if entries["Yolo process inspection"].Condition != original+" and not "+macro {
+	if entries["Yolo process inspection"].Condition != original+" and not "+macro+" and not yolo_openshell_self_check_read" {
 		t.Fatal("inspection family changed")
 	}
 	for name, entry := range entries {
@@ -216,7 +214,7 @@ func TestPinnedRestartNoiseRuleModes(t *testing.T) {
 				t.Fatal(err)
 			}
 			body := Rules
-			for _, macro := range []string{"yolo_runc_init_namespace", "yolo_openshell_startup_read"} {
+			for _, macro := range []string{"yolo_runc_init_namespace", "yolo_openshell_startup_read", "yolo_openshell_self_check_read"} {
 				eventType := "process_vm_readv"
 				if macro == "yolo_runc_init_namespace" {
 					eventType = "unshare"

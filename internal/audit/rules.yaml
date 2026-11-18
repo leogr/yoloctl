@@ -7,13 +7,13 @@
   condition: (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and container.label[yoloctl.openshell.protocol] = "2" and proc.exepath in (/opt/yoloctl/openshell-helper/yoloctl-openshell-helper, /.openshell/runtime/openshell-sandbox, /.openshell/runtime/openshell-supervisor))
 
 # runc init stages can already carry the new container's cgroup identity.
-# Limit this heuristic to namespace setup; it grants no infrastructure exemption.
+# Native container labels can be unavailable again on start/restart. Select the
+# fixed runtime init identity, including its parent, without claiming confinement.
+# This also covers privileged init; no other event family gets this exemption.
 - macro: yolo_runc_init_namespace
   condition: >-
-    container.label[yoloctl.audit.schema] = "1" and
-    container.label[yoloctl.audit.runtime_mode] = confined and
-    container.label[yoloctl.openshell.protocol] = "2" and
     proc.exepath = /usr/local/bin/runc and
+    proc.pexepath = /usr/local/bin/runc and
     proc.name in ("runc:[0:PARENT]", "runc:[1:CHILD]", "runc:[2:INIT]") and
     user.uid = 0
 
@@ -43,6 +43,16 @@
     proc.exepath = /.openshell/runtime/openshell-sandbox and
     proc.name = openshell-sandb and
     proc.pexepath = /opt/yoloctl/openshell-helper/yoloctl-openshell-helper
+
+# Accepted self-check heuristic: the sandbox child deliberately reads its
+# sandbox parent's memory and expects EPERM. Native labels are not reliably
+# available at startup. Same-binary matching inspections share this blind spot.
+- macro: yolo_openshell_self_check_read
+  condition: >-
+    evt.type = process_vm_readv and evt.rawres = -1 and
+    proc.exepath = /.openshell/runtime/openshell-sandbox and
+    proc.name = openshell-sandb and
+    proc.pexepath = /.openshell/runtime/openshell-sandbox
 
 - macro: yolo_fs_mutation
   condition: (evt.type in (open, openat, openat2, creat, truncate, ftruncate, rename, renameat, renameat2, unlink, unlinkat, mkdir, mkdirat, rmdir, symlink, symlinkat, link, linkat) and (evt.is_open_write = true or not evt.type in (open, openat, openat2)))
@@ -94,7 +104,7 @@
 - rule: Yolo process inspection
   desc: Workload cross-process inspection outside known debugger executable paths; names are context rather than authenticity proof
   condition: >-
-    evt.type in (ptrace, process_vm_readv, process_vm_writev) and yolo_workload and not (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and proc.exepath in (/usr/bin/gdb, /usr/bin/lldb, /usr/bin/strace, /usr/local/bin/dlv)) and not yolo_openshell_netproxy_read and not yolo_openshell_startup_read
+    evt.type in (ptrace, process_vm_readv, process_vm_writev) and yolo_workload and not (container.label[yoloctl.audit.schema] = "1" and container.label[yoloctl.audit.runtime_mode] = confined and proc.exepath in (/usr/bin/gdb, /usr/bin/lldb, /usr/bin/strace, /usr/local/bin/dlv)) and not yolo_openshell_netproxy_read and not yolo_openshell_startup_read and not yolo_openshell_self_check_read
   output: "executable=%proc.exepath container=%container.id result=%evt.res box=%yolo.box space=%yolo.space agent=%yolo.agent account=%yolo.account runtime=%yolo.runtime_mode network_unconfined=%yolo.network_unconfined process=%proc.name user=%user.name uid=%user.uid container_name=%container.name"
   priority: NOTICE
   tags: [yoloctl]
