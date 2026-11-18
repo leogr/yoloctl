@@ -63,9 +63,10 @@ its holder is gone; unmarked shell/exec exit does not stop the box.
 network cleanup. A running container does not prove a living agent session;
 a box that is not running is listed as stopped, its last exit or lost session
 beside it ([stop-box](../digests/stop-box.md)).
-A current box's stop is the runtime's bounded stop of the exact container, with
-its checks; only a box on the old upstream runtime first signals its workloads
-through confined SSH, so its stop does not depend on PID 1 forwarding SIGTERM.
+A current confined box's stop is the engine stop of the exact container, with
+its checks. A privileged box and a box on the old upstream runtime are first
+signalled over the box's SSH endpoint and then stopped by the engine; that
+route does not depend on PID 1 forwarding SIGTERM.
 A sandbox socket inode does not prove a listening SSH endpoint. Readiness
 returns a confirmed container exit promptly with its code and a logs hint.
 Use the managed applier, shared resolver and actual readiness probe. [1](#source-1)

@@ -37,10 +37,12 @@ Full inspection reads the actual envelope (exactly one JSON object of strings
 holding both values; an uninspected environment is unverified, never healthy)
 and requires recreation: `box diff`/`show`/`inspect` and `box.drift` report it,
 the start/restart preflight and `chat ensure` refuse (the latter naming the
-server box's exact `box diff` and `box recreate … --space` commands). Only on a
-terminal, interactive `chat ensure` without `--json` and `yoloctl chat` first
-read `chat.status` and offer to recreate the room's own server box, sending that
-recreate on yes (`offerChatServerRecreate`); nothing else recreates it. `chat status` sets
+server box's exact `box diff` and `box recreate … --space` commands). On a
+terminal, `chat ensure` without `--json` first reads `chat.status` and offers to
+recreate the room's own server box, sending that recreate on yes
+(`offerChatServerRecreate`); `yoloctl chat` makes the same offer only when it is
+about to run `chat.ensure` (server not ready), so with a ready server pending
+recreation it opens without one. No other chat command recreates it. `chat status` sets
 `server.recreate_pending` and `server.reason` beside an otherwise ready server.
 No value appears in a reason. [2](#source-2) [3](#source-3) [7](#source-7) [35](#source-35) [36](#source-36)
 

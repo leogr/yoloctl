@@ -67,6 +67,6 @@ wait or a failure, so it is never tagged, and agentless boxes have no state.
 6. <a id="source-6"></a> [Public view](../../internal/agentsession/status.go#L143-L170) — `StateView`, `StateText`; `ContextView.text` at L407, `Lines` at L368, `Line` at L420.
 7. <a id="source-7"></a> [Shape regressions](../../cmd/yoloctl/box_session_test.go#L100-L170) — `statusFixture`, `checkConversationShape` with the state keys.
 8. <a id="source-8"></a> [Chat state](../../internal/chatui/runtime.go#L26-L50) — `RuntimeState`, the state constants, `SourceActivity`; `RuntimeContext.text` at L189, `runtimeRows` at L208, `stateOf`, `stateText`, `stateTag` at L253-L318.
-9. <a id="source-9"></a> [Panel tag](../../internal/chatui/roster.go#L183-L241) — `memberCard`, `stateTagRun` at L338; the adapter in cmd/yoloctl/chat_participant_runtime.go `participantRuntime`.
+9. <a id="source-9"></a> [Panel tag](../../internal/chatui/roster.go#L269-L345) — `memberCard`, `stateTagRun` at L338; the adapter in cmd/yoloctl/chat_participant_runtime.go `participantRuntime`.
 10. <a id="source-10"></a> [Chat regressions](../../internal/chatui/agent_state_test.go#L1-L132) — `TestReportedStateRowAndTag`, `TestStateFallsBackToActivity`; used-only text in ui_package_test.go `TestRuntimeContextText`.
 11. <a id="source-11"></a> [Activity gate](../../internal/chatui/telemetry.go#L124-L139) — `boxActivity`: `participantBox`, `spacetelemetry.ActivityCurrent` and the tracker's `State`.
