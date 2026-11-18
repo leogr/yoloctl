@@ -123,7 +123,7 @@ func newCatalogLsCmd(k catalogKind) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "ls",
 		Aliases: []string{"list"},
-		Short:   fmt.Sprintf("List %ss (built-in + custom)", k.name),
+		Short:   fmt.Sprintf("List built-in and custom %s definitions", k.name),
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			items, err := collectCatalogItems(k)
@@ -149,7 +149,7 @@ func newCatalogShowCmd(k catalogKind) *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "show NAME",
-		Short: fmt.Sprintf("Show a %s (built-in or custom)", k.name),
+		Short: fmt.Sprintf("Show a built-in or custom %s", k.name),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
@@ -281,7 +281,7 @@ func newCatalogDestroyCmd(k catalogKind) *cobra.Command {
 		Long: fmt.Sprintf(`Deletes a CUSTOM %[1]s. Built-ins are yoloctl-owned and cannot be deleted.
 
 Before anything is removed, every box manifest in every space and the custom
-catalogs are scanned for the name. A %[1]s that is still named, or a box whose
+catalogs are scanned for the name. A referenced %[1]s, or a box whose
 references cannot be read, is kept unless --force is given: a dangling name
 makes every box that reaches it fail to compose its policy. Confirmation is
 required unless --force is passed.`, k.name),

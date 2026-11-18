@@ -77,7 +77,7 @@ Use --space or the current context to select the owning space. Space creation
 initializes its required --account name; account create adds more accounts.
 Missing accounts are never created implicitly. Secret values are never printed.`,
 	}
-	cmd.PersistentFlags().String("space", defaultSpaceName, "Space owning the account (defaults to current context)")
+	cmd.PersistentFlags().String("space", defaultSpaceName, "Space owning the account")
 	_ = cmd.RegisterFlagCompletionFunc("space", completeSpaces)
 	cmd.AddCommand(
 		newAccountListCmd(),

@@ -23,17 +23,17 @@ func newAgentboxDestroyCmd() *cobra.Command {
 		keepManifest bool
 	)
 	cmd := &cobra.Command{
-		Use:   "destroy [BOX]",
+		Use:   "destroy BOX",
 		Short: "Stop and remove a box (runtime + its declaration)",
-		Long: "Stops the box gracefully (so openshell-sandbox cleans up its " +
-			"network namespace), removes the container, port forwards, and " +
-			"VM-local runtime dirs, AND deletes the box YAML declaration. " +
-			"A host --workdir and account state are always preserved; only " +
-			"an ephemeral box's VM-local /workdir is wiped (guarded — pass " +
-			"--force). Use `box stop` to keep both the manifest and runtime " +
-			"declaration; --keep-manifest here removes only the runtime. --force also " +
-			"skips the graceful stop. Without --keep-manifest, the box's own chat " +
-			"membership is revoked too, so the name can be enrolled again.",
+		Long: `Removes the box container, port forwards, VM-local runtime directories
+and YAML declaration. Use box stop to keep the declaration and container.
+Use --keep-manifest to remove the runtime while keeping the declaration and
+chat membership. Otherwise the box's own chat membership is revoked too.
+
+Destroy normally stops the box gracefully first so OpenShell can clean up
+its network namespace. --force skips that stop and is required for ephemeral
+boxes, whose VM-local /workdir is removed. Host workdirs and account state
+are preserved.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]

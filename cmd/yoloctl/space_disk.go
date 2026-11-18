@@ -132,7 +132,7 @@ func diskShown(current uint64, saved string) string {
 
 func diskBytesLabel(n uint64) string { return fmt.Sprintf("%d GiB", n/spaceconfig.GiB) }
 
-const dataDiskFlagHelp = "Data disk for accounts and declarations, in whole GiB of at least 4GiB (default 10GiB); it is never reformatted and only grows"
+const dataDiskFlagHelp = "Data disk for accounts and declarations, in whole GiB of at least 4GiB. The disk is preserved and can only grow"
 
 // Replaceable in tests.
 var dataDiskGrower = vmhost.DataDiskGrower

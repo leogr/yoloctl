@@ -70,18 +70,18 @@ func newAgentUpdateCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "update AGENT",
-		Short: "Refresh the agent CLI inside every running box of a given agent",
+		Short: "Refresh a configured agent CLI inside matching boxes",
 		Long: `Installs the latest configured npm package or verified native release as the sandbox user inside
-every box carrying the ` + "`yoloctl.agent=<AGENT>`" + ` label.
+each selected box. Use a running box for an in-place update. When some
+matching boxes are stopped, target a running one with --agentbox BOX. A bulk
+update selects all matching containers and the first install error ends it.
 
-  yoloctl agent update claude                      # every claude box
-  yoloctl agent update claude --agentbox tester    # only one
+  yoloctl agent update claude
+  yoloctl agent update claude --agentbox tester
   yoloctl agent update codex --space prod-untrusted
 
-AGENT is an agent name (agy, claude, codex, gemini, opencode, pi), NOT a box name.
-To target a single box, pass --agentbox BOX — that box must have been created
-with --agent AGENT (so its yoloctl.agent label matches). Boxes without an agent
-label are never matched.
+Use an agent name such as agy, claude, codex, gemini, opencode or pi for AGENT.
+The box must carry the matching yoloctl.agent label.
 
 Pre-flight check: yoloctl verifies the agent process is actually
 running inside each target box before updating. If it isn't, you
@@ -161,7 +161,7 @@ openshell-sandbox policy.`,
 		},
 	}
 	cmd.Flags().StringVar(&spaceName, "space", defaultSpaceName, "Space hosting the boxes")
-	cmd.Flags().StringVar(&agentboxName, "agentbox", "", "Restrict the update to one box (must have yoloctl.agent=AGENT label)")
+	cmd.Flags().StringVar(&agentboxName, "agentbox", "", "Update only BOX, which must carry the matching agent label")
 	cmd.Flags().BoolVar(&force, "force", false, "Skip the pre-flight check that verifies the agent process is running in each target")
 	return cmd
 }

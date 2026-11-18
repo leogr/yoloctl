@@ -44,8 +44,9 @@ boxes see the same host directory). --account, --agent (a different
 agent uses its own per-agent state leaf), and --workdir change that; an
 ephemeral workdir is always re-derived for NEWNAME and starts empty.
 
-Every ` + "`box create`" + ` flag is accepted: a flag you pass explicitly
-overrides the source's setting, anything else keeps the source's value.
+Copy shares the box settings flags from ` + "`box create`" + `. The --operator
+preset is available on create only. A setting flag you pass explicitly
+overrides the source's setting. Omitted settings keep the source's value.
 Collection flags (--features, --capability, --mount, --env, --port,
 --agent-extra-args) replace the source's list wholesale; pass an empty
 value (e.g. --port "") to clear one. Overriding --agent re-derives

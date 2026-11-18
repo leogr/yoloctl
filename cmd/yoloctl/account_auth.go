@@ -206,25 +206,32 @@ func newAccountAuthImportCmd() *cobra.Command {
 	var file, anthropicDir string
 	cmd := &cobra.Command{
 		Use:   "import NAME AGENT [--file PATH | --anthropic-dir DIR]",
-		Short: "Copy an existing host login file into the account's state leaf",
-		Long: `Copies the agent's existing host login file into the account's per-agent
-state leaf at the agent's auth.credential_file. With no --file, tries the
-agent's conventional host path(s) in preference order, first existing wins
-(codex: ~/.codex/auth.json; claude: ~/.claude/.credentials.json;
-gemini: ~/.gemini/oauth_creds.json; pi: ~/.pi/agent/auth.json;
-opencode: ~/.local/share/opencode/auth.json);
-override with --file.
+		Short: "Import an existing host login into an account",
+		Long: `Copies a native login file into the account's per-agent state leaf at the
+agent's auth.credential_file. Pass --file to choose the source explicitly.
+Without it, yoloctl looks for the agent's conventional login files:
 
+  agy       ~/.gemini/antigravity-cli/antigravity-oauth-token
+  claude    ~/.claude/.credentials.json
+  codex     ~/.codex/auth.json
+  gemini    ~/.gemini/oauth_creds.json
+  opencode  ~/.local/share/opencode/auth.json
+  pi        ~/.pi/agent/auth.json
+
+When no Claude native login source is found and neither import flag is set,
+yoloctl reads primaryApiKey from ~/.claude.json and stores it as the account's
+ANTHROPIC_API_KEY secret.
+
+With neither flag, Claude also checks ~/.config/anthropic for a saved profile.
 For Claude Anthropic profiles, --anthropic-dir DIR imports the selected profile's
 config, credential and active selection into the Claude leaf's anthropic subtree.
 It does not import inactive profiles or external identity files. If both legacy
 and Anthropic sources exist, select --file or --anthropic-dir explicitly. A new
 profile credential/config file alone cannot be imported as a legacy login.
 
-The files are COPIED (mode 0600), never bind-mounted from your host login dir:
-the box only ever sees the copy in the account's leaf. Its contents are never
-printed. The account and a running space controller are required. Native import
-refuses to overwrite state used by a running box.
+Native files are copied into the account's leaf with mode 0600. The account
+and a running space controller are required. Credentials are never printed.
+Native import refuses to overwrite state used by a running box.
 
   yoloctl account auth import default codex
   yoloctl account auth import personal codex --file ~/.codex/auth.json

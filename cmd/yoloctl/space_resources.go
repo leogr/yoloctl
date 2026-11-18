@@ -55,7 +55,9 @@ func newSpaceSetCmd() *cobra.Command {
 		Long: `Change VM boot resources without replacing its disks or containers.
 The space must already be stopped. Start it explicitly after the change.
 --memory auto recalculates RAM from current host headroom and saves a concrete
-allocation. --disk only grows the VM system disk and is saved now; it applies
+allocation. --cpus takes an explicit CPU count. Omit it to keep the saved
+count, or use --cpus auto when creating a new space.
+--disk only grows the VM system disk and is saved now; it applies
 at the next space recreate, which replaces that disk (images, containers and
 box files) anyway. --image-layer-compression chooses how newly built image
 layers are stored inside the VM: none (default; faster builds and refreshes,
@@ -107,7 +109,7 @@ An omitted flag preserves its current value.
 			})
 		},
 	}
-	cmd.Flags().Int("cpus", 0, "VM CPU count (omit to keep the current allocation)")
+	cmd.Flags().Int("cpus", 0, "Explicit VM CPU count (omit to keep the current allocation)")
 	cmd.Flags().String("memory", "", "VM RAM: auto (host-aware 4–16 GiB) or an explicit size such as 8GiB")
 	cmd.Flags().String("disk", "", "VM system disk size in whole GiB, such as 50GiB; only grows, applies at the next space recreate")
 	cmd.Flags().String("data-disk", "", "Data disk size in whole GiB, such as 20GiB; only grows, offline at the next space start, after a cheap copy of the disk (Firecracker)")

@@ -35,13 +35,14 @@ func newVersionCmd() *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "version",
-		Short: "Print yoloctl, openshell-sandbox, and Lima versions",
-		Long: `Reports the three versions that pin yoloctl's behavior:
+		Short: "Show the build, runtime and host paths",
+		Long: `Reports version and path information:
 
   yoloctl            this binary
   openshell-sandbox  native runtime target; executable hashes come from
                      the bundled OpenShell qualification
-  limactl            host-side binary version
+  limactl            host-side Lima binary version, when available
+  config and cache   selected yoloctl configuration and cache roots
 
   yoloctl version
   yoloctl version --json`,

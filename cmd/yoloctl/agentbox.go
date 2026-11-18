@@ -50,7 +50,7 @@ const (
 func newAgentboxCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "box",
-		Short: "Manage boxes (sandboxed containers, 1:1 with a coding agent)",
+		Short: "Manage boxes for coding agents, shells and other workloads",
 	}
 	cmd.AddCommand(
 		newAgentboxCreateCmd(),
@@ -164,9 +164,8 @@ box has no live session — it exited, the VM rebooted, the box stopped —
 attach starts one, restarting the box first if needed. If a stopped box
 needs recreation, attach says so before any image build; at a terminal it
 offers to recreate it (box recreate --force --no-attach) and then attaches.
-A detached
-session exit is reported once (exit status + time), then a fresh session
-starts. The revived session runs the box's agent profile command with
+A detached session exit is reported once with its status and time. A fresh
+session then starts. The revived session runs the box's agent profile command with
 its default args and agent_extra_args — or session_command for an agentless
 box, falling back to yoloctl's login shell when unset. A custom positional
 COMMAND from the original run is not persisted. If the previous session's holder died, the orphaned
@@ -235,7 +234,7 @@ session or space operation by request ID and never replay input.
 		},
 	}
 	cmd.Flags().StringVar(&spaceName, "space", defaultSpaceName, "Space hosting the box")
-	cmd.Flags().BoolVar(&noAutoupdate, "no-autoupdate", false, "Skip the npm install -g <pkg>@latest refresh when attach has to restart a stopped box")
+	cmd.Flags().BoolVar(&noAutoupdate, "no-autoupdate", false, "Skip the agent CLI update if attach restarts a stopped box")
 	cmd.Flags().BoolVar(&newSession, newSessionFlag, false, "Start a new agent conversation instead of resuming the box's own (refused while a session runs)")
 	addPassthroughFlag(cmd)
 	cmd.Flags().Bool("box-use", false, "Use the structured collaborative terminal interface (JSON Lines over stdin/stdout)")
@@ -678,7 +677,7 @@ func newAgentboxStartCmd() *cobra.Command {
 		newSession   bool
 	)
 	cmd := &cobra.Command{
-		Use:   "start [BOX]",
+		Use:   "start BOX",
 		Short: "Start or materialize a box from its declaration",
 		Long: `Starts an existing stopped box container, or materializes a
 configured box from its YAML when the container is absent. In both cases it
@@ -689,14 +688,12 @@ refused; inspect the box and explicitly use box recreate to apply them.
 A stopped box on the pre-native runtime is never started: the start is refused
 and, at a terminal, recreation is offered once (default No).
 
-The container's bridge IP can change between runs, so any forward
-systemd units that survived the previous stop are torn down before
-reconcile re-installs them against the new IP.
+Declared port forwards are reconciled through the box's SSH endpoint.
 
-After start, the agent CLI inside the box is autoupdated to the
-current registry-latest version (best-effort; skipped silently when
-the network or registry is unreachable). Pass --no-autoupdate to keep
-the version baked into the image.
+Start checks for the latest configured npm or native agent release. If the
+release check fails, start reports that it skipped the update. An attempted
+installation that fails makes the command fail. Pass --no-autoupdate to
+keep the installed version.
 
   yoloctl box start coder
   yoloctl box start coder --space prod-untrusted`,
@@ -717,7 +714,7 @@ the version baked into the image.
 		},
 	}
 	cmd.Flags().StringVar(&spaceName, "space", defaultSpaceName, "Space hosting the box")
-	cmd.Flags().BoolVar(&noAutoupdate, "no-autoupdate", false, "Skip the post-start npm install -g <pkg>@latest that brings the agent CLI to current registry-latest. Use for air-gapped environments or when you want the version baked into the image.")
+	cmd.Flags().BoolVar(&noAutoupdate, "no-autoupdate", false, "Skip the agent CLI update after start")
 	addPassthroughFlag(cmd)
 	cmd.Flags().BoolVar(&noAttach, "no-attach", false, "Skip the automatic attach to the box's session when the command finishes")
 	cmd.Flags().BoolVar(&newSession, newSessionFlag, false, "Start a new agent conversation on the next session instead of resuming the box's own (refused while a session runs)")
@@ -1080,7 +1077,7 @@ func registerAgentboxCreateFlags(cmd *cobra.Command, opts *agentboxCreateOptions
 	cmd.Flags().StringArrayVar(&specs.Envs, "env", nil, "Set a literal environment variable KEY=VALUE in the box (repeatable). Non-secret by convention — put secrets in the box's account.")
 	cmd.Flags().StringArrayVar(&specs.Ports, "port", nil, "Forward a port into the box (repeatable). Docker host:container order: published:target (e.g. 8080:3000), or a bare target (e.g. 3000) which publishes on the same port. host_ip/protocol default to 127.0.0.1/tcp.")
 	cmd.Flags().BoolVar(&opts.ManifestOnly, "manifest-only", false, "Write the box manifest on the running space controller without creating a container. Materialize later with: yoloctl box reconcile NAME.")
-	cmd.Flags().BoolVar(&opts.NoAutoupdate, "no-autoupdate", false, "Skip the post-create npm install -g <pkg>@latest that brings the agent CLI to current registry-latest. Use this for air-gapped environments or when you want the version baked into the image.")
+	cmd.Flags().BoolVar(&opts.NoAutoupdate, "no-autoupdate", false, "Skip the agent CLI update after create")
 	addPassthroughFlag(cmd)
 	cmd.Flags().BoolVar(&opts.NoAttach, "no-attach", false, "Skip the automatic attach to the box's session when the command finishes")
 }
@@ -2251,7 +2248,7 @@ func warnPostAutoupdateFailure(agentboxName, agent string, exitCode int) {
 func newAgentboxStopCmd() *cobra.Command {
 	var spaceName string
 	cmd := &cobra.Command{
-		Use:   "stop [BOX]",
+		Use:   "stop BOX",
 		Short: "Gracefully stop a box (lets openshell-sandbox tear down its netns)",
 		Long: `Sends SIGTERM so openshell-sandbox can clean up its network
 namespace + veth pair before exit, then reaps any netns/veth an
@@ -2388,12 +2385,12 @@ func newAgentboxRestartCmd() *cobra.Command {
 		startWorkload bool
 	)
 	cmd := &cobra.Command{
-		Use:   "restart [BOX]",
+		Use:   "restart BOX",
 		Short: "Restart a box (stop its runtime, then start it again)",
 		Long: `Stops the box gracefully (SIGTERM to openshell-sandbox so it tears
 down its network namespace, stopping the VM-side session holder first) and then
-starts it again from its declaration — reconciling port forwards against the
-fresh bridge IP. The box manifest and its runtime declaration are
+starts it again from its declaration, reconciling declared port forwards
+through the box's SSH endpoint. The box manifest and its runtime declaration are
 preserved; this is the same machinery as ` + "`box stop` followed by `box start`" + `,
 not a recreate (use ` + "`box recreate`" + ` to rebuild the container).
 Changes requiring recreation are refused before stopping the existing box.
@@ -2401,8 +2398,10 @@ A box on the pre-native runtime is never restarted: a running one is stopped
 (its exact run) and refused, and recreation is offered once at a terminal
 (default No).
 
-After the restart the agent CLI is autoupdated to registry-latest
-(best-effort); pass --no-autoupdate to keep the version baked into the image.
+Restart checks for the latest configured npm or native agent release. If the
+release check fails, restart reports that it skipped the update. An attempted
+installation that fails makes the command fail. Pass --no-autoupdate to
+keep the installed version.
 
   yoloctl box restart coder
   yoloctl box restart coder --space prod-untrusted`,
@@ -2468,7 +2467,7 @@ After the restart the agent CLI is autoupdated to registry-latest
 		},
 	}
 	cmd.Flags().StringVar(&spaceName, "space", defaultSpaceName, "Space hosting the box")
-	cmd.Flags().BoolVar(&noAutoupdate, "no-autoupdate", false, "Skip the post-restart npm install -g <pkg>@latest that brings the agent CLI to current registry-latest. Use for air-gapped environments or when you want the version baked into the image.")
+	cmd.Flags().BoolVar(&noAutoupdate, "no-autoupdate", false, "Skip the agent CLI update after restart")
 	addPassthroughFlag(cmd)
 	cmd.Flags().BoolVar(&noAttach, "no-attach", false, "Skip the automatic attach to the box's session when the command finishes")
 	cmd.Flags().BoolVar(&newSession, newSessionFlag, false, "Replace the agent conversation: after the stop, the next session starts a new one instead of resuming it")
@@ -2548,7 +2547,7 @@ func newAgentboxRecreateCmd() *cobra.Command {
 		noAttach     bool
 	)
 	cmd := &cobra.Command{
-		Use:   "recreate [BOX]",
+		Use:   "recreate BOX",
 		Short: "Tear down and rebuild a box container from its persisted YAML",
 		Long: `Stops the box, removes the container, then re-creates it from
 its persisted declaration on the space data disk.
@@ -2566,9 +2565,8 @@ Lost across recreate: anything the agent wrote inside the container
 outside the bind-mounted paths above (notably ` + "`/tmp` and `/home/sandbox/`" + `
 subdirs that aren't mounted from the host).
 
-By default the post-create autoupdate brings the agent CLI to
-registry-latest. Pass --no-autoupdate to keep the version baked into
-the image.
+After create, yoloctl checks for the latest configured npm or native agent
+release. Pass --no-autoupdate to keep the version in the image.
 
   yoloctl box recreate coder
   yoloctl box recreate coder --no-autoupdate
@@ -2596,7 +2594,7 @@ base, run ` + "`yoloctl image refresh`" + ` and then
 	cmd.Flags().StringVar(&spaceName, "space", defaultSpaceName, "Space hosting the box")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Skip the confirmation prompt")
 	cmd.Flags().Bool("clear-cache", false, "After removing the old container, empty its separate cache before creating the replacement; default keeps it")
-	cmd.Flags().BoolVar(&noAutoupdate, "no-autoupdate", false, "Skip the post-create npm install -g <pkg>@latest that brings the agent CLI to current registry-latest")
+	cmd.Flags().BoolVar(&noAutoupdate, "no-autoupdate", false, "Skip the agent CLI update after recreating the box")
 	addPassthroughFlag(cmd)
 	cmd.Flags().BoolVar(&noAttach, "no-attach", false, "Skip the automatic attach to the box's session when the command finishes")
 	// Set only by the host's pre-native recreation offer: a failure after the
@@ -2712,7 +2710,7 @@ func newAgentboxExecCmd() *cobra.Command {
 			"interactive shell while `box attach` joins the agent session. Captured or " +
 			"piped output (`out=$(yoloctl box exec BOX -- CMD)`) gets no PTY, so it " +
 			"keeps its exact bytes and a separate stderr. " +
-			"Uses system `ssh` with this binary as ProxyCommand. Requires `ssh` on PATH.",
+			"Uses the built-in SSH client.",
 		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			agentbox := args[0]

@@ -30,7 +30,9 @@ are preserved. No automatic cleanup collects these per-box caches. A process
 that points its cache elsewhere still writes outside this directory.
 
 See yoloctl space storage to identify large boxes. Inside a running box use
-its tool's own cache commands, for example: box exec NAME go clean -cache -modcache.`,
+its tool's own cache commands:
+
+  yoloctl box exec NAME -- go clean -cache -modcache`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
@@ -90,7 +92,7 @@ func clearStoppedBoxCache(ctx context.Context, space, name string, observe func(
 	}
 	switch box.Runtime {
 	case boxstate.RuntimeRunning:
-		return 0, fmt.Errorf("box %s is running; stop it first (yoloctl box stop %s) or clear from inside: box exec %s go clean -cache -modcache", name, name, name)
+		return 0, fmt.Errorf("box %s is running; stop it first (yoloctl box stop %s) or clear from inside: yoloctl box exec %s -- go clean -cache -modcache", name, name, name)
 	case boxstate.RuntimeStopped:
 		if box.Container == nil || !cacheInventoryStopped(box.Container.Status) {
 			return 0, errors.New("container status does not affirm that it is stopped; cache retained")

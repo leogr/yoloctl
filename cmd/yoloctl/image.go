@@ -88,7 +88,7 @@ func newImageRefreshCmd() *cobra.Command {
 	var spaceName string
 	cmd := &cobra.Command{
 		Use:   "refresh",
-		Short: "Rebuild the base agentbox image",
+		Short: "Rebuild the base image used by boxes",
 		Long: `Rebuilds the single yoloctl-managed base image from its embedded
 Dockerfile context, rerunning installers to refresh the OS/runtime layers.
 Package download caches are retained; repository indexes are refreshed.
@@ -98,8 +98,8 @@ Package download caches are retained; repository indexes are refreshed.
 The agent CLI is not baked into an image — it is a feature composed
 into a box's runtime image (image = base + resolved features). To pull a
 newer agent CLI into a box, use ` + "`yoloctl box reconcile BOX --rebuild`" + `
-(a fresh composed build + recreate) or ` + "`yoloctl agent update PROFILE`" + `
-(in-place npm refresh of running boxes). Refresh only touches the base
+(a fresh composed build + recreate) or ` + "`yoloctl agent update AGENT`" + `
+(in-place agent CLI update). Refresh only touches the base
 image. Existing feature-composed images keep the previous base: a plain
 ` + "`box recreate`" + `, or a new box with the same features, reuses them. Run
 ` + "`yoloctl box reconcile BOX --rebuild`" + ` for each affected box to rebuild its
@@ -134,7 +134,7 @@ composed image on the refreshed base and recreate it.`,
 				"Existing boxes and composed images keep the previous base. "+
 					"Run `yoloctl box reconcile BOX --rebuild` for each affected box to rebuild its composed image on this base and recreate it; "+
 					"a plain `yoloctl box recreate BOX` reuses an existing composed image. "+
-					"`yoloctl agent update PROFILE` refreshes only the agent CLI in running boxes.")
+					"`yoloctl agent update AGENT` refreshes only the agent CLI in running boxes.")
 			return nil
 		},
 	}

@@ -66,7 +66,7 @@ Use box attach --box-use for an ongoing response-driven interaction.`,
 		ValidArgsFunction: completeAgentboxUse,
 	}
 	cmd.Flags().String("space", defaultSpaceName, "Space hosting the box")
-	cmd.Flags().Bool("no-autoupdate", true, "Skip agent autoupdate if attachment restarts a stopped box")
+	cmd.Flags().Bool("no-autoupdate", true, "Skip agent autoupdate if attachment restarts a stopped box. Use --no-autoupdate=false to allow the update")
 	cmd.Flags().Bool("stdin", false, "Read complete text or JSONL batch from stdin")
 	cmd.Flags().Duration("timeout", 2*time.Minute, "Overall deadline including session startup (1s..10m), excluding bounded receipt cleanup")
 	cmd.Flags().Duration("wait-timeout", 30*time.Second, "Wait action deadline (0..60s)")

@@ -38,13 +38,17 @@ type chatParticipationResult struct {
 
 func addChatParticipationCommands(parent *cobra.Command) {
 	for _, action := range []string{"connect", "disconnect"} {
+		short := "Connect a named AIRC client in an enrolled box"
+		if action == "disconnect" {
+			short = "Disconnect a named AIRC client in an enrolled box"
+		}
 		cmd := &cobra.Command{
 			Use:   action + " BOX",
-			Short: action + " a named AIRC client in an enrolled box",
+			Short: short,
 			Long:  "Explicitly " + action + " one named AIRC client in a running enrolled box using its private managed config. Enrollment, credentials and other named clients are unchanged. This does not start or recreate a box, arm an agent wake listener, send a message or automatically reconnect. Inspect after an uncertain reply before trying another action.",
 			Args:  cobra.ExactArgs(1),
 		}
-		cmd.Flags().String("client", "space", "Named AIRC client (1–32 ASCII letters, digits, underscores or hyphens); disconnect affects only this client")
+		cmd.Flags().String("client", "space", "Named AIRC client for this action (1–32 ASCII letters, digits, underscores or hyphens)")
 		cmd.Flags().Bool("json", false, "Print the acknowledged named-client action as JSON")
 		cmd.RunE = func(cmd *cobra.Command, args []string) error {
 			client, _ := cmd.Flags().GetString("client")

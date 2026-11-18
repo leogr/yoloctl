@@ -20,10 +20,10 @@ import (
 // Chat commands use typed controller operations. They neither boot a VM nor
 // read declarations, native state or authentication material on the host.
 func newChatCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "chat", Short: "Manage the space-owned collaboration room", Long: "Manage the space-owned collaboration room. Verified space operators can ensure, inspect, enroll, revoke, connect and disconnect participants in their current space. The human view and human nickname remain host operations. Enrollment is durable membership; connecting a named client is separate and does not arm an agent wake listener.", Args: cobra.NoArgs}
+	cmd := &cobra.Command{Use: "chat", Short: "Manage the space-owned collaboration room", Long: "Run yoloctl chat on the host to open the native chat view. Verified space operators can ensure, inspect, enroll, revoke, connect and disconnect participants in their current space. The human view and human nickname remain host operations. Enrollment is durable membership; connecting a named client is separate and does not arm an agent wake listener.", Args: cobra.NoArgs}
 	cmd.PersistentFlags().String("space", defaultSpaceName, "Space hosting the managed room")
 	chatIdentityFlags(cmd)
-	cmd.Flags().String("catalog-read", "single", "Channel refresh: single desired manifest or observed runtime status")
+	cmd.Flags().String("catalog-read", "single", "Catalog read mode: single (desired manifest) or observed (includes runtime status)")
 	cmd.RunE = runChatView
 	ensure := &cobra.Command{Use: "ensure", Short: "Create or start the owned chat server and apply membership", Args: cobra.NoArgs}
 	chatIdentityFlags(ensure)

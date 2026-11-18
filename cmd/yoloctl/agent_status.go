@@ -40,9 +40,9 @@ func newAgentStatusCmd() *cobra.Command {
 box that was created with ` + "`--agent`" + `, then compares it with the
 latest npm or native release for that agent.
 
-Latest-version checks use a one-hour cache under
-` + "`~/.cache/yoloctl/npm-latest/`" + `. Pass --no-check-latest for a fast
-offline view that only probes installed versions.
+Latest-version checks use a one-hour cache in the npm-latest directory under
+the yoloctl cache root. Use yoloctl version to see the host cache root. Pass --no-check-latest
+for an offline view that only probes installed versions.
 
   yoloctl agent status
   yoloctl agent status --space prod-untrusted

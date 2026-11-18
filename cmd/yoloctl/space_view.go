@@ -49,10 +49,9 @@ disk for details; they show the same data as the matching command. The
 system disk holds boxes, images and build caches; its details measure what
 fills it (yoloctl space storage). A disk that runs low (under 4 GiB free, 15%
 of a smaller disk, or from 85% used) or almost full (under 2 GiB, 10%, or from
-95%) is flagged in the
-title row and announced once. Click
-a box's memory row for its live breakdown: total charge, limit or shared pool,
-and an estimated working set.
+95%) is flagged in the title row and announced once. Click a box's memory
+row for its live breakdown: total charge, limit or shared pool, and an
+estimated working set.
 
 The view reads the space; it never starts a VM. A stopped space is shown as
 unavailable until it is started. Press ? for keys.

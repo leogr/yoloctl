@@ -85,10 +85,10 @@ Edits refresh the active window; this is a live viewer, not lossless logging.
 Scroll up to pause end-follow; f or End resumes it. Ctrl+S toggles Markdown
 source, drag selects displayed text, y copies through host clipboard policy,
 and q closes the view. Readable relative Markdown file links open a new follow
- tab inside the TUI, retaining their original navigation root. Standalone local
- file opening refuses without a tab channel. HTTP(S) links use host seams.browser
- on/ask/off, including standalone; ask requires deliberate Ctrl+O and Esc cancels.
- Fragments open the file only. A failed read retains the last display marked stale.
+tab inside the TUI, retaining their original navigation root. Standalone local
+file opening requires a tab channel. HTTP(S) links use host seams.browser
+on/ask/off, including standalone. In ask mode, Ctrl+O opens and Esc cancels.
+Fragments open the file only. A failed read marks the last display stale.
 
   yoloctl follow notes.md --space dev
   yoloctl follow --host --format text /tmp/service.log`, Args: func(cmd *cobra.Command, args []string) error {

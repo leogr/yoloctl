@@ -31,9 +31,8 @@ import (
 func newSpaceExportCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "export SPACE ARCHIVE.tar.gz", Short: "Back up declarations and native account state", Long: `Create a private, versioned tar.gz backup containing box/account declarations,
 account secrets, native agent files, selected audit rule sources/selection and
- declared managed chat data. Audit tools/logs are excluded and restore stays disabled.
-Managed room
-credentials are regenerated on import. Host projects, global catalogs, VM images,
+declared managed chat data. Audit tools/logs are excluded and restore stays disabled.
+Managed room credentials are regenerated on import. Host projects, global catalogs, VM images,
 container contents, ephemeral workdirs and sessions are excluded.
 Native sockets and profile-declared process artifacts are omitted; saved agent
 history and settings remain. Absolute links within an agent's native state
@@ -55,8 +54,9 @@ new room identities and credentials; runtime application remains pending.
 Selected audit rule source/order/selection is retained, with auditing disabled;
 tools/logs are excluded and explicit audit enable revalidates the restored rules.
 SPACE must not exist and its name must use 1–16 ASCII characters.
-Choose the destination VM backend and current host's new-space Lima home;
-boxes stay stopped and their images are rebuilt/pulled on explicit box start.
+Choose the destination VM backend with --backend. A Lima import uses this
+host's Lima home for new spaces. Boxes stay stopped. Their images are built
+or pulled when you explicitly start them.
 Host projects and global catalogs must already exist on the destination host.
 Recorded host grants are reused; --workdir remaps the original default workdir,
 and --mount-map OLD=NEW remaps other host paths. Native file ownership is adjusted

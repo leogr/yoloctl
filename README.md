@@ -59,7 +59,9 @@ curl -fsSL https://github.com/leogr/yoloctl/releases/latest/download/yoloctl-dar
 curl -fsSL https://github.com/leogr/yoloctl/releases/latest/download/yoloctl-darwin-amd64.tar.gz | tar xzf - && ./yoloctl-darwin-amd64/yoloctl install
 ```
 
-If `~/.local/bin` is not on your PATH yet, add it: `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc` (bash: `~/.bashrc`).
+If `~/.local/bin` is missing from your PATH, the installer offers to add it
+for bash, zsh or fish. Add `--add-to-path` to the install command to accept
+that step without a separate prompt. Open a new terminal to load the change.
 
 To upgrade, run the same line for the new release: `install` verifies the
 bundle, asks before replacing the current build and prints the update command
@@ -68,19 +70,23 @@ process are in the [installation guide](docs/install.md).
 
 ## Getting started
 
-`install` sets up the binary only. Create your first space before anything
-else; both flags are required:
+From your project directory, create a space, then create and attach to a box.
+This example uses Codex:
 
 ```sh
-yoloctl space create --workdir ~/code --account personal
+yoloctl space create work --workdir "$PWD" --account personal
+yoloctl box create coder --space work --agent codex --account personal --no-attach
+yoloctl box attach coder --space work
 ```
 
-`--workdir` is the host project directory shared into the VM and `--account`
-names the space's first, empty account. The space is called `default` unless
-you pass a name.
+The space mirrors your project under `/workdir` at its absolute host path
+and starts with an empty `personal` account. Sign in when the agent prompts you. If you already have
+a compatible Codex login on the host, you can run
+`yoloctl account auth import personal codex --space work` after creating the
+space and before creating the box.
 
-*Coming next: a dedicated getting-started experience. This section is a
-placeholder while that workflow is designed.*
+Open the space's chat with `yoloctl chat --space work`. To add the box as a
+participant, follow the [managed chat setup](docs/airc.md#space-owned-managed-room).
 
 ## Features
 
@@ -176,6 +182,10 @@ yoloctl box create coordinator --agent codex --features yolo.space.operator
 yoloctl box create worker --agent claude --no-attach
 yoloctl box exec worker -- git status
 ```
+
+The `box create --operator` preset also adds the chat skill and opens
+networking unless you pass `--unconfined-network=false`. The example above
+grants the operator feature directly.
 
 **This grants authority over the whole space**, including other boxes, existing
 accounts and their credentials, writable host grants, stronger capabilities,
@@ -359,6 +369,10 @@ virtualization limits.
 
 ## Security model
 
+Hosts can opt in to [Falco](https://falco.org/) runtime auditing with
+`yoloctl audit enable` and inspect events with `yoloctl audit`. See the
+[VM-native auditing](docs/digests/audit.md) for host requirements and controls.
+
 The aim is to let cooperative coding agents work freely within boundaries you
 choose, without requiring approval for every action. Built-in Claude and Codex
 launches skip their harness approval prompts and rely on yoloctl's confinement.
@@ -420,8 +434,7 @@ Directions we want to explore, with no promised delivery dates:
 
 - [ ] Remote access to your spaces and agents
 - [ ] Broader agent support and more language/tool features
-- [ ] [Falco](https://falco.org/) integration for runtime security auditing
-- [ ] Apple Virtualization on macOS
+- [ ] A native macOS Virtualization.framework adapter without Lima
 - [ ] Faster image preparation and builds
 - [ ] A shared whiteboard for agents
 - [ ] A full web app

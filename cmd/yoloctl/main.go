@@ -121,8 +121,21 @@ func main() {
 		// Independent holders and their SSH proxy children execute locally.
 		root = newRootCmd()
 	}
+	describeSpaceFlagHelp(root)
 	err = executeRoot(root, func() (*cobra.Command, error) { return root.ExecuteContextC(ctx) })
 	os.Exit(classifyError(err))
+}
+
+// describeSpaceFlagHelp replaces the parser's placeholder in the help display.
+// It leaves the flag value and Changed bit intact for the space resolver.
+func describeSpaceFlagHelp(cmd *cobra.Command) {
+	if f := cmd.LocalFlags().Lookup("space"); f != nil && f.DefValue == defaultSpaceName {
+		f.DefValue = ""
+		f.Usage += " (omit to use the current space selection)"
+	}
+	for _, child := range cmd.Commands() {
+		describeSpaceFlagHelp(child)
+	}
 }
 
 // classifyError maps an error returned by Cobra/RunE to a process exit
@@ -165,9 +178,9 @@ func newRootCmd() *cobra.Command {
 		Long: `yoloctl — let coding agents yolo safely.
 
 Run AI coding agents inside hard-isolated spaces.
-A space is a VM-level boundary; inside it, agentboxes (per-agent
-containerized sandboxes) each bind an explicit host workdir (or
-VM-local ephemeral) at /workdir.`,
+Each space is a VM with its own boxes. A box runs an agent, shell or other
+workload. A host project is mirrored under /workdir at its absolute host
+path. An ephemeral workdir uses /workdir directly.`,
 		Version:      version,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,

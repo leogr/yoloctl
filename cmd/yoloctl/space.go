@@ -589,8 +589,8 @@ build keep running, but this build cannot attach to them; after the update,
 start lists those boxes and offers to restart them (default No; scripts only
 get the commands, --restart-sessions restarts without asking). A restart ends
 each agent's process; resume its conversation explicitly. A restarted chat
-server or session_command workload is started again. Box/account commands never boot the VM. 'space destroy' deletes both the bundle and account disk; create
-a new space afterward with 'space create --workdir PATH --account NAME'.`,
+server or session_command workload is started again. Box and account commands
+require a running VM.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, err := resolveSpacePositional(args)
@@ -1550,7 +1550,7 @@ targets when no --space flag is passed. Resolution order:
     ↓ otherwise
   YOLOCTL_SPACE      (nonempty per-process default, e.g. the TUI pin)
     ↓ otherwise
-  context pin        (~/.config/yoloctl/context.yaml)
+  context pin        (context.yaml under the yoloctl config root)
     ↓ otherwise
   "default"
 
@@ -1592,7 +1592,7 @@ Switching asks before closing its tabs and does not rewrite the global pin.`,
 			return printResolvedContext(cmd.OutOrStdout())
 		},
 	}
-	cmd.Flags().BoolVar(&reset, "reset", false, "Clear the space pin (fall back to \"default\")")
+	cmd.Flags().BoolVar(&reset, "reset", false, "Clear the space pin (use YOLOCTL_SPACE if set, then \"default\")")
 	return cmd
 }
 
