@@ -47,10 +47,14 @@ host facts matching Apple M3+ and macOS 15+. This is a conservative heuristic,
 not Apple's capability query. Explicit on overrides host eligibility but refuses
 other driver/guest routes, non-macOS and Firecracker. Auto/off do not manage this
 key on non-macOS or Firecracker; off writes false on macOS Lima.
-An auto boot not enabled by yoloctl emits a reasoned notice; explicit off/on
-and already-running starts are silent. Show separates saved preference, current
-instance-file configuration and current host eligibility; it does not infer Lima
-overrides, a previous boot or guest KVM. [43](#source-43) [45](#source-45)
+Lima emits a notice when auto leaves nested virtualization disabled by yoloctl.
+Explicit off/on and already-running starts are silent. For Lima, `space show`
+reports the saved preference, instance-file value and current host eligibility
+without inferring effective guest KVM. [43](#source-43) [45](#source-45)
+
+[FACT] Firecracker skips the boot notice. `space show` reports that nested KVM
+depends on host KVM support and the guest kernel. The bundled guest kernel
+includes built-in KVM support for Intel and AMD. [45](#source-45) [48](#source-48)
 
 ## Lima stack upgrades
 
@@ -195,7 +199,8 @@ not Firecracker/KVM behavior. The adapter boots fresh; snapshots remain experime
 
 43. <a id="source-43"></a> [Nested resolution](../../internal/vmapi/nested_virtualization.go#L1) — `ResolveNestedVirtualization`, `NestedHostFacts.Eligible`; verified with accompanying changes on fc48bca3.
 44. <a id="source-44"></a> [Lima resource update](../../internal/lima/resources.go#L1) — `SetInstanceResources`, `setResourcesInYAML` guarded explicit boolean update.
-45. <a id="source-45"></a> [Host boot and display](../../cmd/yoloctl/space_nested_virtualization.go#L1) — `applySpaceBootResources`, `nestedBootNotice`, `fillNestedSpaceShow`.
+45. <a id="source-45"></a> [Host boot and display](../../cmd/yoloctl/space_nested_virtualization.go#L19-L86) — `applySpaceBootResources`, `fillNestedSpaceShow` and `nestedBootNotice`, verified at `cfdd42c9` and accompanying changes.
 
 46. <a id="source-46"></a> [Boot activity](../../internal/firecracker/boot_activity_linux.go#L1) — `bootActivity`, `bootLogStat`; validated rotating generations.
 47. <a id="source-47"></a> [Preparation progress](../../internal/firecracker/prep_progress_linux.go#L1) — `prepReport`, `prepProgress`, `withPrepProgress` (counted in `contextDisk.WriteAt`), `prepReader`; `guestbinary.ResolveReporting`; the stages in `Helper`/`bootImage` (helper_linux.go) and seed_linux.go; `TestPrepRecordsFeedTheBootWatchUntilSilence`.
+48. <a id="source-48"></a> [Bundled guest KVM config](../../assets/vm/firecracker/kernel.config#L713-L720) — built-in virtualization, KVM, KVM_INTEL and KVM_AMD at `cfdd42c9`.

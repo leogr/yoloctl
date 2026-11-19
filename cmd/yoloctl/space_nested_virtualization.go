@@ -40,7 +40,7 @@ func applySpaceBootResources(ctx context.Context, boot *spaceconfig.Bootstrap, v
 	if err := vm.SetResources(ctx, boot.Name, resources); err != nil {
 		return fmt.Errorf("apply saved VM resources before starting: %w", err)
 	}
-	if notice := nestedBootNotice(boot.Name, boot.VM.NestedVirtualization, result); notice != "" {
+	if notice := nestedBootNotice(boot.Name, boot.VM.Backend, boot.VM.NestedVirtualization, result); notice != "" {
 		cliNotice(logging.Host, "%s", notice)
 	}
 	return nil
@@ -49,6 +49,12 @@ func applySpaceBootResources(ctx context.Context, boot *spaceconfig.Bootstrap, v
 // fillNestedSpaceShow labels configured state separately from host eligibility.
 func fillNestedSpaceShow(view *spaceShowData, boot *spaceconfig.Bootstrap) {
 	view.NestedPreference = vmapi.NestedPreference(boot.VM.NestedVirtualization)
+	if boot.VM.Backend == "firecracker" {
+		view.NestedConfigured = "not managed"
+		view.NestedHostEligibility = "not assessed"
+		view.NestedReason = "Firecracker nested KVM depends on host KVM support and the guest kernel"
+		return
+	}
 	host := nestedHostFacts()
 	view.NestedHostEligibility = "not eligible"
 	if host.Eligible() {
@@ -61,22 +67,19 @@ func fillNestedSpaceShow(view *spaceShowData, boot *spaceconfig.Bootstrap) {
 	}
 	result, _ := vmapi.ResolveNestedVirtualization("auto", boot.VM.Backend, view.Instance, host)
 	view.NestedReason = result.Reason
-	view.NestedConfigured = "not managed"
-	if boot.VM.Backend != "firecracker" {
-		value, err := lima.InstanceNestedVirtualization(boot.Name)
-		switch {
-		case err != nil:
-			view.NestedConfigured = "unavailable"
-		case value == nil:
-			view.NestedConfigured = "not set"
-		default:
-			view.NestedConfigured = strconv.FormatBool(*value)
-		}
+	value, err := lima.InstanceNestedVirtualization(boot.Name)
+	switch {
+	case err != nil:
+		view.NestedConfigured = "unavailable"
+	case value == nil:
+		view.NestedConfigured = "not set"
+	default:
+		view.NestedConfigured = strconv.FormatBool(*value)
 	}
 }
 
-func nestedBootNotice(name, preference string, result vmapi.NestedResolution) string {
-	if vmapi.NestedPreference(preference) != "auto" || result.Enabled {
+func nestedBootNotice(name, backend, preference string, result vmapi.NestedResolution) string {
+	if backend == "firecracker" || vmapi.NestedPreference(preference) != "auto" || result.Enabled {
 		return ""
 	}
 	return fmt.Sprintf("nested virtualization is not enabled by yoloctl for space %s: %s. To silence this: yoloctl space set %s --nested-virtualization off", name, result.Reason, name)

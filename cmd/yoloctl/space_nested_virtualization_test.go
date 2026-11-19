@@ -62,7 +62,6 @@ func TestNestedBootResourcesResolveListedInstanceAndRefuseUnknownIdentity(t *tes
 func TestNestedBootNoticeReasonsAndSuppression(t *testing.T) {
 	for _, tt := range []struct{ os, backend, driver, arch, chip, version, reason string }{
 		{"linux", "lima", "qemu", "aarch64", "", "", "yoloctl does not manage it for Lima on this system"},
-		{"linux", "firecracker", "", "", "", "", "yoloctl does not manage it for the Firecracker backend"},
 		{"darwin", "lima", "vz", "aarch64", "Apple M2", "15", "this Mac needs Apple M3 or later and macOS 15 or later (found Apple M2, macOS 15)"},
 		{"darwin", "lima", "vz", "aarch64", "", "", "yoloctl could not tell whether this Mac supports it; --nested-virtualization on makes Lima decide"},
 		{"darwin", "lima", "vz", "", "Apple M3", "15", "yoloctl manages this setting only for Lima vz instances with a native aarch64 guest (found driver vz, guest unknown); the VM type is fixed at creation"},
@@ -72,17 +71,32 @@ func TestNestedBootNoticeReasonsAndSuppression(t *testing.T) {
 			t.Fatalf("%+v: %+v %v", tt, result, err)
 		}
 		want := "nested virtualization is not enabled by yoloctl for space fixture: " + tt.reason + ". To silence this: yoloctl space set fixture --nested-virtualization off"
-		if got := nestedBootNotice("fixture", "", result); got != want {
+		if got := nestedBootNotice("fixture", tt.backend, "", result); got != want {
 			t.Fatalf("notice: %s", got)
 		}
 		for _, pref := range []string{"on", "off"} {
-			if got := nestedBootNotice("fixture", pref, result); got != "" {
+			if got := nestedBootNotice("fixture", tt.backend, pref, result); got != "" {
 				t.Fatal(got)
 			}
 		}
 	}
-	if got := nestedBootNotice("fixture", "auto", vmapi.NestedResolution{Enabled: true}); got != "" {
+	if got := nestedBootNotice("fixture", "lima", "auto", vmapi.NestedResolution{Enabled: true}); got != "" {
 		t.Fatal(got)
+	}
+}
+
+func TestFirecrackerDefaultBootResourcesAreSilent(t *testing.T) {
+	wire, _ := captureCLIRecords(t)
+	boot := &spaceconfig.Bootstrap{Name: "fixture", VM: spaceconfig.VMSettings{CPUs: 4, Memory: "4GiB", Backend: "firecracker"}}
+	vm := &nestedDeploymentVM{}
+	if err := applySpaceBootResources(t.Context(), boot, vm); err != nil {
+		t.Fatal(err)
+	}
+	if want := []vmapi.Resources{{CPUs: 4, Memory: "4GiB"}}; !reflect.DeepEqual(vm.applied, want) {
+		t.Fatalf("applied resources = %+v, want %+v", vm.applied, want)
+	}
+	if records := readCLIRecords(t, wire); len(records) != 0 {
+		t.Fatalf("unexpected Firecracker boot log: %+v", records)
 	}
 }
 
@@ -141,6 +155,22 @@ func TestNestedShowReadsConfiguredFileWithoutClaimingEffectiveState(t *testing.T
 	fillNestedSpaceShow(&view, boot)
 	if view.NestedConfigured != "unavailable" {
 		t.Fatalf("followed unsafe file: %+v", view)
+	}
+}
+
+func TestFirecrackerNestedShowReportsKVMDependencies(t *testing.T) {
+	boot := &spaceconfig.Bootstrap{Name: "fixture", VM: spaceconfig.VMSettings{Backend: "firecracker"}}
+	view := spaceShowData{Instance: vmapi.Instance{Name: "fixture"}}
+	fillNestedSpaceShow(&view, boot)
+	if view.NestedPreference != "auto" || view.NestedConfigured != "not managed" || view.NestedHostEligibility != "not assessed" {
+		t.Fatalf("unexpected Firecracker nested virtualization status: %+v", view)
+	}
+	var output bytes.Buffer
+	if err := writeSpaceShowJSON(&output, &view); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), `"nested_virtualization_reason": "Firecracker nested KVM depends on host KVM support and the guest kernel"`) {
+		t.Fatal(output.String())
 	}
 }
 

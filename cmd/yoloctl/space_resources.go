@@ -62,8 +62,8 @@ at the next space recreate, which replaces that disk (images, containers and
 box files) anyway. --image-layer-compression chooses how newly built image
 layers are stored inside the VM: none (default; faster builds and refreshes,
 more disk) or gzip (less disk); it applies from the next space start and does
-not recompress existing layers. --nested-virtualization auto|on|off applies at
-the next VM boot; off also silences auto's unsupported-system notice.
+not recompress existing layers. --nested-virtualization auto|on|off controls
+Lima's next boot. Off silences Lima's unsupported-system notice in auto mode.
 An omitted flag preserves its current value.
 
   yoloctl space set default --memory auto --cpus 8
