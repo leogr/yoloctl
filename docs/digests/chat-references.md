@@ -1,6 +1,7 @@
 # Chat message references
 
-Verification: `88971b185d6b7e9a7e33c16325d90c48c477f33c` and accompanying changes.
+Verification: `88971b185d6b7e9a7e33c16325d90c48c477f33c` for the reference codec.
+Unloaded lookup verified at `0a1e47d47001eab39274faf83f3af36419b04f2b` and accompanying changes.
 
 [FACT] In prose, a shared reference is `m:` plus exactly 22 base64url
 characters whose decoding is a server ID's 16 bytes in display order and
@@ -21,15 +22,22 @@ joined or deleted, else the ordinary typed join) and selects the message there.
 When a join is needed, the message travels with that join intent and is shown
 only by its own switch; a refused, uncertain, superseded or never-started join,
 a part, a new stream or a move elsewhere before confirmation drops it, so a
-later ordinary selection keeps that channel's reading position. Only channel views this client
-already shows are searched, so nothing outside existing membership and history
-becomes readable. Nothing matches by number, offset or prefix. Nothing is
-fetched or sent, and no join starts unless the holding channel was left. A
-target loaded nowhere keeps the position and says that it is not loaded in any
-open channel and that Page Up in its channel may load older history. A loaded
-target a [message filter](chat-filter.md) hides first shows all messages. A
-deleted channel's retained history still navigates, read-only.
+later ordinary selection keeps that channel's reading position. A loaded target
+a [message filter](chat-filter.md) hides first shows all messages. A deleted
+channel's retained history still navigates, read-only.
 [2](#source-2) [5](#source-5)
+
+[FACT] A click with no loaded match tries the current joined channel first,
+followed by the other channels joined at click time in catalog order. Each gets
+one serialized `AROUND msgid=… 1` query through the existing typed history
+stream. The first exact record from a completed, correlated batch opens a
+scrollable quote with its channel, author and time. The quote stays outside the
+transcript, so the source draft, scroll position, unread counts and Page Up
+cursor retain their meaning. Hover is local. Each channel must return a definite
+miss before the view reports absence in joined channels. Refusal, a mismatched
+ID or transport failure stops with an incomplete lookup. Switching or leaving
+the source channel or reconnecting discards the lookup's intent.
+[11](#source-11) [12](#source-12)
 
 [FACT] A marked reference whose exact ID is loaded in this channel view shows
 in its place as one dimmed span, `↗ author: snippet…` (name cut to 16 cells,
@@ -63,8 +71,8 @@ confirmed sends by the same `m:` references; `--reply`/`show` take them or a
 full server message ID and refuse local `@N`. Saved older records show the
 reference or `unavailable`; saved pending batches and `read --again` keep their
 bytes, so older numbers there stay plain text. Images built before this pin keep
-`@N`. The native codec, copy and loaded-channel-only navigation above are
-unchanged; arbitrary opaque IDs still have no copy or navigation action.
+`@N`. The native view's reference tokens use canonical IDs for copy and
+navigation.
 [7](#source-7) [8](#source-8)
 
 ## Sources
@@ -79,3 +87,5 @@ unchanged; arbitrary opaque IDs still have no copy or navigation action.
 8. <a id="source-8"></a> [Shared vectors](../../internal/chatui/testdata/message-references.json#L1-L53) — byte-identical copy of AIRC `tests/data/message-references.json` (SHA-256 `ee5a9cc849c6c3b1a603fdc6aa390500b987876da734f9e79876969e0f47a0ed`); this component checks the canonical entries, AIRC also the opaque ones.
 9. <a id="source-9"></a> [Previews](../../internal/chatui/preview.go#L19) — `previewLabel`, `previewLabelIn`, `loadedElsewhere`, `otherLoaded` (rebuild key in view.go), `previewKeys`, `substitute`, `refreshPreviews`; pure `ApplyReplacements`, `ReplacementBounds`, `ReplacementSourceMap` and `DisplayLine.CopyText` live in markdownview; transcript and selection remain chat-owned.
 10. <a id="source-10"></a> [Preview regressions](../../internal/chatui/preview_test.go#L1-L159) — span, copy, click, Quote, loaded-only, table cell, source view, budget, later targets, rename, wrapped atomic span and hover; spans in `quoteFixtures`.
+11. <a id="source-11"></a> [Unloaded reference search](../../internal/chatui/reference_lookup.go#L15) — `lookupReference`, `nextReference`, `referenceResult`, `referenceRows`; cross-channel and invalidation tests in reference_lookup_test.go.
+12. <a id="source-12"></a> [History lookup transport](../../internal/chatstream/channel_history.go#L57) — `wireRequest`, `finishHistory`, `historyRecord`; bounded batch controls in channel_lookup_test.go; chat_view.go maps the separate result.

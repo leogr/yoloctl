@@ -201,6 +201,9 @@ func (d *channelDriver) record(r record) error {
 	name := eventChannel(r)
 	channel := d.channels[name]
 	if channel == nil {
+		if h := d.history; h != nil && h.Lookup != "" && h.batch != "" && r.Tags["batch"] == h.batch {
+			return errors.New("history lookup child escaped its channel")
+		}
 		if d.selfPrefix(r.Prefix) && r.Command == "JOIN" {
 			return errors.New("client joined a channel outside the trusted catalog")
 		}
@@ -213,6 +216,10 @@ func (d *channelDriver) record(r record) error {
 		}
 		if owner != name || r.Command != "PRIVMSG" && r.Command != "NOTICE" {
 			return errors.New("history child escaped its channel/batch")
+		}
+		if h := d.history; h != nil && h.Lookup != "" && h.batch == batch &&
+			(len(r.Params) != 2 || !validReference(r.Tags["msgid"], 128)) {
+			return errors.New("AIRC history lookup returned a malformed message")
 		}
 	}
 	if err := d.membershipEvent(name, channel, r); err != nil {
@@ -233,12 +240,9 @@ func (d *channelDriver) record(r record) error {
 	if err := channel.adapter.record(r); err != nil {
 		return err
 	}
-	if batch := channel.adapter.batches[r.Tags["batch"]]; batch != nil && !batch.discard && d.history != nil {
-		limit := 50
-		if d.history.latest {
-			limit = 20
-		}
-		if batch.messages > limit {
+	batchID := r.Tags["batch"]
+	if batch := channel.adapter.batches[batchID]; batch != nil && !batch.discard && d.history != nil && d.history.batch == batchID {
+		if uint64(batch.messages) > d.history.wireRequest().Limit {
 			return errors.New("AIRC history exceeded its requested page bound")
 		}
 	}

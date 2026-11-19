@@ -14,6 +14,8 @@ type channelHistory struct {
 	latest bool
 	batch  string
 	until  time.Time
+	found  Message
+	wrong  bool
 }
 
 // emitLatest reports how a channel's initial LATEST page ended: Err is nil
@@ -23,24 +25,22 @@ func (d *channelDriver) emitLatest(channel, id string, err error) {
 }
 
 func (d *channelDriver) requestHistory(request HistoryRequest, latest bool) {
+	pending := &channelHistory{HistoryRequest: request, latest: latest}
 	channel := d.channels[request.Channel]
 	refused := func() {
-		err := errors.New("history request was not sent: membership, continuity or another page is pending")
-		if latest {
-			d.emitLatest(request.Channel, request.ID, err)
-			return
-		}
-		d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: err})
+		d.failHistory(pending, errors.New("history request was not sent: membership, continuity or another page is pending"))
 	}
 	if channel != nil && channel.deleted {
-		if latest {
-			d.emitLatest(request.Channel, request.ID, errChannelDeleted)
-		} else {
-			d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: errChannelDeleted})
-		}
+		d.failHistory(pending, errChannelDeleted)
 		return
 	}
-	if channel == nil || channel.membership != "joined" || d.historyLost || !validReference(request.ID, 80) || !latest && !validReference(request.Before, 128) || len(d.queue) >= managedchat.MaxChannels {
+	anchor := request.Before
+	if request.Lookup != "" && request.Before == "" {
+		anchor = request.Lookup
+	}
+	if channel == nil || channel.membership != "joined" || d.historyLost || !validReference(request.ID, 80) ||
+		(!latest && !validReference(anchor, 128)) || (request.Before != "" && request.Lookup != "") ||
+		len(d.queue) >= managedchat.MaxChannels {
 		refused()
 		return
 	}
@@ -54,7 +54,20 @@ func (d *channelDriver) requestHistory(request HistoryRequest, latest bool) {
 			return
 		}
 	}
-	d.queue = append(d.queue, &channelHistory{HistoryRequest: request, latest: latest})
+	d.queue = append(d.queue, pending)
+}
+
+func (h *channelHistory) wireRequest() Request {
+	r := Request{Op: "history", Channel: h.Channel}
+	switch {
+	case h.latest:
+		r.Direction, r.Reference, r.Limit = "LATEST", "*", 20
+	case h.Lookup != "":
+		r.Direction, r.Reference, r.Limit = "AROUND", "msgid="+h.Lookup, 1
+	default:
+		r.Direction, r.Reference, r.Limit = "BEFORE", "msgid="+h.Before, 50
+	}
+	return r
 }
 
 // advance runs one bounded setup/history request between event reads. WHO and
@@ -96,11 +109,7 @@ func (d *channelDriver) advance() error {
 		d.finishHistory(false, errors.New("channel left before history request"))
 		return nil
 	}
-	request := Request{Op: "history", Channel: history.Channel, Direction: "BEFORE", Reference: "msgid=" + history.Before, Limit: 50}
-	if history.latest {
-		request.Direction, request.Reference, request.Limit = "LATEST", "*", 20
-	}
-	reply, err := d.wire.exchange(request)
+	reply, err := d.wire.exchange(history.wireRequest())
 	if err != nil {
 		return err
 	}
@@ -109,7 +118,7 @@ func (d *channelDriver) advance() error {
 		return nil
 	}
 	channel.adapter.initialHistory = history.latest
-	if !history.latest {
+	if !history.latest && history.Lookup == "" {
 		channel.adapter.olderRequests = 1
 	}
 	return nil
@@ -119,24 +128,38 @@ func (d *channelDriver) initialHistory(channel string) {
 	d.requestHistory(HistoryRequest{ID: fmt.Sprintf("initial-%s-%d", channel, d.wire.serial), Channel: channel}, true)
 }
 
+func (d *channelDriver) failHistory(request *channelHistory, err error) {
+	if err == nil && (request.latest || request.Lookup != "") {
+		err = errors.New("history request ended without its batch; continuity is unknown")
+	}
+	switch {
+	case request.latest:
+		d.emitLatest(request.Channel, request.ID, err)
+	case request.Lookup != "":
+		d.emit(Event{Kind: "history-lookup", Channel: request.Channel, ID: request.ID, Err: err})
+	default:
+		d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: err})
+	}
+}
+
 func (d *channelDriver) finishHistory(success bool, err error) {
 	if d.history == nil {
 		return
 	}
 	request := d.history
 	switch {
-	case request.latest && success:
-		d.emitLatest(request.Channel, request.ID, nil)
-	case request.latest:
-		latestErr := err
-		if latestErr == nil {
-			latestErr = errors.New("history page ended without its batch; continuity is unknown")
-		}
-		d.emitLatest(request.Channel, request.ID, latestErr)
 	case !success:
-		d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: err})
+		d.failHistory(request, err)
+	case request.latest:
+		d.emitLatest(request.Channel, request.ID, nil)
+	case request.Lookup != "":
+		if request.wrong {
+			d.failHistory(request, errors.New("AIRC returned a different message ID"))
+		} else {
+			d.emit(Event{Kind: "history-lookup", Channel: request.Channel, ID: request.ID, Message: request.found})
+		}
 	}
-	if err != nil {
+	if err != nil && request.Lookup == "" {
 		d.emit(Event{Kind: "gap", Channel: request.Channel, Err: err})
 	}
 	if channel := d.channels[request.Channel]; channel != nil {
@@ -146,13 +169,13 @@ func (d *channelDriver) finishHistory(success bool, err error) {
 }
 
 func (d *channelDriver) historyGap(err error) {
-	d.finishHistory(false, nil)
+	if d.history != nil && d.history.Lookup != "" {
+		d.finishHistory(false, err)
+	} else {
+		d.finishHistory(false, nil)
+	}
 	for _, request := range d.queue {
-		if request.latest {
-			d.emitLatest(request.Channel, request.ID, err)
-		} else {
-			d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: err})
-		}
+		d.failHistory(request, err)
 	}
 	d.queue, d.historyLost = nil, true
 	for _, channel := range d.channels {
@@ -177,10 +200,8 @@ func (d *channelDriver) cancelChannelHistory(channel string) {
 		switch {
 		case request.Channel != channel:
 			kept = append(kept, request)
-		case request.latest:
-			d.emitLatest(channel, request.ID, errors.New("channel left before its history was read"))
 		default:
-			d.emit(Event{Kind: "history-page", Channel: channel, ID: request.ID, Count: -1})
+			d.failHistory(request, errors.New("channel left before its history was read"))
 		}
 	}
 	d.queue = kept
@@ -196,6 +217,15 @@ func (d *channelDriver) historyRecord(r record) (bool, error) {
 		}
 		if d.history == nil || r.Params[2] != d.history.Channel {
 			return true, errors.New("history failure targets another request/channel")
+		}
+		if d.history.Lookup != "" {
+			if d.history.batch != "" {
+				return true, errors.New("AIRC refused a history lookup inside its batch")
+			}
+			if r.Params[1] == "HISTORY_LOST" {
+				d.finishHistory(true, nil)
+				return true, nil
+			}
 		}
 		d.finishHistory(false, errors.New("AIRC refused that channel history request"))
 		return true, nil

@@ -75,7 +75,9 @@ enforces loaded ACLs; desired state is not applied authority. Read/quit take no
 controller lock. [10](#source-10) [11](#source-11) [18](#source-18)
 
 [FACT] `RunChannels` owns one JSONL v2 stream/cursor, one pending send/control
-slot and serialized history, preserving caller IDs/channels. Authentic self
+slot and serialized history, preserving caller IDs/channels. A reference
+lookup uses the same serialized history path with a one-record AROUND request
+and a separate completion outside transcript paging. Authentic self
 JOIN confirms membership then queues history. Topic queries require matching
 server/recipient/channel 366 within ten seconds. Late setup cannot clear
 quarantine or overwrite newer TOPIC. Set/clear requires exact self-prefix,
@@ -134,7 +136,7 @@ Separate opt-in tests against real AIRC binaries are summarized in
 13. <a id="source-13"></a> [Controls](../../internal/chatstream/channel_events.go#L30) — actions, membership and topic evidence.
 14. <a id="source-14"></a> [Refresh](../../internal/chatstream/channel_catalog.go#L95) — `receiveCatalog`, `refreshCatalog`.
 15. <a id="source-15"></a> [Stream regressions](../../internal/chatstream/channels_test.go#L46) — topic/control/history/ACL.
-16. <a id="source-16"></a> [History](../../internal/chatstream/channel_history.go#L19) — page queue/correlation.
+16. <a id="source-16"></a> [History](../../internal/chatstream/channel_history.go#L27) — page and reference lookup queue/correlation.
 17. <a id="source-17"></a> [Open-stream regression](../../internal/chatstream/channels_loop_test.go#L139) — identity refresh.
 18. <a id="source-18"></a> [Native snapshot](../../internal/managedchat/store.go#L61) — `ReadManifestSnapshot`, shared private manifest reader; mutation callers retain locks.
 19. <a id="source-19"></a> [Host shape regression](../../cmd/yoloctl/chat_catalog_refresh_test.go#L18) — actual builders, JSON and `RunChannels` for legacy/schema-2 catalog generations and a nickname preference saved after the stream connected.

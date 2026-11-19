@@ -208,6 +208,7 @@ func (m *Model) switchTo(name string) {
 		return
 	}
 	m.captureAnchor()
+	m.clearReference()
 	m.channelView, m.cur = v, v
 	m.linkEpoch++
 	m.drag, m.suggest, m.dismissed = dragState{}, nil, ""
@@ -373,9 +374,9 @@ const (
 	CodeACLDenied      = "acl-denied"
 )
 
-// HistoryRequest asks for the page of a channel before message Before.
+// HistoryRequest asks for an older page or one exact record in a channel.
 type HistoryRequest struct {
-	ID, Channel, Before string
+	ID, Channel, Before, Lookup string
 }
 
 func (m *Model) catalog(msg CatalogMsg) {
@@ -464,6 +465,9 @@ func (m *Model) deletedView(channel string) bool {
 // unless the user moved elsewhere meanwhile, and a refused join (reported
 // as left) is not a departure.
 func (m *Model) membershipChanged(msg MembershipMsg) {
+	if msg.Channel == m.name && msg.State != "joined" {
+		m.clearReference()
+	}
 	join := msg.ID != "" && msg.ID == m.joinSwitch.id
 	m.within(msg.Channel, func() {
 		if m.deleted {

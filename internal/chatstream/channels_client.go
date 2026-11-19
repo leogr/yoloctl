@@ -174,6 +174,14 @@ func (d *channelDriver) addChannel(name, membership string) {
 		}
 		if event.Kind == "message" {
 			event.Message.Channel = name
+			if h := d.history; h != nil && h.Lookup != "" && h.Channel == name && h.batch != "" && event.historyBatch == h.batch {
+				if event.Message.ID == h.Lookup {
+					h.found = event.Message
+				} else {
+					h.wrong = true
+				}
+				return
+			}
 		}
 		if event.Kind == "history-page" && d.history != nil && d.history.Channel == name {
 			event.ID = d.history.ID
@@ -264,12 +272,8 @@ func (d *channelDriver) endPending(err error) {
 		d.finishControl("uncertain", err)
 	}
 	for _, request := range append([]*channelHistory{d.history}, d.queue...) {
-		switch {
-		case request == nil:
-		case request.latest:
-			d.emitLatest(request.Channel, request.ID, err)
-		default:
-			d.emit(Event{Kind: "history-page", Channel: request.Channel, ID: request.ID, Count: -1, Err: err})
+		if request != nil {
+			d.failHistory(request, err)
 		}
 	}
 }

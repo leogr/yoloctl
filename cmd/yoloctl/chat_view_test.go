@@ -195,6 +195,29 @@ func TestChannelEventsKeepTheirChannel(t *testing.T) {
 	}
 }
 
+func TestReferenceLookupKeepsItsRequestOnTheCapturedLink(t *testing.T) {
+	link := &chatLink{older: make(chan chatstream.HistoryRequest, 1)}
+	s := &chatSession{link: link}
+	request := chatui.HistoryRequest{ID: "lookup", Channel: "#space", Lookup: "target"}
+	if msg := s.loadHistory(request)(); msg != nil {
+		t.Fatalf("queue: %#v", msg)
+	}
+	if got := <-link.older; got.ID != request.ID || got.Channel != request.Channel || got.Lookup != request.Lookup || got.Before != "" {
+		t.Fatalf("changed lookup request: %+v", got)
+	}
+	stale := s.loadHistory(request)
+	link.close()
+	s.link = &chatLink{older: make(chan chatstream.HistoryRequest, 1)}
+	if msg := stale(); msg == nil {
+		t.Fatal("a command on a closed link did not settle")
+	} else if result, ok := msg.(chatui.ReferenceLookupMsg); !ok || result.ID != request.ID || result.Channel != request.Channel || result.Err == nil {
+		t.Fatalf("closed lookup: %#v", msg)
+	}
+	if len(s.link.older) != 0 {
+		t.Fatal("old lookup moved to the replacement link")
+	}
+}
+
 // Requests the ended stream never read come back as not sent, so a queued
 // message is rejected (draft kept) instead of staying uncertain forever.
 func TestEndedStreamReportsUnreadRequestsAsNotSent(t *testing.T) {

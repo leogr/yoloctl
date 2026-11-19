@@ -90,7 +90,7 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 	} else {
 		previews.configure(s, &opts)
 	}
-	opts.LoadOlder = s.loadOlder
+	opts.LoadOlder, opts.LookupReference = s.loadHistory, s.loadHistory
 	opts.Send = s.send
 	opts.Copy = func(text string) tea.Cmd {
 		sequence, notice := termio.EvaluateOSC52(termio.OSC52{Selection: "c", Payload: base64.StdEncoding.EncodeToString([]byte(text))}, prefs.ClipboardEnabled())
@@ -405,7 +405,7 @@ func (l *chatLink) unread() []tea.Msg {
 		case a := <-l.actions:
 			out = append(out, chatui.ControlMsg{ID: a.ID, Channel: a.Channel, Kind: a.Kind, State: "refused", Err: errors.New("the connection ended before this action was sent")})
 		case r := <-l.older:
-			out = append(out, chatui.HistoryPageMsg{Channel: r.Channel, ID: r.ID, Count: -1})
+			out = append(out, chatHistoryUnsent(r, errors.New("the connection ended before this history request was sent")))
 		default:
 			return out
 		}
@@ -634,14 +634,30 @@ func (s *chatSession) refreshLoop() {
 	}
 }
 
-func (s *chatSession) loadOlder(r chatui.HistoryRequest) tea.Cmd {
+func (s *chatSession) loadHistory(r chatui.HistoryRequest) tea.Cmd {
 	l := s.current()
+	request := chatstream.HistoryRequest{ID: r.ID, Channel: r.Channel, Before: r.Before, Lookup: r.Lookup}
 	return func() tea.Msg {
-		if queued, _ := admit(l, l.older, chatstream.HistoryRequest{ID: r.ID, Channel: r.Channel, Before: r.Before}); queued {
-			return nil
+		if l == nil {
+			return chatHistoryUnsent(request, errors.New("no chat connection is available"))
 		}
-		return chatui.HistoryPageMsg{Channel: r.Channel, ID: r.ID, Count: -1}
+		queued, closed := admit(l, l.older, request)
+		switch {
+		case queued:
+			return nil
+		case closed:
+			return chatHistoryUnsent(request, errors.New("the connection ended before this history request was queued"))
+		default:
+			return chatHistoryUnsent(request, errors.New("another history request is queued"))
+		}
 	}
+}
+
+func chatHistoryUnsent(r chatstream.HistoryRequest, err error) tea.Msg {
+	if r.Lookup != "" {
+		return chatui.ReferenceLookupMsg{Channel: r.Channel, ID: r.ID, Err: err}
+	}
+	return chatui.HistoryPageMsg{Channel: r.Channel, ID: r.ID, Count: -1}
 }
 
 func (s *chatSession) send(out chatui.Outgoing) tea.Cmd {
@@ -823,7 +839,7 @@ func configureChatBrowser(ctx context.Context, opts *chatui.Options, policy stri
 // viewEvent fences connection-scoped availability independently of channel
 // catalogs; a delayed ended-link observation cannot update its replacement.
 func (s *chatSession) viewEvent(link *chatLink, e chatstream.Event) tea.Msg {
-	if e.Kind == "availability" && s.current() != link {
+	if (e.Kind == "availability" || e.Kind == "history-lookup") && s.current() != link {
 		return nil
 	}
 	return chatViewEvent(e)
@@ -862,6 +878,11 @@ func chatViewEvent(e chatstream.Event) tea.Msg {
 		return chatui.ControlMsg{ID: e.ID, Channel: e.Channel, Kind: e.Action, State: e.State, Code: e.Code, Err: e.Err}
 	case "history-page":
 		return chatui.HistoryPageMsg{Channel: e.Channel, ID: e.ID, Count: e.Count}
+	case "history-lookup":
+		m := e.Message
+		return chatui.ReferenceLookupMsg{Channel: e.Channel, ID: e.ID, Err: e.Err, Message: chatui.Message{
+			ID: m.ID, Channel: m.Channel, Account: m.Account, Nick: m.Nick, Text: m.Text, Time: m.Time,
+		}}
 	case "delivery":
 		d := chatui.DeliveryMsg{ID: e.ID, MessageID: e.MessageID, Channel: e.Channel, State: chatui.Delivery(e.State), Err: e.Err}
 		if r := e.Refusal; r != nil {

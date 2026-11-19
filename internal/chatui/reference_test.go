@@ -272,12 +272,12 @@ func TestMessageReferencesNavigateToLoadedMessages(t *testing.T) {
 	scroll := m.scroll
 	clickCell(m, missing[0])
 	m.View()
-	if !m.picked || m.selected != 0 || m.follow || m.scroll != scroll || !strings.Contains(m.notice, "not loaded in any open channel; Page Up") {
+	if !m.picked || m.selected != 0 || m.follow || m.scroll != scroll || !strings.Contains(m.notice, "history lookup requires") {
 		t.Fatalf("a missing target moved the view: selected=%d scroll=%d/%d notice=%q", m.selected, m.scroll, scroll, m.notice)
 	}
 }
 
-// Reply labels share the same exact, loaded-only navigation.
+// Reply labels share exact navigation and report when lookup is unavailable.
 func TestReplyLabelsStillNavigate(t *testing.T) {
 	m, _ := readyModel()
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})

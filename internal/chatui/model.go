@@ -214,6 +214,8 @@ type Options struct {
 	// LoadOlder requests the page of a channel before its oldest message ID;
 	// the caller answers with older IncomingMsgs and one HistoryPageMsg.
 	LoadOlder func(HistoryRequest) tea.Cmd
+	// LookupReference asks the same stream for one exact retained record.
+	LookupReference func(HistoryRequest) tea.Cmd
 	// Control runs one channel or connection-availability action and answers with
 	// ControlMsg; membership and topic changes arrive as their own messages.
 	Control func(Action) tea.Cmd
@@ -290,6 +292,7 @@ type Model struct {
 	catalogUnobserved bool
 	catalogInfo       map[string]ChannelInfo
 	pending           *pendingAction
+	reference         *referenceLookup
 	lastRefresh       time.Time
 	opts              Options
 	// previewCap is the host's image capability; preview is the pane's one
@@ -562,6 +565,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.refreshForUnknown(accounts...)
 	case HistoryPageMsg:
 		m.within(msg.Channel, func() { m.historyPage(msg) })
+	case ReferenceLookupMsg:
+		return m, m.referenceResult(msg)
 	case IncomingMsg:
 		if m.deletedView(msg.Message.Channel) {
 			break
@@ -634,6 +639,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.touch()
 		})
 	case SessionMsg:
+		m.clearReference()
 		m.opts.Nick = msg.Nick
 		if msg.Identities != nil {
 			m.opts.Identities = msg.Identities
@@ -709,6 +715,7 @@ func (m *Model) runPending(cmd tea.Cmd) tea.Cmd {
 
 func (m *Model) connection(msg ConnectionMsg) {
 	m.captureAnchor()
+	m.clearReference()
 	m.connected = msg.Connected
 	m.ownState, m.ownReason = "unknown", ""
 	if msg.Connected {

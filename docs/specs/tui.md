@@ -188,9 +188,9 @@ The card's State row shows the agent's reported state, or the box's activity
 when it reported none; the panel tags a name only for a wait or an API error
 (`⏳ needs permission`, `⚠ API error`) [31](#source-31). Copy reference puts a message's shared `m:`
 reference on the clipboard; a click on one, or on `msgid:` and the full ID,
-shows that message when it is loaded in an open channel (switching to that channel
-the way selecting it does), and an `@N`
-number is plain text, never followed [24](#source-24). A reference to a message
+shows a loaded message (switching channels when needed). For an unloaded
+message it searches the joined channels and opens a read-only quote if found.
+An `@N` number is plain text [24](#source-24). A reference to a message
 loaded in the same channel shows in its place as `↗ author: text…` (from another
 open channel `↗ #channel · author: text…`), still
 copied and quoted as the reference [24](#source-24). Mentions resolve by account: suggestions insert a

@@ -355,18 +355,17 @@ func (m *Model) activate(act action) tea.Cmd {
 	return nil
 }
 
-// showMessage selects the message with this exact server ID among those
-// loaded in this channel, as reply labels and references name it.
-// Nothing is fetched or guessed: a missing target keeps the position. A
-// loaded target a filter hides first brings back all messages.
+// showMessage navigates to a loaded message or looks up its exact ID.
 func (m *Model) showMessage(id string) tea.Cmd {
 	if m.selectLoaded(id) {
+		m.clearReference()
 		return nil
 	}
 	// A message loaded in another open channel: select that channel the
 	// way a person does (joined: at once; otherwise through the ordinary
 	// typed join path, showing the message once the join switches to it).
 	if name, ok := m.channelHolding(id); ok {
+		m.clearReference()
 		cmd := m.selectChannel(name)
 		switch {
 		case m.name == name:
@@ -379,8 +378,7 @@ func (m *Model) showMessage(id string) tea.Cmd {
 		}
 		return cmd
 	}
-	m.say(levelInfo, "That message is not loaded in any open channel; Page Up in its channel may load older history")
-	return nil
+	return m.lookupReference(id)
 }
 
 // selectLoaded selects message id when it is loaded in the visible channel.

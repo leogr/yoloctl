@@ -57,7 +57,7 @@ lookup runs at a time and stale answers open nothing; the host bounds
 `chat.attach-target` ([lock-free](chat-settings.md), member ID only) to 10 s and
 refuses it after a membership change. A running match attaches, a stopped one
 asks first, a deleted, replaced or revoked member explains itself. Mentions open
-only the card of the account they name ([identities](chat-filter.md)); shared `m:` or `msgid:` references and reply labels select loaded messages
+only the card of the account they name ([identities](chat-filter.md)); shared `m:` or `msgid:` references and reply labels select loaded messages or look up an unloaded one
 ([references](chat-references.md)). Attachment carries room, member and box IDs. Native `chat` tabs may send the TUI only complete guarded requests
 (32-hex identities, valid names), `space view` tabs only plain ones; tabs are
 reused only for identical guarded argv. A plain terminal runs the same guarded

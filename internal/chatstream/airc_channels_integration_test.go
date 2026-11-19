@@ -294,6 +294,34 @@ func (h *channelStream) deliver(t *testing.T, channel, text string) Event {
 	}
 }
 
+func TestRealAIRCReferenceHistoryLookup(t *testing.T) {
+	f := newRealChannelFixture(t)
+	h := f.human()
+	h.next(t, "initial #space history", func(e Event) bool { return e.Channel == "#space" && e.Kind == "history-latest" && e.Err == nil })
+	if e := h.act(t, "join", "#build", nil); e.State != "confirmed" {
+		t.Fatalf("join: %+v", e)
+	}
+	h.next(t, "initial #build history", func(e Event) bool { return e.Channel == "#build" && e.Kind == "history-latest" && e.Err == nil })
+	sent := h.deliver(t, "#space", "one retained record")
+	if sent.State != "confirmed" || sent.MessageID == "" {
+		t.Fatalf("send: %+v", sent)
+	}
+	h.next(t, "original live message", func(e Event) bool { return e.Kind == "message" && e.Message.ID == sent.MessageID })
+	for i, name := range []string{"#build", "#space"} {
+		h.older <- HistoryRequest{ID: fmt.Sprintf("ref-%d", i), Channel: name, Lookup: sent.MessageID}
+		e := h.next(t, "lookup result", func(e Event) bool {
+			if e.Kind == "history-page" || (e.Kind == "message" && e.Message.ID == sent.MessageID) {
+				t.Fatal("lookup entered the transcript or page stream")
+			}
+			return e.Kind == "history-lookup"
+		})
+		if e.Err != nil || e.Channel != name || (name == "#space" && (e.Message.ID != sent.MessageID || e.Message.Text != "one retained record")) ||
+			(name == "#build" && e.Message.ID != "") {
+			t.Fatalf("lookup in %s: %+v", name, e)
+		}
+	}
+}
+
 func TestRealAIRCRunChannelsTopicHistoryAndACLRemoval(t *testing.T) {
 	f := newRealChannelFixture(t)
 	p := f.peer("#space", "#build")

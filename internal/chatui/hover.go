@@ -229,7 +229,7 @@ func (m *Model) hoverHint() []run {
 		case actReply:
 			name, what = "Reply", "click to show the original message"
 		case actRef:
-			name, what = "Reference", "click to show it if it is loaded in an open channel"
+			name, what = "Reference", "click to show it or look it up in joined channels"
 		case actFilter:
 			name, what = "All messages", "click to show every message again"
 		case actCopyCode:

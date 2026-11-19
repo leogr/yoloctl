@@ -51,6 +51,7 @@ type Member struct {
 }
 
 type Event struct {
+	historyBatch         string      // the logical message's chathistory batch, if any
 	CatalogRead          CatalogRead `json:"-"`
 	Channel              string
 	Action               string
@@ -763,7 +764,7 @@ func (d *driver) record(r record) error {
 				break
 			}
 		}
-		d.emit(Event{Kind: "message", Message: m})
+		d.emit(Event{Kind: "message", Message: m, historyBatch: batchID})
 	case "ERROR":
 		return errors.New("AIRC server closed this membership; reconnect only after inspecting state")
 	case "FAIL":
