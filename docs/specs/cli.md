@@ -140,8 +140,11 @@ used; it has no activity fallback. [16](#source-16)
 
 [FACT] Host-only `follow PATH` watches a file inside the selected running VM's
 current grants, with guest-side completion and no automatic boot. Relative paths
-use the space default workdir. Explicit `--host` instead reads an ordinarily
-readable host file and cannot combine with `--space`. `--format auto|text|markdown`
+use the space default workdir. Shell and palette completion offer relative
+children of that workdir and absolute grant roots. Type a dot at the start
+of a component to complete hidden names. A literal `~name` is workdir-relative.
+The forms `~` and `~/...` expand to the host user's home.
+Explicit `--host` reads an ordinarily readable host file and cannot combine with `--space`. `--format auto|text|markdown`
 selects rendering; auto recognizes Markdown extensions. Whole documents through
 2 MiB render completely; larger files use a browsable 1 MiB plain window.
 [25](#source-25)

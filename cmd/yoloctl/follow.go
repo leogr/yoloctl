@@ -73,8 +73,9 @@ func newFollowCmd() *cobra.Command {
 	var format string
 	var linkRoot, navigationRoot string
 	cmd := &cobra.Command{Use: "follow PATH", Short: "Watch a granted file in a live text or Markdown view", Long: `Read a file inside the selected running VM, below its current space grants.
-Relative paths use the space's default workdir. No VM is started and grants
-are never changed. Symlink components in VM paths are refused: use a direct
+Relative paths use the space's default workdir. Completion offers relative
+paths there and absolute grant roots. No VM is started and grants are never
+changed. Symlink components in VM paths are refused: use a direct
 path inside a grant. --host explicitly reads a host file instead, relative
 to the launch directory, without contacting a VM; it cannot use --space.
 
@@ -144,10 +145,10 @@ Fragments open the file only. A failed read marks the last display stale.
 			// The same pinned default workdir also supplies the title base for
 			// absolute paths; it never changes the path used by the reader.
 			ctx, cancel := context.WithTimeout(cmd.Context(), 7*time.Second)
-			workdir, err = followDefault(ctx, space)
+			workdir, err = resolveFollowWorkdir(ctx, space)
 			cancel()
 			if err != nil {
-				if !filepath.IsAbs(args[0]) && !strings.HasPrefix(args[0], "~") {
+				if followRelativePath(args[0]) {
 					return err
 				}
 				// Absolute/home targets do not need settings to resolve; retain
@@ -248,8 +249,23 @@ Fragments open the file only. A failed read marks the last display stale.
 	cmd.ValidArgsFunction = completeFollowPaths
 	return cmd
 }
+func resolveFollowWorkdir(ctx context.Context, space string) (string, error) {
+	workdir, err := followDefault(ctx, space)
+	if err != nil {
+		return "", err
+	}
+	if !filepath.IsAbs(workdir) {
+		return "", fmt.Errorf("space %s has no absolute default workdir", space)
+	}
+	return workdir, nil
+}
+
+func followRelativePath(value string) bool {
+	return !filepath.IsAbs(value) && value != "~" && !strings.HasPrefix(value, "~/")
+}
+
 func absoluteFollowPath(value, base string) (string, error) {
-	if !filepath.IsAbs(value) && !strings.HasPrefix(value, "~") && base != "" {
+	if followRelativePath(value) && base != "" {
 		value = filepath.Join(base, value)
 	}
 	return expandUserPath(value)
@@ -295,53 +311,57 @@ func completeFollowPaths(cmd *cobra.Command, args []string, token string) ([]cob
 	ctx, cancel := context.WithTimeout(cmd.Context(), 2*time.Second)
 	defer cancel()
 	roots, err := followGrants(ctx, space)
-	if err != nil {
+	if err != nil || len(roots) == 0 {
 		return nil, directive
 	}
-	var out []cobra.Completion
+	var grantCandidates []cobra.Completion
 	selectedRoot := false
 	for _, root := range roots {
 		candidate := strings.TrimRight(root, string(filepath.Separator)) + string(filepath.Separator)
 		if candidate == token {
 			selectedRoot = true
 		} else if strings.HasPrefix(candidate, token) {
-			out = append(out, cobra.CompletionWithDesc(candidate, "space grant"))
+			grantCandidates = append(grantCandidates, cobra.CompletionWithDesc(candidate, "space grant"))
 		}
-	}
-	if !selectedRoot && (token == "" || len(out) > 0) {
-		sort.Strings(out)
-		return out, directive | cobra.ShellCompDirectiveNoSpace
 	}
 	// A fully selected grant is a directory to list, including when another
 	// grant is nested below it. Prefix suggestions must not intercept it.
-	out = nil
+	if selectedRoot {
+		grantCandidates = nil
+	}
+	if len(grantCandidates) > 0 {
+		sort.Strings(grantCandidates)
+		directive |= cobra.ShellCompDirectiveNoSpace
+		if token != "" {
+			return grantCandidates, directive
+		}
+	}
 	literalParent, base := splitCompletionToken(token)
 	lookup := literalParent
 	if lookup == "" {
 		lookup = "."
 	}
 	workdir := ""
-	if !filepath.IsAbs(lookup) && !strings.HasPrefix(lookup, "~") {
-		workdir, err = followDefault(ctx, space)
+	if followRelativePath(lookup) {
+		workdir, err = resolveFollowWorkdir(ctx, space)
 		if err != nil {
-			return nil, directive
+			return grantCandidates, directive
 		}
 	}
 	path, err := absoluteFollowPath(lookup, workdir)
 	if err != nil {
-		return nil, directive
+		return grantCandidates, directive
 	}
 	entries, err := followVMReader(space, path).List(ctx, path, base)
 	if err != nil {
-		return nil, directive
+		return grantCandidates, directive
 	}
-	sawDir := false
+	out := make([]cobra.Completion, 0, len(entries)+len(grantCandidates))
 	for _, entry := range entries {
 		out = append(out, literalParent+entry)
-		sawDir = sawDir || strings.HasSuffix(entry, "/")
+		if strings.HasSuffix(entry, "/") {
+			directive |= cobra.ShellCompDirectiveNoSpace
+		}
 	}
-	if sawDir {
-		directive |= cobra.ShellCompDirectiveNoSpace
-	}
-	return out, directive
+	return append(out, grantCandidates...), directive
 }

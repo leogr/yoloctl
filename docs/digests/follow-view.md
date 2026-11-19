@@ -1,11 +1,12 @@
 # Live file view
 
-Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; header-free layout re-read at `e46f7d4ced29695669ca5c30544a53752557c872` and accompanying changes. Navigation symbols re-read at `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes. Viewport restoration verified at `1faf621b2de05046711d5177863d326146cf122b` and accompanying changes.
+Verification: `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; header-free layout re-read at `e46f7d4ced29695669ca5c30544a53752557c872` and accompanying changes. Navigation symbols re-read at `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes. Viewport restoration verified at `1faf621b2de05046711d5177863d326146cf122b` and accompanying changes. Workdir-relative completion checked at `1faf621b2de05046711d5177863d326146cf122b` and accompanying changes.
 
 [FACT] Host-only `yoloctl follow PATH [--space SPACE] [--format auto|text|markdown]`
 opens one live pane. Default mode pins the selected space and absolute VM path;
-relative paths use its controller-owned DefaultWorkdir. Each read or completion
-rechecks the running VM and current bootstrap grants. It never boots a VM,
+relative paths use its controller-owned DefaultWorkdir. A literal `~name` is
+workdir-relative. The forms `~` and `~/...` expand to the host user's home.
+Each read or completion rechecks the running VM and current bootstrap grants. It never boots a VM,
 changes mounts, updates a controller or falls back to host reads. `--host`
 explicitly reads an ordinarily readable host regular file, relative to launch
 cwd, without a VM; it rejects an explicit `--space`. In-box and operator
@@ -26,11 +27,14 @@ handles walk the grant and selected path with no-follow opens; every symlink
 component and nonregular leaf is refused. Linux ancestors use search-only
 handles, while listing opens only the selected directory for reading. A refusal
 suggests a direct path within a current grant. Host mode uses ordinary symlink
-semantics but refuses nonregular files. VM completion offers grant roots and
-up to 512 guest directory entries, with a short timeout and `NoFileComp` on
-success or error; selecting a complete grant root lists its guest children.
-It never substitutes host enumeration. Explicit host mode
-uses host completion. [1](#source-1) [2](#source-2) [3](#source-3)
+semantics but refuses nonregular files. VM completion with an empty token offers children of the space default
+workdir as relative paths, followed by the absolute grant roots. Typed
+relative prefixes keep their spelling, and a leading dot in the current
+component reveals hidden names. Selecting an absolute grant root lists
+its guest children. Completion uses up to 512 guest directory entries, a
+short timeout and `NoFileComp` on success or error. If workdir settings or
+listing are unavailable, empty-token completion can still show the known
+grant roots. Only explicit host mode uses host enumeration. [1](#source-1) [2](#source-2) [3](#source-3)
 
 [FACT] Files through 2 MiB are read completely. Above that, only one active
 1 MiB window is kept and shown as plain text, even for forced Markdown; the
@@ -93,7 +97,7 @@ and light themes. [7](#source-7) [8](#source-8)
 
 ## Sources
 
-1. <a id="source-1"></a> [CLI and completion](../../cmd/yoloctl/follow.go#L71) — `newFollowCmd`, `absoluteFollowPath`, `currentFollowGrants`, `completeFollowPaths`.
+1. <a id="source-1"></a> [CLI and completion](../../cmd/yoloctl/follow.go#L71) — `newFollowCmd`, `absoluteFollowPath`, `currentFollowGrants`, `completeFollowPaths`. `TestFollowCompletionOpensWorkdirRelativePath` in cmd/yoloctl/follow_test.go covers the Cobra reply and opening its relative result.
 2. <a id="source-2"></a> [Sources and transport](../../internal/followview/source.go#L26) — limits, `HostReader.Read`, `VMReader.Read`, `VMReader.call`, `Within`.
 3. <a id="source-3"></a> [VM descriptor reader](../../internal/followview/reader.py#L15) — `open_directory`, `open_selected`, `read`, `listing`.
 4. <a id="source-4"></a> [View and job ownership](../../internal/followview/model.go#L95) — `renderFile`, `jobs`, `Model.Update`, `scroll`, `sameTopRow`, `captureAnchor`, `placeAnchor`, `View`, `Run`. Wheel and reflow regressions in `internal/followview/wheel_test.go`.
