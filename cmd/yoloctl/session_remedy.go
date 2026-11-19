@@ -130,10 +130,20 @@ type boxDriftView struct {
 	Error      string              `json:"error,omitempty"`
 	// LegacyRuntime: the box runs the pre-native runtime. Its restart stops
 	// it and refuses with the recreation remedy; it is never set aside.
-	LegacyRuntime bool `json:"legacy_runtime,omitempty"`
+	LegacyRuntime bool           `json:"legacy_runtime,omitempty"`
+	Upgrade       *upgradeTarget `json:"upgrade,omitempty"`
 }
 
 func collectBoxDrift(ctx context.Context, space string, names []string) ([]boxDriftView, error) {
+	return collectBoxDriftView(ctx, space, names, false)
+}
+
+func collectBoxDriftView(ctx context.Context, space string, names []string, upgrade bool) ([]boxDriftView, error) {
+	if upgrade {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, staleSessionInspectTimeout)
+		defer cancel()
+	}
 	if len(names) == 0 || len(names) > maxDriftBoxes {
 		return nil, fmt.Errorf("box.drift takes 1 to %d boxes", maxDriftBoxes)
 	}
@@ -157,9 +167,19 @@ func collectBoxDrift(ctx context.Context, space string, names []string) ([]boxDr
 		case i < len(boxes) && boxes[i].Name == name:
 			view[i].Drift, view[i].Reasons, view[i].DriftError = boxes[i].Drift, boxes[i].Reasons, boxes[i].DriftError
 			view[i].LegacyRuntime = boxes[i].LegacyRuntime
+			if b := boxes[i]; upgrade && b.Declaration == boxstate.DeclarationDeclared && (b.Runtime == boxstate.RuntimeRunning || b.Runtime == boxstate.RuntimeStopped) {
+				var targetErr error
+				view[i].Upgrade, targetErr = readUpgradeTarget(ctx, b)
+				if targetErr != nil {
+					view[i].Error = targetErr.Error()
+				}
+			}
 		default:
 			view[i].Error = "not resolved"
 		}
+	}
+	if upgrade && ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 	return view, nil
 }

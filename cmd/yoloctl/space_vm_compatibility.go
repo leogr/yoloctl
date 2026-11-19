@@ -66,22 +66,29 @@ func checkRunningSpaceVMCompatibility(ctx context.Context, boot *spaceconfig.Boo
 // The original box request has not been sent. Only a typed, read-only VM
 // mismatch can offer recreation; lost replies and arbitrary errors never retry.
 func ensureCommandVMCompatibility(cmd *cobra.Command, space string) error {
+	_, err := prepareCommandVMCompatibility(cmd, space)
+	return err
+}
+
+// prepareCommandVMCompatibility reports whether the approved repair already
+// deployed this build, so upgrade can continue without selecting it again.
+func prepareCommandVMCompatibility(cmd *cobra.Command, space string) (bool, error) {
 	boot, err := spaceconfig.LoadBootstrap(space)
 	if err != nil {
-		return err
+		return false, err
 	}
 	err = checkCommandVMCompatibility(cmd.Context(), boot)
 	if err == nil {
-		return nil
+		return false, nil
 	}
 	if err = offerSpaceVMRecreate(cmd, boot, err); err != nil {
-		return err
+		return false, err
 	}
 	current, err := spaceconfig.LoadBootstrap(space)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return checkCommandVMCompatibility(cmd.Context(), current) // one attempt, never a prompt loop
+	return true, checkCommandVMCompatibility(cmd.Context(), current) // one attempt, never a prompt loop
 }
 
 func offerSpaceVMRecreate(cmd *cobra.Command, boot *spaceconfig.Bootstrap, cause error) error {

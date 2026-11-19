@@ -108,6 +108,9 @@ func (a managedApplier) Recreate(ctx context.Context, c *agentbox.Config, policy
 			details, missing = nil, true
 		}
 	}
+	if err := checkUpgradeRecreateTarget(ctx, details); err != nil {
+		return err
+	}
 	if err := guardPrivilegedLaunch(ctx, c, launchRecreate, details, nil); err != nil {
 		return err
 	}

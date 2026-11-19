@@ -2601,6 +2601,10 @@ base, run ` + "`yoloctl image refresh`" + ` and then
 	// replacement started stops that exact run. It grants nothing.
 	cmd.Flags().Bool(legacyRemedyFlag, false, "Stop the exact replacement this recreate started if a later step fails (pre-native remedy)")
 	_ = cmd.Flags().MarkHidden(legacyRemedyFlag)
+	cmd.Flags().String(upgradeRecreateFlag, "", "Replace only the exact host-approved upgrade target")
+	cmd.Flags().Bool(startWorkloadFlag, false, "Restore the host-approved upgrade workload after replacement")
+	_ = cmd.Flags().MarkHidden(upgradeRecreateFlag)
+	_ = cmd.Flags().MarkHidden(startWorkloadFlag)
 	return cmd
 }
 
@@ -2622,6 +2626,28 @@ func recreateAgentbox(cmd *cobra.Command, spaceName, name string, force, noAutou
 	cfg, err := agentbox.Load(spaceName, name)
 	if err != nil {
 		return fmt.Errorf("load box manifest: %w", err)
+	}
+
+	binding, guarded, err := readUpgradeRecreateBinding(cmd, cfg, force, noAttach)
+	if err != nil {
+		return err
+	}
+	restoreWorkload, _ := cmd.Flags().GetBool(startWorkloadFlag)
+	if restoreWorkload {
+		if !guarded || binding.Room != "" {
+			return asUserError(errors.New("restoring a recreated workload requires a host upgrade target"))
+		}
+		if err := restartableWorkload(cfg, spaceName); err != nil {
+			return err
+		}
+	}
+	if guarded {
+		ctx := context.WithValue(cmd.Context(), upgradeRecreateKey{}, binding.Target)
+		if binding.Target.Running {
+			ctx = container.WithExpectedRuns(ctx)
+			container.ExpectedRunsFrom(ctx).Expect(name, binding.Target.Run)
+		}
+		cmd.SetContext(ctx)
 	}
 
 	if err := agentbox.ValidateCacheDeclaration(cfg); err != nil {
@@ -2685,6 +2711,9 @@ func recreateAgentbox(cmd *cobra.Command, spaceName, name string, force, noAutou
 			if err := autoupdateAgentboxIfNeeded(ctx, c, name, cfg.Agent, errw, updated); err != nil {
 				return fmt.Errorf("autoupdate %s: %w", name, err)
 			}
+		}
+		if restoreWorkload {
+			return startRestartedWorkload(ctx, c, spaceName, name, errw)
 		}
 		return nil
 	}

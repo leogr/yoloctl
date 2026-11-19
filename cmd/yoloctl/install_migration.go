@@ -110,11 +110,11 @@ func installSpaceAdvice(ctx context.Context, target string) []spaceAdvice {
 		}
 		if snapshot.Bundle != target {
 			a.Header = "uses another controller build"
-			note := "when convenient; a controller-only update keeps agents running, and it asks separately about any required recreate or session restart; box commands need this update"
+			note := "restarts eligible stale sessions and asks before replacing any container"
 			if snapshot.State == "Stopped" {
-				note = "this starts the VM; box commands need this update"
+				note = "starts the VM and asks before replacing any container"
 			}
-			a.Items = append(a.Items, adviceItem{Label: "update", Args: []string{"space", "start", name, "--update-controller"}, Note: note})
+			a.Items = append(a.Items, adviceItem{Label: "update", Args: []string{"space", "upgrade", name}, Note: note})
 		}
 		if boot.VM.Backend == "firecracker" {
 			expected, err := defaultInstallImage()

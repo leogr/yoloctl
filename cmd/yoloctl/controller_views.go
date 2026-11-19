@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
@@ -276,7 +277,15 @@ func runControllerView(ctx context.Context, req controller.Request, out io.Write
 	case spaceStorageMethod:
 		return true, runSpaceStorageView(ctx, req.Space, out)
 	case boxDriftMethod:
-		view, err := collectBoxDrift(ctx, req.Space, req.Args)
+		var view []boxDriftView
+		var err error
+		if len(req.Flags) == 0 {
+			view, err = collectBoxDrift(ctx, req.Space, req.Args)
+		} else if len(req.Flags) == 1 && slices.Equal(req.Flags[upgradeDriftFlag], []string{"true"}) {
+			view, err = collectBoxDriftView(ctx, req.Space, req.Args, true)
+		} else {
+			return true, errors.New("invalid box drift view flags")
+		}
 		if err != nil {
 			return true, err
 		}

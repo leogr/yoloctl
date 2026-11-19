@@ -33,6 +33,7 @@ or session history. Repository working rules are in [AGENTS.md](../AGENTS.md).
 | How are unused images/cache collected, and why can cleanup or a low-disk build stop? | [Lifecycle](specs/lifecycle.md) | [Storage cleanup](digests/storage-gc.md), [disk reserve notices](digests/disk-reserve-warning.md), [per-box caches](digests/box-caches.md) |
 | Why can a Firecracker VM pause while its guest disk still has space? | [Lifecycle](specs/lifecycle.md) | [Host backing storage](digests/host-storage.md) |
 | Why can a box not be attached after a controller update, and how are its sessions restarted or recreated? | [Lifecycle](specs/lifecycle.md) | [Sessions after a controller update](digests/controller-update-sessions.md), [remedies for sessions of another build](digests/session-remedies.md) |
+| How does a host update a space and approve the box changes it needs? | [CLI](specs/cli.md), [Lifecycle](specs/lifecycle.md) | [Space upgrade](digests/space-upgrade.md) |
 | How does Firecracker forward ports, and which images preserve TCP half-close replies? | [Model](specs/model.md) | [Port forwarding](digests/vm-ports.md) |
 | How are VM memory and CPUs chosen, and how can a stopped space's RAM/CPU settings change? | [Model](specs/model.md), [CLI](specs/cli.md) | [VM resource settings](digests/resources.md), [automatic VM CPUs](digests/vm-cpus.md) |
 | How big is a space's VM system disk, what does formatting it cost, and how does it grow? | [Model](specs/model.md), [CLI](specs/cli.md) | [VM system disk size](digests/vm-disk-size.md) |

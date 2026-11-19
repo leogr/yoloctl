@@ -65,6 +65,12 @@ path, byte count and strict platform limit; choose a shorter name or a shorter
 home for a new space. Reads and cleanup retain their existing behavior.
 [19](#source-19)
 
+[FACT] Host-only `space upgrade [SPACE]` selects this build for a configured
+space, restarts eligible stale sessions and checks every declared box. Each
+replacement requires named terminal consent. Unresolved work is listed with
+its remedy and returns nonzero. Completion accepts running or stopped configured
+spaces. [36](#source-36)
+
 [FACT] Host-only `space set SPACE --memory auto|SIZE --cpus N` and
 `space edit SPACE` change VM RAM/CPU settings only while the VM is verified
 stopped. Omitted set flags retain their saved values; `auto` recomputes concrete
@@ -349,3 +355,5 @@ the writable layer require their tool's cache command or explicit recreation
 34. <a id="source-34"></a> [Host box-file recovery](../digests/box-files.md).
 
 35. <a id="source-35"></a> [Terminal log wrapping](../digests/log-wrapping.md).
+
+36. <a id="source-36"></a> [Space upgrade](../digests/space-upgrade.md).

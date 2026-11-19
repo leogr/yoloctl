@@ -96,7 +96,7 @@ func checkControllerSpace(ctx context.Context, space string) (*spaceconfig.Boots
 		return nil, err
 	}
 	if boot.Bundle != identity {
-		return nil, asUserError(fmt.Errorf("space %s selects controller bundle %s; this CLI is %s; use the selected build, or explicitly run yoloctl space start %s --update-controller", space, boot.Bundle, identity, space))
+		return nil, asUserError(fmt.Errorf("space %s selects controller bundle %s; this CLI is %s; use the selected build, run yoloctl space upgrade %s, or select this controller with yoloctl space start %s --update-controller", space, boot.Bundle, identity, space, space))
 	}
 	probe, cancel := context.WithTimeout(ctx, vmhost.GuestProbeTimeout)
 	defer cancel()
@@ -183,7 +183,7 @@ func startControllerSpaceImpl(ctx context.Context, boot *spaceconfig.Bootstrap, 
 		return err
 	}
 	if boot.Bundle != "" && boot.Bundle != identity && !update {
-		return asUserError(fmt.Errorf("space %s selects a different controller build; use its selected yoloctl or space start %s --update-controller", boot.Name, boot.Name))
+		return asUserError(fmt.Errorf("space %s selects a different controller build; use its selected yoloctl, run yoloctl space upgrade %s, or select this controller with yoloctl space start %s --update-controller", boot.Name, boot.Name, boot.Name))
 	}
 	vm := newDeploymentVM()
 	if boot.Initializing && boot.DiskUUID == "" && initialize != nil {

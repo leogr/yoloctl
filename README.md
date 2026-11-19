@@ -340,7 +340,10 @@ needed, and check usage in `box inspect` or `space view`. See
 ### Backups and upgrades
 
 `space export` and `space import` back up a space and restore it as a new one.
-After installing a new build, explicitly select its controller with
+After installing a new build, run `yoloctl space upgrade SPACE` to select its
+controller, restart eligible stale sessions and review any box changes. Each
+container replacement asks for consent and discards container-only files.
+For a controller-only update with a separate session restart decision, use
 `space start SPACE --update-controller`. On Firecracker,
 `space recreate SPACE --update-vm-image` replaces the VM image while preserving
 accounts and declarations; running sessions and ephemeral workdirs are lost.

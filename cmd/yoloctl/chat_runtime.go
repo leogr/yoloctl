@@ -31,6 +31,7 @@ type chatRuntimeRequest struct {
 	ServerBox    string `json:"server_box,omitempty"`
 	Human        string `json:"human,omitempty"`
 	DefaultHuman string `json:"default_human,omitempty"`
+	ExpectedRoom string `json:"expected_room,omitempty"`
 	Box          string `json:"box,omitempty"`
 	MemberID     string `json:"member_id,omitempty"`
 	Generation   uint64 `json:"generation,omitempty"`
@@ -50,6 +51,9 @@ func runControllerChatRuntime(ctx context.Context, req controller.Request, out, 
 		if err := decodeBoundedJSON(bytes.NewReader(req.Payload), &input, 4096); err != nil {
 			return true, errors.New("invalid managed chat request")
 		}
+	}
+	if input.ExpectedRoom != "" && (req.Method != "chat.ensure" || input != (chatRuntimeRequest{ExpectedRoom: input.ExpectedRoom}) || layout.ValidateIdentity(input.ExpectedRoom) != nil || !currentControllerPrincipal(ctx).Admin()) {
+		return true, errors.New("invalid host chat restore binding")
 	}
 	if req.Method == "chat.status" && input != (chatRuntimeRequest{}) {
 		return true, errors.New("chat status takes no mutation fields")
@@ -97,6 +101,15 @@ func runControllerChatRuntime(ctx context.Context, req controller.Request, out, 
 	}
 	if err := checkOperatorChatRuntime(ctx, req.Method, input, store); err != nil {
 		return true, err
+	}
+	if input.ExpectedRoom != "" {
+		room, err := store.Load()
+		if err != nil {
+			return true, err
+		}
+		if room.ID != input.ExpectedRoom || !room.Prepared || !room.RuntimeEnabled {
+			return true, errors.New("managed chat room changed since the upgrade check")
+		}
 	}
 	boxes, err := newBoxStateResolver().ResolveSpace(ctx, req.Space, boxstate.RuntimeInventory)
 	if err != nil {

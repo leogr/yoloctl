@@ -1,6 +1,6 @@
 # Installation, releases and host homes
 
-Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes (CI runner/publication selection); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); CLI log routing re-read at `58d3f37b76e6509d8587dec36a7a4b6814a42f10` and accompanying changes; checkout log parsing re-read at `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes; other sections at `1d265df3`.
+Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes (CI runner/publication selection); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); CLI log routing re-read at `58d3f37b76e6509d8587dec36a7a4b6814a42f10` and accompanying changes; checkout log parsing re-read at `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes; other sections at `1d265df3`. Install update advice re-read at `7ad3dd8677b44567186c76221439bbe11e0d7f0d` and accompanying changes.
 
 [FACT] Coordinated builds stamp hosts and Linux companions with one version and
 random bundle. Only strict `vMAJOR.MINOR.PATCH[-PRERELEASE]` selects release;
@@ -98,7 +98,8 @@ safe to delete. [8](#source-8)
 lock or write) prints a block per space needing something; commands use the
 install link and an explicit `YOLOCTL_HOME`; print-only and `--dry-run` say the
 link still selects the old build. Bundle mismatch advises
-`space start S --update-controller` (stopped: it starts the VM). A Lima VM
+`space upgrade S`, which starts a stopped VM and asks before replacing a
+container. A Lima VM
 predating this build's OpenShell provisioning (`lima.CheckOpenShellVM`) gets
 `space recreate S` instead. Proved Lima pin differences or an unpinned stack add
 an optional recreate; unprovable configuration is `✗`. A Firecracker image

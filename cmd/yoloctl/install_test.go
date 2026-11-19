@@ -245,10 +245,9 @@ func installAdviceFixture(t *testing.T, state string) *spaceconfig.Bootstrap {
 	return b
 }
 
-// A space on another controller build gets one update command: its note
-// says a stopped VM starts, and a running one keeps its agents only for a
-// controller-only update. The command runs the install link with the
-// explicit YOLOCTL_HOME, and print-only output says nothing is installed yet.
+// A space on another build gets one update command. The note names the VM
+// start or stale-session restarts and preserves separate replacement consent.
+// The command uses the install link and the explicit YOLOCTL_HOME.
 func TestInstallSpaceAdviceUpdate(t *testing.T) {
 	for _, state := range []string{"Stopped", "Running"} {
 		b := installAdviceFixture(t, state)
@@ -257,8 +256,9 @@ func TestInstallSpaceAdviceUpdate(t *testing.T) {
 			t.Fatalf("%s: %+v", state, advice)
 		}
 		item := advice[0].Items[0]
-		want := map[string]string{"Stopped": "this starts the VM", "Running": "a controller-only update keeps agents running"}[state]
-		if item.Label != "update" || !slices.Equal(item.Args, []string{"space", "start", b.Name, "--update-controller"}) || !strings.Contains(item.Note, want) {
+		want := map[string]string{"Stopped": "starts the VM", "Running": "restarts eligible stale sessions"}[state]
+		if item.Label != "update" || !slices.Equal(item.Args, []string{"space", "upgrade", b.Name}) || !strings.Contains(item.Note, want) ||
+			!strings.Contains(item.Note, "asks before replacing any container") {
 			t.Fatalf("%s: %+v", state, item)
 		}
 		for _, installed := range []bool{true, false} {
@@ -266,7 +266,7 @@ func TestInstallSpaceAdviceUpdate(t *testing.T) {
 			t.Cleanup(bindCLITestLogger(t, &out))
 			printSpaceAdvice(installOut{w: &out}, advice, "/absolute/install/link", installed)
 			text := out.String()
-			command := "  update    YOLOCTL_HOME=" + shellArg(os.Getenv("YOLOCTL_HOME")) + " /absolute/install/link space start " + b.Name + " --update-controller\n"
+			command := "  update    YOLOCTL_HOME=" + shellArg(os.Getenv("YOLOCTL_HOME")) + " /absolute/install/link space upgrade " + b.Name + "\n"
 			if !strings.Contains(text, b.Name+" · "+strings.ToLower(state)+" · uses another controller build\n") || !strings.Contains(text, command) ||
 				strings.Contains(text, "\x1b") || strings.Contains(text, "Not installed yet") == installed {
 				t.Fatalf("%s installed=%v:\n%s", state, installed, text)

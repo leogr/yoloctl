@@ -142,6 +142,14 @@ by its restart, and the run fails naming its recreate command [27](#source-27); 
 full drift inspection proves (restart, explicit recreation, or undetermined
 with `box inspect`). [11](#source-11) [13](#source-13)
 
+[FACT] `space upgrade` combines the controller update and holder-bound
+restarts with a full box drift plan. Before box changes, named default-No
+questions cover each replacement and each running policy restart. A replacement
+drops container-only state, keeping the workdir, account state and separate
+cache. The selected chat server is handled last and its restored room must
+report ready. Unavailable, declined and manual actions are reported as
+outstanding. [29](#source-29)
+
 [FACT] Export captures declarations, native account files and declared managed
 chat data after admission is drained and workloads are stopped. Import restores
 into a fresh disk/identity,
@@ -271,3 +279,5 @@ features place their caches inside this bind by default. [25](#source-25)
 27. <a id="source-27"></a> [Pre-native boxes](../digests/pre-native-boxes.md).
 
 28. <a id="source-28"></a> [Host box-file recovery](../digests/box-files.md).
+
+29. <a id="source-29"></a> [Space upgrade](../digests/space-upgrade.md).

@@ -56,7 +56,7 @@ func hostSessionRestartOffer(cmd *cobra.Command, boot *spaceconfig.Bootstrap) se
 			boxes := make([]boxstate.Box, 0, len(view))
 			for _, b := range view {
 				// The declaration says whether the session is a managed workload.
-				b.State.Config = b.Config
+				b.State.Config, b.State.Container = b.Config, b.Container
 				boxes = append(boxes, b.State)
 			}
 			return boxes, nil
@@ -85,21 +85,7 @@ func hostSessionRestartOffer(cmd *cobra.Command, boot *spaceconfig.Bootstrap) se
 			return view, nil
 		},
 		ensureChat: func(ctx context.Context) error {
-			req, err := chatEnsureRequest(boot.Name)
-			if err != nil {
-				return err
-			}
-			// A successful exit can still report an unready server: only its
-			// typed, bounded status decides.
-			raw := boundedBuffer{Limit: chatEnsureReplyLimit}
-			if err := callHostController(ctx, boot, req, controller.ClientIO{Out: &raw, Err: cmd.ErrOrStderr()}); err != nil {
-				return err
-			}
-			var status managedchat.Status
-			if err := decodeBoundedJSON(&raw.Buffer, &status, raw.Limit); err != nil {
-				return fmt.Errorf("invalid chat ensure status: %w", err)
-			}
-			return chatEnsureOutcome(status, cmd.ErrOrStderr())
+			return ensureControllerChat(ctx, boot, cmd.ErrOrStderr(), "")
 		},
 		// The prompt needs a person on both ends: a terminal to read the
 		// answer from and one showing the question.
@@ -107,6 +93,32 @@ func hostSessionRestartOffer(cmd *cobra.Command, boot *spaceconfig.Bootstrap) se
 		in:          cmd.InOrStdin(),
 		errw:        cmd.ErrOrStderr(),
 	}
+}
+
+func ensureControllerChat(ctx context.Context, boot *spaceconfig.Bootstrap, errw io.Writer, room string) error {
+	req, err := chatEnsureRequest(boot.Name)
+	if err != nil {
+		return err
+	}
+	if room != "" {
+		req.Payload, err = json.Marshal(chatRuntimeRequest{ExpectedRoom: room})
+		if err != nil {
+			return err
+		}
+	}
+	// A successful exit may still report an unready server.
+	raw := boundedBuffer{Limit: chatEnsureReplyLimit}
+	if err := callHostController(ctx, boot, req, controller.ClientIO{Out: &raw, Err: errw}); err != nil {
+		return err
+	}
+	var status managedchat.Status
+	if err := decodeBoundedJSON(&raw.Buffer, &status, raw.Limit); err != nil {
+		return fmt.Errorf("invalid chat ensure status: %w", err)
+	}
+	if room != "" && (status.Room == nil || status.Room.ID != room) {
+		return errors.New("chat ensure reported a different room")
+	}
+	return chatEnsureOutcome(status, errw)
 }
 
 func isTerminalWriter(w io.Writer) bool {
@@ -119,7 +131,10 @@ func isTerminalWriter(w io.Writer) bool {
 // under its own receipt, refused before teardown if that holder changed. A
 // managed workload also gets its session started again.
 func sessionRestartRequest(space, name, holder string, startWorkload bool) controller.Request {
-	flags := map[string][]string{"no-attach": {"true"}, staleSessionFlag: {holder}}
+	flags := map[string][]string{"no-attach": {"true"}}
+	if holder != "" {
+		flags[staleSessionFlag] = []string{holder}
+	}
 	if startWorkload {
 		flags[startWorkloadFlag] = []string{"true"}
 	}

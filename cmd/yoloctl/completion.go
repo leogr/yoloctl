@@ -74,6 +74,7 @@ func registerCompletions(root *cobra.Command) {
 		{[]string{"space", "start"}, firstArgOnly(completeStartableSpaces)}, // not running
 		{[]string{"space", "stop"}, firstArgOnly(completeRunningSpaces)},    // running
 		{[]string{"space", "ssh"}, firstArgOnly(completeRunningSpaces)},     // running (shell alias shares the cmd)
+		{[]string{"space", "upgrade"}, firstArgOnly(completeSpaces)},
 		{[]string{"space", "recreate"}, firstArgOnly(completeSpaces)},
 		{[]string{"space", "destroy"}, firstArgOnly(completeSpaces)},
 		{[]string{"space", "show"}, firstArgOnly(completeSpaces)},

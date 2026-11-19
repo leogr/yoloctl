@@ -45,6 +45,7 @@ func newClientRootCmd() *cobra.Command {
 		}
 	}
 	space.AddCommand(newSpaceExportCmd(), newSpaceImportCmd(), newSpaceOperationCmd(), newSpaceViewCmd(), newSpaceStorageCmd(), newSpaceSetCmd(), newSpaceEditCmd())
+	space.AddCommand(newSpaceUpgradeCmd())
 	root.AddCommand(newChatCmd(), newFollowCmd())
 	if auditHostAvailable() {
 		root.AddCommand(newAuditCmd())
@@ -85,10 +86,11 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				return asUserError(err)
 			}
 		}
-		titles := map[string]string{"create": "Creating", "start": "Starting", "stop": "Stopping", "recreate": "Recreating", "destroy": "Destroying"}
-		results := map[string]string{"create": "Created space " + space, "start": "Space " + space + " ready", "stop": "Stopped space " + space, "recreate": "recreated space " + space + ". Start each box by name with yoloctl box start BOX --space " + space, "destroy": "Destroyed space " + space}
+		titles := map[string]string{"create": "Creating", "start": "Starting", "upgrade": "Upgrading", "stop": "Stopping", "recreate": "Recreating", "destroy": "Destroying"}
+		results := map[string]string{"create": "Created space " + space, "start": "Space " + space + " ready", "upgrade": "Upgraded space " + space, "stop": "Stopped space " + space, "recreate": "recreated space " + space + ". Start each box by name with yoloctl box start BOX --space " + space, "destroy": "Destroyed space " + space}
 		return cliOperation(cmd, titles[action]+" space "+space, results[action], space, func() error {
-			update, restartSessions := false, false
+			upgrade := action == "upgrade"
+			update, restartSessions := upgrade, false
 			if action == "start" {
 				update, _ = cmd.Flags().GetBool("update-controller")
 				restartSessions, _ = cmd.Flags().GetBool("restart-sessions")
@@ -96,7 +98,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 					return asUserError(errors.New("--restart-sessions requires --update-controller"))
 				}
 			}
-			if action == "start" {
+			if action == "start" || upgrade {
 				// Compatibility may offer recreation before taking the lifecycle
 				// lock. Refuse an unbootable target before that offer as well.
 				boot, err := spaceconfig.LoadBootstrap(space)
@@ -106,8 +108,12 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				if err := vmhost.ValidateInstancePaths(boot.VM.Backend, space); err != nil {
 					return asUserError(err)
 				}
-				if err := ensureCommandVMCompatibility(cmd, space); err != nil {
+				repaired, err := prepareCommandVMCompatibility(cmd, space)
+				if err != nil {
 					return err
+				}
+				if upgrade && repaired {
+					return finishRepairedSpaceUpgrade(cmd, space)
 				}
 			}
 			release, err := lockHostLifecycle(cmd, space)
@@ -124,7 +130,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 			}
 			// Recheck the locked snapshot before either boot or recreate teardown.
 			// Cleanup remains available.
-			if action == "start" || action == "recreate" {
+			if action == "start" || upgrade || action == "recreate" {
 				if err := vmhost.ValidateInstancePaths(boot.VM.Backend, space); err != nil {
 					return asUserError(err)
 				}
@@ -137,7 +143,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				}
 			}
 			switch action {
-			case "start":
+			case "start", "upgrade":
 				seed, err := loadControllerSeed(space)
 				if err != nil {
 					return err
@@ -148,7 +154,10 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 						return err
 					}
 					release() // approved recreation owns its own lifecycle lock
-					return offerSpaceVMRecreate(cmd, boot, err)
+					if err := offerSpaceVMRecreate(cmd, boot, err); err != nil || !upgrade {
+						return err
+					}
+					return finishRepairedSpaceUpgrade(cmd, space)
 				}
 				if err := retireControllerSeed(space); err != nil || !update {
 					if err == nil {
@@ -159,6 +168,9 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				// The prompt and the box restarts run outside the host lifecycle
 				// lock; each restart takes the controller's own native locks.
 				release()
+				if upgrade {
+					return finishSpaceUpgrade(cmd, boot)
+				}
 				err = offerSessionRestarts(cmd.Context(), space, hostSessionRestartOffer(cmd, boot), restartSessions)
 				if err == nil {
 					warnHostDisk(cmd.Context(), boot)

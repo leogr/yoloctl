@@ -64,11 +64,12 @@ unattended and nothing else.
 
 Install never changes a space. After installing, it prints one block per
 space that needs something, with the commands to run when convenient:
-`yoloctl space start NAME --update-controller` when the space uses another
-controller build (a stopped space's VM starts; a controller-only update keeps
-running agents and asks separately about any required recreate or session
-restart), or `yoloctl space recreate NAME` for a Lima VM whose template is
-older than this build. An optional `space recreate NAME --update-vm-image`
+`yoloctl space upgrade NAME` when the space uses another controller build.
+It starts a stopped VM, restarts eligible stale sessions and asks before
+replacing any container. For a controller-only update with a separate session
+restart decision, use `yoloctl space start NAME --update-controller`. A Lima VM
+whose template is older than this build gets `yoloctl space recreate NAME`
+instead. An optional `space recreate NAME --update-vm-image`
 appears when this release's Firecracker image is not the one the space uses.
 A recreate keeps the data disk, accounts, box settings and host workdirs but
 loses sessions and VM-local workdirs; start boxes afterwards. The printed
