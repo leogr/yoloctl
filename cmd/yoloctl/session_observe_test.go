@@ -711,6 +711,69 @@ func TestBoxSessionTextNamesALearnedConversation(t *testing.T) {
 	}
 }
 
+func TestCodexRestartsLeaveModelToTheSavedConversation(t *testing.T) {
+	f := newObserveFixture(t)
+	cfg := &agentbox.Config{
+		Name: "coder", Space: "work", Agent: "codex", Account: "main",
+		AgentExtraArgs: []string{"--model", "gpt-6.1-sol", "--no-alt-screen"},
+	}
+	const id = "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+	defaults := []string{"--ask-for-approval", "never", "--sandbox", "danger-full-access"}
+	launch := func(gen int, opts sessionStartOptions, args []string) *agentsession.Record {
+		t.Helper()
+		rec, err := f.planObserved(cfg, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := append([]string{"env", "YOLOCTL_AGENT_GEN=" + strconv.Itoa(gen), "codex"}, args...)
+		if got := f.starts[gen-1]; !slices.Equal(got, want) {
+			t.Fatalf("launch %d argv = %q, want %q", gen, got, want)
+		}
+		return rec
+	}
+	fresh := append(slices.Clone(defaults), cfg.AgentExtraArgs...)
+	resume := append([]string{"resume", id}, defaults...)
+	resume = append(resume, "--no-alt-screen")
+	launch(1, sessionStartOptions{}, fresh)
+	now := time.Unix(10, 0).UTC()
+	f.reports[1] = []observe.Observation{
+		{Offset: 10, Event: "SessionStart", SessionID: id, Source: "startup", AgentTS: now},
+		{Offset: 20, Event: observe.Query, SessionID: id, Model: "gpt-6.2-astra", Effort: "high", AgentTS: now},
+	}
+	for gen := 2; gen <= 3; gen++ {
+		f.exit(cfg.Name, 0)
+		f.noteExit(cfg)
+		rec := launch(gen, sessionStartOptions{}, resume)
+		if rec.Resume == nil || rec.Resume.Requested != id {
+			t.Fatalf("launch %d resume = %+v, want %s", gen, rec.Resume, id)
+		}
+		// The first resumed launch ends before any fresh report arrives.
+		if rec.Observed == nil || rec.Observed.Effort != nil {
+			t.Fatalf("launch %d inherited an effort report: %+v", gen, rec.Observed)
+		}
+	}
+	f.exit(cfg.Name, 0)
+	f.noteExit(cfg)
+	launch(4, sessionStartOptions{NewSession: true}, fresh)
+}
+
+func TestManualCodexResumeKeepsBoxModel(t *testing.T) {
+	cfg := &agentbox.Config{
+		Name: "coder", Space: "work", Agent: "codex", Account: "main",
+		AgentExtraArgs: []string{"resume", "7c9e6679-7425-40de-944b-e07fc1f90ae7", "-m", "gpt-6.1-sol"},
+	}
+	tracking, _, err := sessionTrackingFor(cfg)
+	if err != nil || tracking != nil {
+		t.Fatalf("manual Codex launch tracked: %v (%v)", tracking, err)
+	}
+	got, err := resolveSessionArgv("work", cfg)
+	want := []string{"codex", "--ask-for-approval", "never", "--sandbox", "danger-full-access",
+		"resume", "7c9e6679-7425-40de-944b-e07fc1f90ae7", "-m", "gpt-6.1-sol"}
+	if err != nil || !slices.Equal(got, want) {
+		t.Fatalf("manual argv = %q (%v), want %q", got, err, want)
+	}
+}
+
 // A reader that honours its context ends at the command's deadline with an
 // explicit unavailable value, and no reader outlives the call. This shows the
 // cooperative budget, not syscall cancellation or a hard wall-clock bound.

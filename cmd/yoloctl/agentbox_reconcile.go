@@ -537,7 +537,7 @@ dedicated commands (` + "`port forward`" + `) or ` + "`box edit`" + `.`,
 	cmd.Flags().BoolVar(&unconfinedNetwork, "unconfined-network", false, "Toggle the network confinement layer (true → open egress, no allow-list/L7 proxy via openshell --mode=process; false → re-confine). Other layers stay on. Triggers a recreate.")
 	cmd.Flags().BoolVar(&privileged, "privileged", false, privilegedFlagHelp+" box set saves the setting; apply it with box recreate.")
 	cmd.Flags().StringArrayVar(&sessionCommand, "session-command", nil, "Replace agentless session_command argv (repeat for each argument; --session-command= clears it). Applied on next session start; non-secret only.")
-	cmd.Flags().StringSliceVar(&agentExtraArgs, "agent-extra-args", nil, "Replace persisted agent_extra_args (repeatable / comma-separated). Applied when yoloctl next starts the managed agent session; non-secret only.")
+	cmd.Flags().StringSliceVar(&agentExtraArgs, "agent-extra-args", nil, "Replace persisted agent_extra_args (repeatable / comma-separated). Applied at the next managed agent start. On tracked Codex resumes, use -- before a prompt so -m/--model can be omitted. Non-secret only.")
 	cmd.Flags().StringVar(&sessionResume, "agent-session-resume", "", "Set the conversation policy: last, never or manual (--agent-session-resume= unsets it). Applied on the next session start.")
 	cmd.Flags().StringArrayVar(&extraFeatures, "feature", nil, "Replace explicit features with these names or OCI references (repeatable)")
 	cmd.Flags().StringArrayVar(&featureOptions, "feature-option", nil, "Set OCI Feature option FEATURE.OPTION=VALUE (repeatable; non-secret)")

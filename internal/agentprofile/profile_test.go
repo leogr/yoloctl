@@ -151,10 +151,11 @@ func TestBuiltinShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantCodex := &SessionSpec{
-		IDFormat:     "uuid",
-		ResumeArgv:   []string{"{{command}}", "resume", "{{session_id}}"},
-		ReservedArgs: []string{"resume"},
-		Observe:      &ObserveSpec{Push: "yolo.agent.observe-codex", Selection: SelectionUnknown},
+		IDFormat:            "uuid",
+		ResumeArgv:          []string{"{{command}}", "resume", "{{session_id}}"},
+		ResumeOmitValueArgs: []string{"-m", "--model"},
+		ReservedArgs:        []string{"resume"},
+		Observe:             &ObserveSpec{Push: "yolo.agent.observe-codex", Selection: SelectionUnknown},
 	}
 	if !reflect.DeepEqual(codex.Session, wantCodex) || !slices.Contains(codex.RequiresFeatures, codex.PushFeature()) {
 		t.Errorf("codex built-in session = %+v (features %v), want %+v", codex.Session, codex.RequiresFeatures, wantCodex)
@@ -436,6 +437,10 @@ func TestValidate(t *testing.T) {
 			ResumeCarry: &ResumeCarry{Effort: &CarryArgs{Args: []string{"--effort", "{{effort}}"}, Values: []string{"--max"}}}}}, "lowercase word"},
 		{"session-resume-only-ok", Profile{Name: "codex", Image: "i", Command: "codex", Session: &SessionSpec{IDFormat: "uuid",
 			ResumeArgv: []string{"codex", "resume", "{{session_id}}"}}}, ""},
+		{"session-omit-argument-with-value", Profile{Name: "custom", Image: "i", Command: "c", Session: &SessionSpec{IDFormat: "uuid",
+			ResumeArgv: []string{"{{command}}", "resume", "{{session_id}}"}, ResumeOmitValueArgs: []string{"--model=default"}}}, "resume_omit_value_args entry"},
+		{"session-omit-argument-without-resume", Profile{Name: "custom", Image: "i", Command: "c", Session: &SessionSpec{IDFormat: "uuid",
+			Observe: &ObserveSpec{Push: "o"}, ResumeOmitValueArgs: []string{"-m"}}}, "resume_omit_value_args requires resume_argv"},
 		{"session-unknown-format", Profile{Name: "claude", Image: "i", Command: "c", Session: &SessionSpec{IDFormat: "thr",
 			ResumeArgv: []string{"{{command}}", "{{session_id}}"}}}, "id_format"},
 		{"session-no-resume", Profile{Name: "claude", Image: "i", Command: "c", Session: &SessionSpec{IDFormat: "uuid"}}, "resume_argv is required"},

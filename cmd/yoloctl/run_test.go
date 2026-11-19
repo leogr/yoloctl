@@ -72,10 +72,11 @@ func TestAgentProfiles_BuiltIns(t *testing.T) {
 			SecretInjection:  []agentprofile.SecretInjection{{Secret: "AWS_ACCESS_KEY_ID"}, {Secret: "AWS_SECRET_ACCESS_KEY"}, {Secret: "AWS_SESSION_TOKEN"}, {Secret: "AWS_BEARER_TOKEN_BEDROCK"}},
 			RequiresFeatures: []string{"codex", "github", "yolo.agent.observe-codex"},
 			Session: &agentprofile.SessionSpec{
-				IDFormat:     "uuid",
-				ResumeArgv:   []string{"{{command}}", "resume", "{{session_id}}"},
-				ReservedArgs: []string{"resume"},
-				Observe:      &agentprofile.ObserveSpec{Push: "yolo.agent.observe-codex", Selection: agentprofile.SelectionUnknown},
+				IDFormat:            "uuid",
+				ResumeArgv:          []string{"{{command}}", "resume", "{{session_id}}"},
+				ResumeOmitValueArgs: []string{"-m", "--model"},
+				ReservedArgs:        []string{"resume"},
+				Observe:             &agentprofile.ObserveSpec{Push: "yolo.agent.observe-codex", Selection: agentprofile.SelectionUnknown},
 			},
 		}},
 	}

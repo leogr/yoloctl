@@ -106,8 +106,9 @@ func ReservedArg(spec *agentprofile.SessionSpec, args []string) string {
 // Argv builds the agent command line, before launch_env, for a launch of
 // kind with conversation id: command, default_args and the assign arguments
 // for a new conversation, resume_argv and default_args for the recorded one,
-// or command and default_args for a learn launch, which takes no id;
-// agent_extra_args always follow.
+// or command and default_args for a learn launch, which takes no id.
+// The box's extra arguments follow, except for options the profile omits on
+// resume through resume_omit_value_args.
 func Argv(profile *agentprofile.Profile, kind, id string, extra []string) ([]string, error) {
 	spec := profile.Session
 	if spec == nil {
@@ -141,11 +142,49 @@ func Argv(profile *agentprofile.Profile, kind, id string, extra []string) ([]str
 		argv = append(argv, expand(spec.AssignArgs)...)
 	case KindResume:
 		argv = append(expand(spec.ResumeArgv), profile.DefaultArgs...)
+		if len(spec.ResumeOmitValueArgs) > 0 {
+			extra = withoutValueArgs(extra, spec.ResumeOmitValueArgs)
+		}
 	default:
 		return nil, fmt.Errorf("unknown launch kind %q", kind)
 	}
 	return append(argv, extra...), nil
 }
+
+func withoutValueArgs(extra, omit []string) []string {
+	out := make([]string, 0, len(extra))
+	for i := 0; i < len(extra); i++ {
+		arg := extra[i]
+		if arg == "--" {
+			return append(out, extra[i:]...)
+		}
+		name, _, inline := strings.Cut(arg, "=")
+		if len(name) > 2 && name[0] == '-' && name[1] != '-' {
+			name, inline = name[:2], true // Short options can take joined values.
+		}
+		if !slices.Contains(omit, name) {
+			out = append(out, arg)
+			continue
+		}
+		next := i + 1
+		if !inline {
+			if next == len(extra) || optionToken(extra[next]) {
+				// Preserve the original arguments for the agent's diagnostic.
+				return extra
+			}
+			next++
+		}
+		if i > 0 && next < len(extra) && !optionToken(extra[next]) {
+			// The removed option may delimit a value list. Keep a bare word
+			// from becoming another value of an earlier option.
+			return extra
+		}
+		i = next - 1
+	}
+	return out
+}
+
+func optionToken(arg string) bool { return len(arg) > 1 && arg[0] == '-' }
 
 // Carried is what a resume of one conversation may carry from its last
 // observation.

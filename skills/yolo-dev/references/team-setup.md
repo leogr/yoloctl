@@ -12,13 +12,15 @@ Use this roster as the default when setting up this team; a different team or
 model assignment overrides it explicitly. It defines roles and intended model/
 effort, not runtime proof or authority. Verify the current CLI's model support
 and observe the launched session; never copy shared account settings to force
-these choices. The box's model/effort args only seed a new conversation: a
-resumed conversation keeps the model/effort last set in it with `/model`
-(Codex; Claude when its reporter recorded them, else the box args apply; agy
-starts a new conversation every time), so set or change them in the session,
-verify `box show` after every restart/recreate, and use `--new-session`
-(`box start`, `restart` or `attach`) for a clean start from the box args. Keep current
-membership and quota in team tracking, not here.
+these choices. The box's model and effort arguments seed a new conversation.
+A tracked Codex resume can omit the box's `-m`/`--model` so the saved
+thread supplies both settings. Use `--` before a positional prompt in the
+box arguments so the model option can be omitted. Claude carries reported
+values and uses box defaults for missing ones. agy carries its reported model
+label. Set or change the values with `/model` in the session, verify `box show`
+after each restart or recreate, and use `--new-session` (`box start`, `restart` or
+`attach`) for a clean start from the box args. Keep current membership and
+quota in team tracking, not here.
 
 Ask the user for box names; if none are supplied, use `model-role`, adding a
 numeric suffix for multiple boxes with the same model and role. The bracketed
@@ -135,8 +137,8 @@ yoloctl chat enroll worker --connect --client space --recreate --json
 ```
 
 Add the mount only when the task needs it and its grant exists. Add the assigned
-model/effort args (Claude `--model`/`--effort`, Codex `-m`, agy `--model`); they
-seed the first conversation only, see
+model/effort args (Claude `--model`/`--effort`, Codex `-m`, agy `--model`) as
+defaults for a new conversation. See
 [conversation identity](../../../docs/digests/agent-conversations.md). Do
 not set a Codex effort with `-c model_reasoning_effort=…`: that override runs
 Codex without its daemon, so chat shows no effort

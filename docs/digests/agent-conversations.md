@@ -1,13 +1,14 @@
 # Agent conversation identity
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; resume carry `ffd5153aed3db8e29d362837407e24bdfacb5f7e` and accompanying changes; resume-file preflight on `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes; agy resume and label carry on `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Carry, saved-file preflight and agy were verified at `ffd5153aed3db8e29d362837407e24bdfacb5f7e`, `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and `37fa8447df51ccbea03fea6ce802418e42e3f30e` with accompanying changes. Codex argv at `c44a99b1ce2fff6106f2312a175b168557388a6e` and accompanying changes.
 
 Launch locking, tokens and settlement are detailed in
 [tracked agent launches](agent-launches.md).
 
 [FACT] A profile's optional `session:` block declares conversation identity:
 a `uuid` format, `assign_args` (fresh ID; without them the agent's first
-report names it), `resume_argv`, optional native `resume_file` presence check,
+report names it), `resume_argv`, optional `resume_omit_value_args` for box
+options with values and optional native `resume_file` presence check,
 identity-taking `reserved_args` and `observe.selection`. Claude declares it
 (`--session-id`, `--resume`) and
 Codex too: no assign arguments, so a launch learns the thread from the first
@@ -29,10 +30,17 @@ unverified. Capture precedes the new
 observation. Fresh assignments and foreign/unattributed reports carry nothing.
 Eligible values override later box model/effort edits; `--new-session` on
 start/restart/attach seeds a fresh conversation with box arguments instead.
-Without eligible values, box arguments apply. Codex declares no carry and
-receives its ordinary resume argv plus box arguments; thread behavior remains
-Codex's own. [1](#source-1) [3](#source-3)
-[20](#source-20)
+Without eligible values, box arguments apply for profiles that declare
+`resume_carry`. [1](#source-1) [20](#source-20)
+
+[FACT] A built-in Codex tracked resume can omit the box's `-m`/`--model`
+so Codex can restore the saved settings even without a fresh observation.
+If a model option follows another box argument and a bare word follows its
+value, the launcher keeps the original arguments to preserve the value boundary.
+Put the model option first or use `--` before the prompt to allow omission.
+First starts, `--new-session` and manual launches keep the model option.
+Explicit Codex model, provider or effort configuration can override saved settings.
+[3](#source-3) [19](#source-19) [23](#source-23)
 
 [FACT] A manifest's `agent_session.resume` is `last`, `never` or `manual`.
 Unset means `manual` when `agent_extra_args` carry a reserved argument, else
@@ -87,7 +95,7 @@ fixtures; no real Claude, VM, crash or reboot is exercised.
 
 1. <a id="source-1"></a> [profile.go](../../internal/agentprofile/profile.go#L150) — `Profile.Session`, `SessionSpec`, `ObserveSpec`; `validateSession`.
 2. <a id="source-2"></a> [claude.yaml](../../internal/agentprofile/builtin/claude.yaml#L56) — the Claude block.
-3. <a id="source-3"></a> [policy.go](../../internal/agentsession/policy.go#L12-L147) — `EffectivePolicy`, `ReservedArg`, `Argv`.
+3. <a id="source-3"></a> [policy.go](../../internal/agentsession/policy.go#L12) — `EffectivePolicy`, `ReservedArg`, `Argv`, `withoutValueArgs`.
 4. <a id="source-4"></a> [agentbox.go](../../internal/agentbox/agentbox.go#L99-L178) — `AgentSession`, `ResumePolicy`; validation at L524-L533; cmd checks in `requireResolvableManifest`.
 5. <a id="source-5"></a> [layout.go](../../internal/layout/layout.go#L355) — `BoxSessionPath`.
 6. <a id="source-6"></a> [record.go](../../internal/agentsession/record.go#L86) — `Record`, `Validate`, `Load`, `Remove`, `save`, `retire`, `Target`.
@@ -104,6 +112,7 @@ fixtures; no real Claude, VM, crash or reboot is exercised.
 17. <a id="source-17"></a> [session_records_test.go](../../internal/spacearchive/session_records_test.go#L1) — export omission; readDeclarations in state.go L30-L74.
 18. <a id="source-18"></a> [box_session.go](../../cmd/yoloctl/box_session.go#L1) — view, probes and output; tests in box_session_test.go.
 19. <a id="source-19"></a> [codex.yaml](../../internal/agentprofile/builtin/codex.yaml#L83-L97) — the Codex block; `TestCodexLearnsAndResumesByThread` in internal/agentsession/agentsession_test.go.
-20. <a id="source-20"></a> [Resume carry](../../internal/agentsession/policy.go#L1-L229) — `Carried`, `CarryArgs`, `plainModelID`, `modelLabel`; `ObservedValue.Session` set in apply.go `applyLine`; `trackedLaunch.launch` in cmd/yoloctl/session_identity.go; tests carry_test.go, statusline_identity_test.go and `TestResumeCarriesTheConversationsLastEffortAndModel`.
+20. <a id="source-20"></a> [Resume carry](../../internal/agentsession/policy.go#L196) — `Carried`, `CarryArgs`, `plainModelID`, `modelLabel`; `ObservedValue.Session` set in apply.go `applyLine`; `trackedLaunch.launch` in cmd/yoloctl/session_identity.go; tests carry_test.go, statusline_identity_test.go and `TestResumeCarriesTheConversationsLastEffortAndModel`.
 21. <a id="source-21"></a> [session_resume_file.go](../../cmd/yoloctl/session_resume_file.go#L15) — bounded native presence request and explicit outcomes.
 22. <a id="source-22"></a> [session_resume_file_test.go](../../cmd/yoloctl/session_resume_file_test.go#L21) — absent/saved/unknown, Target, replay and persistent status regressions.
+23. <a id="source-23"></a> [Codex 0.170 resume configuration](https://github.com/openai/codex/blob/rust-v0.170.0/codex-rs/tui/src/app/config_persistence.rs#L31-L55) — native restore and explicit overrides.

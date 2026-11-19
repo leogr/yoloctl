@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -322,6 +323,80 @@ func TestArgvAssignsOrResumesByID(t *testing.T) {
 	p.Session.AssignArgs = nil
 	if _, err := Argv(p, KindAssign, id, nil); err == nil {
 		t.Fatal("a profile without assign args assigned an id")
+	}
+}
+
+func TestArgvCodexResumeOmitsOnlyTheModelOption(t *testing.T) {
+	profile, err := agentprofile.Lookup("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const id = "0b8f6e3c-1d2a-4f5b-8c7d-9e0f1a2b3c4d"
+	base := append([]string{"codex", "resume", id}, profile.DefaultArgs...)
+	other := []string{"-c", "model_reasoning_effort=high", "--", "--model"}
+	for _, model := range [][]string{
+		{"--model", "gpt-6.1-sol"},
+		{"-m", "gpt-6.1-sol"},
+		{"--model=gpt-6.1-sol"},
+		{"-m=gpt-6.1-sol"},
+		{"-mgpt-6.1-sol"},
+	} {
+		t.Run(strings.Join(model, " "), func(t *testing.T) {
+			extra := append(slices.Clone(model), other...)
+			original := slices.Clone(extra)
+			got, err := Argv(profile, KindResume, id, extra)
+			want := append(slices.Clone(base), other...)
+			if err != nil || !slices.Equal(got, want) || !slices.Equal(extra, original) {
+				t.Fatalf("argv = %q (%v), want %q, extra args = %q", got, err, want, extra)
+			}
+		})
+	}
+	for _, incomplete := range [][]string{
+		{"--model"},
+		{"-m", "--", "prompt"},
+		{"--model", "--sandbox", "read-only"},
+	} {
+		t.Run(strings.Join(incomplete, " "), func(t *testing.T) {
+			got, err := Argv(profile, KindResume, id, incomplete)
+			want := append(slices.Clone(base), incomplete...)
+			if err != nil || !slices.Equal(got, want) {
+				t.Fatalf("argv = %q (%v), want %q", got, err, want)
+			}
+		})
+	}
+}
+
+func TestArgvCodexResumePreservesPromptBoundaries(t *testing.T) {
+	profile, err := agentprofile.Lookup("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const id = "0b8f6e3c-1d2a-4f5b-8c7d-9e0f1a2b3c4d"
+	base := append([]string{"codex", "resume", id}, profile.DefaultArgs...)
+	for _, tc := range []struct {
+		name  string
+		extra []string
+		want  []string
+	}{
+		{"model first", []string{"--model", "seed", "prompt"}, []string{"prompt"}},
+		{"joined model first", []string{"-mseed", "prompt"}, []string{"prompt"}},
+		{"model last", []string{"--no-alt-screen", "--model", "seed"}, []string{"--no-alt-screen"}},
+		{"option after model", []string{"--image", "a.png", "--model", "seed", "--no-alt-screen", "prompt"},
+			[]string{"--image", "a.png", "--no-alt-screen", "prompt"}},
+		{"explicit separator", []string{"--image", "a.png", "--model", "seed", "--", "prompt"},
+			[]string{"--image", "a.png", "--", "prompt"}},
+		{"bare prompt after image list", []string{"--image", "a.png", "b.png", "--model", "seed", "prompt"},
+			[]string{"--image", "a.png", "b.png", "--model", "seed", "prompt"}},
+		{"bare prompt after earlier option", []string{"--no-alt-screen", "--model=seed", "prompt"},
+			[]string{"--no-alt-screen", "--model=seed", "prompt"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Argv(profile, KindResume, id, tc.extra)
+			want := append(slices.Clone(base), tc.want...)
+			if err != nil || !slices.Equal(got, want) {
+				t.Fatalf("argv = %q (%v), want %q", got, err, want)
+			}
+		})
 	}
 }
 

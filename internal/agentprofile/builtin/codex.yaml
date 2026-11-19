@@ -75,14 +75,16 @@ requires_features:
 
 # Conversation identity. Codex cannot start a conversation under an ID it was
 # given, so yoloctl learns the thread from the first main SessionStart a launch
-# reports and later resumes it with `codex resume <id>`, which keeps the
-# ordinary options (default_args and agent_extra_args follow). A box whose
-# agent_extra_args already carry `resume` stays manual.
+# reports and later resumes it with `codex resume <id>`. The default and box
+# arguments follow. Omit the box's model flag on resume when it can be
+# separated from other arguments so Codex restores the saved settings.
+# A box whose agent_extra_args carry `resume` stays manual.
 # selection: unknown — Codex's resume picker reports nothing until a turn, so
 # an in-app selection is not reported.
 session:
   id_format: uuid
   resume_argv: ["{{command}}", "resume", "{{session_id}}"]
+  resume_omit_value_args: ["-m", "--model"]
   reserved_args: ["resume"]
   # The record-only reporter, also listed in requires_features above.
   observe:

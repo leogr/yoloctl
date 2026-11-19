@@ -58,11 +58,13 @@ nonzero without a report does not itself select a fresh conversation. There
 is no fallback after dispatch, and a present file is not proof of resumability.
 A verified container replacement by recreate, edit, set, reconcile or chat `--recreate` keeps a
 launched conversation resumable; a policy-only restart does not. Resume is reported
-unverified until the agent says otherwise. A Claude resume keeps the effort and model last
-reported by that same conversation (`--effort`, `--model`, after the box's own
-args) while a carried value is available, overriding a later box edit until
-`--new-session`; without one the box arguments apply, and for every agent the
-box model/effort arguments seed a new conversation. Records stay on the space's disk
+unverified until the agent says otherwise. Claude uses the last model and effort
+reported by that conversation when available, and fills missing values from the
+ordinary launch arguments. A tracked Codex resume can omit the box's `-m`/`--model`
+so Codex can restore the thread's saved model and effort without fresh reports.
+Use `--` before a positional prompt in the box arguments to preserve its
+boundary. Other explicit Codex configuration overrides still apply. A new
+conversation uses the box arguments. Records stay on the space's disk
 across space recreate but are not exported; an imported box starts a new
 tracked conversation. `box session NAME` shows a record read-only; an
 undecidable holder probe shows as unknown, never idle. [12](#source-12)

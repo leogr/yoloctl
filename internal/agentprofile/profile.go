@@ -156,6 +156,9 @@ type SessionSpec struct {
 	// DefaultArgs and the box's AgentExtraArgs follow. Without it the block
 	// is observe-only (see Resumes).
 	ResumeArgv []string `yaml:"resume_argv,omitempty"`
+	// ResumeOmitValueArgs names short or long options to omit from the box's
+	// extra arguments on resume, including their separate or inline values.
+	ResumeOmitValueArgs []string `yaml:"resume_omit_value_args,omitempty"`
 	// ResumeFile is an optional native-leaf presence preflight before a new
 	// resume allocation: fixed directories, one single-directory wildcard and
 	// a filename containing {{session_id}} followed by a literal suffix.
@@ -595,6 +598,14 @@ func (p *Profile) validateSession() error {
 	}
 	if err := check("assign_args", s.AssignArgs, false); err != nil {
 		return err
+	}
+	if len(s.ResumeOmitValueArgs) > 0 && !s.Resumes() {
+		return fmt.Errorf("agent-profile %q: session.resume_omit_value_args requires resume_argv", p.Name)
+	}
+	for _, a := range s.ResumeOmitValueArgs {
+		if len(a) < 2 || a[0] != '-' || a == "--" || (a[1] != '-' && len(a) != 2) || strings.ContainsAny(a, "= \t\r\n") {
+			return fmt.Errorf("agent-profile %q: session.resume_omit_value_args entry %q must name a short or long option without its value", p.Name, a)
+		}
 	}
 	if s.ResumeFile != "" {
 		if p.StateContainerPath == "" || len(s.AssignArgs) == 0 || !s.Resumes() {
