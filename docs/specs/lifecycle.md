@@ -147,8 +147,10 @@ restarts with a full box drift plan. Before box changes, named default-No
 questions cover each replacement and each running policy restart. A replacement
 drops container-only state, keeping the workdir, account state and separate
 cache. The selected chat server is handled last and its restored room must
-report ready. Unavailable, declined and manual actions are reported as
-outstanding. [29](#source-29)
+report ready. Stopped boxes with known drift stay stopped and get a follow-up
+command. Declined changes are warnings and preserve success when no other work
+is unresolved or fails. Unavailable actions, unanswered prompts and other
+unresolved actions remain outstanding. [29](#source-29)
 
 [FACT] Export captures declarations, native account files and declared managed
 chat data after admission is drained and workloads are stopped. Import restores

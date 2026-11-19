@@ -67,9 +67,10 @@ home for a new space. Reads and cleanup retain their existing behavior.
 
 [FACT] Host-only `space upgrade [SPACE]` selects this build for a configured
 space, restarts eligible stale sessions and checks every declared box. Each
-replacement requires named terminal consent. Unresolved work is listed with
-its remedy and returns nonzero. Completion accepts running or stopped configured
-spaces. [36](#source-36)
+replacement requires named terminal consent. Explicit declines are reported
+with follow-up commands and keep a successful exit when everything else
+completes. Stopped boxes stay stopped. Unresolved actions and failures return
+nonzero. Completion accepts running or stopped configured spaces. [36](#source-36)
 
 [FACT] Host-only `space set SPACE --memory auto|SIZE --cpus N` and
 `space edit SPACE` change VM RAM/CPU settings only while the VM is verified

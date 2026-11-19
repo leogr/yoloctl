@@ -91,13 +91,14 @@ func TestSpaceUpgradeBoxActions(t *testing.T) {
 		{"current", boxstate.RuntimeRunning, boxstate.SessionBuildCurrent, boxstate.DriftInSync, false, upgradeKeep, false},
 		{"stopped", boxstate.RuntimeStopped, "", boxstate.DriftNeedsRestart, false, upgradeKeep, false},
 		{"missing", boxstate.RuntimeMissing, "", boxstate.DriftNeedsCreate, false, upgradeKeep, false},
-		{"stopped-recreate", boxstate.RuntimeStopped, "", boxstate.DriftNeedsRecreate, false, upgradeRecreate, true},
+		{"stopped-recreate", boxstate.RuntimeStopped, "", boxstate.DriftNeedsRecreate, false, upgradeKeep, false},
+		{"stopped-unavailable", boxstate.RuntimeStopped, "", boxstate.DriftError, false, upgradeManual, false},
 		{"stale-recreate", boxstate.RuntimeRunning, boxstate.SessionBuildOther, boxstate.DriftNeedsRecreate, false, upgradeRecreate, true},
 		{"policy", boxstate.RuntimeRunning, boxstate.SessionBuildCurrent, boxstate.DriftNeedsRestart, false, upgradeRestart, true},
 		{"ports", boxstate.RuntimeRunning, boxstate.SessionBuildCurrent, boxstate.DriftLiveOnly, false, upgradeManual, false},
 		{"stale-with-ports", boxstate.RuntimeRunning, boxstate.SessionBuildOther, boxstate.DriftLiveOnly, false, upgradeRestart, false},
 		{"legacy-with-stale-holder", boxstate.RuntimeRunning, boxstate.SessionBuildOther, boxstate.DriftNeedsRecreate, true, upgradeRestart, false},
-		{"stopped-legacy", boxstate.RuntimeStopped, "", boxstate.DriftInSync, true, upgradeRecreate, true},
+		{"stopped-legacy", boxstate.RuntimeStopped, "", boxstate.DriftInSync, true, upgradeKeep, false},
 		{"unknown", boxstate.RuntimeRunning, boxstate.SessionBuildUnknown, boxstate.DriftInSync, false, upgradeManual, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -145,23 +146,29 @@ func upgradeNoRoom(context.Context) (managedchat.Status, error) {
 
 func TestSpaceUpgradeDecisionsThenEffects(t *testing.T) {
 	a := upgradeTestBox("alpha", boxstate.RuntimeRunning, boxstate.SessionBuildCurrent)
-	b := upgradeTestBox("beta", boxstate.RuntimeStopped, "")
+	b := upgradeTestBox("beta", boxstate.RuntimeRunning, boxstate.SessionBuildCurrent)
 	c := upgradeTestBox("third", boxstate.RuntimeRunning, boxstate.SessionBuildOther)
 	boxes := []boxstate.Box{a, b, c}
 	for _, tc := range []struct {
 		name, answers              string
 		interactive, changed, lost bool
 		want                       []string
+		wantError                  bool
+		declined                   int
 	}{
-		{"all-decisions-first", "y\ny\n", true, false, false, []string{"restart alpha", "recreate beta", "restart third"}},
-		{"decline-and-accept", "no\ny\n", true, false, false, []string{"recreate beta", "restart third"}},
-		{"eof", "y\n", true, false, false, []string{"restart alpha", "restart third"}},
-		{"script", "y\ny\n", false, false, false, []string{"restart third"}},
-		{"changed-plan", "y\ny\n", true, true, false, []string{"restart alpha", "restart third"}},
-		{"lost-reply", "y\ny\n", true, false, true, []string{"restart alpha", "recreate beta"}},
+		{"all-decisions-first", "y\ny\n", true, false, false, []string{"restart alpha", "recreate beta", "restart third"}, false, 0},
+		{"decline-and-accept", "no\ny\n", true, false, false, []string{"recreate beta", "restart third"}, false, 1},
+		{"decline-both", "N\n\n", true, false, false, []string{"restart third"}, false, 2},
+		{"decline-and-eof", "no\n", true, false, false, []string{"restart third"}, true, 1},
+		{"invalid-answer", "y\nperhaps\n", true, false, false, []string{"restart alpha", "restart third"}, true, 0},
+		{"eof", "y\n", true, false, false, []string{"restart alpha", "restart third"}, true, 0},
+		{"script", "y\ny\n", false, false, false, []string{"restart third"}, true, 0},
+		{"changed-plan", "y\ny\n", true, true, false, []string{"restart alpha", "restart third"}, true, 0},
+		{"lost-reply", "y\ny\n", true, false, true, []string{"restart alpha", "recreate beta"}, true, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			var prompts bytes.Buffer
+			var prompts, logs bytes.Buffer
+			t.Cleanup(bindCLITestLogger(t, &logs))
 			var calls []string
 			var reads int
 			lost := errors.New("lost controller reply")
@@ -217,11 +224,25 @@ func TestSpaceUpgradeDecisionsThenEffects(t *testing.T) {
 			if tc.lost && !errors.Is(err, lost) {
 				t.Fatalf("lost reply returned %v", err)
 			}
-			if tc.name == "all-decisions-first" && err != nil {
-				t.Fatal(err)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("upgrade returned %v, want error %v", err, tc.wantError)
 			}
-			if tc.name != "all-decisions-first" && err == nil {
-				t.Fatal("outstanding work returned success")
+			if tc.wantError && !tc.lost && classifyError(err) != 1 {
+				t.Fatalf("unresolved actions exit %d, want 1", classifyError(err))
+			}
+			out := logs.String()
+			if strings.Contains(out, "Boxes left as you chose") != (tc.declined > 0) {
+				t.Fatalf("wrong decline warning:\n%s", out)
+			}
+			if !tc.wantError && tc.declined > 0 {
+				if !strings.Contains(out, boxCount(tc.declined)+" left as you chose") ||
+					!strings.Contains(out, sessionRestartCommand("test", a.Name)) || strings.Contains(out, "Outstanding box actions") {
+					t.Fatalf("wrong successful decline summary:\n%s", out)
+				}
+			}
+			if tc.name == "decline-and-eof" && (!strings.Contains(out, "Outstanding box actions") ||
+				!strings.Contains(out, "beta (no yes or no answer received)")) {
+				t.Fatalf("unanswered prompt not reported separately:\n%s", out)
 			}
 		})
 	}
@@ -369,18 +390,18 @@ func TestSpaceUpgradeSelectsThisBuildWithoutStartFlags(t *testing.T) {
 }
 
 func TestSpaceUpgradeRepeatsEffectsAtNamedPrompt(t *testing.T) {
-	b := upgradeTestBox("sandbox", boxstate.RuntimeStopped, "")
+	b := upgradeTestBox("sandbox", boxstate.RuntimeRunning, boxstate.SessionBuildCurrent)
 	b.Config.Privileged = true
 	d := upgradeTestDrift(b, boxstate.DriftNeedsRecreate)
 	r := spaceUpgradeRow{box: b, drift: d, action: upgradeRecreate, confirm: true}
 	var out bytes.Buffer
-	yes, err := confirmSpaceUpgrade(t.Context(), bufio.NewReader(strings.NewReader("y\n")), &out, r)
-	if err != nil || !yes {
-		t.Fatalf("affirmative answer: %v, %v", yes, err)
+	consent, err := confirmSpaceUpgrade(t.Context(), bufio.NewReader(strings.NewReader("y\n")), &out, r)
+	if err != nil || consent != upgradeAccepted {
+		t.Fatalf("affirmative answer: %v, %v", consent, err)
 	}
 	for _, want := range []string{
 		"Container-only files are lost", "Workdir, account state and separate cache are kept",
-		"The replacement container will start", "space-VM root",
+		"space-VM root",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("prompt lacks %q: %s", want, out.String())
@@ -407,12 +428,13 @@ func TestSpaceUpgradeDeclinedLauncherReplacementRestartsOnlyWhenEligible(t *test
 		name, answer       string
 		interactive, drift bool
 		want               string
+		wantError          bool
 	}{
-		{"declined", "n\n", true, false, "restart"},
-		{"nonterminal", "", false, false, "restart"},
-		{"eof", "", true, false, "restart"},
-		{"accepted", "y\n", true, false, "recreate"},
-		{"declined-recreate-drift", "n\n", true, true, ""},
+		{"declined", "n\n", true, false, "restart", false},
+		{"nonterminal", "", false, false, "restart", true},
+		{"eof", "", true, false, "restart", true},
+		{"accepted", "y\n", true, false, "recreate", false},
+		{"declined-recreate-drift", "n\n", true, true, "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			drift := upgradeTestDrift(box, boxstate.DriftInSync)
@@ -441,19 +463,20 @@ func TestSpaceUpgradeDeclinedLauncherReplacementRestartsOnlyWhenEligible(t *test
 				},
 			}
 			err := runSpaceUpgrade(t.Context(), "test", ops)
-			if got := strings.Join(calls, ","); got != tc.want || (err == nil) != (tc.want == "recreate") {
-				t.Fatalf("actions %v, error %v, want %s with a nonzero result only when work remains", calls, err, tc.want)
+			if got := strings.Join(calls, ","); got != tc.want || (err != nil) != tc.wantError {
+				t.Fatalf("actions %v, error %v, want %s and error %v", calls, err, tc.want, tc.wantError)
 			}
 		})
 	}
 }
 
 func TestSpaceUpgradeFailureKeepsOutstandingAndRecoveryHints(t *testing.T) {
-	outstanding := upgradeTestBox("declined", boxstate.RuntimeStopped, "")
+	declined := upgradeTestBox("declined", boxstate.RuntimeRunning, boxstate.SessionBuildCurrent)
+	manual := upgradeTestBox("ports", boxstate.RuntimeRunning, boxstate.SessionBuildCurrent)
 	failing := upgradeTestBox("worker", boxstate.RuntimeRunning, boxstate.SessionBuildOther)
 	failing.Config.SessionCommand = []string{"true"}
 	later := upgradeTestBox("z-last", boxstate.RuntimeRunning, boxstate.SessionBuildOther)
-	boxes := []boxstate.Box{outstanding, failing, later}
+	boxes := []boxstate.Box{declined, failing, manual, later}
 	var logs bytes.Buffer
 	t.Cleanup(bindCLITestLogger(t, &logs))
 	lost := errors.New("lost restart reply")
@@ -468,8 +491,11 @@ func TestSpaceUpgradeFailureKeepsOutstandingAndRecoveryHints(t *testing.T) {
 						continue
 					}
 					state := boxstate.DriftInSync
-					if b.Name == outstanding.Name {
+					switch b.Name {
+					case declined.Name:
 						state = boxstate.DriftNeedsRecreate
+					case manual.Name:
+						state = boxstate.DriftLiveOnly
 					}
 					drift = append(drift, upgradeTestDrift(b, state))
 				}
@@ -487,7 +513,8 @@ func TestSpaceUpgradeFailureKeepsOutstandingAndRecoveryHints(t *testing.T) {
 	if err := runSpaceUpgrade(t.Context(), "test", ops); !errors.Is(err, lost) {
 		t.Fatalf("lost reply returned %v", err)
 	}
-	for _, want := range []string{"Outstanding box actions", "yoloctl box recreate declined --space test",
+	for _, want := range []string{"Boxes left as you chose", "yoloctl box recreate declined --space test",
+		"Outstanding box actions", "yoloctl box reconcile ports --space test",
 		"yoloctl box attach worker --space test", "Box actions not attempted", "z-last"} {
 		if !strings.Contains(logs.String(), want) {
 			t.Errorf("missing %q in output:\n%s", want, logs.String())
@@ -498,5 +525,44 @@ func TestSpaceUpgradeFailureKeepsOutstandingAndRecoveryHints(t *testing.T) {
 	if got := logs.String(); !strings.Contains(got, "yoloctl box recreate worker --space test") ||
 		!strings.Contains(got, "yoloctl chat ensure --space test") {
 		t.Fatalf("missing pre-native server recovery:\n%s", got)
+	}
+}
+
+func TestSpaceUpgradeDefersKnownStoppedDrift(t *testing.T) {
+	const space = "test"
+	for _, tc := range []struct {
+		name   string
+		drift  boxstate.DriftState
+		legacy bool
+		verb   string
+	}{
+		{"immutable", boxstate.DriftNeedsRecreate, false, "recreate"},
+		{"pre-native", boxstate.DriftInSync, true, "recreate"},
+		{"policy", boxstate.DriftNeedsRestart, false, "start"},
+		{"ports", boxstate.DriftLiveOnly, false, "start"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			box := upgradeTestBox(tc.name, boxstate.RuntimeStopped, "")
+			drift := upgradeTestDrift(box, tc.drift)
+			drift.LegacyRuntime = tc.legacy
+			var prompts, logs bytes.Buffer
+			t.Cleanup(bindCLITestLogger(t, &logs))
+			ops := spaceUpgradeOps{
+				sessionRestartOffer: sessionRestartOffer{
+					interactive: true, in: strings.NewReader("y\n"), errw: &prompts,
+					inventory: func(context.Context) ([]boxstate.Box, error) { return []boxstate.Box{box}, nil },
+					drift:     func(context.Context, []string) ([]boxDriftView, error) { return []boxDriftView{drift}, nil },
+				},
+				room: upgradeNoRoom,
+			}
+			if err := runSpaceUpgrade(t.Context(), space, ops); err != nil {
+				t.Fatal(err)
+			}
+			out := logs.String()
+			want := fmt.Sprintf("yoloctl box %s %s --space %s", tc.verb, box.Name, space)
+			if prompts.Len() != 0 || !strings.Contains(out, want) || strings.Contains(out, "Boxes left as you chose") {
+				t.Fatalf("stopped box prompted or lacked its follow-up: %q\n%s", prompts.String(), out)
+			}
+		})
 	}
 }

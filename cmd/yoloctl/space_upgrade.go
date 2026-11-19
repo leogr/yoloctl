@@ -25,10 +25,10 @@ func newSpaceUpgradeCmd() *cobra.Command {
 		Short: "Update a space to this build and review box changes",
 		Long: `Selects this yoloctl build for the space controller and restarts
 eligible sessions from the previous build. Reviews the changes needed by the
-space's boxes and asks before replacing any container. Replacement discards
-files stored only in that container. With no terminal, or if a named
-change is declined, eligible stale sessions are still restarted and
-outstanding box actions are reported with a nonzero exit.`,
+space's running boxes and asks before replacing any container. Replacement
+discards files stored only in that container. Stopped boxes stay stopped, with
+a follow-up command for known drift. Explicit declines are warnings. Actions
+that could not be decided or completed return a nonzero exit.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: hostControllerLifecycle("upgrade"),
 	}
@@ -61,6 +61,14 @@ type spaceUpgradeDecision struct {
 	row    spaceUpgradeRow
 	action spaceUpgradeAction
 }
+
+type spaceUpgradeConsent int
+
+const (
+	upgradeUnanswered spaceUpgradeConsent = iota
+	upgradeDeclined
+	upgradeAccepted
+)
 
 type spaceUpgradeOps struct {
 	sessionRestartOffer
@@ -206,6 +214,23 @@ func classifySpaceUpgradeBox(space string, b boxstate.Box, d boxDriftView, statu
 		return unavailable("drift evidence unavailable: " + d.DriftError)
 	}
 
+	launcherRecreate := slices.ContainsFunc(d.Reasons, func(reason boxstate.Reason) bool {
+		return reason.Code == boxstate.ReasonLauncherRecreate
+	})
+	needsRecreate := d.LegacyRuntime || d.Drift == boxstate.DriftNeedsRecreate || launcherRecreate
+	if b.Runtime == boxstate.RuntimeStopped {
+		switch {
+		case needsRecreate:
+			r.reason = "recreation deferred until you want to use this box again"
+			r.command = upgradeRecreateCommand(space, b.Name)
+		case d.Drift == boxstate.DriftNeedsRestart || d.Drift == boxstate.DriftLiveOnly:
+			r.reason = "saved changes apply on next start"
+			r.command = fmt.Sprintf("yoloctl box start %s --space %s", b.Name, space)
+		default:
+			r.reason = "no box change needed"
+		}
+		return r
+	}
 	workload := len(b.Config.SessionCommand) > 0
 	chatCommand := slices.Equal(b.Config.SessionCommand, agentbox.ChatServerCommand())
 	switch {
@@ -223,14 +248,11 @@ func classifySpaceUpgradeBox(space string, b boxstate.Box, d boxDriftView, statu
 	}
 	stale := b.Session.State == boxstate.SessionRunning && b.Session.Build == boxstate.SessionBuildOther
 	stale = stale && b.Session.Holder != ""
-	launcherRecreate := slices.ContainsFunc(d.Reasons, func(reason boxstate.Reason) bool {
-		return reason.Code == boxstate.ReasonLauncherRecreate
-	})
 	switch {
 	case d.LegacyRuntime && stale:
 		r.action, r.reason, r.legacyStop = upgradeRestart, "stop pre-native run; recreation requires separate consent", true
 		r.command = upgradeRecreateCommand(space, b.Name)
-	case d.LegacyRuntime || d.Drift == boxstate.DriftNeedsRecreate || launcherRecreate:
+	case needsRecreate:
 		r.action, r.confirm = upgradeRecreate, true
 		r.restartIfDeclined = stale && launcherRecreate && !d.LegacyRuntime && d.Drift != boxstate.DriftNeedsRecreate
 		r.reason = upgradeDriftReason(d, boxstate.ReasonDriftNeedsRecreate, boxstate.ReasonLauncherRecreate)
@@ -243,12 +265,10 @@ func classifySpaceUpgradeBox(space string, b boxstate.Box, d boxDriftView, statu
 		r.command = sessionRestartCommand(space, b.Name)
 	case b.Session.State == boxstate.SessionRunning && b.Session.Build != boxstate.SessionBuildCurrent:
 		return unavailable("could not identify the running session")
-	case d.Drift == boxstate.DriftNeedsRestart && b.Runtime == boxstate.RuntimeRunning:
+	case d.Drift == boxstate.DriftNeedsRestart:
 		r.action, r.confirm = upgradeRestart, true
 		r.reason = upgradeDriftReason(d, boxstate.ReasonDriftNeedsRestart)
 		r.command = sessionRestartCommand(space, b.Name)
-	case d.Drift == boxstate.DriftNeedsRestart:
-		r.reason = "saved policy applies on next start"
 	case d.Drift == boxstate.DriftLiveOnly:
 		r.action, r.reason = upgradeManual, "port forwards differ"
 		r.command = "yoloctl box reconcile " + b.Name + " --space " + space
@@ -280,8 +300,11 @@ func runSpaceUpgrade(ctx context.Context, space string, ops spaceUpgradeOps) err
 		reportSpaceUpgradeRow(r)
 	}
 
-	var outstanding []string
+	var declined, outstanding []string
 	defer func() {
+		if len(declined) != 0 {
+			cliLogLines(prettylog.LevelWarn, logging.Host, "Boxes left as you chose", declined)
+		}
 		if len(outstanding) != 0 {
 			cliLogLines(prettylog.LevelWarn, logging.Host, "Outstanding box actions", outstanding)
 		}
@@ -297,20 +320,27 @@ func runSpaceUpgrade(ctx context.Context, space string, ops spaceUpgradeOps) err
 			outstanding = append(outstanding, r.outstanding(r.reason))
 			continue
 		case r.confirm:
-			yes, reason := false, "needs terminal consent"
+			consent, reason := upgradeUnanswered, "needs terminal consent"
 			if ops.interactive {
 				var err error
-				yes, err = confirmSpaceUpgrade(ctx, input, ops.errw, r)
+				consent, err = confirmSpaceUpgrade(ctx, input, ops.errw, r)
 				if err != nil {
 					return fmt.Errorf("controller updated before consent. No box changes started: %w", err)
 				}
-				reason = "declined"
+				reason = "no yes or no answer received"
 			}
-			if !yes {
+			if consent != upgradeAccepted {
+				if consent == upgradeDeclined {
+					reason = "declined"
+				}
 				if r.restartIfDeclined {
 					reason += ". The upgrade still restarts its stale session in the existing container if it matches the plan"
 				}
-				outstanding = append(outstanding, r.outstanding(reason))
+				if consent == upgradeDeclined {
+					declined = append(declined, r.outstanding(reason))
+				} else {
+					outstanding = append(outstanding, r.outstanding(reason))
+				}
 				if !r.restartIfDeclined {
 					continue
 				}
@@ -370,7 +400,11 @@ func runSpaceUpgrade(ctx context.Context, space string, ops spaceUpgradeOps) err
 	if len(outstanding) != 0 {
 		return asUserError(fmt.Errorf("controller updated; %d box actions completed, %d outstanding", completed, len(outstanding)))
 	}
-	cliNotice(logging.Host, "Controller updated and %d box actions completed.", completed)
+	if len(declined) != 0 {
+		cliNotice(logging.Host, "Space upgraded. %d box actions completed. %s left as you chose.", completed, boxCount(len(declined)))
+	} else {
+		cliNotice(logging.Host, "Controller updated and %d box actions completed.", completed)
+	}
 	return nil
 }
 
@@ -399,7 +433,11 @@ func reportSpaceUpgradeRow(r spaceUpgradeRow) {
 	if action == "" {
 		action = "leave unchanged"
 	}
-	cliLogLines(prettylog.LevelNotice, logging.Host, fmt.Sprintf("Box %s (%s): %s. %s", r.box.Name, r.box.Runtime, action, r.reason), spaceUpgradeEffects(r))
+	details := spaceUpgradeEffects(r)
+	if r.action == upgradeKeep && r.command != "" {
+		details = append(details, r.command)
+	}
+	cliLogLines(prettylog.LevelNotice, logging.Host, fmt.Sprintf("Box %s (%s): %s. %s", r.box.Name, r.box.Runtime, action, r.reason), details)
 }
 
 func spaceUpgradeEffects(r spaceUpgradeRow) []string {
@@ -407,14 +445,11 @@ func spaceUpgradeEffects(r spaceUpgradeRow) []string {
 	switch r.action {
 	case upgradeRecreate:
 		details = append(details, "Recreation ends any current session and replaces the container. Container-only files are lost. Workdir, account state and separate cache are kept.")
-		if r.box.Runtime == boxstate.RuntimeStopped {
-			details = append(details, "The replacement container will start.")
-		}
 	case upgradeRestart:
 		details = append(details, "Restart ends the current session.")
 	}
 	if r.restartIfDeclined {
-		details = append(details, "If you decline replacement, the upgrade will still restart the stale session in its existing container if it still matches the plan. Replacement stays outstanding.")
+		details = append(details, "If you decline replacement, the upgrade will still restart the stale session in its existing container if it still matches the plan. The replacement remains deferred.")
 	}
 	if r.drift.Upgrade != nil && (r.action == upgradeRestart || r.action == upgradeRecreate) {
 		desired := agentbox.RuntimeModeConfined
@@ -431,29 +466,35 @@ func spaceUpgradeEffects(r spaceUpgradeRow) []string {
 	return details
 }
 
-func confirmSpaceUpgrade(ctx context.Context, input *bufio.Reader, out io.Writer, r spaceUpgradeRow) (bool, error) {
+func confirmSpaceUpgrade(ctx context.Context, input *bufio.Reader, out io.Writer, r spaceUpgradeRow) (spaceUpgradeConsent, error) {
 	if err := ctx.Err(); err != nil {
-		return false, err
+		return upgradeUnanswered, err
 	}
 	resume := suspendCLISteps()
 	defer resume()
 	for _, line := range spaceUpgradeEffects(r) {
 		if _, err := fmt.Fprintln(out, line); err != nil {
-			return false, err
+			return upgradeUnanswered, err
 		}
 	}
 	if _, err := fmt.Fprintf(out, "%s box %s? [y/N]: ", r.action, r.box.Name); err != nil {
-		return false, err
+		return upgradeUnanswered, err
 	}
 	line, err := input.ReadString('\n')
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return false, nil
+			return upgradeUnanswered, ctx.Err()
 		}
-		return false, err
+		return upgradeUnanswered, err
 	}
-	answer := strings.ToLower(strings.TrimSpace(line))
-	return answer == "y" || answer == "yes", ctx.Err()
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return upgradeAccepted, ctx.Err()
+	case "", "n", "no":
+		return upgradeDeclined, ctx.Err()
+	default:
+		return upgradeUnanswered, ctx.Err()
+	}
 }
 
 func spaceUpgradeFailure(remaining []spaceUpgradeDecision, err error, completed int) error {
