@@ -1,6 +1,6 @@
 # Policy boundaries and image composition
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; static composition coverage `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409` and accompanying changes; APT-compatible smoke probe correction on `a3827ba` and accompanying changes; maintenance PATH verified on `f3a4aa1` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; static composition coverage `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409` and accompanying changes; APT-compatible smoke probe correction on `a3827ba` and accompanying changes; runtime maintenance verified on `c6e67053e4fd40a8987dc6be1c3f34bb4d6b1380` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Effective features combine box selections and agent requirements;
 effective capabilities combine box grants and feature requirements. Features
@@ -71,11 +71,12 @@ updates, and keeps Node 22/Python 3.13. Raw custom/OCI feature order is unchange
 
 [FACT] Agent installers, metadata reads and process probes use outer
 `nerdctl exec --user sandbox` with a fixed system PATH. npm targets latest
-with `/home/sandbox/.npm-global` and a private maintenance cache. Unreadable
-version metadata skips autoupdate with a notice. Install errors propagate with
+with `/home/sandbox/.npm-global` and a private maintenance cache, bypassing the
+agent-writable user and global npmrc files. Unreadable version metadata skips
+autoupdate with a notice. Install errors propagate with
 `--no-autoupdate` guidance for npm. [2](#source-2) [8](#source-8) [17](#source-17)
 [45](#source-45) [46](#source-46) [47](#source-47) [48](#source-48)
-[49](#source-49)
+[49](#source-49) [50](#source-50)
 
 [FACT] Image/Pi/AIRC smokes bypass the entrypoint to check baked ownership.
 The image smoke asserts a small final ownership layer, apt-list/deb/npm marker retention
@@ -185,3 +186,4 @@ AWS credential and custom-egress setup remain explicit. [44](#source-44)
 47. <a id="source-47"></a> [nerdctl v2.3.5](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/cmd/container/exec.go#L171-L179) — exec applies environment overrides to the process spec.
 48. <a id="source-48"></a> [Process probe](../../cmd/yoloctl/agent.go#L278-L286) — `agentProcessRunning` uses the shared exec builder.
 49. <a id="source-49"></a> [System search path](../../internal/container/container.go#L886-L888) — `SystemExecPath`, also used by legacy DNAT.
+50. <a id="source-50"></a> [npm maintenance configuration](npm.md#npm-development-environment) — runtime config overrides, prefix and cache.

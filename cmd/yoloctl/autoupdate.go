@@ -113,13 +113,10 @@ func agentMaintenanceExecArgs(containerID string, args ...string) []string {
 const sandboxNpmMaintenanceCache = features.NPMGlobalPrefix + "/.cache/npm"
 
 // npmInstallGlobalAtLatest invokes `npm install -g <pkg>@latest`
-// inside agentboxName, run as the sandbox user with the explicit shared prefix
-// and a yoloctl-owned cache beneath it. --prefer-online makes npm revalidate
-// registry metadata after the host-side latest-version check detected drift.
-// Shared between
-// autoupdate (post-create / post-start refresh) and `yoloctl agent
-// update PROFILE` (in-place refresh) so the two paths can never
-// drift on their npm invocation semantics.
+// inside agentboxName as the sandbox user with an explicit prefix and cache.
+// --prefer-online revalidates registry metadata after the host-side version
+// check detects drift. Both autoupdate and `yoloctl agent update PROFILE` use
+// this installer.
 func npmInstallGlobalAtLatest(ctx context.Context, c *container.Client, agentboxName, pkg string) error {
 	id, err := c.ResolveContainerID(ctx, agentboxName)
 	if err != nil {
@@ -131,11 +128,13 @@ func npmInstallGlobalAtLatest(ctx context.Context, c *container.Client, agentbox
 	return nil
 }
 
-// npmInstallGlobalAtLatestArgs is kept pure so the ownership-sensitive npm
-// invocation has a focused contract test without requiring a live Lima VM.
 func npmInstallGlobalAtLatestArgs(containerID, pkg string) []string {
+	// Skip both agent-writable npmrc files. npm rejects loading the same
+	// path twice, so use a separate absent file under the container's /dev.
 	return agentMaintenanceExecArgs(containerID,
 		"npm", "install", "-g",
+		"--userconfig=/dev/null",
+		"--globalconfig=/dev/yoloctl-maintenance.npmrc",
 		"--prefix="+features.NPMGlobalPrefix,
 		"--cache="+sandboxNpmMaintenanceCache,
 		"--prefer-online",

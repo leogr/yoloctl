@@ -55,7 +55,8 @@ outside the image, with metadata revalidation. Managed rebuilds retain downloads
 custom bases/raw Dockerfile features keep full cache invalidation.
 Runtime agent maintenance execs use a fixed system PATH. Runtime npm
 maintenance uses the explicit sandbox-owned global prefix and maintenance
-cache. A custom base image needs npm and Node.js on the system PATH for npm
+cache and skips the agent-writable user and global npmrc files. A custom
+base image needs npm and Node.js on the system PATH for npm
 maintenance. Use `--no-autoupdate` to skip lifecycle updates when the image
 lacks system npm. [1](#source-1)
 
