@@ -172,12 +172,18 @@ func TestTypedOptionsAndNoRuntimeAuthority(t *testing.T) {
 			t.Fatalf("accepted %v", values)
 		}
 	}
+	// Runtime requests are ignored, never applied; other properties are refused.
 	for _, key := range []string{"privileged", "capAdd", "securityOpt", "mounts", "entrypoint", "postStartCommand", "init"} {
 		copy := l
 		copy.Metadata = strings.TrimSuffix(l.Metadata, "}") + fmt.Sprintf(",%q:true}", key)
-		if e := copy.Compatible(); e == nil {
-			t.Fatalf("accepted authority %s", key)
+		if requests, e := copy.RuntimeRequests(); e != nil || len(requests) != 1 || requests[0].Key != key {
+			t.Fatalf("runtime request %s not listed as ignored: %+v %v", key, requests, e)
 		}
+	}
+	copy := l
+	copy.Metadata = strings.TrimSuffix(l.Metadata, "}") + `,"hostAuthority":true}`
+	if e := copy.Compatible(); e == nil {
+		t.Fatal("accepted an unknown property")
 	}
 	opts, e := ApplyOptions([]string{testRef}, nil, []string{"tool.moby=false", "tool.version=1.2"})
 	if e != nil || opts[testRef]["moby"] != "false" {

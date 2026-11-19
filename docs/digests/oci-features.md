@@ -1,6 +1,6 @@
 # OCI Dev Container Features
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; ignored runtime requests verified on `1faf621b2de05046711d5177863d326146cf122b` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] `box create`, `box copy`, `box set` and `image build` accept
 repeatable `--feature` names or explicit registry references alongside
@@ -34,14 +34,19 @@ installer runs as image-build root with typed uppercase option variables,
 are ignored. This installs tools into the existing Ubuntu foundation and does
 not select a Microsoft base image. [2](#source-2) [3](#source-3)
 
-[FACT] Features requesting privileged mode, init replacement, added Linux
-capabilities, security overrides, mounts, entrypoints or lifecycle hooks fail
-before persistence. OCI Features add no runtime grants; the box's explicit
-capabilities and OpenShell policy still determine tool access. Consequently some
-upstream Features, including artifacts intended for unconfined debuggers or
-Docker-in-Docker, are incompatible. Local feature directories, direct tarball
-URLs and complete `devcontainer.json` lifecycle execution are not implemented.
-[2](#source-2) [5](#source-5) [13](#source-13)
+[FACT] Requests for privileged mode, init replacement, added Linux
+capabilities, security overrides, mounts, entrypoints or lifecycle hooks are
+always ignored, also for privileged boxes: the Feature installs and nothing
+requested is applied. Any other unknown property fails before persistence. Each
+declaration write and image build logs a notice per Feature listing every
+non-default ignored request, one per line, continuing in further records past 1 KiB (values cut at 200 bytes and
+marked), escaped and filtered like other CLI notices; a worker's warm pass may
+repeat it. For the same locks the installer is unchanged. OCI Features add no
+runtime grants; the box's explicit capabilities and OpenShell policy still
+determine tool access, so debuggers needing `SYS_PTRACE` or unconfined seccomp
+may not work. Local feature directories, direct tarball URLs and complete
+`devcontainer.json` lifecycle execution are not implemented.
+[2](#source-2) [5](#source-5) [13](#source-13) [16](#source-16)
 
 [FACT] Cobra supplies shell and palette completion for selected Feature options,
 boolean/enum/proposed values, built-ins, common references and cached references.
@@ -59,7 +64,7 @@ upstream Feature or either CPU architecture. [8](#source-8) [9](#source-9) [15](
 ## Sources
 
 1. <a id="source-1"></a> [CLI options](../../cmd/yoloctl/agentbox.go#L882) — create/copy flags.
-2. <a id="source-2"></a> [Plan](../../internal/ocifeature/plan.go#L18) — `Definition`, `Compatible`, `Values`, `ApplyOptions`, `Resolve`, `Dockerfile`.
+2. <a id="source-2"></a> [Plan](../../internal/ocifeature/plan.go#L18) — `Definition`, `Compatible`, `RuntimeRequests`, `Values`, `ApplyOptions`, `Resolve`, `Dockerfile`.
 3. <a id="source-3"></a> [Persistence](../../internal/agentbox/oci_features.go#L10) — `ResolveFeatures`, `FeaturePlan`.
 4. <a id="source-4"></a> [Registry](../../internal/ocifeature/registry.go#L28) — `Parse`, `get`, `Resolve`, `Files`, `unpack`.
 5. <a id="source-5"></a> [Capability composition](../../internal/agentbox/compose.go#L63) — `EffectiveCapabilities`.
@@ -73,3 +78,4 @@ upstream Feature or either CPU architecture. [8](#source-8) [9](#source-9) [15](
 13. <a id="source-13"></a> [OCI lookup](../../internal/features/features.go#L250) — no implicit capability requirements.
 14. <a id="source-14"></a> [Cobra registration](../../cmd/yoloctl/completion.go#L248) — feature and option completion.
 15. <a id="source-15"></a> [Completion tests](../../cmd/yoloctl/completion_features_test.go#L13) — CLI routes and metadata values.
+16. <a id="source-16"></a> [Runtime notice](../../cmd/yoloctl/feature_runtime_notice.go#L14) — `noticeIgnoredRuntime`; tests `internal/ocifeature/runtime_test.go`, `cmd/yoloctl/feature_runtime_notice_test.go`.

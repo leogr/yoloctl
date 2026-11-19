@@ -134,8 +134,9 @@ grants. It includes ripgrep and no extra PTY grant. Managed launch
 disables self-updates, model-catalog fetching, sharing and automatic LSP downloads. [8](#source-8)
 
 [FACT] OCI Dev Container Features install pinned tooling with typed options and
-shell/palette completion. They add no runtime grants; incompatible privilege or
-lifecycle requirements fail before declaration persistence. [10](#source-10)
+shell/palette completion. They add no runtime grants; their privilege, runtime
+and lifecycle requests are ignored with a logged notice, and other unknown
+properties fail before declaration persistence. [10](#source-10)
 
 [FACT] Opt-in Falco auditing observes the space VM through modern eBPF and
 performs no remediation. It is outside box confinement; access is host-only.

@@ -398,6 +398,7 @@ With --dry-run, the generated Dockerfile is printed and no build runs.
 			if err != nil {
 				return err
 			}
+			noticeIgnoredRuntime(plan.Ignored)
 			dockerfile, err := features.GenerateDockerfile(baseImage, featureNames, plan)
 			if err != nil {
 				return err

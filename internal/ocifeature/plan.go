@@ -1,6 +1,7 @@
 package ocifeature
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/distribution/reference"
 )
@@ -33,8 +35,32 @@ type Metadata struct {
 }
 
 // Locks retains every selected reference, including aliases of the same
-// artifact. Equal manifest/option combinations install only once.
-type Plan struct{ Locks []Lock }
+// artifact. Equal manifest/option combinations install only once. Ignored
+// lists, per installation, the runtime requests yoloctl never applies.
+type Plan struct {
+	Locks   []Lock
+	Ignored []IgnoredFeature
+}
+
+// IgnoredFeature is one installed Feature whose runtime requests were dropped.
+type IgnoredFeature struct {
+	Ref      string
+	Requests []RuntimeRequest
+}
+
+// RuntimeRequest is one Feature property yoloctl never applies; Value is its
+// compact JSON, cut at runtimeValueLimit bytes and then marked as truncated.
+type RuntimeRequest struct {
+	Key   string
+	Value string
+}
+
+// runtimeKeys is the closed list of Feature properties that are installed
+// around and ignored: yoloctl controls the runtime. Any other unknown property
+// is refused.
+var runtimeKeys = strings.Fields("privileged init capAdd securityOpt mounts entrypoint onCreateCommand updateContentCommand postCreateCommand postStartCommand postAttachCommand")
+
+const runtimeValueLimit = 200
 
 var optionName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
 var envName = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -73,27 +99,70 @@ func (l Lock) Definition() (Metadata, error) {
 	}
 	return m, nil
 }
+
+// Compatible refuses properties outside the supported set and the closed
+// runtime list; runtime requests themselves are ignored, never applied.
 func (l Lock) Compatible() error {
+	_, err := l.RuntimeRequests()
+	return err
+}
+
+// RuntimeRequests lists the effective runtime requests of the Feature, sorted
+// by property name. No-effect values (false, empty arrays) are not requests.
+func (l Lock) RuntimeRequests() ([]RuntimeRequest, error) {
 	var fields map[string]json.RawMessage
 	if e := json.Unmarshal([]byte(l.Metadata), &fields); e != nil {
-		return e
+		return nil, e
 	}
 	allowed := strings.Fields("id version name description options containerEnv dependsOn installsAfter documentationURL licenseURL keywords legacyIds deprecated customizations")
-	for key, raw := range fields {
+	var requests []RuntimeRequest
+	for _, key := range sortedKeys(fields) {
+		raw := fields[key]
 		if slices.Contains(allowed, key) {
 			continue
 		}
-		// False/empty optional runtime requirements have no effect.
-		if slices.Contains([]string{"privileged", "init"}, key) && string(raw) == "false" {
+		// False/empty optional runtime requirements have no effect, however
+		// the JSON is spaced.
+		value := compactValue(raw)
+		if slices.Contains([]string{"privileged", "init"}, key) && value == "false" {
 			continue
 		}
-		if slices.Contains([]string{"capAdd", "securityOpt", "mounts"}, key) && string(raw) == "[]" {
+		if slices.Contains([]string{"capAdd", "securityOpt", "mounts"}, key) && value == "[]" {
 			continue
 		}
-		return fmt.Errorf("unsupported Feature property %q: runtime authority and lifecycle remain controlled by yoloctl", key)
+		if !slices.Contains(runtimeKeys, key) {
+			return nil, fmt.Errorf("unsupported Feature property %q: runtime authority and lifecycle remain controlled by yoloctl", key)
+		}
+		requests = append(requests, RuntimeRequest{Key: key, Value: value})
 	}
+	return requests, nil
+}
 
-	return nil
+func compactValue(raw json.RawMessage) string {
+	var b bytes.Buffer
+	if json.Compact(&b, raw) != nil {
+		b.Reset()
+		b.Write(raw)
+	}
+	v := b.String()
+	if len(v) > runtimeValueLimit {
+		cut := runtimeValueLimit
+		for cut > 0 && !utf8.RuneStart(v[cut]) {
+			cut--
+		}
+		v = v[:cut] + "…(truncated)"
+	}
+	return v
+}
+
+func mergeRequests(into, add []RuntimeRequest) []RuntimeRequest {
+	for _, r := range add {
+		if !slices.Contains(into, r) {
+			into = append(into, r)
+		}
+	}
+	slices.SortFunc(into, func(a, b RuntimeRequest) int { return strings.Compare(a.Key+"\x00"+a.Value, b.Key+"\x00"+b.Value) })
+	return into
 }
 
 func (o Option) value(raw json.RawMessage) (string, error) {
@@ -253,6 +322,7 @@ func Resolve(ctx context.Context, r *Registry, names []string, options map[strin
 	order := []string{}
 	visiting := map[string]bool{}
 	activeRefs := map[string]bool{}
+	requests := map[string][]RuntimeRequest{}
 	var visit func(string, map[string]string) (string, error)
 	visit = func(ref string, opts map[string]string) (string, error) {
 		if e := ctx.Err(); e != nil {
@@ -281,8 +351,9 @@ func Resolve(ctx context.Context, r *Registry, names []string, options map[strin
 			return "", e
 		}
 		m, e := l.Definition()
+		var runtime []RuntimeRequest
 		if e == nil {
-			e = l.Compatible()
+			runtime, e = l.RuntimeRequests()
 		}
 		if e != nil {
 			return "", fmt.Errorf("feature %s: %w", ref, e)
@@ -296,6 +367,8 @@ func Resolve(ctx context.Context, r *Registry, names []string, options map[strin
 			aliases[key] = map[string]Lock{}
 		}
 		aliases[key][l.Ref] = l
+		// Every alias of one artifact contributes its requests to the notice.
+		requests[key] = mergeRequests(requests[key], runtime)
 		if visiting[key] {
 			return "", fmt.Errorf("feature dependency cycle at %s", ref)
 		}
@@ -346,6 +419,11 @@ func Resolve(ctx context.Context, r *Registry, names []string, options map[strin
 	done := map[string]bool{}
 	active := map[string]bool{}
 	result := Plan{}
+	for _, key := range order {
+		if len(requests[key]) > 0 {
+			result.Ignored = append(result.Ignored, IgnoredFeature{Ref: nodes[key].Ref, Requests: requests[key]})
+		}
+	}
 	var sortNode func(string) error
 	sortNode = func(key string) error {
 		if done[key] {

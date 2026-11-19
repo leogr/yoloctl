@@ -644,7 +644,7 @@ func (c *Config) Save() error {
 	if err := c.Validate(); err != nil {
 		return err
 	}
-	if err := c.ResolveFeatures(context.Background()); err != nil {
+	if _, err := c.ResolveFeatures(context.Background()); err != nil {
 		return err
 	}
 	path := c.path

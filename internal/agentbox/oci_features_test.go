@@ -48,3 +48,25 @@ func TestOCIFeaturesPersistOfflineAndDriveImageDrift(t *testing.T) {
 		t.Fatalf("OCI feature added authority: %+v", caps.Capabilities())
 	}
 }
+
+func TestOCIFeatureRuntimeRequestsAreIgnored(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	ref := "ghcr.io/devcontainers/features/go:1"
+	lock := ocifeature.Lock{Ref: ref, Digest: "sha256:" + strings.Repeat("a", 64), Layer: ocifeature.Descriptor{Digest: "sha256:" + strings.Repeat("b", 64), MediaType: "application/vnd.devcontainers.layer.v1+tar", Size: 123}, Metadata: `{"id":"go","version":"1","init":true,"capAdd":["SYS_PTRACE"],"securityOpt":["seccomp=unconfined"]}`}
+	c := &Config{Name: "test", Space: "default", Image: "ubuntu:24.04", Features: []string{ref}, FeatureLocks: []ocifeature.Lock{lock}}
+	if e := c.Save(); e != nil {
+		t.Fatalf("Feature with runtime requests refused: %v", e)
+	}
+	ignored, e := c.ResolveFeatures(t.Context())
+	if e != nil || len(ignored) != 1 || ignored[0].Ref != ref || len(ignored[0].Requests) != 3 {
+		t.Fatalf("ignored requests not reported: %+v %v", ignored, e)
+	}
+	if _, _, e := ResolvedImage(c); e != nil {
+		t.Fatal(e)
+	}
+	// Ignored requests grant nothing.
+	caps, e := EffectiveCapabilities(c)
+	if e != nil || len(caps.Capabilities()) != 0 {
+		t.Fatalf("runtime requests added authority: %+v %v", caps.Capabilities(), e)
+	}
+}

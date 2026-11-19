@@ -10,8 +10,10 @@ import (
 
 // ResolveFeatures is the declaration mutation boundary. Existing locks are
 // retained; reads never contact registries. Remove feature_locks in box edit
-// to explicitly resolve moving tags again.
-func (c *Config) ResolveFeatures(ctx context.Context) error {
+// to explicitly resolve moving tags again. It returns the runtime requests the
+// box's Features declare and yoloctl ignores, so the CLI can log them; Save
+// logs nothing.
+func (c *Config) ResolveFeatures(ctx context.Context) ([]ocifeature.IgnoredFeature, error) {
 	hasOCI := len(c.FeatureOptions) > 0 || len(c.FeatureLocks) > 0
 	for _, name := range c.Features {
 		hasOCI = hasOCI || ocifeature.IsReference(name)
@@ -21,24 +23,24 @@ func (c *Config) ResolveFeatures(ctx context.Context) error {
 		// Direct Save historically permits unavailable profiles. CLI writes
 		// separately require a resolvable policy before persistence.
 		if !hasOCI {
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
 	for _, name := range names {
 		hasOCI = hasOCI || ocifeature.IsReference(name)
 	}
 	if !hasOCI {
-		return nil
+		return nil, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	plan, err := ocifeature.Resolve(ctx, ocifeature.NewRegistry(), names, c.FeatureOptions, c.FeatureLocks)
 	if err != nil {
-		return fmt.Errorf("box %s features: %w", c.Name, err)
+		return nil, fmt.Errorf("box %s features: %w", c.Name, err)
 	}
 	c.FeatureLocks = plan.Locks
-	return nil
+	return plan.Ignored, nil
 }
 func (c *Config) FeaturePlan() (ocifeature.Plan, error) {
 	names, err := EffectiveFeaturesStrict(c)

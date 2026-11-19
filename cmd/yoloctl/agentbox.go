@@ -2067,9 +2067,11 @@ func rejectAccountRootBinds(cfg *agentbox.Config) error {
 // Reconcile. Installers still run only when an image is built. Invalid selections
 // are reported as user errors before any declaration is saved.
 func requireResolvableManifest(ctx context.Context, cfg *agentbox.Config) error {
-	if err := cfg.ResolveFeatures(ctx); err != nil {
+	ignored, err := cfg.ResolveFeatures(ctx)
+	if err != nil {
 		return asUserError(err)
 	}
+	noticeIgnoredRuntime(ignored)
 	if _, err := agentbox.ComposePolicy(cfg); err != nil {
 		return asUserError(err)
 	}
