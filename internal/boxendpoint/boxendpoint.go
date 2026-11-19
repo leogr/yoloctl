@@ -52,6 +52,9 @@ const (
 	// UserEnvironmentVariable carries the account-injected child environment
 	// (a JSON string map), exactly as for openshell-sandbox.
 	UserEnvironmentVariable = "OPENSHELL_USER_ENVIRONMENT"
+	// FeatureEnvironmentVariable carries the box's declared dev container
+	// Feature environment (a JSON string map), applied below the account map.
+	FeatureEnvironmentVariable = "YOLOCTL_FEATURE_ENVIRONMENT"
 	// WorkdirRoot bounds the supervised working directory.
 	WorkdirRoot = "/workdir"
 )
@@ -151,25 +154,35 @@ func ValidateWorkdir(dir string) error {
 // forwarded, nor is the raw JSON or any other supervisor variable. TERM is
 // added per channel by WithTerm.
 func ChildEnvironment(home, user, pathValue, userEnvironment string) ([]string, error) {
+	return ChildEnvironmentWithFeatures(home, user, pathValue, "", userEnvironment)
+}
+
+// ChildEnvironmentWithFeatures is ChildEnvironment with the box's declared
+// Feature environment applied after the base and before the account map, so
+// the account still wins. It never replaces the base HOME/USER/SHELL/PATH.
+func ChildEnvironmentWithFeatures(home, user, pathValue, featureEnvironment, userEnvironment string) ([]string, error) {
 	if pathValue == "" {
 		pathValue = "/usr/local/bin:/usr/bin:/bin"
 	}
 	env := map[string]string{"HOME": home, "USER": user, "SHELL": "/bin/bash", "PATH": pathValue}
+	if featureEnvironment != "" {
+		features, err := decodeChildMap(featureEnvironment)
+		if err != nil {
+			return nil, err
+		}
+		for key, value := range features {
+			if _, base := env[key]; base || strings.HasPrefix(key, "OPENSHELL_") {
+				continue
+			}
+			env[key] = value
+		}
+	}
 	if userEnvironment != "" {
-		if len(userEnvironment) > maxUserEnvironment {
-			return nil, errors.New("child environment exceeds its size limit")
-		}
-		var injected map[string]string
-		if err := json.Unmarshal([]byte(userEnvironment), &injected); err != nil || injected == nil {
-			return nil, errors.New("child environment must be a JSON object of strings")
-		}
-		if len(injected) > maxEnvironmentEntries {
-			return nil, errors.New("child environment has too many entries")
+		injected, err := decodeChildMap(userEnvironment)
+		if err != nil {
+			return nil, err
 		}
 		for key, value := range injected {
-			if !validEnvKey(key) || strings.ContainsRune(value, 0) {
-				return nil, errors.New("child environment has an invalid entry")
-			}
 			if strings.HasPrefix(key, "OPENSHELL_") {
 				continue
 			}
@@ -187,6 +200,25 @@ func ChildEnvironment(home, user, pathValue, userEnvironment string) ([]string, 
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+func decodeChildMap(raw string) (map[string]string, error) {
+	if len(raw) > maxUserEnvironment {
+		return nil, errors.New("child environment exceeds its size limit")
+	}
+	var injected map[string]string
+	if err := json.Unmarshal([]byte(raw), &injected); err != nil || injected == nil {
+		return nil, errors.New("child environment must be a JSON object of strings")
+	}
+	if len(injected) > maxEnvironmentEntries {
+		return nil, errors.New("child environment has too many entries")
+	}
+	for key, value := range injected {
+		if !validEnvKey(key) || strings.ContainsRune(value, 0) {
+			return nil, errors.New("child environment has an invalid entry")
+		}
+	}
+	return injected, nil
 }
 
 // WithTerm returns env plus TERM unless the injected map already chose one.

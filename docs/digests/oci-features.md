@@ -1,6 +1,6 @@
 # OCI Dev Container Features
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; ignored runtime requests verified on `1faf621b2de05046711d5177863d326146cf122b` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; ignored runtime requests verified on `1faf621b2de05046711d5177863d326146cf122b` and accompanying changes; Feature folders and environment verified on `0a1e47d47001eab39274faf83f3af36419b04f2b` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] `box create`, `box copy`, `box set` and `image build` accept
 repeatable `--feature` names or explicit registry references alongside
@@ -41,12 +41,32 @@ requested is applied. Any other unknown property fails before persistence. Each
 declaration write and image build logs a notice per Feature listing every
 non-default ignored request, one per line, continuing in further records past 1 KiB (values cut at 200 bytes and
 marked), escaped and filtered like other CLI notices; a worker's warm pass may
-repeat it. For the same locks the installer is unchanged. OCI Features add no
-runtime grants; the box's explicit capabilities and OpenShell policy still
-determine tool access, so debuggers needing `SYS_PTRACE` or unconfined seccomp
-may not work. Local feature directories, direct tarball URLs and complete
+repeat it. Ignored requests grant nothing, so debuggers needing `SYS_PTRACE` or
+unconfined seccomp may not work. Local feature directories, direct tarball URLs and complete
 `devcontainer.json` lifecycle execution are not implemented.
 [2](#source-2) [5](#source-5) [13](#source-13) [16](#source-16)
+
+[FACT] A locked Feature's `containerEnv` adds policy folders: literal `PATH`
+entries read-only; a folder variable holding a `PATH` entry read-write; other
+paths read-only. A folder holding, inside or containing a catalog network
+executable (pattern) stays read-only: with go:1/rust:1 `/go` and
+`/usr/local/cargo` are writable, `/usr/local/go` and `/usr/local/rustup` not.
+Protected places (system and yoloctl folders, yoloctl mount destinations) and
+declared mount targets are never granted. A final build step resolves each
+granted folder (`readlink -m`) and fails if it lands in a protected place, or a
+writable one in a built-in network-tool folder; read-only links pass. Limit: a
+custom capability's executable reached only through a link is checked by its
+declared name. Other boxes keep folders and image; every box with
+`network.cargo` gains `/usr/local/rustup/toolchains/*/bin/cargo`. [17](#source-17) [18](#source-18)
+
+[FACT] The expanded `containerEnv` (Dockerfile order, `${NAME}`/`$NAME`, Feature
+values only; 4 KiB per value, 64 KiB and 1024 variables per plan; unresolvable,
+oversized or other `$` forms unset the key; `PATH`, reserved and agent-profile
+names skipped) reaches native and privileged children below box `--env`, the
+account map and `launch_env`; a privileged child gets the box value of a
+Feature key. Notices list skipped folders and variables; `box show`/`inspect`
+list declared values. Existing boxes need `box recreate`.
+[17](#source-17) [18](#source-18)
 
 [FACT] Cobra supplies shell and palette completion for selected Feature options,
 boolean/enum/proposed values, built-ins, common references and cached references.
@@ -79,3 +99,5 @@ upstream Feature or either CPU architecture. [8](#source-8) [9](#source-9) [15](
 14. <a id="source-14"></a> [Cobra registration](../../cmd/yoloctl/completion.go#L248) — feature and option completion.
 15. <a id="source-15"></a> [Completion tests](../../cmd/yoloctl/completion_features_test.go#L13) — CLI routes and metadata values.
 16. <a id="source-16"></a> [Runtime notice](../../cmd/yoloctl/feature_runtime_notice.go#L14) — `noticeIgnoredRuntime`; tests `internal/ocifeature/runtime_test.go`, `cmd/yoloctl/feature_runtime_notice_test.go`.
+17. <a id="source-17"></a> [Feature runtime](../../internal/agentbox/feature_runtime.go#L59) — `FeatureRuntimeOf`, `featureGrants`, `FeatureEnvironment`, `workloadLiterals`; `compilePolicy`; `ChildEnvironmentWithFeatures`; tests `feature_runtime_test.go`, golden `oci_go_rust.yaml`.
+18. <a id="source-18"></a> [Expansion and folders](../../internal/ocifeature/runtime_env.go#L78) — `Environment`, `PathCandidates`, `ProtectedPath`, `linkGuard`; tests `runtime_env_test.go`.

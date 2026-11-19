@@ -40,3 +40,4 @@ network_policies:
                 - 443
         binaries:
             - path: /usr/bin/cargo
+            - path: /usr/local/rustup/toolchains/*/bin/cargo

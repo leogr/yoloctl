@@ -367,6 +367,7 @@ func loadAgentboxShowMetadata(ctx context.Context, c *container.Client, d *conta
 		meta.WorkdirContainer = cfg.Workdir.ContainerPath()
 		meta.UnconfinedNetwork = cfg.UnconfinedNetwork
 		meta.Privileged = cfg.Privileged
+		meta.FeatureEnv = featureEnvViews(cfg)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		cliWarn(logging.Box, "box manifest unavailable: %v", err)
 	}
@@ -416,6 +417,8 @@ type agentboxShowMetadata struct {
 	// inspected launch-mode evidence. Either one prints the privileged warning.
 	Privileged bool
 	Runtime    agentbox.RuntimeEvidence
+	// FeatureEnv is the declared dev container Feature environment.
+	FeatureEnv []inspectFeatureEnv
 }
 
 func (m agentboxShowMetadata) privilegedView() bool {

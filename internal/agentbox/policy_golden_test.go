@@ -82,6 +82,10 @@ var policyGoldenCases = []struct {
 	{"pypi", &Config{Name: "coder", Space: "default", Features: []string{"pypi"}, Capabilities: rw}},
 	{"pip", &Config{Name: "coder", Space: "default", Features: []string{"pip"}, Capabilities: rw}},
 	{"cargo", &Config{Name: "coder", Space: "default", Features: []string{"cargo"}, Capabilities: rw}},
+	// Dev container go:1 + rust:1 shapes with their network grants: /go and
+	// /usr/local/cargo writable; the Go toolchain stays read-only because it
+	// holds the go-modules binary (and /usr already covers it).
+	{"oci_go_rust", &Config{Name: "coder", Space: "default", Features: []string{ociGoRef, ociRustRef}, FeatureLocks: ociGoRustLocks(), Capabilities: append(append([]string(nil), rw...), "network.go-modules", "network.cargo")}},
 
 	// Dockerfile-only feature (no network policy): baseline + empty net.
 	{"python-3.12", &Config{Name: "coder", Space: "default", Features: []string{"python-3.12"}, Capabilities: rw}},
@@ -235,7 +239,7 @@ func TestPolicyBinaryAttribution(t *testing.T) {
 		{
 			feature:      "cargo",
 			policyName:   "cargo",
-			wantBinaries: []string{"/usr/bin/cargo"},
+			wantBinaries: []string{"/usr/bin/cargo", "/usr/local/rustup/toolchains/*/bin/cargo"},
 			wantHosts:    []string{"crates.io", "static.crates.io", "index.crates.io"},
 		},
 	}

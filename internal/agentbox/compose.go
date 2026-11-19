@@ -45,7 +45,11 @@ func ComposePolicy(c *Config) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return compilePolicy(eff, c.Mounts)
+	var grants []FeatureGrant
+	if plan, ok := featurePlanLenient(c); ok {
+		grants = featureGrants(plan, eff, c.Mounts)
+	}
+	return compilePolicy(eff, c.Mounts, grants...)
 }
 
 // EffectiveCapabilities derives the positive capability set a schema-v1
@@ -155,7 +159,7 @@ func effectiveFeatures(c *Config) []string {
 // baseline paths is usable; a mount already covered by an equal or broader
 // entry (the account-state slot under /home/sandbox, for example) adds
 // nothing, which keeps those boxes' policy bytes unchanged.
-func compilePolicy(eff *capabilities.EffectiveSet, mounts []Mount) ([]byte, error) {
+func compilePolicy(eff *capabilities.EffectiveSet, mounts []Mount, features ...FeatureGrant) ([]byte, error) {
 	doc := policyDoc{
 		Version:          1,
 		FilesystemPolicy: baselineFilesystem(),
@@ -196,6 +200,27 @@ func compilePolicy(eff *capabilities.EffectiveSet, mounts []Mount) ([]byte, erro
 			} else {
 				doc.FilesystemPolicy.ReadOnly = append(doc.FilesystemPolicy.ReadOnly, g.Path)
 			}
+		}
+	}
+	// Dev container Feature folders (PATH entries read-only, the Feature's own
+	// homes read-write unless they hold a network-granted binary), after the
+	// capability grants and before declared mounts. A folder already covered
+	// adds nothing, so boxes without OCI Features keep their exact bytes.
+	for _, g := range features {
+		if g.Skip != "" {
+			continue
+		}
+		covered := policyCovers(doc.FilesystemPolicy.ReadWrite, g.Path)
+		if !g.ReadWrite {
+			covered = covered || policyCovers(doc.FilesystemPolicy.ReadOnly, g.Path)
+		}
+		if covered {
+			continue
+		}
+		if g.ReadWrite {
+			doc.FilesystemPolicy.ReadWrite = append(doc.FilesystemPolicy.ReadWrite, g.Path)
+		} else {
+			doc.FilesystemPolicy.ReadOnly = append(doc.FilesystemPolicy.ReadOnly, g.Path)
 		}
 	}
 	for _, m := range mounts {

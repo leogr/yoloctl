@@ -315,7 +315,11 @@ var registry = map[string]Capability{
 				{Host: "static.crates.io", Ports: []int{443}},
 				{Host: "index.crates.io", Ports: []int{443}},
 			},
-			Binaries: []string{"/usr/bin/cargo"},
+			// The Ubuntu cargo, and the real cargo of one rustup toolchain as
+			// the dev container Rust Feature installs it (its launcher in
+			// CARGO_HOME runs that binary). One directory level, ending in
+			// bin/cargo; the rustup folder stays read-only to the box.
+			Binaries: []string{"/usr/bin/cargo", "/usr/local/rustup/toolchains/*/bin/cargo"},
 		}},
 	},
 	WorkdirWriteCapability: {
@@ -361,6 +365,19 @@ func Lookup(name string) (Capability, error) {
 		return c, nil
 	}
 	return Capability{}, fmt.Errorf("unknown capability %q (known: %s)", name, strings.Join(Names(), ", "))
+}
+
+// BuiltinNetworkBinaries lists, sorted and unique, every executable path or
+// pattern a built-in network capability names.
+func BuiltinNetworkBinaries() []string {
+	var out []string
+	for _, c := range registry {
+		for _, g := range c.Network {
+			out = append(out, g.Binaries...)
+		}
+	}
+	sort.Strings(out)
+	return slices.Compact(out)
 }
 
 // BuiltinNames returns the sorted names of the embedded built-in capabilities

@@ -82,12 +82,7 @@ func planNativeContainer(c *Config, image string, current spaceenv.Context, rele
 	// The separate supervisor does not inherit the boundary's container ENV.
 	// Snapshot declared workload literals for its child bootstrap as well;
 	// runtime-control keys retain the existing reserved namespace filtering.
-	plan.literalEnv = make(map[string]string, len(c.Env))
-	for key, value := range c.Env {
-		if !strings.HasPrefix(key, "OPENSHELL_") {
-			plan.literalEnv[key] = value.Literal
-		}
-	}
+	plan.literalEnv = workloadLiterals(c)
 	options, err := buildRunOptionsWithEnv(c, image, nil, environment)
 	if err != nil {
 		return container.RunOptions{}, nativeContainerPlan{}, err

@@ -508,7 +508,27 @@ func (p Plan) Dockerfile() (string, error) {
 		}
 		out.WriteString(" ./install.sh && cd / && rm -rf /tmp/yoloctl-feature-install\n")
 	}
+	paths, writable := p.GrantablePaths()
+	out.WriteString(linkGuard(paths, writable))
 	return out.String(), nil
+}
+
+// GrantablePaths are the Feature folders that may enter a box policy: the
+// candidates outside protected places. The policy compiler narrows them
+// further (mount destinations, network binaries); the build guard checks
+// that none of them is a link into a protected place.
+func (p Plan) GrantablePaths() (paths, writable []string) {
+	for _, c := range p.PathCandidates() {
+		if !ProtectedPath(c.Path) {
+			paths = append(paths, c.Path)
+			// The policy keeps a folder that holds a network-granted
+			// executable read-only, so only the others need the target check.
+			if c.ReadWrite && !holdsNetworkTool(c.Path) {
+				writable = append(writable, c.Path)
+			}
+		}
+	}
+	return paths, writable
 }
 
 // BuildFiles supplies validated archive contents with deterministic, private

@@ -1103,7 +1103,7 @@ func runPID1(args []string, logf func(string, ...any)) error {
 	if err != nil {
 		return err
 	}
-	env, err := ChildEnvironment(home, SandboxUser, os.Getenv("PATH"), os.Getenv(UserEnvironmentVariable))
+	env, err := ChildEnvironmentWithFeatures(home, SandboxUser, os.Getenv("PATH"), os.Getenv(FeatureEnvironmentVariable), os.Getenv(UserEnvironmentVariable))
 	if err != nil {
 		return err
 	}

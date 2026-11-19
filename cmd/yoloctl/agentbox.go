@@ -398,6 +398,12 @@ func writeAgentboxShow(w io.Writer, d *container.Details, querySpace string, ll 
 	if meta.Policy != "" {
 		_, _ = fmt.Fprintf(w, "Policy:   %s\n", meta.Policy)
 	}
+	if len(meta.FeatureEnv) > 0 {
+		_, _ = fmt.Fprintln(w, "Feature env (declared; new box processes get it, recreate applies it):")
+		for _, e := range meta.FeatureEnv {
+			_, _ = fmt.Fprintf(w, "  %s\n", e.line())
+		}
+	}
 	if meta.UnconfinedNetwork {
 		_, _ = fmt.Fprintf(w, "Network:  ⚠ UNCONFINED — open egress, no allow-list/L7 proxy (other confinement layers intact)\n")
 	}
@@ -2072,6 +2078,7 @@ func requireResolvableManifest(ctx context.Context, cfg *agentbox.Config) error 
 		return asUserError(err)
 	}
 	noticeIgnoredRuntime(ignored)
+	noticeFeatureRuntime(cfg)
 	if _, err := agentbox.ComposePolicy(cfg); err != nil {
 		return asUserError(err)
 	}

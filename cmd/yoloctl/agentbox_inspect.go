@@ -200,9 +200,12 @@ type inspectManifest struct {
 	Capabilities   []string                     `json:"capabilities,omitempty"`
 	Ports          []inspectPort                `json:"ports,omitempty"`
 	Env            []inspectEnv                 `json:"env,omitempty"`
-	ExtraMounts    []inspectMount               `json:"extra_mounts,omitempty"`
-	CPUs           string                       `json:"cpus,omitempty"`
-	Memory         string                       `json:"memory,omitempty"`
+	// DeclaredFeatureEnv is the dev container Feature environment the
+	// declaration delivers to new box processes (not observed values).
+	DeclaredFeatureEnv []inspectFeatureEnv `json:"declared_feature_env,omitempty"`
+	ExtraMounts        []inspectMount      `json:"extra_mounts,omitempty"`
+	CPUs               string              `json:"cpus,omitempty"`
+	Memory             string              `json:"memory,omitempty"`
 }
 
 // inspectAgentState is the account-derived native-state bind shown by
@@ -396,6 +399,7 @@ func buildInspectManifest(cfg *agentbox.Config) *inspectManifest {
 	for _, k := range sortedEnvKeys(cfg.Env) {
 		m.Env = append(m.Env, inspectEnv{Key: k})
 	}
+	m.DeclaredFeatureEnv = featureEnvViews(cfg)
 	return m
 }
 
@@ -690,6 +694,9 @@ func writeInspectManifest(w io.Writer, m *inspectManifest) {
 	}
 	for _, e := range m.Env {
 		_, _ = fmt.Fprintf(w, "  Env:          %s = (redacted)\n", e.Key)
+	}
+	for _, e := range m.DeclaredFeatureEnv {
+		_, _ = fmt.Fprintf(w, "  Feature env:  %s (declared)\n", e.line())
 	}
 }
 

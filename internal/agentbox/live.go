@@ -3,6 +3,7 @@ package agentbox
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -538,6 +539,15 @@ func buildRunOptionsWithEnv(c *Config, runtimeImage string, endpoint *EndpointBi
 		opts.Mounts = withoutLegacyOpenShellBinds(opts.Mounts)
 		opts.Command = sandbox.PrivilegedEntrypointArgs(c.Workdir.ContainerPath())
 		opts.Mounts = append(opts.Mounts, container.Mount{Source: boxendpoint.BinaryDir, Destination: boxendpoint.BinaryDir, ReadOnly: true})
+		// The endpoint gives its children only a fixed base plus the account
+		// map; the declared Feature environment rides its own variable.
+		if features := privilegedFeatureEnvironment(c); len(features) > 0 {
+			raw, err := json.Marshal(features)
+			if err != nil {
+				return container.RunOptions{}, err
+			}
+			opts.Env = append(opts.Env, boxendpoint.FeatureEnvironmentVariable+"="+string(raw))
+		}
 	}
 	return opts, nil
 }
