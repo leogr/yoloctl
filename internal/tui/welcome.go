@@ -169,14 +169,59 @@ const welcomeFallback = `Type a yoloctl command and press Enter, for example:
   box attach coder
   space ls`
 
+func (m *model) canFillWelcome() bool {
+	line, _ := m.pal.Line()
+	return !m.standalone && len(m.tabs.Tabs) == 0 && !m.console.Busy() &&
+		line == "" && m.welcome.tip.command != ""
+}
+
+func (m *model) fillWelcome() {
+	m.closeToast()
+	m.focusPalette = true
+	m.pal.Insert(m.welcome.tip.command)
+	m.clearSuggestions()
+}
+
+func (m *model) welcomeCommandHit(mo tea.Mouse) bool {
+	if !m.canFillWelcome() || mo.Y >= m.height || mo.X >= m.width {
+		return false
+	}
+	rows, command := m.welcomeLayout()
+	i := mo.Y - m.tabTop()
+	if command == 0 || i < command || i >= len(rows) {
+		return false
+	}
+	// The first non-underlined row after the command belongs to the help text.
+	row := rows[i]
+	if !strings.Contains(row, cUnderline) {
+		return false
+	}
+	plain := ansi.Strip(row)
+	return mo.X >= len(plain)-len(strings.TrimLeft(plain, " ")) &&
+		mo.X < ansi.StringWidth(strings.TrimRight(plain, " "))
+}
+
 func (m *model) welcomeRows() []string {
+	rows, _ := m.welcomeLayout()
+	return rows
+}
+
+func (m *model) welcomeLayout() ([]string, int) {
 	text := m.welcome.tip.text
 	if text == "" {
 		text = welcomeFallback
 	}
 	lines := []string{""}
-	for _, line := range strings.Split(ansi.Wordwrap(text, max(m.width-2, 1), ""), "\n") {
-		lines = append(lines, cDim+"  "+line+cReset)
+	command := 0
+	for i, logical := range strings.Split(text, "\n") {
+		style := cDim
+		if i == 1 && m.canFillWelcome() {
+			command = len(lines)
+			style += cUnderline
+		}
+		for _, line := range strings.Split(ansi.Wordwrap(logical, max(m.width-2, 1), ""), "\n") {
+			lines = append(lines, style+"  "+line+cReset)
+		}
 	}
-	return lines
+	return lines, command
 }

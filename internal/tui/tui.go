@@ -1349,6 +1349,10 @@ func (m *model) handleChromeClick(mo tea.Mouse) bool {
 		}
 		return true
 	default:
+		if m.welcomeCommandHit(mo) {
+			m.fillWelcome()
+			return true
+		}
 		// The view body. While the palette is focused, a click returns focus
 		// to the view. While a tab is focused, fall through so
 		// the existing session passthrough forwards the click to the child.
@@ -1609,10 +1613,8 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case k.Code == tea.KeyLeft:
 		m.pal.Left()
 	case k.Code == tea.KeyRight:
-		line, _ := m.pal.Line()
-		if cur == nil && line == "" && m.welcome.tip.command != "" && k.Mod & ^(tea.ModCapsLock|tea.ModNumLock) == 0 {
-			m.pal.Insert(m.welcome.tip.command)
-			m.clearSuggestions()
+		if m.canFillWelcome() && k.Mod & ^(tea.ModCapsLock|tea.ModNumLock) == 0 {
+			m.fillWelcome()
 		} else {
 			m.pal.Right()
 		}
