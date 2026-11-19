@@ -110,7 +110,7 @@ Disk/owner/target errors fail startup; systemd retries are unchanged. [23](#sour
 12. <a id="source-12"></a> [Preservation regression](../../cmd/yoloctl/space_recreate_test.go#L94) — `TestSpaceRecreatePreservesAccountDiskAndManifests`.
 13. <a id="source-13"></a> [nerdctl v2.2.2 creation](https://github.com/containerd/nerdctl/blob/v2.2.2/pkg/cmd/container/create.go) — no privileged-label write.
 14. <a id="source-14"></a> [nerdctl v2.3.5 inspection](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/inspecttypes/dockercompat/dockercompat.go#L665) — label-derived boolean.
-15. <a id="source-15"></a> [Classifier](../../internal/agentbox/privileged.go#L79) — `ClassifyRuntime` agreement.
+15. <a id="source-15"></a> [Classifier](../../internal/agentbox/privileged.go#L87) — `ClassifyRuntime` agreement.
 16. <a id="source-16"></a> [Agreement regression](../../internal/agentbox/privileged_test.go#L279) — `TestClassifyRuntimeRequiresAgreeingEvidence`.
 17. <a id="source-17"></a> [Parsing regression](../../internal/container/runtime_state_test.go#L9) — `TestInspectDoesNotInferUnreportedPrivilege`.
 18. <a id="source-18"></a> [Host runner](../../scripts/smoke/lima_stack.py#L1) — owned fixture, cache wrapper, deadlines, cleanup and observation; `group_alive`/`settle_command` L183-L222 and `cleanup` L581-L602 retain verified cancellation before destruction.

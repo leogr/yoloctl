@@ -29,16 +29,21 @@ func TestNpmAgentMaintenanceUsesExplicitConfigPaths(t *testing.T) {
 			if err := installAgentLatest(t.Context(), c, id, profile); err != nil {
 				t.Fatal(err)
 			}
+			// The agent's program is maintained as yoloctl-maint in /opt,
+			// started in and writing temporary files to its private home.
 			want := []string{
 				"sudo", "nerdctl", "exec",
-				"--user", "sandbox",
+				"--user", "yoloctl-maint",
+				"--workdir", "/var/lib/yoloctl-maint",
 				"--env", wantAgentMaintenancePath,
+				"--env", "HOME=/var/lib/yoloctl-maint",
+				"--env", "TMPDIR=/var/lib/yoloctl-maint",
 				id,
 				"npm", "install", "-g",
 				"--userconfig=/dev/null",
 				"--globalconfig=/dev/yoloctl-maintenance.npmrc",
-				"--prefix=/home/sandbox/.npm-global",
-				"--cache=/home/sandbox/.npm-global/.cache/npm",
+				"--prefix=/opt/yoloctl/npm",
+				"--cache=/var/lib/yoloctl-maint/.npm",
 				"--prefer-online",
 				tc.pkg + "@latest",
 			}

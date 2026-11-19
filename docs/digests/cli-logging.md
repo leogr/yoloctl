@@ -87,7 +87,7 @@ notice's existing once-per-attachment rule are unchanged.
 3. <a id="source-3"></a> [Controller routing](../../cmd/yoloctl/controller_client.go#L115) — `routeControllerCommands`, `reportClientDetached`; internal/controller/client.go `ExitError.State`, `OutcomeRendered`.
 4. <a id="source-4"></a> [CLI regressions](../../cmd/yoloctl/cli_logging_test.go#L47) — finalization, error identity/status, uncertainty, sink rejection, JSON/raw command routing and warning separation.
 5. <a id="source-5"></a> [Host lifecycle](../../cmd/yoloctl/controller_lifecycle.go#L83) — `hostControllerLifecycle`, `createControllerSpace`; controller_deploy.go `startControllerSpaceImpl`, `stopControllerSpace`; space_archive.go export/import wrappers.
-6. <a id="source-6"></a> [Input boundary](../../cmd/yoloctl/agent.go#L319) — `promptYesNo`; agentbox_reconcile.go `runEditor`, session_client.go `attachToSession`, controller_mounts.go `controllerSpaceShell`, install_migration.go `confirmInstall`.
+6. <a id="source-6"></a> [Input boundary](../../cmd/yoloctl/agent.go#L322) — `promptYesNo`; agentbox_reconcile.go `runEditor`, session_client.go `attachToSession`, controller_mounts.go `controllerSpaceShell`, install_migration.go `confirmInstall`.
 7. <a id="source-7"></a> [Installer output](../../cmd/yoloctl/install_output.go#L34) — `paint`, `ok`, `warn`, `bad`; install.go command outcome wrapper.
 8. <a id="source-8"></a> [Authority warnings](../../cmd/yoloctl/privileged_operator.go#L65) — `guardPrivilegedLaunch`, `warnBoxAuthority`; controller_operator.go `warnBoxOperator`; CLI regression `TestCLIPrivilegedAuthoritySurvivesMessageCap`.
 

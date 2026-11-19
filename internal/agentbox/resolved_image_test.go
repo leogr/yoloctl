@@ -105,3 +105,51 @@ func TestResolvedImage_FeatureChangeTriggersRecreate(t *testing.T) {
 		t.Errorf("expected an image recreate, got %+v", plan)
 	}
 }
+
+// leogr's rule end to end (archyAstra): two boxes with the same features,
+// Codex as the agent in only one. The agent's own package goes to the managed
+// prefix and the image names differ; as a feature tool it stays in the user's.
+func TestResolvedImage_AgentNpmPackageSelectsTheManagedPrefix(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	features := []string{"codex", "github"}
+	tool := &Config{Agent: "none", Image: agentboximage.RefAgentbox, Features: features}
+	agent := &Config{Agent: "codex", Image: agentboximage.RefAgentbox, Features: features}
+	recipe := func(c *Config) (string, string) {
+		t.Helper()
+		names, err := RuntimeFeatures(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ref, dockerfile, _, err := agentboximage.ComposedImageRef(c.Image, names)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resolved, _, err := ResolvedImage(c); err != nil || resolved != ref {
+			t.Fatalf("drift ref %q (%v) differs from the build ref %q", resolved, err, ref)
+		}
+		return ref, dockerfile
+	}
+	toolRef, toolRecipe := recipe(tool)
+	agentRef, agentRecipe := recipe(agent)
+	if toolRef == agentRef {
+		t.Fatal("the same features with and without the Codex agent share an image")
+	}
+	if !strings.Contains(toolRecipe, "@openai/codex@latest --prefix=/home/sandbox/.npm-global") || strings.Contains(toolRecipe, "/opt/yoloctl/npm") {
+		t.Fatalf("Codex as a tool left the user's prefix:\n%s", toolRecipe)
+	}
+	if !strings.Contains(agentRecipe, "@openai/codex@latest --prefix=/opt/yoloctl/npm") || strings.Contains(agentRecipe, "@openai/codex@latest --prefix=/home/sandbox/.npm-global") {
+		t.Fatalf("Codex as the agent is not in the managed prefix:\n%s", agentRecipe)
+	}
+	// A native agent and an agentless box get no agent npm runtime feature.
+	for _, c := range []*Config{{Agent: "agy", Image: agentboximage.RefAgentbox}, tool} {
+		names, err := RuntimeFeatures(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, n := range names {
+			if strings.HasPrefix(n, "yoloctl:agent-npm:") {
+				t.Fatalf("agent %q got %s", c.Agent, n)
+			}
+		}
+	}
+}

@@ -61,7 +61,7 @@ in_box node --input-type=module <"$(dirname "${BASH_SOURCE[0]}")/opencode-runtim
 smoke_info "checking native executable attribution and HTTPS endpoints"
 in_box env BUN_BE_BUN=1 opencode -e '
 const fs = require("node:fs");
-if (fs.realpathSync(process.execPath) !== "/home/sandbox/.npm-global/lib/node_modules/opencode-ai/bin/opencode.exe") process.exit(1);
+if (fs.realpathSync(process.execPath) !== "/opt/yoloctl/npm/lib/node_modules/opencode-ai/bin/opencode.exe") process.exit(1);
 '
 hosts=(opencode.ai api.anthropic.com api.openai.com auth.openai.com chatgpt.com generativelanguage.googleapis.com openrouter.ai)
 for host in "${hosts[@]}"; do
@@ -103,7 +103,7 @@ for binary in curl node; do
   smoke_fail "missing attributed OpenCode egress denial for $binary"
 done
 smoke_require_allowed_egress "$log_output" opencode \
- /home/sandbox/.npm-global/lib/node_modules/opencode-ai/bin/opencode.exe "${hosts[@]}" registry.npmjs.org
+ /opt/yoloctl/npm/lib/node_modules/opencode-ai/bin/opencode.exe "${hosts[@]}" registry.npmjs.org
 
 smoke_info "checking import refusal and create-time secret replacement"
 if "$YOLOCTL" account auth import "$ACCOUNT" opencode --space "$SMOKE_SPACE" --file "${fixture_home}/.local/share/opencode/auth.json" \

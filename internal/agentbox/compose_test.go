@@ -42,6 +42,7 @@ func TestCompose_ClaudeFeatureOnly(t *testing.T) {
 	// path. See the claude feature in internal/features/features.go.
 	wantBinaries := []string{
 		"/usr/bin/node",
+		"/opt/yoloctl/npm/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
 		"/home/sandbox/.npm-global/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
 	}
 	gotBinaries := make([]string, 0, len(np.Binaries))

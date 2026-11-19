@@ -50,6 +50,7 @@ network_policies:
                 - 443
         binaries:
             - path: /usr/bin/node
+            - path: /opt/yoloctl/npm/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe
             - path: /home/sandbox/.npm-global/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe
     github:
         name: github

@@ -3,6 +3,7 @@ package agentbox
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/capabilities"
@@ -193,5 +194,34 @@ func TestEffectiveCapabilitiesViaAgentFeatures(t *testing.T) {
 	}
 	if !gotFeature {
 		t.Error("network.anthropic should carry OriginFeature: it comes from the claude feature pulled in by the profile's requires_features")
+	}
+}
+
+// The one agent-level grant: an agent profile with an npm package adds read
+// access to the managed prefix, tagged OriginAgent so box inspect shows where
+// it comes from. A feature-only box, an agentless box and a native agent do not.
+func TestEffectiveCapabilitiesAgentNpmRead(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	for _, tc := range []struct {
+		cfg  *Config
+		want bool
+	}{
+		{&Config{Name: "x", Space: "default", Agent: "claude"}, true},
+		{&Config{Name: "x", Space: "default", Agent: "codex"}, true},
+		{&Config{Name: "x", Space: "default", Features: []string{"claude"}}, false},
+		{&Config{Name: "x", Space: "default", Agent: "agy"}, false},
+	} {
+		eff, err := EffectiveCapabilities(tc.cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if eff.Has(capabilities.AgentNpmReadCapability) != tc.want {
+			t.Fatalf("agent %q features %v: agent npm read = %v", tc.cfg.Agent, tc.cfg.Features, !tc.want)
+		}
+		for _, e := range eff.Effective() {
+			if e.Capability.Name == capabilities.AgentNpmReadCapability && !slices.Equal(e.Origins, []capabilities.Origin{capabilities.OriginAgent}) {
+				t.Fatalf("origins = %v", e.Origins)
+			}
+		}
 	}
 }

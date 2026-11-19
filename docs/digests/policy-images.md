@@ -1,13 +1,15 @@
 # Policy boundaries
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; baseline writable paths at `e3b21585fc6a31b400f01455a70838d8ebdbabb7` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; baseline writable paths at `e3b21585fc6a31b400f01455a70838d8ebdbabb7` and accompanying changes; agent npm grant `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes; re-read cited sources when changing behavior.
 
 Image composition, build caches and built-in installers are in
 [image composition](image-composition.md); agent updates in a running box are
 in [agent maintenance](agent-maintenance.md).
 
 [FACT] Effective features combine box selections and agent requirements;
-effective capabilities combine box grants and feature requirements. Features
+effective capabilities combine box grants and feature requirements, plus one
+agent-origin grant: read-only access to the managed npm prefix when the agent
+profile names an npm package ([agent maintenance](agent-maintenance.md)). Features
 install software and/or grant policy; agents do not declare capabilities.
 Composition validates catalogs and policy. [1](#source-1) [2](#source-2)
 
@@ -61,35 +63,35 @@ effective operator grant requires recreation of that infrastructure.
 [12](#source-12)
 
 [FACT] Codex's OpenAI HTTPS grant names Node, npm-vendored Linux x64/arm64
-Codex and its detached daemon. Daemon paths allow one version/target directory
+Codex under the managed and user prefixes, and its detached daemon. Daemon paths allow one version/target directory
 under `app-server-daemon/releases`, ending in `bin/codex`; updates need no
 version pin. OpenAI/ChatGPT hosts remain scoped to port 443. Unrelated binaries with no allowed ancestor, spoofed argv and unrelated
 hosts gain no grant. Existing ancestor matching remains unchanged. [18](#source-18) [19](#source-19)
 
 ## Sources
 
-1. <a id="source-1"></a> [internal/agentbox/compose.go](../../internal/agentbox/compose.go#L40-L226) — `ComposePolicy` through `compilePolicy`.
-2. <a id="source-2"></a> [internal/features/features.go](../../internal/features/features.go#L1-L135) — `Feature`, builtin install and capability declarations.
-3. <a id="source-3"></a> [internal/agentbox/compose.go](../../internal/agentbox/compose.go#L228-L331) — `lintReadWriteDevSymlink` through `lintHostPattern`.
+1. <a id="source-1"></a> [internal/agentbox/compose.go](../../internal/agentbox/compose.go#L40-L278) — `ComposePolicy` through `compilePolicy`, including `AgentNpmPackage`.
+2. <a id="source-2"></a> [internal/features/features.go](../../internal/features/features.go#L1-L141) — `Feature`, builtin install and capability declarations.
+3. <a id="source-3"></a> [internal/agentbox/compose.go](../../internal/agentbox/compose.go#L302-L383) — `lintReadWriteDevSymlink` through `lintHostPattern`.
 4. <a id="source-4"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L330) — runtime options, bind mounts and environment.
 5. <a id="source-5"></a> [assets/containers/agentbox/yoloctl-entrypoint.sh](../../assets/containers/agentbox/yoloctl-entrypoint.sh#L26) — GID-zero guard and identity alignment.
 
 6. <a id="source-6"></a> [assets/embed.go](../../assets/embed.go#L1) — embedded assets; the v0.0.72 `SandboxVersion` pins and legacy Rego embed are removed by the retirement (tree `3cc5e841`), the native runtime, its Rego and the generated qualification selection are embedded through `internal/nativeartifacts` (`embedded/selection/`, git-ignored, written by `make build`); `assets/native_openshell.go` keeps an empty default; `assets/sandbox/sandbox-policy.rego` stays only as a test fixture.
 7. <a id="source-7"></a> [internal/features/features_test.go](../../internal/features/features_test.go#L187) — `TestGenerateDockerfile_AgentNpmFeaturesUseLatest`.
-8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L78-L113) — `PTYAllocateCapability`, `ptyGrants`, `PTYGrants`.
+8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L87-L129) — `PTYAllocateCapability`, `ptyGrants`, `PTYGrants`.
 9. <a id="source-9"></a> [internal/sandbox/sandbox.go](../../internal/sandbox/sandbox.go#L113-L139) — `EntrypointArgs` and process-mode selection.
 10. <a id="source-10"></a> [internal/agentbox/policy_golden_test.go](../../internal/agentbox/policy_golden_test.go#L51-L143) — `policyGoldenCases`, `TestPolicyGolden`.
 11. <a id="source-11"></a> [assets/entrypoint_test.go](../../assets/entrypoint_test.go#L11) — prepared-identity no-op, group collisions and rejection before mutation.
 12. <a id="source-12"></a> [Operator implementation](operator.md).
 
 13. <a id="source-13"></a> [Capability authoring](../../internal/capabilities/user.go#L54) — `EgressGrant`, `translate`, `toGrants`.
-14. <a id="source-14"></a> [Endpoint compiler](../../internal/agentbox/compose.go#L352) — `toNetworkPolicyFromGrant`.
+14. <a id="source-14"></a> [Endpoint compiler](../../internal/agentbox/compose.go#L449) — `toNetworkPolicyFromGrant`.
 15. <a id="source-15"></a> [Capability display](../../cmd/yoloctl/capability.go#L98) — text and JSON grants.
 16. <a id="source-16"></a> [OpenShell L7 config](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-network/src/l7/mod.rs#L164) — `parse_l7_config`, `expand_access_presets` at L1460.
 17. <a id="source-17"></a> [OpenShell policy preprocessing](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-network/src/opa.rs#L722) — validation and access expansion.
 
-18. <a id="source-18"></a> [OpenAI capability](../../internal/capabilities/capabilities.go#L162) — `network.openai` executable paths and endpoints.
+18. <a id="source-18"></a> [OpenAI capability](../../internal/capabilities/capabilities.go#L172) — `network.openai` executable paths and endpoints.
 19. <a id="source-19"></a> [Codex egress regressions](../../internal/agentbox/codex_egress_test.go#L19) — `TestCodexEgressGlobScope` checks composed binary paths with OPA glob.match; skips without the optional OPA tool.
-20. <a id="source-20"></a> [Extra mount regressions](../../internal/agentbox/policy_golden_test.go#L376) — `TestPolicyGrantsDeclaredExtraMounts`; golden `extra_mounts`.
+20. <a id="source-20"></a> [Extra mount regressions](../../internal/agentbox/policy_golden_test.go#L383) — `TestPolicyGrantsDeclaredExtraMounts`; golden `extra_mounts`.
 21. <a id="source-21"></a> [Static composition regressions](../../internal/agentbox/compose_surface_test.go#L1) — `TestComposeExplicitNetworkCapabilitiesMatchGoldens`, `TestComposeUnconfinedNetworkKeepsFilesystemPolicy`, `TestComposeExtraReadOnlyMountDesiredPolicy`; `ComposePolicy` and `compilePolicy` in compose.go L40-L226.
 22. <a id="source-22"></a> [Baseline filesystem](../../internal/agentbox/compose.go#L405) — `baselineFilesystem`; `TestCompose_VarTmpReadWrite` in compose_var_tmp_test.go; the goldens in testdata/policy_golden.

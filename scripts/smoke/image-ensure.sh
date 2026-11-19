@@ -20,8 +20,11 @@ SECOND_CREATE_LOG="${SMOKE_ROOT}/image-second-create.log"
 AUTOUPDATE_LOG="${SMOKE_ROOT}/image-autoupdate.log"
 REBUILD_LOG="${SMOKE_ROOT}/image-rebuild.log"
 REFRESH_LOG="${SMOKE_ROOT}/image-base-refresh.log"
-CLAUDE_PACKAGE_JSON="/home/sandbox/.npm-global/lib/node_modules/@anthropic-ai/claude-code/package.json"
-NPM_MAINTENANCE_CACHE="/home/sandbox/.npm-global/.cache/npm"
+# Claude is the box's agent, so its program lives in the managed prefix owned by
+# yoloctl-maint; Codex is a feature tool here and stays in the user's prefix.
+CLAUDE_PACKAGE_JSON="/opt/yoloctl/npm/lib/node_modules/@anthropic-ai/claude-code/package.json"
+CODEX_PACKAGE_JSON="/home/sandbox/.npm-global/lib/node_modules/@openai/codex/package.json"
+NPM_MAINTENANCE_CACHE="/var/lib/yoloctl-maint/.npm"
 CACHE_TOKEN="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
 
 # Check actual unpacked layer usage, not just the generated recipe. A late
@@ -70,6 +73,7 @@ RUN --mount=type=cache,id=yoloctl-apt-lists-v1,target=/var/lib/apt/lists,sharing
 RUN if [ -d /var/lib/apt/lists ]; then test -z "\$(find /var/lib/apt/lists -type f -print -quit)"; fi
 RUN --mount=type=cache,id=yoloctl-npm-v1,target=/var/cache/yoloctl/npm,sharing=locked,mode=0777 \
     test -d /var/cache/yoloctl/npm/0/_cacache \
+    && test -d "/var/cache/yoloctl/npm/\$(id -u yoloctl-maint)/_cacache" \
     && if [ "\$SMOKE_PHASE" = before ]; then printf '%s' "\$SMOKE_TOKEN" > /var/cache/yoloctl/npm/smoke-retained; \
        else test "\$(cat /var/cache/yoloctl/npm/smoke-retained)" = "\$SMOKE_TOKEN" && rm /var/cache/yoloctl/npm/smoke-retained; fi
 RUN if [ -d /var/cache/yoloctl/npm ]; then test -z "\$(find /var/cache/yoloctl/npm -type f -print -quit)"; fi
@@ -166,6 +170,14 @@ check_image_ownership_layer
 "$YOLOCTL" box exec "$BOX" --space "$SMOKE_SPACE" -- go version
 "$YOLOCTL" box exec "$BOX" --space "$SMOKE_SPACE" -- claude --version
 "$YOLOCTL" box exec "$BOX" --space "$SMOKE_SPACE" -- codex --version
+smoke_info "asserting the agent's program is in the managed prefix and not writable by the box user"
+"$YOLOCTL" box exec "$BOX" --space "$SMOKE_SPACE" -- sh -ceu '
+test "$(command -v claude)" = /opt/yoloctl/npm/bin/claude
+test "$(command -v codex)" = /home/sandbox/.npm-global/bin/codex
+test -r "$1" && test -r "$2"
+if touch /opt/yoloctl/npm/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe 2>/dev/null; then exit 1; fi
+if mkdir /opt/yoloctl/npm/lib/node_modules/.bin 2>/dev/null; then exit 1; fi
+' managed-prefix "$CLAUDE_PACKAGE_JSON" "$CODEX_PACKAGE_JSON" || smoke_fail "agent program location or write protection is wrong"
 smoke_info "asserting Codex's bubblewrap prerequisite is available on the confined PATH"
 "$YOLOCTL" box exec "$BOX" --space "$SMOKE_SPACE" -- sh -ceu 'command -v bwrap; bwrap --version'
 
@@ -213,7 +225,9 @@ poison_owner="$(
 [[ "$poison_owner" == "0" ]] ||
 	smoke_fail "poisoned ~/.npm owner = $poison_owner, want root (0)"
 
-"$YOLOCTL" box exec "$BOX" --space "$SMOKE_SPACE" -- \
+# Only the maintenance user can change the agent's files; the box user cannot.
+"$YOLOCTL" space ssh "$SMOKE_SPACE" --root -- \
+	nerdctl exec --user yoloctl-maint "$BOX" \
 	node -e 'const fs = require("fs"); const p = process.argv[1]; const v = JSON.parse(fs.readFileSync(p)); v.version = "0.0.0-yoloctl-smoke"; fs.writeFileSync(p, JSON.stringify(v));' \
 	"$CLAUDE_PACKAGE_JSON"
 
@@ -235,13 +249,12 @@ cache_owner="$(
 	"$YOLOCTL" space ssh "$SMOKE_SPACE" --root -- \
 		nerdctl exec --user 0 "$BOX" stat -c %u:%g "$NPM_MAINTENANCE_CACHE"
 )" || smoke_fail "stat $NPM_MAINTENANCE_CACHE failed — autoupdate did not create the maintenance cache?"
-# GID 20 can resolve to dialout even when sandbox uses that same numeric GID.
-sandbox_owner="$(
+maint_owner="$(
 	"$YOLOCTL" space ssh "$SMOKE_SPACE" --root -- \
-		nerdctl exec --user 0 "$BOX" sh -c 'printf "%s:%s\n" "$(id -u sandbox)" "$(id -g sandbox)"'
-)" || smoke_fail "resolving sandbox identity failed"
-[[ "$cache_owner" == "$sandbox_owner" ]] ||
-	smoke_fail "maintenance cache owner = $cache_owner, want sandbox identity $sandbox_owner"
+		nerdctl exec --user 0 "$BOX" sh -c 'printf "%s:%s\n" "$(id -u yoloctl-maint)" "$(id -g yoloctl-maint)"'
+)" || smoke_fail "resolving the agent maintenance identity failed"
+[[ "$cache_owner" == "$maint_owner" ]] ||
+	smoke_fail "maintenance cache owner = $cache_owner, want yoloctl-maint $maint_owner"
 poison_owner_after="$(
 	"$YOLOCTL" space ssh "$SMOKE_SPACE" --root -- \
 		nerdctl exec --user 0 "$BOX" stat -c %u /home/sandbox/.npm

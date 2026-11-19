@@ -44,6 +44,8 @@ network_policies:
                 - 443
         binaries:
             - path: /usr/bin/node
+            - path: /opt/yoloctl/npm/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
+            - path: /opt/yoloctl/npm/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex
             - path: /home/sandbox/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
             - path: /home/sandbox/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex
             - path: /home/sandbox/.codex/packages/app-server-daemon/releases/*-x86_64-unknown-linux-musl/bin/codex

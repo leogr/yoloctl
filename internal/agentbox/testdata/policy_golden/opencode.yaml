@@ -59,4 +59,5 @@ network_policies:
               ports:
                 - 443
         binaries:
+            - path: /opt/yoloctl/npm/lib/node_modules/opencode-ai/bin/opencode.exe
             - path: /home/sandbox/.npm-global/lib/node_modules/opencode-ai/bin/opencode.exe

@@ -71,7 +71,9 @@ and [accounts](docs/specs/accounts.md).
   never implicitly created. `space create` requires `--account NAME`.
 - An **agent** adapter provides launch/auth/state conventions, a base-image
   default and required features. Features install tools and require positive
-  capabilities; explicit box capabilities plus feature requirements form policy.
+  capabilities; explicit box capabilities plus feature requirements form policy,
+  plus one agent-origin grant: read access to the managed npm prefix when the
+  profile names an npm package.
 
 Construct config paths through `internal/layout`. The host retains only the
 schema-3 space bootstrap (disk identity, grants, UID/GID, VM settings, bundle and
@@ -215,8 +217,11 @@ Evidence: [composition](docs/digests/image-composition.md) and
 Claude, Codex, Gemini, OpenCode and Pi feature installs must track `@latest`; do not pin their feature
 versions. Antigravity (`agy`) installs the latest verified native release.
 Infrastructure pins (OpenShell, terminal libraries, CI lint) are
-separate and deliberate. Agent npm maintenance uses the explicit
-`/home/sandbox/.npm-global` prefix and its private maintenance cache.
+separate and deliberate. Separate npm by role: the package an agent profile
+names lives in `/opt/yoloctl/npm`, installed and updated only as the
+`yoloctl-maint` user from its private home and cache, never writable by the box
+user; every other npm install uses `/home/sandbox/.npm-global`. See
+[agent maintenance](docs/digests/agent-maintenance.md).
 
 Firecracker shares use pinned `pkg/sftp/v2` with isolated decoder/cleanup patches.
 Keep handle metadata descriptor-based, apply creation modes before publication,

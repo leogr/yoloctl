@@ -56,6 +56,14 @@ test "$actual" = "$expected" || { echo "image sandbox identity: $actual, expecte
 test "$(stat -c %u:%g /home/sandbox)" = "$expected"
 wrong_owner=$(find /home/sandbox/.npm-global \( ! -uid "$1" -o ! -gid "$2" \) -print -quit)
 test -z "$wrong_owner" || { echo "npm prefix ownership differs from image identity: $wrong_owner" >&2; exit 1; }
+if [ -d /opt/yoloctl/npm ]; then
+    maint="$(id -u yoloctl-maint):$(id -g yoloctl-maint)"
+    test "$maint" != "$expected" || { echo "agent maintenance user shares the sandbox identity" >&2; exit 1; }
+    wrong_owner=$(find /opt/yoloctl/npm ! -user yoloctl-maint -print -quit)
+    test -z "$wrong_owner" || { echo "agent npm prefix not owned by yoloctl-maint: $wrong_owner" >&2; exit 1; }
+    writable=$(find /opt/yoloctl/npm -perm /022 ! -type l -print -quit)
+    test -z "$writable" || { echo "agent npm prefix is group/other-writable: $writable" >&2; exit 1; }
+fi
 printf "prepared image identity: %s\n" "$actual"
 ' image-identity "$(id -u)" "$(id -g)"
 }

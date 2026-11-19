@@ -14,6 +14,7 @@ filesystem_policy:
         - /app
         - /var/log
         - /workdir
+        - /opt/yoloctl/npm
     read_write:
         - /tmp
         - /var/tmp

@@ -56,7 +56,9 @@ identity. Copy transfers settings and selects the destination's account; it
 never copies account state or project files. [1](#source-1)
 
 [FACT] Agents describe launch/auth/state conventions and image defaults.
-Features install tools and require positive capabilities. Catalogs stay on the
+Features install tools and require positive capabilities. An agent profile's npm
+package is installed in the managed prefix and adds its one read-only grant,
+shown with origin `agent` [20](#source-20). Catalogs stay on the
 host and are read-only inputs to the controller. The persisted VM adapter
 selects transport and lifecycle. New Linux amd64 spaces default to Firecracker
 with KVM and a lazily prepared local image. Firecracker image assembly and
@@ -133,3 +135,4 @@ independent ownership boundaries. [16](#source-16)
 17. <a id="source-17"></a> [Lima storage and space names](../digests/lima-storage.md).
 18. <a id="source-18"></a> [Firecracker host runtime](../digests/firecracker-runtime.md).
 19. <a id="source-19"></a> [Firecracker guest](../digests/firecracker-guest.md).
+20. <a id="source-20"></a> [Agent maintenance](../digests/agent-maintenance.md).

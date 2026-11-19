@@ -1,6 +1,6 @@
 # Gemini CLI adapter
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream behavior inspected at Gemini CLI `v0.62.0`. Re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; install prefix `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes; upstream behavior inspected at Gemini CLI `v0.62.0`. Re-read cited sources when changing behavior.
 
 [FACT] The embedded `gemini` profile selects the Ubuntu base, requires the
 `gemini` and `github` features, and launches `gemini --approval-mode yolo`.
@@ -9,8 +9,9 @@ Its nonsecret launch environment sets `NO_BROWSER=true` and
 The npm package metadata also selects Gemini for the existing versions/update
 commands. [1](#source-1) [2](#source-2)
 
-[FACT] The Gemini feature installs `@google/gemini-cli@latest` with the explicit
-`/home/sandbox/.npm-global` prefix. Its Dockerfile recipe writes image-owned
+[FACT] The Gemini feature installs `@google/gemini-cli@latest` into the managed
+`/opt/yoloctl/npm` prefix when Gemini is the box's agent, otherwise into
+`/home/sandbox/.npm-global` ([agent maintenance](agent-maintenance.md)). Its Dockerfile recipe writes image-owned
 `/etc/gemini-cli/settings.json`, disabling both self-updates and update
 notifications, plus `system-defaults.json`, disabling usage statistics and
 PTY-backed shell execution by default. It does not rewrite account-owned settings.

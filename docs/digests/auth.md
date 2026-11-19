@@ -82,7 +82,7 @@ selects a home-relative host import directory; custom XDG roots use --file. [14]
 ## Sources
 
 1. <a id="source-1"></a> [internal/agentbox/secret_injection.go](../../internal/agentbox/secret_injection.go#L44-L73) — `userEnvironmentJSON`.
-2. <a id="source-2"></a> [internal/agentprofile/builtin/claude.yaml](../../internal/agentprofile/builtin/claude.yaml#L46-L119) — `launch_env`, `auth`, `secret_injection`.
+2. <a id="source-2"></a> [internal/agentprofile/builtin/claude.yaml](../../internal/agentprofile/builtin/claude.yaml#L46-L116) — `launch_env`, `auth`, `secret_injection`.
 3. <a id="source-3"></a> [internal/agentprofile/builtin/codex.yaml](../../internal/agentprofile/builtin/codex.yaml#L13) — `command`, `requires_features`, `auth` (line 89).
 4. <a id="source-4"></a> [cmd/yoloctl/launchenv.go](../../cmd/yoloctl/launchenv.go#L26-L42) — `applyLaunchEnv`.
 5. <a id="source-5"></a> [cmd/yoloctl/account_auth.go](../../cmd/yoloctl/account_auth.go#L133-L404) — `resolveAccountAuthTarget`, `defaultHostAuthPaths`, `newAccountAuthImportCmd`, `importSecretIntoAccount`, `accountAuthStatus`.

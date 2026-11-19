@@ -163,6 +163,7 @@ func TestPolicyBinaryAttribution(t *testing.T) {
 			policyName: "anthropic",
 			wantBinaries: []string{
 				"/usr/bin/node",
+				"/opt/yoloctl/npm/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
 				"/home/sandbox/.npm-global/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
 			},
 			wantHosts: []string{"api.anthropic.com", "*.anthropic.com", "claude.com"},
@@ -172,6 +173,8 @@ func TestPolicyBinaryAttribution(t *testing.T) {
 			policyName: "openai",
 			wantBinaries: []string{
 				"/usr/bin/node",
+				"/opt/yoloctl/npm/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex",
+				"/opt/yoloctl/npm/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex",
 				"/home/sandbox/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex",
 				"/home/sandbox/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex",
 				"/home/sandbox/.codex/packages/app-server-daemon/releases/*-x86_64-unknown-linux-musl/bin/codex",
@@ -192,7 +195,7 @@ func TestPolicyBinaryAttribution(t *testing.T) {
 		},
 		{
 			feature: "opencode", policyName: "opencode",
-			wantBinaries: []string{"/home/sandbox/.npm-global/lib/node_modules/opencode-ai/bin/opencode.exe"},
+			wantBinaries: []string{"/opt/yoloctl/npm/lib/node_modules/opencode-ai/bin/opencode.exe", "/home/sandbox/.npm-global/lib/node_modules/opencode-ai/bin/opencode.exe"},
 			wantHosts:    []string{"registry.npmjs.org", "opencode.ai", "api.anthropic.com", "api.openai.com", "auth.openai.com", "chatgpt.com", "generativelanguage.googleapis.com", "openrouter.ai"},
 		},
 		{

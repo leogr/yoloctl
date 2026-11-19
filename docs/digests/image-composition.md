@@ -1,10 +1,12 @@
 # Image composition and build caches
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409dbbb5f2febbe3bdf2f581dff7775ff43b` and accompanying changes; APT-compatible smoke probe correction on `a3827ba3b050fc0e7641586704954c4fc76f0241` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; agent npm installer `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409dbbb5f2febbe3bdf2f581dff7775ff43b` and accompanying changes; APT-compatible smoke probe correction on `a3827ba3b050fc0e7641586704954c4fc76f0241` and accompanying changes.
 
 [FACT] Composition prepares available sandbox identities before installation,
 using the space owner's UID/GID without account/workdir mounts. npm owns packages
-in its install layer. Final home repair changes only mismatches without following
+in its install layer; the agent's own package is installed by and owned by
+`yoloctl-maint` in `/opt/yoloctl/npm`, an image input that keeps such recipes
+distinct ([agent maintenance](agent-maintenance.md)). Final home repair changes only mismatches without following
 symlinks. Matching startups skip remapping; the entrypoint handles other identities.
 References hash builder version, base, recipe and identity; policy-only features
 are hash-neutral. Cached images are reused; forced builds refresh feature layers
@@ -70,13 +72,13 @@ AWS credential and custom-egress setup remain explicit. [22](#source-22)
 3. <a id="source-3"></a> [assets/entrypoint_test.go](../../assets/entrypoint_test.go#L11) — prepared-identity no-op, group collisions and rejection before mutation.
 4. <a id="source-4"></a> [Image identity regressions](../../internal/agentboximage/composed_test.go#L48) — identity cache separation and native worker build/plan agreement.
 5. <a id="source-5"></a> [BuildKit v0.31.2 bridge](https://github.com/moby/buildkit/blob/v0.31.2/solver/llbsolver/bridge.go#L137-L150) — cache mount reset before an uncached solve.
-6. <a id="source-6"></a> [npm installation](../../internal/features/features.go#L444) — shared `npmPackageInstallDockerfile`.
+6. <a id="source-6"></a> [npm installation](../../internal/features/features.go#L501-L516) — shared `npmPackageInstallDockerfile`.
 7. <a id="source-7"></a> [Dockerfile reference](https://docs.docker.com/reference/dockerfile/#arg) — cache mounts/GC, inherited ARGs and cache invalidation.
 8. <a id="source-8"></a> [Base Dockerfile](../../assets/containers/agentbox/Dockerfile#L28) — apt cache, retries and strict index refresh.
 9. <a id="source-9"></a> [Base recipe regression](../../assets/base_image_test.go#L11) — repository/index/install failure propagation.
 10. <a id="source-10"></a> [Apt installers](../../internal/features/apt.go#L3-L14) — shared locked metadata/archive mounts and strict refresh/install recipe; callers in codex.go, pi.go, opencode.go and features.go; conditional Python fallback in agent_observe.go.
 11. <a id="source-11"></a> [Apt regressions](../../internal/features/apt_test.go#L11-L69) — builtin cache coverage and unavailable-index failure before installation.
-12. <a id="source-12"></a> [scripts/smoke/image-ensure.sh](../../scripts/smoke/image-ensure.sh#L27) — ownership-layer measurement, forced rebuild/cache checks and maintenance.
+12. <a id="source-12"></a> [scripts/smoke/image-ensure.sh](../../scripts/smoke/image-ensure.sh#L30) — ownership-layer measurement, forced rebuild/cache checks and maintenance.
 13. <a id="source-13"></a> [Image smoke probe](../../scripts/smoke/common.sh#L46) — `smoke_check_image_identity`; no account/project mounts or agent workload.
 14. <a id="source-14"></a> [Cache probe regression](../../scripts/test_image_cache_probe.py#L1-L97) — exact smoke shell probe, real isolated APT update with default cleanup, unchanged indexes and reset-cache rejection.
 15. <a id="source-15"></a> [Antigravity adapter](agy.md) — native installation, auth and runtime contracts.

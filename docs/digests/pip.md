@@ -53,14 +53,14 @@ versions are pinned. The smoke's existence does not establish a live pass.
 
 ## Sources
 
-1. <a id="source-1"></a> [internal/features/features.go](../../internal/features/features.go#L176-L214) — `pypi`, `pip` and `python-3.12` definitions.
+1. <a id="source-1"></a> [internal/features/features.go](../../internal/features/features.go#L206-L238) — `pypi`, `pip` and `python-3.12` definitions.
 2. <a id="source-2"></a> [internal/features/pip.go](../../internal/features/pip.go#L12-L28) — `pipInstallDockerfile` validation, launchers and writable directories.
 3. <a id="source-3"></a> [assets/containers/agentbox/Dockerfile](../../assets/containers/agentbox/Dockerfile#L51-L66) — Python PPA, venv package, ensurepip and default aliases.
 4. <a id="source-4"></a> [assets/containers/agentbox/yoloctl-entrypoint.sh](../../assets/containers/agentbox/yoloctl-entrypoint.sh#L28-L46) — UID/GID and home ownership alignment.
 5. <a id="source-5"></a> [Python 3.13 venv documentation](https://docs.python.org/3.13/library/venv.html) — isolated environment, executable paths and activation.
 6. <a id="source-6"></a> [pip caching documentation](https://pip.pypa.io/en/stable/topics/caching/) — pip 26.2.1 cache defaults.
 7. <a id="source-7"></a> [scripts/smoke/pip.sh](../../scripts/smoke/pip.sh#L1) — complete isolated runtime gate.
-8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L269) — unchanged `network.pypi` endpoint and executable grants.
+8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L309) — unchanged `network.pypi` endpoint and executable grants.
 9. <a id="source-9"></a> [pip policy golden](../../internal/agentbox/testdata/policy_golden/pip.yaml#L1) — complete composed policy.
 10. <a id="source-10"></a> [internal/agentboximage/composed_test.go](../../internal/agentboximage/composed_test.go#L204) — `TestComposedImageRef_PipEnvironmentChangesImage`.
 11. <a id="source-11"></a> [internal/features/features_test.go](../../internal/features/features_test.go#L100) — `TestPipEnvironmentIncludesPyPIWithoutChangingPolicyOnlyFeature`.

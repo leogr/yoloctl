@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/leogr/yoloctl/internal/agentnpm"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/nativerelease"
 	"github.com/leogr/yoloctl/internal/operator"
@@ -93,6 +94,12 @@ const WorkdirWriteCapability = "fs.workdir.write"
 // it enforces Landlock and the child only inherits the slave descriptors.
 const PTYAllocateCapability = "fs.pty.allocate"
 
+// AgentNpmReadCapability lets the box read and run its agent's program in the
+// managed npm prefix (internal/agentnpm), which the box user cannot write. The
+// composer adds it with OriginAgent when the box's agent profile names an npm
+// package; it grants nothing else.
+const AgentNpmReadCapability = "fs.agent-npm.read"
+
 // ptyGrants is the exact path set PTYAllocateCapability lowers to. It is
 // deliberately narrow and deliberately NOT "/dev":
 //
@@ -153,8 +160,11 @@ var registry = map[string]Capability{
 				{Host: "claude.ai", Ports: []int{443}},
 				{Host: "*.claude.ai", Ports: []int{443}},
 			},
+			// The managed agent install, then the box user's prefix (the
+			// claude feature on a box whose agent is not Claude).
 			Binaries: []string{
 				"/usr/bin/node",
+				agentnpm.Prefix + "/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
 				"/home/sandbox/.npm-global/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe",
 			},
 		}},
@@ -173,8 +183,11 @@ var registry = map[string]Capability{
 			// Native Codex and its detached daemon have no Node ancestor.
 			// Bound the daemon wildcard to one version/target directory so
 			// @latest updates retain egress without granting the whole cache.
+			// The managed agent install comes first, then the box user's prefix.
 			Binaries: []string{
 				"/usr/bin/node",
+				agentnpm.Prefix + "/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex",
+				agentnpm.Prefix + "/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex",
 				"/home/sandbox/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex",
 				"/home/sandbox/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex",
 				"/home/sandbox/.codex/packages/app-server-daemon/releases/*-x86_64-unknown-linux-musl/bin/codex",
@@ -230,7 +243,10 @@ var registry = map[string]Capability{
 				{Host: "generativelanguage.googleapis.com", Ports: []int{443}},
 				{Host: "openrouter.ai", Ports: []int{443}},
 			},
-			Binaries: []string{"/home/sandbox/.npm-global/lib/node_modules/opencode-ai/bin/opencode.exe"},
+			Binaries: []string{
+				agentnpm.Prefix + "/lib/node_modules/opencode-ai/bin/opencode.exe",
+				"/home/sandbox/.npm-global/lib/node_modules/opencode-ai/bin/opencode.exe",
+			},
 		}},
 	},
 	"network.pi": {
@@ -327,6 +343,11 @@ var registry = map[string]Capability{
 		Description: "Read-write access to the agentbox workdir (/workdir)",
 		Filesystem:  []FSGrant{{Path: "/workdir", Access: ReadWrite}},
 	},
+	AgentNpmReadCapability: {
+		Name:        AgentNpmReadCapability,
+		Description: "Read and run the box agent's npm program in " + agentnpm.Prefix + ", which only yoloctl updates",
+		Filesystem:  []FSGrant{{Path: agentnpm.Prefix, Access: ReadOnly}},
+	},
 	PTYAllocateCapability: {
 		Name: PTYAllocateCapability,
 		Description: "Allocate pseudo-terminals in the box's private /dev/pts (tmux, script, expect, " +
@@ -418,6 +439,7 @@ type Origin string
 const (
 	OriginExplicit Origin = "explicit" // declared directly on the agentbox manifest
 	OriginFeature  Origin = "feature"  // required by a selected feature (incl. an agent profile's required features)
+	OriginAgent    Origin = "agent"    // added for the agent profile's own npm program (AgentNpmReadCapability)
 )
 
 // EffectiveCapability is a resolved capability plus the origins that pulled it

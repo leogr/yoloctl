@@ -9,9 +9,9 @@ import (
 	"io"
 	"strings"
 
+	"github.com/leogr/yoloctl/internal/agentnpm"
 	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/container"
-	"github.com/leogr/yoloctl/internal/features"
 	"github.com/leogr/yoloctl/internal/logging"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 )
@@ -19,9 +19,11 @@ import (
 // autoupdateAgentboxIfNeeded refreshes a configured npm or native distribution
 // on create/start/run unless --no-autoupdate is set. Unavailable version probes
 // skip with notice; an install failure is returned. Native maintenance verifies
-// the release before replacing the binary; npm uses its explicit private prefix.
-// Maintenance runs as sandbox in the outer container. It must never execute
-// an agent workload there, including native --version or self-update commands.
+// the release before replacing the binary, as sandbox; npm installs run as the
+// agent maintenance user into the agent's managed prefix, so the package's
+// install scripts meet nothing the box user can write. Maintenance runs in the
+// outer container. yoloctl must never execute an agent workload there,
+// including native --version or self-update commands.
 // updated records a completed installation for post-launch failure diagnostics.
 func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentboxName, agentName string, notice io.Writer, updated *bool) error {
 	if !hasRealAgent(agentName) {
@@ -94,7 +96,8 @@ func updateAgentInRun(ctx context.Context, c *container.Client, agentboxName str
 }
 
 // Agent maintenance runs outside the inner sandbox, with tools resolved
-// through the fixed system search path.
+// through the fixed system search path. Metadata reads, process probes and the
+// native installer run as sandbox; npm installs use npmInstallGlobalAtLatestArgs.
 func agentMaintenanceExecArgs(containerID string, args ...string) []string {
 	return append([]string{
 		"sudo", "nerdctl", "exec",
@@ -104,19 +107,14 @@ func agentMaintenanceExecArgs(containerID string, args ...string) []string {
 	}, args...)
 }
 
-// sandboxNpmMaintenanceCache is the private cache used by yoloctl's runtime
-// npm maintenance. Keep it below NPMGlobalPrefix: the base image creates that
-// tree for sandbox, and npm feature installs preserve that ownership in their
-// build layer. npm's default POSIX cache is ~/.npm, whose
-// contents may have been created by another execution context and therefore
-// are not part of this ownership contract.
-const sandboxNpmMaintenanceCache = features.NPMGlobalPrefix + "/.cache/npm"
-
-// npmInstallGlobalAtLatest invokes `npm install -g <pkg>@latest`
-// inside agentboxName as the sandbox user with an explicit prefix and cache.
-// --prefer-online revalidates registry metadata after the host-side version
-// check detects drift. Both autoupdate and `yoloctl agent update PROFILE` use
-// this installer.
+// npmInstallGlobalAtLatest invokes `npm install -g <pkg>@latest` inside
+// agentboxName as the agent maintenance user, into the agent's managed prefix
+// (internal/agentnpm), with that user's private home as start folder,
+// temporary folder, HOME and cache. Nothing npm searches, starts from or writes
+// to is writable by the box user. --prefer-online revalidates registry metadata
+// after the host-side version check detects drift. Both autoupdate and
+// `yoloctl agent update PROFILE` use this installer, which also repairs an
+// install that was cut off.
 func npmInstallGlobalAtLatest(ctx context.Context, c *container.Client, agentboxName, pkg string) error {
 	id, err := c.ResolveContainerID(ctx, agentboxName)
 	if err != nil {
@@ -129,32 +127,36 @@ func npmInstallGlobalAtLatest(ctx context.Context, c *container.Client, agentbox
 }
 
 func npmInstallGlobalAtLatestArgs(containerID, pkg string) []string {
-	// Skip both agent-writable npmrc files. npm rejects loading the same
-	// path twice, so use a separate absent file under the container's /dev.
-	return agentMaintenanceExecArgs(containerID,
+	// Skip both npmrc files the box user could write. npm rejects loading the
+	// same path twice, so use a separate absent file under the container's /dev.
+	return append([]string{
+		"sudo", "nerdctl", "exec",
+		"--user", agentnpm.User,
+		"--workdir", agentnpm.Home,
+		"--env", "PATH=" + container.SystemExecPath,
+		"--env", "HOME=" + agentnpm.Home,
+		"--env", "TMPDIR=" + agentnpm.Home,
+		containerID,
+	},
 		"npm", "install", "-g",
 		"--userconfig=/dev/null",
 		"--globalconfig=/dev/yoloctl-maintenance.npmrc",
-		"--prefix="+features.NPMGlobalPrefix,
-		"--cache="+sandboxNpmMaintenanceCache,
+		"--prefix="+agentnpm.Prefix,
+		"--cache="+agentnpm.Cache,
 		"--prefer-online",
 		pkg+"@latest",
 	)
 }
 
-// fetchInstalledNpmVersion returns the version of pkg installed
-// under the shared npm prefix in agentboxName, read directly from the
-// package's package.json. More robust than `npm list -g` because
-// it doesn't depend on npm's runtime config being aware of the sandbox-user
-// prefix (the optional npm feature supplies a default; maintenance always
-// passes --prefix explicitly).
+// fetchInstalledNpmVersion returns the version of the agent's pkg installed in
+// the managed prefix in agentboxName, read directly from the package's
+// package.json. A copy in the box user's prefix never counts.
 //
 // Returns ("", err) when the package isn't installed (file missing)
 // or the JSON is malformed. Callers treat any error as "skip the
 // autoupdate, can't tell if a refresh is needed."
 func fetchInstalledNpmVersion(ctx context.Context, c *container.Client, agentboxName, pkg string) (string, error) {
-	pkgJSONPath := fmt.Sprintf("%s/lib/node_modules/%s/package.json", features.NPMGlobalPrefix, pkg)
-	return fetchInstalledVersionFile(ctx, c, agentboxName, pkgJSONPath)
+	return fetchInstalledVersionFile(ctx, c, agentboxName, agentnpm.PackageJSON(pkg))
 }
 
 // Read metadata only: never run an agent outside OpenShell to probe its version.

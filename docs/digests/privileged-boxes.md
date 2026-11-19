@@ -149,20 +149,20 @@ were not run. [28](#source-28)
 
 ## Sources
 
-1. <a id="source-1"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L124-L132) — `RetiredPrivilegedCapability`, `ErrRetiredPrivileged`; `Lookup` at L338; custom-name refusals in `user.go` at L190 and L332.
-2. <a id="source-2"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L22-L44) — `PrivilegedAuthority`, `PrivilegedOperatorAccess` and `RuntimeFeatures`.
+1. <a id="source-1"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L131-L139) — `RetiredPrivilegedCapability`, `ErrRetiredPrivileged`; `Lookup` at L338; custom-name refusals in `user.go` at L190 and L332.
+2. <a id="source-2"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L22-L52) — `PrivilegedAuthority`, `PrivilegedOperatorAccess` and `RuntimeFeatures`.
 3. <a id="source-3"></a> [internal/features/privileged.go](../../internal/features/privileged.go#L5-L61) — internal installer and its identity note.
 4. <a id="source-4"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L436-L487) — privileged launch; creation check at L263.
 5. <a id="source-5"></a> [internal/container/container.go](../../internal/container/container.go#L86-L122) — run option; inspected record at L546.
 6. <a id="source-6"></a> [nerdctl v2.3.5 run_security_linux.go](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/cmd/container/run_security_linux.go#L43-L48) — spec options; `dockercompat.go#L665` and `create.go#L670` record it and reserve its label.
-7. <a id="source-7"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L132-L183) — binary verification.
+7. <a id="source-7"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L148-L199) — binary verification.
 8. <a id="source-8"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1824-L1830) — runtime preflight.
 9. <a id="source-9"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L35-L39) — early dispatch.
 10. <a id="source-10"></a> [internal/boxendpoint/server_linux.go](../../internal/boxendpoint/server_linux.go#L89-L1174) — server, children, reaper, PID 1 and socket.
 11. <a id="source-11"></a> [internal/boxendpoint/boxendpoint.go](../../internal/boxendpoint/boxendpoint.go#L24-L219) — main-session request, limits, argv and environment.
-12. <a id="source-12"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L46-L130) — `ClassifyRuntime`.
+12. <a id="source-12"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L54-L146) — `ClassifyRuntime`.
 13. <a id="source-13"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L196-L248) — policy note and `runtimeModeReason`.
-14. <a id="source-14"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L185-L215) — explicit-recreate mode gate.
+14. <a id="source-14"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L203-L231) — explicit-recreate mode gate.
 15. <a id="source-15"></a> [cmd/yoloctl/managed_applier.go](../../cmd/yoloctl/managed_applier.go#L35-L91) — launch guards before teardown and the shared recreate gate.
 16. <a id="source-16"></a> [internal/port/port.go](../../internal/port/port.go#L40-L48) — direct routing; teardown at L182-L213.
 17. <a id="source-17"></a> [cmd/yoloctl/privileged_operator.go](../../cmd/yoloctl/privileged_operator.go#L16-L211) — flag help, `guardPrivilegedLaunch`, `privilegedLaunchReason`, continuation, `authorizePrivilegedRestart`, create refusal, `savedDeclarationError` and `warnBoxAuthority`.

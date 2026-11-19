@@ -13,6 +13,7 @@ filesystem_policy:
         - /etc
         - /app
         - /var/log
+        - /opt/yoloctl/npm
     read_write:
         - /tmp
         - /var/tmp
@@ -74,4 +75,5 @@ network_policies:
               ports:
                 - 443
         binaries:
+            - path: /opt/yoloctl/npm/lib/node_modules/opencode-ai/bin/opencode.exe
             - path: /home/sandbox/.npm-global/lib/node_modules/opencode-ai/bin/opencode.exe

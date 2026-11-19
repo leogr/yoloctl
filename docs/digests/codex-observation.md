@@ -89,7 +89,7 @@ the writer's `codex-query` mode [10](#source-10).
 
 1. <a id="source-1"></a> [Codex observe feature](../../internal/features/agent_observe.go#L28) — `agentObserveCodexTOML`, `agentObserveCodexInstallDockerfile`, `agentObserveWriterInstall`.
 2. <a id="source-2"></a> [Feature tests](../../internal/features/agent_observe_codex_test.go#L1) — Claude recipe golden, TOML schema and install.
-3. <a id="source-3"></a> [Feature registry](../../internal/features/features.go#L93) — `yolo.agent.observe-codex`.
+3. <a id="source-3"></a> [Feature registry](../../internal/features/features.go#L104) — `yolo.agent.observe-codex`.
 4. <a id="source-4"></a> [Writer](../../internal/features/agent-observe.py#L1) — `codex_record`, `CodexRead`, `daemon_sockets`, `codex_query`, `codex_hook`.
 5. <a id="source-5"></a> [Codex vectors](../../internal/agentsession/observe/testdata/codex-0.164-synthetic/expected.jsonl#L1-L8) — synthetic payload lines.
 6. <a id="source-6"></a> [Writer regressions](../../scripts/test_agent_observe.py#L1) — `CodexWriterTests`: fields, vectors, the daemon read and its refusals, a stale socket skipped.

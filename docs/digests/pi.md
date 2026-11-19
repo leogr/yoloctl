@@ -1,6 +1,6 @@
 # Pi CLI adapter
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream Pi `v1.0.3` (`d78dc83d633229d12f8b79631384c4c2717c399f`). Re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; install prefix `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes; upstream Pi `v1.0.3` (`d78dc83d633229d12f8b79631384c4c2717c399f`). Re-read cited sources when changing behavior.
 
 [FACT] The embedded `pi` profile uses the Ubuntu base, requires `pi` and
 `github`, and launches the Node CLI `pi`. The existing TUI icon is `π`.
@@ -8,11 +8,12 @@ Pi provides no per-tool approval sandbox; OpenShell confines its process and
 children. Project trust remains Pi's own resource-loading decision.
 [1](#source-1) [2](#source-2) [9](#source-9) [17](#source-17)
 
-[FACT] The feature installs `@earendil-works/pi-coding-agent@latest` into
-`/home/sandbox/.npm-global`, with Ubuntu's `ripgrep` and `fd-find`. Pi accepts
+[FACT] The feature installs `@earendil-works/pi-coding-agent@latest` into the
+managed `/opt/yoloctl/npm` prefix when Pi is the box's agent, otherwise into
+`/home/sandbox/.npm-global` ([agent maintenance](agent-maintenance.md)), with Ubuntu's `ripgrep` and `fd-find`. Pi accepts
 `fdfind` as its system fd executable. An image check rejects Node older than
 22.19 with a base-rebuild hint. Installation writes no native account settings;
-the composed builder restores npm-prefix ownership to sandbox. Existing npm
+the user prefix is owned by sandbox, the managed one by `yoloctl-maint`. Existing npm
 metadata/version/update paths handle Pi without an agent-name branch.
 [3](#source-3) [4](#source-4) [10](#source-10) [15](#source-15)
 
@@ -78,7 +79,7 @@ Unauthorized curl still requires an attributed denial. [7](#source-7)
 2. <a id="source-2"></a> [TUI icon](../../internal/config/tui.go#L134) — `DefaultAgentIcons`.
 3. <a id="source-3"></a> [Installer](../../internal/features/pi.go#L3) — latest npm and search-tool recipe.
 4. <a id="source-4"></a> [CLI regressions](../../cmd/yoloctl/pi_test.go#L16) — launch, maintenance, import, completion.
-5. <a id="source-5"></a> [Capability](../../internal/capabilities/capabilities.go#L214).
+5. <a id="source-5"></a> [Capability](../../internal/capabilities/capabilities.go#L252).
 6. <a id="source-6"></a> [Secret projection tests](../../internal/agentbox/secret_injection_test.go#L12).
 7. <a id="source-7"></a> [Pi smoke](../../scripts/smoke/pi.sh#L1).
 8. <a id="source-8"></a> [Local runtime fixture](../../scripts/smoke/pi-runtime.mjs#L1).

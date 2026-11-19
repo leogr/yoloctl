@@ -29,13 +29,21 @@ const PrivilegedOperatorAccess = "While the box runs, every " + operator.Capabil
 
 // RuntimeFeatures is the final image recipe, resolved in one ordered pass:
 // the declared and profile features (EffectiveFeaturesStrict), then the
-// internal sudo installer for a privileged box. The installer requires no
+// agent's managed npm install when its profile names an npm package, then the
+// internal sudo installer for a privileged box. Neither installer requires
 // capabilities, so nothing feeds back into feature or capability resolution.
 // Image identity, builds and resolved-image drift all use it.
 func RuntimeFeatures(c *Config) ([]string, error) {
 	names, err := EffectiveFeaturesStrict(c)
 	if err != nil {
 		return names, err
+	}
+	pkg, err := AgentNpmPackage(c)
+	if err != nil {
+		return names, err
+	}
+	if pkg != "" {
+		names = append(names, features.AgentNpmRuntime(pkg))
 	}
 	if c.Privileged {
 		names = append(names, features.PrivilegedRuntime)

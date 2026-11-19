@@ -29,6 +29,7 @@ func TestCodexEgressGlobScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	const npm = "/home/sandbox/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/"
+	const managed = "/opt/yoloctl/npm/lib/node_modules/@openai/codex/node_modules/@openai/"
 	const releases = "/home/sandbox/.codex/packages/app-server-daemon/releases/"
 	cases := []struct {
 		name, binary string
@@ -37,6 +38,9 @@ func TestCodexEgressGlobScope(t *testing.T) {
 		{"legacy-node", "/usr/bin/node", true},
 		{"npm-amd64", npm + "codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex", true},
 		{"npm-arm64", npm + "codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex", true},
+		{"managed-amd64", managed + "codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex", true},
+		{"managed-arm64", managed + "codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex", true},
+		{"wrong-managed-leaf", managed + "codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/curl", false},
 		{"daemon-current", releases + "0.166.0-x86_64-unknown-linux-musl/bin/codex", true},
 		{"daemon-next", releases + "0.167.0-x86_64-unknown-linux-musl/bin/codex", true},
 		{"daemon-arm64", releases + "0.167.0-aarch64-unknown-linux-musl/bin/codex", true},

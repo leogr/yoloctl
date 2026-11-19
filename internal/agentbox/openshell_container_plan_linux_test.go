@@ -261,3 +261,47 @@ func TestNativeRuntimeRouteWarnsOnMixedEvidence(t *testing.T) {
 	}
 	_ = plan
 }
+
+// A box whose agent installs from npm refuses binds over the managed prefix or
+// the maintenance home, including a parent of either; other boxes keep them.
+func TestNativeContainerPlanProtectsTheAgentNpmFolders(t *testing.T) {
+	// "/opt" itself is already refused for every box: it holds the helper.
+	for _, target := range []string{"/opt/yoloctl/npm", "/opt/yoloctl/npm/bin", "/var/lib/yoloctl-maint", "/var/lib", "/var"} {
+		for _, agent := range []string{"codex", "none"} {
+			t.Run(agent+target, func(t *testing.T) {
+				c, current, release := nativeContainerPlanFixture(t)
+				if agent != "none" {
+					c.Agent, c.Account = agent, "acct"
+					if err := account.New(c.Space, c.Account).Save(); err != nil {
+						t.Fatal(err)
+					}
+				}
+				c.Mounts = []Mount{{Source: "/host/project/tools", Target: target, ReadOnly: true}}
+				policy, err := ComposePolicy(c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, _, err = planNativeContainer(c, c.Image, current, release, strings.Repeat("d", 32), policy)
+				if agent == "none" && err != nil {
+					t.Fatalf("agentless box refused %s: %v", target, err)
+				}
+				if agent != "none" && (err == nil || !strings.Contains(err.Error(), "agent's program")) {
+					t.Fatalf("npm agent box accepted a mount at %s: %v", target, err)
+				}
+			})
+		}
+	}
+	c, current, release := nativeContainerPlanFixture(t)
+	c.Agent, c.Account = "codex", "acct"
+	if err := account.New(c.Space, c.Account).Save(); err != nil {
+		t.Fatal(err)
+	}
+	c.Mounts = []Mount{{Source: "/host/project/tools", Target: "/opt/yoloctl/tools", ReadOnly: true}}
+	policy, err := ComposePolicy(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := planNativeContainer(c, c.Image, current, release, strings.Repeat("d", 32), policy); err != nil {
+		t.Fatalf("a sibling of the managed prefix was refused: %v", err)
+	}
+}

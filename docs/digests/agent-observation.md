@@ -116,7 +116,7 @@ Claude run need the isolated live check. [12](#source-12) [13](#source-13) [14](
 7. <a id="source-7"></a> [Generations](../../internal/agentsession/observe/generation.go#L1-L108) — `Prepare` (discardable evidence, proof-gated retry), `parseGenName`, `createGeneration`; `removeAt` in root.go.
 8. <a id="source-8"></a> [Feature](../../internal/features/agent_observe.go#L1-L173) — status line, async hooks, interpreter resolution, wrappers and drop-in.
 9. <a id="source-9"></a> [Writer](../../internal/features/agent-observe.py#L1-L829) — `record`, `statusline_record`, `codex_record`, `lock`, `append`, `write`, `main`.
-10. <a id="source-10"></a> [Catalog entry](../../internal/features/features.go#L88-L92) — `yolo.agent.observe`.
+10. <a id="source-10"></a> [Catalog entry](../../internal/features/features.go#L99-L103) — `yolo.agent.observe`.
 11. <a id="source-11"></a> [Reader](../../internal/agentsession/observe/read.go#L1-L514) — `Health`, `Context`, `StatusLine`, `Query`, the states, `Cursor`, `Observation`, `Read`, `listEvents`, `wireEvent`, `parseLine`.
 12. <a id="source-12"></a> [Substrate regressions](../../internal/agentsession/observe/observe_test.go#L1-L839) — root, generations, exhaustion recovery, reader, status line and query validation, the Claude and Codex vectors.
 13. <a id="source-13"></a> [Writer regressions](../../scripts/test_agent_observe.py#L1-L909) — fields, payload shapes, absence, links, contention, rotation, full tmpfs, status line and hand-over, Codex mode and its daemon read; bounds and interpreter resolution in internal/features/agent_observe_test.go.

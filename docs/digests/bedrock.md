@@ -1,6 +1,6 @@
 # AWS CLI and Bedrock setup
 
-Verification: `cae7f0d106ee85c3193168becc12a3ee8fdc25c6` and accompanying changes.
+Verification: `cae7f0d106ee85c3193168becc12a3ee8fdc25c6` and accompanying changes; agent program paths `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes.
 
 [FACT] Builtin Claude and Codex profiles project exactly four optional AWS account
 secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and
@@ -43,7 +43,9 @@ yoloctl account secret set aws AWS_SECRET_ACCESS_KEY --space dev --from-env
 
 [FACT] Copy/edit a custom capability, replacing the copied grants with this
 illustrative regional Runtime example. The source schema and compiler accept
-these exact host/port/binary entries. Select endpoints for the actual region,
+these exact host/port/binary entries. The agent's own program runs from
+`/opt/yoloctl/npm`, a feature tool's from `/home/sandbox/.npm-global`; a copy
+naming only the latter no longer matches the agent ([agent maintenance](agent-maintenance.md)). Select endpoints for the actual region,
 provider and SDK flow; this example does not promise universal AWS access.
 There is no builtin Bedrock capability or endpoint catalog. [7](#source-7)
 
@@ -65,6 +67,9 @@ grants:
         ports: [443]
         binaries:
           - /usr/bin/node
+          - /opt/yoloctl/npm/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe
+          - /opt/yoloctl/npm/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
+          - /opt/yoloctl/npm/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex
           - /home/sandbox/.npm-global/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe
           - /home/sandbox/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
           - /home/sandbox/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-arm64/vendor/aarch64-unknown-linux-musl/bin/codex
@@ -100,7 +105,7 @@ fixtures. No AWS account was available for live provider testing.
 
 ## Sources
 
-1. <a id="source-1"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L1-L154) — explicit optional AWS and existing Anthropic-key declarations.
+1. <a id="source-1"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L1-L151) — explicit optional AWS and existing Anthropic-key declarations.
 2. <a id="source-2"></a> [Private projection](../../internal/agentbox/secret_injection.go#L1-L73) — profile narrowing and create-time account reload; native/chat regression in `aws_environment_linux_test.go`.
 3. <a id="source-3"></a> [Auth status](../../cmd/yoloctl/account_auth.go#L1-L431) — value-free summary through `awsSecretsPresent` and retained native errors.
 4. <a id="source-4"></a> [Verified installer](../../internal/features/aws-install.sh#L1-L36) — signing-key fingerprint, architecture selection and verification before execution.
@@ -111,4 +116,4 @@ fixtures. No AWS account was available for live provider testing.
 9. <a id="source-9"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1-L118) — four-key AWS declarations; OpenAI auth remains native.
 10. <a id="source-10"></a> [Claude Bedrock guidance](https://code.claude.com/docs/en/amazon-bedrock) — documented provider/region configuration, checked 2026-11-06.
 11. <a id="source-11"></a> [AWS installation reference](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) — official architectures, runtime requirements and signing key, checked 2026-11-06.
-12. <a id="source-12"></a> [Host wildcard rule](../../internal/agentbox/compose.go#L300-L331) — `lintHostPattern`.
+12. <a id="source-12"></a> [Host wildcard rule](../../internal/agentbox/compose.go#L363-L383) — `lintHostPattern`.

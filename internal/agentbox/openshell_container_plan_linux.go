@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/agentnpm"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/openshell"
 	"github.com/leogr/yoloctl/internal/sandbox"
@@ -99,6 +100,14 @@ func planNativeContainer(c *Config, image string, current spaceenv.Context, rele
 	artifacts, _ := openshell.RuntimeDirectory(release.Identity())
 	mounts := make([]container.Mount, 0, len(options.Mounts)+1)
 	removedBinary, removedRego := false, false
+	// A bind over the agent's managed npm folder or its maintenance home would
+	// replace what only yoloctl may write.
+	var agentNpmProtected []string
+	if pkg, err := AgentNpmPackage(c); err != nil {
+		return container.RunOptions{}, nativeContainerPlan{}, err
+	} else if pkg != "" {
+		agentNpmProtected = []string{agentnpm.Prefix, agentnpm.Home}
+	}
 	for _, mount := range options.Mounts {
 		if !removedBinary && mount.Destination == sandbox.BinaryDirContainerPath && mount.Source == sandbox.BinaryDirHostPath && mount.ReadOnly {
 			removedBinary = true
@@ -110,8 +119,13 @@ func planNativeContainer(c *Config, image string, current spaceenv.Context, rele
 		}
 		target := filepath.Clean(mount.Destination)
 		for _, protected := range []string{"/.openshell", openshell.HelperDirectory} {
-			if target == protected || strings.HasPrefix(target, protected+"/") || strings.HasPrefix(protected, strings.TrimSuffix(target, "/")+"/") {
+			if mountOverlaps(target, protected) {
 				return container.RunOptions{}, nativeContainerPlan{}, errors.New("mount conflicts with exact native runtime infrastructure")
+			}
+		}
+		for _, protected := range agentNpmProtected {
+			if mountOverlaps(target, protected) {
+				return container.RunOptions{}, nativeContainerPlan{}, fmt.Errorf("mount target %s conflicts with %s, which holds the agent's program or its update user's home; choose another target", target, protected)
 			}
 		}
 		mounts = append(mounts, mount)
@@ -234,3 +248,9 @@ var nativeCreateNotice = func() func(string, error) {
 		}
 	}
 }()
+
+// mountOverlaps reports whether a mount at target would cover, sit inside or
+// replace a parent of protected.
+func mountOverlaps(target, protected string) bool {
+	return target == protected || strings.HasPrefix(target, protected+"/") || strings.HasPrefix(protected, strings.TrimSuffix(target, "/")+"/")
+}

@@ -62,7 +62,7 @@ surviving recreation. [4](#source-4) [8](#source-8) [9](#source-9)
 
 ## Sources
 
-1. <a id="source-1"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L1-L154) — original state bind, nonsecret launch paths and native auth conventions.
+1. <a id="source-1"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L1-L151) — original state bind, nonsecret launch paths and native auth conventions.
 2. <a id="source-2"></a> [Resolver](../../cmd/yoloctl/agentstate.go#L1-L259) — original whole-leaf account selection and normalization.
 3. <a id="source-3"></a> [Source-swap regression](../../internal/agentbox/account_state_source_test.go#L1-L46) — runtime mount source remains the whole leaf after its child is replaced; CLI normalization control in `account_auth_profiles_test.go`.
 4. <a id="source-4"></a> [Launch prefix](../../cmd/yoloctl/launchenv.go#L1-L42) — applyLaunchEnv; ordinary session path in `session_client.go` and tracked initial/resumed path in `session_identity.go`.

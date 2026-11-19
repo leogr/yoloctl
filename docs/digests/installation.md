@@ -117,7 +117,7 @@ show only recovery guidance. [9](#source-9)
 3. <a id="source-3"></a> [Startup](../../cmd/yoloctl/main.go#L69-L110), `main`;
    [routing](../../cmd/yoloctl/main.go#L225-L230), `readOnlyStartup`;
    [bounded probe](../../cmd/yoloctl/version.go#L88-L107).
-4. <a id="source-4"></a> [Smoke roots](../../scripts/smoke/common.sh#L111-L136), `smoke_init`;
+4. <a id="source-4"></a> [Smoke roots](../../scripts/smoke/common.sh#L119-L144), `smoke_init`;
    [sentinel regression](../../scripts/test_vm_smoke.py#L61-L90);
    [Lima gate](../../scripts/smoke/lima_stack.py#L380), `identity`, `setup`, `check`;
    [gate regressions](../../scripts/test_lima_stack.py#L1).

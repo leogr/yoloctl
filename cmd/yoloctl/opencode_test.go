@@ -56,20 +56,28 @@ func TestOpenCodeManagedLaunchAndState(t *testing.T) {
 	if !slices.Equal(effective, []string{"opencode", "github"}) {
 		t.Fatalf("effective features = %v", effective)
 	}
-	_, recipe, installed, err := agentboximage.ComposedImageRef(cfg.Image, effective)
+	runtime, err := agentbox.RuntimeFeatures(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, recipe, installed, err := agentboximage.ComposedImageRef(cfg.Image, runtime)
 	if err != nil || !installed || !strings.Contains(recipe, "opencode-ai@latest") {
 		t.Fatalf("OpenCode image does not install CLI: installed=%v, error=%v", installed, err)
 	}
-	for _, required := range []string{"--no-install-recommends ripgrep", "test -x /home/sandbox/.npm-global/lib/node_modules/opencode-ai/bin/opencode.exe"} {
+	for _, required := range []string{"--no-install-recommends ripgrep", "test -x /opt/yoloctl/npm/lib/node_modules/opencode-ai/bin/opencode.exe"} {
 		if !strings.Contains(recipe, required) {
 			t.Fatalf("OpenCode recipe is missing %q", required)
 		}
+	}
+	// The agent's own package goes to the managed prefix, never the user's.
+	if !strings.Contains(recipe, "npm install -g opencode-ai@latest --prefix=/opt/yoloctl/npm") || strings.Contains(recipe, "opencode-ai@latest --prefix=/home/sandbox/.npm-global") {
+		t.Fatalf("OpenCode image does not install the agent in the managed prefix:\n%s", recipe)
 	}
 	if profile.NpmPackage != "opencode-ai" {
 		t.Fatalf("update package = %q", profile.NpmPackage)
 	}
 	argv = npmInstallGlobalAtLatestArgs(cfg.Name, profile.NpmPackage)
-	if !slices.Contains(argv, "opencode-ai@latest") || !slices.Contains(argv, "--prefix=/home/sandbox/.npm-global") {
+	if !slices.Contains(argv, "opencode-ai@latest") || !slices.Contains(argv, "--prefix=/opt/yoloctl/npm") {
 		t.Fatalf("OpenCode update does not use managed npm installation: %v", argv)
 	}
 }

@@ -95,7 +95,7 @@ upstream Feature or either CPU architecture. [8](#source-8) [9](#source-9) [15](
 10. <a id="source-10"></a> [Set options](../../cmd/yoloctl/agentbox_reconcile.go#L440) — replacement and option updates.
 11. <a id="source-11"></a> [Manual builds](../../cmd/yoloctl/image.go#L344) — Feature-aware build context.
 12. <a id="source-12"></a> [Image composition](../../internal/agentboximage/composed.go#L45) — recipe identity and archive context.
-13. <a id="source-13"></a> [OCI lookup](../../internal/features/features.go#L250) — no implicit capability requirements.
+13. <a id="source-13"></a> [OCI lookup](../../internal/features/features.go#L283) — no implicit capability requirements.
 14. <a id="source-14"></a> [Cobra registration](../../cmd/yoloctl/completion.go#L248) — feature and option completion.
 15. <a id="source-15"></a> [Completion tests](../../cmd/yoloctl/completion_features_test.go#L13) — CLI routes and metadata values.
 16. <a id="source-16"></a> [Runtime notice](../../cmd/yoloctl/feature_runtime_notice.go#L14) — `noticeIgnoredRuntime`; tests `internal/ocifeature/runtime_test.go`, `cmd/yoloctl/feature_runtime_notice_test.go`.

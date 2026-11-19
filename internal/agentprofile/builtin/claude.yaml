@@ -105,18 +105,15 @@ launch_env:
   # agentbox it can never succeed, and every session retries and warns
   # (`claude doctor`: "Can't auto-update: npm global folder isn't writable").
   # It fails twice over:
-  #   - it shells out to a plain `npm install -g`, and runtime npm falls back
-  #     to its built-in /usr prefix: the image never configures a prefix for
-  #     the sandbox user (no .npmrc, no NPM_CONFIG_PREFIX) — installs pass
-  #     --prefix=/home/sandbox/.npm-global explicitly instead (see
-  #     cmd/yoloctl/autoupdate.go) — and /usr is not sandbox-writable;
+  #   - the CLI lives in /opt/yoloctl/npm, owned by the yoloctl-maint user;
+  #     the box user can run it but not replace it (internal/agentnpm);
   #   - a default claude box has no registry.npmjs.org egress anyway — that is
   #     the opt-in `npm` feature (network.npm), not required by this profile —
-  #     so even with a fixed prefix the L7 proxy refuses the fetch.
+  #     so the L7 proxy refuses the fetch.
   # Keeping the CLI at @latest is yoloctl's job instead: lifecycle autoupdate
-  # and `yoloctl agent update` run OUTSIDE the sandbox (`nerdctl exec … npm
-  # install -g --prefix=…`, cmd/yoloctl/autoupdate.go), need no in-box egress,
-  # and stay the single update path. Disabling the in-box updater silences the
+  # and `yoloctl agent update` run OUTSIDE the sandbox as yoloctl-maint
+  # (cmd/yoloctl/autoupdate.go), need no in-box egress, and stay the single
+  # update path. Disabling the in-box updater silences the
   # doomed attempts without widening default egress.
   DISABLE_AUTOUPDATER: "1"
   # DISABLE_AUTOUPDATER alone would also turn off marketplace/plugin

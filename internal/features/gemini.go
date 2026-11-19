@@ -11,7 +11,11 @@ package features
 // egress, so its event-triggered retries would otherwise generate denials.
 // Neither file writes into the account's agent-owned ~/.gemini directory.
 // Upstream v0.62.0: packages/cli/src/config/{settings,settingsSchema}.ts.
-var geminiInstallDockerfile = npmPackageInstallDockerfile("@google/gemini-cli", "latest") + `
+func geminiInstall(npm *npmInstaller) string {
+	return npm.install("@google/gemini-cli", "latest") + geminiSettingsDockerfile
+}
+
+const geminiSettingsDockerfile = `
 RUN mkdir -p /etc/gemini-cli \
     && printf '%s\n' '{"general":{"enableAutoUpdate":false,"enableAutoUpdateNotification":false}}' > /etc/gemini-cli/settings.json \
     && printf '%s\n' '{"privacy":{"usageStatisticsEnabled":false},"tools":{"shell":{"enableInteractiveShell":false}}}' > /etc/gemini-cli/system-defaults.json \

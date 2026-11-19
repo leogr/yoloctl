@@ -67,7 +67,10 @@ func ComposePolicy(c *Config) ([]byte, error) {
 //     box's own Features UNIONed with the selected agent profile's
 //     RequiresFeatures — the agent's egress is granted because RequiresFeatures
 //     pulls in its CLI feature (e.g. claude → network.anthropic), NOT via any
-//     agent-level capability.
+//     agent-level capability;
+//   - the one agent-level grant: when the agent profile names an npm package,
+//     AgentNpmReadCapability (OriginAgent) lets the box read and run that
+//     program in the managed prefix the composer installs it into.
 func EffectiveCapabilities(c *Config) (*capabilities.EffectiveSet, error) {
 	set := capabilities.NewEffectiveSet()
 	// Explicit agentbox capabilities. A writable workdir is the explicit
@@ -94,7 +97,31 @@ func EffectiveCapabilities(c *Config) (*capabilities.EffectiveSet, error) {
 			}
 		}
 	}
+	// Lenient like effectiveFeatures: an unresolvable profile adds nothing on
+	// read paths; the strict image path (RuntimeFeatures) reports it.
+	if pkg, err := AgentNpmPackage(c); err == nil && pkg != "" {
+		if err := set.Add(capabilities.AgentNpmReadCapability, capabilities.OriginAgent); err != nil {
+			return nil, err
+		}
+	}
 	return set, nil
+}
+
+// AgentNpmPackage returns the npm package the box's agent profile names, or ""
+// for an agentless box or an agent without an npm distribution. That package
+// is installed in the managed prefix (internal/agentnpm) and updated there.
+func AgentNpmPackage(c *Config) (string, error) {
+	if !c.HasAgent() {
+		return "", nil
+	}
+	p, err := agentprofile.Lookup(c.Agent)
+	if err != nil {
+		return "", fmt.Errorf("resolve agent %q profile for its npm package: %w", c.Agent, err)
+	}
+	if p.NativeRelease != "" {
+		return "", nil
+	}
+	return p.NpmPackage, nil
 }
 
 // EffectiveFeaturesStrict returns the box's declared features unioned with the

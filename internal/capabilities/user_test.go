@@ -507,7 +507,7 @@ func TestCopyEncodedSlashGrantRoundTrip(t *testing.T) {
 	}
 	var endpoints int
 	for _, grant := range copied.Network {
-		if len(grant.Binaries) != 1 || grant.Binaries[0] != "/home/sandbox/.npm-global/lib/node_modules/opencode-ai/bin/opencode.exe" {
+		if !slices.Equal(grant.Binaries, original.Network[0].Binaries) {
 			t.Fatalf("copy changed binary attribution: %v", grant.Binaries)
 		}
 		for _, endpoint := range grant.Endpoints {

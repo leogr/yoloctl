@@ -85,7 +85,7 @@ separate checks. [8](#source-8) [20](#source-20)
 4. <a id="source-4"></a> [Icon table](../../internal/config/tui.go#L144) — OpenCode defaults.
 5. <a id="source-5"></a> [Feature recipe](../../internal/features/opencode.go#L3) — installation.
 6. <a id="source-6"></a> [Upstream installer](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/opencode/script/postinstall.mjs#L23) — native selection and target.
-7. <a id="source-7"></a> [Capabilities](../../internal/capabilities/capabilities.go#L197) — network.opencode.
+7. <a id="source-7"></a> [Capabilities](../../internal/capabilities/capabilities.go#L231) — network.opencode.
 8. <a id="source-8"></a> [Isolated smoke](../../scripts/smoke/opencode.sh#L1) — binary/runtime/persistence checks.
 9. <a id="source-9"></a> [Upstream ChatGPT auth](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/opencode/src/plugin/openai/codex.ts#L471) — headless device flow and endpoints.
 10. <a id="source-10"></a> [Policy tests](../../internal/agentbox/policy_golden_test.go#L50) — compositions and attribution.
@@ -104,5 +104,5 @@ separate checks. [8](#source-8) [20](#source-20)
 23. <a id="source-23"></a> [Upstream database path](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/core/src/database/database.ts#L53) — SQLite under data.
 24. <a id="source-24"></a> [Upstream dependency bootstrap](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/opencode/src/config/config.ts#L452) — background plugin-SDK installation.
 25. <a id="source-25"></a> [Upstream npm service](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/core/src/npm.ts#L80) — Arborist, script suppression, package resolution and dependency installation.
-26. <a id="source-26"></a> [Endpoint compiler](../../internal/agentbox/compose.go#L352) — REST configuration and encoded slash permission.
+26. <a id="source-26"></a> [Endpoint compiler](../../internal/agentbox/compose.go#L449) — REST configuration and encoded slash permission.
 27. <a id="source-27"></a> [Upstream npm configuration](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/core/src/npm-config.ts#L13) — environment and npm settings.

@@ -92,14 +92,11 @@ RUN groupadd -g 2000 sandbox \
     && mkdir -p /workdir /home/sandbox/.npm-global \
     && chown sandbox:sandbox /workdir /home/sandbox/.npm-global
 
-# Global npm prefix for the sandbox user's CLI installs. Agent-CLI features
-# (claude, codex, gemini, opencode, pi) `npm install -g --prefix=/home/sandbox/.npm-global` into a
-# feature-composed image FROM this base, and the runtime autoupdate
-# (`nerdctl exec --user sandbox npm install -g --prefix=…`) refreshes them in
-# place. Putting the dir + PATH here (instead of in the retired agent-variant
-# images) is what makes `image = base + composed agent feature` work. The
-# npm feature install sets sandbox ownership in its own layer, so the
-# sandbox-user autoupdate can overwrite it without another image-sized copy.
+# Global npm prefix for the sandbox user's own npm installs: npm features,
+# the npm development feature and manual `npm install -g`. The box agent's own
+# npm program is not here: the composer installs it into /opt/yoloctl/npm as
+# the yoloctl-maint user, puts that folder first on PATH, and only yoloctl
+# updates it (internal/agentnpm).
 ENV PATH=/home/sandbox/.npm-global/bin:$PATH
 
 WORKDIR /workdir

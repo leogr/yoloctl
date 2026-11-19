@@ -142,7 +142,7 @@ and local PTYs; they do not establish live-VM or proxy-confined chat coverage.
 30. <a id="source-30"></a> [Layout regressions](../../internal/tui/spaceview/view_test.go#L518) — `TestVMFrameNamesTheSpaceRightAligned`, `TestLegendPrecedesTheCPUGraph`.
 31. <a id="source-31"></a> [First row](../../internal/tui/spaceview/theme.go#L79-L93) — `FirstRowBG`, `FirstRow`; `putFirstRow` in canvas.go L218; first_row_test.go `TestFirstRowIsBlackInEveryState`, `TestFirstRowOperatorWarningStaysDistinct`.
 32. <a id="source-32"></a> [Space view memory readings](space-view-memory.md) — VM, pool and box memory presentation.
-33. <a id="source-33"></a> [privileged.go](../../internal/agentbox/privileged.go#L78-L103) — `ClassifyRuntime`; `TestParseRuntimeStatesCarriesLaunchEvidence` in `runtime_state_test.go` at L43, `TestTelemetryInventoryCarriesPrivilege` in `space_telemetry_test.go` at L319.
+33. <a id="source-33"></a> [privileged.go](../../internal/agentbox/privileged.go#L86-L121) — `ClassifyRuntime`; `TestParseRuntimeStatesCarriesLaunchEvidence` in `runtime_state_test.go` at L43, `TestTelemetryInventoryCarriesPrivilege` in `space_telemetry_test.go` at L319.
 34. <a id="source-34"></a> [layout.go](../../internal/tui/spaceview/layout.go#L1309-L1338) — `privilegeMark`, `privilegedPill`; hint at L410, compact chip at L1516, click in `popup.go` at L166; `privileged_test.go` and its `privilegedFixtureModel` in `fixture_test.go`.
 
 35. <a id="source-35"></a> [Scrollbar layout](../../internal/tui/spaceview/layout.go#L116) — `Model.render`, `builder.scrollbar`; `TestScrollbarHasOwnColumnBesideVMFrame` in view_test.go.

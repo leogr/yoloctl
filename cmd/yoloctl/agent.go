@@ -55,7 +55,8 @@ func newAgentCmd() *cobra.Command {
 // --force skips the check entirely; non-interactive shells without
 // --force return an error rather than silently proceed.
 //
-// The update runs via `nerdctl exec --user sandbox`, which lands in
+// The update runs via `nerdctl exec` (npm as the agent maintenance user,
+// native releases as sandbox), which lands in
 // the outer container netns where eth0 has direct internet — bypasses
 // openshell-sandbox's L7 proxy + the inner-netns iptables fence.
 // Intentional for tool maintenance: the in-sandbox policy still
@@ -71,8 +72,11 @@ func newAgentUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update AGENT",
 		Short: "Refresh a configured agent CLI inside matching boxes",
-		Long: `Installs the latest configured npm package or verified native release as the sandbox user inside
-each selected box. Use a running box for an in-place update. When some
+		Long: `Installs the latest configured npm package or verified native release inside each selected
+box. An npm agent is installed in /opt/yoloctl/npm as the yoloctl-maint user,
+which only yoloctl uses; the box user can run it but not change it. Your own
+npm packages stay in /home/sandbox/.npm-global. A native release is installed
+as the sandbox user. Use a running box for an in-place update. When some
 matching boxes are stopped, target a running one with --agentbox BOX. A bulk
 update selects all matching containers and the first install error ends it.
 Maintenance uses a fixed system PATH. For npm packages, install npm and Node.js

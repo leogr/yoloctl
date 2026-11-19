@@ -57,11 +57,14 @@ still validate signed metadata before installation. Agent packages track
 npm and base apt downloads use disposable BuildKit caches
 outside the image, with metadata revalidation. Managed rebuilds retain downloads;
 custom bases/raw Dockerfile features keep full cache invalidation.
-Runtime agent maintenance execs use a fixed system PATH. Runtime npm
-maintenance uses the explicit sandbox-owned global prefix and maintenance
-cache and skips the agent-writable user and global npmrc files. A custom
-base image needs npm and Node.js on the system PATH for npm
-maintenance. Use `--no-autoupdate` to skip lifecycle updates when the image
+Runtime agent maintenance execs use a fixed system PATH. The package an agent
+profile names lives in `/opt/yoloctl/npm`, which the box user can read and run
+but not write; it is installed and updated only as `yoloctl-maint`, from that
+user's private home and cache, skipping both npmrc files. So no folder npm
+searches while running an install script during an update is agent-writable.
+Every other npm install keeps the sandbox-owned prefix. A custom base image needs
+npm and Node.js on the system PATH for npm maintenance and root to create the
+maintenance user. Use `--no-autoupdate` to skip lifecycle updates when the image
 lacks system npm. [18](#source-18) [19](#source-19)
 
 [FACT] The optional `npm` development feature uses the base's Node.js/npm/npx,

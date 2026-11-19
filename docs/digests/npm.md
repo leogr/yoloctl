@@ -1,6 +1,6 @@
 # npm development environment
 
-Verification: `c6e67053e4fd40a8987dc6be1c3f34bb4d6b1380` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `c6e67053e4fd40a8987dc6be1c3f34bb4d6b1380` and accompanying changes; agent package location `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] The `npm` feature combines a Dockerfile setup step with
 `network.npm`. The base image supplies Node.js 22 from NodeSource, including
@@ -18,11 +18,12 @@ PATH. The config applies to the sandbox user without environment forwarding;
 root-run image installs retain their own config/cache. [2](#source-2)
 [3](#source-3) [4](#source-4)
 
-[FACT] Runtime agent maintenance passes an explicit global prefix and uses its
-separate `/home/sandbox/.npm-global/.cache/npm` cache. Its install command points
-npm's user config at `/dev/null` and global config at an absent path under
-`/dev`. In-box npm commands use the npm feature's config as usual.
-[2](#source-2) [5](#source-5)
+[FACT] The agent's own npm package is not in this prefix: it lives in
+`/opt/yoloctl/npm`, owned and updated by `yoloctl-maint` with its own cache, and
+its install command points npm's user config at `/dev/null` and global config at
+an absent path under `/dev` ([agent maintenance](agent-maintenance.md)). In-box
+npm commands use the npm feature's config as usual and list only the user's
+packages. [2](#source-2) [5](#source-5)
 
 [FACT] The focused maintenance test captures the full exec argv for Claude,
 Codex, Gemini, OpenCode and Pi through the shared distribution installer.
@@ -50,14 +51,14 @@ the smoke. Its existence is not evidence of a successful live run.
 
 ## Sources
 
-1. <a id="source-1"></a> [internal/features/features.go](../../internal/features/features.go#L168-L173) — builtin `npm` install and required capability.
+1. <a id="source-1"></a> [internal/features/features.go](../../internal/features/features.go#L214-L219) — builtin `npm` install and required capability.
 2. <a id="source-2"></a> [internal/features/npm.go](../../internal/features/npm.go#L11) — `npmInstallDockerfile` runtime verification and user config.
 3. <a id="source-3"></a> [assets/containers/agentbox/Dockerfile](../../assets/containers/agentbox/Dockerfile#L9) — Node version/install, sandbox identity and global-command PATH.
 4. <a id="source-4"></a> [assets/containers/agentbox/yoloctl-entrypoint.sh](../../assets/containers/agentbox/yoloctl-entrypoint.sh#L28-L46) — identity alignment and home ownership.
-5. <a id="source-5"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L107-L143) — `sandboxNpmMaintenanceCache`, `npmInstallGlobalAtLatestArgs`.
+5. <a id="source-5"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L110-L150) — `npmInstallGlobalAtLatestArgs`, managed prefix and cache.
 6. <a id="source-6"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L41-L57) — `ComposedImageRef`, `composedImageRef`.
 7. <a id="source-7"></a> [internal/agentboximage/composed_test.go](../../internal/agentboximage/composed_test.go#L123-L138) — `TestComposedImageRef_NpmEnvironmentChangesImage`.
-8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L258-L268) — `network.npm`.
+8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L298-L308) — `network.npm`.
 9. <a id="source-9"></a> [npm policy golden](../../internal/agentbox/testdata/policy_golden/npm.yaml#L28-L40) — exact composed grant.
 10. <a id="source-10"></a> [scripts/smoke/npm.sh](../../scripts/smoke/npm.sh#L1) — complete isolated runtime gate.
-11. <a id="source-11"></a> [cmd/yoloctl/autoupdate_test.go](../../cmd/yoloctl/autoupdate_test.go#L11-L50) — `TestNpmAgentMaintenanceUsesExplicitConfigPaths`.
+11. <a id="source-11"></a> [cmd/yoloctl/autoupdate_test.go](../../cmd/yoloctl/autoupdate_test.go#L11-L52) — `TestNpmAgentMaintenanceUsesExplicitConfigPaths`.

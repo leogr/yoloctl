@@ -121,6 +121,11 @@ func TestMaintenanceExecsUseSystemPathAndExactlySelectedContainer(t *testing.T) 
 					got = got[1:]
 				}
 				prefix := []string{"sudo", "nerdctl", "exec", "--user", "sandbox", "--env", wantAgentMaintenancePath, id}
+				if op == "npm-install" {
+					// Only the npm install runs as the agent maintenance user.
+					prefix = []string{"sudo", "nerdctl", "exec", "--user", "yoloctl-maint", "--workdir", "/var/lib/yoloctl-maint",
+						"--env", wantAgentMaintenancePath, "--env", "HOME=/var/lib/yoloctl-maint", "--env", "TMPDIR=/var/lib/yoloctl-maint", id}
+				}
 				if len(got) != 1 || len(got[0]) <= len(prefix) || !slices.Equal(got[0][:len(prefix)], prefix) {
 					t.Fatal("maintenance exec changed its user, PATH or exact container ID", got)
 				}
@@ -147,7 +152,7 @@ func TestAgentMaintenanceRetainsOneTargetAcrossProbeAndInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := calls()
-	if len(got) != 3 || got[0][2] != "inspect" || got[1][7] != id || got[2][7] != id {
+	if len(got) != 3 || got[0][2] != "inspect" || got[1][7] != id || got[2][13] != id {
 		t.Fatal("probe/install reselected the name", got)
 	}
 }
