@@ -323,7 +323,7 @@ operations can refresh the CLI, or you can use `agent update AGENT` explicitly.
 `--no-autoupdate` skips a lifecycle refresh and keeps the installed version;
 it does not pin a new image build. These downloads run through the
 VM/container maintenance path, outside the agent process's sandbox egress
-policy. See [policy and images](docs/digests/policy-images.md).
+policy. See [agent maintenance](docs/digests/agent-maintenance.md).
 
 ### Workdirs, ports and resources
 

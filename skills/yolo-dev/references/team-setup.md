@@ -139,7 +139,7 @@ yoloctl chat enroll worker --connect --client space --recreate --json
 Add the mount only when the task needs it and its grant exists. Add the assigned
 model/effort args (Claude `--model`/`--effort`, Codex `-m`, agy `--model`) as
 defaults for a new conversation. See
-[conversation identity](../../../docs/digests/agent-conversations.md). Do
+[model and effort on resume](../../../docs/digests/resume-model-effort.md). Do
 not set a Codex effort with `-c model_reasoning_effort=…`: that override runs
 Codex without its daemon, so chat shows no effort
 ([Codex reporter](../../../docs/digests/codex-observation.md)). Add explicit

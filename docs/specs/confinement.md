@@ -4,7 +4,7 @@
 container has elevated setup privileges; its `nerdctl exec` path bypasses the
 inner policy. Package maintenance deliberately uses that path. Agent execution
 and long-lived auxiliary workloads must preserve the sandbox boundary.
-[1](#source-1)
+[1](#source-1) [19](#source-19)
 
 [FACT] The native OpenShell 0.1.6 integration refuses final images with
 an inherited `ENTRYPOINT`; rebuild the base without it or move setup into a
@@ -50,7 +50,8 @@ skip home remapping at startup; images for different identities remain distinct.
 Cached composed images are reused; rebuild refreshes feature layers separately
 from base refresh. Apt index/deb caches stay outside image layers and refreshes
 still validate signed metadata before installation. Agent packages track
-`latest`; infrastructure dependencies have deliberate pins. npm and base apt downloads use disposable BuildKit caches
+`latest`; infrastructure dependencies have deliberate pins. [1](#source-1)
+npm and base apt downloads use disposable BuildKit caches
 outside the image, with metadata revalidation. Managed rebuilds retain downloads;
 custom bases/raw Dockerfile features keep full cache invalidation.
 Runtime agent maintenance execs use a fixed system PATH. Runtime npm
@@ -58,7 +59,7 @@ maintenance uses the explicit sandbox-owned global prefix and maintenance
 cache and skips the agent-writable user and global npmrc files. A custom
 base image needs npm and Node.js on the system PATH for npm
 maintenance. Use `--no-autoupdate` to skip lifecycle updates when the image
-lacks system npm. [1](#source-1)
+lacks system npm. [18](#source-18) [19](#source-19)
 
 [FACT] The optional `npm` development feature uses the base's Node.js/npm/npx,
 sets user-writable global installs and a separate development cache, and grants
@@ -83,7 +84,7 @@ composed builds can resolve locally built and imported base images. [9](#source-
 
 [DERIVED] Investigate agent network denial through effective feature/capability
 policy, but investigate install/update network behavior through the maintenance
-path. They run in different enforcement contexts. [1](#source-1)
+path. They run in different enforcement contexts. [1](#source-1) [19](#source-19)
 
 [FACT] `yolo.space.operator` explicitly grants broad box authority in the current space:
 other existing accounts, granted projects, stronger capabilities and delegation.
@@ -114,7 +115,7 @@ input, inner teardown and Intel hosts remain open.
 profile delegates confinement to OpenShell and disables Codex's nested sandbox.
 Its OpenAI/ChatGPT grant includes the native Linux Codex executables and detached
 daemon across package versions; it retains the existing HTTPS endpoint scope.
-[1](#source-1)
+[1](#source-1) [18](#source-18)
 
 [FACT] Gemini uses image-owned settings to disable its self-updater and default
 to usage statistics off and shell execution without new PTYs. Its required
@@ -161,7 +162,7 @@ does not establish delivery of final SSH output. [17](#source-17)
 
 ## Sources
 
-1. <a id="source-1"></a> [Policy, image and maintenance implementation](../digests/policy-images.md).
+1. <a id="source-1"></a> [Policy boundaries](../digests/policy-images.md).
 2. <a id="source-2"></a> [Operator boundary evidence](../digests/operator.md).
 
 3. <a id="source-3"></a> [Gemini adapter](../digests/gemini.md).
@@ -186,3 +187,5 @@ does not establish delivery of final SSH output. [17](#source-17)
 16. <a id="source-16"></a> [VM-native audit contracts](../digests/audit.md).
 
 17. <a id="source-17"></a> [Native main-exit observation](../digests/openshell-main-exit.md) — PID 1 marker, result and cleanup boundary.
+18. <a id="source-18"></a> [Image composition](../digests/image-composition.md).
+19. <a id="source-19"></a> [Agent maintenance](../digests/agent-maintenance.md).

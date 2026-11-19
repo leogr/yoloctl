@@ -256,7 +256,7 @@ indentation; unknown-width and non-terminal output stay unchanged. [35](#source-
 
 [FACT] Successful and skipped substeps are grouped below their parent's final
 line when it is available. Failed and uncertain substeps print as they end.
-Line output streams progress and debug detail. [26](#source-26)
+Line output streams progress and debug detail. [37](#source-37)
 
 [FACT] When a collapsed host step had Lima output lines, its summary is
 followed by `VM launcher log: yoloctl space logs SPACE --host`; this names
@@ -364,3 +364,4 @@ the writable layer require their tool's cache command or explicit recreation
 35. <a id="source-35"></a> [Terminal log wrapping](../digests/log-wrapping.md).
 
 36. <a id="source-36"></a> [Space upgrade](../digests/space-upgrade.md).
+37. <a id="source-37"></a> [Log steps](../digests/log-steps.md).

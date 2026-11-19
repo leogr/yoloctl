@@ -209,7 +209,7 @@ same CLI surface and lifecycle services for host and in-box clients.
 
 ## Images and terminal behavior
 
-Evidence: [composition](docs/digests/policy-images.md) and
+Evidence: [composition](docs/digests/image-composition.md) and
 [TUI](docs/specs/tui.md).
 
 Claude, Codex, Gemini, OpenCode and Pi feature installs must track `@latest`; do not pin their feature

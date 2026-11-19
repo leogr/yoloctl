@@ -67,7 +67,7 @@ boundary. Other explicit Codex configuration overrides still apply. A new
 conversation uses the box arguments. Records stay on the space's disk
 across space recreate but are not exported; an imported box starts a new
 tracked conversation. `box session NAME` shows a record read-only; an
-undecidable holder probe shows as unknown, never idle. [12](#source-12)
+undecidable holder probe shows as unknown, never idle. [12](#source-12) [25](#source-25)
 [17](#source-17) [21](#source-21) [23](#source-23)
 
 [FACT] Default interactive attachment uses the shared renderer, including a
@@ -210,3 +210,4 @@ a read showing it stopped (never after a lost or uncertain result).
 22. <a id="source-22"></a> [OpenShell compatibility](../digests/openshell-compatibility.md) — mediated signal delivery and listener flags.
 23. <a id="source-23"></a> [Saved conversation presence](../digests/resume-file-presence.md).
 24. <a id="source-24"></a> [Pre-native boxes](../digests/pre-native-boxes.md).
+25. <a id="source-25"></a> [Model and effort on resume](../digests/resume-model-effort.md).
