@@ -1,6 +1,6 @@
 # Agent conversation identity
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Carry, saved-file preflight and agy were verified at `ffd5153aed3db8e29d362837407e24bdfacb5f7e`, `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and `37fa8447df51ccbea03fea6ce802418e42e3f30e` with accompanying changes. Codex argv at `c44a99b1ce2fff6106f2312a175b168557388a6e` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Carry, saved-file preflight and agy were verified at `ffd5153aed3db8e29d362837407e24bdfacb5f7e`, `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and `37fa8447df51ccbea03fea6ce802418e42e3f30e` with accompanying changes. Codex argv at `c6e67053e4fd40a8987dc6be1c3f34bb4d6b1380` and accompanying changes.
 
 Launch locking, tokens and settlement are detailed in
 [tracked agent launches](agent-launches.md).
