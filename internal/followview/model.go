@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image/color"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -444,6 +445,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.gen != m.gen {
 			return m, m.work(false, false)
 		}
+		keepTop := msg.view != nil && m.sameTopRow(msg.view, msg.snapshot.Start)
 		// Cached rerendering says nothing about source availability. Only an
 		// actual read (including an unchanged success) can change that state.
 		if msg.read {
@@ -483,7 +485,11 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 					m.notice = "Table row exceeds display limits; kept closed"
 				}
 			}
-			m.placeAnchor()
+			if keepTop {
+				m.top = min(m.top, m.maxTop())
+			} else {
+				m.placeAnchor()
+			}
 			// Mermaid fences left undrawn by the refresh budget: one
 			// render-only continuation on the retained bytes, repeated while
 			// each makes progress.
@@ -567,6 +573,31 @@ func (m *Model) maxTop() int {
 	}
 	return max(0, len(m.view.rows)-max(1, m.bodyHeight()))
 }
+
+// A byte anchor cannot distinguish overlapping table rows or a separator
+// from the record it precedes. Retain the actual top row when it still
+// occupies the same position in the new layout.
+func (m *Model) sameTopRow(next *rendered, start int64) bool {
+	old := m.view
+	if m.following || old == nil || m.snapshot.Start != start || m.top >= len(old.rows) || m.top >= len(next.rows) {
+		return false
+	}
+	a, b := old.rows[m.top], next.rows[m.top]
+	if a.Line != b.Line || a.Start != b.Start || a.End != b.End || a.Decor != b.Decor || a.Closed != b.Closed {
+		return false
+	}
+	oldLine, newLine := old.sourceLine(a.Line), next.sourceLine(b.Line)
+	if oldLine < 0 || oldLine >= len(old.starts) || newLine < 0 || newLine >= len(next.starts) ||
+		old.starts[oldLine] != next.starts[newLine] {
+		return false
+	}
+	return old.doc.Lines[a.Line].Text == next.doc.Lines[b.Line].Text &&
+		slices.Equal(a.Frags, b.Frags) &&
+		slices.EqualFunc(a.Runs, b.Runs, func(x, y markdownview.Run) bool {
+			return x.Text == y.Text && x.Start == y.Start && x.Copy == y.Copy && x.Tail == y.Tail
+		})
+}
+
 func (m *Model) captureAnchor() {
 	if m.view == nil || len(m.view.rows) == 0 {
 		return

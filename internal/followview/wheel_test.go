@@ -69,3 +69,94 @@ func TestWheelKeepsWrappedRowAfterRender(t *testing.T) {
 		})
 	}
 }
+
+func TestWheelKeepsTableRowAcrossRenderAndRead(t *testing.T) {
+	const doc = "| Ticket | Notes |\n|---|---|\n" +
+		"| one two three four five | red green blue white black |\n" +
+		"| six seven eight nine | indigo orange teal gold |\n"
+	for _, appendWhileReading := range []bool{false, true} {
+		name := "render"
+		if appendWhileReading {
+			name = "append"
+		}
+		t.Run(name, func(t *testing.T) {
+			for _, shape := range []string{"overlap", "separator"} {
+				t.Run(shape, func(t *testing.T) {
+					raw := doc + "\n" + strings.Repeat("tail\n", 30)
+					m, path := fileModel(t, raw, Markdown)
+					m.opts.Navigation = &filelink.Navigator{}
+					_, resize := m.Update(tea.WindowSizeMsg{Width: 27, Height: 6})
+					applyWork(t, m, resize)
+					m.pause()
+
+					target := 0
+					for i := 1; i < m.maxTop(); i++ {
+						a, b := m.view.rows[i-1], m.view.rows[i]
+						if a.Line != b.Line || m.view.doc.Lines[b.Line].Table == nil {
+							continue
+						}
+						overlap := a.Start < b.Start && b.Start < a.End
+						separator := a.Decor && a.Start == 0 && a.End == 0 && b.Start == 0 && b.End > 0
+						if (shape == "overlap" && overlap) || (shape == "separator" && separator) {
+							target = i
+							break
+						}
+					}
+					if target == 0 {
+						t.Fatalf("fixture has no %s row", shape)
+					}
+					m.top = target - 1
+					m.captureAnchor()
+					var work tea.Cmd
+					if appendWhileReading {
+						_, poll := m.Update(pollMsg{})
+						work = poll().(tea.BatchMsg)[1]
+						writeFixture(t, path, []byte(raw+"\na later paragraph\n"))
+					}
+					_, wheel := m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 2, Y: 2})
+					if m.top != target || m.following {
+						t.Fatalf("wheel put top at %d, want paused row %d", m.top, target)
+					}
+					if !appendWhileReading {
+						work = wheel
+					}
+					if work == nil {
+						t.Fatal("missing render work")
+					}
+					result := work().(resultMsg)
+					if appendWhileReading && (!result.read || result.err != nil || !result.snapshot.Changed) {
+						t.Fatalf("expected successful changed read, got read=%v changed=%v err=%v", result.read, result.snapshot.Changed, result.err)
+					}
+					_, next := m.Update(result)
+					if m.top != target {
+						t.Errorf("render moved top to %d, want %d", m.top, target)
+					}
+					if next != nil {
+						applyWork(t, m, next)
+					}
+					if m.top != target {
+						t.Errorf("settled top at %d, want %d", m.top, target)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestViewportUsesSourceAnchorAfterReflow(t *testing.T) {
+	m, _ := fileModel(t, strings.Repeat("word ", 100)+"\n"+strings.Repeat("tail\n", 20), Text)
+	_, resize := m.Update(tea.WindowSizeMsg{Width: 20, Height: 6})
+	applyWork(t, m, resize)
+	applyWork(t, m, key(m, tea.KeyHome, 0))
+	for range 4 {
+		m.scroll(1)
+	}
+	before := m.top
+	anchor := m.anchor
+	_, resize = m.Update(tea.WindowSizeMsg{Width: 40, Height: 6})
+	applyWork(t, m, resize)
+	row := m.view.rows[m.top]
+	if m.top == before || row.Line != 0 || int64(row.Start) > anchor || int64(row.End) <= anchor {
+		t.Fatalf("reflow kept or missed the old row: top %d→%d, row %d [%d,%d), anchor %d", before, m.top, row.Line, row.Start, row.End, anchor)
+	}
+}
