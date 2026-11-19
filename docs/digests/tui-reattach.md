@@ -1,6 +1,6 @@
 # TUI re-attach and view reopen
 
-Verification: `5ab92ee7f49123d5581438727083e6934618565f` and accompanying changes; re-read affected cited symbols when changing behavior.
+Verification: `5ab92ee7f49123d5581438727083e6934618565f` and accompanying changes. Ended close buttons checked against `ca5bf102bdbb658d2f41b8ead982c005ed2b2218` and accompanying changes.
 
 [FACT] Ended panes offer explicit actions:
 - `attach`/`box attach`: `[ Re-attach ]`, regardless of exit status.
@@ -11,7 +11,7 @@ Verification: `5ab92ee7f49123d5581438727083e6934618565f` and accompanying change
   plain sh/bash/zsh/fish with interactive/login flags: `[ Reopen ]`.
 - Help, `--box-use`, suppressed lifecycle attachment, finite/remote commands,
   shell scripts/`-c`/stdin modes, editors, secret prompts and standalone views
-  are excluded. Running followers are not restarted. [1](#source-1)
+  cannot resume in place. Running followers are not restarted. [1](#source-1)
   [10](#source-10)
 
 [FACT] A running space view retries telemetry without booting a VM.
@@ -46,27 +46,32 @@ completion. Only metadata readers join Done; ordinary callbacks stay asynchronou
 to avoid pane-close/UI-loop deadlock. Metadata launches nothing; replacements
 have separate Sessions. PTY output is not metadata. [8](#source-8) [9](#source-9)
 
-[FACT] `r` and a left press on the last-row action button both call
-`reattachPane`; Caps/Num Lock are ignored. Enter/Ctrl+W still close, scroll/tab
-navigation remains available, and other keys are inert. Buttons require enough
-width and an on-screen row; palette clipping can hide them, popups stay above,
-and clicks remain chrome-owned through release. [1](#source-1) [3](#source-3)
-[4](#source-4)
+[FACT] `[ Close ]` on the last row dismisses an ended tab or pane through the
+same path as Enter and Ctrl+W. Closing an unfocused pane leaves the focused
+pane in scrollback if it was scrolled up. Close appears before `[ Re-attach ]`
+or `[ Reopen ]`, or alone when there is no resume action. If both buttons
+cannot fit, the resume button has priority when it fits. Each button requires
+an on-screen row and its full width. Palette clipping can hide it, popups stay above it, and button presses
+remain chrome-owned through release. Standalone views have no buttons. Pressing
+`r` or the resume button calls `reattachPane`. Caps/Num Lock are ignored on `r`.
+Scroll and tab navigation remain available, and other keys are inert. [1](#source-1) [2](#source-2)
+[3](#source-3) [4](#source-4)
 
 [FACT] Replacement preserves rectangle, split and zoom, focuses the new pane,
 drops old gesture owners and closes its Session. Local start failure keeps the
 old pane and reports why; stale exits match no replacement. No timer retries.
-The end banner uses `EndHint` (`r to re-attach to api` or `r to reopen`).
+The end banner says `Press Enter to close` and appends any `EndHint`
+(`r to re-attach to api` or `r to reopen`).
 [1](#source-1) [2](#source-2) [5](#source-5) [6](#source-6)
 
 ## Sources
 
-1. <a id="source-1"></a> [Re-attach](../../internal/tui/reattach.go#L1) — `reattachArgs`, `viewEndAction`, `viewActionForPane`, `reattachHint`, `reattachable`, `reattachPane`, `reattachSlots`, `applyReattachButtons`, `reattachClick`.
-2. <a id="source-2"></a> [Pane start and keys](../../internal/tui/tui.go#L1548) — `handleExitedTabKey`; `startPane` (L801) sets `Args` and `EndHint`; `Pane.Args` in panes/layout.go.
-3. <a id="source-3"></a> [Mouse routing](../../internal/tui/mouse.go#L236-L241) — `handleMouse` calls `reattachClick` after popups and before chrome.
-4. <a id="source-4"></a> [Drawing order](../../internal/tui/tui.go#L1787) — `applyReattachButtons` before `applyOverlay`.
-5. <a id="source-5"></a> [Tests](../../internal/tui/reattach_test.go#L17) — `TestReattachArgs`, `TestEndedAttachReattachesInPlace`, `TestReattachOnlyEndedAttachViews`, `TestReattachButton`, `TestReattachKeyIgnoresLockModifiers`; `reopen_test.go`, `reopen_launch_test.go` and `reopen_args_test.go` cover non-box actions, actual child argv/context changes, exclusions and clipping.
-6. <a id="source-6"></a> [End banner](../../internal/tui/term/session.go#L322) — `writeExitBanner`, `ExitCloseHint`; `TestExitBannerEndHint` in term_test.go; `attachedSetupOutput` in attach.go.
+1. <a id="source-1"></a> [Re-attach](../../internal/tui/reattach.go#L1) — `reattachArgs`, `viewEndAction`, `viewActionForPane`, `reattachHint`, `reattachable`, `reattachPane`, `endedButtonSlots`, `applyEndedButtons`, `endedButtonClick`, `closeEndedPane`.
+2. <a id="source-2"></a> [Pane start and keys](../../internal/tui/tui.go#L1665) — `handleExitedTabKey`; `startPane` (L842) sets `Args` and `EndHint`; `Pane.Args` in panes/layout.go.
+3. <a id="source-3"></a> [Mouse routing](../../internal/tui/mouse.go#L262-L265) — `handleMouse` calls `endedButtonClick` after popups and before chrome.
+4. <a id="source-4"></a> [Drawing order](../../internal/tui/tui.go#L1922) — `applyEndedButtons` before `applyOverlay`.
+5. <a id="source-5"></a> [Tests](../../internal/tui/reattach_test.go#L17) — `TestReattachArgs`, `TestEndedAttachReattachesInPlace`, `TestReattachOnlyEndedAttachViews`, `TestReattachButton`, `TestCloseEndedViewButton`, `TestReattachKeyIgnoresLockModifiers`; `reopen_test.go`, `reopen_launch_test.go` and `reopen_args_test.go` cover non-box actions, actual child argv/context changes, exclusions and clipping.
+6. <a id="source-6"></a> [End banner](../../internal/tui/term/session.go#L417) — `writeExitBanner`, `ExitCloseHint`; `TestExitBannerEndHint` in term_test.go; `attachedSetupOutput` in attach.go.
 
 7. <a id="source-7"></a> [Host publication](../../cmd/yoloctl/resume_target.go#L35) — `publishControllerResumeTarget`, `publishResumeTarget`; `callControllerTerminal` in controller_client.go publishes before dispatch; `TestHostLifecycleResumeTargetThroughClientRoot` in resume_target_test.go.
 8. <a id="source-8"></a> [Typed framing](../../internal/termio/tabrequest.go#L15) — `TabRequest`, `ValidateResumeTarget`, `ReadTabRequests`; `claimTabRequests` in cmd/yoloctl/resume_target.go and startup in main.go; chat_view.go/space_view.go consume that context channel.

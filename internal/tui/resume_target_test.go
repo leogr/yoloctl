@@ -94,11 +94,11 @@ func TestLifecycleResumeInPlaceUsesResolvedTarget(t *testing.T) {
 				if action == "key" {
 					_, _ = m.Update(key('r', 0, "r"))
 				} else {
-					slots := m.reattachSlots()
-					if len(slots) != 1 {
+					slots := m.endedButtonSlots()
+					if len(slots) != 2 || slots[1].label != reattachButton {
 						t.Fatalf("slots=%+v", slots)
 					}
-					x, y := slots[0].x+1, m.tabTop()+slots[0].y
+					x, y := slots[1].x+1, m.tabTop()+slots[1].y
 					_, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y})
 					_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: x, Y: y})
 				}

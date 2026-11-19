@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/termio"
 )
 
@@ -380,7 +381,7 @@ func TestSessionEchoesExitStatusAndHint(t *testing.T) {
 			if !strings.Contains(grid, tc.want) {
 				t.Errorf("exit status %q missing from grid:\n%s", tc.want, grid)
 			}
-			if !strings.Contains(grid, "Press Enter to close this tab") {
+			if !strings.Contains(grid, "Press Enter to close\n") {
 				t.Errorf("close hint missing from grid:\n%s", grid)
 			}
 		})
@@ -411,7 +412,7 @@ func feed(t *testing.T, e *emulator, s string) {
 // "✗ exit 2ass permissions on (shift+tab to cycle)".
 func assertBannerClean(t *testing.T, grid, status string) {
 	t.Helper()
-	if !strings.Contains(grid, status) || !strings.Contains(grid, "Press Enter to close this tab") {
+	if !strings.Contains(grid, status) || !strings.Contains(ansi.Strip(grid)+"\n", "Press Enter to close\n") {
 		t.Fatalf("banner missing or incomplete:\n%s", grid)
 	}
 	for _, line := range strings.Split(grid, "\n") {

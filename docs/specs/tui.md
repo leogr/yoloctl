@@ -59,13 +59,14 @@ holder-backed view keeps its session running and closes at once, while any
 other live command asks first in a popup bound to the commands it lists.
 [35](#source-35)
 
-[FACT] An ended `attach`/`box attach` view offers re-attach in place: `r`, or
-a click on its `[ Re-attach ]` button, runs the same attach again (without
-`--new-session`) in the same pane slot; Enter still closes. Nothing
-re-attaches on its own. Lifecycle auto-attach panes also offer ordinary
-`box attach` for their retained resolved target, including after a remote error;
-this does not prove lifecycle success or replay its command. Suppressed and
-noninteractive lifecycle commands are excluded. [41](#source-41)
+[FACT] Enter and `[ Close ]` dismiss an ended tab or pane. An ended
+`attach`/`box attach` view can re-attach in place. Pressing `r` or clicking
+`[ Re-attach ]` runs the same attach again (without `--new-session`) in the
+same pane slot. Nothing re-attaches on its own. Lifecycle auto-attach panes
+also offer ordinary `box attach` for their retained resolved target, including
+after a remote error. This does not prove lifecycle success or replay its
+command. Suppressed and noninteractive lifecycle commands are excluded.
+[41](#source-41)
 
 [FACT] Ended chat, space-view, followed log, `follow` file-view and interactive VM/box-shell panes
 use `[ Reopen ]`/`r` in the same slot. Arbitrary remote commands, shell scripts,

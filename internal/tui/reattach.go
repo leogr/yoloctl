@@ -17,8 +17,10 @@ import (
 // own; `box attach` itself decides what happens to a stopped box or one
 // that needs recreating, and reports it in the new view.
 
-// reattachButton is the clickable re-attach action on an ended view.
-const reattachButton = "[ Re-attach ]"
+const (
+	endedCloseButton = "[ Close ]"
+	reattachButton   = "[ Re-attach ]"
+)
 
 // attachValueFlags are the `box attach` flags that take a separate value,
 // skipped when finding the box name for display.
@@ -164,66 +166,91 @@ func (m *model) reattachPane(t *tabs.Tab, old *panes.Pane) {
 	m.watchPaneExit(p)
 }
 
-// reattachSlot is where an ended view's button is drawn and clicked, in
-// tab-area cells: the first cells of the pane's last row, when that row is
-// on screen and wide enough.
-type reattachSlot struct {
-	pane  *panes.Pane
-	x, y  int
-	label string
+// endedButtonSlot is a button on the last row of an ended pane, in tab-area cells.
+type endedButtonSlot struct {
+	pane     *panes.Pane
+	x, y     int
+	label    string
+	gapAfter bool
 }
 
-func (m *model) reattachSlots() []reattachSlot {
+func (m *model) endedButtonSlots() []endedButtonSlot {
 	t := m.tabs.Current()
 	if t == nil || m.standalone {
 		return nil
 	}
 	_, visible := m.tabArea()
-	var slots []reattachSlot
+	var slots []endedButtonSlot
 	for _, p := range m.laidOut(t).Visible() {
-		if !m.reattachable(t, p) {
+		r := p.Rect()
+		y := r.Y + r.H - 1
+		if p.Empty() || !p.Exited || r.H <= 0 || y >= visible {
 			continue
 		}
-		action, _ := viewActionForPane(p)
-		width := ansi.StringWidth(action.label)
-		r := p.Rect()
-		if y := r.Y + r.H - 1; r.H > 0 && r.W >= width && y < visible {
-			slots = append(slots, reattachSlot{pane: p, x: r.X, y: y, label: action.label})
+		action, resumable := viewActionForPane(p)
+		resumeWidth := ansi.StringWidth(action.label)
+		resumeFits := resumable && r.W >= resumeWidth
+		x := r.X
+		closeWidth := len(endedCloseButton)
+		// Keep an existing resume button usable when both buttons cannot fit.
+		if r.W >= closeWidth && (!resumeFits || r.W >= closeWidth+1+resumeWidth) {
+			slots = append(slots, endedButtonSlot{pane: p, x: x, y: y, label: endedCloseButton, gapAfter: resumeFits})
+			x += closeWidth + 1
+		}
+		if resumeFits {
+			slots = append(slots, endedButtonSlot{pane: p, x: x, y: y, label: action.label})
 		}
 	}
 	return slots
 }
 
-// applyReattachButtons draws each ended view's button over the tab-area
-// rows, before any popup, which stays on top.
-func (m *model) applyReattachButtons(base []string) {
-	for _, s := range m.reattachSlots() {
+// applyEndedButtons draws before the popups, which stay on top.
+func (m *model) applyEndedButtons(base []string) {
+	for _, s := range m.endedButtonSlots() {
 		if s.y < len(base) {
-			base[s.y] = spliceRow(base[s.y], "\x1b[7m"+s.label+"\x1b[27m", s.x, ansi.StringWidth(s.label), m.width)
+			label := "\x1b[7m" + s.label + "\x1b[27m"
+			if s.gapAfter {
+				label += " "
+			}
+			base[s.y] = spliceRow(base[s.y], label, s.x, ansi.StringWidth(label), m.width)
 		}
 	}
 }
 
-// reattachClick takes a left press on an ended view's button: it
-// re-attaches that view and stays chrome-owned through its release. A press
-// anywhere else takes its normal route.
-func (m *model) reattachClick(msg tea.Msg, mo tea.Mouse) bool {
+// endedButtonClick takes a left press on an ended view's button and keeps
+// the gesture chrome-owned through its release.
+func (m *model) endedButtonClick(msg tea.Msg, mo tea.Mouse) bool {
 	click, ok := msg.(tea.MouseClickMsg)
 	if !ok || click.Button != tea.MouseLeft {
 		return false
 	}
 	mo = m.mouseHit(mo)
 	y := mo.Y - m.tabTop()
-	for _, s := range m.reattachSlots() {
-		if y == s.y && mo.X >= s.x && mo.X < s.x+ansi.StringWidth(s.label) {
-			if m.mouseOwners == nil {
-				m.mouseOwners = make(map[tea.MouseButton]mouseOwner)
-			}
-			m.mouseOwners[tea.MouseLeft] = mouseOwner{}
-			m.selectionPointer = nil
-			m.reattachPane(m.tabs.Current(), s.pane)
-			return true
+	for _, s := range m.endedButtonSlots() {
+		if y != s.y || mo.X < s.x || mo.X >= s.x+ansi.StringWidth(s.label) {
+			continue
 		}
+		if m.mouseOwners == nil {
+			m.mouseOwners = make(map[tea.MouseButton]mouseOwner)
+		}
+		m.mouseOwners[tea.MouseLeft] = mouseOwner{}
+		m.selectionPointer = nil
+		t := m.tabs.Current()
+		if s.label == endedCloseButton {
+			m.closeEndedPane(t, s.pane)
+		} else {
+			m.reattachPane(t, s.pane)
+		}
+		return true
 	}
 	return false
+}
+
+// closeEndedPane shares the keyboard and mouse dismissal path.
+func (m *model) closeEndedPane(t *tabs.Tab, p *panes.Pane) {
+	focused := !m.focusPalette && t.Focused() == p
+	m.requestDetachPane(t, p)
+	if focused {
+		m.scrollToLive()
+	}
 }

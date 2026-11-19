@@ -431,7 +431,7 @@ func writeExitBanner(e *emulator, code int, hint string) {
 }
 
 // ExitCloseHint starts the end banner's last line; an EndHint follows it.
-const ExitCloseHint = "Press Enter to close this tab"
+const ExitCloseHint = "Press Enter to close"
 
 // SendInput shares one ordered queue with terminal query replies.
 func (s *Session) SendInput(p []byte) error {

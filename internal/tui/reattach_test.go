@@ -134,8 +134,8 @@ func TestReattachOnlyEndedAttachViews(t *testing.T) {
 	logs := endedAttach(t, "box", "logs", "api")
 	tab, _ := splitWithEnded(t, m, logs)
 	_, _ = m.Update(key('r', 0, "r"))
-	if tab.Focused() != logs || len(m.reattachSlots()) != 0 {
-		t.Fatal("r on an ended non-attach view does nothing, and it has no button")
+	if tab.Focused() != logs || len(m.endedButtonSlots()) != 1 || m.endedButtonSlots()[0].label != endedCloseButton {
+		t.Fatal("r on a finite ended view does nothing, and only Close is offered")
 	}
 
 	ended := endedAttach(t, "box", "attach", "api")
@@ -163,31 +163,90 @@ func TestReattachButton(t *testing.T) {
 	tab.Layout.SetFocus(live) // the button works on an unfocused view too
 	m.layoutTab(tab)
 
-	slots := m.reattachSlots()
+	slots := m.endedButtonSlots()
 	r := ended.Rect()
-	if len(slots) != 1 || slots[0].pane != ended || slots[0].x != r.X || slots[0].y != r.Y+r.H-1 {
-		t.Fatalf("one button on the ended view's last row: %+v rect %+v", slots, r)
+	if len(slots) != 2 || slots[0].pane != ended || slots[0].label != endedCloseButton || slots[0].x != r.X || slots[0].y != r.Y+r.H-1 ||
+		slots[1].pane != ended || slots[1].label != reattachButton || slots[1].x != r.X+len(endedCloseButton)+1 || slots[1].y != slots[0].y {
+		t.Fatalf("Close before Re-attach on the last row: %+v rect %+v", slots, r)
 	}
 	base := make([]string, m.viewRows())
-	m.applyReattachButtons(base)
-	if row := ansi.Strip(base[slots[0].y]); !strings.HasPrefix(row[r.X:], reattachButton) {
-		t.Fatalf("button not drawn: %q", row)
+	base[slots[0].y] = strings.Repeat("x", m.width)
+	m.applyEndedButtons(base)
+	if row := ansi.Strip(base[slots[0].y]); !strings.HasPrefix(row[r.X:], "[ Close ] [ Re-attach ]") {
+		t.Fatalf("buttons not drawn in order: %q", row)
 	}
-	width := len(reattachButton)
 	y := m.tabTop() + slots[0].y
-	_, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: r.X + width, Y: y})
-	_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: r.X + width, Y: y})
-	if tab.Layout.Panes()[1] != ended {
-		t.Fatal("a press beside the button does not re-attach")
+	gap := slots[1].x - 1
+	_, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: gap, Y: y})
+	_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: gap, Y: y})
+	if len(tab.Layout.Panes()) != 2 || tab.Layout.Panes()[1] != ended {
+		t.Fatal("the gap between buttons started or closed a view")
 	}
-	_, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: r.X + 2, Y: y})
-	_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: r.X + 2, Y: y})
+	_, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: slots[1].x, Y: y})
+	_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: slots[1].x, Y: y})
 	p := tab.Layout.Panes()[1]
 	if p == ended || p.Exited || tab.Focused() != p || !slices.Equal(p.Args, []string{"box", "attach", "api", "--space", "fixture"}) {
 		t.Fatal("a press on the button re-attaches that view, focused")
 	}
-	if len(m.reattachSlots()) != 0 {
+	if len(m.endedButtonSlots()) != 0 {
 		t.Fatal("the live view has no button")
+	}
+}
+
+func TestCloseEndedViewButton(t *testing.T) {
+	for _, name := range []string{"last tab without resume", "unfocused split pane"} {
+		t.Run(name, func(t *testing.T) {
+			m := newTestModel(t, 100, 26)
+			var tab *tabs.Tab
+			var live *panes.Pane
+			var ended *panes.Pane
+			if name == "last tab without resume" {
+				ended = endedAttach(t, "box", "logs", "api")
+				tab = tabs.New(ended)
+				m.tabs.Add(tab)
+				m.focusPalette = false
+			} else {
+				ended = endedAttach(t, "box", "attach", "api")
+				tab, live = splitWithEnded(t, m, ended)
+				live.Command = "yoloctl box edit api"
+				tab.Layout.SetFocus(live)
+			}
+			m.layoutTab(tab)
+			if live != nil {
+				if _, err := live.Session.Write([]byte(strings.Repeat("older output\r\n", 80))); err != nil {
+					t.Fatal(err)
+				}
+				live.Session.Scroll(10)
+				if offset := live.Session.Frame().Offset; offset != 10 {
+					t.Fatalf("live sibling offset = %d, want 10", offset)
+				}
+			}
+			slots := m.endedButtonSlots()
+			if len(slots) == 0 || slots[0].pane != ended || slots[0].label != endedCloseButton || live == nil && len(slots) != 1 {
+				t.Fatalf("missing or misplaced Close: %+v", slots)
+			}
+			x, y := slots[0].x, slots[0].y+m.tabTop()
+			_, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y})
+			if owner, ok := m.mouseOwners[tea.MouseLeft]; !ok || owner.surface != nil || owner.pane != nil {
+				t.Fatalf("Close press must stay chrome-owned through release: %+v", owner)
+			}
+			_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: 0, Y: y})
+			if _, ok := m.mouseOwners[tea.MouseLeft]; ok || m.confirm != nil {
+				t.Fatal("release must settle the gesture, and an ended view needs no confirmation")
+			}
+			if live == nil {
+				if m.tabs.Current() != nil || !m.focusPalette {
+					t.Fatal("Close must dismiss the last tab and return focus to the palette")
+				}
+				return
+			}
+			if m.tabs.Current() != tab || tab.Focused() != live || !slices.Equal(tab.Layout.Panes(), []*panes.Pane{live}) || m.focusPalette {
+				t.Fatal("Close must dismiss only the clicked pane and keep the live sibling focused")
+			}
+			if live.Session.Frame().Offset == 0 {
+				t.Fatal("closing an unfocused pane jumped the live sibling to the bottom")
+			}
+		})
 	}
 }
 

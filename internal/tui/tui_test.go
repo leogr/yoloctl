@@ -653,7 +653,7 @@ func TestExitedTabClosesOnEnter(t *testing.T) {
 	m.tabs.Add(testTab(s, "yoloctl true", true))
 	m.focusPalette = false
 
-	if !strings.Contains(s.GridText(), "Press Enter to close this tab") {
+	if !strings.Contains(s.GridText(), "Press Enter to close\n") {
 		t.Errorf("exited tab missing close hint:\n%s", s.GridText())
 	}
 	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})

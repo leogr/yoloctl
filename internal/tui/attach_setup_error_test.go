@@ -54,7 +54,7 @@ func TestStandaloneSetupSuccessAndEmptyFailure(t *testing.T) {
 }
 
 func TestStandaloneSetupOutputIsBoundedPlainTail(t *testing.T) {
-	text := attachedSetupOutput(strings.Repeat("x", 8000) + "\nError: last cause\x1b\a\n✗ exit 2\nPress Enter to close this tab\n")
+	text := attachedSetupOutput(strings.Repeat("x", 8000) + "\nError: last cause\x1b\a\n✗ exit 2\nPress Enter to close\n")
 	if len(text) > attachedSetupOutputLimit || !strings.HasSuffix(text, "Error: last cause") || strings.ContainsAny(text, "\x1b\a") {
 		t.Fatalf("setup output was not bounded plain tail: len=%d", len(text))
 	}
@@ -62,8 +62,8 @@ func TestStandaloneSetupOutputIsBoundedPlainTail(t *testing.T) {
 
 // The re-attach hint extends the close line; the setup tail drops it too.
 func TestStandaloneSetupOutputDropsHintedBanner(t *testing.T) {
-	text := attachedSetupOutput("Error: cause\n✗ exit 137\nPress Enter to close this tab · r to re-attach to api\n")
-	if text != "Error: cause" {
+	text := attachedSetupOutput("Error: cause\nPress Enter to close the editor\n✗ exit 137\nPress Enter to close · r to re-attach to api\n")
+	if text != "Error: cause\nPress Enter to close the editor" {
 		t.Fatalf("setup output kept the banner: %q", text)
 	}
 }

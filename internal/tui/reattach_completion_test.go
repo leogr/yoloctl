@@ -64,15 +64,15 @@ func TestReattachAfterRealAttachCompletion(t *testing.T) {
 				if !p.Exited {
 					t.Fatal("actual completion did not end the pane")
 				}
-				t.Logf("before diagnostic dismissal: palette=%v slots=%d status=%q", m.focusPalette, len(m.reattachSlots()), m.noticeText())
+				t.Logf("before diagnostic dismissal: palette=%v slots=%d status=%q", m.focusPalette, len(m.endedButtonSlots()), m.noticeText())
 				if end == "admission-refused" {
 					if !m.focusPalette || !strings.Contains(m.console.GridText(), "✗") {
 						t.Fatal("admission error lost its diagnostic")
 					}
 					_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 				}
-				slots := m.reattachSlots()
-				if len(slots) != 1 || slots[0].pane != p {
+				slots := m.endedButtonSlots()
+				if len(slots) != 2 || slots[1].pane != p || slots[1].label != reattachButton {
 					t.Fatalf("ended attach action missing: palette=%v slots=%v", m.focusPalette, slots)
 				}
 				starts := 0
@@ -84,7 +84,7 @@ func TestReattachAfterRealAttachCompletion(t *testing.T) {
 					_, _ = m.Update(key('r', 0, "r"))
 				} else {
 					m.closeToast() // outside-click closure consumes the first popup gesture
-					x, y := slots[0].x+2, m.tabTop()+slots[0].y
+					x, y := slots[1].x+2, m.tabTop()+slots[1].y
 					_, _ = m.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y})
 					_, _ = m.Update(tea.MouseReleaseMsg{Button: tea.MouseLeft, X: x, Y: y})
 				}

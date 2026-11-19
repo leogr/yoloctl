@@ -1666,11 +1666,7 @@ func (m *model) handleExitedTabKey(k tea.Key) tea.Cmd {
 	switch {
 	case k.Code == tea.KeyEnter,
 		k.Code == 'w' && k.Mod&tea.ModCtrl != 0:
-		m.closeFocusedPane()
-		m.scrollToLive()
-		if m.tabs.Current() == nil {
-			m.focusPalette = true // no tabs left: route input to the palette
-		}
+		m.closeEndedPane(m.tabs.Current(), m.tabs.Focused())
 	case k.Code == 'r' && k.Mod&^(tea.ModCapsLock|tea.ModNumLock) == 0:
 		m.reattachPane(m.tabs.Current(), m.tabs.Focused())
 	case k.Code == tea.KeyPgUp:
@@ -1923,9 +1919,8 @@ func (m *model) View() tea.View {
 	for i, line := range base {
 		base[i] = ansi.Truncate(line, max(m.width, 1), "")
 	}
-	// An ended box view's re-attach button, then the pane menu or inert
-	// notice, over whichever path drew the base.
-	m.applyReattachButtons(base)
+	// Ended view buttons sit under the pane menu or inert notice.
+	m.applyEndedButtons(base)
 	m.applyOverlay(base)
 
 	// Compose top-to-bottom. With the palette focused the overlay

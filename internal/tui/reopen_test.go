@@ -84,19 +84,19 @@ func TestEndedViewsReopenInPlace(t *testing.T) {
 				tab.Layout.ToggleZoom()
 				m.layoutTab(tab)
 				rect := ended.Rect()
-				slots := m.reattachSlots()
-				if len(slots) != 1 || slots[0].label != "[ Reopen ]" {
+				slots := m.endedButtonSlots()
+				if len(slots) != 2 || slots[0].label != endedCloseButton || slots[1].label != "[ Reopen ]" {
 					t.Fatalf("slots=%+v", slots)
 				}
 				base := make([]string, m.viewRows())
-				m.applyReattachButtons(base)
+				m.applyEndedButtons(base)
 				if !strings.Contains(ansi.Strip(base[slots[0].y]), "[ Reopen ]") {
 					t.Fatal("button absent")
 				}
 				if failed {
 					// The same mouse routing consumes the gesture and replaces once.
-					m.Update(tea.MouseClickMsg{X: slots[0].x, Y: slots[0].y + m.tabTop(), Button: tea.MouseLeft})
-					m.Update(tea.MouseReleaseMsg{X: slots[0].x, Y: slots[0].y + m.tabTop(), Button: tea.MouseLeft})
+					m.Update(tea.MouseClickMsg{X: slots[1].x, Y: slots[1].y + m.tabTop(), Button: tea.MouseLeft})
+					m.Update(tea.MouseReleaseMsg{X: slots[1].x, Y: slots[1].y + m.tabTop(), Button: tea.MouseLeft})
 				} else {
 					m.Update(key('r', 0, "r"))
 				}
@@ -121,7 +121,7 @@ func TestReopenExcludesLiveAndRetainsFailedStart(t *testing.T) {
 	ended := endedAttach(t, "chat", "--space=dev")
 	tab, _ := splitWithEnded(t, m, ended)
 	ended.Exited = false
-	if m.reattachable(tab, ended) || len(m.reattachSlots()) != 0 {
+	if m.reattachable(tab, ended) || len(m.endedButtonSlots()) != 0 {
 		t.Fatal("live child offers reopen")
 	}
 	ended.Exited = true
@@ -132,18 +132,32 @@ func TestReopenExcludesLiveAndRetainsFailedStart(t *testing.T) {
 	}
 	m.console.ShowError("palette fixture")
 	m.focusPalette = true
-	if len(m.reattachSlots()) != 0 {
+	if len(m.endedButtonSlots()) != 0 {
 		t.Fatal("palette-clipped row remains clickable")
 	}
 	m.focusPalette = false
 	tab.Layout.ToggleZoom()
-	m.width = len("[ Reopen ]") - 1
-	m.layoutTab(tab)
-	if len(m.reattachSlots()) != 0 {
-		t.Fatal("narrow pane offers partial button")
+	for _, tc := range []struct {
+		width int
+		want  []string
+	}{
+		{len(endedCloseButton) - 1, nil},
+		{len(endedCloseButton), []string{endedCloseButton}},
+		{len("[ Reopen ]"), []string{"[ Reopen ]"}},
+		{len(endedCloseButton) + 1 + len("[ Reopen ]"), []string{endedCloseButton, "[ Reopen ]"}},
+	} {
+		m.width = tc.width
+		m.layoutTab(tab)
+		var labels []string
+		for _, slot := range m.endedButtonSlots() {
+			labels = append(labels, slot.label)
+		}
+		if !slices.Equal(labels, tc.want) {
+			t.Fatalf("width %d: buttons %q, want %q", tc.width, labels, tc.want)
+		}
 	}
 	m.standalone = true
-	if m.reattachable(tab, ended) || m.reattachHint(ended.Args) != "" {
+	if m.reattachable(tab, ended) || m.reattachHint(ended.Args) != "" || len(m.endedButtonSlots()) != 0 {
 		t.Fatal("standalone offers reopen")
 	}
 }

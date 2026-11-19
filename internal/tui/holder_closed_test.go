@@ -35,7 +35,7 @@ func TestHolderClosedEndsTheViewWithoutOpeningThePalette(t *testing.T) {
 	if m.focusPalette || strings.Contains(m.console.GridText(), "holder closed") {
 		t.Fatalf("the palette opened over the ended view: focus=%v\n%s", m.focusPalette, m.console.GridText())
 	}
-	if len(m.reattachSlots()) != 1 {
+	if slots := m.endedButtonSlots(); len(slots) != 2 || slots[0].label != endedCloseButton || slots[1].label != reattachButton {
 		t.Fatal("the ended view's re-attach button is not on screen")
 	}
 	if m.noticeText() != "box attach coder: session: connection to holder closed without an exit status" {
