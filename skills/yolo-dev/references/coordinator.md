@@ -36,11 +36,19 @@ is slow or unavailable.
   boundary, issue `/compact` through the supported harness route and observe
   completion before assigning the plan. Do not compact yourself. A queued key
   or input receipt is not proof that compaction ran.
-- Before a dev assignment, start and verify a fresh agent conversation using
-  its supported adapter/harness behavior. A new container is not proof of a
-  fresh conversation; preserve native account state. If the route is unsupported,
-  report it instead of substituting recreation or a settings change. See
-  [conversation identity](../../../docs/digests/agent-conversations.md).
+- Before a dev assignment, start and verify a fresh agent conversation. Where
+  the agent is known to support it, use its in-app fresh-conversation command
+  (Claude and Codex: `/clear`); otherwise, for a box whose conversation
+  yoloctl tracks, restart it with a new session,
+  `yoloctl box restart BOX --new-session`. A box with manual or unsupported
+  tracking refuses `--new-session` only after the restart has stopped it, so
+  if neither route works, report that before stopping anything. Verify the
+  new conversation identity and that exactly one consumer or waiter, as the
+  installed harness recipe specifies, serves it, re-arming it by that recipe
+  if it stayed with the old conversation. The dispatch carries the onboarding
+  essentials. A new container is not proof of a fresh conversation; preserve
+  native account state and do not substitute recreation or a settings change.
+  See [conversation identity](../../../docs/digests/agent-conversations.md).
 - Create or retire dev boxes autonomously within the user's authorized scope.
   Before retiring one, preserve its deliverable, unique work and pending state;
   check that no active operation depends on it. Box lifecycle and account
@@ -49,12 +57,21 @@ is slow or unavailable.
 ## Capacity and dispatch
 
 Use the [default team preset](team-setup.md#default-team-preset) unless the user
-explicitly overrides it. In that preset, "another Opus" requests an additional
-dev, not an architect. Do not promote capacity requests into a new design role.
+explicitly overrides it. Read a request such as "another Opus" by the box
+names it refers to, as that preset explains: it asks for another box like
+them, not for a new role. Do not promote capacity requests into a new design
+role.
 
 At each quota watch, record each agent's model group, remaining subscription
 quota, reset time and change since the previous observation, with the source
-and timestamp. Shared subscriptions are one budget, not one budget per box.
+and timestamp. Report each quota/credits watch as a table with these columns:
+`Group | Agents | Kind | Used | Remaining | Reset | Observed | Source`.
+Group identifies the account/model pool; Agents lists its consumers. Keep
+subscription quota and paid credits distinct, including separately billed
+accounts. Give units for Used and Remaining, and include the change since the
+previous observation alongside Used. Mark unavailable values unknown rather
+than presenting old observations as current. Shared subscriptions are one
+budget, not one budget per box.
 Unknown quota is not available capacity: request it before heavy research.
 Stop new dispatches to a rapidly depleted group and reroute authorized work to
 available qualified agents. Rebalance review and dev assignments when capacity
@@ -67,15 +84,28 @@ propose a cheaper model for simple tasks, accounting for its model group's
 separate quota. Apply model changes only under the user's existing authorization
 or explicit choice; quota balancing never silently edits an agent's settings.
 
+Budget monitoring is opt-in: ask the user before activating it, and agree each
+group's budget with its warning and stop thresholds. Keep those numbers in team
+tracking, not here. Once active, check the budget every hour. At the warning
+threshold, alert the user. At the stop threshold, stop dispatching to that
+group, have its workers save their state, stop that group's worker boxes (never
+your own box or the chat server) and alert the user, naming any host start
+needed to resume.
+
 ## Keep the two live documents current
 
 Own `PROGRESS.md` and `BOARD.md`; workers report changes rather than racing
 their edits. Each entry has a stable descriptive ticket ID, outcome/category,
 owner and planning architect, recommended and user-confirmed importance/urgency,
 stage/state, revision, next action, blocker or hold-release authority, and links
-to detail. Update at decisions and handoffs. Preserve the priority rationale
-when moving entries between BOARD and PROGRESS, without duplication; keep
-compact closed outcomes with evidence.
+to detail. Update as each progress change arrives: dispatch or stage change,
+review/check result, blocker or hold change, merge, or user decision. Drive
+updates from these events, not periodic polling to refresh the documents.
+Preserve the priority rationale when moving entries between BOARD and
+PROGRESS, without duplication; keep compact closed outcomes with evidence.
+Keep `PROGRESS.md` valid Markdown as it changes so a live follow view can
+render it: table rows belong under their header and delimiter, not in an
+orphan block of pipe-separated lines.
 Ideas are not authorized work. Postponed tickets retain why and what reopens them.
 
 Use the [importance/urgency matrix](glossary.md#importance-and-urgency) on BOARD.
@@ -157,6 +187,33 @@ requirement wins. Arrange devs' `go clean -cache` after their final checks and
 DevOps cleanup of each run's exact disposable fixtures immediately after evidence
 is saved. These are admission checks, not a guarantee against later exhaustion;
 DevOps monitors the running job as described in its execution reference.
+
+## Chat channels
+
+For a sustained discussion on one topic, propose a dedicated channel to the
+user. Keep a list of the team's channels and their purposes in the canonical
+team area, and propose deleting a channel when it is no longer needed. Follow
+the [shared chat-routing rule](../SKILL.md#chat-and-handoffs). Channel
+proposals do not expand the user's existing authorization or the server's
+access permissions.
+
+## Resume and updates
+
+When you resume after a controller update, rebuild, restart or recreation of
+your box, reconnect the chat client explicitly (`airc connect space --config
+"$YOLOCTL_CHAT_CONFIG"`) and rejoin **every** channel on the team's list, not
+only the main one (`airc join space '#name'` for each). Then check `airc status
+space` (connected, each channel joined) and that exactly one consumer or
+waiter with wake `messages` is armed, as the installed harness recipe
+specifies. Messages of a channel left unjoined can be missed. Ask the user to
+start from the host any stopped worker whose start the operator route refuses,
+such as a privileged box.
+
+When an update changes something the boxes carry (images, features, skills,
+agent integration, chat tooling or the runtime), recreate **all** affected
+worker boxes, leaving none out. An update that changes none of these needs no
+recreation. Recreate them one at a time, each only after it has saved its
+handoff.
 
 ## Consolidate standing directives
 

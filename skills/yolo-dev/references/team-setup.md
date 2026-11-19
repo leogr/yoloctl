@@ -27,19 +27,22 @@ names in private team tracking; do not publish them in this skill or examples.
 
 | Role | Box/member | Agent | Model | Effort |
 |---|---|---|---|---|
-| Coordinator | `<coordinator-box>` | claude | claude-opus-5-5 | high |
-| Architect | `<claude-architect-box>` | claude | claude-fable-5-1 | xhigh |
-| Architect | `<codex-architect-box>` | codex | gpt-6-astra | high |
-| Dev | `<claude-dev-box-1>`, `<claude-dev-box-2>`, `<claude-dev-box-3>` | claude | claude-opus-5-5 | high |
-| Dev | `<codex-dev-box>` | codex | gpt-6.1-sol | xhigh |
-| DevOps / QA | `<devops-box>` | claude | claude-opus-5-5 | medium |
+| Coordinator | `<coordinator-box>` | claude | claude-opus-5-5 | medium |
+| Architect | `<claude-architect-box>` | claude | claude-fable-5-2 | xhigh |
+| Architect | `<codex-architect-box>` | codex | gpt-6.2-astra | xhigh |
+| Dev | `<claude-dev-box-1>`, `<claude-dev-box-2>`, `<claude-dev-box-3>` | claude | claude-opus-5-5 | xhigh |
+| Dev | `<codex-dev-box>` | codex | gpt-6.2-sol | xhigh |
+| DevOps / QA | `<claude-devops-box>` | claude | claude-opus-5-5 | high |
+| DevOps / QA | `<codex-devops-box>` | codex | gpt-6.2-sol | high |
 | Researcher | `<researcher-box>` | agy | Gemini 4 Argon | medium |
 
 The agy model is a display name; resolve its supported selector through the
 installed harness before launching. These defaults select neither an account
-nor an authentication method. "Another Opus" means another dev using the Opus
-dev row; it does not mean another architect. Extra capacity still needs an
-assignment and the setup checks below.
+nor an authentication method. "Another Opus" refers to box names, not to a
+role: with boxes named by the `model-role` scheme, such as `opus-dev`, it means
+another box like them, with their role and an Opus model. Read such a request
+in its context; the box names usually decide its meaning. Extra capacity still
+needs an assignment and the setup checks below.
 
 Infrastructure is separate: `<chat-server-box>` is the chat server;
 `<privileged-dev-box>` is the agentless/accountless privileged QA executor.

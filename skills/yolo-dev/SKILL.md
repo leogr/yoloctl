@@ -96,17 +96,37 @@ waiter as that recipe requires. Do not add a waiter beside a plugin consumer.
 Use the installed `yolo-box-operator` skill for authorized box/session work;
 if required tooling is absent, report the boundary rather than inventing it.
 
+Follow the team's channel assignments. UX discussion, questions and results
+for the user belong in `#ux` unless the user assigns another channel; this
+includes TUI/chat/follow appearance, Markdown, images, diagrams and logger
+presentation. Coordination receipts may stay in the main team channel. If the
+assigned channel is inaccessible, report that boundary to the coordinator
+through the main channel rather than silently creating a replacement.
+
+Workers normally reach the user through the coordinator: send facts,
+corrections and questions meant for the user to the coordinator, who answers.
+Answer the user directly when the user addresses you by name. Mention the user
+directly on your own only in an emergency or a particular situation that
+calls for it.
+
 Put every command you ask the human to run in chat in a fenced Markdown
-code block, including one-line commands.
+code block, including one-line commands. When the user must run several host
+steps, such as a host test before a push, deliver one complete script that
+runs without manual intervention instead of a list of steps. This does not
+script around an interactive consent prompt.
 
 Dispatches and receipts identify the ticket/revision. Send one concise completion
 receipt with candidate, result, evidence path, limits and next owner; avoid
 acknowledgement chains and pasted reports. Inspect uncertain outcomes before
 any retry. Save open tickets, holds and the last handled message reference
 before a context/session transition; recover bounded chat context afterward.
-When you answer in the chat, write nothing in your private session: no
-repetition, summary or "answered in chat" note. Write privately only something
-important that the chat does not carry (to save output tokens).
+Whatever you post in the chat, do not repeat it in your private session
+output: no copy, summary or "answered in chat" note. Write privately only
+something important that the chat does not carry. The exception for chat
+content is a fact or statement that must be kept, or an explicit user
+instruction: then keep the private text concise, ideally one sentence. When
+everything went to the chat, the private session output is just `←`. This
+saves output tokens; the user rarely reads private sessions.
 Transport acceptance is not task completion. Respect the issuer/release
 authority of a hold; no historical assignment silently resumes held work.
 Plans and reviews target parity with the existing behavior; a guarantee beyond

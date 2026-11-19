@@ -306,6 +306,11 @@ When replacing or upgrading an implementation, functional parity with the
 existing behavior is the bar. Any guarantee, proof or check beyond what the
 current implementation provides needs leogr's explicit approval, with its cost
 shown, before plans, contracts or reviews may make it a requirement.
+Choose the simplest design first, and add a limit, timeout, cap or guard only
+where it protects against a concrete failure, never as a default and never on
+user-owned local inputs without a concrete reason: plans, reviews and findings
+must not require or invent such bounds, and "unbounded" is a finding only with
+a concrete harm shown.
 
 Before every commit or push, run `make check` (docs, script tests, vet,
 darwin cross-vet, tests, lint, native artifact reproducibility). Use the
