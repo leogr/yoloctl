@@ -1,6 +1,6 @@
 # VM, box and AIRC trust stores
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; recipe identity `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; AIRC selection `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; box workload CA environment `3663dda77ee78107e9b281438feaaf900f8d50c0` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Firecracker assembly pins Ubuntu's `ca-certificates`
 20260816ubuntu0.24.04.1 by SHA-256. That release distrusts emSign ECC Root CA -
@@ -51,6 +51,11 @@ previous base until `box reconcile BOX --rebuild` rebuilds the tag on the
 refreshed base. CLI guidance names that sequence.
 [21](#source-21) [22](#source-22) [23](#source-23) [24](#source-24) [25](#source-25)
 
+[FACT] When OpenShell supplies a CA bundle to a box workload, it sets
+`CARGO_HTTP_CAINFO` to the same path as `SSL_CERT_FILE` for main and exec
+processes, including Cargo installed by a dev container Feature.
+[32](#source-32) [33](#source-33) [34](#source-34)
+
 [FACT] The AIRC source pin selects rustls-webpki 0.103.16 and webpki-roots
 1.0.10. Its verifier rejects compromised emSign intermediate keys even under
 supplied G3/AAA anchors; unrelated custom trust remains supported. Upstream
@@ -93,3 +98,6 @@ boxes change only through an explicit rebuild/recreate.
 29. <a id="source-29"></a> [Pinned distrust controls](https://github.com/leogr/airc/blob/b76ba355863cc3eb51900a313d7647d9190eedfa/tests/tls_verifier.rs#L11-L135) — fixed time, supplied anchors, unrelated trust and root removal.
 30. <a id="source-30"></a> [AIRC installer](../../internal/features/airc.go#L36-L82) — selected manifest, verified archive and locked build.
 31. <a id="source-31"></a> [Composed identity](../../internal/agentboximage/composed.go#L48-L76) — feature Dockerfile hashing and create/recreate selection.
+32. <a id="source-32"></a> [OpenShell CA environment patch](../../third_party/openshell/patches/0008-cargo-ca-bundle.patch#L5-L30) — `tls_env_vars` and the child environment regression.
+33. <a id="source-33"></a> [OpenShell process environment](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/process.rs#L529-L536) — `tls_env_vars` at L533 and L693.
+34. <a id="source-34"></a> [OpenShell boundary exec](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/boundary_exec.rs#L174-L178) — `tls_env_vars` applied to exec commands.

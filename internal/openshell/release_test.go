@@ -251,7 +251,7 @@ func TestQualifiedPatchStackAcceptsOptionalSixthPatch(t *testing.T) {
 	}
 }
 
-func TestQualifiedPatchStackAcceptsOptionalSeventhPatch(t *testing.T) {
+func TestQualifiedPatchStackAcceptsOptionalSeventhAndEighthPatches(t *testing.T) {
 	p := releaseFixture(t).Pins
 	fork := p.ForkTree
 	p.Patches[1].Tree = strings.Repeat("d", 40)
@@ -280,5 +280,13 @@ func TestQualifiedPatchStackAcceptsOptionalSeventhPatch(t *testing.T) {
 	extra.ForkTree = strings.Repeat("f", 40)
 	if qualifiedPatchStack(extra) {
 		t.Fatal("unexpected eighth patch accepted")
+	}
+	extra.Patches[7].Name = qualifiedPatch8Name
+	if !qualifiedPatchStack(extra) {
+		t.Fatal("eight-patch release refused")
+	}
+	extra.Patches[7].ParentTree = strings.Repeat("c", 40)
+	if qualifiedPatchStack(extra) {
+		t.Fatal("eighth patch accepted off the chain")
 	}
 }
