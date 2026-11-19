@@ -84,7 +84,7 @@ func TestLimaSpaceLogViewSourceAndRawIsolation(t *testing.T) {
 		}
 		text := out.String()
 		if path == "/tmp/ha.stdout.log" {
-			if !strings.Contains(text, "vm/lima: VM running") || strings.Contains(text, `"status"`) {
+			if !strings.Contains(text, "host>vm: lima: VM running") || strings.Contains(text, `"status"`) {
 				t.Fatalf("Lima view %q", text)
 			}
 		} else if !strings.Contains(text, strings.TrimSuffix(raw, "\n")) {

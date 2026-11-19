@@ -107,7 +107,7 @@ func TestControllerClipboardNoticesKeepCallerWriterAndStream(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("stream did not complete")
 	}
-	if wire.Len() != 0 || !strings.Contains(notices.String(), "warning: session: ") || !strings.Contains(notices.String(), "OSC 52 clipboard read blocked; yoloctl never exposes the host clipboard to a box") {
+	if wire.Len() != 0 || !strings.Contains(notices.String(), "warning: space>session: ") || !strings.Contains(notices.String(), "OSC 52 clipboard read blocked; yoloctl never exposes the host clipboard to a box") {
 		t.Fatalf("notice=%q processwire=%d", notices.String(), wire.Len())
 	}
 }

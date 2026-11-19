@@ -33,6 +33,10 @@ type Options struct {
 	Color      bool
 	Palette    prettylog.Palette
 	ActorWidth int
+	// Label and HideField are the Logger's presentation hooks; the block
+	// passes them to every renderer it creates.
+	Label     func(actor string) (place, name string)
+	HideField func(key, value string) bool
 	// Verbosity Verbose shows the running steps' last 10 output lines
 	// instead of 1.
 	Verbosity prettylog.Verbosity
@@ -341,6 +345,7 @@ func (v *View) renderer(glyphs prettylog.Glyphs) *renderer {
 	r.l = prettylog.New(&r.buf, prettylog.Options{
 		Format: prettylog.FormatPretty, Color: v.o.Color, Palette: v.o.Palette, Glyphs: glyphs,
 		Verbosity: prettylog.Trace, ActorWidth: v.o.ActorWidth, Now: v.o.Now,
+		Label: v.o.Label, HideField: v.o.HideField,
 	})
 	return r
 }

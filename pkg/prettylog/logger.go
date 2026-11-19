@@ -124,9 +124,17 @@ type Options struct {
 	Time       TimeFormat
 	ActorWidth int      // pads the actor column; 0 = no padding
 	Fields     []string // non-reserved fields shown at Normal; Verbose shows all
-	Limits     Limits
-	Fold       FoldOptions
-	Now        func() time.Time // nil uses time.Now
+	// Label splits a root record's actor into the place it runs in and the
+	// name shown after it: pretty "place▸name", plain "place>name". The
+	// executor then leaves the label and prefixes the message ("tool: ").
+	// Nil, or an empty place, keeps the actor[ · executor] label.
+	Label func(actor string) (place, name string)
+	// HideField reports that a shown field is redundant on this line (for
+	// example a space already named by an earlier line). Nil hides nothing.
+	HideField func(key, value string) bool
+	Limits    Limits
+	Fold      FoldOptions
+	Now       func() time.Time // nil uses time.Now
 	// Emit opts into structured presentation instead of the byte destination.
 	// FormatWire ignores this field. Sinks must not reenter this Logger.
 	Emit EmissionSink

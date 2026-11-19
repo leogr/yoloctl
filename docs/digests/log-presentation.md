@@ -1,6 +1,6 @@
 # Log presentation
 
-Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes. Step ordering re-read at `0a1e47d47001eab39274faf83f3af36419b04f2b` and accompanying changes.
+Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes. Step ordering re-read at `0a1e47d47001eab39274faf83f3af36419b04f2b` and accompanying changes. Place labels at `c6e67053e4fd40a8987dc6be1c3f34bb4d6b1380` and accompanying changes.
 
 [FACT] `pkg/prettylog` is a public package of the yoloctl module that renders
 `log/slog` records. It imports no yoloctl or UI package and reads no terminal.
@@ -12,9 +12,10 @@ field (earlier occurrences are ignored everywhere, including on the wire). An
 kind has one glyph (`✗ ! • › ✓ ? · ○`) and one plain prefix (`error:`,
 `warning:`, `notice:`, `uncertain:`, `debug:`). [1](#source-1) [2](#source-2)
 
-[FACT] Pretty lines are `glyph actor[ · executor]  message  fields  took`;
-plain lines are `[time ]prefix actor[/executor]: message fields (took)`,
-keeping the message's case. Controls in messages, keys, group names and values
+[FACT] Pretty lines are `glyph label  message  fields  took`, plain lines
+`[time ]prefix label: message fields (took)`, keeping the message's case
+([labels](log-labels.md)). [3](#source-3)
+Controls in labels, messages, keys, group names and values
 render as `\xNN`; a message newline becomes an aligned continuation line. Terminal width and hanging-wrap rules are in [terminal wrapping](log-wrapping.md). An
 `err` attribute is shown with its record at every verbosity, as a continuation
 line or `: err`. Display levels: `error` shows errors and uncertain results

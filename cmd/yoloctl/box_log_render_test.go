@@ -93,7 +93,7 @@ func TestViewBoxLogs(t *testing.T) {
 	if err := closeViews(); err != nil {
 		t.Fatal(err)
 	}
-	if text := redirected.String(); !strings.Contains(text, "box/openshell_supervisor: Starting sandbox supervision\n") || strings.Contains(text, "\r") {
+	if text := redirected.String(); !strings.Contains(text, "space>box: openshell_supervisor: Starting sandbox supervision\n") || strings.Contains(text, "\r") {
 		t.Fatalf("redirected view %q", text)
 	}
 

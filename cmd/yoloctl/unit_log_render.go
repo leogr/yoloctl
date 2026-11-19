@@ -44,10 +44,6 @@ func ownedRecordFrame(text string) bool {
 	if !ok {
 		return false
 	}
-	actor, _, _ := strings.Cut(head, "/")
-	switch actor {
-	case logging.Host, logging.VM, logging.Controller, logging.Builder, logging.Box, logging.Session, logging.Storage, logging.Audit, logging.Chat, logging.Install:
-		return true
-	}
-	return false
+	_, _, _, known := logging.ParseLabel(head)
+	return known
 }

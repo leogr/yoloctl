@@ -349,7 +349,7 @@ func streamAuditLogs(cmd *cobra.Command, target controllerTarget, query audit.Qu
 		}()
 	}
 	format, summaryColor := prettylog.DecideColor(cmd.ErrOrStderr(), settings.Color, os.Getenv, writerIsTerminal)
-	health := prettylog.New(cmd.ErrOrStderr(), prettylog.Options{Format: format, Color: summaryColor, Verbosity: settings.Verbosity})
+	health := prettylog.New(cmd.ErrOrStderr(), logging.Presentation(prettylog.Options{Format: format, Color: summaryColor, Verbosity: settings.Verbosity}))
 	defer func() {
 		if err := health.Close(); result == nil {
 			result = err

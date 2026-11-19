@@ -93,7 +93,7 @@ func TestAuditRulesHostStreamAndEditor(t *testing.T) {
 	}
 	_, diag, err := execute("rules", "import", source)
 	if err != nil || changed != 1 || downloads != 1 || strings.ContainsAny(diag, "\x1b\a") ||
-		!strings.Contains(diag, "warning: audit: Falco rule validation, 2 warnings: native warning") {
+		!strings.Contains(diag, "warning: space>audit: Falco rule validation, 2 warnings: native warning") {
 		t.Fatal("import/control escaping", changed, diag, err)
 	}
 	wantKind, wantBody = "remove", ""
@@ -179,9 +179,9 @@ func TestAuditRuleValidationIsOneAuditRecord(t *testing.T) {
 		warnings uint64
 		prefix   string
 	}{
-		{errors.New("invalid rules"), 0, "error: audit: Falco rule validation: "},
-		{nil, 3, "warning: audit: Falco rule validation, 3 warnings: "},
-		{nil, 0, "audit: Falco rule validation: "},
+		{errors.New("invalid rules"), 0, "error: space>audit: Falco rule validation: "},
+		{nil, 3, "warning: space>audit: Falco rule validation, 3 warnings: "},
+		{nil, 0, "space>audit: Falco rule validation: "},
 	} {
 		var logged bytes.Buffer
 		if err := reportAuditRuleValidation(&logged, tc.refused, audit.Validation{Diagnostics: "rule 'a': bad field\n\tdetail \x1b[31m\n" + long + "\n", Warnings: tc.warnings}); err != nil {

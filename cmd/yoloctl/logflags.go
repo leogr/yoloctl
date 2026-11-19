@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strings"
@@ -29,9 +30,22 @@ func addLogFlags(root *cobra.Command) {
 		// Logger; Init then keeps it.
 		logging.Init(s)
 		installStepView(s)
+		// An outer command starts with no space named; a nested Execute
+		// (it inherits this context) shares the outer command's state.
+		if cmd.Context() == nil || cmd.Context().Value(outerCommandKey{}) == nil {
+			logging.BeginCommand()
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			cmd.SetContext(context.WithValue(ctx, outerCommandKey{}, true))
+		}
 		return nil
 	}
 }
+
+// outerCommandKey marks a context that already began an outer command.
+type outerCommandKey struct{}
 
 // logSettings combines the environment (YOLOCTL_LOG, YOLOCTL_DEBUG) with the
 // flags; flags win.

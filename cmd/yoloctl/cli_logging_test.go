@@ -195,8 +195,11 @@ func TestCLIControllerRoutingKeepsDataAndRawBytes(t *testing.T) {
 					if _, err := io.WriteString(streams.Err, tc.stderr); err != nil {
 						return err
 					}
-					if wire.Len() != 0 {
-						t.Fatal("command outcome precedes the final controller response")
+					// Only the "using space:" line may come first.
+					for _, r := range readCLIRecords(t, bytes.NewBuffer(append([]byte(nil), wire.Bytes()...))) {
+						if prettylog.StructureOf(r).Outcome != "" {
+							t.Fatal("command outcome precedes the final controller response")
+						}
 					}
 					finalized = true
 					return nil
@@ -216,8 +219,9 @@ func TestCLIControllerRoutingKeepsDataAndRawBytes(t *testing.T) {
 			}
 			records := readCLIRecords(t, wire)
 			if tc.mutation {
-				if len(records) != 1 || prettylog.StructureOf(records[0]).Outcome != string(prettylog.OutcomeOK) {
-					t.Fatalf("mutation final outcome=%+v", records)
+				if len(records) != 2 || records[0].Message != "using space:" || prettylog.StructureOf(records[0]).Subject != "test" ||
+					prettylog.StructureOf(records[1]).Outcome != string(prettylog.OutcomeOK) {
+					t.Fatalf("mutation space line and final outcome=%+v", records)
 				}
 			} else if len(records) != 0 {
 				t.Fatalf("data/raw path gained records: %+v", records)

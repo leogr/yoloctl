@@ -160,7 +160,7 @@ func TestHostStorageGuardHysteresisAndErrors(t *testing.T) {
 	if err := g.step(); !errors.Is(err, unix.EPERM) || g.snapshot().Paused {
 		t.Fatalf("failed stop reported paused: %v", err)
 	}
-	if !strings.Contains(log.String(), "warning: vm/firecracker: VM paused") || !strings.Contains(log.String(), "resumes automatically") || !strings.Contains(log.String(), "not replayed") {
+	if !strings.Contains(log.String(), "warning: host>vm: firecracker: VM paused") || !strings.Contains(log.String(), "resumes automatically") || !strings.Contains(log.String(), "not replayed") {
 		t.Fatalf("missing recovery guidance: %s", log.String())
 	}
 }

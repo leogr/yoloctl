@@ -131,9 +131,12 @@ func spaceLogRecord(line string) slog.Record {
 		}
 	}
 	if head, rest, ok := strings.Cut(line, ": "); ok {
-		actor, executor, _ := strings.Cut(head, "/")
-		switch actor {
-		case logging.Host, logging.VM, logging.Controller, logging.Builder, logging.Box, logging.Session, logging.Storage, logging.Audit, logging.Chat, logging.Install:
+		if actor, executor, toolInMessage, known := logging.ParseLabel(head); known {
+			if toolInMessage {
+				if tool, after, cut := logging.CutTool(rest); cut {
+					executor, rest = tool, after
+				}
+			}
 			attrs = append(attrs, prettylog.Actor(actor))
 			if executor != "" {
 				attrs = append(attrs, prettylog.Executor(executor))

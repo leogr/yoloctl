@@ -169,7 +169,7 @@ func (l *Logger) shownFields(r slog.Record) []field {
 			return true
 		}
 		for _, f := range flatten(nil, "", a) {
-			if all || l.fieldShown(f.key) {
+			if (all || l.fieldShown(f.key)) && (l.o.HideField == nil || !l.o.HideField(f.key, f.val.String())) {
 				out = append(out, f)
 			}
 		}
@@ -248,6 +248,14 @@ func (l *Logger) timestamp(t time.Time) string {
 	return ""
 }
 
+// firstLineAppend adds suffix to the end of the first line of text.
+func firstLineAppend(text, suffix string) string {
+	if i := strings.IndexByte(text, '\n'); i >= 0 {
+		return text[:i] + suffix + text[i:]
+	}
+	return text + suffix
+}
+
 // line is one rendered record and the column where its message starts.
 type line struct {
 	text string
@@ -289,16 +297,34 @@ func (l *Logger) render(r slog.Record, st Structure, depth int) line {
 		return line{text: strings.Join(lines, "\n"), col: ansi.StringWidth(ts) + len(indent)}
 	}
 	child := st.Parent != ""
-	actor := ""
+	actor, styled, tool := "", "", ""
 	if !child && st.Actor != "" {
-		actor = escape(st.Actor, false)
-		if st.Executor != "" {
-			sep := " · "
-			if l.o.Format == FormatPlain {
-				sep = "/"
-			}
-			actor += sep + escape(st.Executor, false)
+		place, name := "", ""
+		if l.o.Label != nil {
+			place, name = l.o.Label(st.Actor)
 		}
+		if place != "" {
+			place, name = escape(place, false), escape(name, false)
+			if st.Executor != "" {
+				tool = escape(st.Executor, false)
+			}
+			actor = place + ">" + name
+			styled = l.style(place, l.pal.Dim, false) + l.style("▸", l.pal.Dim, false) + l.style(name, l.pal.Actor, false)
+		} else {
+			actor = escape(st.Actor, false)
+			if st.Executor != "" {
+				sep := " · "
+				if l.o.Format == FormatPlain {
+					sep = "/"
+				}
+				actor += sep + escape(st.Executor, false)
+			}
+			styled = l.style(actor, l.pal.Actor, false)
+		}
+	}
+	subject := ""
+	if st.Subject != "" {
+		subject = escape(st.Subject, false)
 	}
 	fields := l.fieldsText(l.shownFields(r))
 	stepEnd := st.Step != "" && st.State != "" && st.State != string(StepRunning)
@@ -311,6 +337,12 @@ func (l *Logger) render(r slog.Record, st Structure, depth int) line {
 		errLines = strings.Split(escape(st.Err, true), "\n")
 	}
 	if l.o.Format == FormatPlain {
+		if tool != "" {
+			msg = tool + ": " + msg
+		}
+		if subject != "" {
+			msg = firstLineAppend(msg, " "+subject)
+		}
 		return l.renderPlain(r, st, ts, indent, actor, msg, fields, took, errLines)
 	}
 	glyphColor, textColor, bold := l.role(st.Kind)
@@ -318,17 +350,24 @@ func (l *Logger) render(r slog.Record, st Structure, depth int) line {
 	head := ts + indent + l.style(g, glyphColor, bold) + " "
 	col := ansi.StringWidth(ts) + len(indent) + ansi.StringWidth(g) + 1
 	if actor != "" {
+		// The plain form place>name has the width of place▸name.
 		w := ansi.StringWidth(actor)
 		pad := ""
 		if w < l.o.ActorWidth {
 			pad = strings.Repeat(" ", l.o.ActorWidth-w)
 		}
-		head += l.style(actor, l.pal.Actor, false) + pad + "  "
+		head += styled + pad + "  "
 		col += w + len(pad) + 2
 	}
 	msgLines := strings.Split(msg, "\n")
 	var b strings.Builder
+	if tool != "" {
+		b.WriteString(l.style(tool+":", l.pal.Notice, false) + " ")
+	}
 	b.WriteString(l.style(msgLines[0], textColor, bold))
+	if subject != "" {
+		b.WriteString(" " + l.style(subject, l.pal.Actor, false))
+	}
 	if st.State == string(StepSkipped) && st.Reason != "" {
 		b.WriteString("  " + l.style(escape(st.Reason, false), l.pal.Dim, false))
 	}

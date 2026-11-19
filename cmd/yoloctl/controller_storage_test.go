@@ -51,7 +51,7 @@ func TestStorageSchedulerWakeAndCancellationLogging(t *testing.T) {
 		synctest.Wait()
 		time.Sleep(time.Second)
 		synctest.Wait()
-		if runs.Load() != 2 || !strings.Contains(out.String(), "deadline exceeded") || !strings.Contains(out.String(), "warning: controller: Storage maintenance deferred") {
+		if runs.Load() != 2 || !strings.Contains(out.String(), "deadline exceeded") || !strings.Contains(out.String(), "warning: space>controller: Storage maintenance deferred") {
 			t.Fatalf("completion: runs=%d log=%q", runs.Load(), out.String())
 		}
 		time.Sleep(10 * time.Minute)

@@ -76,6 +76,18 @@ func cliNotice(actor, format string, args ...any) {
 }
 func cliInfo(actor, format string, args ...any) { cliLog(slog.LevelInfo, actor, format, args...) }
 
+// cliUsingSpace prints "using space: NAME" the first time the current outer
+// command works on space. Later lines of the command omit the space field on
+// a terminal (logging.HideNamedSpace). Only the user-facing command
+// boundaries call it, never completion, chat or --all-spaces reads.
+func cliUsingSpace(space string) {
+	if space == "" || !logging.NameSpace(space) {
+		return
+	}
+	logging.Logger().Slog().LogAttrs(context.Background(), prettylog.LevelNotice, "using space:",
+		prettylog.Actor(logging.Host), prettylog.Subject(space))
+}
+
 // C replaces A's named hook without changing main.go/root flag ownership.
 func init() { renderCLIError = func(_ *cobra.Command, err error) { renderLoggedCLIError(err) } }
 
@@ -138,6 +150,7 @@ func cliEndStep(step *prettylog.Step, err error) {
 func cliOperation(cmd *cobra.Command, title, success, space string, run func() error) (result error) {
 	ctx := cmd.Context()
 	_, nested := ctx.Value(cliStepContextKey{}).(*prettylog.Step)
+	cliUsingSpace(space)
 	step := cliStep(ctx, title, prettylog.Actor(logging.Host), slog.String(logging.KeySpace, space))
 	cmd.SetContext(lima.WithProgress(context.WithValue(ctx, cliStepContextKey{}, step), step.Detail()))
 	defer cmd.SetContext(ctx)

@@ -57,6 +57,11 @@ const (
 	// KeyRemedy on an outcome record names a known, typed remedy for its
 	// failure (for example "legacy-recreate"); it is never shown as a field.
 	KeyRemedy = "remedy"
+	// KeySubject marks a record's subject (for example the space a command
+	// works on) for presentation: pretty output shows it after the message
+	// in the actor colour, plain output appends it uncoloured. The key is
+	// namespaced so an ordinary "subject" field stays a field.
+	KeySubject = "prettylog.subject"
 )
 
 // Outcome marks a record as the final outcome of a command.
@@ -67,6 +72,9 @@ func Actor(name string) slog.Attr { return slog.String(KeyActor, name) }
 
 // Executor names the external tool doing the work.
 func Executor(name string) slog.Attr { return slog.String(KeyExecutor, name) }
+
+// Subject names what the record is about, shown after its message.
+func Subject(name string) slog.Attr { return slog.String(KeySubject, name) }
 
 // Took records a duration, printed last and dimmed.
 func Took(d time.Duration) slog.Attr { return slog.Duration(KeyTook, d) }

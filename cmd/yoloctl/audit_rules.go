@@ -195,7 +195,7 @@ func reportAuditRuleValidation(w io.Writer, refused error, v audit.Validation) e
 	}
 	log := logging.Logger()
 	if w != io.Writer(os.Stderr) {
-		log = prettylog.New(w, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity()})
+		log = prettylog.New(w, logging.Presentation(prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity()}))
 	}
 	record := slog.NewRecord(time.Now(), level, title, 0)
 	record.AddAttrs(prettylog.Actor(logging.Audit),

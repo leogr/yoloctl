@@ -20,7 +20,8 @@ holder/advisory wording. Acquisition ends it successfully; a returned error
 ends it failed. Uncontended locks stay silent. Lock timing, cancellation and
 returned errors are unchanged. [11](#source-11)
 
-[FACT] A routed mutation reports its final outcome only after its controller
+[FACT] A routed mutation first names its space once (`using space: NAME`,
+see [place labels](log-labels.md)) and reports its final outcome only after its controller
 call returns, including receipt finalization. Intermediate worker prose is not
 an OK outcome. Known failures retain their text and status; typed lost replies,
 interrupted image jobs and remote `interrupted`/`uncertain`/`command-uncertain`

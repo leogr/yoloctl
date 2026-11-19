@@ -9,7 +9,7 @@ terminal, then reads its current column count with `term.GetSize`. No pixel,
 row or cell geometry is inferred. The public renderer itself reads no terminal.
 [1](#source-1) [3](#source-3)
 
-[FACT] A pretty record's actor/glyph/time prefix remains on its first line.
+[FACT] A pretty record's label/glyph/time prefix remains on its first line.
 Message, fields, duration and error text word-wrap into the remaining columns;
 continuations have spaces to the same detail column. Executor detail and
 repeat-summary text use their own existing columns. The pinned ANSI library's

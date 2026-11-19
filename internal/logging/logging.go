@@ -55,11 +55,125 @@ const (
 	KeyPath    = "path"
 )
 
-// Presentation defaults shared by every yoloctl Logger.
+// Places: where an actor runs, shown before it as place▸actor.
 const (
-	actorWidth = 20
+	PlaceHost  = "host"
+	PlaceSpace = "space"
+)
+
+// Presentation defaults shared by every yoloctl Logger. LabelWidth pads the
+// label column: the longest place▸actor is space▸controller (16 columns),
+// padded to 18 as in the approved layout.
+const (
+	LabelWidth = 18
 	foldWindow = 10 * time.Second
 )
+
+// Label maps a record's actor to the place it runs in and the name shown
+// after it. The host CLI itself shows as host▸yoloctl. An actor outside the
+// vocabulary keeps its plain label.
+func Label(actor string) (place, name string) {
+	switch actor {
+	case Host:
+		return PlaceHost, "yoloctl"
+	case VM, Install:
+		return PlaceHost, actor
+	case Controller, Builder, Box, Session, Storage, Audit, Chat:
+		return PlaceSpace, actor
+	}
+	return "", actor
+}
+
+// ParseLabel reads a plain label back into its actor: "place>name" (this
+// release, the tool is then the message's "tool: " prefix) or
+// "actor[/executor]" (earlier releases). ok is false for anything else.
+func ParseLabel(head string) (actor, executor string, toolInMessage, ok bool) {
+	if place, name, cut := strings.Cut(head, ">"); cut {
+		if place != PlaceHost && place != PlaceSpace || name == "" {
+			return "", "", false, false
+		}
+		actor = name
+		if place == PlaceHost && name == "yoloctl" {
+			actor = Host
+		}
+		p, n := Label(actor)
+		return actor, "", true, p == place && n == name
+	}
+	actor, executor, _ = strings.Cut(head, "/")
+	switch actor {
+	case Host, VM, Controller, Builder, Box, Session, Storage, Audit, Chat, Install:
+		return actor, executor, false, true
+	}
+	return "", "", false, false
+}
+
+// fileTools are the executors yoloctl's own log files name: the vocabulary
+// above plus the VM and box log sources the host renders.
+var fileTools = map[string]bool{
+	BuildKit: true, Nerdctl: true, Containerd: true, Limactl: true, Firecracker: true,
+	OpenShell: true, Falco: true, SSH: true, "kernel": true, "lima": true, "ocsf": true,
+}
+
+// CutTool splits a "tool: message" prefix written after a place>name label.
+// Only a known tool counts; any other first word is message text.
+func CutTool(text string) (tool, rest string, ok bool) {
+	head, rest, cut := strings.Cut(text, ": ")
+	if !cut || !fileTools[head] {
+		return "", text, false
+	}
+	return head, rest, true
+}
+
+// Presentation adds the shared label hook and label width to o. Every
+// Logger that prints actor labels is built from it.
+func Presentation(o prettylog.Options) prettylog.Options {
+	o.Label, o.ActorWidth = Label, LabelWidth
+	return o
+}
+
+// named records the spaces the current outer command has named with its
+// "using space" line. It is per command invocation, not per Logger, so live
+// redraws and buffered step lines see the same answer.
+var named struct {
+	sync.Mutex
+	spaces map[string]bool
+}
+
+// BeginCommand starts an outer command invocation: no space is named yet.
+// Nested operations of the same command share its state.
+func BeginCommand() {
+	named.Lock()
+	named.spaces = nil
+	named.Unlock()
+}
+
+// NameSpace records that the current command named space and reports
+// whether it was not named before.
+func NameSpace(space string) bool {
+	named.Lock()
+	defer named.Unlock()
+	if named.spaces[space] {
+		return false
+	}
+	if named.spaces == nil {
+		named.spaces = map[string]bool{}
+	}
+	named.spaces[space] = true
+	return true
+}
+
+func spaceNamed(space string) bool {
+	named.Lock()
+	defer named.Unlock()
+	return named.spaces[space]
+}
+
+// HideNamedSpace hides a space field that the command already named, only
+// at the normal (info) level where that line is shown. Terminal stderr and
+// its steps block use it; plain output and other levels keep the field.
+func HideNamedSpace(key, value string) bool {
+	return key == KeySpace && Verbosity() == prettylog.Normal && spaceNamed(value)
+}
 
 var defaultFields = []string{KeySpace, KeyBox, KeyImage}
 
@@ -127,11 +241,15 @@ func Init(s Settings) *prettylog.Logger {
 		return current
 	}
 	format, color := prettylog.DecideColor(os.Stderr, s.Color, os.Getenv, IsTerminal)
-	l := prettylog.New(os.Stderr, prettylog.Options{
+	o := Presentation(prettylog.Options{
 		Format: format, Color: color, Palette: palette, Verbosity: s.Verbosity,
 		TerminalWidth: terminalWidth(os.Stderr), GroupStepCompletions: true,
-		ActorWidth: actorWidth, Fields: defaultFields, Fold: prettylog.FoldOptions{Window: foldWindow},
+		Fields: defaultFields, Fold: prettylog.FoldOptions{Window: foldWindow},
 	})
+	if format == prettylog.FormatPretty {
+		o.HideField = HideNamedSpace
+	}
+	l := prettylog.New(os.Stderr, o)
 	installLocked(l, s)
 	return l
 }
@@ -167,9 +285,9 @@ func Logger() *prettylog.Logger {
 	mu.Lock()
 	defer mu.Unlock()
 	if current == nil {
-		current = prettylog.New(os.Stderr, prettylog.Options{
+		current = prettylog.New(os.Stderr, Presentation(prettylog.Options{
 			Format: prettylog.FormatPlain, Verbosity: prettylog.Normal, Fields: defaultFields,
-		})
+		}))
 	}
 	return current
 }
@@ -214,10 +332,10 @@ func SetLogger(l *prettylog.Logger) (restore func()) {
 // NewFileLogger is a Logger for a background log file: plain, UTC RFC 3339
 // timestamps, never coloured, every record, 10 s folding.
 func NewFileLogger(w io.Writer) *prettylog.Logger {
-	return prettylog.New(w, prettylog.Options{
+	return prettylog.New(w, Presentation(prettylog.Options{
 		Format: prettylog.FormatPlain, Verbosity: prettylog.Trace, Time: prettylog.TimeRFC3339,
 		Fold: prettylog.FoldOptions{Window: foldWindow},
-	})
+	}))
 }
 
 // NewFollowLogger is a Logger for a follow view (audit or space logs) on w:
@@ -227,11 +345,11 @@ func NewFollowLogger(w io.Writer, s Settings, key func(slog.Record) (string, boo
 	mu.Lock()
 	p := palette
 	mu.Unlock()
-	return prettylog.New(w, prettylog.Options{
+	return prettylog.New(w, Presentation(prettylog.Options{
 		Format: format, Color: color, Palette: p, Verbosity: s.Verbosity, Time: prettylog.TimeClock,
 		TerminalWidth: terminalWidth(w),
-		ActorWidth:    actorWidth, Fields: defaultFields, Fold: prettylog.FoldOptions{Window: foldWindow, Key: key},
-	})
+		Fields:        defaultFields, Fold: prettylog.FoldOptions{Window: foldWindow, Key: key},
+	}))
 }
 
 // SetPalette replaces the shared palette: the process Logger uses it from

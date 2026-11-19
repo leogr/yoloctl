@@ -1315,7 +1315,8 @@ func resolveEffectiveWorkdir(spaceName, agentboxName, workdirFlag, workdirMode s
 			return agentbox.Workdir{}, err
 		}
 		workdir = scfg.DefaultWorkdir
-		cliNotice(logging.Box, "using space %s default workdir %s (override with --workdir PATH or --workdir-mode ephemeral)", spaceName, workdir)
+		// The host's "using space:" line already named the space.
+		cliNotice(logging.Box, "default workdir %s (override with --workdir PATH or --workdir-mode ephemeral)", workdir)
 	}
 	return buildWorkdir(agentboxName, workdir, agentbox.WorkdirModeHost, notice)
 }

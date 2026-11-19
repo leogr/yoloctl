@@ -10,14 +10,14 @@ import (
 // last top-level occurrence of a reserved key wins, and a value of the wrong
 // type leaves the key absent (the attribute is then shown as a normal field).
 type Structure struct {
-	Actor, Executor, Outcome, Step, Parent, State, Err, Reason, Remedy string
-	Took                                                               time.Duration
-	Detail, Snapshot, Truncated                                        bool
-	Repeat                                                             int
-	Until, Started                                                     time.Time
-	Omitted                                                            int64
-	Overflow                                                           int
-	Kind                                                               Kind
+	Actor, Executor, Outcome, Step, Parent, State, Err, Reason, Remedy, Subject string
+	Took                                                                        time.Duration
+	Detail, Snapshot, Truncated                                                 bool
+	Repeat                                                                      int
+	Until, Started                                                              time.Time
+	Omitted                                                                     int64
+	Overflow                                                                    int
+	Kind                                                                        Kind
 }
 
 // StructureOf parses the reserved attributes of r. Only the last top-level
@@ -39,7 +39,7 @@ var reservedKeys = map[string]bool{
 	KeyActor: true, KeyExecutor: true, KeyOutcome: true, KeyStep: true, KeyParent: true, KeyState: true,
 	KeyTook: true, KeyErr: true, KeyDetail: true, KeyReason: true, KeyRepeat: true, KeyUntil: true,
 	KeySnapshot: true, KeyStarted: true, KeyOmitted: true, KeyOverflow: true, KeyTruncated: true,
-	KeyRemedy: true,
+	KeyRemedy: true, KeySubject: true,
 }
 
 // attrRole is what a top-level attribute is to every consumer.
@@ -125,6 +125,8 @@ func (s *Structure) apply(a slog.Attr) bool {
 		return str(&s.Actor)
 	case KeyExecutor:
 		return str(&s.Executor)
+	case KeySubject:
+		return str(&s.Subject)
 	case KeyOutcome:
 		return str(&s.Outcome)
 	case KeyStep:

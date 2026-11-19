@@ -67,7 +67,7 @@ func clientLogStreams(streams ClientIO) (ClientIO, *prettylog.Logger) {
 	if w == nil {
 		w = io.Discard
 	}
-	l := prettylog.New(w, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity(), GroupStepCompletions: true})
+	l := prettylog.New(w, logging.Presentation(prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity(), GroupStepCompletions: true}))
 	streams.Log = expandFailures(l)
 	return streams, l
 }

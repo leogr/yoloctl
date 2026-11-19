@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/pkg/prettylog"
 )
 
@@ -127,5 +128,5 @@ func plainLogSink(w io.Writer) LogSink {
 	if w == nil {
 		w = io.Discard
 	}
-	return prettylog.New(w, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: prettylog.Trace})
+	return prettylog.New(w, logging.Presentation(prettylog.Options{Format: prettylog.FormatPlain, Verbosity: prettylog.Trace}))
 }

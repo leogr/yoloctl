@@ -31,7 +31,8 @@ func installStepView(s logging.Settings) {
 	}
 	_, color := prettylog.DecideColor(os.Stderr, s.Color, os.Getenv, logging.IsTerminal)
 	v := stepview.Install(logging.Logger(), os.Stderr, stepview.Options{
-		Color: color, Palette: prettylog.ANSIPalette, ActorWidth: 20, Verbosity: s.Verbosity,
+		Color: color, Palette: prettylog.ANSIPalette, ActorWidth: logging.LabelWidth, Verbosity: s.Verbosity,
+		Label: logging.Label, HideField: logging.HideNamedSpace,
 		Size: func() (int, int) {
 			w, h, err := term.GetSize(int(os.Stderr.Fd()))
 			if err != nil {

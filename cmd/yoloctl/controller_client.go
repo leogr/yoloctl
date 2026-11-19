@@ -127,6 +127,11 @@ func routeControllerCommands(root *cobra.Command) {
 		if target.Operator && !strings.HasPrefix(method, "box.") {
 			return asUserError(errors.New("this operator endpoint grants only box commands"))
 		}
+		if cliRoutedOutcome(cmd, method) {
+			// Only commands that log an outcome name their space: data,
+			// raw exec/attach and dry-run output stay free of records.
+			cliUsingSpace(target.Space)
+		}
 		if method == "box.edit" || method == "account.edit" {
 			return editThroughController(cmd, target, method, args)
 		}
@@ -509,7 +514,7 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 		if !processStderr {
 			// Match relayed records: a caller-selected error writer gets
 			// plain records rather than the process terminal's formatting.
-			noticeLog = prettylog.New(errOut, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity()})
+			noticeLog = prettylog.New(errOut, logging.Presentation(prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity()}))
 		}
 		filter := termio.NewOSC52Filter(streams.Out, func(event termio.OSC52) {
 			sequence, notice := termio.EvaluateOSC52(event, prefs.ClipboardEnabled())

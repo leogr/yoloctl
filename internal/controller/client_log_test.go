@@ -100,7 +100,7 @@ func TestCallLogFramesFollowErrAndTheRequestCarriesVerbosity(t *testing.T) {
 	if r := <-got; r.Log != LogDebug {
 		t.Fatalf("request log verbosity %q", r.Log)
 	}
-	if stderr.String() != "warning: host: graceful shutdown failed\n" {
+	if stderr.String() != "warning: host>yoloctl: graceful shutdown failed\n" {
 		t.Fatalf("%q", stderr.String())
 	}
 	// Completion and other silent callers pass io.Discard-like writers: no

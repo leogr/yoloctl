@@ -83,7 +83,7 @@ func TestFirecrackerSpaceLogView(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	if !strings.Contains(text, "vm/firecracker: Running Firecracker v1.17.0") || !strings.Contains(text, "vm/kernel: [0.000000] random: crng init done") ||
+	if !strings.Contains(text, "host>vm: firecracker: Running Firecracker v1.17.0") || !strings.Contains(text, "host>vm: kernel: [0.000000] random: crng init done") ||
 		strings.Contains(text, "anonymous-instance") || strings.Contains(text, `\x0d`) {
 		t.Fatalf("view:\n%s", text)
 	}

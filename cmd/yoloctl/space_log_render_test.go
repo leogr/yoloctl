@@ -42,6 +42,12 @@ func TestSpaceLogRecordPresentationOnly(t *testing.T) {
 		{"error: vm/firecracker: VM stopped", "VM stopped", "vm", "firecracker", slog.LevelError, prettylog.KindError},
 		{`{"time":"2026-11-11","msg":"vendor output"}`, `{"time":"2026-11-11","msg":"vendor output"}`, "", "", slog.LevelInfo, prettylog.KindInfo},
 		{"uncertain: controller: Outcome may be uncertain", "Outcome may be uncertain", "controller", "", slog.LevelWarn, prettylog.KindUnknown},
+		// This release's plain labels: place>name, the tool before the message.
+		{"2026-11-19T10:20:30.120Z warning: space>controller: Store degraded: denied", "Store degraded: denied", "controller", "", slog.LevelWarn, prettylog.KindWarn},
+		{"error: host>vm: firecracker: VM stopped", "VM stopped", "vm", "firecracker", slog.LevelError, prettylog.KindError},
+		{"host>yoloctl: using space: falco", "using space: falco", "host", "", slog.LevelInfo, prettylog.KindInfo},
+		{"space>builder: buildkit: Image ready", "Image ready", "builder", "buildkit", slog.LevelInfo, prettylog.KindInfo},
+		{"space>vm: not a known place", "space>vm: not a known place", "", "", slog.LevelInfo, prettylog.KindInfo},
 	} {
 		t.Run(tc.line, func(t *testing.T) {
 			r := spaceLogRecord(tc.line)
@@ -68,7 +74,7 @@ func TestSpaceLogViewRendersAndFlushes(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	if !strings.Contains(text, "warning: controller: Degraded\\x1b[31m") || !strings.Contains(text, "\n\n") || !strings.Contains(text, "partial\n") || strings.ContainsRune(text, '\x1b') {
+	if !strings.Contains(text, "warning: space>controller: Degraded\\x1b[31m") || !strings.Contains(text, "\n\n") || !strings.Contains(text, "partial\n") || strings.ContainsRune(text, '\x1b') {
 		t.Fatalf("rendered %q", text)
 	}
 }

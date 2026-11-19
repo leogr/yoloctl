@@ -577,3 +577,29 @@ func TestExpansionWithOneRowEvictsNothing(t *testing.T) {
 		t.Fatalf("one row of room keeps the block as it was:\n%s\nwas:\n%s", got, before)
 	}
 }
+
+// The block draws root labels through the Logger's Label hook, and hides the
+// fields HideField names, on live frames and in the summary.
+func TestBlockUsesLabelAndHideField(t *testing.T) {
+	c := &clock{t: time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)}
+	scr := &screen{}
+	label := func(actor string) (string, string) { return "space", actor }
+	hide := func(key, value string) bool { return key == "space" && value == "falco" }
+	l := prettylog.New(scr, prettylog.Options{Format: prettylog.FormatPretty, Verbosity: prettylog.Normal, ActorWidth: 18, Now: c.now, Label: label, HideField: hide})
+	v := Install(l, scr, Options{ActorWidth: 18, Interval: time.Hour, Now: c.now, Label: label, HideField: hide})
+	t.Cleanup(v.Close)
+	root := l.StartStep("Building image", prettylog.Actor("builder"), prettylog.Executor("buildkit"), slog.String("space", "falco"))
+	c.add(time.Second)
+	v.mu.Lock()
+	v.frame = 3
+	v.updateLocked(false)
+	v.mu.Unlock()
+	live := scr.text()
+	if !strings.Contains(live, "space▸builder") || !strings.Contains(live, "buildkit: Building image") || strings.Contains(live, "space=falco") {
+		t.Fatalf("live block:\n%s", live)
+	}
+	root.Done()
+	if got := scr.text(); !strings.Contains(got, "space▸builder") || strings.Contains(got, "space=falco") {
+		t.Fatalf("summary:\n%s", got)
+	}
+}
