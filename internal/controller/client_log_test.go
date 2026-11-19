@@ -111,6 +111,27 @@ func TestCallLogFramesFollowErrAndTheRequestCarriesVerbosity(t *testing.T) {
 	}
 }
 
+func TestCallGroupsRelayedStepCompletionsOnPlainStderr(t *testing.T) {
+	step := func(id, parent, state string) []slog.Attr {
+		return []slog.Attr{slog.String(prettylog.KeyStep, id), slog.String(prettylog.KeyParent, parent), slog.String(prettylog.KeyState, state)}
+	}
+	conn, _ := fakeController(t,
+		logFrame(t, slog.LevelInfo, "Starting controller", step("parent", "", "running")...),
+		logFrame(t, slog.LevelInfo, "Installing controller", step("child", "parent", "running")...),
+		logFrame(t, slog.LevelInfo, "Installed controller", step("child", "parent", "ok")...),
+		Frame{Type: "stderr", Data: []byte("live stderr\n")},
+		logFrame(t, slog.LevelInfo, "Started controller", step("parent", "", "ok")...),
+		Frame{Type: "exit"},
+	)
+	var stderr bytes.Buffer
+	if err := Call(t.Context(), conn, hello(), request("box.start"), ClientIO{Err: &stderr}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Starting controller\n  Installing controller\nlive stderr\nStarted controller: done (0s)\n  Installed controller: done (0s)\n"; stderr.String() != want {
+		t.Fatalf("stderr = %q, want %q", stderr.String(), want)
+	}
+}
+
 func TestCallRejectsAnInvalidLogRecord(t *testing.T) {
 	conn, _ := fakeController(t, Frame{Type: "log", Data: []byte(`{"unknown":1}`)})
 	err := Call(t.Context(), conn, hello(), request("box.start"), ClientIO{})

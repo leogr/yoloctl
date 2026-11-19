@@ -77,9 +77,9 @@ func executeRoot(root *cobra.Command, run func() (*cobra.Command, error)) error 
 	// The steps block ends first, so the command's final error is the last
 	// thing on the terminal, never followed by a redrawn or unfinished step.
 	closeStepView()
+	_ = logging.Logger().Close()
 	if err != nil && (executed == nil || executed == root || !executed.SilenceErrors) {
 		renderCLIError(root, err)
 	}
-	_ = logging.Logger().Close()
 	return err
 }

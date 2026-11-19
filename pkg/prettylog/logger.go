@@ -130,6 +130,9 @@ type Options struct {
 	// Emit opts into structured presentation instead of the byte destination.
 	// FormatWire ignores this field. Sinks must not reenter this Logger.
 	Emit EmissionSink
+	// GroupStepCompletions puts successful and skipped final text lines under
+	// their parent. Other lines stream. Wire and structured sinks keep record order.
+	GroupStepCompletions bool
 
 	// TerminalWidth supplies current terminal columns for pretty text. Nil or
 	// nonpositive leaves text unwrapped. The caller must return zero for a
@@ -138,8 +141,8 @@ type Options struct {
 }
 
 // Logger owns one sink: its writer, its fold state and its step ids. It is
-// synchronous: every record is written before Handle returns, under one mutex
-// shared by every handler derived from it. It never closes its writer.
+// synchronous: writes run under one mutex shared by every derived handler.
+// GroupStepCompletions can defer child summary writes. It never closes its writer.
 type Logger struct {
 	w io.Writer
 	o Options
@@ -147,18 +150,20 @@ type Logger struct {
 	token   string
 	counter atomic.Uint64
 
-	mu      sync.Mutex
-	out     io.Writer // w, or the routed writer
-	steps   StepSink  // non-nil while routed
-	pal     Palette
-	err     error
-	closed  bool
-	run     *foldRun
-	timer   *time.Timer
-	gen     uint64
-	depth   map[string]int
-	outcome OutcomeKind
-	hasOut  bool
+	mu        sync.Mutex
+	out       io.Writer // w, or the routed writer
+	steps     StepSink  // non-nil while routed
+	pal       Palette
+	err       error
+	closed    bool
+	run       *foldRun
+	timer     *time.Timer
+	gen       uint64
+	depth     map[string]int
+	stepLines map[string]*stepLines
+	stepBytes int
+	outcome   OutcomeKind
+	hasOut    bool
 }
 
 // foldRun is the open run of identical records.
@@ -274,6 +279,7 @@ func (l *Logger) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.endRun()
+	l.flushStepLines()
 	if l.timer != nil {
 		l.timer.Stop()
 	}
@@ -310,6 +316,9 @@ func (l *Logger) emitOwned(r slog.Record, owner uint64) error {
 	if l.steps != nil && (st.Step != "" || st.Snapshot) {
 		l.steps.Apply(r)
 		return nil
+	}
+	if l.o.GroupStepCompletions && l.o.Emit == nil && !l.closed && st.Step != "" && st.State != "" {
+		return l.groupStepLine(r, st)
 	}
 	if !l.o.Verbosity.allows(st) {
 		return nil

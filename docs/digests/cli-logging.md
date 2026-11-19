@@ -1,6 +1,6 @@
 # CLI log routing and outcomes
 
-Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes; prior `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7` and accompanying changes. Interrupted outcomes and source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`.
+Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes, with interrupted outcomes re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`. Step summaries re-read at `0a1e47d47001eab39274faf83f3af36419b04f2b` and accompanying changes.
 
 [FACT] CLI warnings, notices and mutation-result prose use the process
 `internal/logging` Logger; worker processes send records and the host renders
@@ -35,9 +35,9 @@ while successful outcomes are hidden. Sink failure changes neither operation sta
 
 [FACT] Host create/start/stop/recreate/destroy and archive commands report
 existing phases as steps and end with an outcome after cleanup; under the
-interactive steps block a successful operation's root summary is its only final
-line (no second success outcome), while failures keep their outcome. Nested phases
-inherit the root's parent; nested lifecycle calls do not emit another command
+interactive steps block a successful operation ends with the root's grouped
+summary, while failures keep their outcome. Nested phases inherit the enclosing
+step as their parent. Nested lifecycle calls do not emit another command
 outcome. VM image preparation, disk allocation, boot and controller deployment
 use the existing functions and guards, without new effect permission or retry.
 Lima lifecycle launcher stdout/stderr feed the current phase’s detail; explicit stdout

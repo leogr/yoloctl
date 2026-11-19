@@ -317,8 +317,9 @@ their launch environment.
 
 [FACT] A plain click on a running step in a pane's steps block expands that
 step to as many of its kept lines as fit, and a second click collapses it.
-Completed children move once into chronological scrollback and no longer own
-live click rows; the running parent and other running children remain live.
+Recent successful and skipped children can share the block with running steps
+and have no clickable rows. Their final lines follow the parent's in scrollback.
+Failed and uncertain children enter scrollback as they end.
 The TUI passes the click's row over a private inherited channel, never as
 input, and only when the pane's program owns no mouse mode or alternate
 screen. Nothing is saved. [54](#source-54)

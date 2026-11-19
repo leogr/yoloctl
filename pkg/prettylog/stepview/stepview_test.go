@@ -134,7 +134,7 @@ func TestBlockShowsRunningStepsAndCollapsesOnSuccess(t *testing.T) {
 	c.add(time.Second)
 	root.Done()
 	got = scr.text()
-	want := "  ✓ [1/3] FROM ubuntu  1.2s\n  ✓ [2/3] RUN npm install  3s\n✓ builder · buildkit    Building image a1b2c3  5.2s"
+	want := "✓ builder · buildkit    Building image a1b2c3  5.2s\n  ✓ [1/3] FROM ubuntu  1.2s\n  ✓ [2/3] RUN npm install  3s"
 	if got != want {
 		t.Fatalf("scrollback:\n%q\nwant:\n%q", got, want)
 	}
@@ -312,7 +312,7 @@ func TestSuspendDefersCompletionOutput(t *testing.T) {
 // user at quiet levels, with the plain format's "error:" prefix.
 func TestFailuresExpandAFailedStepInLineOutput(t *testing.T) {
 	var out strings.Builder
-	l := prettylog.New(&out, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: prettylog.Quiet})
+	l := prettylog.New(&out, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: prettylog.Quiet, GroupStepCompletions: true})
 	f := NewFailures(l)
 	var src strings.Builder
 	w := prettylog.New(&src, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: prettylog.Trace})
@@ -325,11 +325,18 @@ func TestFailuresExpandAFailedStepInLineOutput(t *testing.T) {
 	bad := root.Step("[2/2] RUN make")
 	_, _ = io.WriteString(bad.Detail(), "before failure\nQA-MARKER-42\n")
 	bad.Fail(errors.New("exit code: 3"))
+	tail := "error: Last output of [2/2] RUN make:\n  before failure\n  QA-MARKER-42"
+	if got := out.String(); !strings.Contains(got, "exit code: 3") || !strings.Contains(got, tail) {
+		t.Fatalf("child failure and tail must print while the parent runs: %q", got)
+	}
 	root.Fail(errors.New("image preparation failed"))
 	restore()
 	got := out.String()
-	if !strings.Contains(got, "error: Last output of [2/2] RUN make:\n  before failure\n  QA-MARKER-42") || strings.Contains(got, "fine") || strings.ContainsAny(got, "✗✓›") {
+	if strings.Count(got, tail) != 1 || strings.Contains(got, "fine") || strings.ContainsAny(got, "✗✓›") {
 		t.Fatalf("%q", got)
+	}
+	if strings.Count(got, "exit code: 3") != 1 || strings.Index(got, "exit code: 3") > strings.Index(got, "Last output of") || strings.Index(got, "Last output of") > strings.Index(got, "image preparation failed") {
+		t.Fatalf("failure group is out of order: %q", got)
 	}
 	// A late follower's snapshot of the same failure expands it once, after
 	// the replayed tail.
@@ -457,7 +464,7 @@ func TestFailuresKeepTheTailUnderALongTitle(t *testing.T) {
 	check(out.String())
 }
 
-// A build root that ends retitled leaves one final root line after committed children.
+// A build root that ends retitled leaves one final root line above its children.
 func TestRetitledRootCollapsesToOneLine(t *testing.T) {
 	l, _, scr, _ := setup(t, nil)
 	root := slog.NewRecord(time.Now(), prettylog.LevelInfo, "Image for box ok1 (features: f1)", 0)
@@ -472,7 +479,7 @@ func TestRetitledRootCollapsesToOneLine(t *testing.T) {
 	ready := slog.NewRecord(time.Now(), prettylog.LevelInfo, "Image for box ok1 ready (features: f1)", 0)
 	ready.AddAttrs(prettylog.Actor("builder"), slog.String(prettylog.KeyStep, "r"), slog.String(prettylog.KeyState, "ok"), prettylog.Took(71*time.Second))
 	_ = l.Handle(context.Background(), ready)
-	if got := scr.text(); got != "  ✓ Building image local/c:1  1s\n✓ builder               Image for box ok1 ready (features: f1)  1m11s" {
+	if got := scr.text(); got != "✓ builder               Image for box ok1 ready (features: f1)  1m11s\n  ✓ Building image local/c:1  1s" {
 		t.Fatalf("%q", got)
 	}
 }

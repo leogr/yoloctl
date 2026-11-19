@@ -161,6 +161,9 @@ func TestSpaceStartPresentationLeavesNoOrphanRowsInPinnedVT(t *testing.T) {
 		t.Fatal(err)
 	}
 	root.Done()
+	for i := range 60 {
+		l.Slog().Info(fmt.Sprintf("After the final group %d", i))
+	}
 	view.Close()
 	vt, err := terminal.New(50, 160, 5000, nil)
 	if err != nil {
@@ -183,11 +186,12 @@ func TestSpaceStartPresentationLeavesNoOrphanRowsInPinnedVT(t *testing.T) {
 	if strings.Count(all, "Started controller") != 1 || strings.Count(all, "Starting space work") != 1 || strings.ContainsAny(all, "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏") {
 		t.Fatalf("stale/duplicated final scrollback:\n%s", all)
 	}
-	if strings.Index(all, "Started controller") > strings.Index(all, "Restarting box one") {
-		t.Fatalf("completed controller moved below later output:\n%s", all)
+	if strings.Index(all, "Restarting box one") > strings.Index(all, "Starting space work") || strings.Index(all, "Starting space work") > strings.Index(all, "Started controller") || strings.Index(all, "Started controller") > strings.Index(all, "After the final group 0") {
+		t.Fatalf("final group out of order:\n%s", all)
 	}
-	if !strings.Contains(strings.Join(history, "\n"), "Started controller") {
-		t.Fatal("fixture did not exercise off-screen retained completion")
+	scrollback := strings.Join(history, "\n")
+	if !strings.Contains(scrollback, "Starting space work") || !strings.Contains(scrollback, "Started controller") {
+		t.Fatal("fixture did not exercise an off-screen retained group")
 	}
 }
 

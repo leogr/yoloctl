@@ -129,8 +129,8 @@ func Init(s Settings) *prettylog.Logger {
 	format, color := prettylog.DecideColor(os.Stderr, s.Color, os.Getenv, IsTerminal)
 	l := prettylog.New(os.Stderr, prettylog.Options{
 		Format: format, Color: color, Palette: palette, Verbosity: s.Verbosity,
-		TerminalWidth: terminalWidth(os.Stderr),
-		ActorWidth:    actorWidth, Fields: defaultFields, Fold: prettylog.FoldOptions{Window: foldWindow},
+		TerminalWidth: terminalWidth(os.Stderr), GroupStepCompletions: true,
+		ActorWidth: actorWidth, Fields: defaultFields, Fold: prettylog.FoldOptions{Window: foldWindow},
 	})
 	installLocked(l, s)
 	return l

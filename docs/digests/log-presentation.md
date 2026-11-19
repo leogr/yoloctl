@@ -1,6 +1,6 @@
 # Log presentation
 
-Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes.
+Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes. Step ordering re-read at `0a1e47d47001eab39274faf83f3af36419b04f2b` and accompanying changes.
 
 [FACT] `pkg/prettylog` is a public package of the yoloctl module that renders
 `log/slog` records. It imports no yoloctl or UI package and reads no terminal.
@@ -23,9 +23,9 @@ outcome; `info` (default) adds notices and progress; `debug` adds debug records
 and step detail lines.
 [3](#source-3) [4](#source-4) [11](#source-11)
 
-[FACT] A `Logger` is synchronous: a record is written before `Handle`
-returns, one mutex serializes every derived handler, write errors are
-remembered and never change results, and the writer is never closed.
+[FACT] A `Logger` serializes emission through one mutex shared by every
+derived handler. Writes are synchronous, write errors are remembered and
+never change results, and the writer is never closed.
 Consecutive identical records (same level, message and typed attributes, under
 a length-prefixed key) within the fold window print once, followed by
 `↳ repeated N more times until HH:MM:SS` when the run ends (different record,
@@ -84,19 +84,21 @@ stderr-only command logs; data writers remain separate.
 [FACT] Relayed worker records go to the process Logger when the command's
 stderr is the process stderr, else as plain lines to that writer; a rendering
 error is reported once without changing the result. On a terminal at the
-default `info` level, `stepview` draws running root steps as a block cut to the terminal (no
-terminal reads or keys). Live child completions are committed once above the
-block in arrival order and excluded from later redraws; roots retain their
-collapsed final summary. Failed/unknown child tails and omitted-byte counts
-appear once, under existing bounds. Suspension and partial raw lines defer
-completion output; snapshots restore state without inventing chronological
-child completions, retaining final failure diagnostics. [15](#source-15)
-It closes before the command's final
-error, showing a root step still running as `?` "did not finish before the
-command ended". Without a block, below debug, a failed relayed step's last 20
-lines follow as error records split under the message limit (the heading cuts
-the step title to 120 bytes); their write
-errors are reported like the step's. [14](#source-14) [15](#source-15)
+default `info` level, `stepview` draws a live block within the terminal's
+bounds. Recent successful and skipped children can share the block with running
+steps. Their final lines follow the parent's, in sibling completion order.
+Failed and uncertain children print once when they end, with bounded tails.
+Suspension and partial output defer writing. Snapshots retain failure
+diagnostics without replaying completed successes. At close an unfinished root
+is marked uncertain before its remaining grouped children. [14](#source-14) [15](#source-15)
+
+[FACT] The host stderr logger and the client's plain fallback stream progress,
+debug detail, failures and uncertain results. They hold successful and skipped
+child lines for an observed parent, subject to log level. Close and the buffer
+limits release lines of incomplete groups. Below debug, a failed relayed step's
+last 20 lines follow it as bounded error records. Background files and `space
+logs` retain record order. `space operation` reads receipts through controller
+status/list requests. [8](#source-8) [14](#source-14) [19](#source-19) [20](#source-20)
 
 [FACT] The holder logs an agent launch as its program name and argument count,
 never its argv. Chat notices and delivery marks use the shared `✗`/`?` glyphs
@@ -118,9 +120,13 @@ and the theme's `Warn` tone. [10](#source-10)
 12. <a id="source-12"></a> [Step and wire regressions](../../pkg/prettylog/behavior_test.go#L84-L397) — review1_test.go bounded empty lines, last reserved key, strict decoding, unambiguous fold keys; step lines, snapshot round trip through the wire at Quiet, monotonic states, eviction, typed round trip, caps, unrepresentable records, incomplete streams, `Route`.
 13. <a id="source-13"></a> [Adapter regressions](../../internal/logging/logging_test.go#L1) — env, `SetLogger` restore, palette, no UI imports; logtheme and cmd/yoloctl logflags_test.go; chatui level_glyph_test.go; session holder_argv_test.go.
 14. <a id="source-14"></a> [Host record routing](../../internal/controller/client.go#L45) — `clientLogStreams`, `HostLogSink`, `case "log"`; cmd/yoloctl stepview.go `installStepView`, controller_client.go `callControllerTerminal`.
-15. <a id="source-15"></a> [Steps block](../../pkg/prettylog/stepview/stepview.go#L1) — `Install`, `Apply`, `blockRows`, `summaryLocked`, `Writer`, `Suspend`, `Close`; chronology_test.go completion/snapshot/partial-line controls; failures.go `Failures`; cmd/yoloctl logflags.go `executeRoot` order; stepview_test.go screen regressions.
+15. <a id="source-15"></a> [Steps block](../../pkg/prettylog/stepview/stepview.go#L1) — `Apply`, `blockRows`, `summaryLocked`, `Writer`, `Suspend`, `Close`; chronology_test.go and stepview_test.go screen checks.
 
 16. <a id="source-16"></a> [CLI routing](cli-logging.md) — command outcomes, stderr/data separation and input handoffs.
 
 17. <a id="source-17"></a> [Structured emission](../../pkg/prettylog/emission.go#L9) — `Emission`, `EmissionSink`, `HandleOwned`, `publish`.
 18. <a id="source-18"></a> [Structured emission regressions](../../pkg/prettylog/emission_test.go#L1) — owner ordering, filter/timer/flush/close, errors, byte/wire/step parity and serialized callers.
+
+19. <a id="source-19"></a> [Line summaries](../../pkg/prettylog/step_lines.go#L1) — `groupStepLine`, `flushStepLines`; `step_lines_test.go`; stepview/failures.go `Failures.expand`; internal/logging `Init`; cmd/yoloctl logflags.go `executeRoot`.
+
+20. <a id="source-20"></a> [Stored logs](../../cmd/yoloctl/space_log_render.go#L44) — `newLogView`, `Write`, `emit`; host_log.go `tailHostLogWithSettings`; controller_lifecycle.go `newSpaceOperationCmd`.

@@ -1,6 +1,6 @@
 # Expanding a running step
 
-Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes. Step ordering re-read at `0a1e47d47001eab39274faf83f3af36419b04f2b` and accompanying changes.
 
 [FACT] Every command a TUI pane starts gets one more private inherited
 socket, named by `YOLOCTL_TUI_STEP_FD`. It runs TUI→command and carries
@@ -24,15 +24,15 @@ the step that owns that block row. Only a running step that has no
 running sub-steps owns its title and output rows. A click toggles that step between
 its latest line and as many of its kept lines (tracker `Retained`) as fit
 the block's existing Height−2 limit. The earlier lines are counted on one
-row and the other rows keep their place. A live child completion is committed
-once above the active block and no longer owns a clickable row. Its successful
-detail collapses; failed/unknown tails retain existing bounds and print once.
-Snapshots do not invent child completion order; suspended output waits for
-Resume (or final Close). Nothing is saved and the View reads no terminal.
+row and the other rows keep their place. Recent successful and skipped children
+can appear as non-clickable rows while their parent runs. Their final summaries
+follow the parent's line. Failed and uncertain children print with their bounded
+tails as soon as output is writable. Suspended output waits for Resume or Close.
+Nothing is saved and the View reads no terminal.
 [4](#source-4) [5](#source-5)
 
 [FACT] When a root step that had output lines ends, a `Pointer` may name
-where output is kept, and its answer is printed under the collapsed line.
+where output is kept, and its answer follows the completed step group.
 For a host step with a valid space, yoloctl specifically names the separate
 Lima launcher log, retaining each call's last 64 KiB:
 `VM launcher log: yoloctl space logs SPACE --host`. Transient restart/npm

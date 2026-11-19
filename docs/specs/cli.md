@@ -252,6 +252,10 @@ Data output (`--json`, receipts, streams) is not rendered by it. [26](#source-26
 Pretty terminal logs wrap at the current column count with hanging detail
 indentation; unknown-width and non-terminal output stay unchanged. [35](#source-35)
 
+[FACT] Successful and skipped substeps are grouped below their parent's final
+line when it is available. Failed and uncertain substeps print as they end.
+Line output streams progress and debug detail. [26](#source-26)
+
 [FACT] When a collapsed host step had Lima output lines, its summary is
 followed by `VM launcher log: yoloctl space logs SPACE --host`; this names
 launcher diagnostics, not transient restart/npm details. [32](#source-32)

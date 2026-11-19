@@ -52,23 +52,24 @@ type ExitError struct {
 // the process Logger (and, with an interactive steps block, a stderr that
 // writes above the block); any other writer (a buffer, a diagnostic tail,
 // io.Discard) gets plain lines at the process verbosity.
-func clientLogStreams(streams ClientIO) ClientIO {
+func clientLogStreams(streams ClientIO) (ClientIO, *prettylog.Logger) {
 	if streams.Log != nil {
-		return streams
+		return streams, nil
 	}
 	if f, ok := streams.Err.(*os.File); ok && f == os.Stderr {
 		streams.Log = HostLogSink()
 		if v := stepview.Current(); v != nil {
 			streams.Err = v.Writer(f)
 		}
-		return streams
+		return streams, nil
 	}
 	w := streams.Err
 	if w == nil {
 		w = io.Discard
 	}
-	streams.Log = expandFailures(prettylog.New(w, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity()}))
-	return streams
+	l := prettylog.New(w, prettylog.Options{Format: prettylog.FormatPlain, Verbosity: logging.Verbosity(), GroupStepCompletions: true})
+	streams.Log = expandFailures(l)
+	return streams, l
 }
 
 // HostLogSink is the process Logger as a relayed-record sink. Without a
@@ -180,9 +181,16 @@ func Call(parent context.Context, conn io.ReadWriteCloser, hello Hello, req Requ
 	if err := wire.Write(Frame{Type: "request", Request: &req}); err != nil {
 		return &OutcomeUnknown{ID: req.ID, Cause: err, Method: req.Method, Space: req.Space}
 	}
-	streams = clientLogStreams(streams)
+	streams, localLogger := clientLogStreams(streams)
 	logSink := streams.Log
 	rendered, logFailed := false, false
+	if localLogger != nil {
+		defer func() {
+			if err := localLogger.Close(); err != nil && !logFailed {
+				reportLogError(streams, err)
+			}
+		}()
+	}
 	remedy := "" // typed remedy of the last explicit outcome record
 	credits := make(chan struct{}, 8)
 	for range cap(credits) {
