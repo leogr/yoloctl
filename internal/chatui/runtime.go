@@ -32,6 +32,11 @@ type AgentRuntime struct {
 	Conversation string
 	// State is the agent's reported state; an empty Kind is unknown.
 	State RuntimeState
+	// Unread marks a read that could not read this box's current reports
+	// (a transient miss): the view keeps the values it already had.
+	Unread bool
+	// at is when the read that produced these values happened.
+	at time.Time
 }
 
 // RuntimeState is the agent's reported state (StateWorking … StateFailed),
@@ -80,8 +85,8 @@ type RuntimeContext struct {
 
 // runtimeFreshness is how long a successful host read stays current: about a
 // dozen of the host's 10-second agent reads (cmd/yoloctl agentsRefresh), so a
-// few slow or skipped reads do not blank the line. A failed read makes it
-// stale at once.
+// few slow or skipped reads do not blank the line. A failed read, or one
+// that missed a box's reports, keeps the last good values until this age.
 const runtimeFreshness = 2 * time.Minute
 
 // maxRuntimeText bounds a displayed model or effort value.
@@ -111,7 +116,9 @@ func runtimeText(v string) string {
 }
 
 // agents applies a host read of the members' agents and their runtime.
-// A failed read keeps the last values, which then show as stale.
+// A failed read, or one that could not read a box's current reports, keeps
+// the last values: they stay shown until they are older than
+// runtimeFreshness, and the details card says the latest read failed.
 func (m *Model) agents(msg AgentsMsg) {
 	if msg.Err != nil {
 		m.runtimeErr = oneLine(msg.Err.Error())
@@ -129,16 +136,29 @@ func (m *Model) agents(msg AgentsMsg) {
 	if msg.Runtime == nil {
 		return
 	}
-	// A successful read replaces every value: removed members disappear.
-	m.runtime, m.runtimeAt, m.runtimeErr = maps.Clone(msg.Runtime), msg.At, ""
-	if m.runtimeAt.IsZero() {
-		m.runtimeAt = time.Now()
+	at := msg.At
+	if at.IsZero() {
+		at = time.Now()
 	}
+	// A successful read replaces every value, so removed members disappear,
+	// except that a box whose reports this read missed keeps its last ones.
+	next := maps.Clone(msg.Runtime)
+	for account, rt := range next {
+		if prev, ok := m.runtime[account]; ok && rt.Unread && !prev.Unread {
+			next[account] = prev
+			continue
+		}
+		rt.at = at
+		next[account] = rt
+	}
+	m.runtime, m.runtimeAt, m.runtimeErr = next, at, ""
 }
 
-// runtimeStale reports whether the last read is no longer current evidence.
-func (m *Model) runtimeStale(now time.Time) bool {
-	return m.runtimeErr != "" || now.Sub(m.runtimeAt) > runtimeFreshness
+// runtimeStale reports whether a participant's values are no longer current
+// evidence: read more than runtimeFreshness ago. A failed later read alone
+// does not make them stale.
+func runtimeStale(rt AgentRuntime, now time.Time) bool {
+	return now.Sub(rt.at) > runtimeFreshness
 }
 
 // runtimeOf returns a trusted box member's runtime evidence, if any.
@@ -158,7 +178,7 @@ func (m *Model) runtimeOf(w who) (AgentRuntime, bool) {
 // context window, which this line leaves out.
 func (m *Model) runtimeSummary(w who, now time.Time) string {
 	rt, ok := m.runtimeOf(w)
-	if !ok || rt.Model.Value == "" || m.runtimeStale(now) {
+	if !ok || rt.Model.Value == "" || runtimeStale(rt, now) {
 		return ""
 	}
 	s := modelName(rt.Model.Value)
@@ -252,12 +272,14 @@ func (m *Model) runtimeRows(w who, now time.Time) [][2]string {
 		return nil
 	}
 	switch {
+	case runtimeStale(rt, now):
+		rows = append(rows, [2]string{"Evidence", "stale: last read " + rt.at.Local().Format("15:04")})
 	case m.runtimeErr != "":
-		rows = append(rows, [2]string{"Evidence", "stale: the last refresh failed: " + m.runtimeErr})
-	case m.runtimeStale(now):
-		rows = append(rows, [2]string{"Evidence", "stale: last read " + m.runtimeAt.Local().Format("15:04")})
+		rows = append(rows, [2]string{"Evidence", "read " + rt.at.Local().Format("15:04:05") + "; the last refresh failed: " + m.runtimeErr})
+	case rt.at.Before(m.runtimeAt):
+		rows = append(rows, [2]string{"Evidence", "read " + rt.at.Local().Format("15:04:05") + "; the last refresh could not read its reports"})
 	default:
-		rows = append(rows, [2]string{"Evidence", "read " + m.runtimeAt.Local().Format("15:04:05")})
+		rows = append(rows, [2]string{"Evidence", "read " + rt.at.Local().Format("15:04:05")})
 	}
 	if rt.Note != "" {
 		// Keep the metadata safety bound stable across terminal reports.
@@ -271,15 +293,15 @@ func (m *Model) runtimeRows(w who, now time.Time) [][2]string {
 
 // stateOf is a participant's state: the agent's own report while the last
 // read is current, else, for a box that reported none, its activity
-// (working or idle; unknown activity is no state). A failed or stale read
-// shows no reported state, and activity never stands in for a wait.
+// (working or idle; unknown activity is no state). A stale report (older
+// than runtimeFreshness) is no state, and activity never stands in for a wait.
 func (m *Model) stateOf(w who, now time.Time) (RuntimeState, bool) {
 	rt, ok := m.runtimeOf(w)
 	if !ok || !agentBox(w.agent) {
 		return RuntimeState{}, false
 	}
 	if rt.State.Kind != "" {
-		if m.runtimeStale(now) {
+		if runtimeStale(rt, now) {
 			return RuntimeState{}, false
 		}
 		return rt.State, true

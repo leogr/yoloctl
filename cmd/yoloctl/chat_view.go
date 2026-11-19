@@ -506,7 +506,7 @@ var agentsReadTimeout = 5 * time.Second
 // color) and its model and effort. A box counts only while its declaration
 // ID still equals the member's immutable box ID. A read that a catalog
 // change superseded is discarded and repeated; a failed read reports an
-// error, so earlier runtime values show as stale.
+// error, and the view keeps the earlier values until they age out.
 func (s *chatSession) loadAgents(read func(context.Context) ([]controllerBoxView, error)) tea.Msg {
 	s.mu.Lock()
 	header := s.header

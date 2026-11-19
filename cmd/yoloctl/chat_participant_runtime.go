@@ -41,7 +41,9 @@ func chatParticipantRuntime(header chatstream.Header, view []controllerBoxView) 
 // unknown, with a note saying why.
 func participantRuntime(b controllerBoxView) chatui.AgentRuntime {
 	o, note := observedRuntime(b)
-	rt := chatui.AgentRuntime{Note: note}
+	// A live read that missed the current launch's reports is transient:
+	// the view keeps the values it already had for this box.
+	rt := chatui.AgentRuntime{Note: note, Unread: note == reportsUnreadNote}
 	if o == nil {
 		rt.Hint = reporterHint(b, note)
 		return rt
@@ -117,6 +119,10 @@ func resumeOutcome(st *agentsession.Status) string {
 // running now, or nil with the reason. A stored earlier launch, a launch this
 // read could not reach, or reports of doubtful health are not current
 // evidence.
+// reportsUnreadNote is the note for a running launch whose reports this read
+// could not read.
+const reportsUnreadNote = "the current reports could not be read"
+
 func observedRuntime(b controllerBoxView) (*agentsession.ObservedView, string) {
 	st := b.State.Conversation
 	switch {
@@ -131,7 +137,7 @@ func observedRuntime(b controllerBoxView) (*agentsession.ObservedView, string) {
 	case st.Launch == nil || st.Launch.State != agentsession.StateLaunched || st.Observed.Generation != st.Launch.Generation:
 		return nil, "the agent reports are from an earlier launch"
 	case st.Observed.Live != "current":
-		return nil, "the current reports could not be read"
+		return nil, reportsUnreadNote
 	case st.Observed.Health != string(observe.HealthOK):
 		return nil, "agent reports are " + st.Observed.Health
 	}

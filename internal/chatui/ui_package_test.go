@@ -573,16 +573,16 @@ func TestParticipantsShowObservedModelAndEffortOnly(t *testing.T) {
 			t.Fatalf("panel shows %q:\n%s", banned, out)
 		}
 	}
-	// A failed refresh or an old read is not certain: the card leaves the
-	// model out, keeping only an away reason (case 9), while the details
-	// card states the evidence.
+	// A failed refresh keeps the last good values on the line (no blink),
+	// while the details card says the latest refresh failed; only an old
+	// read leaves the model out, keeping an away reason (case 9).
 	m.Update(AgentsMsg{Err: errors.New("controller busy")})
-	if summary("mopus") != "" || cardRole(m, "mopus") != "" || cardRole(m, "mrev") != "reviewing C" {
-		t.Fatalf("failed refresh: %q %q", cardRole(m, "mopus"), cardRole(m, "mrev"))
+	if summary("mopus") != "Opus 5.5 (max)" || cardRole(m, "mopus") == "" {
+		t.Fatalf("failed refresh blanked the line: %q %q", cardRole(m, "mopus"), cardRole(m, "mrev"))
 	}
 	m.openCard("opus", "mopus")
-	if card := view(m); !strings.Contains(card, "claude-opus-5-5 (reported by the agent's status line") || !strings.Contains(card, "stale: the last refresh failed: controller busy") {
-		t.Fatalf("stale card:\n%s", card)
+	if card := view(m); !strings.Contains(card, "claude-opus-5-5 (reported by the agent's status line") || !strings.Contains(card, "; the last refresh failed: controller busy") || strings.Contains(card, "stale:") {
+		t.Fatalf("card after a failed refresh:\n%s", card)
 	}
 	m.overlay = nil
 	m.Update(AgentsMsg{At: now.Add(-3 * time.Minute), Runtime: map[string]AgentRuntime{

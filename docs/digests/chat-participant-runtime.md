@@ -1,6 +1,6 @@
 # Chat participant model and effort
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; card-only panel re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; 10 s reads, Version row and reporter hint `f28bf6f93e5c002fd127e67c6c671c7aadc5bad2` and accompanying changes; state row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; conversation row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; kept values across failed or missed reads at `7347d60dd0dc7af0eef615736c72e73ef3df6db8` and accompanying changes; card-only panel re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; 10 s reads, Version row and reporter hint `f28bf6f93e5c002fd127e67c6c671c7aadc5bad2` and accompanying changes; state row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; conversation row `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
 
 [FACT] A roomy Participants panel's card detail line is exactly
 `Model (effort) · away reason`, such as `Opus 5.5 (max) · reviewing C`, below
@@ -13,8 +13,12 @@ friendly names; others stay raw, sanitized to one line of at most 64 cells. Noth
 or launch arguments. [1](#source-1) [2](#source-2) [6](#source-6)
 
 [FACT] The line shows a model only while it is an agent observation and the
-last read is current: a failed read or one over two minutes old empties model
-and effort with no marker. Every participant is a two-row card, also when the
+values are current: they were read within the last two minutes. A failed read,
+or one that could not read that box's current reports (the controller's live
+read missed it, `Unread`), keeps the last good values on the line and in the
+card, whose Evidence row names the miss; only values older than two minutes
+are left out, with no marker. Every other observation change, such as a stopped
+session or an earlier launch, replaces them. [12](#source-12) Every participant is a two-row card, also when the
 panel scrolls. The details card keeps
 its Identity (`agent` or `human`, omitted when unconfirmed) and Agent rows, shows
 each observed raw value with its report (status line, hook, or a read of the
@@ -48,8 +52,8 @@ without a hook still waits for the controller's minute-throttled daemon
 refresh ([Codex refresh read](codex-refresh-read.md)), which these reads only
 wake. The times are nominal: admission or failed reads can delay them. Requests coalesce; a read made while the trusted catalog
 moved to another room, disk, account or generation is discarded and repeated.
-A failed read keeps earlier values for the details card only; a successful one
-replaces them all. Values are keyed by the trusted catalog's immutable box ID of
+A failed read keeps earlier values; a successful one replaces them all except a
+box it marked `Unread`, which keeps its earlier values and their read time. Values are keyed by the trusted catalog's immutable box ID of
 non-revoked members, so a same-name box with a new ID gets none.
 [3](#source-3) [4](#source-4) [5](#source-5)
 
@@ -84,10 +88,11 @@ Codex boxes report through their hook reporter ([Codex reporter](codex-observati
 2. <a id="source-2"></a> [Participant detail line](../../internal/chatui/roster.go#L269-L301) — `memberCard`; the line from `roleLine` in marquee.go L66; `agentBox` in runtime.go; model-first truncation and scrolled cards in presence_panel_test.go `TestParticipantAwayDetails` L160.
 3. <a id="source-3"></a> [Participant runtime](../../cmd/yoloctl/chat_participant_runtime.go#L11-L135) — `chatParticipantRuntime`, `participantRuntime`, `participantConversation`, `observedRuntime`.
 4. <a id="source-4"></a> [Serial reads](../../cmd/yoloctl/chat_view.go#L399-L500) — `refreshAgents`, `agentsLoop`, `loadAgents`, `adoptCatalogFor`.
-5. <a id="source-5"></a> [Host regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L73-L163) — box IDs, observed values with sources and context, launch arguments ignored, superseded and failed reads.
-6. <a id="source-6"></a> [UI regressions](../../internal/chatui/ui_package_test.go#L487-L682) — `cardRole`, `TestParticipantsShowObservedModelAndEffortOnly`: every line case, banned panel words (context included), stale and failed reads, sources and the Context row, effort-only, no-report, unverified and disconnected cards; `TestRuntimeContextText`.
+5. <a id="source-5"></a> [Host regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L73-L163) — box IDs, observed values with sources and context, launch arguments ignored, superseded and failed reads, and the `Unread` marker in `TestObservedRuntimeIsCurrentLaunchOnly`.
+6. <a id="source-6"></a> [UI regressions](../../internal/chatui/ui_package_test.go#L487-L682) — `cardRole`, `TestParticipantsShowObservedModelAndEffortOnly`: every line case, banned panel words (context included), stale and failed reads (kept within two minutes), sources and the Context row, effort-only, no-report, unverified and disconnected cards; `TestRuntimeContextText`.
 7. <a id="source-7"></a> [Observation regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L18-L71) — `currentObservation`, `values`, `TestObservedRuntimeIsCurrentLaunchOnly`.
 8. <a id="source-8"></a> [Claude reporter](claude-reporter.md) — the required status line and hook reporter.
 9. <a id="source-9"></a> [Hover scrolling](../../internal/chatui/marquee.go#L12-L202) — `marqueeHold`/`marqueeStep`/`marqueeEnd`/`marqueeMin`, `hoveredLabel`, `marqueeSteps`, `marqueeWindow`, `roleText`, `settleMarquee`, `marqueeAdvance`; `cardWidth` set in roster.go `participantRows` L127, the footer fallback in hover.go `hoverHint` L192, the update hook in model.go L386 and L442.
 10. <a id="source-10"></a> [Hover regressions](../../internal/chatui/marquee_test.go#L88-L319) — injected ticks: fitting, clipped and empty rows, delays, width, true suffix, invalidation and stale ticks, compact/NoMotion/narrow, CJK, combining and ZWJ graphemes.
 11. <a id="source-11"></a> [Version and hint regressions](../../internal/chatui/participant_version_test.go#L1) — card Version row, stale card, hint-only empty card; chat_participant_runtime_test.go `TestParticipantRuntimeCarriesTheReportedVersion`, `TestReporterHintOnlyForAnAccountStatusLineAgentWithoutReports`, `TestAgentsLoopReadsEveryIntervalAndStopsOnClose`; `reporterHint` in chat_participant_runtime.go.
+12. <a id="source-12"></a> [Kept values](../../internal/chatui/runtime.go#L115) — `agents`, `runtimeStale`, `AgentRuntime.Unread`; cmd/yoloctl/chat_participant_runtime.go `reportsUnreadNote`; `TestRefreshKeepsLastGoodValues` in runtime_keep_test.go.

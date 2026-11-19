@@ -68,6 +68,15 @@ func TestObservedRuntimeIsCurrentLaunchOnly(t *testing.T) {
 		if model, effort, note := values(b); model != "" || effort != "" || note == "" || participantRuntime(b).Context != nil {
 			t.Errorf("%s: stale evidence shown as current: %q %q %q", name, model, effort, note)
 		}
+		// Only a live read that missed the current launch is transient: the
+		// view keeps its last values then (leogr's blink, e.g. a spent
+		// live-read budget). Every other case replaces them.
+		if want := name == "read unavailable" || name == "not read"; participantRuntime(b).Unread != want {
+			t.Errorf("%s: Unread %v, want %v", name, participantRuntime(b).Unread, want)
+		}
+	}
+	if participantRuntime(currentObservation(cfg, "claude-opus-5-5", "max")).Unread {
+		t.Error("a current read is not a miss")
 	}
 }
 

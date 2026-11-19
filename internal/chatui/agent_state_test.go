@@ -66,8 +66,8 @@ func TestReportedStateRowAndTag(t *testing.T) {
 	}
 	report(StateWaitingPermission)
 	m.Update(AgentsMsg{Err: errors.New("controller busy")})
-	if row, tag := stateRow(m, "mopus"), stateTagOf(m, "mopus"); row != "" || tag != "" {
-		t.Fatalf("a failed read kept the state: %q %q", row, tag)
+	if row, tag := stateRow(m, "mopus"), stateTagOf(m, "mopus"); row == "" || tag == "" {
+		t.Fatalf("a failed read blanked the last good state: %q %q", row, tag)
 	}
 	m.Update(AgentsMsg{At: time.Now().Add(-3 * time.Minute), Runtime: map[string]AgentRuntime{
 		"mopus": {State: RuntimeState{Kind: StateWaitingPermission, Source: SourceHook, At: at}},
