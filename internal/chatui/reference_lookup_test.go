@@ -29,9 +29,17 @@ func referenceLookupModel(t *testing.T) (*Model, *[]HistoryRequest) {
 func TestUnloadedReferenceQuotesExactMatchAcrossJoinedChannels(t *testing.T) {
 	m, calls := referenceLookupModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
-	m.Update(IncomingMsg{Message: Message{ID: "referrer", Channel: m.name, Nick: "peer", Text: sharedMissing}})
+	m.Update(IncomingMsg{Message: Message{ID: "referrer", Channel: m.name, Nick: "peer", Text: "selected text and " + sharedMissing}})
 	paste(m, "draft to preserve")
-	m.follow, m.picked, m.selected = false, true, 0
+	m.follow = false
+	dragOver(t, m, "referrer", 0, "selected text")
+	if m.sel == nil {
+		t.Fatal("expected a text highlight")
+	}
+	highlight, ok := m.selectedText(*m.sel)
+	if !ok || strings.TrimSpace(highlight) != "selected text" {
+		t.Fatalf("fixture highlighted %q", highlight)
+	}
 	m.View()
 	cells := targetCells(m, actRef, refMissing)
 	if len(cells) == 0 {
@@ -73,6 +81,42 @@ func TestUnloadedReferenceQuotesExactMatchAcrossJoinedChannels(t *testing.T) {
 		m.follow || !m.picked || m.selected != 0 || m.scroll != scroll || m.anchor != anchor ||
 		len(m.messages) != 1 || len(m.views["#space"].messages) != 0 || m.loadingOlder || m.historyEnd || m.unread != 0 {
 		t.Fatal("lookup altered the source channel or its paging state")
+	}
+	if m.sel == nil {
+		t.Fatal("lookup discarded the source highlight")
+	}
+	if got, ok := m.selectedText(*m.sel); !ok || got != highlight {
+		t.Fatalf("highlight after lookup is %q, want %q", got, highlight)
+	}
+	m.quoteSelection()
+	if !strings.Contains(m.Draft(), "> selected text") {
+		t.Fatalf("highlight is no longer available to Quote: %q", m.Draft())
+	}
+}
+
+func TestReferenceSearchCancelsWhenChannelPickerOpens(t *testing.T) {
+	m, calls := referenceLookupModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
+	m.showMessage(refMissing)
+	m.View()
+	for _, h := range m.hits {
+		if h.area == hitTop && h.id == "channels" {
+			clickCell(m, [2]int{h.x0, h.y})
+			break
+		}
+	}
+	if len(*calls) != 1 || m.overlay == nil || m.overlay.kind != overlayChannels || m.reference != nil {
+		t.Fatalf("picker did not cancel the request: %+v", *calls)
+	}
+	r := (*calls)[0]
+	m.Update(ReferenceLookupMsg{ID: r.ID, Channel: r.Channel})
+	m.Update(ReferenceLookupMsg{ID: r.ID, Channel: r.Channel, Message: Message{ID: r.Lookup, Channel: r.Channel}})
+	if len(*calls) != 1 || m.overlay == nil || m.overlay.kind != overlayChannels {
+		t.Fatal("a canceled result advanced the lookup or displaced the picker")
+	}
+	press(m, tea.KeyEscape, 0)
+	if m.overlay != nil || strings.Contains(m.notice, "Looking up") {
+		t.Fatalf("picker left stale progress: %q", m.notice)
 	}
 }
 

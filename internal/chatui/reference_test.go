@@ -259,7 +259,7 @@ func TestMessageReferencesNavigateToLoadedMessages(t *testing.T) {
 		m.picked, m.selected, m.follow, m.anchor = false, 0, true, nil
 		m.View()
 		clickCell(m, c)
-		if !m.picked || m.selected != 0 || m.follow || m.anchor == nil || m.anchor.key != "server:"+refTarget || m.focus != focusMessages {
+		if !m.picked || m.selected != 0 || m.follow || m.anchor == nil || m.anchor.key != "server:"+refTarget || m.focus != focusMessages || m.sel != nil {
 			t.Fatalf("click at %v: picked=%v selected=%d follow=%v anchor=%+v", c, m.picked, m.selected, m.follow, m.anchor)
 		}
 	}

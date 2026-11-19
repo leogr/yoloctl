@@ -35,8 +35,9 @@ scrollable quote with its channel, author and time. The quote stays outside the
 transcript, so the source draft, scroll position, unread counts and Page Up
 cursor retain their meaning. Hover is local. Each channel must return a definite
 miss before the view reports absence in joined channels. Refusal, a mismatched
-ID or transport failure stops with an incomplete lookup. Switching or leaving
-the source channel or reconnecting discards the lookup's intent.
+ID or transport failure stops with an incomplete lookup. Opening another panel
+cancels the lookup. Switching or leaving the source channel or reconnecting
+also discards its intent. An unloaded-reference click preserves highlighted text.
 [11](#source-11) [12](#source-12)
 
 [FACT] A marked reference whose exact ID is loaded in this channel view shows
@@ -78,7 +79,7 @@ navigation.
 ## Sources
 
 1. <a id="source-1"></a> [Body tokens](../../internal/chatui/body.go#L16) — `decorateTokens`, `refPrefix`, `compactRef`, `refID`, `msgidPrefix`, `messageID`, `nickByte`; shared `Linked` prevents overriding link targets.
-2. <a id="source-2"></a> [Navigation](../../internal/chatui/mouse.go#L322-L403) — `activate`, `showMessage`, `selectLoaded`, `channelHolding`; channels.go `joinSwitch.ref` carries a deferred message with its join and `showJoined` shows it, `selectChannel` owns join admission.
+2. <a id="source-2"></a> [Navigation](../../internal/chatui/mouse.go#L334-L427) — `activate`, `showMessage`, `selectLoaded`, `channelHolding`; channels.go `joinSwitch.ref` carries a deferred message with its join and `showJoined` shows it, `selectChannel` owns join admission.
 3. <a id="source-3"></a> [Hover hints](../../internal/chatui/hover.go#L213-L214) — `actRef`; kinds in rows.go L15–L23.
 4. <a id="source-4"></a> [Copy reference](../../internal/chatui/model.go#L1004-L1152) — `messageActions`, `runAction`; Help row in overlay.go L106.
 5. <a id="source-5"></a> [Regressions](../../internal/chatui/reference_test.go#L22-L459) — `TestReferencesReachOtherOpenChannels`, `TestCrossChannelReferenceJoinsLeftChannel`, `TestCrossChannelReferenceEndsWithItsJoin`; shared vectors and unused bits, tokens, inert numbers, wrapped and missing targets, reply labels, copy, channels and deletion.

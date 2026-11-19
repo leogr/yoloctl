@@ -48,6 +48,10 @@ type overlayState struct {
 }
 
 func (m *Model) openOverlay(o overlayState) {
+	if m.reference != nil {
+		m.clearReference()
+		m.say(levelInfo, "Message lookup canceled")
+	}
 	m.overlay = &o
 	m.suggest = nil
 }

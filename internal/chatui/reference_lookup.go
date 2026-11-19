@@ -23,6 +23,9 @@ type referenceLookup struct {
 }
 
 func (m *Model) clearReference() {
+	if m.reference != nil {
+		m.clearInfo()
+	}
 	m.reference = nil
 	if m.overlay != nil && m.overlay.kind == overlayReference {
 		m.overlay = nil
@@ -70,19 +73,20 @@ func (m *Model) referenceResult(msg ReferenceLookupMsg) tea.Cmd {
 	if r == nil || msg.ID != r.id || msg.Channel != r.channels[0] {
 		return nil
 	}
+	if msg.Err == nil && msg.Message.ID == "" {
+		r.channels = r.channels[1:]
+		return m.nextReference()
+	}
+	m.reference = nil
 	switch {
 	case msg.Err != nil:
 		m.say(levelWarn, "Message lookup incomplete in "+msg.Channel+": "+oneLine(msg.Err.Error()))
-	case msg.Message.ID == "":
-		r.channels = r.channels[1:]
-		return m.nextReference()
 	case msg.Message.ID != r.target || msg.Message.Channel != msg.Channel:
 		m.say(levelWarn, "Message lookup returned a different record in "+msg.Channel)
-	case m.overlay == nil:
+	default:
 		m.clearInfo()
 		m.openOverlay(overlayState{kind: overlayReference, quote: msg.Message})
 	}
-	m.reference = nil
 	return nil
 }
 

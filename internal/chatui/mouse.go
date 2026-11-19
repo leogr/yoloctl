@@ -121,8 +121,13 @@ func (m *Model) mouseDown(mo tea.Mouse) tea.Cmd {
 	}
 	row, _ := m.rowAt(mo.Y)
 	p, ok := m.pointAt(mo.X, mo.Y)
-	m.sel = nil
-	m.drag = dragState{active: true, area: hitTranscript, x: mo.X, y: mo.Y, lastX: mo.X, lastY: mo.Y, press: p, pressOK: ok, generation: m.generation, act: actionAt(m.widthMethod, row.runs, mo.X), key: row.key}
+	act := actionAt(m.widthMethod, row.runs, mo.X)
+	// An unloaded reference click keeps the previous highlight. A drag
+	// or navigation to a loaded message still replaces or clears it.
+	if act.Kind != actRef && act.Kind != actReply {
+		m.sel = nil
+	}
+	m.drag = dragState{active: true, area: hitTranscript, x: mo.X, y: mo.Y, lastX: mo.X, lastY: mo.Y, press: p, pressOK: ok, generation: m.generation, act: act, key: row.key}
 	if ok && row.kind != rowEvent {
 		m.drag.pick = p.key // a room notice row selects no message
 	}
@@ -159,12 +164,15 @@ func (m *Model) mouseMove(mo tea.Mouse) tea.Cmd {
 	if !d.moved && mo.X == d.x && mo.Y == d.y {
 		return nil
 	}
-	if !d.moved && d.pick != "" {
+	if !d.moved {
+		m.sel = nil
 		// A selection that starts in a message selects that message, so
 		// Enter quotes the highlight at once (Quote is first while the
 		// highlight lies in it). pointAt snaps a press on its header, gutter
 		// or separator to its text, so those start in it too.
-		m.pick(d.pick)
+		if d.pick != "" {
+			m.pick(d.pick)
+		}
 	}
 	d.moved = true
 	d.lastX, d.lastY = mo.X, mo.Y
@@ -224,6 +232,7 @@ func (m *Model) mouseUp(mo tea.Mouse) tea.Cmd {
 		if act := actionAt(m.widthMethod, row.runs, mo.X); act.Kind != actNone && act == d.act && d.generation == m.generation {
 			return m.activate(act)
 		}
+		m.sel = nil
 		if row.key != "" && row.key == d.key && row.kind != rowEvent {
 			m.pick(row.key)
 		}
@@ -358,6 +367,7 @@ func (m *Model) activate(act action) tea.Cmd {
 // showMessage navigates to a loaded message or looks up its exact ID.
 func (m *Model) showMessage(id string) tea.Cmd {
 	if m.selectLoaded(id) {
+		m.sel = nil
 		m.clearReference()
 		return nil
 	}
@@ -365,6 +375,7 @@ func (m *Model) showMessage(id string) tea.Cmd {
 	// way a person does (joined: at once; otherwise through the ordinary
 	// typed join path, showing the message once the join switches to it).
 	if name, ok := m.channelHolding(id); ok {
+		m.sel = nil
 		m.clearReference()
 		cmd := m.selectChannel(name)
 		switch {
