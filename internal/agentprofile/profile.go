@@ -35,6 +35,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/leogr/yoloctl/internal/agentnpm"
 	"github.com/leogr/yoloctl/internal/atomicfile"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/nativerelease"
@@ -537,6 +538,12 @@ func (p *Profile) Validate() error {
 	for _, name := range p.StateArchiveExcludes {
 		if name == "." || !fs.ValidPath(name) || strings.ContainsAny(name, "\\\x00*?[]") {
 			return fmt.Errorf("agent-profile %q: state_archive_excludes entry %q must be a literal relative path below the state directory", p.Name, name)
+		}
+	}
+	if p.NpmPackage != "" {
+		// The package becomes one word of the image recipe and the update argv.
+		if err := agentnpm.ValidatePackage(p.NpmPackage); err != nil {
+			return fmt.Errorf("agent-profile %q: npm_package: %w", p.Name, err)
 		}
 	}
 	if p.NativeRelease != "" {

@@ -66,7 +66,7 @@ func refreshNeedsNoCache(base string, candidates []string, force bool) (bool, er
 		return true, nil
 	}
 	for _, name := range candidates {
-		f, err := features.Lookup(name)
+		f, err := features.LookupRuntime(name)
 		if err != nil {
 			return false, err
 		}

@@ -108,7 +108,7 @@ and stopped-space export; `SMOKE_IMPORT_BACKEND` selects cross-adapter restore; 
 11. <a id="source-11"></a> [Native export policy](../../internal/spacearchive/native_export.go#L17) — `nativeExportPolicy.skip`, `relativeLink`; bounded runtime exclusions and portable targets.
 12. <a id="source-12"></a> [Native export regressions](../../internal/spacearchive/native_export_test.go#L63) — Codex and custom-profile round trips, original bytes/links retained and unsafe targets rejected by name.
 13. <a id="source-13"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L43) — `state_archive_excludes` identifies disposable process state.
-14. <a id="source-14"></a> [Profile validation](../../internal/agentprofile/profile.go#L384) — `Profile.Validate` rejects unsafe exclusion paths.
+14. <a id="source-14"></a> [Profile validation](../../internal/agentprofile/profile.go#L385) — `Profile.Validate` rejects unsafe exclusion paths.
 15. <a id="source-15"></a> [Managed chat archive implementation](../../internal/spacearchive/chat.go#L20) — `writeChatState`, `validateChatEntry`, `restoreChatState`.
 16. <a id="source-16"></a> [Managed chat archive regressions](../../internal/spacearchive/chat_test.go#L1) — independent identities, interrupted restore and unsafe inventories.
 17. <a id="source-17"></a> [Export grow guard](../../cmd/yoloctl/space_archive.go#L79-L81) — the `DataDiskGrow` refusal in `exportSpace`.

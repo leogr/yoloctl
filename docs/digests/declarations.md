@@ -107,7 +107,7 @@ rejected. This does not delete native state or change credential import.
 10. <a id="source-10"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L725) — grant classification and live bind checks.
 11. <a id="source-11"></a> [cmd/yoloctl/space_lifecycle.go](../../cmd/yoloctl/space_lifecycle.go#L20) — protected root rejection.
 12. <a id="source-12"></a> [cmd/yoloctl/agentbox_copy.go](../../cmd/yoloctl/agentbox_copy.go#L24) — copy merge and destination validation.
-13. <a id="source-13"></a> [internal/agentprofile/profile.go](../../internal/agentprofile/profile.go#L52) — adapter schema and lookup.
+13. <a id="source-13"></a> [internal/agentprofile/profile.go](../../internal/agentprofile/profile.go#L53) — adapter schema and lookup.
 14. <a id="source-14"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L201) — `expandControllerPaths` validates and canonicalizes host path flags.
 15. <a id="source-15"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1771) — `rejectAccountRootBinds` checks the native worker's path namespace.
 16. <a id="source-16"></a> [cmd/yoloctl/controller_client_test.go](../../cmd/yoloctl/controller_client_test.go#L18) — host alias, disk identity, project-path and pre-dispatch command regressions.

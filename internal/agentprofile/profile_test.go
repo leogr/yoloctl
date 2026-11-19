@@ -360,6 +360,10 @@ func TestValidate(t *testing.T) {
 		{"no-command", Profile{Name: "claude", Image: "i"}, "command is required"},
 		{"relative-state-path", Profile{Name: "claude", Image: "i", Command: "c", StateContainerPath: "rel/path"}, "must be absolute"},
 		{"absolute-state-path-ok", Profile{Name: "claude", Image: "i", Command: "c", StateContainerPath: "/abs"}, ""},
+		// npm_package becomes one word of the image recipe and update argv.
+		{"npm-scoped-ok", Profile{Name: "custom", Image: "i", Command: "c", NpmPackage: "@scope/my-cli"}, ""},
+		{"npm-shell-text", Profile{Name: "custom", Image: "i", Command: "c", NpmPackage: "my-cli && curl x"}, "invalid npm package name"},
+		{"npm-newline", Profile{Name: "custom", Image: "i", Command: "c", NpmPackage: "my-cli\nRUN id"}, "invalid npm package name"},
 		{"auth-ok", Profile{Name: "codex", Image: "i", Command: "c", StateContainerPath: "/abs",
 			Auth: &AuthSpec{CredentialFile: "auth.json"}}, ""},
 		{"auth-no-credential-file", Profile{Name: "codex", Image: "i", Command: "c", StateContainerPath: "/abs",

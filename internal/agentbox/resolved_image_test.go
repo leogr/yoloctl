@@ -1,10 +1,13 @@
 package agentbox
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/agentboximage"
+	"github.com/leogr/yoloctl/internal/layout"
 )
 
 func TestEffectiveFeaturesStrict_UnionsProfile(t *testing.T) {
@@ -151,5 +154,44 @@ func TestResolvedImage_AgentNpmPackageSelectsTheManagedPrefix(t *testing.T) {
 				t.Fatalf("agent %q got %s", c.Agent, n)
 			}
 		}
+	}
+}
+
+// A custom agent whose package no catalog feature installs gets the agent
+// install after the OCI Feature installs, which may supply Node.js and npm
+// on a custom base (archyAstra r1).
+func TestResolvedImage_UnsuppliedAgentNpmInstallFollowsOCIFeatures(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	dir, err := layout.AgentsDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "my-agent.yaml"), []byte("name: my-agent\nimage: custom/base:1\ncommand: my-cli\nnpm_package: my-cli\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Config{Agent: "my-agent", Image: "custom/base:1", Features: []string{ociGoRef}, FeatureLocks: ociGoRustLocks()[:1]}
+	plan, err := c.FeaturePlan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, err := RuntimeFeatures(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, dockerfile, installs, err := agentboximage.ComposedImageRef(c.Image, names, plan)
+	if err != nil || !installs {
+		t.Fatalf("installs=%v err=%v", installs, err)
+	}
+	oci := strings.Index(dockerfile, "# OCI Feature: "+ociGoRef)
+	agent := strings.Index(dockerfile, "npm install -g my-cli@latest --prefix=/opt/yoloctl/npm")
+	if oci < 0 || agent < oci || strings.Count(dockerfile, "npm install -g my-cli@") != 1 {
+		t.Fatalf("OCI Feature at %d, agent install at %d:\n%s", oci, agent, dockerfile)
+	}
+	if !strings.HasSuffix(strings.TrimRight(dockerfile[:strings.Index(dockerfile, "\nRUN find /home/sandbox -xdev")], "\n"), "ENV PATH=/opt/yoloctl/npm/bin:$PATH") {
+		t.Fatalf("the agent folder is not first on PATH after every install:\n%s", dockerfile)
 	}
 }

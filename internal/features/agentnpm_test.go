@@ -103,17 +103,34 @@ func TestOpenCodeCheckFollowsItsPrefix(t *testing.T) {
 	}
 }
 
-func TestAgentNpmRuntimeName(t *testing.T) {
+// The managed role is internal: only the composer's runtime list (from the
+// box's agent profile) selects it. Public lookups and a standalone image build
+// reject the marker, and the Codex feature alone keeps the user's prefix.
+func TestAgentNpmRuntimeNameIsInternal(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	name := AgentNpmRuntime("@anthropic-ai/claude-code")
-	if strings.Contains(name, "/") || !IsBuiltin(name) {
-		t.Fatalf("runtime name %q must be a built-in without a slash", name)
+	if strings.Contains(name, "/") {
+		t.Fatalf("runtime name %q contains a slash (an OCI reference)", name)
 	}
-	f, err := Lookup(name)
+	f, err := LookupRuntime(name)
 	if err != nil || f.Install == nil || f.Install.Package != "@anthropic-ai/claude-code" {
-		t.Fatalf("Lookup(%q) = %+v, %v", name, f.Install, err)
+		t.Fatalf("LookupRuntime(%q) = %+v, %v", name, f.Install, err)
 	}
-	for _, bad := range []string{agentNpmRuntimePrefix, agentNpmRuntimePrefix + "%zz", agentNpmRuntimePrefix + "a%2fb"} {
-		if _, err := Lookup(bad); err == nil || IsBuiltin(bad) {
+	if _, err := Lookup(name); err == nil || IsBuiltin(name) {
+		t.Fatalf("public lookup accepted the internal marker %q", name)
+	}
+	if _, err := GenerateDockerfile("base", []string{"codex", AgentNpmRuntime("@openai/codex")}); err == nil {
+		t.Fatal("a standalone image build accepted the internal marker")
+	}
+	out, err := GenerateDockerfile("base", []string{"codex"})
+	if err != nil || !strings.Contains(out, homeCodexInstall) || strings.Contains(out, "/opt/yoloctl") {
+		t.Fatalf("standalone Codex build left the user's prefix (%v):\n%s", err, out)
+	}
+	for _, bad := range []string{
+		agentNpmRuntimePrefix, agentNpmRuntimePrefix + "%zz", agentNpmRuntimePrefix + "a%2fb",
+		AgentNpmRuntime("pkg; rm -rf /"), AgentNpmRuntime("Upper"), AgentNpmRuntime("@scope/x y"),
+	} {
+		if _, err := LookupRuntime(bad); err == nil {
 			t.Fatalf("invalid runtime name %q accepted", bad)
 		}
 	}

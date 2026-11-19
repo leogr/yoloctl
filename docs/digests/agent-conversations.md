@@ -72,7 +72,7 @@ fixtures; no real Claude, VM, crash or reboot is exercised.
 
 ## Sources
 
-1. <a id="source-1"></a> [profile.go](../../internal/agentprofile/profile.go#L150) — `Profile.Session`, `SessionSpec`, `ObserveSpec`; `validateSession`.
+1. <a id="source-1"></a> [profile.go](../../internal/agentprofile/profile.go#L151) — `Profile.Session`, `SessionSpec`, `ObserveSpec`; `validateSession`.
 2. <a id="source-2"></a> [claude.yaml](../../internal/agentprofile/builtin/claude.yaml#L56) — the Claude block.
 3. <a id="source-3"></a> [policy.go](../../internal/agentsession/policy.go#L12) — `EffectivePolicy`, `ReservedArg`, `Argv`.
 4. <a id="source-4"></a> [agentbox.go](../../internal/agentbox/agentbox.go#L99-L178) — `AgentSession`, `ResumePolicy`; validation at L524-L533; cmd checks in `requireResolvableManifest`.

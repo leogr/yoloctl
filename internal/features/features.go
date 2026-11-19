@@ -257,11 +257,7 @@ RUN install -d -o sandbox -g sandbox /home/sandbox/.agents /home/sandbox/.agents
 // shadow one (same-name overrides of built-ins are not allowed).
 func IsBuiltin(name string) bool {
 	_, ok := registry[name]
-	if ok || name == PrivilegedRuntime {
-		return true
-	}
-	_, agent, err := agentNpmRuntimeFeature(name)
-	return agent && err == nil
+	return ok || name == PrivilegedRuntime
 }
 
 // BuiltinNames returns the sorted names of the embedded built-in features only
@@ -289,9 +285,6 @@ func Lookup(name string) (Feature, error) {
 	}
 	if name == PrivilegedRuntime {
 		return privilegedRuntime, nil
-	}
-	if f, ok, err := agentNpmRuntimeFeature(name); ok {
-		return f, err
 	}
 	userFeatures, err := LoadUserFeatures()
 	if err != nil {
@@ -380,13 +373,16 @@ func GenerateDockerfile(base string, featureNames []string, plans ...ocifeature.
 // renderDockerfile renders resolved features in order, then the OCI plans,
 // and returns the names of the features that rendered an install step. The
 // agent's npm package, named by the agent runtime feature, is installed at the
-// first feature that installs it, or where that runtime feature stands; its
-// folder is then put first on PATH once more after everything else.
+// first feature that installs it, and its folder is then put first on PATH
+// once more after everything else. When no feature installs it, the agent
+// install comes after the OCI plans, which may supply Node.js and npm.
 func renderDockerfile(base string, resolved []Feature, plans []ocifeature.Plan) (string, []string, error) {
 	npm := &npmInstaller{}
-	for _, f := range resolved {
+	var agentRuntime *Feature
+	for i, f := range resolved {
 		if f.Install != nil && f.Install.Kind == installAgentNpm {
 			npm.agent = f.Install.Package
+			agentRuntime = &resolved[i]
 		}
 	}
 	var b strings.Builder
@@ -419,8 +415,15 @@ func renderDockerfile(base string, resolved []Feature, plans []ocifeature.Plan) 
 		}
 		b.WriteString(fragment)
 	}
-	if npm.installed {
+	switch {
+	case npm.installed:
 		b.WriteString(agentNpmFinalPath())
+	case agentRuntime != nil:
+		// The install ends with the agent folder first on PATH.
+		installing = append(installing, agentRuntime.Name)
+		fmt.Fprintf(&b, "\n# Feature: %s — %s\n", agentRuntime.Name, agentRuntime.Description)
+		b.WriteString(npm.install(npm.agent, "latest"))
+		b.WriteString("\n")
 	}
 	return b.String(), installing, nil
 }
@@ -441,7 +444,7 @@ func InstallPlan(base string, featureNames []string, plans ...ocifeature.Plan) (
 	}
 	resolved := make([]Feature, 0, len(featureNames))
 	for _, n := range featureNames {
-		f, err := Lookup(n)
+		f, err := LookupRuntime(n)
 		if err != nil {
 			return "", nil, false, err
 		}
@@ -492,7 +495,9 @@ func renderInstall(f Feature, npm *npmInstaller) (string, error) {
 		}
 		return npm.install(f.Install.Package, version), nil
 	case installAgentNpm:
-		return npm.install(f.Install.Package, "latest"), nil
+		// Rendered by renderDockerfile after the OCI plans, only when no
+		// feature installs the agent's package.
+		return "", nil
 	default:
 		return "", fmt.Errorf("feature %q has unknown install kind %q", f.Name, f.Install.Kind)
 	}

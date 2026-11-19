@@ -18,8 +18,19 @@ const agentNpmRuntimePrefix = "yoloctl:agent-npm:"
 const installAgentNpm = "agent-npm"
 
 // AgentNpmRuntime returns the runtime feature name for the agent's npm package.
+// Only the composer's runtime feature list carries it (agentbox.RuntimeFeatures,
+// from the box's agent profile); public feature lookups do not know it.
 func AgentNpmRuntime(pkg string) string {
 	return agentNpmRuntimePrefix + url.PathEscape(pkg)
+}
+
+// LookupRuntime resolves a name of the composer's runtime feature list: the
+// agent's managed npm installer, or any name Lookup knows.
+func LookupRuntime(name string) (Feature, error) {
+	if f, ok, err := agentNpmRuntimeFeature(name); ok {
+		return f, err
+	}
+	return Lookup(name)
 }
 
 func agentNpmRuntimeFeature(name string) (Feature, bool, error) {
@@ -28,7 +39,10 @@ func agentNpmRuntimeFeature(name string) (Feature, bool, error) {
 		return Feature{}, false, nil
 	}
 	pkg, err := url.PathUnescape(escaped)
-	if err != nil || pkg == "" || AgentNpmRuntime(pkg) != name {
+	if err == nil {
+		err = agentnpm.ValidatePackage(pkg)
+	}
+	if err != nil || AgentNpmRuntime(pkg) != name {
 		return Feature{}, true, fmt.Errorf("invalid agent npm runtime feature %q", name)
 	}
 	return Feature{

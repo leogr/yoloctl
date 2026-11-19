@@ -72,7 +72,7 @@ AWS credential and custom-egress setup remain explicit. [22](#source-22)
 3. <a id="source-3"></a> [assets/entrypoint_test.go](../../assets/entrypoint_test.go#L11) — prepared-identity no-op, group collisions and rejection before mutation.
 4. <a id="source-4"></a> [Image identity regressions](../../internal/agentboximage/composed_test.go#L48) — identity cache separation and native worker build/plan agreement.
 5. <a id="source-5"></a> [BuildKit v0.31.2 bridge](https://github.com/moby/buildkit/blob/v0.31.2/solver/llbsolver/bridge.go#L137-L150) — cache mount reset before an uncached solve.
-6. <a id="source-6"></a> [npm installation](../../internal/features/features.go#L501-L516) — shared `npmPackageInstallDockerfile`.
+6. <a id="source-6"></a> [npm installation](../../internal/features/features.go#L506-L522) — shared `npmPackageInstallDockerfile`.
 7. <a id="source-7"></a> [Dockerfile reference](https://docs.docker.com/reference/dockerfile/#arg) — cache mounts/GC, inherited ARGs and cache invalidation.
 8. <a id="source-8"></a> [Base Dockerfile](../../assets/containers/agentbox/Dockerfile#L28) — apt cache, retries and strict index refresh.
 9. <a id="source-9"></a> [Base recipe regression](../../assets/base_image_test.go#L11) — repository/index/install failure propagation.

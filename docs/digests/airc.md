@@ -89,7 +89,7 @@ controller. Test existence proves no live pass; bridge plaintext proves no remot
 ## Sources
 
 1. <a id="source-1"></a> [internal/features/airc.go](../../internal/features/airc.go#L36) — `aircInstallDockerfile` and source download.
-2. <a id="source-2"></a> [internal/features/features.go](../../internal/features/features.go#L88) — feature registry; `Lookup` and `removedFeatures` at L283–L314.
+2. <a id="source-2"></a> [internal/features/features.go](../../internal/features/features.go#L88) — feature registry; `Lookup` and `removedFeatures` at L279–L307.
 3. <a id="source-3"></a> [Source pin](../../internal/features/airc-source/manifest.json#L1) — public repository, release tag, source commit and per-architecture archive URL/SHA-256.
 4. <a id="source-4"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L45) — recipe identity.
 5. <a id="source-5"></a> [internal/agentbox/agentbox.go](../../internal/agentbox/agentbox.go#L105) — `SessionCommand`; `Config.Validate` at L504.

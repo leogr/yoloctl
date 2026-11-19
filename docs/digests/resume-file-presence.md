@@ -69,7 +69,7 @@ conversation resumes or validate login/provider behavior.
 1. <a id="source-1"></a> [Claude session documentation](https://code.claude.com/docs/en/sessions#where-transcripts-are-stored) — local layout, ID lookup and retention/persistence limits.
 2. <a id="source-2"></a> [Claude directory documentation](https://code.claude.com/docs/en/claude-directory) — `CLAUDE_CONFIG_DIR` relocation.
 3. <a id="source-3"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L56) — session pattern and argv.
-4. <a id="source-4"></a> [Profile validation](../../internal/agentprofile/profile.go#L155) — `SessionSpec`, `validateSession`.
+4. <a id="source-4"></a> [Profile validation](../../internal/agentprofile/profile.go#L156) — `SessionSpec`, `validateSession`.
 5. <a id="source-5"></a> [Restricted pattern](../../internal/agentprofile/resume_file.go#L11) — `validateResumeFile`.
 6. <a id="source-6"></a> [Tracked launch](../../cmd/yoloctl/session_identity.go#L283) — `launch`, owner/preflight ordering and ordinary allocation/settlement.
 7. <a id="source-7"></a> [Presence request](../../cmd/yoloctl/session_resume_file.go#L15) — `resumeFilePresent`.

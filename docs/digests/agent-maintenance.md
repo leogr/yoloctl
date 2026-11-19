@@ -8,14 +8,19 @@ the system user `yoloctl-maint`, whose private home `/var/lib/yoloctl-maint`
 (mode 0700) holds the runtime update's start folder, temporary files and cache.
 Every other npm install — npm features, the `npm` development feature, an agent
 feature on a box whose agent is something else, manual installs — keeps
-`/home/sandbox/.npm-global`. [1](#source-1) [2](#source-2) [3](#source-3)
+`/home/sandbox/.npm-global`. Profile validation accepts only a lowercase
+registry name (optionally scoped), so the package stays one data word in the
+recipe and the update argv. [1](#source-1) [2](#source-2) [3](#source-3)
+[19](#source-19)
 
 [FACT] `RuntimeFeatures` appends the internal `yoloctl:agent-npm:<escaped
 package>` installer for that package, so build and drift share one recipe and
-the same features with and without that agent yield different images. The
-renderer installs the package once, at the first feature that installs it or
-where that installer stands when none does, and later copies of it render
-nothing. That step creates or verifies the user (free system numbers, exact
+the same features with and without that agent yield different images. Only
+the composer resolves that name (`LookupRuntime`); public lookups and a
+standalone `image build` reject it. The renderer installs the package once, at
+the first feature that installs it, or after every feature and OCI plan when
+none does (an OCI Feature may supply Node.js and npm); later copies of it
+render nothing. That step creates or verifies the user (free system numbers, exact
 home/shell/group shape, never root or sandbox), creates the folders, runs
 `npm install -g PKG@latest` as `yoloctl-maint` with the shared per-UID build
 cache, and puts `/opt/yoloctl/npm/bin` on PATH for later build steps; PATH puts
@@ -41,8 +46,10 @@ errors propagate with
 reached through features; `box inspect` prints that origin. `network.anthropic`,
 `network.openai` and `network.opencode` name their programs under both prefixes.
 For such a box, the native container plan refuses mount targets equal to,
-inside or above the managed prefix or the maintenance home. [13](#source-13)
-[14](#source-14) [15](#source-15) [16](#source-16)
+inside or above the managed prefix or the maintenance home. The OCI Feature
+alias check leaves the managed paths to the existing `/opt/yoloctl` protection,
+so boxes without an npm agent keep their image names. [13](#source-13)
+[14](#source-14) [15](#source-15) [16](#source-16) [20](#source-20)
 
 [FACT] The image smoke checks the managed owner, no group/other write,
 `command -v` for the agent and a feature tool, a refused write from the box,
@@ -51,13 +58,13 @@ the forced update and the maintenance cache owner. [17](#source-17)
 
 ## Sources
 
-1. <a id="source-1"></a> [internal/agentnpm/agentnpm.go](../../internal/agentnpm/agentnpm.go#L1-L31) — `Prefix`, `User`, `Home`, `Cache`, `PackageJSON`.
+1. <a id="source-1"></a> [internal/agentnpm/agentnpm.go](../../internal/agentnpm/agentnpm.go#L1-L36) — `Prefix`, `User`, `Home`, `Cache`, `PackageJSON`.
 2. <a id="source-2"></a> [internal/features/features.go](../../internal/features/features.go#L73-L77) — `NPMGlobalPrefix`, the box user's prefix.
 3. <a id="source-3"></a> [internal/agentbox/compose.go](../../internal/agentbox/compose.go#L110-L125) — `AgentNpmPackage`.
 4. <a id="source-4"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L30-L52) — `RuntimeFeatures`.
-5. <a id="source-5"></a> [internal/features/agentnpm.go](../../internal/features/agentnpm.go#L1-L114) — runtime feature name, `npmInstaller`, `recipe`, `agentNpmInstallDockerfile`, `agentNpmFinalPath`.
-6. <a id="source-6"></a> [internal/features/features.go](../../internal/features/features.go#L380-L426) — `renderDockerfile`.
-7. <a id="source-7"></a> [Rendering regressions](../../internal/features/agentnpm_test.go#L1-L119) — tool vs agent, first supplier, appended/pinned/duplicate, OpenCode check, names.
+5. <a id="source-5"></a> [internal/features/agentnpm.go](../../internal/features/agentnpm.go#L1-L128) — runtime feature name, `LookupRuntime`, `npmInstaller`, `recipe`, `agentNpmInstallDockerfile`, `agentNpmFinalPath`.
+6. <a id="source-6"></a> [internal/features/features.go](../../internal/features/features.go#L373-L429) — `renderDockerfile`.
+7. <a id="source-7"></a> [Rendering regressions](../../internal/features/agentnpm_test.go#L1-L137) — tool vs agent, first supplier, appended/pinned/duplicate, OpenCode check, names.
 8. <a id="source-8"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L98-L160) — `agentMaintenanceExecArgs`, `npmInstallGlobalAtLatestArgs`, `fetchInstalledNpmVersion`.
 9. <a id="source-9"></a> [Native install argv](../../cmd/yoloctl/agent_distribution.go#L102-L118) — `nativeInstallArgs` uses the shared exec builder.
 10. <a id="source-10"></a> [Maintenance argv regression](../../cmd/yoloctl/autoupdate_test.go#L11-L52) — `TestNpmAgentMaintenanceUsesExplicitConfigPaths`.
@@ -66,6 +73,8 @@ the forced update and the maintenance cache owner. [17](#source-17)
 13. <a id="source-13"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L97-L101) — `AgentNpmReadCapability`; `OriginAgent` in the `Origin` constants.
 14. <a id="source-14"></a> [Origin regression](../../internal/agentbox/compose_capabilities_test.go#L200-L227) — `TestEffectiveCapabilitiesAgentNpmRead`.
 15. <a id="source-15"></a> [Mount guard](../../internal/agentbox/openshell_container_plan_linux.go#L103-L131) — `agentNpmProtected`, `mountOverlaps`; regression `TestNativeContainerPlanProtectsTheAgentNpmFolders`.
-16. <a id="source-16"></a> [Image regression](../../internal/agentbox/resolved_image_test.go#L109-L155) — `TestResolvedImage_AgentNpmPackageSelectsTheManagedPrefix`.
+16. <a id="source-16"></a> [Image regression](../../internal/agentbox/resolved_image_test.go#L112-L197) — `TestResolvedImage_AgentNpmPackageSelectsTheManagedPrefix`, `TestResolvedImage_UnsuppliedAgentNpmInstallFollowsOCIFeatures`.
 17. <a id="source-17"></a> [scripts/smoke/image-ensure.sh](../../scripts/smoke/image-ensure.sh#L23-L27) — managed and user package paths, write refusal and forced update.
 18. <a id="source-18"></a> [scripts/smoke/common.sh](../../scripts/smoke/common.sh#L46-L68) — `smoke_check_image_identity` managed-prefix owner and mode.
+19. <a id="source-19"></a> [Package names](../../internal/agentnpm/agentnpm.go#L38-L49) — `ValidatePackage`; used by `Profile.Validate` and the runtime-name parser; regressions in agentnpm_test.go and profile_test.go `TestValidate`.
+20. <a id="source-20"></a> [OCI alias check](../../internal/ocifeature/runtime_env.go#L316-L337) — `networkToolPrefixes`; regression `TestAliasGuardLeavesTheManagedNpmPrefixToLinkGuard`.

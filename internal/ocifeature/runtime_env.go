@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/leogr/yoloctl/internal/agentnpm"
 	"github.com/leogr/yoloctl/internal/capabilities"
 )
 
@@ -319,6 +320,13 @@ func aliasGuard(writable []string) string {
 func networkToolPrefixes() []string {
 	var out []string
 	for _, b := range capabilities.BuiltinNetworkBinaries() {
+		// The agent's managed npm prefix lies under /opt/yoloctl, which
+		// linkGuard already refuses and only the maintenance user writes.
+		// Leaving it out keeps the image identity of every box with a
+		// writable Feature folder unchanged.
+		if under(b, agentnpm.Prefix) {
+			continue
+		}
 		if i := strings.IndexAny(b, "*?["); i >= 0 {
 			b = path.Dir(b[:i] + "x")
 		}

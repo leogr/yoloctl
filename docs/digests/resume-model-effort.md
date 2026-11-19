@@ -26,7 +26,7 @@ Explicit Codex model, provider or effort configuration can override saved settin
 
 ## Sources
 
-1. <a id="source-1"></a> [profile.go](../../internal/agentprofile/profile.go#L148-L200) — `SessionSpec`, `ResumeCarry`; `validateSession`.
+1. <a id="source-1"></a> [profile.go](../../internal/agentprofile/profile.go#L149-L201) — `SessionSpec`, `ResumeCarry`; `validateSession`.
 2. <a id="source-2"></a> [Resume carry](../../internal/agentsession/policy.go#L196) — `Carried`, `CarryArgs`, `plainModelID`, `modelLabel`; `ObservedValue.Session` set in apply.go `applyLine`; `trackedLaunch.launch` in cmd/yoloctl/session_identity.go; tests carry_test.go, statusline_identity_test.go and `TestResumeCarriesTheConversationsLastEffortAndModel`.
 3. <a id="source-3"></a> [policy.go](../../internal/agentsession/policy.go#L112-L181) — `Argv`, `withoutValueArgs`.
 4. <a id="source-4"></a> [codex.yaml](../../internal/agentprofile/builtin/codex.yaml#L83-L97) — the Codex block, `resume_omit_value_args`.

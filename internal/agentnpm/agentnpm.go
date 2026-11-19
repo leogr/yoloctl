@@ -8,6 +8,11 @@
 // installs) keeps the box user's own prefix.
 package agentnpm
 
+import (
+	"fmt"
+	"regexp"
+)
+
 const (
 	// Prefix is the npm global prefix of the agent's program.
 	Prefix = "/opt/yoloctl/npm"
@@ -28,4 +33,17 @@ const (
 // installed version is read from.
 func PackageJSON(pkg string) string {
 	return Prefix + "/lib/node_modules/" + pkg + "/package.json"
+}
+
+// packageName is an npm registry package name: lowercase, optionally scoped,
+// without characters a shell or Dockerfile could interpret.
+var packageName = regexp.MustCompile(`^(@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$`)
+
+// ValidatePackage rejects a string that is not an npm registry package name,
+// so it stays one data word wherever a recipe or argv carries it.
+func ValidatePackage(pkg string) error {
+	if len(pkg) > 214 || !packageName.MatchString(pkg) {
+		return fmt.Errorf("invalid npm package name %q: use a lowercase registry name such as my-cli or @scope/my-cli", pkg)
+	}
+	return nil
 }
