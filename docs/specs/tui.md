@@ -27,6 +27,13 @@ Explicit command targets still win, and a busy palette command must finish
 or be interrupted before switching. [44](#source-44)
 [1](#source-1)
 
+[FACT] The host TUI's idle no-tabs screen shows the first confirmed setup
+step for its selected space or one random tip when setup is complete. It
+keeps its generic hint during an outstanding or inconclusive read. Checks run
+at startup and on returning to the screen without polling or starting VMs.
+Right on an empty palette input fills a tip's command for editing.
+[56](#source-56)
+
 [FACT] A tab can be split into panes, each hosting one palette subprocess
 as a tab does, with a 20×5 minimum and no fixed count. The focused pane of the
 current tab is the single source of keys, title, cursor and focus reports;
@@ -483,3 +490,5 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 54. <a id="source-54"></a> [Expanding a running step](../digests/step-expand.md).
 
 55. <a id="source-55"></a> [Persistent TUI notices](../digests/tui-notice-toasts.md) — queue, tab ownership, input precedence and standalone behavior.
+
+56. <a id="source-56"></a> [Welcome tips](../digests/tui-welcome.md).

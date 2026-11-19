@@ -192,7 +192,7 @@ path. An ephemeral workdir uses /workdir directly.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if os.Getenv("YOLOCTL_TUI") != "1" &&
 				term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
-				return tui.Run(cmd.Context())
+				return tui.Run(cmd.Context(), readWelcomeStatus)
 			}
 			return cmd.Help()
 		},

@@ -172,6 +172,7 @@ type model struct {
 	spaceListRequest uint64
 	spaceGeneration  uint64
 	spacePicker      *spacePicker
+	welcome          welcomeView
 
 	sugg        []yoloctlcli.Candidate // last suggestion list (overlay, while typing)
 	suggSel     int                    // selected index into sugg: the ghost / TAB target
@@ -202,7 +203,7 @@ type model struct {
 // Run starts the TUI and blocks until the user quits. ctx cancellation
 // (SIGINT/SIGTERM) also stops it; tab subprocesses are killed on the
 // way out — agents themselves keep running because clients detach.
-func Run(ctx context.Context) error {
+func Run(ctx context.Context, readWelcome func(context.Context, string) WelcomeStatus) error {
 	cfg, err := config.LoadTUI()
 	if err != nil {
 		return err
@@ -225,6 +226,11 @@ func Run(ctx context.Context) error {
 		return err
 	}
 
+	if !m.spaceBound && readWelcome != nil {
+		welcomeCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		m.welcome = welcomeView{ctx: welcomeCtx, read: readWelcome}
+	}
 	err = runProgram(ctx, p)
 	m.deleteOwnedImages(os.Stdout) // free this TUI's images on the host terminal
 	m.eachSession(func(p *panes.Pane) { p.Session.Close() })
@@ -307,7 +313,7 @@ func (m *model) startSpinner() tea.Cmd {
 // Init measures host color defaults and enables mouse reporting. Color
 // requests are read-only; child palette changes never reach the host terminal.
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(tea.RequestForegroundColor, tea.RequestBackgroundColor, requestHostPalette, m.initHostMouse(), m.noticeExpiryCmd())
+	return tea.Batch(tea.RequestForegroundColor, tea.RequestBackgroundColor, requestHostPalette, m.initHostMouse(), m.noticeExpiryCmd(), m.syncWelcome())
 }
 
 func (m *model) updateTerminalColors() {
@@ -906,7 +912,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		m.checkConfirm()
 		m.syncPlaceholder()
 		m.syncFocus()
-		cmd = tea.Batch(cmd, m.syncMouseShift(), m.syncHostGeometry(), m.syncHostMouseEncoding(), m.syncImages())
+		cmd = tea.Batch(cmd, m.syncMouseShift(), m.syncHostGeometry(), m.syncHostMouseEncoding(), m.syncImages(), m.syncWelcome())
 	}()
 	if m.imageProbeMsg(msg) {
 		return m, nil
@@ -964,6 +970,11 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		m.hostBlurred = true
 		m.cancelChrome() // host focus loss cancels a chrome drag
 		m.disarmPrefix() // and disarms the prefix; an open picker stays
+		return m, nil
+	case welcomeMsg:
+		if m.welcome.visiting && msg.visit == m.welcome.visit {
+			m.welcome.tip = msg.tip
+		}
 		return m, nil
 	case wakeMsg:
 		m.pending.Store(false)
@@ -1598,7 +1609,13 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case k.Code == tea.KeyLeft:
 		m.pal.Left()
 	case k.Code == tea.KeyRight:
-		m.pal.Right()
+		line, _ := m.pal.Line()
+		if cur == nil && line == "" && m.welcome.tip.command != "" && k.Mod & ^(tea.ModCapsLock|tea.ModNumLock) == 0 {
+			m.pal.Insert(m.welcome.tip.command)
+			m.clearSuggestions()
+		} else {
+			m.pal.Right()
+		}
 	case k.Code == tea.KeyHome:
 		m.pal.Home()
 	case k.Code == tea.KeyEnd:
@@ -1907,10 +1924,7 @@ func (m *model) View() tea.View {
 		// An undivided tab keeps the single-frame path unchanged.
 		base = selectionLines(frames.tab)
 	} else {
-		base = []string{"",
-			cDim + "  type a yoloctl command and press Enter" + cReset,
-			cDim + "  e.g.: box create coder --agent claude · box attach coder · space ls" + cReset,
-		}
+		base = m.welcomeRows()
 	}
 	for len(base) < rows {
 		base = append(base, "")

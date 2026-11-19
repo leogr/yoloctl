@@ -30,7 +30,7 @@ func TestTUISignalShutdown(t *testing.T) {
 			}
 			fmt.Println("DETACHED_CLEANLY")
 		} else {
-			if err := tui.Run(ctx); err != nil {
+			if err := tui.Run(ctx, nil); err != nil {
 				t.Fatal(err)
 			}
 			fmt.Println("TUI_CLOSED_CLEANLY")
