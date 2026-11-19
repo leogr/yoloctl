@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/leogr/yoloctl/internal/filelink"
@@ -159,8 +158,7 @@ func TestFollowAdmissionContinuesBeyondRefusedFirstBatch(t *testing.T) {
 
 func TestLocalAdmissionRelayoutReusesMermaidBudget(t *testing.T) {
 	m, _ := fileModel(t, "[file](a.md)\n```mermaid\nflowchart TD\n A-->B\n```", Markdown)
-	clock := time.Now()
-	renderer := &fakeRenderer{clock: &clock}
+	renderer := &fakeRenderer{}
 	m.opts.Mermaid = renderer
 	m.gen++ // changed render inputs after fileModel's initial plain-fence view
 	m.opts.Navigation = &filelink.Navigator{Context: filelink.Context{Mode: "host", Base: "/p", Root: "/p"}, Probe: func(_ context.Context, targets []filelink.Target) map[filelink.Target]error {
