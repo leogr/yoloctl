@@ -86,4 +86,14 @@ func TestWelcomeMissingSelectedSpace(t *testing.T) {
 			t.Errorf("uncertain selection %q = %+v", name, got)
 		}
 	}
+	// A loop makes Stat fail with a non-absence error even when tests run as root.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Base(path), path); err != nil {
+		t.Fatal(err)
+	}
+	if got := readWelcomeStatus(t.Context(), "work"); got.Step != tui.WelcomeUnknown {
+		t.Errorf("unreadable inventory = %+v, want generic hint", got)
+	}
 }

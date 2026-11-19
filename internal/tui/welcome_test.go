@@ -20,7 +20,7 @@ func TestWelcomeTipCommands(t *testing.T) {
 		{WelcomeNoSpace, "space create work --workdir /project --account my.user", "No space yet. A space is the VM your boxes run in."},
 		{WelcomeStopped, "space start work", "Space work is stopped."},
 		{WelcomeUpgrade, "space upgrade work", "It restarts sessions and asks before recreating any box."},
-		{WelcomeNoOperator, "box create operator --agent claude --operator --agent-extra-args --model,claude-opus-5-5,--effort,medium", "boxes for you; it gets full authority over this space."},
+		{WelcomeNoOperator, "box create space-commander --agent claude --operator --agent-extra-args --model,claude-opus-5-5,--effort,medium", "boxes for you; it gets full authority over this space."},
 		{WelcomeNoChat, "chat ensure", "No chat yet. Create the space's chat room:"},
 		{WelcomeEnroll, "chat enroll lead --connect --recreate", "\"Join the space chat and keep listening for messages\""},
 		{WelcomeOnlyOperator, "chat", "\"@lead create a box for /project with Claude and the go feature\""},

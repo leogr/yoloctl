@@ -133,7 +133,7 @@ func makeWelcomeTip(status WelcomeStatus, space, cwd, login string) welcomeTip {
 			"space upgrade "+space, "\nIt restarts sessions and asks before recreating any box.")
 	case WelcomeNoOperator:
 		return commandTip("No operator box yet. An operator is an agent that manages\nboxes for you; it gets full authority over this space.",
-			"box create operator --agent claude --operator --agent-extra-args --model,claude-opus-5-5,--effort,medium", "")
+			"box create space-commander --agent claude --operator --agent-extra-args --model,claude-opus-5-5,--effort,medium", "")
 	case WelcomeNoChat:
 		return commandTip("No chat yet. Create the space's chat room:", "chat ensure", "")
 	case WelcomeEnroll:

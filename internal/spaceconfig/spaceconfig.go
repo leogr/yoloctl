@@ -176,6 +176,16 @@ func Exists(name string) (bool, error) {
 // incomplete or externally modified bundle with only a boxes/ subtree —
 // is skipped). Empty slice (no error) if the spaces dir doesn't exist yet.
 func List() ([]string, error) {
+	return list(false)
+}
+
+// ListStrict returns lookup errors for candidate bundles. It is used where an
+// empty list must establish that no saved configs exist.
+func ListStrict() ([]string, error) {
+	return list(true)
+}
+
+func list(strict bool) ([]string, error) {
 	if c := spaceenv.Current(); c != nil {
 		return []string{c.Space}, nil
 	}
@@ -199,14 +209,13 @@ func List() ([]string, error) {
 		if layout.ValidateExistingSpaceName(name) != nil {
 			continue
 		}
-		cfgPath, err := layout.SpaceConfigPath(name)
-		if err != nil {
-			continue
+		exists, err := Exists(name)
+		if strict && err != nil {
+			return nil, fmt.Errorf("check space %q: %w", name, err)
 		}
-		if _, err := os.Stat(cfgPath); err != nil {
-			continue
+		if exists {
+			names = append(names, name)
 		}
-		names = append(names, name)
 	}
 	sort.Strings(names)
 	return names, nil

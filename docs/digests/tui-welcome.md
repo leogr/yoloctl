@@ -15,6 +15,8 @@ the host inventory, selected space stopped, older running release, no
 operator declaration, managed chat setup required, operator unenrolled,
 operator the only box besides the chat server. A selected space missing from
 a nonempty inventory keeps the generic hint and the selection stays pinned.
+An error checking a candidate bundle leaves the inventory unknown and keeps
+the generic hint. [9](#source-9)
 The observer uses existing VM lookup, guest version, controller box inventory
 and chat status reads, without boot or controller installation. Bundle IDs do
 not express ordering. The upgrade tip requires validated release tags and a
@@ -46,3 +48,4 @@ token, the filled command uses `.` in the same directory. [7](#source-7)
 6. <a id="source-6"></a> [Box and chat observation](../../cmd/yoloctl/tui_welcome.go#L86) — `welcomeBoxStatus`.
 7. <a id="source-7"></a> [Palette Right](../../internal/tui/tui.go#L1611-L1620) — fill tip or move cursor.
 8. <a id="source-8"></a> [Palette editor](../../internal/tui/palette/palette.go#L114-L127) — `Submit` and whitespace tokenization.
+9. <a id="source-9"></a> [Complete space listing](../../internal/spaceconfig/spaceconfig.go#L182) — `ListStrict`.

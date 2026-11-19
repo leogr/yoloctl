@@ -25,7 +25,7 @@ func readWelcomeStatus(ctx context.Context, space string) tui.WelcomeStatus {
 	defer cancel()
 	boot, err := spaceconfig.LoadBootstrap(space)
 	if errors.Is(err, os.ErrNotExist) {
-		if names, err := spaceconfig.List(); err == nil && len(names) == 0 {
+		if names, err := spaceconfig.ListStrict(); err == nil && len(names) == 0 {
 			return tui.WelcomeStatus{Step: tui.WelcomeNoSpace}
 		}
 	}
