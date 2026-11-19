@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -30,7 +32,7 @@ if args[2]=='inspect':
  print((p/'inspect.json').read_text())
  sys.exit(int(os.environ.get('YOLOCTL_TEST_MAINTENANCE_INSPECT_EXIT','0')))
 if args[2]=='exec':
- if len(args)>6 and args[6]=='cat': print('{"version":"1.2.3"}')
+ if len(args)>8 and args[8]=='cat': print('{"version":"1.2.3"}')
  sys.exit(int(os.environ.get('YOLOCTL_TEST_MAINTENANCE_EXEC_EXIT','0')))
 sys.exit(97)
 `
@@ -56,7 +58,10 @@ sys.exit(97)
 	}
 }
 
-func TestMaintenanceExecsUseExactlySelectedContainer(t *testing.T) {
+// Spell out the system directories independently from the production argv.
+const wantAgentMaintenancePath = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+func TestMaintenanceExecsUseSystemPathAndExactlySelectedContainer(t *testing.T) {
 	id := strings.Repeat("f", 64)
 	valid := `[{"Id":"c1` + strings.Repeat("0", 62) + `","Name":"peer"},{"Id":"` + id + `","Name":"c1"}]`
 	operations := map[string]func(*container.Client, string) error{
@@ -115,9 +120,9 @@ func TestMaintenanceExecsUseExactlySelectedContainer(t *testing.T) {
 					}
 					got = got[1:]
 				}
-				prefix := []string{"sudo", "nerdctl", "exec", "--user", "sandbox", id}
+				prefix := []string{"sudo", "nerdctl", "exec", "--user", "sandbox", "--env", wantAgentMaintenancePath, id}
 				if len(got) != 1 || len(got[0]) <= len(prefix) || !slices.Equal(got[0][:len(prefix)], prefix) {
-					t.Fatal("maintenance exec used a name or changed user", got)
+					t.Fatal("maintenance exec changed its user, PATH or exact container ID", got)
 				}
 			})
 		}
@@ -142,7 +147,21 @@ func TestAgentMaintenanceRetainsOneTargetAcrossProbeAndInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := calls()
-	if len(got) != 3 || got[0][2] != "inspect" || got[1][5] != id || got[2][5] != id {
+	if len(got) != 3 || got[0][2] != "inspect" || got[1][7] != id || got[2][7] != id {
 		t.Fatal("probe/install reselected the name", got)
+	}
+}
+
+func TestNpmMaintenanceFailureExplainsSystemPathAndAutoupdateOptOut(t *testing.T) {
+	id := strings.Repeat("f", 64)
+	c, _ := maintenanceTargetFixture(t, "[]")
+	t.Setenv("YOLOCTL_TEST_MAINTENANCE_EXEC_EXIT", "1")
+	err := npmInstallGlobalAtLatest(t.Context(), c, id, "@vendor/agent")
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Fatalf("npm maintenance error = %v, want wrapped exit status 1", err)
+	}
+	if !strings.Contains(err.Error(), "npm is unavailable on that PATH") || !strings.Contains(err.Error(), "--no-autoupdate") {
+		t.Fatalf("npm maintenance error lacks PATH and autoupdate guidance: %v", err)
 	}
 }

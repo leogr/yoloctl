@@ -114,5 +114,5 @@ func installAgentLatest(ctx context.Context, c *container.Client, box string, p 
 }
 
 func nativeInstallArgs(containerID string, r nativerelease.Release) []string {
-	return append([]string{"sudo", "nerdctl", "exec", "--user", "sandbox", containerID}, r.InstallArgs()...)
+	return agentMaintenanceExecArgs(containerID, r.InstallArgs()...)
 }

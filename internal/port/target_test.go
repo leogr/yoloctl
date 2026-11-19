@@ -10,7 +10,9 @@ import (
 	"github.com/leogr/yoloctl/internal/container"
 )
 
-func TestLegacyDNATUsesExactSelectedIDAndNeverFallsBackToName(t *testing.T) {
+const wantDNATExecPath = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+func TestLegacyDNATUsesSystemPathAndExactSelectedID(t *testing.T) {
 	for _, remove := range []bool{false, true} {
 		for _, state := range []string{"valid", "absent", "short-id", "inspect-error", "exec-error"} {
 			t.Run(state+"/remove="+map[bool]string{true: "yes", false: "no"}[remove], func(t *testing.T) {
@@ -59,8 +61,8 @@ func TestLegacyDNATUsesExactSelectedIDAndNeverFallsBackToName(t *testing.T) {
 					if remove {
 						op = "-D"
 					}
-					if strings.Count(calls, "nerdctl exec "+d.ID+" iptables -t nat "+op+" ") != 1 || strings.Count(calls, "\n") != 2 {
-						t.Fatal("wrong target, repeated exec or wrong rule", calls)
+					if strings.Count(calls, "nerdctl exec --env "+wantDNATExecPath+" "+d.ID+" iptables -t nat "+op+" ") != 1 || strings.Count(calls, "\n") != 2 {
+						t.Fatal("wrong PATH, target, exec count or rule", calls)
 					}
 				} else if strings.Contains(calls, "nerdctl exec") {
 					t.Fatal("unresolved identity reached DNAT exec", calls)
@@ -88,7 +90,7 @@ func TestForwardKeepsBridgeAndExecOnTheSameInspectedContainer(t *testing.T) {
 			if strings.Count(calls, "nerdctl inspect c1\n") != 1 || !strings.Contains(calls, "TCP:10.4.0.7:80") || strings.Contains(calls, "10.4.0.99") {
 				t.Fatal("bridge target changed or was inspected twice", calls)
 			}
-			if strings.Contains(calls, "nerdctl exec "+d.ID+" iptables") == direct || strings.Contains(calls, "nerdctl exec c1 ") {
+			if strings.Contains(calls, "nerdctl exec ") == direct || (!direct && !strings.Contains(calls, "nerdctl exec --env "+wantDNATExecPath+" "+d.ID+" iptables ")) {
 				t.Fatal("DNAT target/mode changed", calls)
 			}
 		})

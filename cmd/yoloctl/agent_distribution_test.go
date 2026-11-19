@@ -48,7 +48,7 @@ func TestNativeMaintenanceUsesSandboxAndNeverRunsAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := nativeInstallArgs("native-box", r)
-	want := []string{"sudo", "nerdctl", "exec", "--user", "sandbox", "native-box", "/usr/bin/python3", "-I", "-c"}
+	want := []string{"sudo", "nerdctl", "exec", "--user", "sandbox", "--env", wantAgentMaintenancePath, "native-box", "/usr/bin/python3", "-I", "-c"}
 	if !slices.Equal(args[:len(want)], want) {
 		t.Fatalf("unsafe native maintenance argv prefix: %v", args[:len(want)])
 	}

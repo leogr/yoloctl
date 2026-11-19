@@ -105,7 +105,7 @@ func TestPortServiceRemovalUsesRetainedTransportAndCurrentLegacyEvidence(t *test
 			if strings.Contains(commands, "nerdctl exec") != (mode == "legacy") || strings.Contains(commands, "is-active") {
 				t.Fatal("cleanup entered a different runtime or substituted stop state", commands)
 			}
-			if mode == "legacy" && (strings.Count(commands, "nerdctl inspect web\n") != 1 || !strings.Contains(commands, "nerdctl exec "+d.ID+" iptables -t nat -D ")) {
+			if mode == "legacy" && (strings.Count(commands, "nerdctl inspect web\n") != 1 || !strings.Contains(commands, "nerdctl exec --env "+wantDNATExecPath+" "+d.ID+" iptables -t nat -D ")) {
 				t.Fatal("legacy cleanup repeated lookup or lost its inspected target", commands)
 			}
 		})

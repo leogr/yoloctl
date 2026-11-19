@@ -93,6 +93,17 @@ func updateAgentInRun(ctx context.Context, c *container.Client, agentboxName str
 	return nil
 }
 
+// Agent maintenance runs outside the inner sandbox, with tools resolved
+// through the fixed system search path.
+func agentMaintenanceExecArgs(containerID string, args ...string) []string {
+	return append([]string{
+		"sudo", "nerdctl", "exec",
+		"--user", "sandbox",
+		"--env", "PATH=" + container.SystemExecPath,
+		containerID,
+	}, args...)
+}
+
 // sandboxNpmMaintenanceCache is the private cache used by yoloctl's runtime
 // npm maintenance. Keep it below NPMGlobalPrefix: the base image creates that
 // tree for sandbox, and npm feature installs preserve that ownership in their
@@ -114,22 +125,22 @@ func npmInstallGlobalAtLatest(ctx context.Context, c *container.Client, agentbox
 	if err != nil {
 		return err
 	}
-	return c.Shell(ctx, npmInstallGlobalAtLatestArgs(id, pkg)...)
+	if err := c.Shell(ctx, npmInstallGlobalAtLatestArgs(id, pkg)...); err != nil {
+		return fmt.Errorf("npm install using the system PATH (%s): %w. If npm is unavailable on that PATH, install npm and Node.js in a system directory or pass --no-autoupdate to skip automatic updates", container.SystemExecPath, err)
+	}
+	return nil
 }
 
 // npmInstallGlobalAtLatestArgs is kept pure so the ownership-sensitive npm
 // invocation has a focused contract test without requiring a live Lima VM.
 func npmInstallGlobalAtLatestArgs(containerID, pkg string) []string {
-	return []string{
-		"sudo", "nerdctl", "exec",
-		"--user", "sandbox",
-		containerID,
+	return agentMaintenanceExecArgs(containerID,
 		"npm", "install", "-g",
-		"--prefix=" + features.NPMGlobalPrefix,
-		"--cache=" + sandboxNpmMaintenanceCache,
+		"--prefix="+features.NPMGlobalPrefix,
+		"--cache="+sandboxNpmMaintenanceCache,
 		"--prefer-online",
-		pkg + "@latest",
-	}
+		pkg+"@latest",
+	)
 }
 
 // fetchInstalledNpmVersion returns the version of pkg installed
@@ -153,11 +164,7 @@ func fetchInstalledVersionFile(ctx context.Context, c *container.Client, agentbo
 	if err != nil {
 		return "", err
 	}
-	cmd := vmhost.ShellCommand(ctx, c.Env(),
-		"sudo", "nerdctl", "exec",
-		"--user", "sandbox", id,
-		"cat", pkgJSONPath,
-	)
+	cmd := vmhost.ShellCommand(ctx, c.Env(), agentMaintenanceExecArgs(id, "cat", pkgJSONPath)...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

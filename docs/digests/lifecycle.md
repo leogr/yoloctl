@@ -1,6 +1,6 @@
 # Reconcile, native locks and space lifecycle
 
-Verification: `0bfec5a3ac693f226a04d280634025bf35d66e1a` and accompanying changes (saved-declaration errors); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; runtime target selection at `9169119ca6b27e530064dc49b8b7a1d06c17397b` and accompanying changes; box start/stop results at `19fe5134273d38642397a288132586b4e94dcd10` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior; holding and source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`.
+Verification: `0bfec5a3ac693f226a04d280634025bf35d66e1a` and accompanying changes (saved-declaration errors); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; runtime target selection at `9169119ca6b27e530064dc49b8b7a1d06c17397b` and accompanying changes; box start/stop results at `19fe5134273d38642397a288132586b4e94dcd10` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior; holding and source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; legacy DNAT PATH at `f3a4aa1` and accompanying changes.
 
 [FACT] Explicit reconcile selects create, recreate, restart, then live port changes. Account,
 agent, mounts/workdir access, image, literal env and network mode can require
@@ -32,6 +32,7 @@ exactly selected full canonical container ID, avoiding hex-name/ID-prefix
 collisions. Already resolved IDs stay fixed; a failed CID command does not fall
 back to name selection. Names still identify sockets and operator cleanup. Scoped native ID/receipt
 paths and confined SSH exec stay unchanged; raw log selectors are not covered.
+Legacy DNAT add and delete invoke `iptables` with the fixed system PATH.
 [30](#source-30) [31](#source-31) [32](#source-32)
 
 [FACT] Start on a running container is a no-op. Other starts/restarts refuse
@@ -141,7 +142,7 @@ physical power loss.
 29. <a id="source-29"></a> [nerdctl v2.3.5 container walker](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/idutil/containerwalker/containerwalker.go#L47-L74) — `Walk` matches the name label or an ID prefix; `container inspect` returns every match.
 30. <a id="source-30"></a> [Runtime target](../../internal/container/target.go#L1) — `ValidateContainerID`, `ResolveContainerID`; `Client.Start/Stop/Remove` in container.go; collision/refusal/fixed-ID/error controls in target_test.go; named SSH with retained CID in sandbox/stop.go `StopContainerID`.
 31. <a id="source-31"></a> [Maintenance](../../cmd/yoloctl/autoupdate.go#L90) — npm/version helpers; native install in agent_distribution.go and process probe in agent.go; container_target_test.go covers target argv and refusals.
-32. <a id="source-32"></a> [Legacy forwarding](../../internal/port/port.go#L94) — retained inspected bridge/CID and `legacyDNATTarget`; port/target_test.go covers target argv, mode, refusals and best-effort removal.
+32. <a id="source-32"></a> [Legacy forwarding](../../internal/port/port.go#L94-L172) — inspected bridge/CID and `dnatExecArgs`; `legacyDNATTarget` verifies cleanup routing, and `TestLegacyDNATUsesSystemPathAndExactSelectedID` checks argv, mode and refusals.
 
 33. <a id="source-33"></a> [Saved apply errors](../../cmd/yoloctl/privileged_operator.go#L192) — `savedDeclarationError`.
 34. <a id="source-34"></a> [Set/edit apply tail](../../cmd/yoloctl/agentbox_reconcile.go#L766) — `reconcileAndPrint`.

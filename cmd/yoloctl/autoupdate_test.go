@@ -14,6 +14,7 @@ func TestNpmInstallGlobalAtLatestArgsUsesSandboxOwnedPrefixAndCache(t *testing.T
 	want := []string{
 		"sudo", "nerdctl", "exec",
 		"--user", "sandbox",
+		"--env", wantAgentMaintenancePath,
 		"coder",
 		"npm", "install", "-g",
 		"--prefix=/home/sandbox/.npm-global",

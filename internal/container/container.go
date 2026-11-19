@@ -883,6 +883,10 @@ func (c *Client) ReadFile(ctx context.Context, path string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
+// SystemExecPath is the search path for yoloctl-owned commands that run
+// in the outer container.
+const SystemExecPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
 // Shell runs an arbitrary command inside the env VM (no container scope).
 // Used for setup/cleanup tasks like creating the per-agentbox socket dir.
 func (c *Client) Shell(ctx context.Context, args ...string) error {

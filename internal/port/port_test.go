@@ -1,7 +1,8 @@
 package port
 
 import (
-	"reflect"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -65,31 +66,24 @@ func TestUnitNameRoundTrip(t *testing.T) {
 	}
 }
 
-func TestDNATRuleArgs(t *testing.T) {
-	// The -A / -D forms must be byte-identical except for the op so
-	// the kernel can match the install and delete rules. Lock that in.
-	add := dnatRuleArgs("-A", 3000)
-	del := dnatRuleArgs("-D", 3000)
+func TestDNATExecArgs(t *testing.T) {
+	id := strings.Repeat("a", 64)
 	wantAdd := []string{
+		"sudo", "nerdctl", "exec", "--env", wantDNATExecPath, id,
 		"iptables", "-t", "nat", "-A", "PREROUTING",
 		"-i", "eth0", "-p", "tcp",
 		"--dport", "3000",
 		"-j", "DNAT",
 		"--to-destination", "10.200.0.2:3000",
 	}
-	if !reflect.DeepEqual(add, wantAdd) {
-		t.Errorf("dnatRuleArgs(-A, 3000) = %v, want %v", add, wantAdd)
+	if add := dnatExecArgs(id, "-A", 3000); !slices.Equal(add, wantAdd) {
+		t.Errorf("add DNAT argv = %q, want %q", add, wantAdd)
 	}
-	if len(add) != len(del) {
-		t.Fatalf("add/del arg lengths differ: %d vs %d", len(add), len(del))
-	}
-	for i := range add {
-		if i == 3 {
-			continue // the op slot
-		}
-		if add[i] != del[i] {
-			t.Errorf("add[%d]=%q != del[%d]=%q (only op slot may differ)", i, add[i], i, del[i])
-		}
+	// The two forms must match apart from the operation for kernel deletion.
+	wantDelete := slices.Clone(wantAdd)
+	wantDelete[9] = "-D"
+	if del := dnatExecArgs(id, "-D", 3000); !slices.Equal(del, wantDelete) {
+		t.Errorf("delete DNAT argv = %q, want %q", del, wantDelete)
 	}
 }
 

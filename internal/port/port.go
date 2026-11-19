@@ -126,13 +126,11 @@ func Forward(ctx context.Context, c *container.Client, spec Spec) error {
 	return nil
 }
 
-// dnatRuleArgs returns the iptables args (without the `nerdctl exec`
-// prefix) for the inner-netns DNAT rule. op is "-A" to add or "-D" to
-// delete; both forms must match exactly for the kernel to find the
-// rule on delete. Pulled out so tests can verify the rule shape
-// without shelling out.
-func dnatRuleArgs(op string, containerPort int) []string {
+// dnatExecArgs builds the outer-container exec for the inner-netns DNAT
+// rule. Add (-A) and delete (-D) must otherwise match exactly.
+func dnatExecArgs(containerID, op string, containerPort int) []string {
 	return []string{
+		"sudo", "nerdctl", "exec", "--env", "PATH=" + container.SystemExecPath, containerID,
 		"iptables", "-t", "nat", op, "PREROUTING",
 		"-i", "eth0", "-p", "tcp",
 		"--dport", strconv.Itoa(containerPort),
@@ -157,8 +155,7 @@ func installInnerNetnsDNAT(ctx context.Context, c *container.Client, agentbox st
 	if err != nil {
 		return err
 	}
-	args := append([]string{"sudo", "nerdctl", "exec", id}, dnatRuleArgs("-A", containerPort)...)
-	return c.Shell(ctx, args...)
+	return c.Shell(ctx, dnatExecArgs(id, "-A", containerPort)...)
 }
 
 // removeInnerNetnsDNAT deletes the matching DNAT rule. Best-effort:
@@ -170,8 +167,7 @@ func removeInnerNetnsDNAT(ctx context.Context, c *container.Client, agentbox str
 	if err != nil {
 		return
 	}
-	args := append([]string{"sudo", "nerdctl", "exec", id}, dnatRuleArgs("-D", containerPort)...)
-	_ = c.Shell(ctx, args...)
+	_ = c.Shell(ctx, dnatExecArgs(id, "-D", containerPort)...)
 }
 
 // ErrPortInUse marks a Forward failure caused by a duplicate listener.

@@ -75,6 +75,8 @@ func newAgentUpdateCmd() *cobra.Command {
 each selected box. Use a running box for an in-place update. When some
 matching boxes are stopped, target a running one with --agentbox BOX. A bulk
 update selects all matching containers and the first install error ends it.
+Maintenance uses a fixed system PATH. For npm packages, install npm and Node.js
+in system directories in custom base images.
 
   yoloctl agent update claude
   yoloctl agent update claude --agentbox tester
@@ -278,10 +280,7 @@ func agentProcessRunning(ctx context.Context, spaceName, agentboxName, agentComm
 	if err != nil {
 		return false, err
 	}
-	shCmd := vmhost.ShellCommand(ctx, spaceName,
-		"sudo", "nerdctl", "exec", "--user", "sandbox", id,
-		"pgrep", "-f", agentCommand,
-	)
+	shCmd := vmhost.ShellCommand(ctx, spaceName, agentMaintenanceExecArgs(id, "pgrep", "-f", agentCommand)...)
 	shCmd.Stdout = io.Discard
 	shCmd.Stderr = io.Discard
 	err = shCmd.Run()

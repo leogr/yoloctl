@@ -1,6 +1,6 @@
 # Policy boundaries and image composition
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; static composition coverage `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409` and accompanying changes; APT-compatible smoke probe correction on `a3827ba` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; static composition coverage `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409` and accompanying changes; APT-compatible smoke probe correction on `a3827ba` and accompanying changes; maintenance PATH verified on `f3a4aa1` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Effective features combine box selections and agent requirements;
 effective capabilities combine box grants and feature requirements. Features
@@ -69,11 +69,13 @@ leaves two base refreshes, avoids the NodeSource bootstrap script's extra
 updates, and keeps Node 22/Python 3.13. Raw custom/OCI feature order is unchanged.
 [30](#source-30) [31](#source-31) [41](#source-41) [42](#source-42)
 
-[FACT] Runtime updates target latest with explicit `/home/sandbox/.npm-global`
-and a separate maintenance cache. Failed version probes skip with notice;
-failed installs return errors. Outer `nerdctl exec --user sandbox` is a
-package-maintenance exception, never an agent launch path.
-[2](#source-2) [8](#source-8) [17](#source-17)
+[FACT] Agent installers, metadata reads and process probes use outer
+`nerdctl exec --user sandbox` with a fixed system PATH. npm targets latest
+with `/home/sandbox/.npm-global` and a private maintenance cache. Unreadable
+version metadata skips autoupdate with a notice. Install errors propagate with
+`--no-autoupdate` guidance for npm. [2](#source-2) [8](#source-8) [17](#source-17)
+[45](#source-45) [46](#source-46) [47](#source-47) [48](#source-48)
+[49](#source-49)
 
 [FACT] Image/Pi/AIRC smokes bypass the entrypoint to check baked ownership.
 The image smoke asserts a small final ownership layer, apt-list/deb/npm marker retention
@@ -133,7 +135,7 @@ AWS credential and custom-egress setup remain explicit. [44](#source-44)
 5. <a id="source-5"></a> [assets/containers/agentbox/yoloctl-entrypoint.sh](../../assets/containers/agentbox/yoloctl-entrypoint.sh#L26) — GID-zero guard and identity alignment.
 6. <a id="source-6"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L48) — prepared identity, repair, hashing and build selection.
 7. <a id="source-7"></a> [internal/agentboximage/ensure.go](../../internal/agentboximage/ensure.go#L54-L105) — `EnsureImage`, `imageRefreshArgs`.
-8. <a id="source-8"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L50-L145) — `autoupdateAgentboxIfNeeded` through `npmInstallGlobalAtLatestArgs`.
+8. <a id="source-8"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L50-L172) — `updateAgentInRun`, `agentMaintenanceExecArgs`, npm install and metadata reads.
 9. <a id="source-9"></a> [assets/embed.go](../../assets/embed.go#L1) — embedded assets; the v0.0.72 `SandboxVersion` pins and legacy Rego embed are removed by the retirement (tree `3cc5e841`), the native runtime, its Rego and the generated qualification selection are embedded through `internal/nativeartifacts` (`embedded/selection/`, git-ignored, written by `make build`); `assets/native_openshell.go` keeps an empty default; `assets/sandbox/sandbox-policy.rego` stays only as a test fixture.
 10. <a id="source-10"></a> [internal/features/features_test.go](../../internal/features/features_test.go#L187) — `TestGenerateDockerfile_AgentNpmFeaturesUseLatest`.
 11. <a id="source-11"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L78-L113) — `PTYAllocateCapability`, `ptyGrants`, `PTYGrants`.
@@ -177,3 +179,9 @@ AWS credential and custom-egress setup remain explicit. [44](#source-44)
 43. <a id="source-43"></a> [Cache probe regression](../../scripts/test_image_cache_probe.py#L1-L97) — exact smoke shell probe, real isolated APT update with default cleanup, unchanged indexes and reset-cache rejection.
 
 44. <a id="source-44"></a> [AWS feature](../../internal/features/aws.go#L1) — embedded installer/key recipe; configuration is described in `bedrock.md`.
+
+45. <a id="source-45"></a> [Maintenance argv and failure regressions](../../cmd/yoloctl/container_target_test.go#L61-L167) — `TestMaintenanceExecsUseSystemPathAndExactlySelectedContainer`, `TestNpmMaintenanceFailureExplainsSystemPathAndAutoupdateOptOut`.
+46. <a id="source-46"></a> [Native install argv](../../cmd/yoloctl/agent_distribution.go#L102-L118) — `nativeInstallArgs` uses the shared exec builder.
+47. <a id="source-47"></a> [nerdctl v2.3.5](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/cmd/container/exec.go#L171-L179) — exec applies environment overrides to the process spec.
+48. <a id="source-48"></a> [Process probe](../../cmd/yoloctl/agent.go#L278-L286) — `agentProcessRunning` uses the shared exec builder.
+49. <a id="source-49"></a> [System search path](../../internal/container/container.go#L886-L888) — `SystemExecPath`, also used by legacy DNAT.

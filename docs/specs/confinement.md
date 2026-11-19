@@ -53,8 +53,11 @@ still validate signed metadata before installation. Agent packages track
 `latest`; infrastructure dependencies have deliberate pins. npm and base apt downloads use disposable BuildKit caches
 outside the image, with metadata revalidation. Managed rebuilds retain downloads;
 custom bases/raw Dockerfile features keep full cache invalidation.
-Runtime npm maintenance uses the explicit
-sandbox-owned global prefix and maintenance cache. [1](#source-1)
+Runtime agent maintenance execs use a fixed system PATH. Runtime npm
+maintenance uses the explicit sandbox-owned global prefix and maintenance
+cache. A custom base image needs npm and Node.js on the system PATH for npm
+maintenance. Use `--no-autoupdate` to skip lifecycle updates when the image
+lacks system npm. [1](#source-1)
 
 [FACT] The optional `npm` development feature uses the base's Node.js/npm/npx,
 sets user-writable global installs and a separate development cache, and grants
