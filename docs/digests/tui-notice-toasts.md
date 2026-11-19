@@ -1,6 +1,6 @@
 # TUI notice history and auto-popup
 
-Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes. Palette arrow routing re-verified at `f75fb9b22c2a9db0644f328c05d55e426bbe7d18` and accompanying changes.
+Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes. Palette arrow routing re-verified at `f75fb9b22c2a9db0644f328c05d55e426bbe7d18` and accompanying changes. Retained bell counts verified at `ca5bf102bdbb658d2f41b8ead982c005ed2b2218` and accompanying changes.
 
 [FACT] Outer feedback is an in-memory notice queue, separate from the header,
 standalone result and palette command output. Consecutive identical kind, text
@@ -17,14 +17,14 @@ its expiry from Init. During focused review, arrivals only update history/the
 bell: they do not retarget selection, steal focus or restart expiry.
 [1](#source-1) [2](#source-2) [3](#source-3)
 
-[FACT] The top bar shows circled unread counts (`❶!` through `❿!`) before the
-space switch, counting entries rather than repeats. Above ten it shows circled
-buckets (`❿+!`, `❶⓿⓿+!`, and so on). Zero hides the badge; Ctrl+N still opens
-retained read history. Its cells are reserved from palette editing
-and shared by paint/hits. Click the bell, or Ctrl+N while the palette is open,
+[FACT] The top bar shows circled counts of retained notices (`❶!` through
+`❿!`) before the space switch. A merged repeat counts as one entry. Above
+ten it shows circled buckets (`❿+!`, `❶⓿⓿+!`, and so on). Dismissing the last
+entry hides the badge. Its cells are reserved from palette editing and shared
+by paint and hit testing. Click the bell, or Ctrl+N while the palette is open,
 to open focused history. Ctrl+N is not intercepted in an agent pane or standalone
-attachment. Viewing/paging a notice marks that entry read. [2](#source-2)
-[3](#source-3)
+attachment. Viewing or paging marks the current entry read. Unread entries and
+popup focus control emphasis. [2](#source-2) [3](#source-3)
 
 [FACT] Notice history and the space switch share popup opening/focus restoration:
 opening replaces a sibling popup, preserves the palette draft and respects
@@ -67,8 +67,8 @@ Source/PTy controls are not native graphical/macOS parity evidence.
 ## Sources
 
 1. <a id="source-1"></a> [Queue and dialog](../../internal/tui/notices.go#L17) — capture, arrival, repeat, geometry, keys, mouse and dismissal.
-2. <a id="source-2"></a> [History popup](../../internal/tui/notice_popup.go#L1) — timer, choice selection, popup focus, unread count and bell geometry.
-3. <a id="source-3"></a> [TUI](../../internal/tui/tui.go#L1) — Init, Update expiry/paste, palette Ctrl+N, header/cursor; tests in notice_bell_test.go.
+2. <a id="source-2"></a> [History popup](../../internal/tui/notice_popup.go#L1) — timer, choice selection, popup focus, `noticeChip` retained count, `headerChipsStyled` emphasis and `noticeBellHit` geometry.
+3. <a id="source-3"></a> [TUI](../../internal/tui/tui.go#L1) — Init, Update expiry/paste, palette Ctrl+N, header/cursor. `TestNoticeBellCountsRetainedEntriesUntilDismissed` in notice_bell_test.go covers reading, closing, reopening and dismissal.
 4. <a id="source-4"></a> [Space popup lifecycle](../../internal/tui/space_switch.go#L90) — beginPopup, restorePopupFocus, openSpacePicker and closeSpacePicker.
 5. <a id="source-5"></a> [Input regressions](../../internal/tui/notices_test.go#L1) — notice_dialog_test.go and notice_bell_test.go add focus, expiry, button, gesture, standalone and retained history controls.
 6. <a id="source-6"></a> [Shared dialog frame](../../internal/tui/spaceview/dialog.go#L9) — participant/notice border, background and button faces.

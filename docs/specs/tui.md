@@ -375,10 +375,11 @@ output, resizes, an unread viewer, detach/rejoin and final status. Its guest aud
 checks transport behavior; it does not measure graphical parity. [4](#source-4)
 
 [FACT] New outer notices auto-open an unfocused dialog for about eight
-seconds (dashboard: top-right, below the header like the space switch), then hide while retained in history. The top-bar circled-count bell before the
-space switch counts unread entries (hidden at zero, circled buckets above ten);
-click it or use Ctrl+N in the palette to
-open focused history. Viewing marks the current entry read. Focused arrows/Tab
+seconds (dashboard: top-right, below the header like the space switch), then
+hide while retained in history. The top-bar bell before the space switch counts
+retained entries and disappears after the last one is dismissed. Click it or
+use Ctrl+N in the palette to open focused history. Viewing marks the current
+entry read and preserves the count. Focused arrows/Tab
 select buttons (including Dismiss), Enter runs the selection, and `‹`/`›` page
 notices. Esc/outside click closes without erasing history; an auto-popup click
 focuses it. Popup opening/closing shares space-switch focus restoration. New

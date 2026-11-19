@@ -130,7 +130,7 @@ func (m *model) unreadNotices() int {
 
 // Notice counts use the same circled glyphs as tab numbers.
 func (m *model) noticeChip() string {
-	count := m.unreadNotices()
+	count := len(m.notices)
 	if m.standalone || count == 0 {
 		return ""
 	}

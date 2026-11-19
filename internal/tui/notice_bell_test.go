@@ -19,8 +19,60 @@ func TestNoticeBellCtrlNOpensFocused(t *testing.T) {
 	if !m.noticeFocused {
 		t.Fatal("palette Ctrl+N did not focus notices")
 	}
-	if m.noticeChip() != "" {
-		t.Fatal("viewed notice did not mark bell read")
+	if m.unreadNotices() != 0 || m.noticeChip() != "❶!" {
+		t.Fatal("viewing should mark the notice read and retain the bell")
+	}
+}
+
+func TestNoticeBellCountsRetainedEntriesUntilDismissed(t *testing.T) {
+	m := newTestModel(t, 120, 30)
+	m.ctxSpace = "fixture"
+	m.postNotice(prettylog.KindWarn, "first")
+	m.postNotice(prettylog.KindWarn, "second")
+	m.postNotice(prettylog.KindWarn, "second")
+	expectChip := func(want string) {
+		t.Helper()
+		if got := m.noticeChip(); got != want {
+			t.Fatalf("bell = %q, want %q", got, want)
+		}
+	}
+	clickBell := func() {
+		x := m.width - 1 - ansi.StringWidth(m.headerChips())
+		_, _ = m.Update(click(x, 0))
+		_, _ = m.Update(releaseAt(x, 0))
+	}
+	press := func(code rune, text string) {
+		_, _ = m.Update(key(code, 0, text))
+		_, _ = m.Update(tea.KeyReleaseMsg{Code: code})
+	}
+
+	// The repeated second notice still occupies just one history entry.
+	expectChip("❷!")
+	clickBell()
+	if !m.noticeFocused || m.unreadNotices() != 1 {
+		t.Fatal("bell click did not open and mark the newest notice read")
+	}
+	expectChip("❷!")
+	press('‹', "‹")
+	if m.noticeIndex != 0 || m.unreadNotices() != 0 {
+		t.Fatal("paging did not mark the remaining notice read")
+	}
+	press(tea.KeyEscape, "")
+	if m.noticeVisible {
+		t.Fatal("Esc did not close the popup")
+	}
+	expectChip("❷!")
+	clickBell()
+	if !m.noticeFocused {
+		t.Fatal("click could not reopen fully read notice history")
+	}
+
+	press(tea.KeyEnter, "")
+	expectChip("❶!")
+	press(tea.KeyEnter, "")
+	expectChip("")
+	if m.noticeVisible {
+		t.Fatal("popup still visible after final dismissal")
 	}
 }
 
