@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -17,11 +18,11 @@ func TestWelcomeTipCommands(t *testing.T) {
 		command string
 		line    string
 	}{
-		{WelcomeNoSpace, "space create work --workdir /project --account my.user", "No space yet. A space is the VM your boxes run in."},
-		{WelcomeStopped, "space start work", "Space work is stopped."},
-		{WelcomeUpgrade, "space upgrade work", "It restarts sessions and asks before recreating any box."},
-		{WelcomeNoOperator, "box create space-commander --agent claude --operator --agent-extra-args --model,claude-opus-5-5,--effort,medium", "boxes for you; it gets full authority over this space."},
-		{WelcomeNoChat, "chat ensure", "No chat yet. Create the space's chat room:"},
+		{WelcomeNoSpace, "space create work --workdir /project --account my.user", "Tip: you have no space yet. A space is the VM your boxes run in. To create one, type:"},
+		{WelcomeStopped, "space start work", "Tip: space work is stopped. To start it, type:"},
+		{WelcomeUpgrade, "space upgrade work", "  (it restarts sessions and asks before recreating any box)"},
+		{WelcomeNoOperator, "box create space-commander --agent claude --operator --agent-extra-args --model,claude-opus-5-5,--effort,medium", "with full authority over this space. To create one, type:"},
+		{WelcomeNoChat, "chat ensure", "Tip: your space has no chat room yet. To create it, type:"},
 		{WelcomeEnroll, "chat enroll lead --connect --recreate", "\"Join the space chat and keep listening for messages\""},
 		{WelcomeOnlyOperator, "chat", "\"@lead create a box for /project with Claude and the go feature\""},
 	} {
@@ -49,7 +50,7 @@ func TestWelcomeVisitAndStaleResults(t *testing.T) {
 	if firstRead == nil || len(reads) != 0 || m.syncWelcome() != nil {
 		t.Fatal("entering the welcome screen should schedule one background read")
 	}
-	if !strings.Contains(ansi.Strip(m.View().Content), "type a yoloctl command and press Enter") {
+	if !strings.Contains(ansi.Strip(m.View().Content), "Type a yoloctl command and press Enter, for example:") {
 		t.Fatal("welcome fallback missing while the read is outstanding")
 	}
 	first := firstRead().(welcomeMsg)
@@ -108,5 +109,34 @@ func TestWelcomeRightFillsWithoutRunning(t *testing.T) {
 	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	if line, cursor := m.pal.Line(); line != "space start work" || cursor != 1 {
 		t.Fatalf("Right changed the nonempty draft: line=%q cursor=%d", line, cursor)
+	}
+}
+
+func TestWelcomeRightThroughHostInput(t *testing.T) {
+	for _, tc := range []struct{ name, right string }{
+		{"CSI", "\x1b[C"},
+		{"SS3", "\x1bOC"},
+		{"Kitty", "\x1b[?31u\x1b[1;1:1C\x1b[1;1:3C"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestModel(t, 100, 24)
+			m.welcome.tip = makeWelcomeTip(WelcomeStatus{Step: WelcomeNoChat}, "work", "", "")
+			runCompatibilityInput(t, m, tc.right, false)
+			if line, _ := m.pal.Line(); line != "chat ensure" || m.console.Busy() || len(m.tabs.Tabs) != 0 {
+				t.Fatalf("Right should fill without submitting: line=%q busy=%v tabs=%d", line, m.console.Busy(), len(m.tabs.Tabs))
+			}
+		})
+	}
+}
+
+func TestWelcomeFallbackExampleLines(t *testing.T) {
+	m := newTestModel(t, 100, 24)
+	got := m.welcomeRows()
+	for i, row := range got {
+		got[i] = ansi.Strip(row)
+	}
+	want := []string{"", "  Type a yoloctl command and press Enter, for example:", "    box create coder --agent claude", "    box attach coder", "    space ls"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("fallback rows = %q, want %q", got, want)
 	}
 }

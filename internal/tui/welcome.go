@@ -100,8 +100,11 @@ func (m *model) syncWelcome() tea.Cmd {
 	}
 }
 
+func welcomeCommandTip(before, command, after string) welcomeTip {
+	return welcomeTip{before + "\n  " + command + after + "\n→ puts it in the input", command}
+}
+
 func makeWelcomeTip(status WelcomeStatus, space, cwd, login string) welcomeTip {
-	const fill = "\n→ puts it in the input"
 	// Cwd is user-owned text. Show control characters as escapes rather than
 	// letting a directory name send terminal controls.
 	path := cwd
@@ -109,17 +112,14 @@ func makeWelcomeTip(status WelcomeStatus, space, cwd, login string) welcomeTip {
 		path = strconv.QuoteToGraphic(path)
 	}
 	operator := status.Operator
-	commandTip := func(before, command, after string) welcomeTip {
-		return welcomeTip{before + "\n  " + command + after + fill, command}
-	}
 	switch status.Step {
 	case WelcomeNoSpace:
 		if account.ValidateName(login) != nil {
 			login = "personal"
 		}
 		command := "space create work --workdir " + path + " --account " + login
-		tip := commandTip("No space yet. A space is the VM your boxes run in.", command, "")
-		tip.text += " · change the name and account first"
+		tip := welcomeCommandTip("Tip: you have no space yet. A space is the VM your boxes run in. To create one, type:",
+			command, "\n  (change the name and account first)")
 		// The palette splits whitespace. Its subprocesses inherit this
 		// directory, so a single dot can carry a path that spans tokens.
 		if strings.ContainsFunc(cwd, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
@@ -127,20 +127,26 @@ func makeWelcomeTip(status WelcomeStatus, space, cwd, login string) welcomeTip {
 		}
 		return tip
 	case WelcomeStopped:
-		return commandTip(fmt.Sprintf("Space %s is stopped.", space), "space start "+space, "")
+		return welcomeCommandTip(fmt.Sprintf("Tip: space %s is stopped. To start it, type:", space), "space start "+space, "")
 	case WelcomeUpgrade:
-		return commandTip(fmt.Sprintf("Space %s runs an older version than this yoloctl.", space),
-			"space upgrade "+space, "\nIt restarts sessions and asks before recreating any box.")
+		return welcomeCommandTip(fmt.Sprintf("Tip: space %s runs an older version than this yoloctl. To upgrade it, type:", space),
+			"space upgrade "+space, "\n  (it restarts sessions and asks before recreating any box)")
 	case WelcomeNoOperator:
-		return commandTip("No operator box yet. An operator is an agent that manages\nboxes for you; it gets full authority over this space.",
+		return welcomeCommandTip("Tip: an operator is an agent that manages boxes for you, with full authority over this space. To create one, type:",
 			"box create space-commander --agent claude --operator --agent-extra-args --model,claude-opus-5-5,--effort,medium", "")
 	case WelcomeNoChat:
-		return commandTip("No chat yet. Create the space's chat room:", "chat ensure", "")
+		return welcomeCommandTip("Tip: your space has no chat room yet. To create it, type:", "chat ensure", "")
 	case WelcomeEnroll:
 		command := "chat enroll " + operator + " --connect --recreate"
-		return welcomeTip{fmt.Sprintf("Add %[1]s to the chat:\n  %[2]s\nThen attach and tell it to start listening:\n  attach %[1]s\n  \"Join the space chat and keep listening for messages\"\n→ puts the enroll command in the input", operator, command), command}
+		return welcomeTip{fmt.Sprintf(`Tip: %[1]s is not in the chat yet. To add it, type:
+  %[2]s
+Then attach to it and ask it to listen to the chat. Type:
+  attach %[1]s
+and say: "Join the space chat and keep listening for messages"
+→ puts the enroll command in the input`, operator, command), command}
 	case WelcomeOnlyOperator:
-		return commandTip(fmt.Sprintf("Open the chat and ask %[1]s, for example:\n  \"@%[1]s create a box for %[2]s with Claude and the go feature\"", operator, path), "chat", "")
+		return welcomeCommandTip(fmt.Sprintf("Tip: ask %s for what you need in the chat. To open it, type:", operator), "chat",
+			fmt.Sprintf("\nand say, for example: \"@%s create a box for %s with Claude and the go feature\"", operator, path))
 	case WelcomeReady:
 		return welcomeTips[rand.IntN(len(welcomeTips))]
 	default:
@@ -149,22 +155,24 @@ func makeWelcomeTip(status WelcomeStatus, space, cwd, login string) welcomeTip {
 }
 
 var welcomeTips = [...]welcomeTip{
-	{"· space view           live, clickable view of boxes, resources and chat", "space view"},
-	{"· follow PATH          watch a Markdown or text file live", "follow PATH"},
-	{"· attach BOX           join a box's persistent agent session", "attach BOX"},
-	{"· box copy SRC NEW     a new box with the same settings (not files)", "box copy SRC NEW"},
-	{"· port forward BOX 8080   reach a box's port from the host", "port forward BOX 8080"},
-	{"· space storage        what fills the VM's disks", "space storage"},
-	{"· Ctrl+Alt ←/→ (⌃⌥ on macOS)  switch tabs", ""},
+	welcomeCommandTip("Tip: have you ever tried a live, clickable view of your space? Type:", "space view", ""),
+	welcomeCommandTip("Tip: have you ever tried watching a Markdown or text file live? Type:", "follow PATH", ""),
+	welcomeCommandTip("Tip: have you ever tried joining a box's agent session? Type:", "attach BOX", ""),
+	welcomeCommandTip("Tip: have you ever tried making a new box with another box's settings (not its files)? Type:", "box copy SRC NEW", ""),
+	welcomeCommandTip("Tip: have you ever tried reaching a box's port from the host? Type:", "port forward BOX 8080", ""),
+	welcomeCommandTip("Tip: have you ever tried seeing what fills the VM's disks? Type:", "space storage", ""),
+	{text: "Tip: have you ever tried switching tabs from the keyboard? Press Ctrl+Alt ←/→ (⌃⌥←/→ on macOS)."},
 }
+
+const welcomeFallback = `Type a yoloctl command and press Enter, for example:
+  box create coder --agent claude
+  box attach coder
+  space ls`
 
 func (m *model) welcomeRows() []string {
 	text := m.welcome.tip.text
 	if text == "" {
-		return []string{"",
-			cDim + "  type a yoloctl command and press Enter" + cReset,
-			cDim + "  e.g.: box create coder --agent claude · box attach coder · space ls" + cReset,
-		}
+		text = welcomeFallback
 	}
 	lines := []string{""}
 	for _, line := range strings.Split(ansi.Wordwrap(text, max(m.width-2, 1), ""), "\n") {

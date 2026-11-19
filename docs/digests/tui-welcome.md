@@ -1,14 +1,14 @@
 # Welcome tips
 
-Verification: `f3a4aa1ef43a52b2066320fd00990d6cd6527109` and the accompanying welcome-tip change.
+Verification: `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and the accompanying welcome-tip change.
 
 [FACT] The bare host TUI runs a background observation for its pinned space
 when it first shows the idle no-tabs screen, returns to it after tabs or a
 palette command, or switches spaces while it is showing. There is no polling.
 Leaving the screen cancels its pending read, and replies from an earlier visit
 cannot populate a later one. While the read is outstanding or inconclusive,
-the screen shows the original two-line command hint. Bound native/operator
-clients keep that hint. [1](#source-1) [2](#source-2) [3](#source-3)
+the screen shows a generic command hint with three examples on separate lines.
+Bound native/operator clients keep that hint. [1](#source-1) [2](#source-2) [3](#source-3)
 
 [FACT] The first confirmed missing step wins in this order. No spaces in
 the host inventory, selected space stopped, older running release, no
