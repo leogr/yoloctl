@@ -1,6 +1,6 @@
 # Agent state and used-only context
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; stale-read note `1d265df3cfae49026ec4202fe88e9cce83ad1ca9`; re-read cited symbols when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; stale-read note `1d265df3cfae49026ec4202fe88e9cce83ad1ca9`; kept state across failed or missed reads at `7347d60dd0dc7af0eef615736c72e73ef3df6db8` and accompanying changes; re-read cited symbols when changing behavior.
 
 [FACT] A report may carry an enumerated `state`: `working`, `idle`,
 `waiting_permission`, `waiting_input`, `waiting_dialog` or `failed` (an API
@@ -45,9 +45,11 @@ since 14:02`, `waiting for input …`, `waiting for a dialog …` or `API error 
 14:02`, with the report's source text. The Participants panel tags a name only
 for a wait (`⏳ needs permission`, `⏳ needs input`, `⏳ dialog`, warning tone) or
 `failed` (`⚠ API error`, error tone); `working` and `idle` get no words and the
-card detail line is unchanged. A failed or old read shows no reported state
-and does not fall back to activity: it is a read problem, and the dot still
-shows activity.
+card detail line is unchanged. A failed read, or one that missed the box's
+reports, keeps the last reported state and its tag until that report's read is
+two minutes old (`stateOf`, `runtimeStale`); an older read shows no reported
+state and does not fall back to activity: it is a read problem, and the dot
+still shows activity.
 Context without a size reads `40k used`. [8](#source-8) [9](#source-9) [10](#source-10)
 
 [FACT] Only when the launch reported no state, the chat view falls back to
