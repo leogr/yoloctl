@@ -2,6 +2,7 @@
 
 Verification: `b54fc365f39f3319e9fd680789ed8318d84e45bb` and accompanying changes; VM replacement check `e3b21585fc6a31b400f01455a70838d8ebdbabb7` and accompanying changes.
 Helper drift verified at `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes.
+Older-controller drain verified at `cc47f7f92e43347b68d4856b4315b0ee93ec0bc6` and accompanying changes.
 
 [FACT] Host-only `space upgrade [SPACE]` resolves the space like `space start`.
 It selects the invoking build, with the existing VM compatibility, separate VM
@@ -22,6 +23,15 @@ the repaired box review. A no warns with the command and keeps success. No
 terminal, EOF or another answer leaves it outstanding with a nonzero result.
 The answer is read byte by byte, so later box answers stay unread.
 [9](#source-9) [10](#source-10)
+
+[FACT] The controller update drains the running controller before installing
+this build, also after a No. A released protocol-2 controller (v0.1.0 to
+v0.3.0) refuses this build's hello with exit 2 before reading any request; only
+then the host sends that one drain again in protocol 2, with the same bundle,
+space and generation, `MatchHello`'s identity checks and no protocol-3 request
+field. The old controller answers once its drain has finished, so its
+operations end first. Every other request keeps the exact protocol-3
+handshake. [14](#source-14) [15](#source-15)
 
 [FACT] The upgrade combines the controller's box inventory, managed room status
 and full drift in groups of at most 64 declared boxes. Each group has a shared
@@ -84,3 +94,5 @@ without a retry prompt. A later explicit invocation reads state again.
 11. <a id="source-11"></a> [space_upgrade_target.go](../../cmd/yoloctl/space_upgrade_target.go#L52) — `readUpgradeTarget` binds the helper check to the inspected container.
 12. <a id="source-12"></a> [openshell_native_linux.go](../../internal/agentbox/openshell_native_linux.go#L50) — `OpenShellHelperNeedsRecreate` verifies the native runtime record.
 13. <a id="source-13"></a> [release.go](../../internal/openshellrelease/release.go#L31) — `EarlierHelper` compares verified helper inputs.
+14. <a id="source-14"></a> [older_drain.go](../../internal/controller/older_drain.go#L10-L92) — `OlderProtocol`, `RefusedAsOlder`, `DrainOlder`; host use `drainBeforeDeployment` in cmd/yoloctl/controller_deploy.go, called by `startControllerSpaceImpl` through `drainControllerForDeployment`.
+15. <a id="source-15"></a> [older_drain_test.go](../../internal/controller/older_drain_test.go#L17-L241) — v0.3.0 wire fixture (strict frame decoding, its `MatchHello`), `TestUpgradeDrainsAReleasedProtocol2Controller`, `TestOlderDrainKeepsTheExactHandshake`, `TestRefusedAsOlderMatchesOnlyTheReleasedRefusal`.

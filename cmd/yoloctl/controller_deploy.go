@@ -242,7 +242,7 @@ func startControllerSpaceImpl(ctx context.Context, boot *spaceconfig.Bootstrap, 
 			}
 		}
 		if err := drainControllerForDeployment(func(log io.Writer) error {
-			return controllerControl(ctx, boot, "control.drain", log)
+			return drainBeforeDeployment(ctx, boot, log)
 		}, func() ([]byte, error) {
 			return vmhost.ControllerService(ctx, boot.Name, "state").Output()
 		}, errw); err != nil {
@@ -407,4 +407,25 @@ func stopControllerSpace(ctx context.Context, boot *spaceconfig.Bootstrap, errw 
 	forced, stop := context.WithTimeout(ctx, 30*time.Second)
 	defer stop()
 	return cliRunStep(forced, "Forcing VM stop", func(ctx context.Context) error { return vmhost.New().ForceStop(ctx, boot.Name, true) })
+}
+
+// drainBeforeDeployment drains the running controller before this build is
+// installed. A released older controller refuses this build's hello before it
+// reads a request; it is drained in its own protocol, so its operations still
+// finish first, as in an upgrade between builds of one protocol. Every other
+// request, this drain's first attempt included, uses callHostController.
+func drainBeforeDeployment(ctx context.Context, boot *spaceconfig.Bootstrap, log io.Writer) error {
+	err := controllerControl(ctx, boot, "control.drain", log)
+	if !controller.RefusedAsOlder(err) {
+		return err
+	}
+	bridge := vmhost.ShellCommand(ctx, boot.Name, "sudo", session.VMBinaryPath, "controller-internal", "connect")
+	flush := vmhost.AttachFilteredStderr(bridge, log)
+	defer flush()
+	conn, err := controller.StartTransport(bridge)
+	if err != nil {
+		return err
+	}
+	hello := controller.Hello{Bundle: boot.Bundle, Space: boot.Name, Generation: boot.Generation}
+	return controller.DrainOlder(ctx, conn, hello, rand.Text(), log)
 }
