@@ -52,7 +52,7 @@ def main():
             installed = verify(selected.resolve().parent)
             assert installed == manifest
             if attempt == 1:
-                assert 'is already installed' in result.stdout, result.stdout
+                assert 'is already installed' in result.stdout + result.stderr, (result.stdout, result.stderr)
         key = selected.resolve().parent
         keys.append(key)
         assert all(path.exists() for path in keys)
