@@ -143,10 +143,6 @@ func (m *model) prefixRoute(k tea.Key, modifier bool) (tea.Cmd, bool) {
 		m.closeToast()
 		return nil, false
 	}
-	if m.noticeFocused && k.Code == tea.KeyRight && k.Mod & ^(tea.ModCapsLock|tea.ModNumLock) == 0 &&
-		m.keyOwners[keyIdentity(k)] == nil && m.canFillWelcome() {
-		return nil, false
-	}
 	if m.toastEscape(k) || m.toastActionKey(k) {
 		return nil, true
 	}

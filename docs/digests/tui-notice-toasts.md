@@ -29,8 +29,9 @@ popup focus control emphasis. [2](#source-2) [3](#source-3)
 [FACT] Notice history and the space switch share popup opening/focus restoration:
 opening replaces a sibling popup, preserves the palette draft and respects
 browser/confirmation priority. Esc or an outside left press closes and restores
-caller focus. Outside closure consumes its press/release, without clicking
-through to a child. Clicking an auto-popup focuses it and cancels expiry.
+caller focus. Outside closure consumes its press/release. The visible welcome
+text beside the popup keeps its own click and drag actions.
+Clicking an auto-popup focuses it and cancels expiry.
 The old prefix bracket/scroll notice routes are removed. [1](#source-1)
 [2](#source-2) [4](#source-4) [5](#source-5)
 

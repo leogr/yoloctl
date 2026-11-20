@@ -31,7 +31,8 @@ or be interrupted before switching. [44](#source-44)
 step for its selected space or one random tip when setup is complete. It
 keeps its generic hint during an outstanding or inconclusive read. Checks run
 at startup and on returning to the screen without polling or starting VMs.
-Right on an empty palette input fills a tip's command for editing.
+On the no-tabs screen, clicking a tip's command fills an empty palette input.
+Dragging over the tip selects text and copies it subject to the host clipboard setting.
 [56](#source-56)
 
 [FACT] A tab can be split into panes, each hosting one palette subprocess

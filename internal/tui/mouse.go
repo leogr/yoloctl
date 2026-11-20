@@ -197,6 +197,10 @@ func (m *model) handleMouse(msg tea.Msg) (tea.Model, tea.Cmd) {
 		pixels = &terminal.MousePixels{X: mo.X + 1, Y: mo.Y + 1, CellWidth: cw, CellHeight: ch}
 		mo.X, mo.Y = floorCell(pixels.X, cw), floorCell(pixels.Y, ch)
 	}
+	copyWelcome, owned := m.continueWelcomeDrag(msg, m.mouseHit(mo))
+	if owned {
+		return m, copyWelcome
+	}
 	if m.toastMouse(msg, mo) {
 		return m, nil
 	}
@@ -287,7 +291,7 @@ func (m *model) handleMouse(msg tea.Msg) (tea.Model, tea.Cmd) {
 				delete(m.mouseOwners, button)
 			}
 		}
-		return m, nil
+		return m, copyWelcome
 	case tea.MouseMotionMsg:
 		if mo.Button != tea.MouseNone {
 			// No observed press means no application-owned drag.
@@ -305,6 +309,9 @@ func (m *model) handleMouse(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseClickMsg:
 		if mo.Button == tea.MouseLeft {
 			m.selectionPointer = nil
+			if m.startWelcomeDrag(m.mouseHit(mo)) {
+				return m, nil
+			}
 		}
 		if !m.focusPalette {
 			// D2: a press in an unfocused pane focuses it, then is delivered.

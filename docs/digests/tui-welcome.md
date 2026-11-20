@@ -1,6 +1,6 @@
 # Welcome tips
 
-Verification: `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and the accompanying welcome-tip change.
+Verification: `dfd9bbff5905889ba48bdfbe17b78ee31a844b15` and the accompanying welcome interaction change.
 
 [FACT] The bare host TUI runs a background observation for its pinned space
 when it first shows the idle no-tabs screen, returns to it after tabs or a
@@ -30,12 +30,14 @@ or a change in that identity between reads keeps the generic hint. When all
 steps are complete the view picks one random tip for the visit.
 [2](#source-2) [6](#source-6)
 
-[FACT] Plain Right fills an empty palette input when the shown tip has a
-command. Enter is still required to submit. The first-space tip uses the
+[FACT] A click on the shown command fills an empty palette input. Enter is
+still required to submit. Dragging over welcome text selects it for copying
+through the existing host clipboard policy. [7](#source-7) [10](#source-10)
+The first-space tip uses the
 working directory and the host login if it is a valid account name. Otherwise
 the account suggestion is `personal`. The shown directory stays explicit.
 For a directory name the whitespace-split palette cannot express in one
-token, the filled command uses `.` in the same directory. [7](#source-7)
+token, the filled command uses `.` in the same directory. [2](#source-2)
 [8](#source-8)
 
 ## Sources
@@ -46,6 +48,7 @@ token, the filled command uses `.` in the same directory. [7](#source-7)
 4. <a id="source-4"></a> [Welcome observation](../../cmd/yoloctl/tui_welcome.go#L23-L63) — host bootstrap and read paths.
 5. <a id="source-5"></a> [Version ordering](../../cmd/yoloctl/tui_welcome.go#L69-L84) — `olderWelcomeRelease`.
 6. <a id="source-6"></a> [Box and chat observation](../../cmd/yoloctl/tui_welcome.go#L86) — `welcomeBoxStatus`.
-7. <a id="source-7"></a> [Palette Right](../../internal/tui/tui.go#L1611-L1620) — fill tip or move cursor.
+7. <a id="source-7"></a> [Welcome mouse interaction](../../internal/tui/welcome_mouse.go#L21) — hit testing, click to fill and drag to copy.
 8. <a id="source-8"></a> [Palette editor](../../internal/tui/palette/palette.go#L114-L127) — `Submit` and whitespace tokenization.
 9. <a id="source-9"></a> [Complete space listing](../../internal/spaceconfig/spaceconfig.go#L182) — `ListStrict`.
+10. <a id="source-10"></a> [Host clipboard](../../internal/tui/tui.go#L287) — `osc52HostMsg` applies the clipboard setting.

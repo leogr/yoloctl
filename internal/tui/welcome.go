@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/account"
+	"github.com/leogr/yoloctl/internal/terminal"
 )
 
 // WelcomeStep is the first missing setup step confirmed by the dashboard's reader.
@@ -47,6 +48,7 @@ type welcomeView struct {
 	space    string
 	visit    uint64
 	tip      welcomeTip
+	drag     *welcomeDrag
 }
 
 type welcomeMsg struct {
@@ -70,6 +72,7 @@ func (m *model) syncWelcome() tea.Cmd {
 	}
 	w.visiting, w.space = visiting, m.ctxSpace
 	w.tip = welcomeTip{}
+	w.drag = nil
 	w.visit++
 	if !visiting {
 		return nil
@@ -100,8 +103,10 @@ func (m *model) syncWelcome() tea.Cmd {
 	}
 }
 
+const welcomeFillHint = "Click the command to put it in the input."
+
 func welcomeCommandTip(before, command, after string) welcomeTip {
-	return welcomeTip{before + "\n  " + command + after + "\n→ puts it in the input", command}
+	return welcomeTip{before + "\n  " + command + after + "\n" + welcomeFillHint, command}
 }
 
 func makeWelcomeTip(status WelcomeStatus, space, cwd, login string) welcomeTip {
@@ -143,7 +148,7 @@ func makeWelcomeTip(status WelcomeStatus, space, cwd, login string) welcomeTip {
 Then attach to it and ask it to listen to the chat. Type:
   attach %[1]s
 and say: "Join the space chat and keep listening for messages"
-→ puts the enroll command in the input`, operator, command), command}
+`+welcomeFillHint, operator, command), command}
 	case WelcomeOnlyOperator:
 		return welcomeCommandTip(fmt.Sprintf("Tip: ask %s for what you need in the chat. To open it, type:", operator), "chat",
 			fmt.Sprintf("\nand say, for example: \"@%s create a box for %s with Claude and the go feature\"", operator, path))
@@ -169,10 +174,13 @@ const welcomeFallback = `Type a yoloctl command and press Enter, for example:
   box attach coder
   space ls`
 
+func (m *model) welcomeIdle() bool {
+	return !m.standalone && len(m.tabs.Tabs) == 0 && !m.console.Busy()
+}
+
 func (m *model) canFillWelcome() bool {
 	line, _ := m.pal.Line()
-	return !m.standalone && len(m.tabs.Tabs) == 0 && !m.console.Busy() &&
-		line == "" && m.welcome.tip.command != ""
+	return line == "" && m.welcome.tip.command != ""
 }
 
 func (m *model) fillWelcome() {
@@ -182,46 +190,34 @@ func (m *model) fillWelcome() {
 	m.clearSuggestions()
 }
 
-func (m *model) welcomeCommandHit(mo tea.Mouse) bool {
-	if !m.canFillWelcome() || mo.Y >= m.height || mo.X >= m.width {
-		return false
-	}
-	rows, command := m.welcomeLayout()
-	i := mo.Y - m.tabTop()
-	if command == 0 || i < command || i >= len(rows) {
-		return false
-	}
-	// The first non-underlined row after the command belongs to the help text.
-	row := rows[i]
-	if !strings.Contains(row, cUnderline) {
-		return false
-	}
-	plain := ansi.Strip(row)
-	return mo.X >= len(plain)-len(strings.TrimLeft(plain, " ")) &&
-		mo.X < ansi.StringWidth(strings.TrimRight(plain, " "))
-}
-
 func (m *model) welcomeRows() []string {
-	rows, _ := m.welcomeLayout()
+	rows, _, _ := m.welcomeLayout()
+	if drag := m.welcome.drag; drag != nil && drag.moved && m.sameWelcome(drag) {
+		rows = selectionLines(terminal.Frame{Lines: rows, Selection: drag.spans(rows)})
+	}
 	return rows
 }
 
-func (m *model) welcomeLayout() ([]string, int) {
+func (m *model) welcomeLayout() (rows []string, commandStart, commandEnd int) {
 	text := m.welcome.tip.text
 	if text == "" {
 		text = welcomeFallback
 	}
 	lines := []string{""}
-	command := 0
 	for i, logical := range strings.Split(text, "\n") {
 		style := cDim
-		if i == 1 && m.canFillWelcome() {
-			command = len(lines)
+		// The primary command is the second logical line of each command tip.
+		command := i == 1 && m.canFillWelcome()
+		if command {
+			commandStart = len(lines)
 			style += cUnderline
 		}
 		for _, line := range strings.Split(ansi.Wordwrap(logical, max(m.width-2, 1), ""), "\n") {
-			lines = append(lines, style+"  "+line+cReset)
+			lines = append(lines, ansi.Truncate(style+"  "+line+cReset, max(m.width, 1), ""))
+		}
+		if command {
+			commandEnd = len(lines)
 		}
 	}
-	return lines, command
+	return lines, commandStart, commandEnd
 }

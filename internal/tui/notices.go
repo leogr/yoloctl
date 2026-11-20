@@ -464,7 +464,7 @@ func (m *model) toastMouse(msg tea.Msg, mo tea.Mouse) bool {
 	}
 	if !o.contains(mo.X, mo.Y) {
 		if _, press := msg.(tea.MouseClickMsg); press && o.w > 0 && mo.Button == tea.MouseLeft {
-			if m.welcomeCommandHit(m.mouseHit(mo)) {
+			if hit, _ := m.welcomeTextHit(m.mouseHit(mo)); hit && mo.Mod == 0 {
 				return false
 			}
 			m.ownPopupPress(mo.Button)
