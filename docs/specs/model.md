@@ -104,7 +104,7 @@ Box declaration IDs are minted only on chat enrollment and are meaningful
 together with the native disk ID. Ordinary legacy saves do not introduce identity
 fields. Explicit runtime opt-in projects only the server's private leaves and
 each participant's own credential plus narrow Unix endpoint directory.
-[10](#source-10) [11](#source-11)
+[10](#source-10) [11](#source-11) [21](#source-21)
 
 [FACT] Host config/cache roots default to `yoloctl` under the XDG/OS bases for
 both release and development builds. One absolute,
@@ -136,3 +136,4 @@ independent ownership boundaries. [16](#source-16)
 18. <a id="source-18"></a> [Firecracker host runtime](../digests/firecracker-runtime.md).
 19. <a id="source-19"></a> [Firecracker guest](../digests/firecracker-guest.md).
 20. <a id="source-20"></a> [Agent maintenance](../digests/agent-maintenance.md).
+21. <a id="source-21"></a> [Managed chat membership application](../digests/chat-application.md).

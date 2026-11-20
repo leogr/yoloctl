@@ -100,7 +100,7 @@ AIRC needs a host check. [6](#source-6) [7](#source-7) [10](#source-10)
 9. <a id="source-9"></a> [Staging runtime](../../cmd/yoloctl/chat_image_runtime.go#L68-L150) — feature requirement and `--stage` argv.
 10. <a id="source-10"></a> [Controller regressions](../../cmd/yoloctl/chat_image_staging_test.go#L1-L124) — feature gate, argv, non-stage replies uncertain, probe flag, view conversion.
 11. <a id="source-11"></a> [Source pin](../../internal/features/airc-source/manifest.json#L1) — AIRC release source commit and archive checksums; the pinned `src/lib.rs` L38 lists the feature.
-12. <a id="source-12"></a> [Pre-write refusal](../../internal/chatstream/client.go#L320-L411) — `localRejection` from `exchange` becomes a `rejected` delivery in `driver.send`; chat-runtime.md has the stream contract.
+12. <a id="source-12"></a> [Pre-write refusal](../../internal/chatstream/client.go#L320-L411) — `localRejection` from `exchange` becomes a `rejected` delivery in `driver.send`; chat-stream.md has the stream contract.
 13. <a id="source-13"></a> [Rejection regression](../../internal/chatui/prewrite_rejection_test.go#L12-L57) — `TestPreWriteRejectionKeepsTheStagedDraftForAnExplicitResend`.
 14. <a id="source-14"></a> [Server temporary directory](../../internal/agentbox/chat.go#L153-L158) — `chatServerEnvironment`; the baseline's writable paths in compose.go `baselineFilesystem`.
 15. <a id="source-15"></a> [SQLite temporary files](https://www.sqlite.org/tempfiles.html#temporary_file_storage_locations) — the directories SQLite tries, in order.

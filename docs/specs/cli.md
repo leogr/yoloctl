@@ -183,7 +183,7 @@ authentication and saves the next connection's display nickname; reconnect the
 human view explicitly. Box lifecycle role synchronization preserves published
 changes as pending when the managed chat holder is stopped and control is
 absent/refused; `chat ensure` explicitly starts it. Verified live orphan servers
-still receive role updates. [6](#source-6) [7](#source-7) [8](#source-8)
+still receive role updates. [6](#source-6) [7](#source-7) [8](#source-8) [38](#source-38)
 
 [FACT] `chat enroll BOX --connect [--client space] [--recreate]` sequences
 enrollment and named-client connection without retry. Flags are validated
@@ -314,7 +314,7 @@ the writable layer require their tool's cache command or explicit recreation
 3. <a id="source-3"></a> [Box-use request/observation contract](../digests/box-use.md).
 4. <a id="source-4"></a> [Live space view](../digests/space-view.md).
 5. <a id="source-5"></a> [Operator preset and authority](../digests/operator.md).
-6. <a id="source-6"></a> [Managed chat runtime and stream](../digests/chat-runtime.md).
+6. <a id="source-6"></a> [Managed chat runtime](../digests/chat-runtime.md).
 7. <a id="source-7"></a> [Managed roles, settings and attachment](../digests/chat-settings.md).
 8. <a id="source-8"></a> [Operator chat commands and limits](../digests/operator-chat.md).
 9. <a id="source-9"></a> [Managed channel catalog and stream](../digests/chat-channels.md).
@@ -366,3 +366,4 @@ the writable layer require their tool's cache command or explicit recreation
 
 36. <a id="source-36"></a> [Space upgrade](../digests/space-upgrade.md).
 37. <a id="source-37"></a> [Log steps](../digests/log-steps.md).
+38. <a id="source-38"></a> [Managed chat membership application](../digests/chat-application.md).

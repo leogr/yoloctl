@@ -150,6 +150,7 @@ over. Desired-only recovery APIs still report runtime unapplied; unsupported
 AIRC feature probes fail explicitly. Operators can administer membership and
 named participant connections, while human view/settings and arbitrary server
 execution/attachment remain host-only. [6](#source-6) [7](#source-7) [8](#source-8)
+[22](#source-22) [23](#source-23)
 
 [FACT] The finite read-only `chat.channel.catalog` operation returns one verified
 native desired manifest with an explicit runtime-unobserved discriminator.
@@ -160,7 +161,7 @@ list/status observations and all action-time checks retain their contracts.
 
 [FACT] Status/catalog observations and opening a verified healthy human stream
 remain available during unrelated mutation locks. Opening first inspects readiness;
-uncertain runtime evidence does not trigger automatic setup. [7](#source-7)
+uncertain runtime evidence does not trigger automatic setup. [7](#source-7) [23](#source-23)
 
 [FACT] Channel ACL mutations reuse that authority and require one verified
 pre-reload/acknowledgment/post-reload incarnation. The stream rechecks current
@@ -195,7 +196,7 @@ image recreation. [18](#source-18)
 
 5. <a id="source-5"></a> [VM adapters](../digests/vm-adapters.md).
 6. <a id="source-6"></a> [Managed chat state and limits](../digests/managed-chat.md).
-7. <a id="source-7"></a> [Managed runtime and stream](../digests/chat-runtime.md).
+7. <a id="source-7"></a> [Managed chat runtime](../digests/chat-runtime.md).
 8. <a id="source-8"></a> [Operator chat and human identity boundary](../digests/operator-chat.md).
 9. <a id="source-9"></a> [Managed channel catalog and stream](../digests/chat-channels.md).
 10. <a id="source-10"></a> [Image publication and recovery](../digests/chat-images.md).
@@ -213,3 +214,5 @@ image recreation. [18](#source-18)
 19. <a id="source-19"></a> [Box stop and start results](../digests/box-stop-start.md).
 20. <a id="source-20"></a> [Disk reserve notices](../digests/disk-reserve-warning.md).
 21. <a id="source-21"></a> [Firecracker host runtime and helper](../digests/firecracker-runtime.md).
+22. <a id="source-22"></a> [Managed chat membership application](../digests/chat-application.md).
+23. <a id="source-23"></a> [Managed chat human stream](../digests/chat-stream.md).

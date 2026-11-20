@@ -221,7 +221,7 @@ to chat and follow HTTP(S) links (including standalone): `ask` presents the
 fixed URL for a second Ctrl+O, Esc cancels, and modal input leaves the draft
 untouched. See [Markdown navigation](../digests/markdown-navigation.md) for the local file
 admission and link action boundaries. Fixture tests establish component/adapter behavior, not final
-host/VM integration. [15](#source-15) [16](#source-16) [17](#source-17) [18](#source-18) [19](#source-19) [20](#source-20) [39](#source-39) [40](#source-40)
+host/VM integration. [15](#source-15) [16](#source-16) [57](#source-57) [17](#source-17) [18](#source-18) [19](#source-19) [20](#source-20) [39](#source-39) [40](#source-40)
 [FACT] Catalog refresh and pre-JOIN reads use the same fixed mode. Ending the
 chat connection cancels its reads. Background refresh triggers coalesce per
 connection, while each JOIN reads its own catalog. The channel picker says server application was not checked; `--catalog-read=observed`
@@ -437,7 +437,7 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 13. <a id="source-13"></a> [Explicit host image paste and browser requests](../digests/host-integrations.md).
 14. <a id="source-14"></a> [Live space view and its tab requests](../digests/space-view.md).
 15. <a id="source-15"></a> [Native chat component and validation boundaries](../digests/chat-ui.md).
-16. <a id="source-16"></a> [Managed human stream](../digests/chat-runtime.md).
+16. <a id="source-16"></a> [Managed human stream](../digests/chat-stream.md).
 17. <a id="source-17"></a> [Native chat input and message actions](../digests/chat-interaction.md).
 18. <a id="source-18"></a> [Native chat channels and live identities](../digests/chat-channel-view.md).
 19. <a id="source-19"></a> [Native chat hover and collapsed pastes](../digests/chat-hover-paste.md).
@@ -493,3 +493,4 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 55. <a id="source-55"></a> [Persistent TUI notices](../digests/tui-notice-toasts.md) — queue, tab ownership, input precedence and standalone behavior.
 
 56. <a id="source-56"></a> [Welcome tips](../digests/tui-welcome.md).
+57. <a id="source-57"></a> [Managed chat runtime](../digests/chat-runtime.md).

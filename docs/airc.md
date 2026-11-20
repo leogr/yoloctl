@@ -20,7 +20,7 @@ It needs a running matching controller and an AIRC image with Unix listeners,
 ACL reload/revocation, JSONL v2 receipts and presence support. The bundled source
 pin provides these interfaces; existing boxes need an explicit image rebuild
 and recreation to install them. Unsupported feature probes stop with an error,
-without falling back to TCP. See the [runtime contract](digests/chat-runtime.md)
+without falling back to TCP. See the [application contract](digests/chat-application.md)
 and the [pinned source evidence](digests/airc-upstream.md).
 
 The managed human stream additionally requires the `client-topic` and
