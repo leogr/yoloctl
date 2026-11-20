@@ -1196,6 +1196,7 @@ type spaceShowData struct {
 	NestedConfigured      string
 	NestedHostEligibility string
 	NestedReason          string
+	nestedConfigUsesFile  bool
 	MetadataOnly          bool
 	DefaultAccount        string
 	AccountDiskID         string
@@ -1365,7 +1366,11 @@ func writeSpaceShow(w io.Writer, data *spaceShowData) error {
 	_, _ = fmt.Fprintf(w, "CPUs:       %d\n", inst.CPUs)
 	_, _ = fmt.Fprintf(w, "Memory:     %s\n", humanBytes(inst.Memory))
 	if data.NestedPreference != "" {
-		_, _ = fmt.Fprintf(w, "Nested virtualization: %s (saved); %s (configured in instance file); %s (host eligibility)\n", data.NestedPreference, data.NestedConfigured, data.NestedHostEligibility)
+		configured := data.NestedConfigured
+		if data.nestedConfigUsesFile {
+			configured += " (configured in instance file)"
+		}
+		_, _ = fmt.Fprintf(w, "Nested virtualization: %s (saved); %s; %s (host eligibility)\n", data.NestedPreference, configured, data.NestedHostEligibility)
 		if data.NestedReason != "" {
 			_, _ = fmt.Fprintf(w, "Nested virtualization reason: %s\n", data.NestedReason)
 		}

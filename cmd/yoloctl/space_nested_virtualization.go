@@ -49,7 +49,8 @@ func applySpaceBootResources(ctx context.Context, boot *spaceconfig.Bootstrap, v
 // fillNestedSpaceShow labels configured state separately from host eligibility.
 func fillNestedSpaceShow(view *spaceShowData, boot *spaceconfig.Bootstrap) {
 	view.NestedPreference = vmapi.NestedPreference(boot.VM.NestedVirtualization)
-	if boot.VM.Backend == "firecracker" {
+	view.nestedConfigUsesFile = boot.VM.Backend != "firecracker"
+	if !view.nestedConfigUsesFile {
 		view.NestedConfigured = "not managed"
 		view.NestedHostEligibility = "not assessed"
 		view.NestedReason = "Firecracker nested KVM depends on host KVM support and the guest kernel"

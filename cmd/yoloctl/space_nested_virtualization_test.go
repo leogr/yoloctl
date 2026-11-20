@@ -140,6 +140,13 @@ func TestNestedShowReadsConfiguredFileWithoutClaimingEffectiveState(t *testing.T
 		t.Fatalf("%+v", view)
 	}
 	var output bytes.Buffer
+	if err := writeSpaceShow(&output, &view); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Nested virtualization: off (saved); true (configured in instance file); not managed on this system (host eligibility)\n"; !strings.Contains(output.String(), want) {
+		t.Fatalf("missing Lima status %q in:\n%s", want, &output)
+	}
+	output.Reset()
 	if err := writeSpaceShowJSON(&output, &view); err != nil {
 		t.Fatal(err)
 	}
@@ -165,12 +172,29 @@ func TestFirecrackerNestedShowReportsKVMDependencies(t *testing.T) {
 	if view.NestedPreference != "auto" || view.NestedConfigured != "not managed" || view.NestedHostEligibility != "not assessed" {
 		t.Fatalf("unexpected Firecracker nested virtualization status: %+v", view)
 	}
+	const reason = "Firecracker nested KVM depends on host KVM support and the guest kernel"
 	var output bytes.Buffer
+	if err := writeSpaceShow(&output, &view); err != nil {
+		t.Fatal(err)
+	}
+	want := "Nested virtualization: auto (saved); not managed; not assessed (host eligibility)\n" +
+		"Nested virtualization reason: " + reason + "\n"
+	if !strings.Contains(output.String(), want) {
+		t.Fatalf("missing Firecracker status %q in:\n%s", want, &output)
+	}
+	output.Reset()
 	if err := writeSpaceShowJSON(&output, &view); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output.String(), `"nested_virtualization_reason": "Firecracker nested KVM depends on host KVM support and the guest kernel"`) {
-		t.Fatal(output.String())
+	for _, want := range []string{
+		`"nested_virtualization_preference": "auto"`,
+		`"nested_virtualization_configured": "not managed"`,
+		`"nested_virtualization_host_eligibility": "not assessed"`,
+		`"nested_virtualization_reason": "` + reason + `"`,
+	} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("missing Firecracker JSON field %q in:\n%s", want, &output)
+		}
 	}
 }
 
