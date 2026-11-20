@@ -1,6 +1,6 @@
 # VM image preparation and replacement
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; OpenShell retirement `1d265df3` and accompanying changes; grow capability `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; audit kernel `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; OpenShell retirement `1d265df3` and accompanying changes; grow capability `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; audit kernel `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes; init build ID `6fa0a8ced0566ecd2f18066a0fe3a442946b632b` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Firecracker create/import and explicit image updates resolve immutable
 media under config-root `vm-images/firecracker`. Automatic selection hashes the
@@ -21,6 +21,9 @@ sparse disk creation and SSH transport require no host Python, compiler,
 filesystem utilities or SSH executable; Lima has separate prerequisites.
 Changing image assembly logic without changing its inputs/init requires bumping
 `imageRecipeVersion`. [2](#source-2) [3](#source-3) [4](#source-4) [15](#source-15)
+The init is linked without a Go build ID, which hashes every input of its
+packages, including box-only assets it never uses; its SHA256 therefore follows
+the linked program. [29](#source-29)
 
 [FACT] Ubuntu squashfs, Debian archives and runtime archives are decoded in Go.
 Links remain in a virtual tree; guest ELF dependencies are checked before ext4
@@ -151,3 +154,4 @@ mutation. An explicit Lima recreate selects the current build, so no
 26. <a id="source-26"></a> [Retired inputs](../../internal/firecracker/recipe_linux.go#L21) — `imageRecipeVersion` 4; retired paths in assemble_linux.go; `assets/vm/firecracker/pins.json` without `openshell.tgz`; Lima template without the download/Rego sections (retirement tree `3cc5e841`).
 27. <a id="source-27"></a> [cmd/yoloctl](../../cmd/yoloctl/controller_deploy.go#L1) — `checkSpaceOpenShellImage` in `space_openshell_image.go`, called from `controller_deploy.go` (sol2 space-old-image-refusal tree `f9260ea0`).
 28. <a id="source-28"></a> [cmd/yoloctl](../../cmd/yoloctl/controller_deploy.go#L1) — `space_vm_compatibility.go`, `internal/lima/openshell_compatibility.go`, Lima template marker (sol lima-vm-preflight tree `84a754b7`; nftables package and marker v2 from lima-nft-package tree `f018d8b8`).
+29. <a id="source-29"></a> [Init link](../../Makefile#L112-L117) — `build-vm-init` with `-buildid=`, the same flags in `scripts/vm/firecracker/build.py`; `TestBoxOnlyAssetEditKeepsVMImageIdentity` in `internal/firecracker/init_identity_linux_test.go`.

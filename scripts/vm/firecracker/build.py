@@ -19,7 +19,7 @@ def build_image(args):
     with tempfile.TemporaryDirectory(prefix="yfc-init-") as tmp:
         args.init_binary = str(Path(tmp) / "yoloctl-init")
         env = dict(os.environ, CGO_ENABLED="0", GOOS="linux", GOARCH="amd64", GOFLAGS="")
-        builder.inputs.run(["go", "build", "-buildvcs=false", "-trimpath", "-ldflags", "-s -w", "-o", args.init_binary, "./cmd/yoloctl-vm-guest"], cwd=REPO, env=env)
+        builder.inputs.run(["go", "build", "-buildvcs=false", "-trimpath", "-ldflags", "-s -w -buildid=", "-o", args.init_binary, "./cmd/yoloctl-vm-guest"], cwd=REPO, env=env)
         args.init_sha256 = builder.inputs.digest(args.init_binary)
         args.guest_protocol = int(re.search(r"const Protocol = (\d+)", (REPO / "internal/vmwire/boot.go").read_text())[1])
         builder.build(args)

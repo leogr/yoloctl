@@ -109,9 +109,12 @@ native-embed:
 check-native-reproducible:
 	GOOS=$(BUILD_HOST_OS) GOARCH=$(BUILD_HOST_ARCH) GOFLAGS= go run -buildvcs=false ./scripts/native-artifacts.go reproduce
 
+# The Firecracker VM image identity hashes this init. Go's build ID hashes every
+# input of every linked package, including embedded files the init never uses,
+# such as the box Dockerfile; without it the bytes follow the linked program.
 .PHONY: build-vm-init
 build-vm-init: $(BIN_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS= go build -buildvcs=false -trimpath -ldflags "-s -w" -o $(BIN_DIR)/yoloctl-vm-init-linux-amd64 ./cmd/yoloctl-vm-guest
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS= go build -buildvcs=false -trimpath -ldflags "-s -w -buildid=" -o $(BIN_DIR)/yoloctl-vm-init-linux-amd64 ./cmd/yoloctl-vm-guest
 
 build-linux-amd64: native-embed $(BIN_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS= go build -buildvcs=$(BUILDVCS) $(GUEST_GOFLAGS) -ldflags "$(GUEST_LDFLAGS)" -o $(BIN_DIR)/yoloctl-linux-amd64 $(MAIN)
