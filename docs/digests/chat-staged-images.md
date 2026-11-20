@@ -1,6 +1,6 @@
 # Native chat: text and images as one message
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; `/var/tmp` baseline note at `e3b21585fc6a31b400f01455a70838d8ebdbabb7`; re-read cited symbols when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
 
 [FACT] The controller's stream probe sets the room header's `attachments` only
 when the confined AIRC client lists `message-attachments`. Only then does the
@@ -73,9 +73,10 @@ after launch is `EffectsUncertain`, as for uploads.
 
 [FACT] Pinned AIRC publishes a message and its stages in one transaction and
 reports any failure of it as `store`. With no temporary directory set, SQLite
-falls back to `/var/tmp`, which the confined baseline does not grant, so the
-managed server's children get `/tmp` instead, applied by recreating its
-container ([runtime](chat-runtime.md)). [14](#source-14) [15](#source-15)
+falls back to `/var/tmp`, which older box policies do not grant (the baseline
+does now, see [policy boundaries](policy-images.md)), so the managed server's
+children get `/tmp` instead, applied by recreating its container
+([runtime](chat-runtime.md)). [14](#source-14) [15](#source-15)
 [16](#source-16) [17](#source-17)
 
 [FACT] Regressions cover feature gating and canonical forwarding, the tag

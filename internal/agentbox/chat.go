@@ -151,9 +151,9 @@ func addChatRunOptions(c *Config, opts *container.RunOptions) error {
 }
 
 // chatServerEnvironment points the managed server's temporary files at /tmp,
-// which its sandbox may write. Unset, SQLite falls back to /var/tmp: its
-// mode bits pass SQLite's access() probe, but the sandbox denies creating
-// files there, so a publication that needs a temporary file fails to store.
+// which every box policy lets it write. Unset, SQLite falls back to
+// /var/tmp, which older box policies do not grant, so a publication that
+// needs a temporary file failed to store there.
 // SQLITE_TMPDIR is set too because SQLite prefers it to TMPDIR.
 var chatServerEnvironment = map[string]string{"TMPDIR": "/tmp", "SQLITE_TMPDIR": "/tmp"}
 

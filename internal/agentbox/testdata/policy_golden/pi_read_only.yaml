@@ -16,6 +16,7 @@ filesystem_policy:
         - /workdir
     read_write:
         - /tmp
+        - /var/tmp
         - /home/sandbox
         - /run
         - /dev/null

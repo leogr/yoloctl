@@ -1,6 +1,6 @@
 # Policy boundaries
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; baseline writable paths at `e3b21585fc6a31b400f01455a70838d8ebdbabb7` and accompanying changes; re-read cited sources when changing behavior.
 
 Image composition, build caches and built-in installers are in
 [image composition](image-composition.md); agent updates in a running box are
@@ -12,7 +12,12 @@ install software and/or grant policy; agents do not declare capabilities.
 Composition validates catalogs and policy. [1](#source-1) [2](#source-2)
 
 [FACT] Policy selects sandbox user/group, best-effort Landlock, capability-based
-workdir access and scoped network grants. It rejects overlapping writable paths,
+workdir access and scoped network grants. Every box's baseline makes `/tmp`,
+`/var/tmp`, `/home/sandbox`, `/run`, `/dev/null` and `/dev/zero` writable.
+`/var/tmp` is there because SQLite, without `SQLITE_TMPDIR` or `TMPDIR`, sorts
+through a temporary file in `/var/tmp`, whose mode passes its `access()` probe;
+denied, Codex's index-building state upgrade failed and every Codex session
+exited at launch (`baselineFilesystem`, `TestCompose_VarTmpReadWrite`). [22](#source-22) It rejects overlapping writable paths,
 known `/dev` symlinks and invalid host patterns. PTY access grants `/dev/pts` and
 `/dev/tty`, never `/dev/ptmx`. Each declared extra mount gets Landlock access
 matching its bind (`read_only` for `:ro`, otherwise `read_write`) unless an
@@ -87,4 +92,4 @@ hosts gain no grant. Existing ancestor matching remains unchanged. [18](#source-
 19. <a id="source-19"></a> [Codex egress regressions](../../internal/agentbox/codex_egress_test.go#L19) — `TestCodexEgressGlobScope` checks composed binary paths with OPA glob.match; skips without the optional OPA tool.
 20. <a id="source-20"></a> [Extra mount regressions](../../internal/agentbox/policy_golden_test.go#L376) — `TestPolicyGrantsDeclaredExtraMounts`; golden `extra_mounts`.
 21. <a id="source-21"></a> [Static composition regressions](../../internal/agentbox/compose_surface_test.go#L1) — `TestComposeExplicitNetworkCapabilitiesMatchGoldens`, `TestComposeUnconfinedNetworkKeepsFilesystemPolicy`, `TestComposeExtraReadOnlyMountDesiredPolicy`; `ComposePolicy` and `compilePolicy` in compose.go L40-L226.
-
+22. <a id="source-22"></a> [Baseline filesystem](../../internal/agentbox/compose.go#L405) — `baselineFilesystem`; `TestCompose_VarTmpReadWrite` in compose_var_tmp_test.go; the goldens in testdata/policy_golden.

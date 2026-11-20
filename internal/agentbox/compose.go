@@ -391,9 +391,12 @@ func isAncestor(parent, child string) bool {
 // fs.workdir.write capability.
 //
 // Mirrors what the presets in assets/sandbox/presets/ agree on: system paths
-// read-only (so the agent can't tamper), /tmp + /run + /dev/null + /dev/zero
-// always writable (the tool ecosystem expects them), /home/sandbox always
-// writable (every tool's cache + config lives there).
+// read-only (so the agent can't tamper), /tmp + /var/tmp + /run + /dev/null +
+// /dev/zero always writable (the tool ecosystem expects them; SQLite, for
+// one, without SQLITE_TMPDIR or TMPDIR sorts through a temporary file in the
+// first of /var/tmp, /usr/tmp and /tmp whose mode passes access(), so a
+// denied /var/tmp fails its index builds), /home/sandbox always writable (every tool's cache + config lives
+// there).
 //
 // No terminal device is in the baseline: /dev/pts, /dev/ptmx and /dev/tty are
 // all denied by Landlock unless the box opts into fs.pty.allocate. The managed
@@ -409,7 +412,7 @@ func baselineFilesystem() filesystemPolicy {
 			"/etc", "/app", "/var/log",
 		},
 		ReadWrite: []string{
-			"/tmp", "/home/sandbox", "/run",
+			"/tmp", "/var/tmp", "/home/sandbox", "/run",
 			"/dev/null", "/dev/zero",
 		},
 	}

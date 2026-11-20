@@ -15,6 +15,7 @@ filesystem_policy:
         - /var/log
     read_write:
         - /tmp
+        - /var/tmp
         - /home/sandbox
         - /run
         - /dev/null

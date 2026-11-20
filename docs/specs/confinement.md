@@ -32,6 +32,9 @@ named `sandbox` group and permits it to share the numeric host GID with the
 existing group, except GID zero, which is rejected before identity changes.
 It does not change workdir ownership. [1](#source-1)
 
+[FACT] Every box may write `/tmp` and `/var/tmp` (SQLite's default temporary
+directory), its home, `/run`, `/dev/null` and `/dev/zero`. [1](#source-1)
+
 [FACT] PTY access is opt-in through `/dev/pts` and `/dev/tty`; writable symlink
 paths such as `/dev/ptmx` are rejected by policy composition. Preserve policy
 goldens and the runtime feature smoke when changing grants. [1](#source-1)
