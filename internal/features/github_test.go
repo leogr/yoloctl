@@ -43,7 +43,8 @@ func TestGitHubFeatureRendersTheGhInstall(t *testing.T) {
 }
 
 // The script accepts only the published key set, gives apt only those keys and
-// installs gh from GitHub's repository at the path the capability names.
+// installs gh only from GitHub's repository at the path the capability names.
+// GnuPG runs under a long temporary path, so no step may need an agent socket.
 func TestGitHubInstallTrustsOnlyThePublishedKeys(t *testing.T) {
 	if _, err := exec.LookPath("gpg"); err != nil {
 		t.Skip("gpg not installed")
@@ -59,8 +60,12 @@ func TestGitHubInstallTrustsOnlyThePublishedKeys(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			bin := filepath.Join(root, "bin")
-			if err := os.Mkdir(bin, 0o700); err != nil {
-				t.Fatal(err)
+			// Beyond every Unix socket path limit, as macOS temporary paths can be.
+			long := filepath.Join(root, strings.Repeat("t", 110))
+			for _, dir := range []string{bin, long} {
+				if err := os.Mkdir(dir, 0o700); err != nil {
+					t.Fatal(err)
+				}
 			}
 			key := tc.key
 			if key == "" {
@@ -77,8 +82,9 @@ func TestGitHubInstallTrustsOnlyThePublishedKeys(t *testing.T) {
 			}
 			keyring := filepath.Join(root, "keyrings", "github.gpg")
 			sources := filepath.Join(root, "github-cli.sources")
-			cmd := exec.Command("sh", "-c", githubInstallScript, "github-install", key, keyring, sources, filepath.Join(bin, "gh"))
-			cmd.Env = []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "TMPDIR=" + root, "TEST_ROOT=" + root}
+			preferences := filepath.Join(root, "github-cli.pref")
+			cmd := exec.Command("sh", "-c", githubInstallScript, "github-install", key, keyring, sources, preferences, filepath.Join(bin, "gh"))
+			cmd.Env = []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "TMPDIR=" + long, "TEST_ROOT=" + root}
 			output, err := cmd.CombinedOutput()
 			calls, _ := os.ReadFile(filepath.Join(root, "calls"))
 			if !tc.ok {
@@ -97,6 +103,12 @@ func TestGitHubInstallTrustsOnlyThePublishedKeys(t *testing.T) {
 			want := "Types: deb\nURIs: https://cli.github.com/packages\nSuites: stable\nComponents: main\nArchitectures: arm64\nSigned-By: " + keyring + "\n"
 			if string(got) != want {
 				t.Fatalf("sources = %q, want %q", got, want)
+			}
+			// Only GitHub's gh is a candidate, whatever release the base prefers.
+			got, _ = os.ReadFile(preferences)
+			want = "Package: gh\nPin: origin cli.github.com\nPin-Priority: 1001\n\nPackage: gh\nPin: version *\nPin-Priority: -1\n"
+			if string(got) != want {
+				t.Fatalf("preferences = %q, want %q", got, want)
 			}
 			home := filepath.Join(root, "check")
 			if err := os.Mkdir(home, 0o700); err != nil {

@@ -65,10 +65,10 @@ smoke checks `bwrap` on the confined PATH, not nested sandbox operation.
 required capabilities. It uses the ordinary recipe hash and refresh/cache rules;
 AWS credential and custom-egress setup remain explicit. [22](#source-22)
 
-[FACT] The `github` feature installs the latest `gh` from GitHub's apt
-repository at `/usr/bin/gh`, the path `network.github` names. The embedded
+[FACT] The `github` feature installs the latest `gh`, pinned to GitHub's apt
+repository, at `/usr/bin/gh`, the path `network.github` names. The embedded
 keyring must hold exactly the two published primary keys; apt receives only
-those. Key rotation is a source update. Every box with `github` gets a new
+those. Rotation is a source update. Every box with `github` gets a new
 composed image. [23](#source-23) [24](#source-24)
 
 ## Sources
@@ -95,5 +95,5 @@ composed image. [23](#source-23) [24](#source-24)
 20. <a id="source-20"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L14) — default args delegate confinement to OpenShell.
 21. <a id="source-21"></a> [Codex install regression](../../internal/features/features_test.go#L56) — `TestCodexFeatureInstallsBubblewrap`.
 22. <a id="source-22"></a> [AWS feature](../../internal/features/aws.go#L1) — embedded installer/key recipe; configuration is described in `bedrock.md`.
-23. <a id="source-23"></a> [GitHub CLI feature](../../internal/features/github-install.sh#L1-L35) — key-set check, apt keyring and install; recipe `github.go`.
+23. <a id="source-23"></a> [GitHub CLI feature](../../internal/features/github-install.sh#L1-L36) — key check, keyring, origin pin, install; recipe `github.go`.
 24. <a id="source-24"></a> [GitHub CLI Linux install](https://github.com/cli/cli/blob/trunk/docs/install_linux.md) — published fingerprints and keyring checksums, checked 2026-11-20.
