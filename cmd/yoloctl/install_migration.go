@@ -117,15 +117,13 @@ func installSpaceAdvice(ctx context.Context, target string) []spaceAdvice {
 			a.Items = append(a.Items, adviceItem{Label: "update", Args: []string{"space", "upgrade", name}, Note: note})
 		}
 		if boot.VM.Backend == "firecracker" {
-			expected, err := defaultInstallImage()
-			switch {
-			case err == nil && boot.VM.Image == expected:
-			case errors.Is(err, os.ErrNotExist) || err == nil && expected == "":
-				a.Items = append(a.Items, adviceItem{Label: "optional", Args: []string{"space", "recreate", name, "--update-vm-image"},
-					Note: "install did not change this space's VM image; recreating uses this release's: " + recreateEffects})
+			switch state, err := firecrackerImageState(boot); {
 			case err != nil:
 				a.Problem = "could not check this space's VM image: " + err.Error()
-			default:
+			case state == vmImageNotPrepared:
+				a.Items = append(a.Items, adviceItem{Label: "optional", Args: []string{"space", "recreate", name, "--update-vm-image"},
+					Note: "install did not change this space's VM image; recreating uses this release's: " + recreateEffects})
+			case state == vmImageOther:
 				a.Items = append(a.Items, adviceItem{Label: "optional", Args: []string{"space", "recreate", name, "--update-vm-image"},
 					Note: "this space's VM image is not this release's default; install did not change it. Recreating uses this release's: " + recreateEffects})
 			}
@@ -218,50 +216,100 @@ func limaArchives(raw []byte) ([]any, error) {
 	return archives, nil
 }
 
+// vmImageState compares a Firecracker space's recorded image with this
+// build's default selection (the published default for this build's recipe).
+type vmImageState int
+
+const (
+	vmImageCurrent     vmImageState = iota // the space uses this build's default image
+	vmImageNotPrepared                     // this build's default image is not prepared on this host
+	vmImageOther                           // the space uses another image
+)
+
+// firecrackerImageState reads this build's default image read-only: it never
+// prepares, downloads or verifies media beyond the published default.
+func firecrackerImageState(boot *spaceconfig.Bootstrap) (vmImageState, error) {
+	expected, err := defaultInstallImage()
+	switch {
+	case err == nil && boot.VM.Image == expected:
+		return vmImageCurrent, nil
+	case errors.Is(err, os.ErrNotExist) || err == nil && expected == "":
+		return vmImageNotPrepared, nil
+	case err != nil:
+		return 0, err
+	}
+	return vmImageOther, nil
+}
+
+// limaStackState compares a Lima space's effective container-stack archives
+// with this build's template pins.
+type limaStackState int
+
+const (
+	limaStackMatches       limaStackState = iota // the effective archives equal this build's pins
+	limaStackUnpinnedBuild                       // this build pins no archives: nothing to compare
+	limaStackDiffers                             // the space pins other archives
+	limaStackUnpinnedSpace                       // the space pins none and follows the host's Lima default
+)
+
 // installLimaAdvice is the optional Lima stack replacement for a space whose
 // effective archives differ from this build's pins, or a problem when the
 // effective archives cannot be proved.
 func installLimaAdvice(space string) (*adviceItem, string) {
+	state, problem := readLimaStackState(space)
+	if problem != "" || state == limaStackMatches || state == limaStackUnpinnedBuild {
+		return nil, problem
+	}
+	note := "replaces this space's Lima container stack with this build's pins, after the controller update; recreating starts the VM: " + recreateEffects
+	if state == limaStackUnpinnedSpace {
+		note = "this space's stack is unpinned and follows the host's Lima default. " + strings.ToUpper(note[:1]) + note[1:]
+	}
+	return &adviceItem{Label: "optional", Args: []string{"space", "recreate", space}, Note: note}, ""
+}
+
+// readLimaStackState proves the space's effective archives, or names the
+// problem that prevents it (inherited or global Lima configuration, unreadable
+// or invalid configuration).
+func readLimaStackState(space string) (limaStackState, string) {
 	desired, err := limaArchives(vmhost.TemplateWithAccountDisk(nil, "", false))
 	if err != nil {
-		return nil, "could not read this build's Lima pins: " + err.Error()
+		return 0, "could not read this build's Lima pins: " + err.Error()
 	}
 	if len(desired) == 0 {
-		return nil, ""
+		return limaStackUnpinnedBuild, ""
 	}
 	home, err := spaceconfig.LimaHome(space)
 	if err != nil {
-		return nil, "could not find the Lima home: " + err.Error()
+		return 0, "could not find the Lima home: " + err.Error()
 	}
 	for _, name := range []string{"default.yaml", "override.yaml"} {
 		raw, err := safepath.ReadFile(home, filepath.Join("_config", name), 1<<20)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, "could not read the global Lima configuration: " + err.Error()
+			return 0, "could not read the global Lima configuration: " + err.Error()
 		}
 		if len(strings.TrimSpace(string(raw))) > 0 {
-			return nil, "could not prove this space's Lima stack: a global Lima configuration is present"
+			return 0, "could not prove this space's Lima stack: a global Lima configuration is present"
 		}
 	}
 	dir, err := vmhost.InstanceDir(space)
 	if err != nil {
-		return nil, "could not read this space's Lima configuration: " + err.Error()
+		return 0, "could not read this space's Lima configuration: " + err.Error()
 	}
 	raw, err := safepath.ReadFile(dir, "lima.yaml", 1<<20)
 	if err != nil {
-		return nil, "could not read this space's Lima configuration: " + err.Error()
+		return 0, "could not read this space's Lima configuration: " + err.Error()
 	}
 	effective, err := limaArchives(raw)
 	if err != nil {
-		return nil, "could not prove this space's Lima stack: " + err.Error()
+		return 0, "could not prove this space's Lima stack: " + err.Error()
 	}
-	if reflect.DeepEqual(desired, effective) {
-		return nil, ""
+	switch {
+	case reflect.DeepEqual(desired, effective):
+		return limaStackMatches, ""
+	case len(effective) == 0:
+		return limaStackUnpinnedSpace, ""
 	}
-	note := "replaces this space's Lima container stack with this build's pins, after the controller update; recreating starts the VM: " + recreateEffects
-	if len(effective) == 0 {
-		note = "this space's stack is unpinned and follows the host's Lima default. " + strings.ToUpper(note[:1]) + note[1:]
-	}
-	return &adviceItem{Label: "optional", Args: []string{"space", "recreate", space}, Note: note}, ""
+	return limaStackDiffers, ""
 }
 
 // Read precisely one answer without consuming input meant for a later lifecycle

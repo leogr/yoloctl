@@ -91,6 +91,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 		return cliOperation(cmd, titles[action]+" space "+space, results[action], space, func() error {
 			upgrade := action == "upgrade"
 			update, restartSessions := upgrade, false
+			var vmResult spaceUpgradeVMResult
 			if action == "start" {
 				update, _ = cmd.Flags().GetBool("update-controller")
 				restartSessions, _ = cmd.Flags().GetBool("restart-sessions")
@@ -114,6 +115,19 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				}
 				if upgrade && repaired {
 					return finishRepairedSpaceUpgrade(cmd, space)
+				}
+				if upgrade {
+					// A VM that this build proves does not match it is offered for
+					// recreation before the controller update; the recreate deploys
+					// this build, so the box review continues on the new VM.
+					recreated, result, err := offerSpaceUpgradeVMRecreate(cmd, space)
+					if err != nil {
+						return err
+					}
+					if recreated {
+						return finishRepairedSpaceUpgrade(cmd, space)
+					}
+					vmResult = result
 				}
 			}
 			release, err := lockHostLifecycle(cmd, space)
@@ -169,7 +183,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 				// lock; each restart takes the controller's own native locks.
 				release()
 				if upgrade {
-					return finishSpaceUpgrade(cmd, boot)
+					return finishSpaceUpgrade(cmd, boot, vmResult)
 				}
 				err = offerSessionRestarts(cmd.Context(), space, hostSessionRestartOffer(cmd, boot), restartSessions)
 				if err == nil {

@@ -138,7 +138,7 @@ show only recovery guidance. [9](#source-9)
    [destination boundary](../../internal/installer/paths.go#L1-L87), `ValidatePaths`;
    [fault/concurrency regressions](../../internal/installer/engine_test.go#L1-L307), `TestLockRetriesOnlySpuriousENOENT` in lock_retry_test.go;
    [overlap regressions](../../internal/installer/paths_test.go#L1-L193).
-9. <a id="source-9"></a> [Space advice](../../cmd/yoloctl/install_migration.go#L1-L292), `installSpaceAdvice`, `printSpaceAdvice`, `installLimaAdvice`;
+9. <a id="source-9"></a> [Space advice](../../cmd/yoloctl/install_migration.go#L1-L342), `installSpaceAdvice`, `printSpaceAdvice`, `installLimaAdvice`, `firecrackerImageState`, `readLimaStackState` (shared with `space upgrade`);
    [inventory](../../cmd/yoloctl/install_inventory.go#L1-L48), `consentSnapshot`, `readInstallConsent`;
    [default metadata](../../internal/firecracker/recipe_linux.go#L60-L88), `ReadDefaultImage`.
 10. <a id="source-10"></a> [Install shell setup](install-shell-setup.md).

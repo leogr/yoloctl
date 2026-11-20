@@ -28,7 +28,14 @@ eligible sessions from the previous build. Reviews the changes needed by the
 space's running boxes and asks before replacing any container. Replacement
 discards files stored only in that container. Stopped boxes stay stopped, with
 a follow-up command for known drift. Explicit declines are warnings. Actions
-that could not be decided or completed return a nonzero exit.`,
+that could not be decided or completed return a nonzero exit.
+
+First, upgrade checks whether the space's VM matches this build: on
+Firecracker, whether it uses this build's default VM image; on Lima, whether
+its container stack uses this build's pins. Other Lima template changes are
+not detectable and are reported as such. When the VM does not match, upgrade
+shows why and asks before running space recreate (with --update-vm-image on
+Firecracker); the box review then continues on the new VM.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: hostControllerLifecycle("upgrade"),
 	}
@@ -75,6 +82,8 @@ type spaceUpgradeOps struct {
 	room     func(context.Context) (managedchat.Status, error)
 	recreate func(context.Context, spaceUpgradeRow) error
 	ensure   func(context.Context, string) error
+	// vm is the space VM recreation decided before the controller update.
+	vm spaceUpgradeVMResult
 }
 
 func finishRepairedSpaceUpgrade(cmd *cobra.Command, space string) error {
@@ -85,10 +94,10 @@ func finishRepairedSpaceUpgrade(cmd *cobra.Command, space string) error {
 	if err := checkCommandVMCompatibility(cmd.Context(), boot); err != nil {
 		return err
 	}
-	return finishSpaceUpgrade(cmd, boot)
+	return finishSpaceUpgrade(cmd, boot, spaceUpgradeVMResult{})
 }
 
-func finishSpaceUpgrade(cmd *cobra.Command, boot *spaceconfig.Bootstrap) error {
+func finishSpaceUpgrade(cmd *cobra.Command, boot *spaceconfig.Bootstrap, vm spaceUpgradeVMResult) error {
 	cliNotice(logging.Host, "Space %s has selected controller build %s. Checking its boxes.", boot.Name, boot.Bundle)
 	offer := hostSessionRestartOffer(cmd, boot)
 	offer.drift = func(ctx context.Context, names []string) ([]boxDriftView, error) {
@@ -116,6 +125,7 @@ func finishSpaceUpgrade(cmd *cobra.Command, boot *spaceconfig.Bootstrap) error {
 		ensure: func(ctx context.Context, room string) error {
 			return ensureControllerChat(ctx, boot, cmd.ErrOrStderr(), room)
 		},
+		vm: vm,
 	}
 	err := runSpaceUpgrade(cmd.Context(), boot.Name, ops)
 	warnHostDisk(cmd.Context(), boot)
@@ -302,6 +312,12 @@ func runSpaceUpgrade(ctx context.Context, space string, ops spaceUpgradeOps) err
 
 	var declined, outstanding []string
 	defer func() {
+		if len(ops.vm.declined) != 0 {
+			cliLogLines(prettylog.LevelWarn, logging.Host, "Space VM left as you chose", ops.vm.declined)
+		}
+		if len(ops.vm.outstanding) != 0 {
+			cliLogLines(prettylog.LevelWarn, logging.Host, "Outstanding space action", ops.vm.outstanding)
+		}
 		if len(declined) != 0 {
 			cliLogLines(prettylog.LevelWarn, logging.Host, "Boxes left as you chose", declined)
 		}
@@ -397,8 +413,12 @@ func runSpaceUpgrade(ctx context.Context, space string, ops spaceUpgradeOps) err
 			}
 		}
 	}
-	if len(outstanding) != 0 {
-		return asUserError(fmt.Errorf("controller updated; %d box actions completed, %d outstanding", completed, len(outstanding)))
+	if len(outstanding) != 0 || len(ops.vm.outstanding) != 0 {
+		return asUserError(fmt.Errorf("controller updated; %d box actions completed, %d outstanding", completed, len(outstanding)+len(ops.vm.outstanding)))
+	}
+	if len(ops.vm.declined) != 0 && len(declined) == 0 {
+		cliNotice(logging.Host, "Space upgraded. %d box actions completed. The VM recreate was left as you chose.", completed)
+		return nil
 	}
 	if len(declined) != 0 {
 		cliNotice(logging.Host, "Space upgraded. %d box actions completed. %s left as you chose.", completed, boxCount(len(declined)))

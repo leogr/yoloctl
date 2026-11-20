@@ -1,11 +1,26 @@
 # Upgrading a space
 
-Verification: `b54fc365f39f3319e9fd680789ed8318d84e45bb` and accompanying changes.
+Verification: `b54fc365f39f3319e9fd680789ed8318d84e45bb` and accompanying changes; VM replacement check `e3b21585fc6a31b400f01455a70838d8ebdbabb7` and accompanying changes.
 
 [FACT] Host-only `space upgrade [SPACE]` resolves the space like `space start`.
 It selects the invoking build, with the existing VM compatibility, separate VM
 recreation consent and controller startup checks. The host lifecycle lock is
 released before box planning, prompts or requests. [1](#source-1) [6](#source-6)
+
+[FACT] After the VM compatibility check and before the controller update,
+upgrade compares the VM with this build using install advice's read-only
+selections. A Firecracker VM matches when its recorded image is this build's
+published default image. A Lima VM matches when its effective container-stack
+archives equal this build's template pins. Upgrade reports problems proving
+the Lima archives, and other Lima template differences, as not detectable. It
+never boots, prepares or downloads media for this check. For a mismatch,
+upgrade shows the reason and recreate command and asks once, default No, on
+terminal input and stderr. A yes runs the compatibility repair's `space
+recreate --force` (with `--update-vm-image` on Firecracker) and continues with
+the repaired box review. A no warns with the command and keeps success. No
+terminal, EOF or another answer leaves it outstanding with a nonzero result.
+The answer is read byte by byte, so later box answers stay unread.
+[9](#source-9) [10](#source-10)
 
 [FACT] The upgrade combines the controller's box inventory, managed room status
 and full drift in groups of at most 64 declared boxes. Each group has a shared
@@ -56,3 +71,5 @@ without a retry prompt. A later explicit invocation reads state again.
 6. <a id="source-6"></a> [space_upgrade.go](../../cmd/yoloctl/space_upgrade.go#L80) — `finishRepairedSpaceUpgrade`.
 7. <a id="source-7"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2378) — `newAgentboxRestartCmd` and `recreateAgentbox`.
 8. <a id="source-8"></a> [managed_applier.go](../../cmd/yoloctl/managed_applier.go#L87) — `Recreate`.
+9. <a id="source-9"></a> [space_upgrade_vm.go](../../cmd/yoloctl/space_upgrade_vm.go#L39) — `readSpaceVMReplacement`, `offerSpaceUpgradeVMRecreate`, `confirmSpaceUpgradeVM`; install_migration.go `firecrackerImageState`, `readLimaStackState`; call site in controller_lifecycle.go `hostControllerLifecycle`; result reporting in space_upgrade.go `runSpaceUpgrade`.
+10. <a id="source-10"></a> [space_upgrade_vm_test.go](../../cmd/yoloctl/space_upgrade_vm_test.go#L1) — Firecracker/Lima selection cases, consent matrix, exit status, and the order before the controller update.

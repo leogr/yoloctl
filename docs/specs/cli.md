@@ -68,7 +68,8 @@ home for a new space. Reads and cleanup retain their existing behavior.
 [19](#source-19)
 
 [FACT] Host-only `space upgrade [SPACE]` selects this build for a configured
-space, restarts eligible stale sessions and checks every declared box. Each
+space, restarts eligible stale sessions and checks every declared box. It first
+offers a VM recreate when this build proves the VM does not match it. Each
 replacement requires named terminal consent. Explicit declines are reported
 with follow-up commands and keep a successful exit when everything else
 completes. Stopped boxes stay stopped. Unresolved actions and failures return

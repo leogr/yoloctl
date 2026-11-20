@@ -143,8 +143,11 @@ by its restart, and the run fails naming its recreate command [27](#source-27); 
 full drift inspection proves (restart, explicit recreation, or undetermined
 with `box inspect`). [11](#source-11) [13](#source-13)
 
-[FACT] `space upgrade` combines the controller update and holder-bound
-restarts with a full box drift plan. Before box changes, named default-No
+[FACT] `space upgrade` first asks, default No, before recreating a VM that
+this build proves does not match it: a Firecracker image other than this
+build's default, or Lima container-stack pins other than this build's. It
+reports other Lima template differences as not detectable. It combines the
+controller update and holder-bound restarts with a full box drift plan. Before box changes, named default-No
 questions cover each replacement and each running policy restart. A replacement
 drops container-only state, keeping the workdir, account state and separate
 cache. The selected chat server is handled last and its restored room must
