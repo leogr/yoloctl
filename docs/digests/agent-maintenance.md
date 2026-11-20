@@ -10,8 +10,9 @@ Every other npm install — npm features, the `npm` development feature, an agen
 feature on a box whose agent is something else, manual installs — keeps
 `/home/sandbox/.npm-global`. Profile validation accepts any name in npm's
 URL-safe name set (optionally scoped; published uppercase and `~'!()*` names
-included), and the recipe single-quotes it, so the package stays one data word
-in the recipe and the update argv. [1](#source-1) [2](#source-2) [3](#source-3)
+included), and the recipe single-quotes it and both installs pass it after
+`--`, so the package stays one data word that neither the shell nor npm reads
+as anything else. [1](#source-1) [2](#source-2) [3](#source-3)
 [19](#source-19)
 
 [FACT] `RuntimeFeatures` appends the internal `yoloctl:agent-npm:<escaped
@@ -65,10 +66,10 @@ the forced update and the maintenance cache owner. [17](#source-17)
 4. <a id="source-4"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L30-L52) — `RuntimeFeatures`.
 5. <a id="source-5"></a> [internal/features/agentnpm.go](../../internal/features/agentnpm.go#L1-L128) — runtime feature name, `LookupRuntime`, `npmInstaller`, `recipe`, `agentNpmInstallDockerfile`, `agentNpmFinalPath`.
 6. <a id="source-6"></a> [internal/features/features.go](../../internal/features/features.go#L373-L429) — `renderDockerfile`.
-7. <a id="source-7"></a> [Rendering regressions](../../internal/features/agentnpm_test.go#L1-L146) — tool vs agent, first supplier, appended/pinned/duplicate, OpenCode check, names.
-8. <a id="source-8"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L98-L160) — `agentMaintenanceExecArgs`, `npmInstallGlobalAtLatestArgs`, `fetchInstalledNpmVersion`.
+7. <a id="source-7"></a> [Rendering regressions](../../internal/features/agentnpm_test.go#L1-L150) — tool vs agent, first supplier, appended/pinned/duplicate, OpenCode check, names.
+8. <a id="source-8"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L98-L162) — `agentMaintenanceExecArgs`, `npmInstallGlobalAtLatestArgs`, `fetchInstalledNpmVersion`.
 9. <a id="source-9"></a> [Native install argv](../../cmd/yoloctl/agent_distribution.go#L102-L118) — `nativeInstallArgs` uses the shared exec builder.
-10. <a id="source-10"></a> [Maintenance argv regression](../../cmd/yoloctl/autoupdate_test.go#L11-L52) — `TestNpmAgentMaintenanceUsesExplicitConfigPaths`.
+10. <a id="source-10"></a> [Maintenance argv regression](../../cmd/yoloctl/autoupdate_test.go#L11-L64) — `TestNpmAgentMaintenanceUsesExplicitConfigPaths`, `TestNpmAgentMaintenanceEndsOptionsBeforeThePackage`.
 11. <a id="source-11"></a> [Target and failure regressions](../../cmd/yoloctl/container_target_test.go#L64-L172) — `TestMaintenanceExecsUseSystemPathAndExactlySelectedContainer`, `TestNpmMaintenanceFailureExplainsSystemPathAndAutoupdateOptOut`.
 12. <a id="source-12"></a> [Explicit update](../../cmd/yoloctl/agent.go#L144-L166) — selected ID, probe and same-version install.
 13. <a id="source-13"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L97-L101) — `AgentNpmReadCapability`; `OriginAgent` in the `Origin` constants.
@@ -77,5 +78,5 @@ the forced update and the maintenance cache owner. [17](#source-17)
 16. <a id="source-16"></a> [Image regression](../../internal/agentbox/resolved_image_test.go#L112-L197) — `TestResolvedImage_AgentNpmPackageSelectsTheManagedPrefix`, `TestResolvedImage_UnsuppliedAgentNpmInstallFollowsOCIFeatures`.
 17. <a id="source-17"></a> [scripts/smoke/image-ensure.sh](../../scripts/smoke/image-ensure.sh#L23-L27) — managed and user package paths, write refusal and forced update.
 18. <a id="source-18"></a> [scripts/smoke/common.sh](../../scripts/smoke/common.sh#L46-L68) — `smoke_check_image_identity` managed-prefix owner and mode.
-19. <a id="source-19"></a> [Package names](../../internal/agentnpm/agentnpm.go#L39-L58) — `ValidatePackage`, `ShellQuote`; used by `Profile.Validate` and the runtime-name parser; regressions in agentnpm_test.go and profile_test.go `TestValidate`.
+19. <a id="source-19"></a> [Package names](../../internal/agentnpm/agentnpm.go#L39-L59) — `ValidatePackage`, `ShellQuote`; used by `Profile.Validate` and the runtime-name parser; regressions in agentnpm_test.go and profile_test.go `TestValidate`.
 20. <a id="source-20"></a> [OCI alias check](../../internal/ocifeature/runtime_env.go#L316-L337) — `networkToolPrefixes`; regression `TestAliasGuardLeavesTheManagedNpmPrefixToLinkGuard`.

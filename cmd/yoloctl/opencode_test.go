@@ -70,7 +70,7 @@ func TestOpenCodeManagedLaunchAndState(t *testing.T) {
 		}
 	}
 	// The agent's own package goes to the managed prefix, never the user's.
-	if !strings.Contains(recipe, "npm install -g 'opencode-ai@latest' --prefix=/opt/yoloctl/npm") || strings.Contains(recipe, "opencode-ai@latest --prefix=/home/sandbox/.npm-global") {
+	if !strings.Contains(recipe, "npm install -g --prefix=/opt/yoloctl/npm --cache=\"/var/cache/yoloctl/npm/$(id -u)\" --prefer-online -- 'opencode-ai@latest'") || strings.Contains(recipe, "opencode-ai@latest --prefix=/home/sandbox/.npm-global") {
 		t.Fatalf("OpenCode image does not install the agent in the managed prefix:\n%s", recipe)
 	}
 	if profile.NpmPackage != "opencode-ai" {

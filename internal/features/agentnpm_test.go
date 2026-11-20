@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	managedCodexInstall = "npm install -g '@openai/codex@latest' --prefix=/opt/yoloctl/npm"
+	managedCodexInstall = "npm install -g --prefix=/opt/yoloctl/npm --cache=\"/var/cache/yoloctl/npm/$(id -u)\" --prefer-online -- '@openai/codex@latest'"
 	homeCodexInstall    = "npm install -g @openai/codex@latest --prefix=/home/sandbox/.npm-global"
 	agentPathLine       = "ENV PATH=/opt/yoloctl/npm/bin:$PATH"
 )
@@ -77,13 +77,13 @@ func TestAgentNpmInstallIsAppendedOnceWithoutASupplier(t *testing.T) {
 	cfg := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", cfg)
 	alone := render(t, "github", AgentNpmRuntime("my-cli"))
-	if strings.Count(alone, "npm install -g 'my-cli@latest' --prefix=/opt/yoloctl/npm") != 1 {
+	if strings.Count(alone, "npm install -g --prefix=/opt/yoloctl/npm --cache=\"/var/cache/yoloctl/npm/$(id -u)\" --prefer-online -- 'my-cli@latest'") != 1 {
 		t.Fatalf("custom agent package not installed in the managed prefix:\n%s", alone)
 	}
 	writeUserFeature(t, testFeaturesDir(t), "my-cli-pinned", "name: my-cli-pinned\ndescription: pinned\ninstall:\n  kind: npm\n  package: my-cli\n  version: 1.2.3\n")
 	writeUserFeature(t, testFeaturesDir(t), "my-cli-again", "name: my-cli-again\ndescription: again\ninstall:\n  kind: npm\n  package: my-cli\n")
 	both := render(t, "my-cli-pinned", "my-cli-again", AgentNpmRuntime("my-cli"))
-	if strings.Count(both, "npm install -g ") != 1 || !strings.Contains(both, "'my-cli@latest' --prefix=/opt/yoloctl/npm") {
+	if strings.Count(both, "npm install -g ") != 1 || !strings.Contains(both, "--prefer-online -- 'my-cli@latest'") {
 		t.Fatalf("agent package not installed exactly once at latest:\n%s", both)
 	}
 	// As a tool the pinned feature keeps its version and the user's prefix.
@@ -93,11 +93,15 @@ func TestAgentNpmInstallIsAppendedOnceWithoutASupplier(t *testing.T) {
 	}
 }
 
-// A published name with a quote stays one shell word in the recipe.
+// A published name with a quote stays one shell word in the recipe, and one
+// starting with "-" follows "--", so npm never reads it as an option.
 func TestAgentNpmInstallQuotesThePackage(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if out := render(t, AgentNpmRuntime("-tool")); !strings.Contains(out, "--prefer-online -- '-tool@latest'\n") {
+		t.Fatalf("dash package not after --:\n%s", out)
+	}
 	out := render(t, AgentNpmRuntime("o'brien"))
-	if !strings.Contains(out, `npm install -g 'o'\''brien@latest' --prefix=/opt/yoloctl/npm`) {
+	if !strings.Contains(out, `--prefer-online -- 'o'\''brien@latest'`) {
 		t.Fatalf("package not quoted:\n%s", out)
 	}
 }

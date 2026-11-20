@@ -38,15 +38,16 @@ func PackageJSON(pkg string) string {
 
 // packageName accepts every name npm can publish or has published (legacy
 // uppercase such as JSONStream and the special characters ~'!()* included):
-// npm names are URL-safe, one optional "@scope/" apart. The image recipe
-// single-quotes the name (ShellQuote), so none of these characters is read by
-// the shell; anything outside this set can never be an npm package.
+// npm names are URL-safe, one optional "@scope/" apart, of any length an
+// existing package may have. The image recipe single-quotes the name
+// (ShellQuote) and both installs pass it after "--", so neither the shell nor
+// npm reads it as anything else; outside this set nothing is an npm package.
 var packageName = regexp.MustCompile(`^(@[A-Za-z0-9._~!*'()-]+/[A-Za-z0-9._~!*'()-]+|[A-Za-z0-9._~!*'()-]+)$`)
 
 // ValidatePackage rejects a string that cannot be an npm registry package
 // name, so it stays one data word wherever a recipe or argv carries it.
 func ValidatePackage(pkg string) error {
-	if len(pkg) > 214 || !packageName.MatchString(pkg) {
+	if !packageName.MatchString(pkg) {
 		return fmt.Errorf("invalid npm package name %q: use a registry name such as my-cli or @scope/my-cli", pkg)
 	}
 	return nil

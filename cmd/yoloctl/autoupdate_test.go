@@ -45,11 +45,20 @@ func TestNpmAgentMaintenanceUsesExplicitConfigPaths(t *testing.T) {
 				"--prefix=/opt/yoloctl/npm",
 				"--cache=/var/lib/yoloctl-maint/.npm",
 				"--prefer-online",
+				"--",
 				tc.pkg + "@latest",
 			}
 			if got := calls(); len(got) != 1 || !slices.Equal(got[0], want) {
 				t.Fatalf("npm install calls = %q, want one call %q", got, want)
 			}
 		})
+	}
+}
+
+// A published name starting with "-" stays the package in the update argv.
+func TestNpmAgentMaintenanceEndsOptionsBeforeThePackage(t *testing.T) {
+	argv := npmInstallGlobalAtLatestArgs(strings.Repeat("f", 64), "-tool")
+	if got := argv[len(argv)-2:]; !slices.Equal(got, []string{"--", "-tool@latest"}) {
+		t.Fatalf("argv tail = %q", got)
 	}
 }

@@ -144,6 +144,8 @@ func npmInstallGlobalAtLatestArgs(containerID, pkg string) []string {
 		"--prefix="+agentnpm.Prefix,
 		"--cache="+agentnpm.Cache,
 		"--prefer-online",
+		// A published name may start with "-"; "--" keeps it the package.
+		"--",
 		pkg+"@latest",
 	)
 }

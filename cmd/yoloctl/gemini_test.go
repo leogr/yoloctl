@@ -58,7 +58,7 @@ func TestGeminiManagedLaunchAndState(t *testing.T) {
 		t.Fatalf("Gemini image does not install CLI: installed=%v, error=%v", installed, err)
 	}
 	// The agent's own package goes to the managed prefix, never the user's.
-	if !strings.Contains(recipe, "npm install -g '@google/gemini-cli@latest' --prefix=/opt/yoloctl/npm") || strings.Contains(recipe, "@google/gemini-cli@latest --prefix=/home/sandbox/.npm-global") {
+	if !strings.Contains(recipe, "npm install -g --prefix=/opt/yoloctl/npm --cache=\"/var/cache/yoloctl/npm/$(id -u)\" --prefer-online -- '@google/gemini-cli@latest'") || strings.Contains(recipe, "@google/gemini-cli@latest --prefix=/home/sandbox/.npm-global") {
 		t.Fatalf("Gemini image does not install the agent in the managed prefix:\n%s", recipe)
 	}
 	if profile.NpmPackage != "@google/gemini-cli" {
