@@ -161,18 +161,32 @@ else:
     assert args[15:] == ["image-identity", str(os.getuid()), str(os.getgid())], args
     env = os.environ.copy()
     env["PATH"] = str(pathlib.Path(env["IMAGE_PROBE_STATE"]) / "probe-tools") + ":" + env["PATH"]
-    sys.exit(subprocess.run(["sh", "-ceu", *args[14:]], env=env).returncode)
+    # Model the guest's optional managed prefix under the test directory.
+    probe = args[14].replace("/opt/yoloctl/npm", '"$IMAGE_PROBE_STATE/managed-npm"')
+    sys.exit(subprocess.run(["sh", "-ceu", probe, *args[15:]], env=env).returncode)
 ''')
         probe_tools = self.root / "probe-tools"
         probe_tools.mkdir()
         executable(probe_tools / "stat", '#!/bin/sh\nid -u | tr -d "\\n"; printf ":"; id -g\n')
         # Execute the real probe's shell with simulated filesystem/identity
         # results. This checks parsing and failures, not a container runtime.
-        executable(probe_tools / "id", '#!/bin/sh\n/usr/bin/id "$1"\n')
+        executable(probe_tools / "id", f'''#!/bin/sh
+case "$1:${{2:-sandbox}}" in
+    -u:sandbox) echo {os.getuid()} ;;
+    -g:sandbox) echo {os.getgid()} ;;
+    -u:yoloctl-maint) echo {os.getuid() + 1} ;;
+    -g:yoloctl-maint) echo {os.getgid() + 1} ;;
+    *) exit 1 ;;
+esac
+''')
         executable(probe_tools / "find", '#!/bin/sh\nexit 0\n')
-        result = self.run_common("smoke_check_image_identity", "coder")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("prepared image identity:", result.stdout)
+        for managed_prefix in (False, True):
+            with self.subTest(managed_prefix=managed_prefix):
+                if managed_prefix:
+                    (self.root / "managed-npm").mkdir()
+                result = self.run_common("smoke_check_image_identity", "coder")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("prepared image identity:", result.stdout)
         executable(probe_tools / "find", '#!/bin/sh\necho /home/sandbox/.npm-global/wrong-owner\n')
         result = self.run_common("smoke_check_image_identity", "coder")
         self.assertNotEqual(result.returncode, 0)
