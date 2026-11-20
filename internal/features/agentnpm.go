@@ -116,9 +116,9 @@ func agentNpmInstallDockerfile(pkg string) string {
     install -d -m 0755 -o %[1]s -g %[1]s %[3]s
 USER %[1]s
 RUN --mount=type=cache,id=yoloctl-npm-v1,target=/var/cache/yoloctl/npm,sharing=locked,mode=0777 \
-    cd %[2]s && HOME=%[2]s TMPDIR=%[2]s npm install -g %[5]s@latest --prefix=%[3]s --cache="/var/cache/yoloctl/npm/$(id -u)" --prefer-online
+    cd %[2]s && HOME=%[2]s TMPDIR=%[2]s npm install -g %[5]s --prefix=%[3]s --cache="/var/cache/yoloctl/npm/$(id -u)" --prefer-online
 USER root
-ENV PATH=%[6]s:$PATH`, user, home, prefix, shell, pkg, agentnpm.Bin)
+ENV PATH=%[6]s:$PATH`, user, home, prefix, shell, agentnpm.ShellQuote(pkg+"@latest"), agentnpm.Bin)
 }
 
 // agentNpmFinalPath keeps the agent's folder first on PATH after every

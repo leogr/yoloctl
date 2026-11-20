@@ -1,6 +1,6 @@
 # npm development environment
 
-Verification: `c6e67053e4fd40a8987dc6be1c3f34bb4d6b1380` and accompanying changes; agent package location `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `c6e67053e4fd40a8987dc6be1c3f34bb4d6b1380` and accompanying changes; agent package location `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] The `npm` feature combines a Dockerfile setup step with
 `network.npm`. The base image supplies Node.js 22 from NodeSource, including
@@ -59,6 +59,6 @@ the smoke. Its existence is not evidence of a successful live run.
 6. <a id="source-6"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L41-L57) — `ComposedImageRef`, `composedImageRef`.
 7. <a id="source-7"></a> [internal/agentboximage/composed_test.go](../../internal/agentboximage/composed_test.go#L123-L138) — `TestComposedImageRef_NpmEnvironmentChangesImage`.
 8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L298-L308) — `network.npm`.
-9. <a id="source-9"></a> [npm policy golden](../../internal/agentbox/testdata/policy_golden/npm.yaml#L28-L40) — exact composed grant.
+9. <a id="source-9"></a> [npm policy golden](../../internal/agentbox/testdata/policy_golden/npm.yaml#L29-L41) — exact composed grant.
 10. <a id="source-10"></a> [scripts/smoke/npm.sh](../../scripts/smoke/npm.sh#L1) — complete isolated runtime gate.
 11. <a id="source-11"></a> [cmd/yoloctl/autoupdate_test.go](../../cmd/yoloctl/autoupdate_test.go#L11-L52) — `TestNpmAgentMaintenanceUsesExplicitConfigPaths`.

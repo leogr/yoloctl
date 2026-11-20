@@ -1,6 +1,6 @@
 # AWS CLI and Bedrock setup
 
-Verification: `cae7f0d106ee85c3193168becc12a3ee8fdc25c6` and accompanying changes; agent program paths `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes.
+Verification: `cae7f0d106ee85c3193168becc12a3ee8fdc25c6` and accompanying changes; agent program paths `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes.
 
 [FACT] Builtin Claude and Codex profiles project exactly four optional AWS account
 secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and

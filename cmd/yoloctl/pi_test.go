@@ -58,7 +58,7 @@ func TestPiManagedLaunchAndState(t *testing.T) {
 		t.Fatalf("Pi image does not install CLI: installed=%v, error=%v", installed, err)
 	}
 	// The agent's own package goes to the managed prefix, never the user's.
-	if !strings.Contains(recipe, "npm install -g @earendil-works/pi-coding-agent@latest --prefix=/opt/yoloctl/npm") || strings.Contains(recipe, "@earendil-works/pi-coding-agent@latest --prefix=/home/sandbox/.npm-global") {
+	if !strings.Contains(recipe, "npm install -g '@earendil-works/pi-coding-agent@latest' --prefix=/opt/yoloctl/npm") || strings.Contains(recipe, "@earendil-works/pi-coding-agent@latest --prefix=/home/sandbox/.npm-global") {
 		t.Fatalf("Pi image does not install the agent in the managed prefix:\n%s", recipe)
 	}
 	if profile.NpmPackage != "@earendil-works/pi-coding-agent" {

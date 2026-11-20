@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	managedCodexInstall = "npm install -g @openai/codex@latest --prefix=/opt/yoloctl/npm"
+	managedCodexInstall = "npm install -g '@openai/codex@latest' --prefix=/opt/yoloctl/npm"
 	homeCodexInstall    = "npm install -g @openai/codex@latest --prefix=/home/sandbox/.npm-global"
 	agentPathLine       = "ENV PATH=/opt/yoloctl/npm/bin:$PATH"
 )
@@ -77,19 +77,28 @@ func TestAgentNpmInstallIsAppendedOnceWithoutASupplier(t *testing.T) {
 	cfg := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", cfg)
 	alone := render(t, "github", AgentNpmRuntime("my-cli"))
-	if strings.Count(alone, "npm install -g my-cli@latest --prefix=/opt/yoloctl/npm") != 1 {
+	if strings.Count(alone, "npm install -g 'my-cli@latest' --prefix=/opt/yoloctl/npm") != 1 {
 		t.Fatalf("custom agent package not installed in the managed prefix:\n%s", alone)
 	}
 	writeUserFeature(t, testFeaturesDir(t), "my-cli-pinned", "name: my-cli-pinned\ndescription: pinned\ninstall:\n  kind: npm\n  package: my-cli\n  version: 1.2.3\n")
 	writeUserFeature(t, testFeaturesDir(t), "my-cli-again", "name: my-cli-again\ndescription: again\ninstall:\n  kind: npm\n  package: my-cli\n")
 	both := render(t, "my-cli-pinned", "my-cli-again", AgentNpmRuntime("my-cli"))
-	if strings.Count(both, "npm install -g my-cli@") != 1 || !strings.Contains(both, "my-cli@latest --prefix=/opt/yoloctl/npm") {
+	if strings.Count(both, "npm install -g ") != 1 || !strings.Contains(both, "'my-cli@latest' --prefix=/opt/yoloctl/npm") {
 		t.Fatalf("agent package not installed exactly once at latest:\n%s", both)
 	}
 	// As a tool the pinned feature keeps its version and the user's prefix.
 	tool := render(t, "my-cli-pinned")
 	if !strings.Contains(tool, "npm install -g my-cli@1.2.3 --prefix=/home/sandbox/.npm-global") || strings.Contains(tool, "/opt/yoloctl") {
 		t.Fatalf("custom npm tool changed:\n%s", tool)
+	}
+}
+
+// A published name with a quote stays one shell word in the recipe.
+func TestAgentNpmInstallQuotesThePackage(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	out := render(t, AgentNpmRuntime("o'brien"))
+	if !strings.Contains(out, `npm install -g 'o'\''brien@latest' --prefix=/opt/yoloctl/npm`) {
+		t.Fatalf("package not quoted:\n%s", out)
 	}
 }
 
@@ -128,7 +137,7 @@ func TestAgentNpmRuntimeNameIsInternal(t *testing.T) {
 	}
 	for _, bad := range []string{
 		agentNpmRuntimePrefix, agentNpmRuntimePrefix + "%zz", agentNpmRuntimePrefix + "a%2fb",
-		AgentNpmRuntime("pkg; rm -rf /"), AgentNpmRuntime("Upper"), AgentNpmRuntime("@scope/x y"),
+		AgentNpmRuntime("pkg; rm -rf /"), AgentNpmRuntime("a$b"), AgentNpmRuntime("@scope/x y"),
 	} {
 		if _, err := LookupRuntime(bad); err == nil {
 			t.Fatalf("invalid runtime name %q accepted", bad)

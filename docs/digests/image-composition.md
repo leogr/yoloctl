@@ -1,6 +1,6 @@
 # Image composition and build caches
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; agent npm installer `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409dbbb5f2febbe3bdf2f581dff7775ff43b` and accompanying changes; APT-compatible smoke probe correction on `a3827ba3b050fc0e7641586704954c4fc76f0241` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; agent npm installer `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409dbbb5f2febbe3bdf2f581dff7775ff43b` and accompanying changes; APT-compatible smoke probe correction on `a3827ba3b050fc0e7641586704954c4fc76f0241` and accompanying changes.
 
 [FACT] Composition prepares available sandbox identities before installation,
 using the space owner's UID/GID without account/workdir mounts. npm owns packages

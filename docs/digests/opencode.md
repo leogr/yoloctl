@@ -104,5 +104,5 @@ separate checks. [8](#source-8) [20](#source-20)
 23. <a id="source-23"></a> [Upstream database path](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/core/src/database/database.ts#L53) — SQLite under data.
 24. <a id="source-24"></a> [Upstream dependency bootstrap](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/opencode/src/config/config.ts#L452) — background plugin-SDK installation.
 25. <a id="source-25"></a> [Upstream npm service](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/core/src/npm.ts#L80) — Arborist, script suppression, package resolution and dependency installation.
-26. <a id="source-26"></a> [Endpoint compiler](../../internal/agentbox/compose.go#L449) — REST configuration and encoded slash permission.
+26. <a id="source-26"></a> [Endpoint compiler](../../internal/agentbox/compose.go#L452) — REST configuration and encoded slash permission.
 27. <a id="source-27"></a> [Upstream npm configuration](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/core/src/npm-config.ts#L13) — environment and npm settings.

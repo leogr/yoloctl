@@ -1,6 +1,6 @@
 # Gemini CLI adapter
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; install prefix `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes; upstream behavior inspected at Gemini CLI `v0.62.0`. Re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; install prefix `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; upstream behavior inspected at Gemini CLI `v0.62.0`. Re-read cited sources when changing behavior.
 
 [FACT] The embedded `gemini` profile selects the Ubuntu base, requires the
 `gemini` and `github` features, and launches `gemini --approval-mode yolo`.

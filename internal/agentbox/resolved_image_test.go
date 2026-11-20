@@ -140,7 +140,7 @@ func TestResolvedImage_AgentNpmPackageSelectsTheManagedPrefix(t *testing.T) {
 	if !strings.Contains(toolRecipe, "@openai/codex@latest --prefix=/home/sandbox/.npm-global") || strings.Contains(toolRecipe, "/opt/yoloctl/npm") {
 		t.Fatalf("Codex as a tool left the user's prefix:\n%s", toolRecipe)
 	}
-	if !strings.Contains(agentRecipe, "@openai/codex@latest --prefix=/opt/yoloctl/npm") || strings.Contains(agentRecipe, "@openai/codex@latest --prefix=/home/sandbox/.npm-global") {
+	if !strings.Contains(agentRecipe, "'@openai/codex@latest' --prefix=/opt/yoloctl/npm") || strings.Contains(agentRecipe, "@openai/codex@latest --prefix=/home/sandbox/.npm-global") {
 		t.Fatalf("Codex as the agent is not in the managed prefix:\n%s", agentRecipe)
 	}
 	// A native agent and an agentless box get no agent npm runtime feature.
@@ -187,8 +187,8 @@ func TestResolvedImage_UnsuppliedAgentNpmInstallFollowsOCIFeatures(t *testing.T)
 		t.Fatalf("installs=%v err=%v", installs, err)
 	}
 	oci := strings.Index(dockerfile, "# OCI Feature: "+ociGoRef)
-	agent := strings.Index(dockerfile, "npm install -g my-cli@latest --prefix=/opt/yoloctl/npm")
-	if oci < 0 || agent < oci || strings.Count(dockerfile, "npm install -g my-cli@") != 1 {
+	agent := strings.Index(dockerfile, "npm install -g 'my-cli@latest' --prefix=/opt/yoloctl/npm")
+	if oci < 0 || agent < oci || strings.Count(dockerfile, "npm install -g ") != 1 {
 		t.Fatalf("OCI Feature at %d, agent install at %d:\n%s", oci, agent, dockerfile)
 	}
 	if !strings.HasSuffix(strings.TrimRight(dockerfile[:strings.Index(dockerfile, "\nRUN find /home/sandbox -xdev")], "\n"), "ENV PATH=/opt/yoloctl/npm/bin:$PATH") {

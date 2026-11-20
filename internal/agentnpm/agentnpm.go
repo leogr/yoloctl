@@ -11,6 +11,7 @@ package agentnpm
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 const (
@@ -35,15 +36,23 @@ func PackageJSON(pkg string) string {
 	return Prefix + "/lib/node_modules/" + pkg + "/package.json"
 }
 
-// packageName is an npm registry package name: lowercase, optionally scoped,
-// without characters a shell or Dockerfile could interpret.
-var packageName = regexp.MustCompile(`^(@[a-z0-9][a-z0-9._~-]*/)?[a-z0-9][a-z0-9._~-]*$`)
+// packageName accepts every name npm can publish or has published (legacy
+// uppercase such as JSONStream and the special characters ~'!()* included):
+// npm names are URL-safe, one optional "@scope/" apart. The image recipe
+// single-quotes the name (ShellQuote), so none of these characters is read by
+// the shell; anything outside this set can never be an npm package.
+var packageName = regexp.MustCompile(`^(@[A-Za-z0-9._~!*'()-]+/[A-Za-z0-9._~!*'()-]+|[A-Za-z0-9._~!*'()-]+)$`)
 
-// ValidatePackage rejects a string that is not an npm registry package name,
-// so it stays one data word wherever a recipe or argv carries it.
+// ValidatePackage rejects a string that cannot be an npm registry package
+// name, so it stays one data word wherever a recipe or argv carries it.
 func ValidatePackage(pkg string) error {
 	if len(pkg) > 214 || !packageName.MatchString(pkg) {
-		return fmt.Errorf("invalid npm package name %q: use a lowercase registry name such as my-cli or @scope/my-cli", pkg)
+		return fmt.Errorf("invalid npm package name %q: use a registry name such as my-cli or @scope/my-cli", pkg)
 	}
 	return nil
+}
+
+// ShellQuote returns s as one single-quoted POSIX shell word.
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

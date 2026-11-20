@@ -87,7 +87,7 @@ upstream Feature or either CPU architecture. [8](#source-8) [9](#source-9) [15](
 2. <a id="source-2"></a> [Plan](../../internal/ocifeature/plan.go#L18) — `Definition`, `Compatible`, `RuntimeRequests`, `Values`, `ApplyOptions`, `Resolve`, `Dockerfile`.
 3. <a id="source-3"></a> [Persistence](../../internal/agentbox/oci_features.go#L10) — `ResolveFeatures`, `FeaturePlan`.
 4. <a id="source-4"></a> [Registry](../../internal/ocifeature/registry.go#L28) — `Parse`, `get`, `Resolve`, `Files`, `unpack`.
-5. <a id="source-5"></a> [Capability composition](../../internal/agentbox/compose.go#L63) — `EffectiveCapabilities`.
+5. <a id="source-5"></a> [Capability composition](../../internal/agentbox/compose.go#L55) — `EffectiveCapabilities`.
 6. <a id="source-6"></a> [Completion](../../cmd/yoloctl/completion_features.go#L14) — selected declarations and metadata options.
 7. <a id="source-7"></a> [Advisory cache](../../internal/ocifeature/completion.go#L30) — `remember`, `MetadataForCompletion`, `CachedReferences`.
 8. <a id="source-8"></a> [Resolver tests](../../internal/ocifeature/oci_test.go#L66) — registry, archive, options and dependencies.

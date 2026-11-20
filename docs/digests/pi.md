@@ -1,6 +1,6 @@
 # Pi CLI adapter
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; install prefix `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes; upstream Pi `v1.0.3` (`d78dc83d633229d12f8b79631384c4c2717c399f`). Re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; install prefix `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; upstream Pi `v1.0.3` (`d78dc83d633229d12f8b79631384c4c2717c399f`). Re-read cited sources when changing behavior.
 
 [FACT] The embedded `pi` profile uses the Ubuntu base, requires `pi` and
 `github`, and launches the Node CLI `pi`. The existing TUI icon is `π`.

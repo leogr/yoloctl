@@ -1,6 +1,6 @@
 # Policy boundaries
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; baseline writable paths at `e3b21585fc6a31b400f01455a70838d8ebdbabb7` and accompanying changes; agent npm grant `8bb7b34e20fe0d052c2b38cfc02f97dabeea5daa` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; baseline writable paths at `e3b21585fc6a31b400f01455a70838d8ebdbabb7` and accompanying changes; agent npm grant `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; re-read cited sources when changing behavior.
 
 Image composition, build caches and built-in installers are in
 [image composition](image-composition.md); agent updates in a running box are
@@ -85,7 +85,7 @@ hosts gain no grant. Existing ancestor matching remains unchanged. [18](#source-
 12. <a id="source-12"></a> [Operator implementation](operator.md).
 
 13. <a id="source-13"></a> [Capability authoring](../../internal/capabilities/user.go#L54) — `EgressGrant`, `translate`, `toGrants`.
-14. <a id="source-14"></a> [Endpoint compiler](../../internal/agentbox/compose.go#L449) — `toNetworkPolicyFromGrant`.
+14. <a id="source-14"></a> [Endpoint compiler](../../internal/agentbox/compose.go#L452) — `toNetworkPolicyFromGrant`.
 15. <a id="source-15"></a> [Capability display](../../cmd/yoloctl/capability.go#L98) — text and JSON grants.
 16. <a id="source-16"></a> [OpenShell L7 config](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-network/src/l7/mod.rs#L164) — `parse_l7_config`, `expand_access_presets` at L1460.
 17. <a id="source-17"></a> [OpenShell policy preprocessing](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-network/src/opa.rs#L722) — validation and access expansion.
@@ -94,4 +94,4 @@ hosts gain no grant. Existing ancestor matching remains unchanged. [18](#source-
 19. <a id="source-19"></a> [Codex egress regressions](../../internal/agentbox/codex_egress_test.go#L19) — `TestCodexEgressGlobScope` checks composed binary paths with OPA glob.match; skips without the optional OPA tool.
 20. <a id="source-20"></a> [Extra mount regressions](../../internal/agentbox/policy_golden_test.go#L383) — `TestPolicyGrantsDeclaredExtraMounts`; golden `extra_mounts`.
 21. <a id="source-21"></a> [Static composition regressions](../../internal/agentbox/compose_surface_test.go#L1) — `TestComposeExplicitNetworkCapabilitiesMatchGoldens`, `TestComposeUnconfinedNetworkKeepsFilesystemPolicy`, `TestComposeExtraReadOnlyMountDesiredPolicy`; `ComposePolicy` and `compilePolicy` in compose.go L40-L226.
-22. <a id="source-22"></a> [Baseline filesystem](../../internal/agentbox/compose.go#L405) — `baselineFilesystem`; `TestCompose_VarTmpReadWrite` in compose_var_tmp_test.go; the goldens in testdata/policy_golden.
+22. <a id="source-22"></a> [Baseline filesystem](../../internal/agentbox/compose.go#L432) — `baselineFilesystem`; `TestCompose_VarTmpReadWrite` in compose_var_tmp_test.go; the goldens in testdata/policy_golden.
