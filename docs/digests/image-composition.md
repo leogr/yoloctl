@@ -13,10 +13,11 @@ are hash-neutral. Cached images are reused; forced builds refresh feature layers
 only. Custom bases retain normal runtime handling. [1](#source-1) [2](#source-2)
 [3](#source-3) [4](#source-4)
 
-[FACT] A managed bind nested under `/home/sandbox` adds its parent directories
-to the composed recipe before home ownership repair. Setup stops at symlinks
-and leaves the bind leaf to the runtime. Only recipes with this setup change
-identity. [1](#source-1) [25](#source-25) [26](#source-26)
+[FACT] A nested managed bind below `/home/sandbox` adds its parent directories
+to the image recipe. When this is the sole install, only new parents receive
+the launch UID/GID, and identity remapping stays at startup. Other install
+recipes use the existing home repair. Setup stops at symlinks and the runtime
+mounts the leaf. [1](#source-1) [25](#source-25) [26](#source-26)
 
 [FACT] Managed-base refresh and builtin/npm composition use a fresh build ARG
 to rerun installers while retaining downloads and stable image references.
@@ -103,4 +104,4 @@ composed image. [23](#source-23) [24](#source-24)
 23. <a id="source-23"></a> [GitHub CLI feature](../../internal/features/github-install.sh#L1-L36) — key check, keyring, origin pin, install; recipe `github.go`.
 24. <a id="source-24"></a> [GitHub CLI Linux install](https://github.com/cli/cli/blob/trunk/docs/install_linux.md) — published fingerprints and keyring checksums, checked 2026-11-20.
 25. <a id="source-25"></a> [Runtime recipe](../../internal/agentbox/privileged.go#L30-L55) — selects setup for managed state.
-26. <a id="source-26"></a> [State parents installer](../../internal/features/agent_state_parents.go#L20-L68) — directory selection and creation.
+26. <a id="source-26"></a> [State parents installer](../../internal/features/agent_state_parents.go#L20-L91) — directory selection and creation.

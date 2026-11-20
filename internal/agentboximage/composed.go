@@ -61,17 +61,21 @@ func composedImageRef(base string, candidates []string, uid, gid int, plans ...o
 	if base == "" {
 		return "", "", false, fmt.Errorf("base image is required")
 	}
-	preparedBase := fmt.Sprintf("FROM %s AS %s\nARG %s\n", base, preparedBaseStage, imageRefreshArg)
-	// A custom base previously used as-is can set a non-root default user.
-	// State-only composition still needs root for build-time identity setup.
 	if len(installing) == 1 && features.IsAgentStateParentsRuntime(installing[0]) {
-		preparedBase += "USER root\n"
+		// This base used to run directly. Keep its existing files and identity
+		// setup as-is, and assign only the new parents to the launch UID/GID.
+		setup, err := features.OwnedAgentStateParentsDockerfile(installing[0], uid, gid)
+		if err != nil {
+			return "", "", false, err
+		}
+		dockerfile = fmt.Sprintf("FROM %s\nARG %s\n%s\n", base, imageRefreshArg, setup)
+	} else {
+		dockerfile = fmt.Sprintf("FROM %s AS %s\nARG %s\n", base, preparedBaseStage, imageRefreshArg) + composedIdentitySetup(uid, gid) + "\n" + dockerfile
+		// Custom installers can still write root-owned home files. Repair only
+		// mismatches, without copying up correctly-owned npm/native package trees.
+		dockerfile += fmt.Sprintf("\nRUN find /home/sandbox -xdev \\( ! -user sandbox -o ! -group sandbox \\) -exec chown -h sandbox:sandbox {} + \\\n"+
+			"    && YOLOCTL_HOST_UID=%d YOLOCTL_HOST_GID=%d /usr/local/bin/yoloctl-entrypoint /bin/true\n", uid, gid)
 	}
-	dockerfile = preparedBase + composedIdentitySetup(uid, gid) + "\n" + dockerfile
-	// Custom installers can still write root-owned home files. Repair only
-	// mismatches, without copying up correctly-owned npm/native package trees.
-	dockerfile += fmt.Sprintf("\nRUN find /home/sandbox -xdev \\( ! -user sandbox -o ! -group sandbox \\) -exec chown -h sandbox:sandbox {} + \\\n"+
-		"    && YOLOCTL_HOST_UID=%d YOLOCTL_HOST_GID=%d /usr/local/bin/yoloctl-entrypoint /bin/true\n", uid, gid)
 	sum := sha256.Sum256([]byte(builderVersion + "\x00" + base + "\x00" + dockerfile))
 	return ComposedImageRepo + ":" + hex.EncodeToString(sum[:])[:12], dockerfile, true, nil
 }

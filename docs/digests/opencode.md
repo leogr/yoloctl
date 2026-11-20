@@ -26,11 +26,14 @@ web egress. Custom registries/providers require explicit capabilities. Shell PTY
 remain opt-in. Policy goldens cover isolated, GitHub and read-only compositions.
 [7](#source-7) [8](#source-8) [9](#source-9) [10](#source-10)
 
-[FACT] The OpenCode leaf binds at `/home/sandbox/.local/share/opencode`. Managed
-launch keeps XDG data there and relocates config, cache, state and npm's cache
-under that leaf. It holds `config/opencode/opencode.json`, `auth.json` and SQLite
-sessions. Import copies the whole credential file. Temporary files use
-`/tmp/opencode`. [1](#source-1) [11](#source-11) [12](#source-12) [13](#source-13) [23](#source-23)
+[FACT] The account's OpenCode leaf binds at
+`/home/sandbox/.local/share/opencode`. XDG data retains that conventional path;
+launch overrides place config, cache, state and npm's download cache beneath that leaf. Config
+is `config/opencode/opencode.json` there. Credentials (`auth.json`), SQLite
+sessions and agent settings therefore use the account mount. Temporary files
+under `/tmp/opencode` are disposable. Import copies only the entire credential
+file, including all stored providers; it does not copy host configuration.
+[1](#source-1) [11](#source-11) [12](#source-12) [13](#source-13) [23](#source-23)
 
 [FACT] Image composition creates OpenCode's `.local` and `.local/share`
 parents with sandbox ownership. Bare exec can create `.local/state`. The smoke
@@ -107,5 +110,5 @@ separate checks. [8](#source-8) [20](#source-20)
 25. <a id="source-25"></a> [Upstream npm service](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/core/src/npm.ts#L80) — Arborist, script suppression, package resolution and dependency installation.
 26. <a id="source-26"></a> [Endpoint compiler](../../internal/agentbox/compose.go#L452) — REST configuration and encoded slash permission.
 27. <a id="source-27"></a> [Upstream npm configuration](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/core/src/npm-config.ts#L13) — environment and npm settings.
-28. <a id="source-28"></a> [State parent installation](../../internal/features/agent_state_parents.go#L20-L68).
-29. <a id="source-29"></a> [Image home ownership](../../internal/agentboximage/composed.go#L61-L76).
+28. <a id="source-28"></a> [State parent installation](../../internal/features/agent_state_parents.go#L20-L91).
+29. <a id="source-29"></a> [Image home ownership](../../internal/agentboximage/composed.go#L70-L78).

@@ -237,11 +237,10 @@ func TestResolvedImage_NestedStateParents(t *testing.T) {
 	if err != nil || !installs {
 		t.Fatalf("state-only composition = %q, %v, %v", ref, installs, err)
 	}
-	const prepared = "FROM custom/base:1 AS yoloctl-prepared-base\nARG YOLOCTL_IMAGE_REFRESH\nUSER root\n"
-	parents := strings.Index(recipe, `"/home/sandbox/config/tool"`)
-	ownership := strings.Index(recipe, "chown -h sandbox:sandbox")
-	if !strings.HasPrefix(recipe, prepared) || parents < 0 || ownership <= parents {
-		t.Fatalf("nested parents must precede final home ownership:\n%s", recipe)
+	const prepared = "FROM custom/base:1\nARG YOLOCTL_IMAGE_REFRESH\nUSER root\n"
+	if !strings.HasPrefix(recipe, prepared) || !strings.Contains(recipe, `"/home/sandbox/config/tool"`) ||
+		!strings.Contains(recipe, "chown -h --") || strings.Contains(recipe, "find /home/sandbox") || strings.Contains(recipe, "yoloctl-entrypoint") {
+		t.Fatalf("state-only recipe must own only the new parents:\n%s", recipe)
 	}
 	if got, _, err := ResolvedImage(c); err != nil || got != ref {
 		t.Fatalf("resolved image = %q, %v, want %q", got, err, ref)
