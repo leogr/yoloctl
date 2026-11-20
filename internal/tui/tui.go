@@ -884,6 +884,8 @@ func (m *model) startPane(args []string, rows, cols int) *panes.Pane {
 		Background:       m.background,
 		LogPalette:       m.noticePalette(),
 		Palette:          m.hostPalette,
+
+		InlineHolderClose: !m.standalone,
 	})
 	if err != nil {
 		m.startNotice(err)
@@ -1256,12 +1258,9 @@ func (m *model) reportInputErrors() {
 
 // Managed admission/stream failures are command results, not status chips.
 // Leave them pending on their session while the palette is busy, and don't
-// steal input focus from another live tab for a background failure. One
-// exception: a stream that ended without an exit status
-// (session.ErrSessionClosed, as when the box under an attached view stops) is
-// reported with its exact text in a notice toast, so the palette does not
-// open over the ended view. That error is not proof of a normal stop; the
-// view is still handled as failed.
+// steal input focus from another live tab for a background failure. Tabs
+// explain exitless holder closes in their own end banner. Standalone views
+// report managed stream failures through their notice.
 func (m *model) reportViewErrors() {
 	if !m.standalone && m.console.Busy() {
 		return
@@ -1274,8 +1273,11 @@ func (m *model) reportViewErrors() {
 		}
 		if err := p.Session.TakeViewError(); err != nil {
 			message := p.Title() + ": " + err.Error()
-			if m.standalone || errors.Is(err, session.ErrSessionClosed) {
+			if m.standalone {
 				m.postPaneNotice(tab, p, prettylog.KindWarn, message)
+				return
+			}
+			if errors.Is(err, session.ErrSessionClosed) {
 				return
 			}
 			messages = append(messages, message)

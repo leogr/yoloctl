@@ -1,6 +1,6 @@
 # TUI routing, keyboard, mouse, and paste
 
-Verification: `d4da1dc09daf8766074409600c1433534913c43b` and accompanying changes (holder-closed feedback); notice placement re-verified at `16684468` plus accompanying changes; other facts at `1d265df3`; palette tab shortcuts and idle-palette Ctrl+D re-verified at `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes; modified arrow routing re-verified at `f75fb9b22c2a9db0644f328c05d55e426bbe7d18` and accompanying changes; tab legend re-verified at `76bcf960c0d8d07faae06258f1fb1088bef24bdd` and accompanying changes.
+Verification: `d0825d0c4b8e4656e1c523f6ecbe94c57aaca552` and accompanying changes (holder-closed feedback); notice placement re-verified at `16684468` plus accompanying changes; other facts at `1d265df3`; palette tab shortcuts and idle-palette Ctrl+D re-verified at `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes; modified arrow routing re-verified at `f75fb9b22c2a9db0644f328c05d55e426bbe7d18` and accompanying changes; tab legend re-verified at `76bcf960c0d8d07faae06258f1fb1088bef24bdd` and accompanying changes.
 
 [FACT] `opensLiveSurface` routes box attach, exec/edit, space shells, catalog
 editors and following logs to tabs; lifecycle commands use attachment flags.
@@ -52,12 +52,15 @@ command group. Leaving the overlay does not stop that command. [4](#source-4)
 [19](#source-19)
 
 [FACT] Private attachment failures appear as wrapped palette results. A busy
-palette command delays their display; background failures mark their tabs
-without stealing focus. A stream that ended without an exit status
-(`session.ErrSessionClosed`, as when the box under a view stops) is instead
-shown with its exact text in a persistent toast and a tab `!`, so the palette does not open over
-the ended view; the view is still handled as failed. Standalone attachment
-retains its error notice and returned diagnostic. [6](#source-6) [17](#source-17)
+palette command delays their display. Background failures mark their tabs
+without stealing focus. For `session.ErrSessionClosed`, the ended tab or pane
+shows “session ended without an exit status (the box stopped or restarted)” in
+its failure banner, with the usual close and re-attach actions where available.
+The failure banner replaces the notice and its `!` marker for this case. The
+terminal pump reads the retained stream error after joining the stream, so consuming
+the UI diagnostic earlier cannot erase the banner reason. Standalone attachment
+keeps the numeric banner, notice and returned diagnostic.
+[17](#source-17) [31](#source-31) [32](#source-32)
 
 [FACT] Host Bubble Tea keyboard enhancements request event types, alternate
 keys, all keys and associated text. The core owns child Kitty negotiation and
@@ -135,7 +138,7 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 15. <a id="source-15"></a> [Native selection and explicit copy](terminal-selection.md) — local selection and conditional copy-key ownership.
 16. <a id="source-16"></a> [box-attach.sh](../../scripts/smoke/box-attach.sh#L15) — scripted Enter bytes in `pty_run` and shared detach/reattach input fixtures.
 17. <a id="source-17"></a> [view_errors_test.go](../../internal/tui/view_errors_test.go#L93) — inherited-channel rejection, palette wrapping/defer, background focus and standalone diagnostics;
-    [holder_closed_test.go](../../internal/tui/holder_closed_test.go#L1-L71) — the status-line report of an exitless holder close and a real failure still in the palette.
+    [holder_closed_test.go](../../internal/tui/holder_closed_test.go#L17-L108) — exitless holder closes in tab and standalone views, and other failures in the palette.
 18. <a id="source-18"></a> [Compatibility evidence](terminal-compatibility.md) — legacy input, committed text, focus/cursor coverage and limits.
 19. <a id="source-19"></a> [Host integrations](host-integrations.md) — explicit PNG paste ownership and live browser approval.
 20. <a id="source-20"></a> [palette_paste_test.go](../../internal/tui/palette_paste_test.go#L13) — host-reader paste/focus and cursor alignment regression.
@@ -150,3 +153,5 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 28. <a id="source-28"></a> [palette_quit_test.go](../../internal/tui/palette_quit_test.go#L9-L26) — empty/nonempty idle-palette draft quit regression.
 29. <a id="source-29"></a> [Palette arrow routing](../../internal/tui/pane_prefix.go#L138) — notice precedence before the palette handles modified arrows.
 30. <a id="source-30"></a> [Host arrow regression](../../internal/tui/palette_arrows_test.go#L10) — wire sequences with and without notice focus.
+31. <a id="source-31"></a> [session.go](../../internal/tui/term/session.go#L375-L442) — `pump` joins the private stream before `writeExitBanner` uses its retained error.
+32. <a id="source-32"></a> [tui.go](../../internal/tui/tui.go#L1260-L1299) — `reportViewErrors` routes private attachment diagnostics.

@@ -70,6 +70,8 @@ type Options struct {
 	// plain-text action (for example how to re-attach). The TUI sets it
 	// only for panes that offer that action.
 	EndHint string
+	// InlineHolderClose explains an exitless managed stream in the tab banner.
+	InlineHolderClose bool
 }
 
 // Session is one PTY child rendered through the emulator: the unit a
@@ -292,7 +294,7 @@ func Start(opts Options) (*Session, error) {
 		s.startView(viewParent)
 	}
 	go s.waitChild()
-	go s.pump(opts.OnData)
+	go s.pump(opts.OnData, opts.InlineHolderClose)
 	return s, nil
 }
 
@@ -313,7 +315,7 @@ func (s *Session) waitChild() {
 // ensureSpace that runs `limactl start`, whose long-lived host-agent
 // inherits this PTY as a controlling terminal — would otherwise never EOF,
 // leaving the tab "running" forever.
-func (s *Session) pump(onData func()) {
+func (s *Session) pump(onData func(), inlineHolderClose bool) {
 	readDone := make(chan struct{})
 	go func() {
 		buf := make([]byte, 32*1024)
@@ -371,6 +373,7 @@ func (s *Session) pump(onData func()) {
 		_ = s.stepFile.Close()
 	}
 
+	var reason string
 	if s.managed != nil {
 		select {
 		case <-s.managed.done:
@@ -380,8 +383,12 @@ func (s *Session) pump(onData func()) {
 		}
 		s.managed.cancel()
 		s.finishView()
+		// The reader retains its error after the UI has consumed TakeViewError.
+		if inlineHolderClose && errors.Is(s.managed.err, session.ErrSessionClosed) {
+			reason = "session ended without an exit status (the box stopped or restarted)"
+		}
 	}
-	writeExitBanner(s.emulator, exitCode(s.cmd, s.waitErr), s.endHint)
+	writeExitBanner(s.emulator, exitCode(s.cmd, s.waitErr), s.endHint, reason)
 	s.EndRenderHold()
 	if onData != nil {
 		onData()
@@ -401,8 +408,8 @@ func (s *Session) ResumeTarget() (termio.TabRequest, bool) {
 }
 
 // writeExitBanner appends the exit banner once the child is reaped: the
-// same exit status line the palette console shows — green ✓ on success,
-// red ✗ on failure — plus a dim "press Enter to close" affordance, so the
+// exit status or the reason for a failed managed stream, with the palette
+// console’s result style and a dim "Press Enter to close" hint, so the
 // tab reports how its command ended and how to dismiss it (the TUI closes
 // the tab on Enter). A child killed mid-frame (box/VM stop under a
 // full-screen agent) leaves a scroll region set and the cursor parked
@@ -414,8 +421,13 @@ func (s *Session) ResumeTarget() (termio.TabRequest, bool) {
 // available while still scrolling a full dead frame enough to make room.
 // Exactly one blank line separates the previous visible content and banner.
 // A non-empty hint follows the close hint on the same line, after " · ".
-func writeExitBanner(e *emulator, code int, hint string) {
-	status := e.logNotice(code, fmt.Sprintf("exit %d", code))
+func writeExitBanner(e *emulator, code int, hint, reason string) {
+	if reason == "" {
+		reason = fmt.Sprintf("exit %d", code)
+	} else {
+		code = 1 // The stream failed even if the local relay exited successfully.
+	}
+	status := e.logNotice(code, reason)
 	_, _ = e.Write([]byte(termio.SessionEndResetInPlace))
 	row, hasContent := e.lastContentRow()
 	sep := "\r\n"

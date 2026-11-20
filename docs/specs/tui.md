@@ -94,9 +94,10 @@ explicit retry; telemetry-only loss does not request IRC reconnect.
 
 [FACT] Private attachment failures use the palette's wrapped result area,
 deferred while a palette command runs. Background failures leave another live
-tab's input focus intact. A stream that ended without an exit status (for
-example, the holder of a stopped box) is shown in a persistent toast with a tab `!` instead,
-without opening the palette over the ended view. [1](#source-1)
+tab's input focus intact. If a holder stream ends without an exit status,
+the ended tab or pane explains the reason in its banner without posting a notice
+or adding a notice `!` to the tab. Standalone attachment shows a failure notice.
+[1](#source-1)
 
 [FACT] `space view` opens in a tab unless help is requested. Only that tab
 and native `chat` tabs may request new attach tabs through the private channel. Through it, the view can

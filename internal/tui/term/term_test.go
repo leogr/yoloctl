@@ -464,7 +464,7 @@ func TestExitBannerAfterDirtyFrame(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newTestEmulator(t, 8, 80, nil, 0)
 			feed(t, e, tc.setup+dirtyFrame)
-			writeExitBanner(e, 7, "")
+			writeExitBanner(e, 7, "", "")
 			if got := e.IsAlt(); got != tc.wantAlt {
 				t.Errorf("IsAlt = %v, want %v — the banner belongs on the screen the child died on", got, tc.wantAlt)
 			}
@@ -491,7 +491,7 @@ func TestExitBannerAfterClientError(t *testing.T) {
 	// What the embedded attach client emits, then Cobra's error line.
 	feed(t, e, termio.SessionEndResetInPlace+"\r\n\r\n")
 	feed(t, e, "Error: session: connection to holder closed without an exit status\r\n")
-	writeExitBanner(e, 2, "")
+	writeExitBanner(e, 2, "", "")
 
 	grid := e.GridText()
 	if !e.IsAlt() {
@@ -746,13 +746,13 @@ func TestResizeGrowKeepsGridBounded(t *testing.T) {
 func TestExitBannerEndHint(t *testing.T) {
 	e := newTestEmulator(t, 8, 80, nil, 0)
 	feed(t, e, "agent output\r\n")
-	writeExitBanner(e, 137, "r to re-attach to api")
+	writeExitBanner(e, 137, "r to re-attach to api", "")
 	grid := e.GridText()
 	if !strings.Contains(grid, "✗ exit 137\n"+ExitCloseHint+" · r to re-attach to api") {
 		t.Fatalf("banner with hint:\n%s", grid)
 	}
 	plain := newTestEmulator(t, 8, 80, nil, 0)
-	writeExitBanner(plain, 0, "")
+	writeExitBanner(plain, 0, "", "")
 	if g := plain.GridText(); !strings.Contains(g, ExitCloseHint+"\n") || strings.Contains(g, "·") {
 		t.Fatalf("banner without hint changed:\n%s", g)
 	}
