@@ -96,5 +96,5 @@ or interactive terminal behavior; those require separate live validation. [5](#s
 13. <a id="source-13"></a> [Isolated smoke](../../scripts/smoke/agy.sh#L1) — default synthetic checks and optional real personal OAuth/tool gate.
 
 14. <a id="source-14"></a> [Native installer](../../internal/nativerelease/install.py#L1) — verified download and atomic replacement.
-15. <a id="source-15"></a> [Lifecycle autoupdate](../../cmd/yoloctl/autoupdate.go#L17) — distribution dispatch.
+15. <a id="source-15"></a> [Lifecycle autoupdate](../../cmd/yoloctl/autoupdate.go#L20) — distribution dispatch.
 16. <a id="source-16"></a> [Launcher regression](../../internal/features/agy_test.go#L8) — seed values at the exec boundary and preservation of existing settings.

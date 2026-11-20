@@ -33,6 +33,7 @@ if args[2]=='inspect':
  sys.exit(int(os.environ.get('YOLOCTL_TEST_MAINTENANCE_INSPECT_EXIT','0')))
 if args[2]=='exec':
  if len(args)>8 and args[8]=='cat': print('{"version":"1.2.3"}')
+ if len(args)>8 and args[8]=='test': sys.exit(int(os.environ.get('YOLOCTL_TEST_MAINTENANCE_PROBE_EXIT','0')))
  sys.exit(int(os.environ.get('YOLOCTL_TEST_MAINTENANCE_EXEC_EXIT','0')))
 sys.exit(97)
 `
@@ -168,5 +169,25 @@ func TestNpmMaintenanceFailureExplainsSystemPathAndAutoupdateOptOut(t *testing.T
 	}
 	if !strings.Contains(err.Error(), "npm is unavailable on that PATH") || !strings.Contains(err.Error(), "--no-autoupdate") {
 		t.Fatalf("npm maintenance error lacks PATH and autoupdate guidance: %v", err)
+	}
+}
+
+// A box built before the managed agent folder fails the install as the
+// missing maintenance user; the error names the recreate command instead of
+// the npm PATH hint (devOpUs live QA r1).
+func TestNpmMaintenanceOnABoxWithoutTheManagedFolderNamesRecreate(t *testing.T) {
+	id := strings.Repeat("f", 64)
+	c, calls := maintenanceTargetFixture(t, `[{"Id":"`+id+`","Name":"coder"}]`)
+	t.Setenv("YOLOCTL_TEST_MAINTENANCE_EXEC_EXIT", "1")
+	t.Setenv("YOLOCTL_TEST_MAINTENANCE_PROBE_EXIT", "1")
+	err := npmInstallGlobalAtLatest(t.Context(), c, id, "@vendor/agent")
+	if err == nil || !strings.Contains(err.Error(), "predates the managed agent folder /opt/yoloctl/npm") ||
+		!strings.Contains(err.Error(), "yoloctl box recreate coder --space fixture") || strings.Contains(err.Error(), "npm is unavailable") {
+		t.Fatalf("old-box install error = %v", err)
+	}
+	probe := []string{"sudo", "nerdctl", "exec", "--user", "sandbox", "--env", wantAgentMaintenancePath, id, "test", "-d", "/opt/yoloctl/npm"}
+	got := calls()
+	if !slices.ContainsFunc(got, func(call []string) bool { return slices.Equal(call, probe) }) {
+		t.Fatalf("no managed-folder probe as sandbox on the selected container: %q", got)
 	}
 }

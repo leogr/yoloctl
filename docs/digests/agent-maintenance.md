@@ -1,6 +1,6 @@
 # Agent maintenance and the managed npm prefix
 
-Verification: `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes.
+Verification: `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; old-box install message `6fa0a8ced0566ecd2f18066a0fe3a442946b632b` and accompanying changes.
 
 [FACT] npm is split by role. The package a box's agent profile names
 (`npm_package`, built-in or custom) is installed in `/opt/yoloctl/npm`, owned by
@@ -39,8 +39,9 @@ user and global npmrc files bypassed. Version reads use the managed package's
 keeps the existing skip notice. Explicit updates reinstall even at the same
 version, which also repairs a cut-off install. The native installer, metadata
 reads and the process probe still run as sandbox with the fixed PATH. Install
-errors propagate with
-`--no-autoupdate` guidance for npm. [8](#source-8) [9](#source-9) [10](#source-10)
+errors propagate with `--no-autoupdate` guidance for npm; when the box's image
+has no `/opt/yoloctl/npm` (built before the managed folder), the error instead
+says so and names `yoloctl box recreate NAME --space SPACE`. [8](#source-8) [9](#source-9) [10](#source-10)
 [11](#source-11) [12](#source-12)
 
 [FACT] An agent profile with an npm package adds `fs.agent-npm.read`
@@ -67,10 +68,10 @@ the forced update and the maintenance cache owner. [17](#source-17)
 5. <a id="source-5"></a> [internal/features/agentnpm.go](../../internal/features/agentnpm.go#L1-L128) — runtime feature name, `LookupRuntime`, `npmInstaller`, `recipe`, `agentNpmInstallDockerfile`, `agentNpmFinalPath`.
 6. <a id="source-6"></a> [internal/features/features.go](../../internal/features/features.go#L373-L429) — `renderDockerfile`.
 7. <a id="source-7"></a> [Rendering regressions](../../internal/features/agentnpm_test.go#L1-L150) — tool vs agent, first supplier, appended/pinned/duplicate, OpenCode check, names.
-8. <a id="source-8"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L98-L162) — `agentMaintenanceExecArgs`, `npmInstallGlobalAtLatestArgs`, `fetchInstalledNpmVersion`.
+8. <a id="source-8"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L99-L180) — `agentMaintenanceExecArgs`, `npmInstallGlobalAtLatest`, `predatesAgentNpm`, `npmInstallGlobalAtLatestArgs`, `fetchInstalledNpmVersion`.
 9. <a id="source-9"></a> [Native install argv](../../cmd/yoloctl/agent_distribution.go#L102-L118) — `nativeInstallArgs` uses the shared exec builder.
 10. <a id="source-10"></a> [Maintenance argv regression](../../cmd/yoloctl/autoupdate_test.go#L11-L64) — `TestNpmAgentMaintenanceUsesExplicitConfigPaths`, `TestNpmAgentMaintenanceEndsOptionsBeforeThePackage`.
-11. <a id="source-11"></a> [Target and failure regressions](../../cmd/yoloctl/container_target_test.go#L64-L172) — `TestMaintenanceExecsUseSystemPathAndExactlySelectedContainer`, `TestNpmMaintenanceFailureExplainsSystemPathAndAutoupdateOptOut`.
+11. <a id="source-11"></a> [Target and failure regressions](../../cmd/yoloctl/container_target_test.go#L65-L193) — `TestMaintenanceExecsUseSystemPathAndExactlySelectedContainer`, `TestNpmMaintenanceFailureExplainsSystemPathAndAutoupdateOptOut`, `TestNpmMaintenanceOnABoxWithoutTheManagedFolderNamesRecreate`.
 12. <a id="source-12"></a> [Explicit update](../../cmd/yoloctl/agent.go#L144-L166) — selected ID, probe and same-version install.
 13. <a id="source-13"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L97-L101) — `AgentNpmReadCapability`; `OriginAgent` in the `Origin` constants.
 14. <a id="source-14"></a> [Origin regression](../../internal/agentbox/compose_capabilities_test.go#L200-L227) — `TestEffectiveCapabilitiesAgentNpmRead`.
