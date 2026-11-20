@@ -17,6 +17,7 @@ import (
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/openshell"
+	"github.com/leogr/yoloctl/internal/openshellrelease"
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/sandbox"
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -44,6 +45,26 @@ type OpenShellRuntime struct {
 // installs/repairs/adopts any artifact, generation, socket or process.
 func InspectOpenShellRuntime(ctx context.Context, client *container.Client, name string) (OpenShellRuntime, error) {
 	return inspectOpenShellRuntime(ctx, client, name, name)
+}
+
+// OpenShellHelperNeedsRecreate reads the helper identity for an upgrade's
+// already-inspected container. Pre-native and privileged boxes have no
+// separate OpenShell helper to compare.
+func OpenShellHelperNeedsRecreate(ctx context.Context, client *container.Client, details *container.Details) (bool, error) {
+	if details == nil || !nativeLowerHex(details.ID, 32) {
+		return false, errors.New("OpenShell helper check lacks its inspected container ID")
+	}
+	if !hasOpenShellRuntimeSignals(details) {
+		return false, nil
+	}
+	observed, err := inspectOpenShellRuntime(ctx, client, details.Name, details.ID)
+	if err != nil {
+		return false, err
+	}
+	if err := sameNativePolicyObservation(details, observed); err != nil {
+		return false, err
+	}
+	return openshellrelease.EarlierHelper(observed.Release)
 }
 
 // selector is the create acknowledgement CID in the startup transaction.

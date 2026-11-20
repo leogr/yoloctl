@@ -77,6 +77,76 @@ func upgradeTestDrift(b boxstate.Box, drift boxstate.DriftState) boxDriftView {
 	return d
 }
 
+func TestSpaceUpgradeOldHelperUsesNamedConsent(t *testing.T) {
+	oldResolver, oldTarget := resolveStaleSessionsFn, readUpgradeTargetFn
+	t.Cleanup(func() { resolveStaleSessionsFn, readUpgradeTargetFn = oldResolver, oldTarget })
+	for _, tt := range []struct {
+		name, answer string
+		runtime      boxstate.RuntimeState
+		earlier      bool
+		probeErr     error
+		wantPrompt   bool
+		wantRecreate bool
+	}{
+		{name: "default no", answer: "\n", runtime: boxstate.RuntimeRunning, earlier: true, wantPrompt: true},
+		{name: "yes", answer: "y\n", runtime: boxstate.RuntimeRunning, earlier: true, wantPrompt: true, wantRecreate: true},
+		{name: "stopped", answer: "y\n", runtime: boxstate.RuntimeStopped, earlier: true},
+		{name: "current helper", answer: "y\n", runtime: boxstate.RuntimeRunning},
+		{name: "unavailable", answer: "y\n", runtime: boxstate.RuntimeRunning, probeErr: errors.New("helper evidence unavailable")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			box := upgradeTestBox("older", tt.runtime, "")
+			box.Drift = boxstate.DriftInSync
+			resolveStaleSessionsFn = func(context.Context, string, []string) ([]boxstate.Box, error) {
+				return []boxstate.Box{box}, nil
+			}
+			readUpgradeTargetFn = func(_ context.Context, b boxstate.Box) (*upgradeTarget, bool, error) {
+				return upgradeTestDrift(b, b.Drift).Upgrade, tt.earlier, tt.probeErr
+			}
+			checkDrift := func(ctx context.Context, names []string) ([]boxDriftView, error) {
+				return collectBoxDriftView(ctx, "test", names, true)
+			}
+			wantDrift := boxstate.DriftInSync
+			if tt.earlier {
+				wantDrift = boxstate.DriftNeedsRecreate
+			}
+			rows, err := checkDrift(t.Context(), []string{box.Name})
+			if err != nil || len(rows) != 1 || rows[0].Drift != wantDrift {
+				t.Fatalf("upgrade drift = %+v, %v; want %s", rows, err, wantDrift)
+			}
+			if plain, err := collectBoxDrift(t.Context(), "test", []string{box.Name}); err != nil || len(plain) != 1 || plain[0].Drift != boxstate.DriftInSync {
+				t.Fatalf("ordinary drift = %+v, %v", plain, err)
+			}
+			var prompts, logs bytes.Buffer
+			t.Cleanup(bindCLITestLogger(t, &logs))
+			recreated := false
+			err = runSpaceUpgrade(t.Context(), "test", spaceUpgradeOps{
+				sessionRestartOffer: sessionRestartOffer{
+					interactive: true, in: strings.NewReader(tt.answer), errw: &prompts,
+					inventory: func(context.Context) ([]boxstate.Box, error) { return []boxstate.Box{box}, nil },
+					drift:     checkDrift,
+					restart:   func(context.Context, string, string, bool) error { t.Fatal("unexpected restart"); return nil },
+				},
+				room: upgradeNoRoom,
+				recreate: func(_ context.Context, row spaceUpgradeRow) error {
+					if row.box.Name != box.Name || recreated {
+						t.Fatalf("unexpected replacement of %q", row.box.Name)
+					}
+					recreated = true
+					return nil
+				},
+			})
+			const reason = "OpenShell helper of an earlier yoloctl build"
+			if (err != nil) != (tt.probeErr != nil) || recreated != tt.wantRecreate ||
+				strings.Contains(prompts.String(), "recreate box older? [y/N]") != tt.wantPrompt ||
+				strings.Contains(prompts.String(), reason) != tt.wantPrompt ||
+				strings.Contains(logs.String(), reason) != tt.earlier {
+				t.Fatalf("upgrade error %v, replaced %v, prompts %q, logs %q", err, recreated, prompts.String(), logs.String())
+			}
+		})
+	}
+}
+
 func TestSpaceUpgradeBoxActions(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

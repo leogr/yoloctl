@@ -1,6 +1,7 @@
 # Upgrading a space
 
 Verification: `b54fc365f39f3319e9fd680789ed8318d84e45bb` and accompanying changes; VM replacement check `e3b21585fc6a31b400f01455a70838d8ebdbabb7` and accompanying changes.
+Helper drift verified at `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes.
 
 [FACT] Host-only `space upgrade [SPACE]` resolves the space like `space start`.
 It selects the invoking build, with the existing VM compatibility, separate VM
@@ -27,6 +28,13 @@ and full drift in groups of at most 64 declared boxes. Each group has a shared
 30-second budget. A timed-out group remains outstanding. The plan leaves
 missing containers unmaterialized and reports unavailable state and orphans.
 [2](#source-2) [3](#source-3)
+
+[FACT] The upgrade drift read compares a confined container's verified
+OpenShell helper source and dependencies against this build. A mismatch
+gives `needs_recreate` and names the earlier-build helper in the plan and
+consent prompt. A stopped box gets the reason and a follow-up command.
+Unavailable helper evidence leaves the action outstanding.
+[2](#source-2) [3](#source-3) [11](#source-11) [12](#source-12) [13](#source-13)
 
 [FACT] Invocation authorizes holder-bound restarts for compatible stale
 sessions. Container replacement and other running policy restarts require
@@ -73,3 +81,6 @@ without a retry prompt. A later explicit invocation reads state again.
 8. <a id="source-8"></a> [managed_applier.go](../../cmd/yoloctl/managed_applier.go#L87) — `Recreate`.
 9. <a id="source-9"></a> [space_upgrade_vm.go](../../cmd/yoloctl/space_upgrade_vm.go#L39) — `readSpaceVMReplacement`, `offerSpaceUpgradeVMRecreate`, `confirmSpaceUpgradeVM`; install_migration.go `firecrackerImageState`, `readLimaStackState`; call site in controller_lifecycle.go `hostControllerLifecycle`; result reporting in space_upgrade.go `runSpaceUpgrade`.
 10. <a id="source-10"></a> [space_upgrade_vm_test.go](../../cmd/yoloctl/space_upgrade_vm_test.go#L1) — Firecracker/Lima selection cases, consent matrix, exit status, and the order before the controller update.
+11. <a id="source-11"></a> [space_upgrade_target.go](../../cmd/yoloctl/space_upgrade_target.go#L52) — `readUpgradeTarget` binds the helper check to the inspected container.
+12. <a id="source-12"></a> [openshell_native_linux.go](../../internal/agentbox/openshell_native_linux.go#L50) — `OpenShellHelperNeedsRecreate` verifies the native runtime record.
+13. <a id="source-13"></a> [release.go](../../internal/openshellrelease/release.go#L31) — `EarlierHelper` compares verified helper inputs.

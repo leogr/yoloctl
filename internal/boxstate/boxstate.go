@@ -115,6 +115,7 @@ const (
 	// The box was created before the session launcher (or runs the old
 	// upstream runtime): a warning, never drift or a refusal (directive 56).
 	ReasonLauncherRecreate ReasonCode = "launcher_recreate"
+	ReasonHelperRecreate   ReasonCode = "openshell_helper_recreate"
 	// A running privileged box whose endpoint predates the main-session
 	// request.
 	ReasonMainSessionRestart ReasonCode = "main_session_restart"

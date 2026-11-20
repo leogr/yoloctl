@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
@@ -168,10 +169,18 @@ func collectBoxDriftView(ctx context.Context, space string, names []string, upgr
 			view[i].Drift, view[i].Reasons, view[i].DriftError = boxes[i].Drift, boxes[i].Reasons, boxes[i].DriftError
 			view[i].LegacyRuntime = boxes[i].LegacyRuntime
 			if b := boxes[i]; upgrade && b.Declaration == boxstate.DeclarationDeclared && (b.Runtime == boxstate.RuntimeRunning || b.Runtime == boxstate.RuntimeStopped) {
-				var targetErr error
-				view[i].Upgrade, targetErr = readUpgradeTarget(ctx, b)
+				target, earlierHelper, targetErr := readUpgradeTargetFn(ctx, b)
+				view[i].Upgrade = target
 				if targetErr != nil {
 					view[i].Error = targetErr.Error()
+				} else if earlierHelper {
+					switch view[i].Drift {
+					case boxstate.DriftInSync, boxstate.DriftNeedsRestart, boxstate.DriftLiveOnly, boxstate.DriftNeedsRecreate:
+						view[i].Drift = boxstate.DriftNeedsRecreate
+						view[i].Reasons = slices.Concat(view[i].Reasons, []boxstate.Reason{{
+							Code: boxstate.ReasonHelperRecreate, Message: "box runs the OpenShell helper of an earlier yoloctl build",
+						}})
+					}
 				}
 			}
 		default:

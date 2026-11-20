@@ -47,28 +47,38 @@ func upgradeManifestHash(cfg *agentbox.Config) (string, error) {
 	return fmt.Sprintf("%x", sha256.Sum256(cfgBytes)), nil
 }
 
-func readUpgradeTarget(ctx context.Context, b boxstate.Box) (*upgradeTarget, error) {
+var readUpgradeTargetFn = readUpgradeTarget
+
+func readUpgradeTarget(ctx context.Context, b boxstate.Box) (*upgradeTarget, bool, error) {
 	if b.Config == nil || b.Container == nil {
-		return nil, errors.New("box declaration or container unavailable")
+		return nil, false, errors.New("box declaration or container unavailable")
 	}
-	details, err := container.New(b.Space).Inspect(ctx, b.Name)
+	client := container.New(b.Space)
+	details, err := client.Inspect(ctx, b.Name)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if container.ValidateContainerID(details.ID) != nil || b.Container.ID == "" || !strings.HasPrefix(details.ID, b.Container.ID) ||
 		details.Name != b.Name || details.Labels[agentbox.LabelAgentbox] != b.Name || details.Labels[agentbox.LabelSpace] != b.Space ||
 		details.Running != (b.Runtime == boxstate.RuntimeRunning) || details.Running && details.StartedAt == "" {
-		return nil, errors.New("box container identity changed or is unavailable")
+		return nil, false, errors.New("box container identity changed or is unavailable")
 	}
 	mode := agentbox.ClassifyRuntime(details)
 	if mode.Mode == agentbox.RuntimeModeUnknown {
-		return nil, fmt.Errorf("box runtime mode unavailable: %s", mode.Reason)
+		return nil, false, fmt.Errorf("box runtime mode unavailable: %s", mode.Reason)
+	}
+	earlierHelper := false
+	if mode.Mode == agentbox.RuntimeModeConfined {
+		earlierHelper, err = agentbox.OpenShellHelperNeedsRecreate(ctx, client, details)
+		if err != nil {
+			return nil, false, fmt.Errorf("check OpenShell helper for %s: %w", b.Name, err)
+		}
 	}
 	hash, err := upgradeManifestHash(b.Config)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return &upgradeTarget{ManifestHash: hash, Run: container.RunOf(details), Running: details.Running, Mode: mode.Mode}, nil
+	return &upgradeTarget{ManifestHash: hash, Run: container.RunOf(details), Running: details.Running, Mode: mode.Mode}, earlierHelper, nil
 }
 
 func upgradeRecreateRequest(space string, row spaceUpgradeRow) (controller.Request, error) {

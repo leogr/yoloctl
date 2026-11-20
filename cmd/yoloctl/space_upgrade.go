@@ -30,6 +30,8 @@ discards files stored only in that container. Stopped boxes stay stopped, with
 a follow-up command for known drift. Explicit declines are warnings. Actions
 that could not be decided or completed return a nonzero exit.
 
+An earlier-build OpenShell helper is a reason to offer recreation.
+
 First, upgrade checks whether the space's VM matches this build: on
 Firecracker, whether it uses this build's default VM image; on Lima, whether
 its container stack uses this build's pins. Other Lima template changes are
@@ -228,10 +230,14 @@ func classifySpaceUpgradeBox(space string, b boxstate.Box, d boxDriftView, statu
 		return reason.Code == boxstate.ReasonLauncherRecreate
 	})
 	needsRecreate := d.LegacyRuntime || d.Drift == boxstate.DriftNeedsRecreate || launcherRecreate
+	helperReason := upgradeDriftReason(d, boxstate.ReasonHelperRecreate)
 	if b.Runtime == boxstate.RuntimeStopped {
 		switch {
 		case needsRecreate:
 			r.reason = "recreation deferred until you want to use this box again"
+			if helperReason != "" {
+				r.reason = helperReason + "; " + r.reason
+			}
 			r.command = upgradeRecreateCommand(space, b.Name)
 		case d.Drift == boxstate.DriftNeedsRestart || d.Drift == boxstate.DriftLiveOnly:
 			r.reason = "saved changes apply on next start"
@@ -265,7 +271,10 @@ func classifySpaceUpgradeBox(space string, b boxstate.Box, d boxDriftView, statu
 	case needsRecreate:
 		r.action, r.confirm = upgradeRecreate, true
 		r.restartIfDeclined = stale && launcherRecreate && !d.LegacyRuntime && d.Drift != boxstate.DriftNeedsRecreate
-		r.reason = upgradeDriftReason(d, boxstate.ReasonDriftNeedsRecreate, boxstate.ReasonLauncherRecreate)
+		r.reason = helperReason
+		if r.reason == "" {
+			r.reason = upgradeDriftReason(d, boxstate.ReasonDriftNeedsRecreate, boxstate.ReasonLauncherRecreate)
+		}
 		if r.reason == "" {
 			r.reason = "existing container requires explicit replacement"
 		}
@@ -492,6 +501,11 @@ func confirmSpaceUpgrade(ctx context.Context, input *bufio.Reader, out io.Writer
 	}
 	resume := suspendCLISteps()
 	defer resume()
+	if reason := upgradeDriftReason(r.drift, boxstate.ReasonHelperRecreate); reason != "" {
+		if _, err := fmt.Fprintln(out, reason); err != nil {
+			return upgradeUnanswered, err
+		}
+	}
 	for _, line := range spaceUpgradeEffects(r) {
 		if _, err := fmt.Fprintln(out, line); err != nil {
 			return upgradeUnanswered, err

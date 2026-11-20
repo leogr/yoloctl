@@ -10,10 +10,52 @@ import (
 	"strings"
 	"testing"
 
+	helperinputs "github.com/leogr/yoloctl"
 	"github.com/leogr/yoloctl/assets"
 	"github.com/leogr/yoloctl/internal/nativeartifacts"
 	"github.com/leogr/yoloctl/internal/openshell"
 )
+
+func TestEarlierHelperMatchesCompiledSourceAndDependencies(t *testing.T) {
+	raw, hash, _ := fixtureSelection(t, nil)
+	release, err := openshell.LoadQualifiedRelease(raw, hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pins, err := releasePins(release)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := compiledHelperInputs
+	t.Cleanup(func() { compiledHelperInputs = previous })
+	for _, tt := range []struct {
+		name string
+		edit func(*helperinputs.Identity)
+		old  bool
+	}{
+		{name: "same source and dependencies"},
+		{name: "different source", edit: func(id *helperinputs.Identity) { id.SourceSHA256 += "0" }, old: true},
+		{name: "different dependency", edit: func(id *helperinputs.Identity) { id.Modules[0].Version += "-other" }, old: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			current := pins.Helper.Inputs
+			current.Modules = append([]helperinputs.Module(nil), current.Modules...)
+			if tt.edit != nil {
+				tt.edit(&current)
+			}
+			compiledHelperInputs = func() (helperinputs.Identity, error) { return current, nil }
+			got, err := EarlierHelper(release)
+			if got != tt.old || err != nil {
+				t.Fatalf("earlier helper = %v, %v; want %v, nil", got, err, tt.old)
+			}
+		})
+	}
+	unavailable := errors.New("compiled inputs unavailable")
+	compiledHelperInputs = func() (helperinputs.Identity, error) { return helperinputs.Identity{}, unavailable }
+	if old, err := EarlierHelper(release); old || !errors.Is(err, unavailable) {
+		t.Fatalf("unavailable inputs classified as drift: %v, %v", old, err)
+	}
+}
 
 func testHash(raw []byte) string {
 	digest := sha256.Sum256(raw)

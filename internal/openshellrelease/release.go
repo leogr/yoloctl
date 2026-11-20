@@ -10,7 +10,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"sync"
 
+	helperinputs "github.com/leogr/yoloctl"
 	"github.com/leogr/yoloctl/assets"
 	"github.com/leogr/yoloctl/internal/nativeartifacts"
 	"github.com/leogr/yoloctl/internal/openshell"
@@ -20,6 +23,23 @@ import (
 // A native request must return it before effects, without choosing a fixture,
 // changing its expected hash or silently using the legacy runtime.
 var ErrUnavailable = errors.New("this yoloctl was built without its native OpenShell selection; run make build")
+
+var compiledHelperInputs = sync.OnceValues(helperinputs.Current)
+
+// EarlierHelper compares a verified box release with this build's helper
+// source and dependencies. An unavailable identity is an error, not drift.
+func EarlierHelper(release openshell.QualifiedRelease) (bool, error) {
+	pins, err := releasePins(release)
+	if err != nil {
+		return false, err
+	}
+	current, err := compiledHelperInputs()
+	if err != nil {
+		return false, err
+	}
+	old := pins.Helper.Inputs
+	return old.Schema != current.Schema || old.SourceSHA256 != current.SourceSHA256 || !slices.Equal(old.Modules, current.Modules), nil
+}
 
 // Load accepts no caller-selected trust material and performs no I/O or runtime
 // mutation. New-create/replacement callers use this before holder/box effects;
@@ -54,19 +74,25 @@ func loadSelection(manifest []byte, reviewedHash string, rego []byte, sourceChec
 	// Strict qualification has already validated every field, duplicate key,
 	// patch/platform/helper/schema and subject binding. Read its retained copy
 	// to compare the paired Rego without exposing opaque runtime authority.
-	var document struct {
-		Pins openshell.ReleasePins `json:"pins"`
-	}
-	if err := json.Unmarshal(release.Manifest(), &document); err != nil {
+	pins, err := releasePins(release)
+	if err != nil {
 		return openshell.QualifiedRelease{}, nil, err
 	}
 	pairedRego := bytes.Clone(rego)
 	digest := sha256.Sum256(pairedRego)
-	if hex.EncodeToString(digest[:]) != document.Pins.RegoSHA256 {
+	if hex.EncodeToString(digest[:]) != pins.RegoSHA256 {
 		return openshell.QualifiedRelease{}, nil, errors.New("compiled native OpenShell Rego differs from its reviewed qualification")
 	}
 	if err := sourceCheck(release); err != nil {
 		return openshell.QualifiedRelease{}, nil, fmt.Errorf("compiled native OpenShell helper qualification: %w", err)
 	}
 	return release, pairedRego, nil
+}
+
+func releasePins(release openshell.QualifiedRelease) (openshell.ReleasePins, error) {
+	var document struct {
+		Pins openshell.ReleasePins `json:"pins"`
+	}
+	err := json.Unmarshal(release.Manifest(), &document)
+	return document.Pins, err
 }
