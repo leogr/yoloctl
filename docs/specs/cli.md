@@ -354,7 +354,7 @@ the writable layer require their tool's cache command or explicit recreation
 
 30. <a id="source-30"></a> [Chat export](../digests/chat-export.md).
 
-31. <a id="source-31"></a> [Nested virtualization](../digests/vm-adapters.md#nested-virtualization).
+31. <a id="source-31"></a> [Nested virtualization](../digests/nested-virtualization.md).
 
 32. <a id="source-32"></a> [Expanding a running step](../digests/step-expand.md).
 

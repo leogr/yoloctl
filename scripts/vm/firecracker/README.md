@@ -20,10 +20,10 @@ every host. The linked evidence describes the current code and contracts.
 |---|---|
 | VM image updates | Explicit `space recreate --update-vm-image` or `--vm-image DIR`; same-build retry or compatible previous-image recovery while pending. Native data is retained, not snapshotted. [Image evidence](../../../docs/digests/vm-images.md). |
 | Platforms | This adapter supports Linux amd64 with KVM. Other supported hosts use Lima; there is no separate yoloctl Apple Virtualization adapter. [Adapter selection](../../../internal/vm/vm.go), [Firecracker registration](../../../internal/vm/firecracker_linux_amd64.go). |
-| Project files and ports | Host shares use SSHFS; absolute/escaping symlinks are unsupported. Published ports bind to host loopback. [Adapter evidence](../../../docs/digests/vm-adapters.md). |
+| Project files and ports | Host shares use SSHFS; absolute/escaping symlinks are unsupported. Published ports bind to host loopback. [Runtime evidence](../../../docs/digests/firecracker-runtime.md), [share limits](../../../docs/digests/vm-shares.md). |
 | Disk capacity | Sparse disks and TRIM reclaim host allocation; maximum guest capacity stays fixed. No public disk-resize command exists. [Storage details](#storage-and-compatibility). |
 | Backups | Export requires stopped workloads and captures declarations/account state. Host projects, catalogs, VM/container images, ephemeral workdirs and sessions are excluded. It is not a live workload snapshot. [Archive contract](../../../docs/digests/space-archives.md). |
-| Snapshot restore | The integrated adapter boots fresh. Restore remains in the experiment harness. [Adapter evidence](../../../docs/digests/vm-adapters.md). |
+| Snapshot restore | The integrated adapter boots fresh. Restore remains in the experiment harness. [Guest evidence](../../../docs/digests/firecracker-guest.md). |
 | Artifact distribution | Local preparation and explicit image bundles are supported. There is no unified OCI artifact resolver/publisher. [Image evidence](../../../docs/digests/vm-images.md). |
 
 ## First use and local storage

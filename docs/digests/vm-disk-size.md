@@ -52,7 +52,7 @@ skips seeding and deletes nothing. A seeded disk is re-seeded only for a
 different build. The helper removes the record durably as its last action
 before starting the VMM and starts no VMM if that fails. Seeding costs a second
 format allocation and the binary on the host for a moment; its stages report
-completed work to vm.log (see [VM adapters](vm-adapters.md)). After boot,
+completed work to vm.log (see [Firecracker host runtime](firecracker-runtime.md)). After boot,
 `EnsureVMBinary` still installs the starting build. [8](#source-8)
 
 [FACT] Regressions cover the sizing table (80→40, 120→50, 50→30, 20→30 with

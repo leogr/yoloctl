@@ -87,7 +87,7 @@ but boxes require explicit starts. Destruction removes runtime before the disk
 and bundle, retaining recovery metadata after intermediate failures. VM
 termination proof and disk operations go through the selected adapter. An
 uncertain Firecracker launch cannot authorize disk deletion.
-[1](#source-1) [6](#source-6)
+[1](#source-1) [6](#source-6) [30](#source-30)
 
 [FACT] Interrupted commands are never replayed. The controller resolves only
 reviewed durable evidence or exact read-only postconditions; an outcome it cannot
@@ -288,3 +288,4 @@ features place their caches inside this bind by default. [25](#source-25)
 28. <a id="source-28"></a> [Host box-file recovery](../digests/box-files.md).
 
 29. <a id="source-29"></a> [Space upgrade](../digests/space-upgrade.md).
+30. <a id="source-30"></a> [Firecracker process and disk proof](../digests/firecracker-runtime.md).

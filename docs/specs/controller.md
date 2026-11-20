@@ -5,7 +5,7 @@ secrets on the native data disk. The host owns boot authority, host grants,
 catalogs and UI preferences. There is no installed host daemon, shared declaration writer,
 or host/guest advisory lock. The Firecracker adapter has one private host helper
 per running VM for device transport; it has no controller authority.
-[1](#source-1) [2](#source-2) [5](#source-5)
+[1](#source-1) [2](#source-2) [5](#source-5) [21](#source-21)
 
 ```mermaid
 flowchart TB
@@ -193,7 +193,7 @@ image recreation. [18](#source-18)
 3. <a id="source-3"></a> [Lifecycle and archives](../digests/lifecycle.md).
 4. <a id="source-4"></a> [Operator scope and guidance](../digests/operator.md).
 
-5. <a id="source-5"></a> [VM adapters and helper lifetime](../digests/vm-adapters.md).
+5. <a id="source-5"></a> [VM adapters](../digests/vm-adapters.md).
 6. <a id="source-6"></a> [Managed chat state and limits](../digests/managed-chat.md).
 7. <a id="source-7"></a> [Managed runtime and stream](../digests/chat-runtime.md).
 8. <a id="source-8"></a> [Operator chat and human identity boundary](../digests/operator-chat.md).
@@ -212,3 +212,4 @@ image recreation. [18](#source-18)
 
 19. <a id="source-19"></a> [Box stop and start results](../digests/box-stop-start.md).
 20. <a id="source-20"></a> [Disk reserve notices](../digests/disk-reserve-warning.md).
+21. <a id="source-21"></a> [Firecracker host runtime and helper](../digests/firecracker-runtime.md).

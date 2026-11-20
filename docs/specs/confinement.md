@@ -179,7 +179,7 @@ does not establish delivery of final SSH output. [17](#source-17)
 7. <a id="source-7"></a> [Pi adapter](../digests/pi.md) — install, state, provider and runtime contracts.
 
 8. <a id="source-8"></a> [OpenCode adapter](../digests/opencode.md) — native runtime, account and validation contracts.
-9. <a id="source-9"></a> [VM adapter and guest build service](../digests/vm-adapters.md).
+9. <a id="source-9"></a> [Firecracker guest build service](../digests/firecracker-guest.md).
 10. <a id="source-10"></a> [OCI Features](../digests/oci-features.md).
 11. <a id="source-11"></a> [Privileged development boxes](../digests/privileged-boxes.md).
 12. <a id="source-12"></a> [VM images](../digests/vm-images.md) — bundled kernel recipe and built-in KVM.

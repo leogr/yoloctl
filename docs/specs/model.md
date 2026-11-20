@@ -67,6 +67,7 @@ with a two-minute inactivity window and caller cancellation; activity alone is
 never readiness, and storage pauses retain the runtime. Guest containerd and
 lazy-builder readiness each use a scoped two-minute budget; ordinary
 diagnostic and cleanup limits remain separate. [1](#source-1) [3](#source-3) [6](#source-6)
+[18](#source-18) [19](#source-19)
 
 [FACT] New/recreated Lima VMs use pinned Ubuntu Minimal 24.04 images and
 nerdctl-full 2.3.5 archives for both guest architectures. Existing unpinned VMs
@@ -130,3 +131,5 @@ independent ownership boundaries. [16](#source-16)
 16. <a id="source-16"></a> [Build identity and host homes](../digests/installation.md).
 
 17. <a id="source-17"></a> [Lima storage and space names](../digests/lima-storage.md).
+18. <a id="source-18"></a> [Firecracker host runtime](../digests/firecracker-runtime.md).
+19. <a id="source-19"></a> [Firecracker guest](../digests/firecracker-guest.md).
