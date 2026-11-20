@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/tui/panes"
 	"github.com/leogr/yoloctl/internal/tui/tabs"
@@ -132,13 +133,19 @@ func TestWelcomeClickAndDrag(t *testing.T) {
 	}{
 		{"command click", false, "space start work", false, "space start work"},
 		{"command click with notice", true, "space start work", false, "space start work"},
+		{"enroll click with notice", true, "chat enroll space-commander --connect --recreate", false, "chat enroll space-commander --connect --recreate"},
+		{"attach click with notice", true, "attach space-commander", false, "attach space-commander"},
 		{"command drag", false, "space start work", true, "space"},
 		{"tip text drag with notice", true, "Tip: ", true, "Tip: "},
 		{"hint click", false, "Click the command", false, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			m := newTestModel(t, 140, 24)
-			m.welcome.tip = makeWelcomeTip(WelcomeStatus{Step: WelcomeStopped}, "work", "", "")
+			m := newTestModel(t, 178, 24)
+			status := WelcomeStatus{Step: WelcomeStopped}
+			if strings.Contains(tc.row, "space-commander") {
+				status = WelcomeStatus{Step: WelcomeEnroll, Operator: "space-commander"}
+			}
+			m.welcome.tip = makeWelcomeTip(status, "work", "", "")
 			if tc.focused {
 				m.postNotice(prettylog.KindWarn, "retained")
 				m.openToast()
@@ -166,6 +173,9 @@ func TestWelcomeClickAndDrag(t *testing.T) {
 			if line, _ := m.pal.Line(); m.console.Busy() || (!tc.drag && line != tc.want) || (tc.drag && line != "") {
 				t.Fatalf("unexpected input after release: %q (busy=%v)", line, m.console.Busy())
 			}
+			if tc.focused && (!m.noticeVisible || !m.noticeFocused) {
+				t.Fatal("welcome interaction closed or unfocused the notice")
+			}
 			if tc.drag {
 				if cmd == nil {
 					t.Fatal("drag did not copy")
@@ -176,6 +186,27 @@ func TestWelcomeClickAndDrag(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestWelcomeCommandUnderlineMatchesHit(t *testing.T) {
+	m := newTestModel(t, 32, 24)
+	m.welcome.tip = makeWelcomeTip(WelcomeStatus{Step: WelcomeEnroll, Operator: "space-commander"}, "work", "", "")
+	rows, commands := m.welcomeLayout()
+	if len(commands) < 3 {
+		t.Fatal("fixture needs a wrapped command and a separate attach command")
+	}
+	for y, row := range rows {
+		for _, cells := range uv.NewStyledString(row).Lines(ansi.GraphemeWidth) {
+			x := 0
+			for _, cell := range cells {
+				_, command := m.welcomeTextHit(tea.Mouse{X: x, Y: m.tabTop() + y})
+				if underline := cell.Style.Underline != uv.UnderlineNone; underline != (command != "") {
+					t.Fatalf("row %d cell %d %q: underline=%t command=%q", y, x, cell.Content, underline, command)
+				}
+				x += cell.Width
+			}
+		}
 	}
 }
 

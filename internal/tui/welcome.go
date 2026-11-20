@@ -37,7 +37,7 @@ type WelcomeStatus struct {
 }
 
 type welcomeTip struct {
-	text, command string
+	text, command, attach string
 }
 
 type welcomeView struct {
@@ -106,7 +106,7 @@ func (m *model) syncWelcome() tea.Cmd {
 const welcomeFillHint = "Click the command to put it in the input."
 
 func welcomeCommandTip(before, command, after string) welcomeTip {
-	return welcomeTip{before + "\n  " + command + after + "\n" + welcomeFillHint, command}
+	return welcomeTip{text: before + "\n  " + command + after + "\n" + welcomeFillHint, command: command}
 }
 
 func makeWelcomeTip(status WelcomeStatus, space, cwd, login string) welcomeTip {
@@ -143,12 +143,14 @@ func makeWelcomeTip(status WelcomeStatus, space, cwd, login string) welcomeTip {
 		return welcomeCommandTip("Tip: your space has no chat room yet. To create it, type:", "chat ensure", "")
 	case WelcomeEnroll:
 		command := "chat enroll " + operator + " --connect --recreate"
-		return welcomeTip{fmt.Sprintf(`Tip: %[1]s is not in the chat yet. To add it, type:
+		attach := "attach " + operator
+		text := fmt.Sprintf(`Tip: %[1]s is not in the chat yet. To add it, type:
   %[2]s
 Then attach to it and ask it to listen to the chat. Type:
-  attach %[1]s
+  %[3]s
 and say: "Join the space chat and keep listening for messages"
-`+welcomeFillHint, operator, command), command}
+`+welcomeFillHint, operator, command, attach)
+		return welcomeTip{text: text, command: command, attach: attach}
 	case WelcomeOnlyOperator:
 		return welcomeCommandTip(fmt.Sprintf("Tip: ask %s for what you need in the chat. To open it, type:", operator), "chat",
 			fmt.Sprintf("\nand say, for example: \"@%s create a box for %s with Claude and the go feature\"", operator, path))
@@ -180,44 +182,61 @@ func (m *model) welcomeIdle() bool {
 
 func (m *model) canFillWelcome() bool {
 	line, _ := m.pal.Line()
-	return line == "" && m.welcome.tip.command != ""
+	return line == ""
 }
 
-func (m *model) fillWelcome() {
-	m.closeToast()
+func (m *model) fillWelcome(command string) {
 	m.focusPalette = true
-	m.pal.Insert(m.welcome.tip.command)
+	m.pal.Insert(command)
 	m.clearSuggestions()
 }
 
 func (m *model) welcomeRows() []string {
-	rows, _, _ := m.welcomeLayout()
+	rows, _ := m.welcomeLayout()
 	if drag := m.welcome.drag; drag != nil && drag.moved && m.sameWelcome(drag) {
 		rows = selectionLines(terminal.Frame{Lines: rows, Selection: drag.spans(rows)})
 	}
 	return rows
 }
 
-func (m *model) welcomeLayout() (rows []string, commandStart, commandEnd int) {
-	text := m.welcome.tip.text
+func (m *model) welcomeLayout() ([]string, map[int]string) {
+	tip := m.welcome.tip
+	text := tip.text
 	if text == "" {
 		text = welcomeFallback
 	}
 	lines := []string{""}
+	var commands map[int]string
+	canFill := m.canFillWelcome()
 	for i, logical := range strings.Split(text, "\n") {
-		style := cDim
-		// The primary command is the second logical line of each command tip.
-		command := i == 1 && m.canFillWelcome()
-		if command {
-			commandStart = len(lines)
-			style += cUnderline
+		command := ""
+		if canFill {
+			switch {
+			case i == 1: // the primary command is the second logical line
+				command = tip.command
+			case tip.attach != "" && logical == "  "+tip.attach:
+				command = tip.attach
+			}
 		}
 		for _, line := range strings.Split(ansi.Wordwrap(logical, max(m.width-2, 1), ""), "\n") {
-			lines = append(lines, ansi.Truncate(style+"  "+line+cReset, max(m.width, 1), ""))
-		}
-		if command {
-			commandEnd = len(lines)
+			if command != "" {
+				line = ansi.Truncate(line, max(m.width-2, 0), "")
+			}
+			painted := cDim + "  " + line + cReset
+			if command != "" {
+				content := strings.Trim(line, " ")
+				if content != "" {
+					start := len(line) - len(strings.TrimLeft(line, " "))
+					end := start + len(content)
+					painted = cDim + "  " + line[:start] + cUnderline + content + cReset + line[end:]
+					if commands == nil {
+						commands = make(map[int]string)
+					}
+					commands[len(lines)] = command
+				}
+			}
+			lines = append(lines, ansi.Truncate(painted, max(m.width, 1), ""))
 		}
 	}
-	return lines, commandStart, commandEnd
+	return lines, commands
 }

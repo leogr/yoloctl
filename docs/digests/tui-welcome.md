@@ -30,8 +30,10 @@ or a change in that identity between reads keeps the generic hint. When all
 steps are complete the view picks one random tip for the visit.
 [2](#source-2) [6](#source-6)
 
-[FACT] A click on the shown command fills an empty palette input. Enter is
-still required to submit. Dragging over welcome text selects it for copying
+[FACT] A click on underlined command text fills an empty palette input and
+keeps any open notice. In the enrollment tip both the enroll and attach
+commands are clickable. Enter submits the input when the palette has keyboard
+focus. Dragging over welcome text selects it for copying
 through the existing host clipboard policy. [7](#source-7) [10](#source-10)
 The first-space tip uses the
 working directory and the host login if it is a valid account name. Otherwise

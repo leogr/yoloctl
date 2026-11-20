@@ -12,27 +12,31 @@ import (
 )
 
 type welcomeDrag struct {
-	tip            welcomeTip
-	visit          uint64
-	size           image.Point
-	top            int
-	start, end     image.Point
-	command, moved bool
+	tip        welcomeTip
+	visit      uint64
+	size       image.Point
+	top        int
+	start, end image.Point
+	command    string
+	moved      bool
 }
 
-func (m *model) welcomeTextHit(mo tea.Mouse) (text, command bool) {
+func (m *model) welcomeTextHit(mo tea.Mouse) (text bool, command string) {
 	if !m.welcomeIdle() || mo.Y >= m.height || mo.X >= m.width {
-		return false, false
+		return false, ""
 	}
-	rows, commandStart, commandEnd := m.welcomeLayout()
+	rows, commands := m.welcomeLayout()
 	y := mo.Y - m.tabTop()
 	if y < 0 || y >= len(rows) {
-		return false, false
+		return false, ""
 	}
 	plain := ansi.Strip(rows[y])
 	hit := mo.X >= len(plain)-len(strings.TrimLeft(plain, " ")) &&
 		mo.X < ansi.StringWidth(strings.TrimRight(plain, " "))
-	return hit, hit && commandStart <= y && y < commandEnd
+	if !hit {
+		return false, ""
+	}
+	return true, commands[y]
 }
 
 func (m *model) startWelcomeDrag(mo tea.Mouse) bool {
@@ -88,15 +92,15 @@ func (m *model) continueWelcomeDrag(msg tea.Msg, mo tea.Mouse) (tea.Cmd, bool) {
 		return nil, owned
 	}
 	if !drag.moved {
-		if drag.command && m.canFillWelcome() && !m.toastLayout().contains(mo.X, mo.Y) &&
+		if drag.command != "" && m.canFillWelcome() && !m.toastLayout().contains(mo.X, mo.Y) &&
 			m.browserDialog == nil && m.confirm == nil && m.picker == nil && m.spacePicker == nil && m.activeNotice() == nil {
-			m.fillWelcome()
+			m.fillWelcome(drag.command)
 		} else if m.noticeVisible && !m.toastLayout().contains(mo.X, mo.Y) {
 			m.closeToast()
 		}
 		return nil, owned
 	}
-	rows, _, _ := m.welcomeLayout()
+	rows, _ := m.welcomeLayout()
 	var parts []string
 	for y, span := range drag.spans(rows) {
 		if span.End > span.Start {
