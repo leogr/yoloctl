@@ -14,7 +14,7 @@ import (
 )
 
 func TestComposedImageRef_PolicyOnlyHasNoInstall(t *testing.T) {
-	ref, _, hasInstall, err := ComposedImageRef(RefAgentbox, []string{"github"})
+	ref, _, hasInstall, err := ComposedImageRef(RefAgentbox, []string{"pypi"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,11 +67,11 @@ func TestComposedImageRef_IdentitySeparatesCache(t *testing.T) {
 		if strings.Contains(recipe, "chown -R") || !strings.Contains(setup, "find /home/sandbox -xdev \\( ! -user sandbox -o ! -group sandbox \\)") || !strings.Contains(setup, want) || strings.Contains(recipe, "ENV YOLOCTL_HOST_") {
 			t.Fatalf("identity setup recopies owned files or persists env:\n%s", recipe)
 		}
-		withPolicy, _, _, err := composedImageRef(RefAgentbox, []string{"pi", "github"}, uid, gid)
+		withPolicy, _, _, err := composedImageRef(RefAgentbox, []string{"pi", "pypi"}, uid, gid)
 		if err != nil || ref != withPolicy {
 			t.Fatalf("policy-only feature changed identity cache: %q, %q, %v", ref, withPolicy, err)
 		}
-		if base, _, installs, err := composedImageRef(RefAgentbox, []string{"github"}, uid, gid); err != nil || installs || base != "" {
+		if base, _, installs, err := composedImageRef(RefAgentbox, []string{"pypi"}, uid, gid); err != nil || installs || base != "" {
 			t.Fatalf("policy-only box unexpectedly composed an identity image: %q, %v", base, err)
 		}
 	}
@@ -162,9 +162,9 @@ func TestComposedImageRef_UsesSpaceOwner(t *testing.T) {
 // the composed ref (no image effect → no spurious rebuild/recreate).
 func TestComposedImageRef_PolicyOnlyDoesNotChangeRef(t *testing.T) {
 	withGo, _, _, _ := ComposedImageRef(RefAgentbox, []string{"go"})
-	withGoGithub, _, _, _ := ComposedImageRef(RefAgentbox, []string{"go", "github"})
-	if withGo != withGoGithub {
-		t.Errorf("policy-only feature changed the ref: %q vs %q", withGo, withGoGithub)
+	withGoPypi, _, _, _ := ComposedImageRef(RefAgentbox, []string{"go", "pypi"})
+	if withGo != withGoPypi {
+		t.Errorf("policy-only feature changed the ref: %q vs %q", withGo, withGoPypi)
 	}
 }
 
@@ -231,7 +231,7 @@ func TestComposedImageRef_PipEnvironmentChangesImage(t *testing.T) {
 
 func TestEnsureComposedImage_PolicyOnlyReturnsBase(t *testing.T) {
 	f := &fakeClient{imagesPresent: map[string]bool{RefAgentbox: true}}
-	ref, err := EnsureComposedImage(context.Background(), f, RefAgentbox, []string{"github"}, Options{})
+	ref, err := EnsureComposedImage(context.Background(), f, RefAgentbox, []string{"pypi"}, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,6 @@
 # Image composition and build caches
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; agent npm installer `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409dbbb5f2febbe3bdf2f581dff7775ff43b` and accompanying changes; APT-compatible smoke probe correction on `a3827ba3b050fc0e7641586704954c4fc76f0241` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; agent npm installer `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409dbbb5f2febbe3bdf2f581dff7775ff43b` and accompanying changes; APT-compatible smoke probe correction on `a3827ba3b050fc0e7641586704954c4fc76f0241` and accompanying changes. GitHub CLI install on `804b5adcd478a04b234daa3d344587fd58525df1` and accompanying changes.
 
 [FACT] Composition prepares available sandbox identities before installation,
 using the space owner's UID/GID without account/workdir mounts. npm owns packages
@@ -65,6 +65,12 @@ smoke checks `bwrap` on the confined PATH, not nested sandbox operation.
 required capabilities. It uses the ordinary recipe hash and refresh/cache rules;
 AWS credential and custom-egress setup remain explicit. [22](#source-22)
 
+[FACT] The `github` feature installs the latest `gh` from GitHub's apt
+repository at `/usr/bin/gh`, the path `network.github` names. The embedded
+keyring must hold exactly the two published primary keys; apt receives only
+those. Key rotation is a source update. Every box with `github` gets a new
+composed image. [23](#source-23) [24](#source-24)
+
 ## Sources
 
 1. <a id="source-1"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L48) — prepared identity, repair, hashing and build selection.
@@ -89,3 +95,5 @@ AWS credential and custom-egress setup remain explicit. [22](#source-22)
 20. <a id="source-20"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L14) — default args delegate confinement to OpenShell.
 21. <a id="source-21"></a> [Codex install regression](../../internal/features/features_test.go#L56) — `TestCodexFeatureInstallsBubblewrap`.
 22. <a id="source-22"></a> [AWS feature](../../internal/features/aws.go#L1) — embedded installer/key recipe; configuration is described in `bedrock.md`.
+23. <a id="source-23"></a> [GitHub CLI feature](../../internal/features/github-install.sh#L1-L35) — key-set check, apt keyring and install; recipe `github.go`.
+24. <a id="source-24"></a> [GitHub CLI Linux install](https://github.com/cli/cli/blob/trunk/docs/install_linux.md) — published fingerprints and keyring checksums, checked 2026-11-20.

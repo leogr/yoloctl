@@ -37,7 +37,7 @@ type Feature struct {
 	Description string `yaml:"description"`
 	// Install describes how the component is installed into the image.
 	// Nil for policy-only features whose tool already lives in the base
-	// image (e.g. github: git/gh are baked in).
+	// image (e.g. pypi: the base's Python and pip).
 	Install *Install `yaml:"install,omitempty"`
 	// RequiresCapabilities lists the capability names this feature needs
 	// (e.g. "network.anthropic"). The policy composer resolves these against
@@ -83,8 +83,8 @@ const NPMGlobalPrefix = "/home/sandbox/.npm-global"
 // Version-pinned variants MAY append
 // `-<version>` (`python-3.12`), but the built-in `go` is deliberately
 // UNVERSIONED: it installs latest stable Go and keeps GOTOOLCHAIN=local;
-// a module requiring a newer toolchain needs an explicit image refresh/recreate. Policy-only features (`github`, `pypi`) carry no install —
-// their tools live in the base image.
+// a module requiring a newer toolchain needs an explicit image refresh/recreate. The policy-only `pypi` feature carries no install —
+// its tools live in the base image.
 var registry = map[string]Feature{
 	"aws": {
 		Name:        "aws",
@@ -196,13 +196,16 @@ RUN install -d -o sandbox -g sandbox /home/sandbox/.agents /home/sandbox/.agents
 		RequiresCapabilities: []string{"network.opencode"},
 	},
 
-	// Ecosystem features: policy-only (tool in the base image), egress via
-	// the required capability.
+	// Ecosystem features: egress via the required capability. git is in the
+	// base image; gh comes from GitHub's signed apt repository at /usr/bin/gh,
+	// the path the capability names.
 	"github": {
 		Name:                 "github",
-		Description:          "GitHub egress restricted to git + gh (tools in the base image)",
+		Description:          "GitHub CLI (latest gh from GitHub's signed apt repository) and GitHub egress restricted to git + gh; git is in the base image",
+		Install:              &Install{Kind: InstallDockerfile, Dockerfile: githubInstallDockerfile()},
 		RequiresCapabilities: []string{"network.github"},
 	},
+	// Policy-only: the base image's Python and pip.
 	"pypi": {
 		Name:                 "pypi",
 		Description:          "PyPI + pythonhosted egress (opt-in)",

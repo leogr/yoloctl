@@ -80,18 +80,18 @@ func TestCodexFeatureInstallsBubblewrap(t *testing.T) {
 	}
 }
 
-// TestPolicyOnlyFeatureHasNoInstall: ecosystem features (github) install
-// nothing — their tool is in the base image; they only inherit a capability.
+// TestPolicyOnlyFeatureHasNoInstall: a policy-only feature (pypi) installs
+// nothing — its tool is in the base image; it only inherits a capability.
 func TestPolicyOnlyFeatureHasNoInstall(t *testing.T) {
-	f, err := Lookup("github")
+	f, err := Lookup("pypi")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f.Install != nil {
-		t.Errorf("github should be policy-only (no install), got %+v", f.Install)
+		t.Errorf("pypi should be policy-only (no install), got %+v", f.Install)
 	}
-	if len(f.RequiresCapabilities) != 1 || f.RequiresCapabilities[0] != "network.github" {
-		t.Errorf("github RequiresCapabilities = %v", f.RequiresCapabilities)
+	if len(f.RequiresCapabilities) != 1 || f.RequiresCapabilities[0] != "network.pypi" {
+		t.Errorf("pypi RequiresCapabilities = %v", f.RequiresCapabilities)
 	}
 }
 
@@ -222,12 +222,12 @@ func TestGenerateDockerfile_AgentNpmFeaturesUseLatest(t *testing.T) {
 // TestGenerateDockerfile_PolicyOnlyFeatureNoStep: a policy-only feature adds no
 // build step (nothing to install).
 func TestGenerateDockerfile_PolicyOnlyFeatureNoStep(t *testing.T) {
-	out, err := GenerateDockerfile("base", []string{"github"})
+	out, err := GenerateDockerfile("base", []string{"pypi"})
 	if err != nil {
 		t.Fatalf("GenerateDockerfile: %v", err)
 	}
-	if strings.Contains(out, "# Feature: github") {
-		t.Errorf("policy-only github should contribute no build step:\n%s", out)
+	if strings.Contains(out, "# Feature: pypi") {
+		t.Errorf("policy-only pypi should contribute no build step:\n%s", out)
 	}
 }
 
@@ -269,17 +269,17 @@ func TestInstallPlan_InstallFeature(t *testing.T) {
 // A policy-only feature installs nothing → hasInstall=false (the caller then
 // runs the base image as-is rather than building a pointless composed image).
 func TestInstallPlan_PolicyOnlyHasNoInstall(t *testing.T) {
-	_, installing, hasInstall, err := InstallPlan("base", []string{"github"})
+	_, installing, hasInstall, err := InstallPlan("base", []string{"pypi"})
 	if err != nil {
 		t.Fatalf("InstallPlan: %v", err)
 	}
 	if hasInstall || len(installing) != 0 {
-		t.Errorf("github should install nothing: installing=%v hasInstall=%v", installing, hasInstall)
+		t.Errorf("pypi should install nothing: installing=%v hasInstall=%v", installing, hasInstall)
 	}
 }
 
 func TestInstallPlan_MixedReportsOnlyInstallers(t *testing.T) {
-	_, installing, hasInstall, err := InstallPlan("base", []string{"go", "github", "claude"})
+	_, installing, hasInstall, err := InstallPlan("base", []string{"go", "pypi", "claude"})
 	if err != nil {
 		t.Fatalf("InstallPlan: %v", err)
 	}
@@ -287,7 +287,7 @@ func TestInstallPlan_MixedReportsOnlyInstallers(t *testing.T) {
 		t.Fatal("mixed set should have installs")
 	}
 	if got := strings.Join(installing, ","); got != "go,claude" {
-		t.Errorf("installing = %q, want go,claude (github is policy-only)", got)
+		t.Errorf("installing = %q, want go,claude (pypi is policy-only)", got)
 	}
 }
 

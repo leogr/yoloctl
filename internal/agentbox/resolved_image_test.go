@@ -70,7 +70,7 @@ func TestResolvedImage_ComposesExtraFeature(t *testing.T) {
 // A generic-shell box whose only feature is policy-only stays on the base.
 func TestResolvedImage_PolicyOnlyStaysOnBase(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	c := &Config{Agent: "none", Image: agentboximage.RefAgentbox, Features: []string{"github"}}
+	c := &Config{Agent: "none", Image: agentboximage.RefAgentbox, Features: []string{"pypi"}}
 	ref, composed, err := ResolvedImage(c)
 	if err != nil {
 		t.Fatal(err)

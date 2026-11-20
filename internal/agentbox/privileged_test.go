@@ -394,7 +394,7 @@ func TestPolicyOnlyChangeDoesNotRestartPrivilegedBox(t *testing.T) {
 	old := privilegedConfig()
 	actual := provedPrivilegedActual(t, old)
 	desired := privilegedConfig()
-	desired.Features = append(desired.Features, "github") // policy-only: no install
+	desired.Features = append(desired.Features, "pypi") // policy-only: no install
 	if string(mustCompose(t, desired)) == string(actual.PolicyContent) {
 		t.Fatal("fixture did not change the policy")
 	}
@@ -572,7 +572,7 @@ func withProtocol(d *container.Details, protocol, launcher string) *container.De
 func TestRuntimeProtocolMustAgreeWithLauncher(t *testing.T) {
 	c := privilegedConfig()
 	changed := privilegedConfig()
-	changed.Features = append(changed.Features, "github") // policy-only change
+	changed.Features = append(changed.Features, "pypi") // policy-only change
 	malformed := privilegedDetails(c)
 	malformed.Command = append(slices.Clone(malformed.Command), "--unknown", "x")
 	for name, tc := range map[string]struct {

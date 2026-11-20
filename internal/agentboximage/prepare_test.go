@@ -71,7 +71,7 @@ func TestPrepareManagedBaseCopiesEmbeddedContextAndModes(t *testing.T) {
 }
 
 func TestPreparePolicyOnlyDoesNotInventBuild(t *testing.T) {
-	p, err := PrepareComposed(t.Context(), RefAgentbox, []string{"github"}, Options{Force: true})
+	p, err := PrepareComposed(t.Context(), RefAgentbox, []string{"pypi"}, Options{Force: true})
 	if err != nil || p.DesiredRef != RefAgentbox || len(p.Recipe.Dockerfile) != 0 {
 		t.Fatal(p, err)
 	}
