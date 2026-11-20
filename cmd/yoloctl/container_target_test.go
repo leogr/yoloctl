@@ -33,7 +33,7 @@ if args[2]=='inspect':
  sys.exit(int(os.environ.get('YOLOCTL_TEST_MAINTENANCE_INSPECT_EXIT','0')))
 if args[2]=='exec':
  if len(args)>8 and args[8]=='cat': print('{"version":"1.2.3"}')
- if len(args)>8 and args[8]=='test': sys.exit(int(os.environ.get('YOLOCTL_TEST_MAINTENANCE_PROBE_EXIT','0')))
+ if len(args)>8 and args[8]=='test': sys.exit(int(os.environ.get('YOLOCTL_TEST_MAINTENANCE_PROBE_EXIT','1')))
  sys.exit(int(os.environ.get('YOLOCTL_TEST_MAINTENANCE_EXEC_EXIT','0')))
 sys.exit(97)
 `
@@ -67,10 +67,10 @@ func TestMaintenanceExecsUseSystemPathAndExactlySelectedContainer(t *testing.T) 
 	valid := `[{"Id":"c1` + strings.Repeat("0", 62) + `","Name":"peer"},{"Id":"` + id + `","Name":"c1"}]`
 	operations := map[string]func(*container.Client, string) error{
 		"npm-install": func(c *container.Client, target string) error {
-			return npmInstallGlobalAtLatest(t.Context(), c, target, "@vendor/agent")
+			return npmInstallGlobalAtLatest(t.Context(), c, target, "c1", "@vendor/agent")
 		},
 		"native-install": func(c *container.Client, target string) error {
-			return installAgentLatest(t.Context(), c, target, &agentprofile.Profile{NativeRelease: "antigravity"})
+			return installAgentLatest(t.Context(), c, target, "c1", &agentprofile.Profile{NativeRelease: "antigravity"})
 		},
 		"npm-version": func(c *container.Client, target string) error {
 			_, err := fetchInstalledNpmVersion(t.Context(), c, target, "@vendor/agent")
@@ -149,7 +149,7 @@ func TestAgentMaintenanceRetainsOneTargetAcrossProbeAndInstall(t *testing.T) {
 	if ok, err := preflightAgentRunning(cmd, c.Env(), "c1", selected, "claude"); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
-	if err := installAgentLatest(t.Context(), c, selected, &agentprofile.Profile{NpmPackage: "@vendor/agent"}); err != nil {
+	if err := installAgentLatest(t.Context(), c, selected, "c1", &agentprofile.Profile{NpmPackage: "@vendor/agent"}); err != nil {
 		t.Fatal(err)
 	}
 	got := calls()
@@ -162,7 +162,7 @@ func TestNpmMaintenanceFailureExplainsSystemPathAndAutoupdateOptOut(t *testing.T
 	id := strings.Repeat("f", 64)
 	c, _ := maintenanceTargetFixture(t, "[]")
 	t.Setenv("YOLOCTL_TEST_MAINTENANCE_EXEC_EXIT", "1")
-	err := npmInstallGlobalAtLatest(t.Context(), c, id, "@vendor/agent")
+	err := npmInstallGlobalAtLatest(t.Context(), c, id, "coder", "@vendor/agent")
 	var exitErr *exec.ExitError
 	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
 		t.Fatalf("npm maintenance error = %v, want wrapped exit status 1", err)
@@ -173,21 +173,31 @@ func TestNpmMaintenanceFailureExplainsSystemPathAndAutoupdateOptOut(t *testing.T
 }
 
 // A box built before the managed agent folder fails the install as the
-// missing maintenance user; the error names the recreate command instead of
-// the npm PATH hint (devOpUs live QA r1).
+// missing maintenance user; the error names the recreate command with the box
+// name instead of the npm PATH hint (devOpUs live QA r1). Only a successful
+// `test ! -d` gives that remedy: a folder that exists or a probe that cannot
+// run keeps the install's own error (archyAstra r1).
 func TestNpmMaintenanceOnABoxWithoutTheManagedFolderNamesRecreate(t *testing.T) {
 	id := strings.Repeat("f", 64)
-	c, calls := maintenanceTargetFixture(t, `[{"Id":"`+id+`","Name":"coder"}]`)
-	t.Setenv("YOLOCTL_TEST_MAINTENANCE_EXEC_EXIT", "1")
-	t.Setenv("YOLOCTL_TEST_MAINTENANCE_PROBE_EXIT", "1")
-	err := npmInstallGlobalAtLatest(t.Context(), c, id, "@vendor/agent")
-	if err == nil || !strings.Contains(err.Error(), "predates the managed agent folder /opt/yoloctl/npm") ||
-		!strings.Contains(err.Error(), "yoloctl box recreate coder --space fixture") || strings.Contains(err.Error(), "npm is unavailable") {
-		t.Fatalf("old-box install error = %v", err)
-	}
-	probe := []string{"sudo", "nerdctl", "exec", "--user", "sandbox", "--env", wantAgentMaintenancePath, id, "test", "-d", "/opt/yoloctl/npm"}
-	got := calls()
-	if !slices.ContainsFunc(got, func(call []string) bool { return slices.Equal(call, probe) }) {
-		t.Fatalf("no managed-folder probe as sandbox on the selected container: %q", got)
+	for _, tc := range []struct {
+		probeExit string
+		remedy    bool
+	}{{"0", true}, {"1", false}, {"7", false}} {
+		t.Run("probe-exit-"+tc.probeExit, func(t *testing.T) {
+			c, calls := maintenanceTargetFixture(t, "[]")
+			t.Setenv("YOLOCTL_TEST_MAINTENANCE_EXEC_EXIT", "7")
+			t.Setenv("YOLOCTL_TEST_MAINTENANCE_PROBE_EXIT", tc.probeExit)
+			err := npmInstallGlobalAtLatest(t.Context(), c, id, "coder", "@vendor/agent")
+			remedy := err != nil && strings.Contains(err.Error(), "predates the managed agent folder /opt/yoloctl/npm") &&
+				strings.Contains(err.Error(), "yoloctl box recreate coder --space fixture")
+			if remedy != tc.remedy || err == nil || remedy == strings.Contains(err.Error(), "npm is unavailable") {
+				t.Fatalf("install error = %v, want remedy %v", err, tc.remedy)
+			}
+			probe := []string{"sudo", "nerdctl", "exec", "--user", "sandbox", "--env", wantAgentMaintenancePath, id, "test", "!", "-d", "/opt/yoloctl/npm"}
+			got := calls()
+			if len(got) != 2 || !slices.Equal(got[1], probe) {
+				t.Fatalf("calls = %q, want the install then the folder probe on the selected container", got)
+			}
+		})
 	}
 }

@@ -26,7 +26,7 @@ func TestNpmAgentMaintenanceUsesExplicitConfigPaths(t *testing.T) {
 				t.Fatal(err)
 			}
 			c, calls := maintenanceTargetFixture(t, "[]")
-			if err := installAgentLatest(t.Context(), c, id, profile); err != nil {
+			if err := installAgentLatest(t.Context(), c, id, "coder", profile); err != nil {
 				t.Fatal(err)
 			}
 			// The agent's program is maintained as yoloctl-maint in /opt,

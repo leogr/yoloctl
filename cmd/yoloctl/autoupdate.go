@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/agentnpm"
@@ -87,7 +86,7 @@ func updateAgentInRun(ctx context.Context, c *container.Client, agentboxName str
 		cliNotice(logging.Box, "autoupdate skipped (read the box before the install: %v)", err)
 		return nil
 	}
-	if err := installAgentLatest(ctx, c, id, profile); err != nil {
+	if err := installAgentLatest(ctx, c, id, agentboxName, profile); err != nil {
 		return fmt.Errorf("autoupdate %s in %s: %w", profile.Distribution(), agentboxName, err)
 	}
 	if updated != nil {
@@ -116,18 +115,16 @@ func agentMaintenanceExecArgs(containerID string, args ...string) []string {
 // after the host-side version check detects drift. Both autoupdate and
 // `yoloctl agent update PROFILE` use this installer, which also repairs an
 // install that was cut off.
-func npmInstallGlobalAtLatest(ctx context.Context, c *container.Client, agentboxName, pkg string) error {
-	id, err := c.ResolveContainerID(ctx, agentboxName)
+// target is the selected container (name or exact ID) every exec uses; box
+// is the box name the recreate remedy names.
+func npmInstallGlobalAtLatest(ctx context.Context, c *container.Client, target, box, pkg string) error {
+	id, err := c.ResolveContainerID(ctx, target)
 	if err != nil {
 		return err
 	}
 	if err := c.Shell(ctx, npmInstallGlobalAtLatestArgs(id, pkg)...); err != nil {
 		if predatesAgentNpm(ctx, c, id) {
-			name := agentboxName
-			if d, inspectErr := c.Inspect(ctx, id); inspectErr == nil && d.Name != "" {
-				name = d.Name
-			}
-			return fmt.Errorf("this box predates the managed agent folder %s, so its agent cannot be updated in place; recreate it: yoloctl box recreate %s --space %s", agentnpm.Prefix, name, c.Env())
+			return fmt.Errorf("this box predates the managed agent folder %s, so its agent cannot be updated in place; recreate it: yoloctl box recreate %s --space %s", agentnpm.Prefix, box, c.Env())
 		}
 		return fmt.Errorf("npm install using the system PATH (%s): %w. If npm is unavailable on that PATH, install npm and Node.js in a system directory or pass --no-autoupdate to skip automatic updates", container.SystemExecPath, err)
 	}
@@ -136,12 +133,10 @@ func npmInstallGlobalAtLatest(ctx context.Context, c *container.Client, agentbox
 
 // predatesAgentNpm reports, after a failed install, whether the container
 // was built before the managed agent npm folder existed: its image has no
-// /opt/yoloctl/npm (and no maintenance user). Any other probe result keeps
-// the install's own error.
+// /opt/yoloctl/npm (and no maintenance user). Only a successful
+// `test ! -d` proves that; any probe failure keeps the install's own error.
 func predatesAgentNpm(ctx context.Context, c *container.Client, id string) bool {
-	err := vmhost.ShellCommand(ctx, c.Env(), agentMaintenanceExecArgs(id, "test", "-d", agentnpm.Prefix)...).Run()
-	var exitErr *exec.ExitError
-	return errors.As(err, &exitErr) && exitErr.ExitCode() == 1
+	return vmhost.ShellCommand(ctx, c.Env(), agentMaintenanceExecArgs(id, "test", "!", "-d", agentnpm.Prefix)...).Run() == nil
 }
 
 func npmInstallGlobalAtLatestArgs(containerID, pkg string) []string {

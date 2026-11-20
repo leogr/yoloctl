@@ -98,15 +98,16 @@ func fetchInstalledAgentVersion(ctx context.Context, c *container.Client, box st
 	return fetchInstalledVersionFile(ctx, c, box, r.MetadataPath())
 }
 
-func installAgentLatest(ctx context.Context, c *container.Client, box string, p *agentprofile.Profile) error {
+// target selects the container; name is the box name error remedies use.
+func installAgentLatest(ctx context.Context, c *container.Client, target, name string, p *agentprofile.Profile) error {
 	if p.NativeRelease == "" {
-		return npmInstallGlobalAtLatest(ctx, c, box, p.NpmPackage)
+		return npmInstallGlobalAtLatest(ctx, c, target, name, p.NpmPackage)
 	}
 	r, err := nativerelease.Lookup(p.NativeRelease)
 	if err != nil {
 		return err
 	}
-	id, err := c.ResolveContainerID(ctx, box)
+	id, err := c.ResolveContainerID(ctx, target)
 	if err != nil {
 		return err
 	}

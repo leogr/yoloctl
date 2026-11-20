@@ -159,7 +159,7 @@ openshell-sandbox policy.`,
 					}
 				}
 				cliInfo(logging.Box, "  updating %s...", pkg)
-				if err := installAgentLatest(cmd.Context(), c, id, profile); err != nil {
+				if err := installAgentLatest(cmd.Context(), c, id, name, profile); err != nil {
 					return fmt.Errorf("update %s in %s: %w", pkg, name, err)
 				}
 			}
