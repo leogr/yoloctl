@@ -26,6 +26,7 @@ const (
 	qualifiedPatch6Name    = "main-attachments-ended.patch"
 	qualifiedPatch7Name    = "main-output-backpressure.patch"
 	qualifiedPatch8Name    = "cargo-ca-bundle.patch"
+	qualifiedPatch9Name    = "dns-mapping-refresh.patch"
 	protocolFixtureVersion = "workspace-read-only-v1"
 )
 
@@ -123,6 +124,7 @@ func qualifiedPatchStack(p ReleasePins) bool {
 		"unmediated-network.patch", "workspace-read-only.patch",
 		qualifiedPatch3Name, qualifiedPatch4Name, qualifiedPatch5Name,
 		qualifiedPatch6Name, qualifiedPatch7Name, qualifiedPatch8Name,
+		qualifiedPatch9Name,
 	}
 	if len(p.Patches) < 2 || len(p.Patches) > len(names) {
 		return false

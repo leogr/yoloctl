@@ -51,6 +51,11 @@
       "file": "patches/0008-cargo-ca-bundle.patch",
       "sha256": "a11eca2e191bb84f02eca6d17db6e40fff42b1d50af0359644e6473a49fbecab",
       "result_tree": "0a5b3e37360cf4a065384ce60b98126e75731c94"
+    },
+    {
+      "file": "patches/0009-dns-mapping-refresh.patch",
+      "sha256": "33317cf192f87ba40aa3dfd003f0b09553385c859287682a3b19c58ee57887e3",
+      "result_tree": "b9311474ebd91fb6eb6edacc9c9ca9f877bf96d4"
     }
   ],
   "source_dir": "OpenShell-patch2-signed",

@@ -1,6 +1,6 @@
 # npm development environment
 
-Verification: `c6e67053e4fd40a8987dc6be1c3f34bb4d6b1380` and accompanying changes; agent package location `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `c6e67053e4fd40a8987dc6be1c3f34bb4d6b1380` and accompanying changes; agent package location `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; policy DNS refresh `10a95c539a5085045420c7d56d25eeca7b53c4cf` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] The `npm` feature combines a Dockerfile setup step with
 `network.npm`. The base image supplies Node.js 22 from NodeSource, including
@@ -41,6 +41,11 @@ filter limiting what JavaScript can send to the registry. Private registries,
 Git dependencies and package-specific binary/header download hosts need
 separate applicable capabilities. [8](#source-8) [9](#source-9)
 
+[FACT] npm reuses DNS answers for five minutes, longer than the sandbox's
+policy DNS mappings. Later downloads of one install therefore connect to
+expired synthetic addresses; OpenShell patch 9 refreshes such mappings on
+connect instead of denying them with `EACCES`. [12](#source-12)
+
 [FACT] `make smoke-npm` creates an isolated generic-shell box and exercises
 the confined SSH path: runtime/config/ownership, registry installation, offline
 `npm ci` preserving a lockfile, build/test scripts, local/downloaded npx use,
@@ -62,3 +67,4 @@ the smoke. Its existence is not evidence of a successful live run.
 9. <a id="source-9"></a> [npm policy golden](../../internal/agentbox/testdata/policy_golden/npm.yaml#L29-L41) — exact composed grant.
 10. <a id="source-10"></a> [scripts/smoke/npm.sh](../../scripts/smoke/npm.sh#L1) — complete isolated runtime gate.
 11. <a id="source-11"></a> [cmd/yoloctl/autoupdate_test.go](../../cmd/yoloctl/autoupdate_test.go#L11-L56) — `TestNpmAgentMaintenanceUsesExplicitConfigPaths`.
+12. <a id="source-12"></a> [Policy DNS digest](policy-dns.md) — mapping TTL, npm's 5-minute cache, patch 9 refresh on connect.

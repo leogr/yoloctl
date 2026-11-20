@@ -92,6 +92,12 @@ composed builds can resolve locally built and imported base images. [9](#source-
 policy, but investigate install/update network behavior through the maintenance
 path. They run in different enforcement contexts. [1](#source-1) [19](#source-19)
 
+[FACT] Granted host names resolve in a box to synthetic addresses whose
+mappings expire after at most 30 seconds. With OpenShell patch 9, a later
+connect to an expired policy-backed mapping refreshes it instead of failing
+with `EACCES`, so clients that cache DNS (npm) keep working; `box logs` names
+the reason of any remaining `NET:OPEN DENIED`. [20](#source-20)
+
 [FACT] `yolo.space.operator` explicitly grants broad box authority in the current space:
 other existing accounts, granted projects, stronger capabilities and delegation.
 The VM controller validates the live caller's grant/incarnation at request and
@@ -195,3 +201,4 @@ does not establish delivery of final SSH output. [17](#source-17)
 17. <a id="source-17"></a> [Native main-exit observation](../digests/openshell-main-exit.md) — PID 1 marker, result and cleanup boundary.
 18. <a id="source-18"></a> [Image composition](../digests/image-composition.md).
 19. <a id="source-19"></a> [Agent maintenance](../digests/agent-maintenance.md).
+20. <a id="source-20"></a> [Policy DNS](../digests/policy-dns.md) — synthetic mappings, expiry and patch 9 refresh on connect.

@@ -251,7 +251,7 @@ func TestQualifiedPatchStackAcceptsOptionalSixthPatch(t *testing.T) {
 	}
 }
 
-func TestQualifiedPatchStackAcceptsOptionalSeventhAndEighthPatches(t *testing.T) {
+func TestQualifiedPatchStackAcceptsOptionalSeventhToNinthPatches(t *testing.T) {
 	p := releaseFixture(t).Pins
 	fork := p.ForkTree
 	p.Patches[1].Tree = strings.Repeat("d", 40)
@@ -288,5 +288,27 @@ func TestQualifiedPatchStackAcceptsOptionalSeventhAndEighthPatches(t *testing.T)
 	extra.Patches[7].ParentTree = strings.Repeat("c", 40)
 	if qualifiedPatchStack(extra) {
 		t.Fatal("eighth patch accepted off the chain")
+	}
+	extra.Patches[7].ParentTree = fork
+	nine := extra
+	nine.Patches = append(append([]SourcePatch(nil), extra.Patches...), SourcePatch{"other.patch", sha256Hex([]byte("9")), strings.Repeat("f", 40), strings.Repeat("9", 40)})
+	nine.ForkTree = strings.Repeat("9", 40)
+	if qualifiedPatchStack(nine) {
+		t.Fatal("unexpected ninth patch accepted")
+	}
+	nine.Patches[8].Name = qualifiedPatch9Name
+	if !qualifiedPatchStack(nine) {
+		t.Fatal("nine-patch release refused")
+	}
+	nine.Patches[8].ParentTree = strings.Repeat("c", 40)
+	if qualifiedPatchStack(nine) {
+		t.Fatal("ninth patch accepted off the chain")
+	}
+	ten := nine
+	ten.Patches = append(append([]SourcePatch(nil), nine.Patches...), SourcePatch{"extra.patch", sha256Hex([]byte("10")), strings.Repeat("9", 40), strings.Repeat("a", 40)})
+	ten.Patches[8].ParentTree = strings.Repeat("f", 40)
+	ten.ForkTree = strings.Repeat("a", 40)
+	if qualifiedPatchStack(ten) {
+		t.Fatal("unexpected tenth patch accepted")
 	}
 }
