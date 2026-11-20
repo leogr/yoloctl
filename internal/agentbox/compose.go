@@ -118,10 +118,14 @@ func AgentNpmPackage(c *Config) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve agent %q profile for its npm package: %w", c.Agent, err)
 	}
+	return profileNpmPackage(p), nil
+}
+
+func profileNpmPackage(p *agentprofile.Profile) string {
 	if p.NativeRelease != "" {
-		return "", nil
+		return ""
 	}
-	return p.NpmPackage, nil
+	return p.NpmPackage
 }
 
 // EffectiveFeaturesStrict returns the box's declared features unioned with the
@@ -136,6 +140,11 @@ func AgentNpmPackage(c *Config) (string, error) {
 // read-only list/show/diff paths, where a missing profile must not break
 // policy composition for an already-running box.
 func EffectiveFeaturesStrict(c *Config) ([]string, error) {
+	names, _, err := effectiveFeaturesWithProfile(c)
+	return names, err
+}
+
+func effectiveFeaturesWithProfile(c *Config) ([]string, *agentprofile.Profile, error) {
 	seen := make(map[string]struct{}, len(c.Features))
 	out := make([]string, 0, len(c.Features))
 	add := func(f string) {
@@ -157,13 +166,14 @@ func EffectiveFeaturesStrict(c *Config) ([]string, error) {
 	if c.HasAgent() {
 		p, err := agentprofile.Lookup(c.Agent)
 		if err != nil {
-			return out, fmt.Errorf("resolve agent %q profile for effective features: %w", c.Agent, err)
+			return out, nil, fmt.Errorf("resolve agent %q profile for effective features: %w", c.Agent, err)
 		}
 		for _, f := range p.RequiresFeatures {
 			add(f)
 		}
+		return out, p, nil
 	}
-	return out, nil
+	return out, nil, nil
 }
 
 // effectiveFeatures is the LENIENT view: the agent-profile Lookup is non-fatal

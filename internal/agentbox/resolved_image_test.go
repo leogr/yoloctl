@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/agentboximage"
+	"github.com/leogr/yoloctl/internal/features"
 	"github.com/leogr/yoloctl/internal/layout"
 )
 
@@ -193,5 +194,56 @@ func TestResolvedImage_UnsuppliedAgentNpmInstallFollowsOCIFeatures(t *testing.T)
 	}
 	if !strings.HasSuffix(strings.TrimRight(dockerfile[:strings.Index(dockerfile, "\nRUN find /home/sandbox -xdev")], "\n"), "ENV PATH=/opt/yoloctl/npm/bin:$PATH") {
 		t.Fatalf("the agent folder is not first on PATH after every install:\n%s", dockerfile)
+	}
+}
+
+func TestResolvedImage_NestedStateParents(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	for _, agent := range []string{"agy", "claude", "codex", "gemini", "opencode", "pi", "none"} {
+		c := &Config{Agent: agent, Account: "account", Image: agentboximage.RefAgentbox}
+		if agent == "none" {
+			c.Account = "none"
+		}
+		names, err := RuntimeFeatures(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, name := range names {
+			found = found || features.IsAgentStateParentsRuntime(name)
+		}
+		if found != (agent == "opencode") {
+			t.Errorf("agent %s has state setup=%v: %v", agent, found, names)
+		}
+	}
+
+	dir, err := layout.AgentsDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	profile := []byte("name: my-agent\nimage: custom/base:1\ncommand: my-cli\nstate_container_path: /home/sandbox/config/tool/data\n")
+	if err := os.WriteFile(filepath.Join(dir, "my-agent.yaml"), profile, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Config{Agent: "my-agent", Account: "account", Image: "custom/base:1"}
+	names, err := RuntimeFeatures(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, recipe, installs, err := agentboximage.ComposedImageRef(c.Image, names)
+	if err != nil || !installs {
+		t.Fatalf("state-only composition = %q, %v, %v", ref, installs, err)
+	}
+	const prepared = "FROM custom/base:1 AS yoloctl-prepared-base\nARG YOLOCTL_IMAGE_REFRESH\nUSER root\n"
+	parents := strings.Index(recipe, `"/home/sandbox/config/tool"`)
+	ownership := strings.Index(recipe, "chown -h sandbox:sandbox")
+	if !strings.HasPrefix(recipe, prepared) || parents < 0 || ownership <= parents {
+		t.Fatalf("nested parents must precede final home ownership:\n%s", recipe)
+	}
+	if got, _, err := ResolvedImage(c); err != nil || got != ref {
+		t.Fatalf("resolved image = %q, %v, want %q", got, err, ref)
 	}
 }

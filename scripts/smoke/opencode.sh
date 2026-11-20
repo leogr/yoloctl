@@ -43,7 +43,7 @@ in_opencode() {
   OPENCODE_DISABLE_LSP_DOWNLOAD=true OPENCODE_CONFIG_CONTENT='{"share":"disabled"}' \
   NO_PROXY=localhost,127.0.0.1,::1 opencode "$@"
 }
-in_opencode --version
+in_box opencode --version
 in_box rg --version
 in_opencode auth list >"${SMOKE_ROOT}/opencode-auth-check.txt"
 in_box node -e '

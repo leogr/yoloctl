@@ -1,6 +1,6 @@
 # Image composition and build caches
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; agent npm installer `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409dbbb5f2febbe3bdf2f581dff7775ff43b` and accompanying changes; APT-compatible smoke probe correction on `a3827ba3b050fc0e7641586704954c4fc76f0241` and accompanying changes. GitHub CLI install on `804b5adcd478a04b234daa3d344587fd58525df1` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; agent npm installer `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409dbbb5f2febbe3bdf2f581dff7775ff43b` and accompanying changes; APT-compatible smoke probe correction on `a3827ba3b050fc0e7641586704954c4fc76f0241` and accompanying changes. GitHub CLI install on `804b5adcd478a04b234daa3d344587fd58525df1` and accompanying changes. State bind parents on `bfa83927136293f6dfdbfe32ddf7eca3b235a2c8` and accompanying changes.
 
 [FACT] Composition prepares available sandbox identities before installation,
 using the space owner's UID/GID without account/workdir mounts. npm owns packages
@@ -12,6 +12,11 @@ References hash builder version, base, recipe and identity; policy-only features
 are hash-neutral. Cached images are reused; forced builds refresh feature layers
 only. Custom bases retain normal runtime handling. [1](#source-1) [2](#source-2)
 [3](#source-3) [4](#source-4)
+
+[FACT] A managed bind nested under `/home/sandbox` adds its parent directories
+to the composed recipe before home ownership repair. Setup stops at symlinks
+and leaves the bind leaf to the runtime. Only recipes with this setup change
+identity. [1](#source-1) [25](#source-25) [26](#source-26)
 
 [FACT] Managed-base refresh and builtin/npm composition use a fresh build ARG
 to rerun installers while retaining downloads and stable image references.
@@ -97,3 +102,5 @@ composed image. [23](#source-23) [24](#source-24)
 22. <a id="source-22"></a> [AWS feature](../../internal/features/aws.go#L1) — embedded installer/key recipe; configuration is described in `bedrock.md`.
 23. <a id="source-23"></a> [GitHub CLI feature](../../internal/features/github-install.sh#L1-L36) — key check, keyring, origin pin, install; recipe `github.go`.
 24. <a id="source-24"></a> [GitHub CLI Linux install](https://github.com/cli/cli/blob/trunk/docs/install_linux.md) — published fingerprints and keyring checksums, checked 2026-11-20.
+25. <a id="source-25"></a> [Runtime recipe](../../internal/agentbox/privileged.go#L30-L55) — selects setup for managed state.
+26. <a id="source-26"></a> [State parents installer](../../internal/features/agent_state_parents.go#L20-L68) — directory selection and creation.

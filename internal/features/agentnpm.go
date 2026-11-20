@@ -24,10 +24,12 @@ func AgentNpmRuntime(pkg string) string {
 	return agentNpmRuntimePrefix + url.PathEscape(pkg)
 }
 
-// LookupRuntime resolves a name of the composer's runtime feature list: the
-// agent's managed npm installer, or any name Lookup knows.
+// LookupRuntime resolves the composer's internal setup and ordinary features.
 func LookupRuntime(name string) (Feature, error) {
 	if f, ok, err := agentNpmRuntimeFeature(name); ok {
+		return f, err
+	}
+	if f, ok, err := agentStateParentsFeature(name); ok {
 		return f, err
 	}
 	return Lookup(name)

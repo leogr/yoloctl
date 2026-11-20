@@ -27,23 +27,24 @@ const PrivilegedAuthority = "space-VM root authority: every box, account credent
 // running privileged box, and who may launch one.
 const PrivilegedOperatorAccess = "While the box runs, every " + operator.Capability + " box in this space can exec in, attach to, use, restart and recreate it and so gain this authority; only the host can start it when it is new or stopped"
 
-// RuntimeFeatures is the final image recipe, resolved in one ordered pass:
-// the declared and profile features (EffectiveFeaturesStrict), then the
-// agent's managed npm install when its profile names an npm package, then the
-// internal sudo installer for a privileged box. Neither installer requires
-// capabilities, so nothing feeds back into feature or capability resolution.
-// Image identity, builds and resolved-image drift all use it.
+// RuntimeFeatures is the final image recipe. It combines the declared and
+// profile features with managed npm, state parent and privileged setup. The
+// internal setup adds no capabilities. Image identity, builds and drift all
+// use the same recipe.
 func RuntimeFeatures(c *Config) ([]string, error) {
-	names, err := EffectiveFeaturesStrict(c)
+	names, profile, err := effectiveFeaturesWithProfile(c)
 	if err != nil {
 		return names, err
 	}
-	pkg, err := AgentNpmPackage(c)
-	if err != nil {
-		return names, err
-	}
-	if pkg != "" {
-		names = append(names, features.AgentNpmRuntime(pkg))
+	if profile != nil {
+		if pkg := profileNpmPackage(profile); pkg != "" {
+			names = append(names, features.AgentNpmRuntime(pkg))
+		}
+		if c.HasRealAccount() {
+			if setup := features.AgentStateParentsRuntime(profile.StateContainerPath); setup != "" {
+				names = append(names, setup)
+			}
+		}
 	}
 	if c.Privileged {
 		names = append(names, features.PrivilegedRuntime)

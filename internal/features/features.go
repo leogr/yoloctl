@@ -382,10 +382,17 @@ func GenerateDockerfile(base string, featureNames []string, plans ...ocifeature.
 func renderDockerfile(base string, resolved []Feature, plans []ocifeature.Plan) (string, []string, error) {
 	npm := &npmInstaller{}
 	var agentRuntime *Feature
+	var stateParents *Feature
 	for i, f := range resolved {
-		if f.Install != nil && f.Install.Kind == installAgentNpm {
+		if f.Install == nil {
+			continue
+		}
+		switch f.Install.Kind {
+		case installAgentNpm:
 			npm.agent = f.Install.Package
 			agentRuntime = &resolved[i]
+		case installAgentStateParents:
+			stateParents = &resolved[i]
 		}
 	}
 	var b strings.Builder
@@ -427,6 +434,10 @@ func renderDockerfile(base string, resolved []Feature, plans []ocifeature.Plan) 
 		fmt.Fprintf(&b, "\n# Feature: %s — %s\n", agentRuntime.Name, agentRuntime.Description)
 		b.WriteString(npm.install(npm.agent, "latest"))
 		b.WriteString("\n")
+	}
+	if stateParents != nil {
+		installing = append(installing, stateParents.Name)
+		b.WriteString("\n" + stateParents.Install.Dockerfile + "\n")
 	}
 	return b.String(), installing, nil
 }
@@ -500,6 +511,9 @@ func renderInstall(f Feature, npm *npmInstaller) (string, error) {
 	case installAgentNpm:
 		// Rendered by renderDockerfile after the OCI plans, only when no
 		// feature installs the agent's package.
+		return "", nil
+	case installAgentStateParents:
+		// Create parents after every installer, before final home ownership.
 		return "", nil
 	default:
 		return "", fmt.Errorf("feature %q has unknown install kind %q", f.Name, f.Install.Kind)

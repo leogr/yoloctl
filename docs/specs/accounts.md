@@ -64,9 +64,11 @@ it. It is never implicit and never runs at launch. [8](#source-8)
 `agent/auth.json` file once, and declares four provider API-key secrets. Stored
 Pi credentials take precedence over environment keys. [5](#source-5)
 
-[FACT] OpenCode persists its XDG config/cache/state and native auth.json in one
-account leaf. It supports declared provider secrets or whole-file native import;
-the headless ChatGPT device method is available for remote login. [6](#source-6)
+[FACT] Image composition gives sandbox ownership to parent directories of
+nested account binds under `/home/sandbox`. OpenCode uses this
+home for bare exec and persists its managed-session XDG config, cache and state
+alongside `auth.json` in the account leaf. It supports declared provider secrets,
+whole-file native import and headless ChatGPT device login. [6](#source-6)
 
 ## Sources
 

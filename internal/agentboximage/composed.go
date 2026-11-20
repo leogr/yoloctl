@@ -51,7 +51,7 @@ func composedImageRef(base string, candidates []string, uid, gid int, plans ...o
 	// Resolve against a prepared base stage so the small identity change runs
 	// before feature installers populate the sandbox home. Keep this wiring out
 	// of feature definitions, including user-provided Dockerfile fragments.
-	dockerfile, _, hasInstall, err = features.InstallPlan(preparedBaseStage, candidates, plans...)
+	dockerfile, installing, hasInstall, err := features.InstallPlan(preparedBaseStage, candidates, plans...)
 	if err != nil {
 		return "", "", false, err
 	}
@@ -61,7 +61,13 @@ func composedImageRef(base string, candidates []string, uid, gid int, plans ...o
 	if base == "" {
 		return "", "", false, fmt.Errorf("base image is required")
 	}
-	dockerfile = fmt.Sprintf("FROM %s AS %s\nARG %s\n", base, preparedBaseStage, imageRefreshArg) + composedIdentitySetup(uid, gid) + "\n" + dockerfile
+	preparedBase := fmt.Sprintf("FROM %s AS %s\nARG %s\n", base, preparedBaseStage, imageRefreshArg)
+	// A custom base previously used as-is can set a non-root default user.
+	// State-only composition still needs root for build-time identity setup.
+	if len(installing) == 1 && features.IsAgentStateParentsRuntime(installing[0]) {
+		preparedBase += "USER root\n"
+	}
+	dockerfile = preparedBase + composedIdentitySetup(uid, gid) + "\n" + dockerfile
 	// Custom installers can still write root-owned home files. Repair only
 	// mismatches, without copying up correctly-owned npm/native package trees.
 	dockerfile += fmt.Sprintf("\nRUN find /home/sandbox -xdev \\( ! -user sandbox -o ! -group sandbox \\) -exec chown -h sandbox:sandbox {} + \\\n"+
