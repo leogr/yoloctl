@@ -273,7 +273,7 @@ own records are parsed, and child output stays literal text.
 Background logs we own use plain timestamped records and bounded
 current/previous generations;
 Lima/vendor and parsed marker formats retain their existing owners and bytes.
-[28](#source-28)
+[28](#source-28) [39](#source-39)
 
 [FACT] Host-only `audit` opens the read-only Falco view; `audit status`,
 `enable`, `disable`, `logs [SPACE] --follow --json` and finite JSONL `export [SPACE] --output`
@@ -348,7 +348,7 @@ the writable layer require their tool's cache command or explicit recreation
 
 27. <a id="source-27"></a> [CLI logging and outcomes](../digests/cli-logging.md).
 
-28. <a id="source-28"></a> [Background logs](../digests/background-logs.md).
+28. <a id="source-28"></a> [Background log storage](../digests/background-logs.md).
 
 29. <a id="source-29"></a> [VM-native audit contracts](../digests/audit.md).
 
@@ -367,3 +367,4 @@ the writable layer require their tool's cache command or explicit recreation
 36. <a id="source-36"></a> [Space upgrade](../digests/space-upgrade.md).
 37. <a id="source-37"></a> [Log steps](../digests/log-steps.md).
 38. <a id="source-38"></a> [Managed chat membership application](../digests/chat-application.md).
+39. <a id="source-39"></a> [Stored log views](../digests/log-views.md).

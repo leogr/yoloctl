@@ -1,7 +1,8 @@
-# Background log storage and views
+# Background log storage
 
-Verification: `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7`; Lima view:
-`e1386faff0f1db931b00d9305ec257173d38d365` and accompanying changes; Firecracker view: `1aceb626b9a21aacebda708a06e266205a2be704` and accompanying changes; box view: `61a7506a9a805e9a7b14a3256d6c6f2d24227b00` and accompanying changes; unit view: `a4322a8c233da5f9eeb51239db68fab34d55f9b0` and accompanying changes.
+Verification: `4580b43c30412beb0d7f57e8a4a6ef9833ef82c7`.
+
+For VM and container log output, see [stored log views](log-views.md).
 
 [FACT] The controller service, managed holder and Firecracker guest init use the
 shared file Logger: plain UTC RFC3339 timestamps, levels and actor fields, no
@@ -56,59 +57,13 @@ settlement reads the last 4 MiB across both log generations, including a marker
 split at rotation; it does not extend that historical search window.
 [5](#source-5) [8](#source-8)
 
-[FACT] `space logs` renders its existing VM-log output through the shared follow
-Logger and continues using `tail -F` for follow-by-name. Partial input lines are
-bounded at 64 KiB. Recognized plain prefixes supply presentation hints only;
-the lossy file grammar cannot reconstruct typed outcomes or fields. Controls
-are escaped in ordinary display and consecutive records fold.
-`--log-level debug` preserves the original bytes on stdout. `warn`/`-q` hide ordinary/vendor text and blank
-lines; `error` also hides warnings but retains uncertain results. The file
-logger remains an internal full-diagnostic sink. These views never drive
-lifecycle settlement.
-[9](#source-9)
-
-[FACT] For Lima's `ha.stdout.log`, the view decodes host-agent time/status
-records: original timestamps, port forwarding, vsock, cloud-init and VM status.
-Failed events/degradation display as warnings; status errors display as errors.
-Unknown fields/types and malformed/incomplete records retain their original
-text. Debug still bypasses all parsing. [13](#source-13) [14](#source-14)
-
-[FACT] For Firecracker's `vm.log`, Firecracker v1.17 logger lines (local time,
-`[instance:thread[:LEVEL…]]`) show as `vm/firecracker` at their time and level
-(info when the line carries none),
-and kernel console lines (`[seconds] text`) as `vm/kernel`. yoloctl's own
-records keep the plain parser. Other lines, markers included, stay generic text;
-unstamped lines take the last stamped line's time (the read time before one) and serial carriage returns
-are dropped for display. [15](#source-15) [16](#source-16)
-
-[FACT] `box logs` renders the container's replayed stdout/stderr on the client
-through the same follow Logger, one view per stream. OpenShell tracing lines
-(`time LEVEL crate::module: msg`) show as `box/<crate>` and OCSF lines
-(`time OCSF CLASS:ACTIVITY [SEV] msg`) as `box/ocsf`, INFO/LOW as info and MED as
-warning; other severities and all other output, application text and panic
-reports included, stay plain info text at the last stamped time (no prefix is read
-as a level or outcome). On a terminal request only a destination that is the raw
-terminal gets CRLF; debug keeps the original bytes. [17](#source-17)
-
-[FACT] `space logs SPACE --unit NAME` reads one guest service's log from the
-running VM over the space shell: `sudo tail -n N [-F]` of
-`/var/log/yoloctl-units/NAME.log` in a Firecracker guest, `sudo journalctl
---no-pager -o cat -u NAME -n N [-f]` in a Lima guest. Only lines framed as
-yoloctl file records (RFC3339 time, optional level, yoloctl actor) are parsed;
-child output stays literal info text at the last record's time. NAME is a
-managed unit (the guest's launch rule, `vmwire.ManagedUnitName`) or, for reading
-only, `yoloctl-controller.service`, of letters, digits and `._@-`; anything else
-is refused before the VM is contacted. A Firecracker controller inherits the
-guest init's output, so its name shows the mixed VM log with a notice. It never
-starts the VM or a service; debug keeps the bytes. [18](#source-18)
-
 [FACT] Regressions cover raw suffixes/two rotations, an oversized existing file,
 unsafe current/history files, sink recovery, a real external producer, marker
 interleaving with a bypass negative control, and
 stdio drain with a child still holding the pipe. Presentation tests cover
 partial/control bytes, folding and exact trace output. These are isolated
 filesystem/process tests; native VM/daemon behaviour needs separate runtime QA.
-[10](#source-10) [11](#source-11)
+[9](#source-9) [10](#source-10)
 
 [FACT] Audit reconciliation/maintenance deferrals use audit warnings without
 adding their private error details. A worker's failed completion-record write
@@ -116,7 +71,7 @@ is a controller error with the reserved error attribute; abandoned image work
 is a builder warning after its orphan evidence is saved. These diagnostics use
 the installed file/worker binding, carry no outcome, and do not alter operation
 classification, durable evidence or existing admission/cancellation rules.
-[12](#source-12)
+[11](#source-11)
 
 ## Sources
 
@@ -128,14 +83,8 @@ classification, durable evidence or existing admission/cancellation rules.
 6. <a id="source-6"></a> [Unit supervisor](../../internal/vmguest/units_linux.go#L130) — `managedUnit.start`, `watch`, `cleanGroup`.
 7. <a id="source-7"></a> [Existing preparation log](../../internal/firecracker/prepare_linux.go#L60) — `prepareLocalImage`, `assembleLocalImage` progress callback in `assemble_linux.go`; `host_storage_linux.go` `hostStorageGuard.step`, `watch`; Lima `limaDriver.LogPath` in `internal/vm/lima.go`.
 8. <a id="source-8"></a> [Raw grow settlement](../../internal/firecracker/datadisk_linux.go#L188) — `DataDiskGrowLogged`; `internal/rotatelog/read.go` `ReadTail`; `internal/vmguest/controller_linux.go` supervisor `logf`; `init_linux.go` ready/grow output.
-9. <a id="source-9"></a> [Log view](../../cmd/yoloctl/space_log_render.go#L17) — `spaceLogOutput`, `spaceLogRecord`; `space.go` `tailLimaLog`.
-10. <a id="source-10"></a> [Rotation regressions](../../internal/rotatelog/writer_test.go#L35) — raw producer, bounds, privacy, marker; `stdio_linux_test.go` `TestCaptureStdioDrainsBeforeHelperExit`; `marker_test.go` shared ingress and sink-failure controls; `internal/lima/diagnostics_test.go` host concurrency/stale-generation cases.
-11. <a id="source-11"></a> [View and grow regressions](../../cmd/yoloctl/space_log_render_test.go#L25) — view tests; `internal/firecracker/datadisk_linux_test.go` `TestDataDiskGrowLoggedAcrossRotation`; `internal/firecracker/helper_log_test.go` final-record ordering/early-return/once controls; `controller_storage_test.go` scheduled diagnostics.
 
-12. <a id="source-12"></a> [Initialized diagnostics](../../cmd/yoloctl/controller_audit_linux.go#L448) — `startAuditRetention`; controller_internal.go `recordWorkerCompletion`; internal/controller/image_orphans.go `SaveImageOrphan`; owned_diagnostics_linux_test.go and image_orphan_logging_test.go record/evidence/sink-failure controls.
-13. <a id="source-13"></a> [Lima adapter](../../cmd/yoloctl/lima_space_log_render.go#L56) — `limaSpaceLogRecord`; `lima_space_log_render_test.go` source isolation, controls and debug.
-14. <a id="source-14"></a> [Lima 2.2.1 event schema](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/hostagent/events/events.go) — host-agent event fields.
-15. <a id="source-15"></a> [Firecracker adapter](../../cmd/yoloctl/firecracker_space_log_render.go#L41) — `newFirecrackerSpaceLogRecord`, `firecrackerRecord`; `firecracker_space_log_render_test.go` with real v1.17.0 console lines in `testdata/firecracker-vm-console.log`.
-16. <a id="source-16"></a> [Firecracker v1.17.0 logger](https://github.com/firecracker-microvm/firecracker/blob/v1.17.0/src/vmm/src/logger/logging.rs) — line format, defaults and stdout target; `src/utils/src/time.rs` `LocalTime`.
-17. <a id="source-17"></a> [Box log view](../../cmd/yoloctl/box_log_render.go#L37) — `newBoxLogRecord`, `viewBoxLogs`; `controller_client.go` box.logs; `box_log_render_test.go` with real OpenShell output in `testdata/box-logs-openshell.txt`.
-18. <a id="source-18"></a> [Unit log view](../../cmd/yoloctl/space.go#L109) — `tailUnitLog`; `unit_log_render.go` `newUnitLogRecord`; `internal/vmservice/service.go` `LogCommand`, `logArgv`, `ErrControllerInVMLog`; `internal/vmwire/unit.go` `ManagedUnitName`; log_command_test.go, tcp_test.go `TestManagedUnitName`.
+9. <a id="source-9"></a> [Rotation regressions](../../internal/rotatelog/writer_test.go#L35) — raw producer, bounds, privacy, marker; `stdio_linux_test.go` `TestCaptureStdioDrainsBeforeHelperExit`; `marker_test.go` shared ingress and sink-failure controls; `internal/lima/diagnostics_test.go` host concurrency/stale-generation cases.
+10. <a id="source-10"></a> [View and grow regressions](../../cmd/yoloctl/space_log_render_test.go#L25) — view tests; `internal/firecracker/datadisk_linux_test.go` `TestDataDiskGrowLoggedAcrossRotation`; `internal/firecracker/helper_log_test.go` final-record ordering/early-return/once controls; `controller_storage_test.go` scheduled diagnostics.
+
+11. <a id="source-11"></a> [Initialized diagnostics](../../cmd/yoloctl/controller_audit_linux.go#L448) — `startAuditRetention`; controller_internal.go `recordWorkerCompletion`; internal/controller/image_orphans.go `SaveImageOrphan`; owned_diagnostics_linux_test.go and image_orphan_logging_test.go record/evidence/sink-failure controls.
