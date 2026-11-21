@@ -62,19 +62,31 @@ Run the same install line for a newer release. At a terminal, `install` asks
 before replacing the current build; `--yes` accepts that managed upgrade
 unattended and nothing else.
 
-Install never changes a space. After installing, it prints one block per
-space that needs something, with the commands to run when convenient:
-`yoloctl space upgrade NAME` when the space uses another controller build.
-It starts a stopped VM, restarts eligible stale sessions and asks before
-replacing any container. For a controller-only update with a separate session
-restart decision, use `yoloctl space start NAME --update-controller`. A Lima VM
-whose template is older than this build gets `yoloctl space recreate NAME`
-instead. An optional `space recreate NAME --update-vm-image`
-appears when this release's Firecracker image is not the one the space uses.
-A recreate keeps the data disk, accounts, box settings and host workdirs but
-loses sessions and VM-local workdirs; start boxes afterwards. The printed
-commands use the installed binary and your explicit `YOLOCTL_HOME`, if any.
-Output is colored on a terminal; set `NO_COLOR` for plain text.
+The installer leaves spaces untouched and prints follow-up commands for spaces
+that need them. If a space uses another controller build, run
+`yoloctl space upgrade NAME` on the host. It checks the VM and offers to
+recreate it if the Firecracker image or the Lima container stack differs from
+this build. It can start a stopped VM and restart eligible stale sessions. It
+asks separately for each container replacement or policy-only restart of a
+running box. On a VM you keep, stopped boxes stay stopped and get follow-up
+commands for known changes.
+
+Back up files stored only inside containers before accepting replacements.
+A VM recreate keeps the data disk, accounts, box settings and host workdirs.
+It discards containers, sessions, per-box caches and VM-local workdirs. Start
+the boxes you need afterwards. See the Upgrade notes section of the
+[v0.4.0 release](https://github.com/leogr/yoloctl/releases/tag/v0.4.0) for what
+to expect when coming from v0.3.0.
+
+For a controller-only update with a separate session restart decision, use
+`yoloctl space start NAME --update-controller`. The installer advises
+`yoloctl space recreate NAME` directly if a Lima VM lacks the required
+OpenShell provisioning. It can also print optional VM recreation commands,
+including `yoloctl space recreate NAME --update-vm-image` when the selected
+Firecracker image differs from this build's default.
+
+The printed commands use the installed binary and your explicit
+`YOLOCTL_HOME`, if any. Set `NO_COLOR` to turn off terminal log colors.
 
 ## Where builds keep their data
 

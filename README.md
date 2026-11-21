@@ -4,6 +4,8 @@
 
 ![A 50-second tour: the palette and agent tabs, four panes in one view, a read-only reviewer, detach and reattach, an operator creating a box, the whole team in one chat, and a ticket taken from plan to merge](docs/demos/00-intro.gif)
 
+*The demos on this page were recorded before v0.4.0.*
+
 **yoloctl is a local-first orchestrator for AI coding harnesses.** Give your
 agents a **space**: a VM where each works in its own customizable **box**, using
 its native harness. Give them a shared chat, and a collection of agents becomes
@@ -15,8 +17,8 @@ its limits.
 
 ## Give your agents room to work
 
-- **Less permission fatigue.** Let agents work inside a declared filesystem
-  and network policy, with no approval interruptions.
+- **Less permission fatigue.** Set filesystem and network boundaries up front
+  so agents can work within them.
 - **Work that keeps going.** Leave a session running, close your terminal and
   come back to it later.
 - **Your harnesses, together.** Put Claude Code on implementation and Codex on
@@ -36,7 +38,7 @@ identity, and shared projects and chat let the team work together.*
 | Concept | What it gives you |
 |---|---|
 | **Space** | A VM, host mount grants and a persistent data disk for declarations and accounts. Linux amd64 defaults to Firecracker; other platforms default to Lima. |
-| **Box** | A customizable container running one agent, or an agentless shell. It declares the account, workdir, image, features and capabilities. Ordinary boxes use OpenShell confinement. |
+| **Box** | A customizable container for one agent, a shell or a configured command. It declares the account, workdir, image, features and capabilities. Ordinary boxes use OpenShell confinement. |
 | **Account** | A space-owned identity with secrets and separate saved state for each agent. Boxes choosing the same account and agent share that native state. |
 | **Workdir** | The project directory: a granted host directory mirrored under `/workdir/...`, or a disposable directory inside the VM. |
 | **Feature** | A tool or integration, such as Go or an agent CLI, together with its required capabilities. Some features grant access without installing software. |
@@ -47,6 +49,10 @@ also means coordinating edits. See the [model](docs/specs/model.md) for the full
 contract.
 
 ## Install a release
+
+Run the installer on the host. Firecracker needs read and write access to
+`/dev/kvm` on Linux x86_64. For Lima, install it and put `limactl` on PATH.
+On Linux x86_64, pass `--backend lima` to `space create` to use Lima instead.
 
 ```sh
 # Linux x86_64
@@ -60,13 +66,14 @@ curl -fsSL https://github.com/leogr/yoloctl/releases/latest/download/yoloctl-dar
 ```
 
 If `~/.local/bin` is missing from your PATH, the installer offers to add it
-for bash, zsh or fish. Add `--add-to-path` to the install command to accept
-that step without a separate prompt. Open a new terminal to load the change.
+for bash, zsh or fish. It can also set up shell completion. Add
+`--add-to-path` or `--completion` to accept the corresponding change. Open a
+new terminal to load it.
 
 To upgrade, run the same line for the new release: `install` verifies the
-bundle, asks before replacing the current build and prints the update command
-for each space. Verifying downloads, upgrades, data locations and the release
-process are in the [installation guide](docs/install.md).
+bundle, asks before replacing the current build and prints any follow-up
+commands for your spaces. Verifying downloads, upgrades, data locations and the
+release process are in the [installation guide](docs/install.md).
 
 ## Getting started
 
@@ -75,13 +82,15 @@ This example uses Codex:
 
 ```sh
 yoloctl space create work --workdir "$PWD" --account personal
+yoloctl space use work
 yoloctl box create coder --space work --agent codex --account personal --no-attach
 yoloctl box attach coder --space work
 ```
 
 The space mirrors your project under `/workdir` at its absolute host path
-and starts with an empty `personal` account. Sign in when the agent prompts you. If you already have
-a compatible Codex login on the host, you can run
+and starts with an empty `personal` account. The `space use` command selects
+`work` as the CLI default for later examples. Sign in when the agent prompts
+you. If you already have a compatible Codex login on the host, you can run
 `yoloctl account auth import personal codex --space work` after creating the
 space and before creating the box.
 
@@ -101,13 +110,19 @@ check the whole space at a glance.*
 Run bare `yoloctl` to open the TUI. The command palette uses the same CLI:
 commands such as `box attach`, `box exec` and `space ssh` open live tabs;
 ordinary results stay in the palette. **Ctrl+Y** switches between the palette
-and your current tab.
+and your current tab. Click a running step to see its recent output. In the
+idle palette, **Ctrl+R** switches between the last command and command history.
+The welcome screen offers a setup command or tip. Click the bell in the top
+bar to read retained notices.
 
 | Make it yours | What you can do |
 |---|---|
-| **Tabs and split panes** | Keep agents, shells and chat side by side. **Ctrl+Q** opens the tmux-style pane menu: split, focus, resize, zoom, swap, move tabs into panes or break a pane out into a tab. |
+| **Tabs and split panes** | Keep agents, shells and chat side by side. **Ctrl+Q** opens the pane menu to split, focus, resize, zoom, swap and move tabs into panes. Use **↑** on a pane bar to move the pane to its own tab. |
 | **Recognizable agents** | See the agent icon, account and title on each box tab; focus a pane to direct your input there. |
 | **A live space view** | Run `space view` for boxes, system/data disk use and VM/box memory readings. Open a box's session from the view. |
+| **Switch spaces** | Use the space picker in the top bar. Switching asks before closing the current tabs and applies to this TUI window. |
+| **Ended views** | Press **Enter** or click **Close** when it fits. Eligible views offer **Re-attach** or **Reopen** in the same pane. |
+| **Follow a file** | Run `follow PATH` for a live view of a VM file, or `follow --host PATH` for a host file. Markdown files render tables and supported Mermaid diagrams. |
 | **Copy on purpose** | Select terminal text, then use an explicit copy action. Native chat also supports drag selection that copies on release. |
 | **Images at your fingertips** | Press **Ctrl+V** to paste a host screenshot or clipboard PNG into a managed agent session. |
 | **Your host browser** | Let an agent open web links through the managed browser integration, controlled by your host settings. |
@@ -131,7 +146,7 @@ proxy limits egress according to policy. Features bring the capabilities they
 need; explicit box grants let you tailor the rest:
 
 ```sh
-yoloctl box create reviewer --agent claude --read-only
+yoloctl box create readonly-reviewer --agent claude --read-only
 yoloctl box create go-dev --agent codex --features go,github
 yoloctl box inspect go-dev
 ```
@@ -152,13 +167,23 @@ your terminal. Close its TUI tab to detach, then return to its screen and
 history:
 
 ```sh
-yoloctl box attach writer
+yoloctl box attach coder
 ```
 
-Several windows can attach to the same session. Claude Code and Codex also
-support tracked conversation resume: by default, the box's next session resumes
-its recorded conversation, including after container recreation. Use
-`--new-session` when you want a fresh conversation.
+Several windows can attach to the same session. In a newly created confined box,
+exiting the agent or the configured `session_command` stops the box. A box
+without a configured session process keeps running. Attach can start a
+stopped box and open its next session.
+
+Claude Code, Codex and Antigravity support tracked conversation resume. By
+default, the next session resumes the recorded conversation, including after
+container recreation. Use `box attach BOX --new-session` to start a fresh
+conversation when the box has no live session.
+
+Antigravity learns the conversation from its status-line reporter. The launcher
+sets up the reporter when it creates the account's settings. For an account
+with pre-existing Antigravity settings, stop its boxes and run
+`yoloctl account observe ACCOUNT agy --enable` to enable the reporter.
 
 Agent state persists on the space's data disk across box and VM recreation;
 running sessions end when the VM does. Resume depends on the agent adapter and
@@ -201,18 +226,21 @@ Removing the feature does not undo work the operator already performed. See the
 *Read another agent's terminal, type into it and wait for a response.*
 
 The host or a space operator can use `box use` to read a session's screen or
-history, send text and keys, wait for changes, or batch requests:
+history, send text and keys, wait for changes, or batch requests. It can start a
+missing session:
 
 ```sh
 yoloctl box use worker screen
 yoloctl box use worker text "/compact"
 yoloctl box use worker key enter
-yoloctl box use worker wait --wait-timeout 5s
+yoloctl box use worker screen
 ```
 
 Answer a worker's question, run a harness slash command or check its progress.
 An accepted input request means the input was queued; read the screen before
-and after to see what happened. See [box use](docs/digests/box-use.md).
+and after to see what happened. To watch for a screen change, run
+`yoloctl box use worker wait --wait-timeout 5s`. See
+[box use](docs/digests/box-use.md).
 
 ### Chat
 
@@ -225,19 +253,21 @@ Each space can run a managed chat room. Enrolled boxes get private room
 credentials and the AIRC client/skill integration. Mention an agent with
 `@name`, or the team with `@all`, to bring it into the conversation.
 
-The native view has channels, replies, threads, Markdown tables and images.
-Its Participants panel shows available agent activity and reported model,
-effort and context; click a participant to attach to its session.
+The native view has channels, replies, threads, Markdown tables and text
+diagrams. On supported terminals, click a PNG attachment to preview it. The
+Participants panel shows available agent activity and reported model, effort
+and context. Click a participant to attach to its session.
 
 ```sh
 yoloctl chat ensure --human yourname       # Create the room on first use.
-yoloctl chat enroll writer --recreate     # Replaces this box's container.
-yoloctl chat                             # Open the native chat view.
+yoloctl chat enroll coder --recreate       # Replaces this box's container.
+yoloctl chat                              # Open the native chat view.
 ```
 
 Use the room to assign work, ask for a second opinion and follow decisions as
-they happen. Wake and delivery behavior depends on the harness integration;
-see the [chat guide](docs/airc.md).
+they happen. Use `yoloctl chat export` to save retained history as text or JSON
+lines. For chat setup and harness-specific wake behavior, see the
+[chat guide](docs/airc.md).
 
 ## Supported agents
 
@@ -245,7 +275,7 @@ see the [chat guide](docs/airc.md).
 |---|---|---|
 | **Claude Code** (`claude`) | **Full** | Native account state, conversation resume, agent observations and team chat integration. |
 | **Codex** (`codex`) | **Full** | Native account state, tracked conversation resume, agent observations and team chat integration. |
-| **Antigravity** (`agy`) | **Basic** | Native CLI, login/state persistence and status reporting. See [adapter notes](docs/digests/agy.md) for limits. |
+| **Antigravity** (`agy`) | **Basic** | Native CLI, login/state persistence and tracked conversation resume with its [status-line reporter](#sessions). See [adapter notes](docs/digests/agy.md) for limits. |
 | **Gemini CLI** (`gemini`) | **Experimental** | See [authentication and runtime notes](docs/digests/gemini.md). |
 | **OpenCode** (`opencode`) | **Experimental** | See [providers, plugins and runtime notes](docs/digests/opencode.md). |
 | **Pi** (`pi`) | **Experimental** | See [providers and runtime notes](docs/digests/pi.md). |
@@ -265,7 +295,6 @@ create them explicitly, then choose one for each box:
 ```sh
 yoloctl account create work
 yoloctl account create review
-yoloctl account create personal
 
 # Configure each account's login or supported API-key auth before use.
 yoloctl box create writer --agent claude --account work --no-attach
@@ -310,20 +339,32 @@ can cross these account boundaries. See [accounts](docs/specs/accounts.md) and
 
 ### Tools and images
 
-Add Go, npm, pip, Cargo and other tools with `--features`; yoloctl composes the
-image on demand and reuses cached builds. Public OCI Dev Container Features
-are available through `--feature ghcr.io/…`. Automatic cleanup removes unused
-composed images and build cache, preserving retained images and box data. See
+Add Go, npm, pip, Cargo and other tools with `--features`. The `github`
+feature installs `gh` and grants GitHub access to `git` and `gh`. yoloctl
+composes the image on demand and reuses cached builds. Public OCI Dev Container
+Features are available through `--feature ghcr.io/…`. yoloctl reports and skips
+their requests for container runtime changes such as added mounts, privileged
+mode and lifecycle hooks. Automatic cleanup removes unused composed images
+and build cache, preserving retained images and box data. See
 [OCI Features](docs/digests/oci-features.md) and
 [storage cleanup](docs/digests/storage-gc.md).
 
 **Agent updates stay current.** Claude, Codex, Gemini, OpenCode and Pi installs
-track `@latest`; Antigravity uses its latest verified native release. Lifecycle
-operations can refresh the CLI, or you can use `agent update AGENT` explicitly.
+track `@latest` and live in the managed `/opt/yoloctl/npm` prefix, read-only
+to ordinary box users. With the `npm` feature, `npm install -g` uses
+`/home/sandbox/.npm-global`. Project installs use `node_modules`. Antigravity
+uses its latest verified native release. Lifecycle operations can refresh the
+CLI, or you can use `agent update AGENT` explicitly.
 `--no-autoupdate` skips a lifecycle refresh and keeps the installed version;
 it does not pin a new image build. These downloads run through the
 VM/container maintenance path, outside the agent process's sandbox egress
 policy. See [agent maintenance](docs/digests/agent-maintenance.md).
+
+New confined boxes keep `/home/sandbox/.cache` on the VM across ordinary
+stop, start and container recreation. Check its size with `space storage`.
+Use `box cache clear BOX` when the box is stopped or
+`box recreate --clear-cache BOX` when replacing it. See
+[box caches](docs/digests/box-cache-remedy.md).
 
 ### Workdirs, ports and resources
 
@@ -331,23 +372,39 @@ Use a granted host project for persistent files, or
 `--workdir-mode ephemeral` for a disposable VM-local workdir. Box mounts must
 fit the space's existing host grants.
 
-`port forward BOX 3000:3000` makes a box's service available on the host; the
-service must listen on `0.0.0.0`. Boxes share the VM's CPUs and bounded workload
-memory pool by default. Apply individual `--cpus` and `--memory` limits when
-needed, and check usage in `box inspect` or `space view`. See
+`port forward BOX 3000:3000` publishes a box's service on host loopback. In a
+new OpenShell box, the service can listen on `127.0.0.1` or `0.0.0.0`. Legacy
+and privileged boxes use a bridge route, so bind to `0.0.0.0` or an address that
+route can reach. Boxes share the VM's CPUs and bounded workload memory pool by
+default. Apply individual `--cpus` and `--memory` limits when needed, and check
+usage in `box inspect` or `space view`. See
 [resources](docs/digests/resources.md) and [ports](docs/digests/vm-ports.md).
 
 ### Backups and upgrades
 
-`space export` and `space import` back up a space and restore it as a new one.
+`space export` and `space import` back up declarations and native account
+state and restore them into a new space. On the host, `yoloctl box cp BOX:PATH DEST`
+saves container-only files from a running or stopped box. The space and a
+controller matching the CLI build must be running.
+
 After installing a new build, run `yoloctl space upgrade SPACE` to select its
-controller, restart eligible stale sessions and review any box changes. Each
-container replacement asks for consent and discards container-only files.
+controller, restart eligible stale sessions and review any box changes. It
+offers to replace a mismatched VM, then asks separately before replacing
+containers or restarting running boxes just to apply policy. On a VM you keep,
+stopped boxes stay stopped and get follow-up commands for known changes.
+
+If you're upgrading from v0.3.0, use that build to save container-only files
+to the host before upgrading. Accepting VM replacement removes its containers
+at that point. You can also keep the VM and decline box replacements, then
+use v0.4.0's `box cp` after the controller update and before recreating boxes.
+
 For a controller-only update with a separate session restart decision, use
 `space start SPACE --update-controller`. On Firecracker,
 `space recreate SPACE --update-vm-image` replaces the VM image while preserving
-accounts and declarations; running sessions and ephemeral workdirs are lost.
-See [VM images](docs/digests/vm-images.md) and
+accounts, declarations and host workdirs. It discards containers, sessions,
+per-box caches and ephemeral workdirs. See the Upgrade notes section of the
+[v0.4.0 release](https://github.com/leogr/yoloctl/releases/tag/v0.4.0) and the
+guides to [VM images](docs/digests/vm-images.md) and
 [archives](docs/digests/space-archives.md).
 
 ### Privileged development boxes
@@ -358,9 +415,9 @@ itself, including running an inner space through nested virtualization when
 the host and outer VM expose working KVM support. This is an advanced workflow;
 `--privileged` alone does not make nested virtualization available everywhere.
 Spaces default to `--nested-virtualization auto`: eligible Apple M3+ Macs running
-macOS 15+ enable it for Lima vz/aarch64 VMs at boot. Use `space set SPACE
---nested-virtualization off` to disable it; `space show` reports the saved and
-configured values.
+macOS 15+ enable it for Lima vz/aarch64 VMs at boot. On a stopped space, use
+`space set SPACE --nested-virtualization off` to disable it. Use `space show`
+to check the saved setting and what the backend reports.
 
 **A privileged box runs without OpenShell confinement and has root authority
 over the entire space VM**: its boxes, credentials, native state, controller
@@ -373,7 +430,8 @@ virtualization limits.
 ## Security model
 
 Hosts can opt in to [Falco](https://falco.org/) runtime auditing with
-`yoloctl audit enable` and inspect events with `yoloctl audit`. See the
+`yoloctl audit enable` and inspect events with `yoloctl audit`.
+Use `yoloctl audit status` to check whether auditing is active. See the
 [VM-native auditing](docs/digests/audit.md) for host requirements and controls.
 
 The aim is to let cooperative coding agents work freely within boundaries you
@@ -398,7 +456,7 @@ access still matters. Use backups and choose a space's grants accordingly.
 
 ```sh
 make build
-make check   # Documentation, script tests, vet, Darwin cross-vet, Go tests and lint.
+make check   # Docs, script tests, vet, Darwin cross-vet, Go tests, lint and native helper reproducibility.
 ```
 
 `make build` produces the host CLI and Linux companions under `bin/`; install
