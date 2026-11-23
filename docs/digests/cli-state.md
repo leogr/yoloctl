@@ -1,6 +1,6 @@
 # CLI selection, runtime views, and output
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; completion registration re-read at `63b8a5be7896a88f5ecddf6159e2911fbc512fa1` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Flag/context space selection is centralized: explicit flag, nonempty
 `YOLOCTL_SPACE`, global context pin, then `default`; explicit positional targets
@@ -85,8 +85,8 @@ transport/principal verification is stubbed. [22](#source-22) [23](#source-23)
 
 [FACT] `space create/import --backend` completes adapters linked into the host
 binary, filtering by prefix without probing hypervisors, KVM or controllers.
-`--vm-image` completes local directories. Completion registration also runs
-after host-only commands are added, so import receives the shared callbacks.
+`--vm-image` completes local directories. The host client registers completions
+once, after adding its host-only commands, so import receives the shared callbacks.
 Shells and the TUI use the same Cobra completion endpoint.
 [18](#source-18) [19](#source-19) [20](#source-20) [21](#source-21)
 

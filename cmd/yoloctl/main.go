@@ -172,6 +172,12 @@ func classifyError(err error) int {
 }
 
 func newRootCmd() *cobra.Command {
+	cmd := newBaseRootCmd()
+	registerCompletions(cmd)
+	return cmd
+}
+
+func newBaseRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "yoloctl",
 		Short: "yoloctl — let coding agents yolo safely",
@@ -220,7 +226,6 @@ path. An ephemeral workdir uses /workdir directly.`,
 		newFeatureCmd(),
 		newCapabilityCmd(),
 	)
-	registerCompletions(cmd)
 	rejectUnknownCommandGroups(cmd)
 	registerSpaceOperations(cmd)
 	registerStartModeWarnings(cmd)

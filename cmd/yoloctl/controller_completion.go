@@ -169,7 +169,7 @@ func runControllerCompletionInto(ctx context.Context, p controller.Principal, re
 	if err := decodeBoundedJSON(bytes.NewReader(req.Payload), &query, controller.MaxDocument); err != nil {
 		return err
 	}
-	root := newRootCmd()
+	root := newBaseRootCmd()
 	root.SetOut(out)
 	// Chat and audit use typed client commands, so they are absent from the ordinary
 	// native execution root. Completion only runs the local read callbacks;

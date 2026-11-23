@@ -26,7 +26,7 @@ import (
 // routes space-owned execution to the controller. Host lifecycle retains only
 // its local boot record and selected VM adapter authority.
 func newClientRootCmd() *cobra.Command {
-	root := newRootCmd()
+	root := newBaseRootCmd()
 	root.Annotations = map[string]string{"controller-client": "true"}
 	routeControllerCommands(root)
 	space, _, _ := root.Find([]string{"space"})
@@ -63,8 +63,6 @@ func newClientRootCmd() *cobra.Command {
 	}
 	shell, _, _ := root.Find([]string{"space", "ssh"})
 	shell.RunE = controllerSpaceShell
-	// Host-only commands (including import) are added after newRootCmd's
-	// completion pass. Fill missing callbacks without replacing existing ones.
 	registerCompletions(root)
 	guardOperatorCommands(root)
 	return root
