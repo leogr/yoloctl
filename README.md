@@ -99,8 +99,8 @@ participant, follow the [managed chat setup](docs/airc.md#space-owned-managed-ro
 
 ### Awesome TUI
 
-<!-- DEMO: the TUI: the space chip, box list, tabs dragged into a 2x2, the pane menu's zoom, a follow view with a diagram, space view -->
-![The yoloctl TUI: picking a space from the chip, box list, agent tabs dragged with the mouse into a four-pane view, the pane menu zooming the chat, a plan link opening a follow view with its diagram drawn, and the space view scrolled](docs/demos/01-tui.gif)
+<!-- DEMO: the TUI: box list, tabs dragged into a 2x2, the pane menu's zoom, a follow view with a diagram, space view -->
+![The yoloctl TUI: box list, agent tabs dragged with the mouse into a four-pane view, the pane menu zooming the chat, a plan link opening a follow view with its diagram drawn, and the space view scrolled](docs/demos/01-tui.gif)
 
 *Your team, its terminals and its tools, in one place: arrange the work, then
 check the whole space at a glance.*
@@ -190,8 +190,8 @@ its recorded state. See [sessions](docs/specs/sessions.md) and
 
 ### Space operator
 
-<!-- DEMO: the space operator reading another box's quota with box use and handing out a ticket -->
-![The space operator reads another box's weekly quota through box use, posts it as a table in the chat, then hands a ticket out to the other agents](docs/demos/05-operator.gif)
+<!-- DEMO: the space operator builds its team: it creates and enrolls a coder and a reviewer, briefs them with box use, both answer, their cards in the space view -->
+![Asked in the chat, the space operator creates a coder and a reviewer box itself, enrolls them in the chat and briefs them; both answer the human, and their new cards show in the space view](docs/demos/05-operator.gif)
 
 *Let an agent assemble its own team.*
 
@@ -482,10 +482,10 @@ yoloctl is developed with yoloctl. The [yolo-dev skill](skills/yolo-dev/SKILL.md
 helps a team of agents take assigned roles—coordinator, architect, dev,
 researcher and DevOps—and move work through plan, build, review, QA and merge.
 
-<!-- DEMO: a ticket from the chat to a merge: plan with diagram, test, review, MERGED -->
-![A ticket from the chat to a merge: the coder posts its plan, whose link opens the drawn diagram, then the test result, the review and the MERGED report arrive in the human's thread](docs/demos/08-devflow.gif)
+<!-- DEMO: a real team implements a yoloctl change: the ticket, the edit, parity checks and the before/after benchmark, make check off camera, the commit, the review, the CANDIDATE -->
+![A real Codex team implements a small yoloctl speed-up: the dev edits the code and runs the parity checks and the before/after benchmark, make check passes on that tree, the reviewer approves the commit, and the coordinator reports the candidate with the measured numbers](docs/demos/08-devflow.gif)
 
-*The demo team takes a sample Go ticket from plan to merge.*
+*A real team takes a real yoloctl change from the ticket to a reviewed candidate.*
 
 ## Roadmap
 
