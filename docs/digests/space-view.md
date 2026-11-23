@@ -1,6 +1,6 @@
 # Live space view
 
-Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; scrollbar layout re-read at `85f67be08d8bceefb03db745cad123ea5bbade49` and accompanying changes; re-read affected cited symbols when changing behavior.
+Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; scrollbar layout re-read at `85f67be08d8bceefb03db745cad123ea5bbade49` and accompanying changes; canvas.go anchors re-read at `3c7c5f354342cbee98ca04e980dc7d17a05cac06` and accompanying changes; re-read affected cited symbols when changing behavior.
 
 [FACT] `space view [SPACE]` is a host-only command added beside export and
 import; its positional completes running spaces. It refuses box operators and
@@ -140,7 +140,7 @@ and local PTYs; they do not establish live-VM or proxy-confined chat coverage.
 
 29. <a id="source-29"></a> [Shared visual helpers](../../internal/tui/spaceview/visual.go#L9) — `ChatIcon`.
 30. <a id="source-30"></a> [Layout regressions](../../internal/tui/spaceview/view_test.go#L518) — `TestVMFrameNamesTheSpaceRightAligned`, `TestLegendPrecedesTheCPUGraph`.
-31. <a id="source-31"></a> [First row](../../internal/tui/spaceview/theme.go#L79-L93) — `FirstRowBG`, `FirstRow`; `putFirstRow` in canvas.go L218; first_row_test.go `TestFirstRowIsBlackInEveryState`, `TestFirstRowOperatorWarningStaysDistinct`.
+31. <a id="source-31"></a> [First row](../../internal/tui/spaceview/theme.go#L79-L93) — `FirstRowBG`, `FirstRow`; `putFirstRow` in canvas.go L226; first_row_test.go `TestFirstRowIsBlackInEveryState`, `TestFirstRowOperatorWarningStaysDistinct`.
 32. <a id="source-32"></a> [Space view memory readings](space-view-memory.md) — VM, pool and box memory presentation.
 33. <a id="source-33"></a> [privileged.go](../../internal/agentbox/privileged.go#L86-L121) — `ClassifyRuntime`; `TestParseRuntimeStatesCarriesLaunchEvidence` in `runtime_state_test.go` at L43, `TestTelemetryInventoryCarriesPrivilege` in `space_telemetry_test.go` at L319.
 34. <a id="source-34"></a> [layout.go](../../internal/tui/spaceview/layout.go#L1309-L1338) — `privilegeMark`, `privilegedPill`; hint at L410, compact chip at L1516, click in `popup.go` at L166; `privileged_test.go` and its `privilegedFixtureModel` in `fixture_test.go`.

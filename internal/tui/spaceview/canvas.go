@@ -1,7 +1,7 @@
 package spaceview
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -31,34 +31,42 @@ func (s Style) bold() Style      { s.Bold = true; return s }
 func (s Style) underline() Style { s.Underline = true; return s }
 
 func (s Style) sgr() string {
-	var parts []string
+	var buf [48]byte
+	b := buf[:0]
 	if s.Bold {
-		parts = append(parts, "1")
+		b = append(b, ";1"...)
 	}
 	if s.Italic {
-		parts = append(parts, "3")
+		b = append(b, ";3"...)
 	}
 	if s.Underline {
-		parts = append(parts, "4")
+		b = append(b, ";4"...)
 	}
-	parts = append(parts, colorSGR(s.FG, 38)...)
-	parts = append(parts, colorSGR(s.BG, 48)...)
-	if len(parts) == 0 {
+	b = colorSGR(colorSGR(b, s.FG, 38), s.BG, 48)
+	if len(b) == 0 {
 		return ""
 	}
-	return "\x1b[" + strings.Join(parts, ";") + "m"
+	return "\x1b[" + string(b[1:]) + "m"
 }
 
-func colorSGR(c Color, base int) []string {
+func colorSGR(b []byte, c Color, base int) []byte {
 	switch {
 	case c == 0:
-		return nil
+		return b
 	case c&trueColor != 0:
 		v := int(c &^ trueColor)
-		return []string{fmt.Sprint(base), "2", fmt.Sprint(v >> 16 & 0xff), fmt.Sprint(v >> 8 & 0xff), fmt.Sprint(v & 0xff)}
+		return appendParams(b, base, 2, v>>16&0xff, v>>8&0xff, v&0xff)
 	default:
-		return []string{fmt.Sprint(base), "5", fmt.Sprint(int(c) - 1)}
+		return appendParams(b, base, 5, int(c)-1)
 	}
+}
+
+// appendParams appends each value in decimal after a ';' separator.
+func appendParams(b []byte, values ...int) []byte {
+	for _, v := range values {
+		b = strconv.AppendInt(append(b, ';'), int64(v), 10)
+	}
+	return b
 }
 
 // seg is a run of plain text with one style and an optional click target.
