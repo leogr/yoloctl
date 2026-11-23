@@ -2,9 +2,7 @@
 
 > Let coding agents yolo safely.
 
-![A 50-second tour: the palette and agent tabs, four panes in one view, a read-only reviewer, detach and reattach, an operator creating a box, the whole team in one chat, and a ticket taken from plan to merge](docs/demos/00-intro.gif)
-
-*The demos on this page were recorded before v0.4.0.*
+![A 2.5-minute story with real agents: a fresh yoloctl creates a space and one box, the mouse drags agent tabs into a four-pane view, the space operator reads another box's quota with box use and posts it as a table, then the team takes one ticket from the chat to a merge while the human quotes the result](docs/demos/00-intro.gif)
 
 **yoloctl is a local-first orchestrator for AI coding harnesses.** Give your
 agents a **space**: a VM where each works in its own customizable **box**, using
@@ -101,8 +99,8 @@ participant, follow the [managed chat setup](docs/airc.md#space-owned-managed-ro
 
 ### Awesome TUI
 
-<!-- DEMO: the TUI: palette and agent tabs, chat and space view splits, a tab dragged into a 2x2, resize, zoom, swap -->
-![The yoloctl TUI: the command palette and agent tabs, a chat and a space view opened in split panes, a tab dragged into a four-pane grid, then resize, zoom and swap](docs/demos/01-tui.gif)
+<!-- DEMO: the TUI: the space chip, box list, tabs dragged into a 2x2, the pane menu's zoom, a follow view with a diagram, space view -->
+![The yoloctl TUI: picking a space from the chip, box list, agent tabs dragged with the mouse into a four-pane view, the pane menu zooming the chat, a plan link opening a follow view with its diagram drawn, and the space view scrolled](docs/demos/01-tui.gif)
 
 *Your team, its terminals and its tools, in one place: arrange the work, then
 check the whole space at a glance.*
@@ -192,8 +190,8 @@ its recorded state. See [sessions](docs/specs/sessions.md) and
 
 ### Space operator
 
-<!-- DEMO: an operator agent creating and driving worker boxes -->
-![An operator agent creates a new box, drives it through box use and reports its answer together with the box's weekly quota](docs/demos/05-operator.gif)
+<!-- DEMO: the space operator reading another box's quota with box use and handing out a ticket -->
+![The space operator reads another box's weekly quota through box use, posts it as a table in the chat, then hands a ticket out to the other agents](docs/demos/05-operator.gif)
 
 *Let an agent assemble its own team.*
 
@@ -220,8 +218,8 @@ Removing the feature does not undo work the operator already performed. See the
 
 #### Box use
 
-<!-- DEMO: an operator sending /compact to another agent and reading its screen -->
-![An operator agent asks another agent a question and sends it /compact through box use, reading its screen each time, with that agent's pane live beside it](docs/demos/06-box-use.gif)
+<!-- DEMO: an operator opening another agent's usage screen with box use and reading it -->
+![The operator opens another agent's usage screen through box use, reads it and closes it again, with that agent's pane live beside it, and answers with a quota table](docs/demos/06-box-use.gif)
 
 *Read another agent's terminal, type into it and wait for a response.*
 
@@ -244,8 +242,8 @@ and after to see what happened. To watch for a screen change, run
 
 ### Chat
 
-<!-- DEMO: a full team of agents and a human working together in the chat -->
-![The native chat view: the human posts one message to the whole team, each agent answers in the room and the reviewer hands a follow-up to the coordinator](docs/demos/07-chat.gif)
+<!-- DEMO: the zoomed chat: a ticket, threaded answers, For me, a quote -->
+![The native chat view, zoomed: the human posts a ticket, the agents answer in threads, a For me filter keeps only the human's thread, and the human quotes the MERGED report and replies](docs/demos/07-chat.gif)
 
 *One room for you and all your agents.*
 
@@ -484,8 +482,8 @@ yoloctl is developed with yoloctl. The [yolo-dev skill](skills/yolo-dev/SKILL.md
 helps a team of agents take assigned roles—coordinator, architect, dev,
 researcher and DevOps—and move work through plan, build, review, QA and merge.
 
-<!-- DEMO: the yolo-dev team taking a ticket from plan to merge -->
-![Four panes with the chat, a coordinator, a dev and a reviewer agent taking a ticket from the chat to a fast-forward merge, ending on the MERGED report](docs/demos/08-devflow.gif)
+<!-- DEMO: a ticket from the chat to a merge: plan with diagram, test, review, MERGED -->
+![A ticket from the chat to a merge: the coder posts its plan, whose link opens the drawn diagram, then the test result, the review and the MERGED report arrive in the human's thread](docs/demos/08-devflow.gif)
 
 *The yoloctl team at work on yoloctl.*
 
