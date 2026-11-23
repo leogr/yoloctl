@@ -485,7 +485,7 @@ researcher and DevOps—and move work through plan, build, review, QA and merge.
 <!-- DEMO: a ticket from the chat to a merge: plan with diagram, test, review, MERGED -->
 ![A ticket from the chat to a merge: the coder posts its plan, whose link opens the drawn diagram, then the test result, the review and the MERGED report arrive in the human's thread](docs/demos/08-devflow.gif)
 
-*The yoloctl team at work on yoloctl.*
+*The demo team takes a sample Go ticket from plan to merge.*
 
 ## Roadmap
 
