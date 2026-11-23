@@ -254,6 +254,20 @@ func (t *Tracker) Steps() []StepView {
 	return out
 }
 
+// AnyEnded reports whether a step named in ids has ended; a step the
+// Tracker does not know has not. It reads every state under one lock, so the
+// answer is one consistent view, like Steps, without copying any step.
+func (t *Tracker) AnyEnded(ids []string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, id := range ids {
+		if ts := t.steps[id]; ts != nil && ts.ended() {
+			return true
+		}
+	}
+	return false
+}
+
 // Retained returns every tracked step in start order, like Steps, with
 // all its retained detail lines in Tail instead of the last TailLines, and
 // Omitted counting only the bytes the limits dropped.

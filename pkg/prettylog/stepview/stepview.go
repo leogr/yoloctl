@@ -14,6 +14,7 @@ import (
 	"cmp"
 	"context"
 	"io"
+	"iter"
 	"log/slog"
 	"slices"
 	"strconv"
@@ -176,15 +177,17 @@ func (v *View) updateLocked(detailOnly bool) {
 		v.dirty = true
 		return
 	}
-	steps := v.tracker.Steps()
-	byID := make(map[string]prettylog.StepView, len(steps))
-	for _, s := range steps {
-		byID[s.ID] = s
+	// A detail line with every active root still running only marks the
+	// block dirty: read the root states without copying every step.
+	if detailOnly && !v.tracker.AnyEnded(v.active) {
+		v.dirty = true
+		return
 	}
+	x := indexSteps(v.tracker.Steps())
 	var ended []string
 	kept := v.active[:0]
 	for _, id := range v.active {
-		if s, ok := byID[id]; ok && s.State != prettylog.StepRunning {
+		if s, ok := x.lookup(id); ok && s.State != prettylog.StepRunning {
 			ended = append(ended, id)
 			continue
 		}
@@ -198,26 +201,27 @@ func (v *View) updateLocked(detailOnly bool) {
 	var b bytes.Buffer
 	v.clearLocked(&b)
 	for _, id := range ended {
-		b.WriteString(v.summaryLocked(byID[id], steps))
+		root, _ := x.lookup(id)
+		b.WriteString(v.summaryLocked(root, &x))
 	}
-	v.flushChildrenLocked(&b, steps, byID)
-	v.drawLocked(&b, steps)
+	v.flushChildrenLocked(&b, &x)
+	v.drawLocked(&b, &x)
 	_, _ = v.out.Write(b.Bytes())
 	v.tickLocked()
 }
 
 // flushChildrenLocked reports failed or uncertain children and handles late
 // completions once their parents have printed.
-func (v *View) flushChildrenLocked(b *bytes.Buffer, steps []prettylog.StepView, byID map[string]prettylog.StepView) {
+func (v *View) flushChildrenLocked(b *bytes.Buffer, x *stepIndex) {
 	kept := v.pending[:0]
 	for _, id := range v.pending {
 		if v.committed[id] {
 			continue
 		}
-		s := byID[id]
+		s, _ := x.lookup(id)
 		if s.State != prettylog.StepRunning && (failedOrUnknown(s.State) || v.committed[s.Parent]) {
-			if _, rooted := parentChain(s, steps); rooted {
-				b.WriteString(v.summaryLocked(s, steps))
+			if _, rooted := x.parentChain(s); rooted {
+				b.WriteString(v.summaryLocked(s, x))
 				continue
 			}
 		}
@@ -257,7 +261,12 @@ func (v *View) loop(t *time.Ticker, stop chan struct{}) {
 				v.dirty = false
 				var b bytes.Buffer
 				v.clearLocked(&b)
-				v.drawLocked(&b, v.tracker.Steps())
+				// While raw output ends mid-line the block stays hidden:
+				// drawLocked would draw nothing, so take no step copy.
+				if !v.partial {
+					x := indexSteps(v.tracker.Steps())
+					v.drawLocked(&b, &x)
+				}
 				_, _ = v.out.Write(b.Bytes())
 			}
 			v.mu.Unlock()
@@ -288,13 +297,13 @@ func (v *View) clearLocked(b *bytes.Buffer) {
 	v.shown = 0
 }
 
-func (v *View) drawLocked(b *bytes.Buffer, steps []prettylog.StepView) {
+func (v *View) drawLocked(b *bytes.Buffer, x *stepIndex) {
 	if v.pause > 0 || v.closed || v.partial || len(v.active) == 0 {
 		return
 	}
 	width, height := v.size()
 	limit := max(height-2, 1)
-	rows, owners := v.blockRows(steps, limit)
+	rows, owners := v.blockRows(x, limit)
 	if len(rows) > limit {
 		rows, owners = rows[len(rows)-limit:], owners[len(owners)-limit:]
 	}
@@ -330,7 +339,8 @@ func (v *View) Click(offset int) {
 	}
 	var b bytes.Buffer
 	v.clearLocked(&b)
-	v.drawLocked(&b, v.tracker.Steps())
+	x := indexSteps(v.tracker.Steps())
+	v.drawLocked(&b, &x)
 	_, _ = v.out.Write(b.Bytes())
 }
 
@@ -388,9 +398,6 @@ func (r *renderer) detail(s prettylog.StepView, text string) {
 	_ = r.l.Handle(context.Background(), rec)
 }
 
-// count is how many lines the renderer has produced.
-func (r *renderer) count() int { return bytes.Count(r.buf.Bytes(), []byte{'\n'}) }
-
 func (r *renderer) lines() []string {
 	text := strings.TrimSuffix(r.buf.String(), "\n")
 	if text == "" {
@@ -399,21 +406,85 @@ func (r *renderer) lines() []string {
 	return strings.Split(text, "\n")
 }
 
-func children(steps []prettylog.StepView, parent string) []prettylog.StepView {
-	var out []prettylog.StepView
-	for _, s := range steps {
-		if s.Parent == parent {
-			out = append(out, s)
+// stepIndex is one Tracker snapshot with its step IDs and parent links
+// resolved once, so walking the steps does not search them again for each
+// step. Tracker step IDs are unique. Children keep tracker (start) order;
+// callers that sort siblings sort their own copy.
+type stepIndex struct {
+	steps []prettylog.StepView
+	pos   map[string]int // step ID → position in steps; nil: scan steps
+	// first and next link each step's children in start order: position+1
+	// of a step's first child and of a step's next sibling (0 = none).
+	first, next []int
+}
+
+// scanSteps is the largest snapshot searched without an index: one map
+// group's worth of steps, where building the index would cost more
+// allocations than the searches it saves.
+const scanSteps = 8
+
+func indexSteps(steps []prettylog.StepView) stepIndex {
+	x := stepIndex{steps: steps}
+	if len(steps) <= scanSteps {
+		return x
+	}
+	x.pos = make(map[string]int, len(steps))
+	for i, s := range steps {
+		if _, seen := x.pos[s.ID]; !seen {
+			x.pos[s.ID] = i
 		}
 	}
-	return out
+	links := make([]int, 2*len(steps))
+	x.first, x.next = links[:len(steps)], links[len(steps):]
+	for i := len(steps) - 1; i >= 0; i-- {
+		if p, ok := x.pos[steps[i].Parent]; ok {
+			x.next[i] = x.first[p]
+			x.first[p] = i + 1
+		}
+	}
+	return x
+}
+
+// lookup returns the first step with this ID.
+func (x *stepIndex) lookup(id string) (prettylog.StepView, bool) {
+	if x.pos == nil {
+		for _, s := range x.steps {
+			if s.ID == id {
+				return s, true
+			}
+		}
+	} else if i, ok := x.pos[id]; ok {
+		return x.steps[i], true
+	}
+	return prettylog.StepView{}, false
+}
+
+// children yields the steps whose parent is parent, in start order.
+func (x *stepIndex) children(parent string) iter.Seq[prettylog.StepView] {
+	return func(yield func(prettylog.StepView) bool) {
+		p, ok := x.pos[parent]
+		if !ok {
+			// No index, or not a step of this snapshot (such as ""): scan.
+			for _, s := range x.steps {
+				if s.Parent == parent && !yield(s) {
+					return
+				}
+			}
+			return
+		}
+		for i := x.first[p]; i != 0; i = x.next[i-1] {
+			if !yield(x.steps[i-1]) {
+				return
+			}
+		}
+	}
 }
 
 // liveChildren keeps the existing running-step slots. Recent completions
 // fill the slots left over, so an active child stays visible as siblings end.
-func (v *View) liveChildren(steps []prettylog.StepView, parent string, showCompleted bool) ([]prettylog.StepView, int, bool) {
+func (v *View) liveChildren(x *stepIndex, parent string, showCompleted bool) ([]prettylog.StepView, int, bool) {
 	var running, completed []prettylog.StepView
-	for _, child := range children(steps, parent) {
+	for child := range x.children(parent) {
 		if child.State == prettylog.StepRunning {
 			running = append(running, child)
 		} else if showCompleted && v.settled[child.ID] > 0 && !v.committed[child.ID] {
@@ -431,14 +502,14 @@ func (v *View) liveChildren(steps []prettylog.StepView, parent string, showCompl
 // and the step each row belongs to ("" for a row that expands nothing). The
 // expanded step shows as many of its latest kept lines as fit in limit
 // rows with the rest of the block, counting the earlier ones on one row.
-func (v *View) blockRows(steps []prettylog.StepView, limit int) ([]string, []string) {
+func (v *View) blockRows(x *stepIndex, limit int) ([]string, []string) {
 	showCompleted := true
-	rows, owners := v.blockRowsWith(steps, showCompleted, nil)
+	rows, owners := v.blockRowsWith(x, showCompleted, nil)
 	if len(rows) > limit {
 		// Preserve the running rows when the terminal is too short for
 		// both running and completed steps.
 		showCompleted = false
-		rows, owners = v.blockRowsWith(steps, showCompleted, nil)
+		rows, owners = v.blockRowsWith(x, showCompleted, nil)
 	}
 	if v.expanded == "" {
 		return rows, owners
@@ -460,7 +531,7 @@ func (v *View) blockRows(steps []prettylog.StepView, limit int) ([]string, []str
 	}
 	// The step's own rows are its title and its tail; the rest stays.
 	room := max(limit-(len(rows)-shown)-1, 1)
-	return v.blockRowsWith(steps, showCompleted, func(s prettylog.StepView) []string {
+	return v.blockRowsWith(x, showCompleted, func(s prettylog.StepView) []string {
 		if s.ID != v.expanded {
 			return nil
 		}
@@ -478,22 +549,24 @@ func (v *View) blockRows(steps []prettylog.StepView, limit int) ([]string, []str
 
 // blockRowsWith renders the block; expand, when it returns lines for a
 // running step, replaces that step's short tail.
-func (v *View) blockRowsWith(steps []prettylog.StepView, showCompleted bool, expand func(prettylog.StepView) []string) ([]string, []string) {
+func (v *View) blockRowsWith(x *stepIndex, showCompleted bool, expand func(prettylog.StepView) []string) ([]string, []string) {
 	glyphs := prettylog.DefaultGlyphs
 	glyphs.Info = spinner[v.frame%len(spinner)]
 	r := v.renderer(glyphs)
 	now := v.o.Now()
-	byID := map[string]prettylog.StepView{}
-	for _, s := range steps {
-		byID[s.ID] = s
-	}
 	tail := 1
 	if v.o.Verbosity >= prettylog.Verbose {
 		tail = 10
 	}
+	// Each row rendered since the last call belongs to id. The renderer only
+	// appends, so only the bytes after the previous count are counted.
 	var owners []string
+	counted, rows := 0, 0
 	own := func(id string) {
-		for len(owners) < r.count() {
+		rendered := r.buf.Bytes()
+		rows += bytes.Count(rendered[counted:], []byte{'\n'})
+		counted = len(rendered)
+		for len(owners) < rows {
 			owners = append(owners, id)
 		}
 	}
@@ -505,7 +578,7 @@ func (v *View) blockRowsWith(steps []prettylog.StepView, showCompleted bool, exp
 		}
 		r.step(s, v.actors[s.ID], took, false)
 		// A running leaf shows output lines and can expand: its rows are its.
-		kids, hidden, hasRunningChildren := v.liveChildren(steps, s.ID, showCompleted)
+		kids, hidden, hasRunningChildren := v.liveChildren(x, s.ID, showCompleted)
 		leaf := s.State == prettylog.StepRunning && !hasRunningChildren
 		if leaf {
 			own(s.ID)
@@ -533,7 +606,7 @@ func (v *View) blockRowsWith(steps []prettylog.StepView, showCompleted bool, exp
 		}
 	}
 	for _, id := range v.active {
-		if s, ok := byID[id]; ok {
+		if s, ok := x.lookup(id); ok {
 			walk(s)
 		}
 	}
@@ -542,9 +615,9 @@ func (v *View) blockRowsWith(steps []prettylog.StepView, showCompleted bool, exp
 
 // summaryLocked formats a finished group in parent-first order. Siblings
 // keep their completion order; snapshot-only failures follow in tracker order.
-func (v *View) summaryLocked(root prettylog.StepView, steps []prettylog.StepView) string {
+func (v *View) summaryLocked(root prettylog.StepView, x *stepIndex) string {
 	r := v.renderer(prettylog.DefaultGlyphs)
-	r.seedParents(root, steps, v.actors)
+	r.seedParents(root, x, v.actors)
 	var walk func(s prettylog.StepView, write, restoreFailures bool)
 	walk = func(s prettylog.StepView, write, restoreFailures bool) {
 		failed := failedOrUnknown(s.State)
@@ -561,7 +634,7 @@ func (v *View) summaryLocked(root prettylog.StepView, steps []prettylog.StepView
 			r.buf.Truncate(kept)
 		}
 		restoreFailures = restoreFailures || failed
-		kids := children(steps, s.ID)
+		kids := slices.Collect(x.children(s.ID))
 		slices.SortStableFunc(kids, func(a, b prettylog.StepView) int {
 			orderA, orderB := v.settled[a.ID], v.settled[b.ID]
 			if orderA == 0 || orderB == 0 {
@@ -581,7 +654,7 @@ func (v *View) summaryLocked(root prettylog.StepView, steps []prettylog.StepView
 		}
 	}
 	walk(root, true, false)
-	if root.Parent == "" && v.o.Pointer != nil && hadOutput(root, steps) {
+	if root.Parent == "" && v.o.Pointer != nil && hadOutput(root, x) {
 		actor := v.actors[root.ID]
 		if text := v.o.Pointer(actor[0], root); text != "" {
 			rec := slog.NewRecord(time.Time{}, prettylog.LevelInfo, text, 0)
@@ -600,8 +673,8 @@ func (v *View) summaryLocked(root prettylog.StepView, steps []prettylog.StepView
 
 // seedParents restores formatting depth without emitting ancestor rows again.
 // Preserve any summary rows already formatted before seeding another branch.
-func (r *renderer) seedParents(s prettylog.StepView, steps []prettylog.StepView, actors map[string][2]string) {
-	parents, _ := parentChain(s, steps)
+func (r *renderer) seedParents(s prettylog.StepView, x *stepIndex, actors map[string][2]string) {
+	parents, _ := x.parentChain(s)
 	kept := r.buf.Len()
 	for i := len(parents) - 1; i >= 0; i-- {
 		r.step(parents[i], actors[parents[i].ID], parents[i].Took, false)
@@ -611,25 +684,19 @@ func (r *renderer) seedParents(s prettylog.StepView, steps []prettylog.StepView,
 
 // parentChain is bounded by the Tracker's existing step inventory. Orphan or
 // cyclic child records have no known root and never acquire scrollback ownership.
-func parentChain(s prettylog.StepView, steps []prettylog.StepView) ([]prettylog.StepView, bool) {
+func (x *stepIndex) parentChain(s prettylog.StepView) ([]prettylog.StepView, bool) {
 	var parents []prettylog.StepView
 	parent := s.Parent
-	for range len(steps) {
+	for range len(x.steps) {
 		if parent == "" {
 			return parents, true
 		}
-		found := false
-		for _, p := range steps {
-			if p.ID == parent {
-				parents = append(parents, p)
-				parent = p.Parent
-				found = true
-				break
-			}
-		}
-		if !found {
+		p, ok := x.lookup(parent)
+		if !ok {
 			return nil, false
 		}
+		parents = append(parents, p)
+		parent = p.Parent
 	}
 	return parents, parent == ""
 }
@@ -644,12 +711,12 @@ func failureDetails(r *renderer, s prettylog.StepView) {
 }
 
 // hadOutput reports whether root or any step under it had output lines.
-func hadOutput(root prettylog.StepView, steps []prettylog.StepView) bool {
+func hadOutput(root prettylog.StepView, x *stepIndex) bool {
 	if len(root.Tail) > 0 || root.Omitted > 0 {
 		return true
 	}
-	for _, k := range children(steps, root.ID) {
-		if hadOutput(k, steps) {
+	for k := range x.children(root.ID) {
+		if hadOutput(k, x) {
 			return true
 		}
 	}
@@ -778,26 +845,22 @@ func (v *View) Close() {
 	}
 	var b bytes.Buffer
 	v.clearLocked(&b)
-	steps := v.tracker.Steps()
-	byID := map[string]prettylog.StepView{}
-	for _, s := range steps {
-		byID[s.ID] = s
-	}
+	x := indexSteps(v.tracker.Steps())
 	for _, id := range v.active {
-		root := byID[id]
+		root, _ := x.lookup(id)
 		if root.State == prettylog.StepRunning {
 			// The command ended before this step reported an end: say so,
 			// never show it as running or done.
 			root.State, root.Err = prettylog.StepUnknown, unfinished
 		}
-		b.WriteString(v.summaryLocked(root, steps))
+		b.WriteString(v.summaryLocked(root, &x))
 	}
-	v.flushChildrenLocked(&b, steps, byID)
+	v.flushChildrenLocked(&b, &x)
 	// An intermediate parent that never finished has no final line. Keep
 	// its observed descendants rather than dropping them at command exit.
 	for _, id := range v.pending {
-		s := byID[id]
-		parents, ok := parentChain(s, steps)
+		s, _ := x.lookup(id)
+		parents, ok := x.parentChain(s)
 		if !ok || v.committed[id] || s.State == prettylog.StepRunning {
 			continue
 		}
@@ -807,7 +870,7 @@ func (v *View) Close() {
 			}
 			s = p
 		}
-		b.WriteString(v.summaryLocked(s, steps))
+		b.WriteString(v.summaryLocked(s, &x))
 	}
 	v.active = nil
 	v.closed = true

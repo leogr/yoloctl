@@ -1,6 +1,6 @@
 # Terminal log wrapping
 
-Verification: `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes.
+Verification: `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes. Step block truncation re-read at `3c7c5f354342cbee98ca04e980dc7d17a05cac06` and accompanying changes.
 
 [FACT] Pretty log text can use an optional `Options.TerminalWidth` callback.
 The host CLI stderr and standalone follow-log adapters supply it: each rendered
@@ -36,6 +36,6 @@ or non-terminal descriptors. They do not qualify every native terminal.
 2. <a id="source-2"></a> [Pretty layout](../../pkg/prettylog/format.go#L257-L420) — `terminalWidth`, `prettyText`, `render`, `summary`.
 3. <a id="source-3"></a> [Width option](../../pkg/prettylog/logger.go#L117) — `Options.TerminalWidth`.
 4. <a id="source-4"></a> [Wire/filter boundary](../../pkg/prettylog/logger.go#L294) — `emitOwned`.
-5. <a id="source-5"></a> [Step block](../../pkg/prettylog/stepview/stepview.go#L251-L261) — terminal-row truncation.
+5. <a id="source-5"></a> [Step block](../../pkg/prettylog/stepview/stepview.go#L300-L317) — `drawLocked` terminal-row truncation.
 6. <a id="source-6"></a> [Renderer controls](../../pkg/prettylog/wrap_test.go#L1) — hanging indent, resize, Unicode/colour and byte parity.
 7. <a id="source-7"></a> [PTY adapter controls](../../internal/logging/terminal_width_test.go#L1) — live column probes and non-terminal opt-out.
