@@ -73,12 +73,12 @@ if in_box curl -sS --max-time 5 -o /dev/null https://generativelanguage.googleap
 fi
 for _attempt in {1..10}; do
 	log_output="$("$YOLOCTL" box logs "$BOX" --space "$SMOKE_SPACE" 2>&1)"
-	if grep -q "binary '/usr/bin/curl' not allowed in policy 'gemini'" <<<"$log_output"; then
+	if smoke_denied_egress "$log_output" gemini /usr/bin/curl generativelanguage.googleapis.com; then
 		break
 	fi
 	sleep 1
 done
-grep -q "binary '/usr/bin/curl' not allowed in policy 'gemini'" <<<"$log_output" ||
+smoke_denied_egress "$log_output" gemini /usr/bin/curl generativelanguage.googleapis.com ||
 	smoke_fail "missing attributed Gemini egress denial"
 smoke_require_allowed_egress "$log_output" gemini /usr/bin/node "${hosts[@]}"
 

@@ -92,7 +92,7 @@ if in_box curl -fsS --max-time 5 -o /dev/null https://registry.npmjs.org/semver 
 	smoke_fail "curl borrowed npm registry egress"
 fi
 logs="$("$YOLOCTL" box logs "$BOX" --space "$SMOKE_SPACE" 2>&1)"
-grep -q "binary '/usr/bin/curl' not allowed in policy 'npm'" <<<"$logs" ||
+smoke_denied_egress "$logs" npm /usr/bin/curl registry.npmjs.org ||
 	smoke_fail "missing attributed curl denial"
 
 diff_output="$("$YOLOCTL" box diff "$BOX" --space "$SMOKE_SPACE" 2>&1)"

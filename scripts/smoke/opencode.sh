@@ -77,7 +77,8 @@ in_box env BUN_BE_BUN=1 opencode -e '
 const res = await fetch("https://registry.npmjs.org/@opencode-ai%2Fplugin", {signal: AbortSignal.timeout(15000)});
 if (!res.ok || (await res.json()).name !== "@opencode-ai/plugin") process.exit(1);
 '
-for host in generativelanguage.googleapis.com registry.npmjs.org; do
+denied_hosts=(generativelanguage.googleapis.com registry.npmjs.org)
+for host in "${denied_hosts[@]}"; do
 if in_box curl -sS --max-time 5 -o /dev/null "https://$host/" 2>/dev/null; then
  smoke_fail "curl borrowed OpenCode egress"
 fi
@@ -90,16 +91,23 @@ req.on("error", () => {process.exitCode = 1});
  smoke_fail "Node borrowed OpenCode egress"
 fi
 done
+# Each program must be refused on at least one of the hosts it tried.
+opencode_denied() {
+ local host
+ for host in "${denied_hosts[@]}"; do
+  smoke_denied_egress "$log_output" opencode "/usr/bin/$1" "$host" && return 0
+ done
+ return 1
+}
 for _attempt in {1..10}; do
  log_output="$("$YOLOCTL" box logs "$BOX" --space "$SMOKE_SPACE" 2>&1)"
- if grep -q "binary '/usr/bin/curl' not allowed in policy 'opencode'" <<<"$log_output" &&
-    grep -q "binary '/usr/bin/node' not allowed in policy 'opencode'" <<<"$log_output"; then
+ if opencode_denied curl && opencode_denied node; then
   break
  fi
  sleep 1
 done
 for binary in curl node; do
- grep -q "binary '/usr/bin/$binary' not allowed in policy 'opencode'" <<<"$log_output" ||
+ opencode_denied "$binary" ||
   smoke_fail "missing attributed OpenCode egress denial for $binary"
 done
 smoke_require_allowed_egress "$log_output" opencode \

@@ -331,11 +331,17 @@ esac
                 self.assertIn(status, result.stderr)
 
     def test_https_requires_allowance_for_each_host_binary_and_policy(self):
-        allowed = ("OCSF NET:OPEN [INFO] ALLOWED /usr/bin/node(156) -> "
+        # The current OpenShell form, as a live box log prints it; the older
+        # "OCSF NET:OPEN [INFO]" form still matches.
+        allowed = ("13:23:59  space>box: ocsf: NET:OPEN ALLOWED /usr/bin/node(0) -> "
                    "api.openai.com:443 [policy:pi engine:opa]")
-        result = self.run_common("smoke_require_allowed_egress", allowed,
-                                 "pi", "/usr/bin/node", "api.openai.com")
-        self.assertEqual(result.returncode, 0, result.stderr)
+        older = ("OCSF NET:OPEN [INFO] ALLOWED /usr/bin/node(156) -> "
+                 "api.openai.com:443 [policy:pi engine:opa]")
+        for logs in (allowed, older):
+            with self.subTest(logs=logs):
+                result = self.run_common("smoke_require_allowed_egress", logs,
+                                         "pi", "/usr/bin/node", "api.openai.com")
+                self.assertEqual(result.returncode, 0, result.stderr)
         for logs in ("", allowed.replace("NET:OPEN", "NET:DENY"),
                      allowed.replace("ALLOWED", "DENIED"),
                      allowed.replace("/usr/bin/node", "/usr/bin/curl"),
@@ -350,6 +356,46 @@ esac
                                  "pi", "/usr/bin/node", "api.openai.com", "auth.openai.com")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("auth.openai.com", result.stderr)
+
+    def test_denied_egress_needs_a_policy_denial_on_a_granted_endpoint(self):
+        # The current OpenShell form, from a live box log: the policy DNS
+        # mapping for the granted host and port, then the program's denial.
+        mapping = ("21:39:23  space>box: ocsf: CONFIG:PUBLISHED Policy DNS mapped "
+                   "api.anthropic.com resolved=160.79.104.10 synthetic=198.18.0.2 "
+                   "ports=443 mapping_id=2d9c8f60-155d-4801-9691-a2e221bc18de")
+        denied = ("21:39:23  warning: space>box: ocsf: NET:OPEN DENIED /usr/bin/curl(0) -> "
+                  "api.anthropic.com:443 [reason:transparent_tcp_policy_denied]")
+        args = ("anthropic", "/usr/bin/curl", "api.anthropic.com")
+        for logs in (mapping + "\n" + denied,
+                     mapping.replace("ports=443", "ports=80,443") + "\n" + denied,
+                     "binary '/usr/bin/curl' not allowed in policy 'anthropic'"):
+            with self.subTest(logs=logs):
+                result = self.run_common("smoke_denied_egress", logs, *args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+        expired = denied.replace("transparent_tcp_policy_denied", "transparent_tcp_mapping_denied")
+        for logs in ("", denied, mapping, mapping + "\n" + expired,
+                     mapping + "\n" + denied.replace("/usr/bin/curl", "/usr/bin/node"),
+                     mapping.replace("api.anthropic.com", "other.example") + "\n" + denied,
+                     mapping.replace("ports=443", "ports=8443") + "\n" + denied,
+                     mapping + "\n" + denied.replace(":443", ":8443"),
+                     mapping + "\n" + denied.replace("DENIED", "ALLOWED"),
+                     "binary '/usr/bin/curl' not allowed in policy 'other'"):
+            with self.subTest(logs=logs):
+                result = self.run_common("smoke_denied_egress", logs, *args)
+                self.assertNotEqual(result.returncode, 0)
+
+    def test_policy_denied_finds_a_refused_binary_in_either_form(self):
+        # go-modules: curl must be refused and the go binary never.
+        curl = ("21:39:23  warning: space>box: ocsf: NET:OPEN DENIED /usr/bin/curl(0) -> "
+                "proxy.golang.org:443 [reason:transparent_tcp_policy_denied]")
+        go_now = curl.replace("/usr/bin/curl", "/usr/local/go/bin/go")
+        go_older = "binary '/usr/local/go/bin/go' not allowed in policy 'go-modules'"
+        go_expired = go_now.replace("transparent_tcp_policy_denied", "transparent_tcp_mapping_denied")
+        for logs, denied in ((curl, False), (curl + "\n" + go_now, True),
+                             (curl + "\n" + go_older, True), (curl + "\n" + go_expired, False)):
+            with self.subTest(logs=logs):
+                result = self.run_common("smoke_policy_denied", logs, "/usr/local/go/bin/go")
+                self.assertEqual(result.returncode == 0, denied, result.stderr)
 
     def matrix_fixture(self):
         shutil.copy(SCRIPTS / "vm-backends.sh", self.scripts)

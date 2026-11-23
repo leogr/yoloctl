@@ -140,7 +140,7 @@ if in_box curl -fsS --max-time 5 -o /dev/null https://pypi.org/simple/packaging/
 	smoke_fail "curl borrowed PyPI egress"
 fi
 logs="$("$YOLOCTL" box logs "$BOX" --space "$SMOKE_SPACE" 2>&1)"
-grep -q "binary '/usr/bin/curl' not allowed in policy 'pypi'" <<<"$logs" ||
+smoke_denied_egress "$logs" pypi /usr/bin/curl pypi.org ||
 	smoke_fail "missing attributed curl denial"
 
 diff_output="$("$YOLOCTL" box diff "$BOX" --space "$SMOKE_SPACE" 2>&1)"

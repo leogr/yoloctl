@@ -32,12 +32,44 @@ smoke_require_allowed_egress() {
 	local logs="$1" policy="$2" binary="$3" host
 	shift 3
 	for host in "$@"; do
-		if ! printf '%s\n' "$logs" | grep -F 'OCSF NET:OPEN ' |
+		if ! printf '%s\n' "$logs" | grep -F 'NET:OPEN ' |
 			grep -F "ALLOWED ${binary}(" |
 			grep -F -- "-> ${host}:443 [policy:${policy} " >/dev/null; then
 			smoke_fail "missing attributed ${policy} egress allowance for ${binary} -> ${host}:443"
 		fi
 	done
+}
+
+# A program refused on a policy-granted endpoint, in either log form: the
+# sentence naming the policy ("binary 'B' not allowed in policy 'P'"), or the
+# current OpenShell pair. That pair names the process and destination, not the
+# policy: a host name gets a policy DNS mapping only when a policy grants it
+# (docs/digests/policy-dns.md), so a mapping published for HOST and PORT plus
+# BINARY denied there with reason transparent_tcp_policy_denied shows the
+# program was refused on a granted endpoint. An expired mapping
+# (transparent_tcp_mapping_denied) says nothing about the policy and does not
+# match. Returns 0 when found, so callers can wait for the asynchronous log.
+smoke_denied_egress() {
+	local logs="$1" policy="$2" binary="$3" host="$4" port="${5:-443}"
+	if printf '%s\n' "$logs" | grep -F "binary '${binary}' not allowed in policy '${policy}'" >/dev/null; then
+		return 0
+	fi
+	printf '%s\n' "$logs" | grep -F "CONFIG:PUBLISHED Policy DNS mapped ${host} " |
+		grep -E "ports=([0-9]+,)*${port}([ ,]|$)" >/dev/null &&
+		printf '%s\n' "$logs" | grep -F "NET:OPEN DENIED ${binary}(" |
+		grep -F -- ") -> ${host}:${port} [reason:transparent_tcp_policy_denied]" >/dev/null
+}
+
+# Any policy denial of BINARY, in either log form, for checks that a program
+# was never refused: the sentence, or a current DENIED line with reason
+# transparent_tcp_policy_denied. Returns 0 when one is found.
+smoke_policy_denied() {
+	local logs="$1" binary="$2"
+	if printf '%s\n' "$logs" | grep -F "binary '${binary}' not allowed" >/dev/null; then
+		return 0
+	fi
+	printf '%s\n' "$logs" | grep -F "NET:OPEN DENIED ${binary}(" |
+		grep -F "[reason:transparent_tcp_policy_denied]" >/dev/null
 }
 
 # Inspect the IMAGE, bypassing the entrypoint: inspecting the live box would

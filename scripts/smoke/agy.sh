@@ -83,7 +83,7 @@ if in_box curl -sS --max-time 5 -o /dev/null https://daily-cloudcode-pa.googleap
 	smoke_fail "curl borrowed native agy egress"
 fi
 logs="$("$YOLOCTL" box logs "$BOX" --space "$SMOKE_SPACE" 2>&1)"
-grep -q "binary '/usr/bin/curl' not allowed in policy 'agy'" <<<"$logs" ||
+smoke_denied_egress "$logs" agy /usr/bin/curl daily-cloudcode-pa.googleapis.com ||
 	smoke_fail "missing attributed curl denial"
 in_box python3 -c '
 import pathlib

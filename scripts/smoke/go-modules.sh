@@ -89,16 +89,16 @@ fi
 logs=""
 for _attempt in {1..10}; do
 	logs="$("$YOLOCTL" box logs "$BOX" --space "$SMOKE_SPACE" 2>&1 || true)"
-	if grep -q "binary '/usr/bin/curl' not allowed in policy 'go-modules'" <<<"$logs"; then
+	if smoke_denied_egress "$logs" go-modules /usr/bin/curl proxy.golang.org; then
 		break
 	fi
 	sleep 1
 done
-if ! grep -q "binary '/usr/bin/curl' not allowed in policy 'go-modules'" <<<"$logs"; then
+if ! smoke_denied_egress "$logs" go-modules /usr/bin/curl proxy.golang.org; then
 	printf '%s\n' "$logs" | tail -20 >&2
 	smoke_fail "missing attributed curl denial"
 fi
-if grep -q "binary '/usr/local/go/bin/go' not allowed" <<<"$logs"; then
+if smoke_policy_denied "$logs" /usr/local/go/bin/go; then
 	smoke_fail "the go binary was denied module egress"
 fi
 

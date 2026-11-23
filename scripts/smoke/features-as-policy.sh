@@ -58,9 +58,9 @@ if ! grep -q "DENIED /usr/bin/curl" <<<"$log_output"; then
 	printf '%s\n' "$log_output" | tail -20 >&2
 	smoke_fail "the sandbox log did not record the curl denial"
 fi
-if ! grep -q "binary '/usr/bin/curl' not allowed in policy 'anthropic'" <<<"$log_output"; then
+if ! smoke_denied_egress "$log_output" anthropic /usr/bin/curl api.anthropic.com; then
 	printf '%s\n' "$log_output" | tail -20 >&2
-	smoke_fail "the denial log did not attribute curl to the Anthropic policy"
+	smoke_fail "the denial log did not show curl refused on the Anthropic policy's endpoint"
 fi
 
 smoke_info "asserting PTY allocation is denied without fs.pty.allocate"
