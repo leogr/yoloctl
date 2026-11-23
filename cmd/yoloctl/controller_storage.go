@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/catalogsnapshot"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/resources"
@@ -156,7 +157,7 @@ func collectControllerStorage(ctx context.Context) error {
 		return err
 	}
 	defer cleanup()
-	spaceenv.UseCatalogSnapshot(catalogs)
+	catalogsnapshot.Use(catalogs)
 	boot, err := imageVMIncarnation(c.DiskID)
 	if err != nil {
 		return err
@@ -243,7 +244,7 @@ func imagePreflightWorker(ctx context.Context) (result error) {
 		return err
 	}
 	defer cleanup()
-	spaceenv.UseCatalogSnapshot(catalogs)
+	catalogsnapshot.Use(catalogs)
 	disk, err := storagegc.RootDisk()
 	if err != nil {
 		return err

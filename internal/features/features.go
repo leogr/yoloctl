@@ -280,6 +280,10 @@ func BuiltinNames() []string {
 // Custom features may NOT shadow a built-in name (LoadUserFeatures errors on a
 // collision), so the two namespaces are disjoint.
 func Lookup(name string) (Feature, error) {
+	return lookup(name, LoadUserFeatures)
+}
+
+func lookup(name string, load func() (map[string]Feature, error)) (Feature, error) {
 	if ocifeature.IsReference(name) {
 		if _, err := ocifeature.Parse(name); err != nil {
 			return Feature{}, err
@@ -289,7 +293,7 @@ func Lookup(name string) (Feature, error) {
 	if name == PrivilegedRuntime {
 		return privilegedRuntime, nil
 	}
-	userFeatures, err := LoadUserFeatures()
+	userFeatures, err := load()
 	if err != nil {
 		return Feature{}, fmt.Errorf("load user features: %w", err)
 	}
@@ -302,7 +306,7 @@ func Lookup(name string) (Feature, error) {
 	if removedFeatures[name] {
 		return Feature{}, fmt.Errorf("feature %q was removed with the Repartee client and its airc-box launcher: use the managed room (yoloctl chat) for chat, yolo.chat.skill for the AIRC tools, and edit this box's features and session_command", name)
 	}
-	return Feature{}, fmt.Errorf("unknown feature %q (known: %s)", name, strings.Join(Names(), ", "))
+	return Feature{}, fmt.Errorf("unknown feature %q (known: %s)", name, strings.Join(names(load), ", "))
 }
 
 // removedFeatures are former built-ins that only get a clearer error. They
@@ -311,7 +315,11 @@ var removedFeatures = map[string]bool{"yolo.chat.server": true, "yolo.chat.repar
 
 // Names returns every known feature name (embedded + user), sorted.
 func Names() []string {
-	userFeatures, _ := LoadUserFeatures()
+	return names(LoadUserFeatures)
+}
+
+func names(load func() (map[string]Feature, error)) []string {
+	userFeatures, _ := load()
 	seen := make(map[string]struct{}, len(registry)+len(userFeatures))
 	out := make([]string, 0, len(registry)+len(userFeatures))
 	for n := range userFeatures {
@@ -458,7 +466,7 @@ func InstallPlan(base string, featureNames []string, plans ...ocifeature.Plan) (
 	}
 	resolved := make([]Feature, 0, len(featureNames))
 	for _, n := range featureNames {
-		f, err := LookupRuntime(n)
+		f, err := lookupRuntime(n, loadSnapshot)
 		if err != nil {
 			return "", nil, false, err
 		}

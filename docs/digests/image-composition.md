@@ -2,6 +2,8 @@
 
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; agent npm installer `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; apt metadata caching/repository consolidation verified on `9101409dbbb5f2febbe3bdf2f581dff7775ff43b` and accompanying changes; APT-compatible smoke probe correction on `a3827ba3b050fc0e7641586704954c4fc76f0241` and accompanying changes. GitHub CLI install on `804b5adcd478a04b234daa3d344587fd58525df1` and accompanying changes. State bind parents on `bfa83927136293f6dfdbfe32ddf7eca3b235a2c8` and accompanying changes.
 
+Install-plan catalog reuse verified on `5a4b9acf13bce7f18501300ad49117613ee08a91` and accompanying changes.
+
 [FACT] Composition prepares available sandbox identities before installation,
 using the space owner's UID/GID without account/workdir mounts. npm owns packages
 in its install layer; the agent's own package is installed by and owned by
@@ -12,6 +14,10 @@ References hash builder version, base, recipe and identity; policy-only features
 are hash-neutral. Cached images are reused; forced builds refresh feature layers
 only. Custom bases retain normal runtime handling. [1](#source-1) [2](#source-2)
 [3](#source-3) [4](#source-4)
+
+[FACT] Install planning loads the private custom Feature catalog at the first
+ordinary lookup and reuses that load for the worker's snapshot. OCI references
+and internal setup features bypass the ordinary catalog. [27](#source-27) [28](#source-28)
 
 [FACT] A nested managed bind below `/home/sandbox` adds its parent directories
 to the image recipe. When this is the sole install, only new parents receive
@@ -79,29 +85,31 @@ composed image. [23](#source-23) [24](#source-24)
 
 ## Sources
 
-1. <a id="source-1"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L48) — prepared identity, repair, hashing and build selection.
+1. <a id="source-1"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L45-L81) — prepared identity, repair and hashing. Build selection starts at `EnsureComposedImage` on line 98.
 2. <a id="source-2"></a> [internal/agentboximage/ensure.go](../../internal/agentboximage/ensure.go#L54-L105) — `EnsureImage`, `imageRefreshArgs`.
 3. <a id="source-3"></a> [assets/entrypoint_test.go](../../assets/entrypoint_test.go#L11) — prepared-identity no-op, group collisions and rejection before mutation.
-4. <a id="source-4"></a> [Image identity regressions](../../internal/agentboximage/composed_test.go#L48) — identity cache separation and native worker build/plan agreement.
+4. <a id="source-4"></a> [Image identity regressions](../../internal/agentboximage/composed_test.go#L50-L78) — identity cache separation. `TestComposedImageRef_UsesSpaceOwner` on line 127 checks native worker build and plan agreement.
 5. <a id="source-5"></a> [BuildKit v0.31.2 bridge](https://github.com/moby/buildkit/blob/v0.31.2/solver/llbsolver/bridge.go#L137-L150) — cache mount reset before an uncached solve.
-6. <a id="source-6"></a> [npm installation](../../internal/features/features.go#L506-L522) — shared `npmPackageInstallDockerfile`.
+6. <a id="source-6"></a> [npm installation](../../internal/features/features.go#L542) — shared `npmPackageInstallDockerfile`.
 7. <a id="source-7"></a> [Dockerfile reference](https://docs.docker.com/reference/dockerfile/#arg) — cache mounts/GC, inherited ARGs and cache invalidation.
 8. <a id="source-8"></a> [Base Dockerfile](../../assets/containers/agentbox/Dockerfile#L28) — apt cache, retries and strict index refresh.
 9. <a id="source-9"></a> [Base recipe regression](../../assets/base_image_test.go#L11) — repository/index/install failure propagation.
 10. <a id="source-10"></a> [Apt installers](../../internal/features/apt.go#L3-L14) — shared locked metadata/archive mounts and strict refresh/install recipe; callers in codex.go, pi.go, opencode.go and features.go; conditional Python fallback in agent_observe.go.
 11. <a id="source-11"></a> [Apt regressions](../../internal/features/apt_test.go#L11-L69) — builtin cache coverage and unavailable-index failure before installation.
 12. <a id="source-12"></a> [scripts/smoke/image-ensure.sh](../../scripts/smoke/image-ensure.sh#L30) — ownership-layer measurement, forced rebuild/cache checks and maintenance.
-13. <a id="source-13"></a> [Image smoke probe](../../scripts/smoke/common.sh#L46) — `smoke_check_image_identity`; no account/project mounts or agent workload.
+13. <a id="source-13"></a> [Image smoke probe](../../scripts/smoke/common.sh#L78-L101) — `smoke_check_image_identity`; no account/project mounts or agent workload.
 14. <a id="source-14"></a> [Cache probe regression](../../scripts/test_image_cache_probe.py#L1-L97) — exact smoke shell probe, real isolated APT update with default cleanup, unchanged indexes and reset-cache rejection.
 15. <a id="source-15"></a> [Antigravity adapter](agy.md) — native installation, auth and runtime contracts.
 16. <a id="source-16"></a> [Pi adapter](pi.md) — install, state, provider and runtime contracts.
 17. <a id="source-17"></a> [OpenCode adapter](opencode.md) — native runtime, account and validation contracts.
 18. <a id="source-18"></a> [OCI plan](../../internal/ocifeature/plan.go#L312) — `Resolve`; `Plan.Dockerfile` generation.
-19. <a id="source-19"></a> [Codex installer](../../internal/features/codex.go#L3) — `codexInstallDockerfile`.
+19. <a id="source-19"></a> [Codex installer](../../internal/features/codex.go#L6-L8) — `codexInstall`.
 20. <a id="source-20"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L14) — default args delegate confinement to OpenShell.
 21. <a id="source-21"></a> [Codex install regression](../../internal/features/features_test.go#L56) — `TestCodexFeatureInstallsBubblewrap`.
-22. <a id="source-22"></a> [AWS feature](../../internal/features/aws.go#L1) — embedded installer/key recipe; configuration is described in `bedrock.md`.
+22. <a id="source-22"></a> [AWS feature](../../internal/features/aws.go#L9-L26) — embedded installer/key recipe; configuration is described in `bedrock.md`.
 23. <a id="source-23"></a> [GitHub CLI feature](../../internal/features/github-install.sh#L1-L36) — key check, keyring, origin pin, install; recipe `github.go`.
 24. <a id="source-24"></a> [GitHub CLI Linux install](https://github.com/cli/cli/blob/trunk/docs/install_linux.md) — published fingerprints and keyring checksums, checked 2026-11-20.
 25. <a id="source-25"></a> [Runtime recipe](../../internal/agentbox/privileged.go#L30-L55) — selects setup for managed state.
 26. <a id="source-26"></a> [State parents installer](../../internal/features/agent_state_parents.go#L20-L91) — directory selection and creation.
+27. <a id="source-27"></a> [Install planning](../../internal/features/features.go#L463-L498) — `InstallPlan`; `lookup` at line 286 resolves OCI and privileged setup before custom Features.
+28. <a id="source-28"></a> [Runtime lookup](../../internal/features/agentnpm.go#L32-L40) — `lookupRuntime` handles agent npm and state-parent setup before `lookup`.

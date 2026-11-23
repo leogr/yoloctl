@@ -11,7 +11,7 @@ import (
 )
 
 // UNWIRED accessor for the future exact SDK call AFTER ordinary catalog/context
-// setup (executeControllerWorker AFTER UseCatalogSnapshot). It does not install
+// setup, after executeControllerWorker selects the catalog snapshot. It does not install
 // a context value, set Server.PIDAnchor, call16 or create a source on fallback.
 // The retained original early candidate alone owns token Close.
 func borrowControllerWorkerSDKSource(ctx context.Context, use func(*openshell.NativeWorkerSource) error) error {

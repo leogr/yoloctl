@@ -2,6 +2,8 @@
 
 Verification: `272abb082790962572505495756706d40d73f06c` and accompanying N1/N2 changes; acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes; re-read cited sources when changing behavior. Exec-preflight re-read at `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes.
 
+Catalog load reuse verified on `5a4b9acf13bce7f18501300ad49117613ee08a91` and accompanying changes.
+
 [FACT] Public clients reuse the service's Cobra definitions and route registered
 operations to one root controller inside the selected VM. Host clients use a
 fixed adapter SSH bridge to its private admin socket; operator clients use their
@@ -74,6 +76,15 @@ catalog digest and boot generation, rejecting concurrent or identical-inode
 replacement. Each worker uses a private catalog snapshot from two matching
 inventories of the read-only host catalog directories. [9](#source-9)
 [10](#source-10) [11](#source-11)
+
+[FACT] The worker lazily shares one custom capability load across effective-set
+additions and OCI folder grant calculations. Install planning lazily shares one
+ordinary Feature load. Both retain load errors for the private snapshot's
+lifetime. Without an installed snapshot those paths read the live catalogs.
+Effective sets borrow the nested slices of cached capabilities as read-only
+data for the worker's lifetime.
+The cache lives outside the OpenShell helper's compiled source inputs.
+[38](#source-38) [39](#source-39) [40](#source-40) [41](#source-41)
 
 [FACT] A drain persists maintenance before waiting for admitted setup and a
 running recovery check; new work is refused except `box stop`, which is admitted
@@ -170,3 +181,7 @@ this test seam does not change server authorization. [19](#source-19)
 36. <a id="source-36"></a> [Log frames](../../internal/controller/log_transport.go#L1) — `LogVerbosity`, `frameLog`, `relayWorkerLog`, `joinWorkerLog`; client.go `case "log"`/`"exit"`, `ExitError.Rendered`/`State`, `OutcomeRendered`; server.go exit `State`.
 
 37. <a id="source-37"></a> [Deployment readiness](../../cmd/yoloctl/controller_deploy.go#L349) — `controllerReadyTimeout`, `waitControllerReady`.
+38. <a id="source-38"></a> [Snapshot loader](../../internal/catalogsnapshot/catalog.go#L14-L46) — `Use`, `Loader`; `executeControllerWorker` selects the private copy before dispatch.
+39. <a id="source-39"></a> [Capability consumers](../../internal/capabilities/capabilities.go#L451-L540) — `CatalogNetworkBinaries`, `EffectiveSet.Add`, `Capabilities`, `Effective`; reader check in `cmd/yoloctl/catalog_snapshot_consumers_test.go`.
+40. <a id="source-40"></a> [Feature install planning](../../internal/features/features.go#L463-L493) — `InstallPlan`, using the snapshot loader from `internal/features/user.go`.
+41. <a id="source-41"></a> [Helper input audit](../../scripts/check-helper-inputs.py#L37-L76) — compares the compiled identity and actual Linux amd64/arm64 production inputs against Go's selected packages.

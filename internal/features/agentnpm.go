@@ -26,13 +26,17 @@ func AgentNpmRuntime(pkg string) string {
 
 // LookupRuntime resolves the composer's internal setup and ordinary features.
 func LookupRuntime(name string) (Feature, error) {
+	return lookupRuntime(name, LoadUserFeatures)
+}
+
+func lookupRuntime(name string, load func() (map[string]Feature, error)) (Feature, error) {
 	if f, ok, err := agentNpmRuntimeFeature(name); ok {
 		return f, err
 	}
 	if f, ok, err := agentStateParentsFeature(name); ok {
 		return f, err
 	}
-	return Lookup(name)
+	return lookup(name, load)
 }
 
 func agentNpmRuntimeFeature(name string) (Feature, bool, error) {

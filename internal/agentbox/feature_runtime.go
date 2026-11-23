@@ -72,19 +72,11 @@ func featureGrants(plan ocifeature.Plan, eff *capabilities.EffectiveSet, mounts 
 	// Every network-granted executable in the catalog, not only the box's
 	// current grants: a program written over one while the box lacks the grant
 	// would otherwise hold it once the capability is added.
-	var binaries []string
-	add := func(capab capabilities.Capability) {
+	binaries := capabilities.CatalogNetworkBinaries()
+	for _, capab := range eff.Capabilities() {
 		for _, g := range capab.Network {
 			binaries = append(binaries, g.Binaries...)
 		}
-	}
-	for _, name := range capabilities.Names() {
-		if capab, err := capabilities.Lookup(name); err == nil {
-			add(capab)
-		}
-	}
-	for _, capab := range eff.Capabilities() {
-		add(capab)
 	}
 	var out []FeatureGrant
 	for _, cand := range plan.PathCandidates() {

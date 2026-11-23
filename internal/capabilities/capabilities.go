@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/agentnpm"
+	"github.com/leogr/yoloctl/internal/catalogsnapshot"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/nativerelease"
 	"github.com/leogr/yoloctl/internal/operator"
@@ -372,10 +373,18 @@ func IsBuiltin(name string) bool {
 // fast path. Returns an error naming the known capabilities when name resolves
 // to neither, and ErrRetiredPrivileged for RetiredPrivilegedCapability.
 func Lookup(name string) (Capability, error) {
+	return lookup(name, LoadUser)
+}
+
+// Effective sets and OCI folder checks borrow these definitions. Their
+// nested slices are read-only for the lifetime of the worker's snapshot.
+var loadSnapshot = catalogsnapshot.Loader(LoadUser)
+
+func lookup(name string, load func() (map[string]Capability, error)) (Capability, error) {
 	if name == RetiredPrivilegedCapability {
 		return Capability{}, ErrRetiredPrivileged
 	}
-	user, err := LoadUser()
+	user, err := load()
 	if err != nil {
 		return Capability{}, fmt.Errorf("load user capabilities: %w", err)
 	}
@@ -385,7 +394,7 @@ func Lookup(name string) (Capability, error) {
 	if c, ok := registry[name]; ok {
 		return c, nil
 	}
-	return Capability{}, fmt.Errorf("unknown capability %q (known: %s)", name, strings.Join(Names(), ", "))
+	return Capability{}, fmt.Errorf("unknown capability %q (known: %s)", name, strings.Join(names(load), ", "))
 }
 
 // BuiltinNetworkBinaries lists, sorted and unique, every executable path or
@@ -415,7 +424,11 @@ func BuiltinNames() []string {
 
 // Names returns every known capability name (built-in + user), sorted.
 func Names() []string {
-	user, _ := LoadUser()
+	return names(LoadUser)
+}
+
+func names(load func() (map[string]Capability, error)) []string {
+	user, _ := load()
 	seen := make(map[string]struct{}, len(registry)+len(user))
 	out := make([]string, 0, len(registry)+len(user))
 	for n := range user {
@@ -429,6 +442,21 @@ func Names() []string {
 		out = append(out, n)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// CatalogNetworkBinaries lists binaries in capability-name order, preserving
+// each capability's grant and binary order. An unreadable private catalog
+// contributes no binaries, including those from built-ins.
+func CatalogNetworkBinaries() []string {
+	var out []string
+	for _, name := range names(loadSnapshot) {
+		if c, err := lookup(name, loadSnapshot); err == nil {
+			for _, grant := range c.Network {
+				out = append(out, grant.Binaries...)
+			}
+		}
+	}
 	return out
 }
 
@@ -465,7 +493,7 @@ func NewEffectiveSet() *EffectiveSet {
 // Add resolves name and records origin. Idempotent per (name): the grant is
 // added once; origins accumulate (deduped).
 func (s *EffectiveSet) Add(name string, origin Origin) error {
-	c, err := Lookup(name)
+	c, err := lookup(name, loadSnapshot)
 	if err != nil {
 		return err
 	}
@@ -487,6 +515,8 @@ func (s *EffectiveSet) Has(name string) bool {
 }
 
 // Capabilities returns the effective capabilities in insertion order.
+// Treat each capability's nested slices as read-only. An installed snapshot
+// shares them across effective sets for the lifetime of the worker.
 func (s *EffectiveSet) Capabilities() []Capability {
 	out := make([]Capability, 0, len(s.order))
 	for _, n := range s.order {
@@ -496,7 +526,8 @@ func (s *EffectiveSet) Capabilities() []Capability {
 }
 
 // Effective returns the effective capabilities with their origins, sorted by
-// name for deterministic output.
+// name for deterministic output. Treat the nested slices as read-only.
+// An installed snapshot shares the capability data across effective sets.
 func (s *EffectiveSet) Effective() []EffectiveCapability {
 	names := append([]string(nil), s.order...)
 	sort.Strings(names)

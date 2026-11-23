@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/atomicfile"
+	"github.com/leogr/yoloctl/internal/catalogsnapshot"
 	"github.com/leogr/yoloctl/internal/layout"
 	"gopkg.in/yaml.v3"
 
@@ -30,11 +31,12 @@ import (
 //
 // Errors include the offending file path so users see what to fix.
 //
-// Not cached: every call re-reads the dir. The dir is on the local
-// filesystem and contains a handful of small YAML files; the cost
-// is sub-millisecond. If feature discovery becomes hot, a
-// sync.Once-guarded cache lands here without API changes.
+// Every call re-reads the directory.
 func LoadUserFeatures() (map[string]Feature, error) {
+	return loadUserFeatures(false)
+}
+
+func loadUserFeatures(skipEmptyMap bool) (map[string]Feature, error) {
 	dir, err := layout.FeaturesDir()
 	if err != nil {
 		return nil, err
@@ -45,6 +47,9 @@ func LoadUserFeatures() (map[string]Feature, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if skipEmptyMap && len(entries) == 0 {
+		return nil, nil
 	}
 	out := make(map[string]Feature, len(entries))
 	for _, e := range entries {
@@ -82,6 +87,10 @@ func LoadUserFeatures() (map[string]Feature, error) {
 	}
 	return out, nil
 }
+
+var loadSnapshot = catalogsnapshot.Loader(func() (map[string]Feature, error) {
+	return loadUserFeatures(true)
+})
 
 // validateUserFeature checks a user feature's install + capability shape.
 // Network/filesystem access is no longer inline (it lives in

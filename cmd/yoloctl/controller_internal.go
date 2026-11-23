@@ -19,6 +19,7 @@ import (
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/atomicfile"
+	"github.com/leogr/yoloctl/internal/catalogsnapshot"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/logging"
@@ -222,7 +223,7 @@ func runControllerInternal(ctx context.Context, args []string) error {
 			return err
 		}
 		defer cleanup()
-		spaceenv.UseCatalogSnapshot(catalogs)
+		catalogsnapshot.Use(catalogs)
 		return validateControllerGrants(mounts)
 	case "stop-workloads":
 		space := spaceenv.Current().Space
@@ -702,7 +703,7 @@ func executeControllerWorker(ctx context.Context, work controller.WorkerInput) e
 		return err
 	}
 	defer cleanup()
-	spaceenv.UseCatalogSnapshot(catalogs)
+	catalogsnapshot.Use(catalogs)
 	if state, ok := ctx.Value(warmKey{}).(*imageWarmState); ok {
 		state.snapshot = digest
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/agentsession"
+	"github.com/leogr/yoloctl/internal/catalogsnapshot"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/features"
@@ -124,7 +125,7 @@ func collectCodexObservation(ctx context.Context) error {
 		return err
 	}
 	defer cleanup()
-	spaceenv.UseCatalogSnapshot(catalogs)
+	catalogsnapshot.Use(catalogs)
 	targets, err := codexObserveTargets(ctx, container.New(c.Space), c.Space)
 	if err != nil {
 		return err

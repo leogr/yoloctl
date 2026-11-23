@@ -3,6 +3,7 @@
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; ignored runtime requests verified on `1faf621b2de05046711d5177863d326146cf122b` and accompanying changes; Feature folders and environment verified on `0a1e47d47001eab39274faf83f3af36419b04f2b` and accompanying changes; re-read cited sources when changing behavior.
 
 Environment validation verified on `4624036d2ea68a359c1e308a4f6b2651921ffba5` and accompanying changes.
+Catalog binary lookup verified on `5a4b9acf13bce7f18501300ad49117613ee08a91` and accompanying changes.
 
 [FACT] `box create`, `box copy`, `box set` and `image build` accept
 repeatable `--feature` names or explicit registry references alongside
@@ -67,6 +68,11 @@ custom capability's executable reached only through a link is checked by its
 declared name. Other boxes keep folders and image; every box with
 `network.cargo` gains `/usr/local/rustup/toolchains/*/bin/cargo`. [17](#source-17) [18](#source-18)
 
+[FACT] Folder checks visit the catalog's binaries in capability-name order,
+preserving grant and binary order, then visit the box's effective grants. A
+malformed private capability catalog contributes zero binaries to the first
+pass, including built-in binaries. [17](#source-17) [19](#source-19)
+
 [FACT] The expanded `containerEnv` (Dockerfile order, `${NAME}`/`$NAME`, Feature
 values only; 4 KiB per value, 64 KiB and 1024 variables per plan; unresolvable,
 oversized or other `$` forms unset the key; `PATH`, reserved and agent-profile
@@ -119,3 +125,4 @@ upstream Feature or either CPU architecture. [8](#source-8) [9](#source-9) [15](
 16. <a id="source-16"></a> [Runtime notice](../../cmd/yoloctl/feature_runtime_notice.go#L14) — `noticeIgnoredRuntime`; tests `internal/ocifeature/runtime_test.go`, `cmd/yoloctl/feature_runtime_notice_test.go`.
 17. <a id="source-17"></a> [Feature runtime](../../internal/agentbox/feature_runtime.go#L59) — `FeatureRuntimeOf`, `featureGrants`, `FeatureEnvironment`, `workloadLiterals`; `compilePolicy`; `ChildEnvironmentWithFeatures`; tests `feature_runtime_test.go`, golden `oci_go_rust.yaml`.
 18. <a id="source-18"></a> [Expansion and folders](../../internal/ocifeature/runtime_env.go#L79) — `Environment`, `PathCandidates`, `ProtectedPath`, `linkGuard`; tests `runtime_env_test.go`.
+19. <a id="source-19"></a> [Catalog binaries and parity](../../internal/capabilities/capabilities.go#L451-L461) — `CatalogNetworkBinaries`; differential cases in `internal/agentbox/catalog_snapshot_test.go`.
