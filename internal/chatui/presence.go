@@ -152,10 +152,18 @@ func (m *Model) addPresence(kind presenceKind, name string) {
 			kept = append(kept, ev)
 		}
 	}
-	m.presence = kept
-	if len(m.presence) > maxPresenceEvents {
-		m.presence = append([]presenceEvent(nil), m.presence[len(m.presence)-maxPresenceEvents:]...)
+	if extra := len(kept) - maxPresenceEvents; extra > 0 {
+		// The first overflow moves the notices into a buffer that holds
+		// the bound and the next notice; later ones trim inside it.
+		if cap(kept) > maxPresenceEvents+1 {
+			m.presence = make([]presenceEvent, maxPresenceEvents, maxPresenceEvents+1)
+			copy(m.presence, kept[extra:])
+			return
+		}
+		kept = kept[:copy(kept, kept[extra:])]
 	}
+	clear(m.presence[len(kept):]) // release the notices left behind
+	m.presence = kept
 }
 
 func (ev presenceEvent) text() (string, string) {
