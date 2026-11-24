@@ -3,6 +3,7 @@ package chatui
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/leogr/yoloctl/internal/hostintegration"
@@ -119,8 +120,16 @@ func messageKey(msg Message) string {
 
 // oneLine neutralizes text for single-row chrome: names, notices, labels.
 func oneLine(s string) string {
-	return strings.NewReplacer("\n", " ", "\t", " ").Replace(plain(s))
+	oneLineOnce.Do(func() { oneLineSpaces = strings.NewReplacer("\n", " ", "\t", " ") })
+	return oneLineSpaces.Replace(plain(s))
 }
+
+// oneLineSpaces is built once, at first use, so a command that shows no
+// chat never builds it.
+var (
+	oneLineOnce   sync.Once
+	oneLineSpaces *strings.Replacer
+)
 
 // draftLayout wraps the draft into composer rows of width cells. A fold is
 // one unbreakable chip that moves to the next row rather than splitting. It

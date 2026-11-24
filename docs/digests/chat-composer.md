@@ -36,7 +36,7 @@ starts back with no replay. [6](#source-6)
 
 1. <a id="source-1"></a> [Model and integration types](../../internal/chatui/model.go#L34) — messages, `Options`, `Update`, `submit`, `delivery`, `incoming`, `append`, `evict`.
 2. <a id="source-2"></a> [Editor](../../internal/chatui/editor.go#L12) — bounds, `cleanInput`, grapheme editing and undo.
-3. <a id="source-3"></a> [Draft layout](../../internal/chatui/render.go#L111) — `draftLayout`, shared by cursor and composer.
+3. <a id="source-3"></a> [Draft layout](../../internal/chatui/render.go#L137) — `draftLayout`, shared by cursor and composer.
 4. <a id="source-4"></a> [Composer readiness](../../internal/chatui/view.go#L534-L742) — `composerStatus`, `inputRow`, `footer`.
 5. <a id="source-5"></a> [Disconnected reopen](../../internal/chatui/reopen.go#L10) — `reopenOffered`, `reopenKey`, `reopen`, `reopenFooter`; `connection` in model.go marks uncertain delivery before explicit reconnect. `reopen_test.go` covers draft/reply/history retention, input priority, errors, duplicate activation and telemetry/deleted-channel exclusion.
 6. <a id="source-6"></a> [Own availability](../../internal/chatui/availability.go#L1) — `availabilityCommand`, `availability`, `availabilitySummary`; `controlDone` in channels.go preserves the original draft.
