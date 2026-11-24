@@ -110,7 +110,12 @@ func URLAt(text string, i int) (end int, link string, ok bool) {
 	if !strings.HasPrefix(text[i:], "https://") && !strings.HasPrefix(text[i:], "http://") {
 		return 0, "", false
 	}
-	end = i + strings.IndexAny(text[i:]+" ", " \t")
+	end = strings.IndexAny(text[i:], " \t")
+	if end < 0 {
+		end = len(text)
+	} else {
+		end += i
+	}
 	link = strings.TrimRight(text[i:end], ").,;:]>\"'")
 	return end, link, true
 }

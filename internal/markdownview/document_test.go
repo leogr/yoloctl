@@ -116,3 +116,25 @@ func TestLayoutReportsTheExistingRowLimit(t *testing.T) {
 		t.Fatal("existing limit marker/metadata changed", layout.Limited, len(layout.Rows))
 	}
 }
+
+func TestBareURLBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		text   string
+		i, end int
+		link   string
+		ok     bool
+	}{
+		{"", 0, 0, "", false},
+		{"plain text", 0, 0, "", false},
+		{"http://a", 0, len("http://a"), "http://a", true},
+		{"see https://a).,] next", 4, len("see https://a).,]"), "https://a", true},
+		{"see https://a)\tnext url", 4, len("see https://a)"), "https://a", true},
+		{"https://a\u00a0b", 0, len("https://a\u00a0b"), "https://a\u00a0b", true},
+		{"https://a\xff>", 0, len("https://a\xff>"), "https://a\xff", true},
+	} {
+		end, link, ok := URLAt(tc.text, tc.i)
+		if end != tc.end || link != tc.link || ok != tc.ok {
+			t.Errorf("URLAt(%q, %d) = (%d, %q, %t), want (%d, %q, %t)", tc.text, tc.i, end, link, ok, tc.end, tc.link, tc.ok)
+		}
+	}
+}

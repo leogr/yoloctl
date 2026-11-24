@@ -56,6 +56,10 @@ view out again for links only when the visible-destination probe admits a new
 target; that relayout reuses the current Mermaid drawing outcome. Clipboard
 behavior is unchanged. [2](#source-2) [4](#source-4) [6](#source-6)
 
+[FACT] The bare URL scanner searches for the first ASCII space or TAB in
+the original line suffix and uses the line end on a miss. Trailing punctuation
+is trimmed from the intent without moving the scan boundary. [10](#source-10)
+
 ## Sources
 
 1. <a id="source-1"></a> [Navigation context](../../internal/filelink/navigation.go#L18) — Context, Resolve, Accept, AdmitDestinations.
@@ -69,3 +73,5 @@ behavior is unchanged. [2](#source-2) [4](#source-4) [6](#source-6)
 8. <a id="source-8"></a> [Admission adapter](../../internal/linkview/policy.go#L10) — Policy adapts already-admitted targets without coupling transport/path types to Markdown or TUI.
 
 9. <a id="source-9"></a> [Raw destination analysis](../../internal/markdownview/unsafe_links.go#L15) — UnsafeDestinations reuses the raw block/inline grammar and retains denial before Plain sanitization; linkview.Policy applies it to original native-view source.
+
+10. <a id="source-10"></a> [Bare URL scan](../../internal/markdownview/document.go#L108) — `URLAt` and `TestBareURLBoundaries`, verified at `4624036` and accompanying changes.
