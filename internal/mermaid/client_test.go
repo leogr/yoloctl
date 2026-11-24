@@ -1,25 +1,59 @@
 package mermaid
 
 import (
+	"bufio"
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
 )
 
-// The test binary is its own worker when started with the worker argument.
+const silentWorkerArgument = "__mermaid-test-silent-worker"
+
+// The test binary is its own worker when started with a worker argument.
 func TestMain(m *testing.M) {
-	if len(os.Args) == 2 && os.Args[1] == WorkerArgument {
-		os.Exit(WorkerMain())
+	if len(os.Args) == 2 {
+		switch os.Args[1] {
+		case WorkerArgument:
+			os.Exit(WorkerMain())
+		case silentWorkerArgument:
+			os.Exit(runSilentWorker())
+		}
 	}
 	os.Exit(m.Run())
+}
+
+// runSilentWorker replies once to confirm a real start, then stays silent.
+func runSilentWorker() int {
+	frame, err := readFrame(os.Stdin, maxRequest)
+	var req request
+	if err != nil || strictJSON(frame, &req) != nil {
+		return 1
+	}
+	resp := response{
+		Version:  req.Version,
+		Artifact: req.Artifact,
+		Result:   Result{Status: OK, Lines: []string{"ready"}},
+	}
+	if err := writeFrame(os.Stdout, resp, maxResponse); err != nil {
+		return 1
+	}
+	_, _ = io.Copy(io.Discard, os.Stdin)
+	return 0
+}
+
+func silentWorker() *exec.Cmd {
+	return exec.Command(os.Args[0], silentWorkerArgument)
 }
 
 type clock struct {
@@ -87,7 +121,7 @@ func TestClientTimeoutIsNotRetried(t *testing.T) {
 	skipUnderRace(t)
 	c, _, _ := testClient(t, selfWorker)
 	ctx := context.Background()
-	warm(t, c) // the guard includes startup; measure the render deadline
+	warm(t, c, 80) // the guard includes startup; measure the render deadline
 	start := time.Now()
 	if got := c.Render(ctx, denseGraph(), 80, ansi.GraphemeWidth); got.Status != Timeout {
 		t.Fatalf("%+v", got)
@@ -109,7 +143,7 @@ func TestClientQueuedRequestIsBusyAtItsGuard(t *testing.T) {
 	skipUnderRace(t)
 	c, _, _ := testClient(t, selfWorker)
 	ctx := context.Background()
-	warm(t, c) // the guard includes startup; measure the render deadline
+	warm(t, c, 80) // the guard includes startup; measure the render deadline
 	slow := make(chan Result, 1)
 	go func() { slow <- c.Render(ctx, denseGraph(), 80, ansi.GraphemeWidth) }()
 	for len(c.slot) == 0 {
@@ -128,24 +162,80 @@ func TestClientQueuedRequestIsBusyAtItsGuard(t *testing.T) {
 	}
 }
 
-// A worker that does not answer within the guard is killed; a restart is
-// allowed at most once per 30 s, otherwise the renderer is unavailable.
+// warmSilentWorker starts the worker through Render before the measured
+// request. Each start uses a new width so the warm-up reaches the worker.
+func warmSilentWorker(t *testing.T, c *Client, width int) *workerProcess {
+	t.Helper()
+	warm(t, c, width)
+	c.mu.Lock()
+	p := c.proc
+	c.mu.Unlock()
+	if p == nil {
+		t.Fatal("warm-up returned with no live worker")
+	}
+	t.Cleanup(func() { _ = p.cmd.Process.Kill() })
+	return p
+}
+
+// holdReply leaves the reply pending on a Go pipe. The pipe lets synctest
+// advance time after the client has sent its request and is waiting for a reply.
+func holdReply(t *testing.T, p *workerProcess) {
+	t.Helper()
+	reply, withheld := io.Pipe()
+	p.stdout = bufio.NewReader(reply)
+	t.Cleanup(func() {
+		_ = withheld.Close()
+		_ = reply.Close()
+	})
+}
+
+// The bubble joins the client's reaper before the test reads ProcessState.
+func requireWorkerKilled(t *testing.T, c *Client, p *workerProcess) {
+	t.Helper()
+	state := p.cmd.ProcessState
+	if state == nil || state.Sys().(syscall.WaitStatus).Signal() != syscall.SIGKILL {
+		t.Fatalf("worker was not killed: %v", state)
+	}
+	c.mu.Lock()
+	live := c.proc != nil
+	c.mu.Unlock()
+	if live {
+		t.Fatal("killed worker left the client slot occupied")
+	}
+}
+
+// A worker that does not answer within the guard is killed. Following the
+// first restart, another must wait until restartEvery has elapsed.
 func TestClientKillsAHungWorkerAndThrottlesRestarts(t *testing.T) {
-	c, starts, clk := testClient(t, func() *exec.Cmd { return exec.Command("sleep", "60") })
-	c.guard.Store(int64(200 * time.Millisecond))
+	c, starts, clk := testClient(t, silentWorker)
 	ctx := context.Background()
-	for i, want := range []int32{1, 2, 2} {
-		if got := c.Render(ctx, simple, 80+i, ansi.GraphemeWidth); got.Status != Unavailable {
-			t.Fatalf("render %d: %+v", i, got)
+	expire := func(width int, wantStarts int32) {
+		t.Helper()
+		p := warmSilentWorker(t, c, width)
+		const guard = 200 * time.Millisecond
+		previous := c.guard.Swap(int64(guard))
+		defer c.guard.Store(previous)
+		synctest.Test(t, func(t *testing.T) {
+			holdReply(t, p)
+			start := time.Now()
+			got := c.Render(ctx, simple, width, ansi.GraphemeWidth)
+			if got.Status != Unavailable || time.Since(start) != guard {
+				t.Fatalf("hung worker: %+v after %s, want unavailable at %s", got, time.Since(start), guard)
+			}
+		})
+		requireWorkerKilled(t, c, p)
+		if n := starts.Load(); n != wantStarts {
+			t.Fatalf("%d starts, want %d", n, wantStarts)
 		}
-		if n := starts.Load(); n != want {
-			t.Fatalf("render %d: %d starts, want %d", i, n, want)
-		}
+	}
+
+	expire(80, 1)
+	expire(81, 2)
+	if got := c.Render(ctx, simple, 82, ansi.GraphemeWidth); got.Status != Unavailable || starts.Load() != 2 {
+		t.Fatalf("restart during the throttle: %+v starts=%d", got, starts.Load())
 	}
 	clk.add(restartEvery)
-	if got := c.Render(ctx, simple, 90, ansi.GraphemeWidth); got.Status != Unavailable || starts.Load() != 3 {
-		t.Fatalf("no restart after the throttle: %+v starts=%d", got, starts.Load())
-	}
+	expire(90, 3)
 }
 
 // A reply that breaks the protocol is an internal error; the worker is
@@ -365,30 +455,41 @@ func TestClientAbandonedStartNeverBegins(t *testing.T) {
 // warm starts the worker (startup counts against the guard) so a test of the
 // real render deadline is not decided by process start and compile time on a
 // loaded machine.
-func warm(t *testing.T, c *Client) {
+func warm(t *testing.T, c *Client, width int) {
 	t.Helper()
 	limit := c.guard.Swap(int64(time.Minute))
 	defer c.guard.Store(limit)
-	if got := c.Render(context.Background(), "flowchart LR\n W[warm] --> U[up]", 80, ansi.GraphemeWidth); got.Status != OK {
-		t.Fatalf("warm-up: %+v", got)
+	if got := c.Render(context.Background(), "flowchart LR\n W[warm] --> U[up]", width, ansi.GraphemeWidth); got.Status != OK {
+		t.Fatalf("warm-up at width %d: %+v", width, got)
 	}
 }
 
 // A caller that gives up while the worker renders (follow's refresh budget)
-// gets busy at once; the worker is replaced, and that is not a crash: the
-// next requests start a worker without the restart throttle.
+// gets busy at once. The worker is replaced without the restart throttle.
 func TestClientCancelDuringRenderIsBusyAndNotThrottled(t *testing.T) {
-	c, starts, _ := testClient(t, func() *exec.Cmd {
-		return exec.Command("sh", "-c", "cat >/dev/null & sleep 5")
-	})
+	c, starts, _ := testClient(t, silentWorker)
 	for n := range 3 {
-		ctx, cancel := context.WithCancel(context.Background())
-		go func() { time.Sleep(30 * time.Millisecond); cancel() }()
-		start := time.Now()
-		got := c.Render(ctx, simple, 80+n, ansi.GraphemeWidth)
-		if got.Status != Busy || time.Since(start) > time.Second {
-			t.Fatalf("request %d: %+v after %s", n, got, time.Since(start))
-		}
+		p := warmSilentWorker(t, c, 80+n)
+		synctest.Test(t, func(t *testing.T) {
+			holdReply(t, p)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			result := make(chan Result, 1)
+			go func() { result <- c.Render(ctx, simple, 80+n, ansi.GraphemeWidth) }()
+
+			synctest.Wait()
+			select {
+			case got := <-result:
+				t.Fatalf("request %d returned before cancellation: %+v", n, got)
+			default:
+			}
+			start := time.Now()
+			cancel()
+			if got := <-result; got.Status != Busy || time.Since(start) != 0 {
+				t.Fatalf("request %d: %+v after %s, want busy immediately after cancellation", n, got, time.Since(start))
+			}
+		})
+		requireWorkerKilled(t, c, p)
 		if int(starts.Load()) != n+1 {
 			t.Fatalf("request %d: %d starts; a canceled render throttled the restart", n, starts.Load())
 		}
