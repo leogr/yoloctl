@@ -92,6 +92,12 @@ func TestAcceptAndRejectTable(t *testing.T) {
 		{"flowchart LR\nA -->|\"x\" | B", "line 2: unsupported edge label"},
 		{"flowchart LR\nA -->|\"\"| B", "line 2: unsupported edge label"},
 		{"flowchart LR\nA -- \" \" --> B", "line 2: unsupported edge label"},
+		// spaces inside the quotes: drawn where the unquoted label is trimmed
+		{"flowchart LR\nA -->|\" x\"| B", "line 2: a quoted edge label cannot start or end with a space"},
+		{"flowchart LR\nA -->|\"x \"| B", "line 2: a quoted edge label cannot start or end with a space"},
+		{"flowchart LR\nA -- \" x \" --> B", "line 2: a quoted edge label cannot start or end with a space"},
+		{"flowchart LR\nA -->|\"\u00a0x\"| B", "line 2: a quoted edge label cannot start or end with a space"},
+		{"flowchart LR\nA -- \"x\u3000\" --> B", "line 2: a quoted edge label cannot start or end with a space"},
 		{"flowchart LR\nA -->|\"`**md**`\"| B", "line 2: unsupported edge label"}, // a Markdown string
 		{"flowchart LR\nA -- \"`md`\" --> B", "line 2: unsupported edge label"},
 		// the renderer ends `-- … -->` at its first -->, and reads | or a dotted

@@ -277,10 +277,15 @@ func edge(s string) (string, string) {
 
 // quotedReason checks a quoted edge label, one Mermaid string: text without a
 // quote, drawn as that text unquoted. A string starting with a backtick is a
-// Markdown string, which the renderer draws with its marks.
+// Markdown string, which the renderer draws with its marks. The renderer
+// trims an unquoted label but keeps spaces inside the quotes, which move or
+// widen the drawing.
 func quotedReason(text string) string {
 	if strings.TrimSpace(text) == "" || strings.HasPrefix(text, "`") {
 		return "unsupported edge label"
+	}
+	if strings.TrimSpace(text) != text {
+		return "a quoted edge label cannot start or end with a space"
 	}
 	if code := entityCode(text); code != "" {
 		return "entity code " + code + " is not supported (only #34;)"

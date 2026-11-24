@@ -31,8 +31,9 @@ character but the renderer only `#34;`, so a quoted label with another one
 quoted pipe label may hold any other character. `-- "…" -->` refuses
 `-->`, `|`, `-.` and `.-` in the text: the renderer ends this form at its
 first `-->`, drops the arrowhead after a `|` and draws the edge dotted after
-`-.` or `.-`. A space between pipe and quote, a quote inside, an unbalanced
-quote or text beside the string is refused. [1](#source-1) [2](#source-2) [4](#source-4)
+`-.` or `.-`. A space between pipe and quote or just inside a quote (the
+renderer keeps it, where an unquoted label is trimmed), a quote inside, an
+unbalanced quote or text beside the string is refused. [1](#source-1) [2](#source-2) [4](#source-4)
 
 [FACT] Notes the pinned renderer draws in the wrong place are refused
 (`notePlacement`): it draws a note beside the message before it, and a block's
