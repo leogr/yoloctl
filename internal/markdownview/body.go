@@ -1071,9 +1071,9 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 				prefix = []Run{Deco(strings.Repeat("│ ", bars), spaceview.Style{FG: theme.Frame})}
 				textWidth = max(width-2*bars, 1)
 			}
-			ranges, pad, hang := WrapRanges(wm, dl.Text, textWidth, !dl.Code), 0, 0
-			if r, p, h, ok := listRanges(wm, dl, textWidth); ok {
-				ranges, pad, hang = r, p, h
+			ranges, pad, hang, ok := listRanges(wm, dl, textWidth)
+			if !ok {
+				ranges = WrapRanges(wm, dl.Text, textWidth, !dl.Code)
 			}
 			for k, r := range ranges {
 				runs := CloneRuns(prefix)
