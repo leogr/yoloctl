@@ -393,14 +393,10 @@ func envRecreateReason(desired map[string]EnvVar, actualEnv []string, managedKey
 		}
 	}
 	if managedKeys != nil {
-		desiredSet := make(map[string]bool, len(desired))
-		for k := range desired {
-			desiredSet[k] = true
-		}
 		// Removed: a key yoloctl managed last time is no longer declared.
 		// managedKeys is stored sorted, so the first hit is deterministic.
 		for _, k := range managedKeys {
-			if !desiredSet[k] {
+			if _, ok := desired[k]; !ok {
 				return fmt.Sprintf("env %s removed", k)
 			}
 		}

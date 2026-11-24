@@ -10,6 +10,10 @@ normalized CPU/memory limits; changing or removing caps recreates, while equival
 units converge. Old containers recreate to join the workload memory pool.
 [1](#source-1) [2](#source-2)
 
+[FACT] Reconcile detects removed managed environment keys by looking them up
+in the desired environment map. A container without the managed-key label
+uses the declared-key check and skips removal detection. [37](#source-37)
+
 [FACT] When reconciliation fails after `box set` or `box edit` saved the
 declaration, a user error says it is saved and applying it failed, preserving
 the cause
@@ -149,3 +153,5 @@ physical power loss.
 35. <a id="source-35"></a> [Controller edit apply](../../cmd/yoloctl/controller_documents.go#L250) — saved declaration enters the shared reconcile tail.
 
 36. <a id="source-36"></a> [Declaration permission comparison](../../cmd/yoloctl/saved_permissions.go#L16) — immutable prior snapshot and removal warning, not runtime proof.
+
+37. <a id="source-37"></a> [Environment drift](../../internal/agentbox/diff.go#L388) — `envRecreateReason`; verified at `ed0f79a6f4e9e03e8c0777ec612b58315cbf86b1` and accompanying changes.
