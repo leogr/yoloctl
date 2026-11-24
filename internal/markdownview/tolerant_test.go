@@ -798,3 +798,25 @@ func TestTolerantReviewFindings(t *testing.T) {
 		})
 	}
 }
+
+func TestIndentedCodeBlankRuns(t *testing.T) {
+	opts := documentOptions()
+	opts.MapSource = true
+	prefix := "    first\n \n\t\n\n    second"
+	text := prefix + "\n\n \n"
+	doc := Parse(text, opts)
+	if len(doc.Lines) != 10 || len(doc.Sources) != len(doc.Lines) {
+		t.Fatalf("got %d display lines and %d source lines", len(doc.Lines), len(doc.Sources))
+	}
+	if got := doc.Lines[0].Block; got != "first\n\n\n\nsecond" {
+		t.Fatalf("copied block %q", got)
+	}
+	if closer, source := doc.Lines[6], doc.Sources[6]; closer.Fence != FenceClose || source.Start != len(prefix) || source.End != len(prefix) {
+		t.Fatalf("closer at source %d:%d, want %d", source.Start, source.End, len(prefix))
+	}
+	for _, line := range doc.Lines[7:] {
+		if line.Code || line.Decor {
+			t.Fatal("the trailing blank run belongs outside the code card")
+		}
+	}
+}

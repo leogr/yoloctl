@@ -25,7 +25,10 @@ TAB-indented marker line is a nested item; outside one it is not a bullet.
 Outside a list a line indented by 4 or more columns starts a code card where the
 previous line is not paragraph or quote text, an indented fence or table there
 included; it shows the lines without their first 4 columns, unwrapped and
-unhighlighted, with a Copy button. [1](#source-1) [3](#source-3)
+unhighlighted, with a Copy button. An open code card checks forward once per
+run of blank lines that needs lookahead. A blank line below four columns
+belongs to the card if the next nonblank line has at least four columns.
+Without an open card, parsing skips that lookahead. [1](#source-1) [3](#source-3) [7](#source-7)
 
 [FACT] A small HTML subset, bare and case-insensitive: `<b>`/`<strong>`,
 `<i>`/`<em>`, `<kbd>`/`<code>` pairs style their text, matched within the line
@@ -64,9 +67,11 @@ grapheme-width limit). [6](#source-6)
 
 ## Sources
 
-1. <a id="source-1"></a> [body.go](../../internal/markdownview/body.go#L142) — `parseLines`, `withoutClosingHashes`, `thematicBreak`, `setextUnderline`, `quoteMarkers`, `tolerantListItem`, `indentedCodeLine`, `fenceIndentOK`, `commentBlockEnd`, `commentLine`, `splitAtBreaks`.
+1. <a id="source-1"></a> [body.go](../../internal/markdownview/body.go#L156) — `parseLines`, `withoutClosingHashes`, `thematicBreak`, `setextUnderline`, `quoteMarkers`, `tolerantListItem`, `indentedCodeLine`, `fenceIndentOK`, `commentBlockEnd`, `commentLine`, `splitAtBreaks`.
 2. <a id="source-2"></a> [inline.go](../../internal/markdownview/inline.go#L64) — escapes (`#`, `<` added).
 3. <a id="source-3"></a> [blocks.go](../../internal/markdownview/blocks.go#L1) — `indentCols`, `listMarker`, `listContext`.
 4. <a id="source-4"></a> [html_inline.go](../../internal/markdownview/html_inline.go#L1) — `stripTags`, `scanTags`, `tagAt`, `styleTags`.
-5. <a id="source-5"></a> [table cells](../../internal/markdownview/body.go#L1126) — `TableLines`, `tableCell`, `segments`, `cellBreaks`, `fitTableColumns`; table_compact.go `rowClipped`, `compactRecord`; table_fallback.go `labelledTable`.
+5. <a id="source-5"></a> [table cells](../../internal/markdownview/body.go#L1233) — `TableLines`, `tableCell`, `segments`, `cellBreaks`, `fitTableColumns`; table_compact.go `rowClipped`, `compactRecord`; table_fallback.go `labelledTable`.
 6. <a id="source-6"></a> [tolerant_test.go](../../internal/markdownview/tolerant_test.go#L1) — rule, corpus, mapping and fuzz tests; chatui `TestSetextHeadingInChat`, `TestRuleInChat`, markdown_parity_test.go.
+
+7. <a id="source-7"></a> [Indented code blank runs](../../internal/markdownview/body.go#L243) — `parseLines` and `TestIndentedCodeBlankRuns`, verified at `4624036` and accompanying changes.

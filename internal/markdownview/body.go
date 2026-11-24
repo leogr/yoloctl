@@ -240,13 +240,16 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 		}
 		codeOpener = -1
 	}
-	// codeContinues reports whether the blank line k is inside the open code
-	// block: a later line indented by 4 or more comes before any line
-	// indented by less.
+	// A blank run belongs to the open code block if the next nonblank line
+	// is indented by at least four columns. A miss closes the block.
+	codeBlankEnd := 0
 	codeContinues := func(k int) bool {
-		for ; k < len(lines); k++ {
-			if strings.TrimSpace(lines[k]) != "" {
-				col, _ := indentCols(lines[k])
+		if k < codeBlankEnd {
+			return true
+		}
+		for codeBlankEnd = k + 1; codeBlankEnd < len(lines); codeBlankEnd++ {
+			if strings.TrimSpace(lines[codeBlankEnd]) != "" {
+				col, _ := indentCols(lines[codeBlankEnd])
 				return col >= 4
 			}
 		}
@@ -262,7 +265,7 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 			if _, _, item := listMarker(line); !item {
 				lists.other(line)
 			}
-			if owned := col >= 4 || blank && codeContinues(idx); codeOpener >= 0 && !owned {
+			if codeOpener >= 0 && col < 4 && (!blank || !codeContinues(idx)) {
 				closeCode(at - 1)
 			}
 			if codeOpener < 0 {
