@@ -4,9 +4,10 @@
 // short reason that the view shows next to the source.
 //
 // Admitted (v1, leogr D2): flowcharts (graph|flowchart TD|TB|LR) with plain,
-// quoted, rhombus and round nodes, the four edge styles, labels, chains, &
-// groups, subgraphs and comments; sequence diagrams with participants and
-// actors, the four message arrows, notes, blocks, activations and autonumber.
+// quoted, rhombus and round nodes, the four edge styles, plain or quoted
+// labels, chains, & groups, subgraphs and comments; sequence diagrams with
+// participants and actors, the four message arrows, notes, blocks,
+// activations and autonumber.
 package admit
 
 import (
@@ -247,7 +248,7 @@ func bracketText(s string, open, closing byte) (string, string, bool) {
 var edgeOps = []string{"-.->", "-->", "---", "==>"}
 
 // edge reads an admitted edge: an operator with an optional |label|, or
-// `-- label -->`.
+// `-- label -->`; either label may be quoted.
 func edge(s string) (string, string) {
 	for _, op := range edgeOps {
 		if rest, ok := strings.CutPrefix(s, op); ok {
@@ -258,6 +259,9 @@ func edge(s string) (string, string) {
 		}
 	}
 	if rest, ok := strings.CutPrefix(s, "-- "); ok {
+		if quoted, ok := strings.CutPrefix(strings.TrimLeft(rest, " "), `"`); ok {
+			return dashQuotedLabel(quoted)
+		}
 		text, tail, found := strings.Cut(rest, "-->")
 		text = strings.TrimSpace(text)
 		if !found || text == "" || strings.ContainsAny(text, "|\"[]{}()") {
@@ -271,7 +275,39 @@ func edge(s string) (string, string) {
 	return "", "unsupported edge"
 }
 
+// A quoted edge label is one Mermaid string: text without a quote, drawn as
+// that text unquoted (#34; is its quote). A string starting with a backtick
+// is a Markdown string, which the renderer draws with its marks.
+func quotedText(text string) bool {
+	return strings.TrimSpace(text) != "" && !strings.HasPrefix(text, "`")
+}
+
+// dashQuotedLabel reads the rest of `-- "label" -->` after its first quote.
+// The renderer ends this form at its first `-->` and takes a `|`, `-.` or
+// `.-` in it for the edge's own: those labels are admitted as |"label"|.
+func dashQuotedLabel(s string) (string, string) {
+	text, rest, closed := strings.Cut(s, `"`)
+	tail, arrow := strings.CutPrefix(strings.TrimLeft(rest, " "), "-->")
+	if !closed || !arrow || !quotedText(text) || strings.Contains(text, "-->") ||
+		strings.Contains(text, "|") || strings.Contains(text, "-.") || strings.Contains(text, ".-") {
+		return "", "unsupported edge label"
+	}
+	if tail != "" && strings.ContainsRune("->.=ox", rune(tail[0])) {
+		return "", "unsupported edge"
+	}
+	return tail, ""
+}
+
 func pipeLabel(s string) (string, string) {
+	// The renderer reads a quoted label only right after the operator.
+	if quoted, ok := strings.CutPrefix(s, `|"`); ok {
+		text, rest, closed := strings.Cut(quoted, `"`)
+		tail, end := strings.CutPrefix(rest, "|")
+		if !closed || !end || !quotedText(text) {
+			return "", "unsupported edge label"
+		}
+		return tail, ""
+	}
 	t := strings.TrimLeft(s, " \t")
 	if !strings.HasPrefix(t, "|") {
 		return s, ""

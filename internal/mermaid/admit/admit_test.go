@@ -61,6 +61,41 @@ func TestAcceptAndRejectTable(t *testing.T) {
 		{"flowchart LR\nA -->|why| B\nA -.-> C\nA ==> D\nA --- E", ""},
 		{"flowchart LR\n%% comment\nA & B --> C & D;", ""},
 		{"flowchart LR\nsubgraph one\nA\nend\nsubgraph two words\nB\nend\nsubgraph t[Three]\nC\nend", ""},
+		// quoted edge labels: one Mermaid string, drawn as that text unquoted
+		{"flowchart LR\nA -- \"x\" --> B", ""},
+		{"flowchart LR\nA -->|\"x\"| B\nA -.->|\"y\"| C\nA ==>|\"z\"| D\nA ---|\"w\"| E", ""},
+		{"flowchart TD\nA -->|\"x\"| B -- \"two words\" --> C & D", ""},
+		{"flowchart LR\nA --  \"x\"  --> B\nA-- \"y\"-->C\nA -->|\"z\"|D", ""},
+		{"flowchart LR\nA -->|\"a (b) [c] {d} | e --> f -.-> g; %% ❯\"| B", ""},
+		{"flowchart LR\nA -- \"a (b) [c] {d}; %% ❯ -- -> == e.g.\" --> B", ""},
+		{"flowchart LR\nA -->|\"say #34;hi#34;\"| B\nA -- \"say #34;hi#34;\" --> C", ""}, // #34; is Mermaid's quote
+		{"flowchart LR\nA -->|\"x| B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -->|x\"| B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -- \"x --> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -- x\" --> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -->|\"a \\\"b\\\" c\"| B", "line 2: unsupported edge label"}, // no backslash escape in Mermaid
+		{"flowchart LR\nA -- \"a \"b\" c\" --> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -->|\"x\" y| B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -->|y \"x\"| B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -- \"x\" y --> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -- y \"x\" --> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -->| \"x\" | B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA --> |\"x\"| B", "line 2: unsupported edge label"}, // drawn as a node "|"x"| B"
+		{"flowchart LR\nA -->|\"x\" | B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -->|\"\"| B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -- \" \" --> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -->|\"`**md**`\"| B", "line 2: unsupported edge label"}, // a Markdown string
+		{"flowchart LR\nA -- \"`md`\" --> B", "line 2: unsupported edge label"},
+		// the renderer ends `-- … -->` at its first -->, and reads | or a dotted
+		// mark in it as the edge's: these labels need |"…"|
+		{"flowchart LR\nA -- \"a --> b\" --> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -- \"a | b\" --> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -- \"a -.-> b\" --> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -- \"v1.-rc\" --> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -- \"x\" --- B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -- \"x\" -.-> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -- \"x\" -->> B", "line 2: unsupported edge"},
+		{"flowchart LR\nA -- \"x\" -->o B", "line 2: unsupported edge"},
 		{"flowchart LR\nsubgraph \"Two\"\nB\nend", "line 2: quoted subgraph titles are not supported"},
 		{"flowchart LR\nsubgraph t[\"Three\"]\nB\nend", "line 2: quoted subgraph titles are not supported"},
 		{"flowchart LR\n\tA --> B", "contains control characters"}, // TAB: the renderer's protocol refuses it
@@ -159,6 +194,7 @@ func FuzzAdmission(f *testing.F) {
 		"flowchart LR\n A --> B\n", "graph TD\n A{x} -- y --> B(z)\n subgraph s[t]\n C\n end\n",
 		"sequenceDiagram\n actor A as U\n A->>+B: hi\n alt x\n Note over A,B: n\n else y\n end\n",
 		";", "%%\n", "flowchart LR\n A[\"a\"] -.->|l| B & C ==> D\n", "sequenceDiagram\n A-xB: no\n", "\xff",
+		"flowchart LR\n A -->|\"a | b\"| B -- \"c d\" --> C\n",
 	} {
 		f.Add(seed)
 	}
