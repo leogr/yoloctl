@@ -39,7 +39,9 @@ a backslash or in an autolink. A line starting with `<!--` hides every line to
 the first `-->` (from one backward pass); text after it is literal. In a table
 cell `<br>` is one space with a forced break: such a table always goes through
 the fit, a collapsed row shows its first line with …, labelled rows give each
-segment its own line. [1](#source-1) [4](#source-4) [5](#source-5)
+segment its own line. A `<br>` inside a link shown by its label alone stays a
+space, not a break: the label maps as one unit. [1](#source-1) [4](#source-4)
+[5](#source-5)
 
 [FACT] A hidden line keeps its place and `LineSource`, is `Decor` (never copied)
 and gets no row. A `<br>` part has its own `LineSource`, the tag's bytes ending
@@ -77,7 +79,7 @@ grapheme-width limit). [6](#source-6)
 2. <a id="source-2"></a> [inline.go](../../internal/markdownview/inline.go#L64) — escapes (`#`, `<` added).
 3. <a id="source-3"></a> [blocks.go](../../internal/markdownview/blocks.go#L1) — `indentCols`, `listMarker`, `listContext`.
 4. <a id="source-4"></a> [html_inline.go](../../internal/markdownview/html_inline.go#L1) — `stripTags`, `scanTags`, `tagAt`, `styleTags`.
-5. <a id="source-5"></a> [table cells](../../internal/markdownview/body.go#L1233) — `TableLines`, `tableCell`, `segments`, `cellBreaks`, `fitTableColumns`; table_compact.go `rowClipped`, `compactRecord`; table_fallback.go `labelledTable`.
+5. <a id="source-5"></a> [table cells](../../internal/markdownview/body.go#L1239) — `TableLines`, `tableCell`, `segments`, `cellBreaks`, `fitTableColumns`; table_compact.go `rowClipped`, `compactRecord`; table_fallback.go `labelledTable`; `TestTableCellLineBreakInLinkLabel`, verified at `61397bf` and accompanying changes.
 6. <a id="source-6"></a> [tolerant_test.go](../../internal/markdownview/tolerant_test.go#L1) — rule, corpus, mapping and fuzz tests; chatui `TestSetextHeadingInChat`, `TestRuleInChat`, markdown_parity_test.go.
 
 7. <a id="source-7"></a> [Indented code blank runs](../../internal/markdownview/body.go#L243) — `parseLines` and `TestIndentedCodeBlankRuns`, verified at `4624036` and accompanying changes.

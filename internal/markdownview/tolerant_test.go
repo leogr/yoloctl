@@ -671,6 +671,71 @@ func TestTableCellLineBreakLabelled(t *testing.T) {
 	}
 }
 
+// A <br> inside the label of a link shown by its label alone has no shown
+// byte of its own (the label maps as one unit), so it is not a break and the
+// label keeps its space. Laying out the first six cells panicked; in the next
+// four the break fell on the byte after the link and cut it.
+func TestTableCellLineBreakInLinkLabel(t *testing.T) {
+	options := documentOptions()
+	options.MapSource = true
+	options.Links = func(destination string) Action {
+		switch {
+		case strings.HasPrefix(destination, "http"):
+			return Action{Kind: IntentURL, Value: destination}
+		case destination == "a" || strings.HasSuffix(destination, ".md"):
+			return Action{Kind: IntentLocalFile, Value: destination}
+		}
+		return Action{}
+	}
+	for _, tc := range []struct {
+		text, cell string
+		breaks     int // a <br> after a link keeps its break
+	}{
+		{"h||\n-|-\n[<br>](a)<b></b>|", " ", 0},
+		{"h||\n-|-\n[<br>](a)|", " ", 0},
+		{"h||\n-|-\n[<br>](http)<br>|", "  ", 1},
+		{"h||\n-|-\n[<br>](http)|", " ", 0},
+		{"h||\n-|-\n|[<br>](a)", " ", 0},
+		{"h||\n-|-\n[x<br>y](http)|", "x y", 0},
+		{"h||\n-|-\n[x<br>y](http)z|", "x yz", 0},
+		{"h||\n-|-\n[a<br>b](x.md)[a](x.md)x|", "a bax", 0},
+		{"h||\n-|-\n[a<br>b](x.md)tail[<br>](a)|", "a btail ", 0},
+		{"h||\n-|-\n[a<br>b](x.md)[<br>](a)é|", "a b é", 0},
+		{"h||\n-|-\n[a<br>b](x.md) [a](x.md)|", "a b a", 0},
+		{"h||\n-|-\n[x](http)<br>y|", "x y", 1},
+	} {
+		for _, wm := range []ansi.Method{ansi.GraphemeWidth, ansi.WcWidth} {
+			options.Method = wm
+			doc := Parse(tc.text, options)
+			row := doc.Lines[2]
+			if got := row.Text[row.Cells[0][0]:row.Cells[0][1]]; got != tc.cell || len(row.Breaks) != tc.breaks {
+				t.Fatalf("%q: cell %q breaks %v, want %q and %d", tc.text, got, row.Breaks, tc.cell, tc.breaks)
+			}
+			for _, k := range row.Breaks {
+				if row.Text[k] != ' ' {
+					t.Fatalf("%q: break %d is not a space in %q", tc.text, k, row.Text)
+				}
+			}
+			link := false
+			for _, p := range row.Pieces {
+				link = link || p.Act.Kind != IntentNone
+			}
+			if !link {
+				t.Fatalf("%q: no link piece in %+v", tc.text, row.Pieces)
+			}
+			for width := 1; width <= 40; width++ {
+				for _, compact := range []bool{false, true} {
+					Layout(doc, width, LayoutOptions{Method: wm, Theme: options.Theme, CompactTables: compact})
+				}
+			}
+			for _, width := range []int{8, 20, 40} {
+				rows, _ := painted(t, doc, options, width)
+				checkCoverage(t, doc, rows)
+			}
+		}
+	}
+}
+
 // describeLines is one line per display line: its kind and its text.
 func describeLines(doc Document) string {
 	var b strings.Builder

@@ -636,8 +636,14 @@ func tableCell(text string, st spaceview.Style, theme spaceview.Theme, links Lin
 			styles[i] = ts
 		}
 		out.pieces = styleTags(out.pieces, m, styles, theme)
+		// segments cuts each break's byte out of the text, so a break is
+		// made only on its own space: the shown byte copied from it. A link
+		// shown by its label alone maps the label as one unit, so a <br>
+		// inside it has no such byte and stays a space in the label.
 		for _, k := range spaced {
-			out.breaks = append(out.breaks, displayAt(m, k))
+			if at := displayAt(m, k); at < len(m.At) && m.At[at] == k {
+				out.breaks = append(out.breaks, at)
+			}
 		}
 	}
 	return out
