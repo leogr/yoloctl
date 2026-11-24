@@ -141,15 +141,30 @@ func draftLayout(wm ansi.Method, text string, folds []fold, cursor, width int) (
 	var row draftRow
 	start, offset, col := 0, 0, 0
 	part := func(text string, fold int) {
-		if n := len(row.parts); fold < 0 && n > 0 && row.parts[n-1].fold < 0 {
-			row.parts[n-1].text += text
-		} else {
+		n := len(row.parts)
+		if fold >= 0 || n == 0 || row.parts[n-1].fold >= 0 {
 			row.parts = append(row.parts, draftPart{text: text, fold: fold, col: col})
+			b.WriteString(text)
+			return
 		}
+		// A plain cell extends the plain part before it, whose bytes end
+		// the row so far: its text becomes those bytes, not a new copy.
+		from := b.Len() - len(row.parts[n-1].text)
 		b.WriteString(text)
+		row.parts[n-1].text = b.String()[from:]
 	}
 	flush := func(end int) {
 		row.text, row.start, row.end = b.String(), start, end
+		if len(row.parts) > 1 {
+			// An earlier part can hold an outgrown buffer of the builder:
+			// cut every part from the finished row instead.
+			from := 0
+			for k := range row.parts {
+				n := len(row.parts[k].text)
+				row.parts[k].text = row.text[from : from+n]
+				from += n
+			}
+		}
 		row.stops = append(row.stops, draftStop{offset: end, col: col})
 		rows = append(rows, row)
 		b.Reset()
