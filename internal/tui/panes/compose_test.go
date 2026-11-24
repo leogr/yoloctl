@@ -255,7 +255,7 @@ func barText(l *Layout, p *Pane, w int) string {
 		grid[0][x] = cell{Cell: uv.Cell{Content: "─", Width: 1}}
 	}
 	drawBar(grid, l, p, Rect{0, 0, w, 1})
-	return ansi.Strip(renderRow(grid[0]))
+	return ansi.Strip(renderRow(grid[0], make(uv.Line, 0, w)))
 }
 
 // A wide and a combining-character title are measured, not counted in runes.

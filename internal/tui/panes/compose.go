@@ -121,8 +121,9 @@ func Compose(l *Layout, rows map[*Pane][]string) []string {
 		}
 	}
 	out := make([]string, h)
+	run := make(uv.Line, 0, w)
 	for y, row := range grid {
-		out[y] = renderRow(row)
+		out[y] = renderRow(row, run)
 	}
 	return out
 }
@@ -319,10 +320,11 @@ func drawBar(grid [][]cell, l *Layout, p *Pane, bar Rect) {
 }
 
 // renderRow writes pane and border runs, each from its own cells and each
-// closed with a reset.
-func renderRow(row []cell) string {
+// closed with a reset. run is empty scratch with room for the row, shared
+// by the rows of one frame: each run is rendered to text before the next
+// one overwrites its cells.
+func renderRow(row []cell, run uv.Line) string {
 	var b strings.Builder
-	run := make(uv.Line, 0, len(row))
 	border := false
 	flush := func() {
 		if len(run) > 0 {

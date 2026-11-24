@@ -69,7 +69,7 @@ Browser and image requests and real host rendering are not covered.
 2. <a id="source-2"></a> [Empty pane](../../internal/tui/placeholder.go#L36-L54) — `fillPlaceholder`; `Layout.Empty` in panes/layout.go.
 3. <a id="source-3"></a> [Browser requests](../../internal/tui/host_actions.go#L51-L83) — `browserRequest`: badge and mark.
 4. <a id="source-4"></a> [Bells and marks](../../internal/tui/bell.go#L1-L48) — `paneBellMsg`, `paneBellHandler`, `markUnfocused`; exits in tui.go `Update` (`tabExitMsg`).
-5. <a id="source-5"></a> [Mark drawing](../../internal/tui/panes/compose.go#L259-L319) — `drawBar`; cleared by `Layout.SetFocus` and `tabs.Model.Select`.
+5. <a id="source-5"></a> [Mark drawing](../../internal/tui/panes/compose.go#L260-L320) — `drawBar`; cleared by `Layout.SetFocus` and `tabs.Model.Select`.
 6. <a id="source-6"></a> [D1 test](../../internal/tui/pane_session_test.go#L17-L82) — `TestOneSessionInTwoPanesLatestResizeWins`; `TestPanePTYsHaveTheirPaneSize` follows.
 7. <a id="source-7"></a> [Request tests](../../internal/tui/pane_input_test.go#L316) — `TestEmptyPaneTransitions`.
 8. <a id="source-8"></a> [Mark tests](../../internal/tui/pane_input_test.go#L429) — `TestBellAndExitMarkAnUnfocusedPane`; composer `TestComposeAttentionMark`.
