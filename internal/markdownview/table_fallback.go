@@ -121,13 +121,23 @@ func labelledTable(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft i
 	out := make([][]BodyRow, len(lines))
 	out[0] = []BodyRow{notice}
 	previous := -1
+	cursor := 0
+	checked, seek := false, false
 	for _, field := range fields {
 		i := field.line
-		if previous >= 0 && previous != i {
-			out[i] = append(out[i], BodyRow{Line: first + i, Decor: true})
-		}
-		previous = i
 		dl := lines[i]
+		if previous != i {
+			if previous >= 0 {
+				out[i] = append(out[i], BodyRow{Line: first + i, Decor: true})
+			}
+			cursor = 0
+			checked, seek = false, false
+			previous = i
+		}
+		if !checked && (len(dl.Cells) >= minSeekFragments || len(field.ranges) >= minSeekFragments) {
+			seek = canSeekPieces(dl.Pieces) && cellsInOrder(dl.Cells)
+			checked = true
+		}
 		for j, r := range field.ranges {
 			row := BodyRow{Line: first + i}
 			if j > 0 {
@@ -141,7 +151,11 @@ func labelledTable(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft i
 			start, end := field.cell[0]+lo-len(field.label), field.cell[0]+hi-len(field.label)
 			row.Start, row.End = start, end
 			row.Frags = [][2]int{{start, end}}
-			for _, p := range dl.Pieces {
+			pieces := dl.Pieces
+			if seek {
+				pieces = piecesAt(pieces, &cursor, start, end)
+			}
+			for _, p := range pieces {
 				a, b := max(start, p.Start), min(end, p.End)
 				if a < b {
 					row.Runs = append(row.Runs, Run{Text: dl.Text[a:b], Style: p.Style, Copy: true, Start: a, Act: p.Act, Strike: p.Strike})

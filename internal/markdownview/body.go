@@ -1081,6 +1081,8 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 			if !ok {
 				ranges = WrapRanges(wm, dl.Text, textWidth, !dl.Code)
 			}
+			seek := len(ranges) >= minSeekFragments && canSeekPieces(dl.Pieces)
+			cursor := 0
 			for k, r := range ranges {
 				runs := CloneRuns(prefix)
 				gutter := hang
@@ -1090,7 +1092,11 @@ func bodyRows(wm ansi.Method, lines []DisplayLine, width int, theme spaceview.Th
 				if gutter > 0 {
 					runs = append(runs, Deco(strings.Repeat(" ", gutter), spaceview.Style{}))
 				}
-				for _, p := range dl.Pieces {
+				pieces := dl.Pieces
+				if seek {
+					pieces = piecesAt(pieces, &cursor, r[0], r[1])
+				}
+				for _, p := range pieces {
 					s, e := max(p.Start, r[0]), min(p.End, r[1])
 					if s < e {
 						runs = append(runs, Run{Text: dl.Text[s:e], Style: p.Style, Copy: true, Start: s, Act: p.Act, Strike: p.Strike})
@@ -1507,6 +1513,7 @@ func fitTableColumns(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft
 
 	frame, plainStyle := spaceview.Style{FG: theme.Frame}, spaceview.Style{FG: theme.Text}
 	out := make([][]BodyRow, len(lines))
+	var cursors [MaxTableColumns]int
 	for i, dl := range lines {
 		if dl.Cells == nil {
 			parts := make([]string, cols)
@@ -1515,6 +1522,17 @@ func fitTableColumns(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft
 			}
 			out[i] = []BodyRow{{Line: first + i, Runs: []Run{Deco(strings.Join(parts, "─┼─"), frame)}, Decor: true}}
 			continue
+		}
+		seek := (heights[i] >= minSeekFragments || cols >= minSeekFragments) &&
+			cols <= len(cursors) && len(dl.Cells) == cols && canSeekPieces(dl.Pieces) && cellsInOrder(dl.Cells)
+		if seek {
+			// Visual rows interleave columns. Seed each column from the same
+			// ordered stream, then let its fragments advance independently.
+			cursor := 0
+			for c, cr := range dl.Cells {
+				cursor = skipPieces(dl.Pieces, cursor, cr[0])
+				cursors[c] = cursor
+			}
 		}
 		for v := range heights[i] {
 			row := BodyRow{Line: first + i, Start: len(dl.Text)}
@@ -1538,7 +1556,11 @@ func fitTableColumns(wm ansi.Method, lines []DisplayLine, first, width, rowsLeft
 				if left > 0 {
 					row.Runs = append(row.Runs, Deco(strings.Repeat(" ", left), plainStyle))
 				}
-				for _, p := range dl.Pieces {
+				pieces := dl.Pieces
+				if seek {
+					pieces = piecesAt(pieces, &cursors[c], f[0], e)
+				}
+				for _, p := range pieces {
 					if s, pe := max(p.Start, f[0]), min(p.End, e); s < pe {
 						row.Runs = append(row.Runs, Run{Text: dl.Text[s:pe], Style: p.Style, Copy: true, Start: s, Act: p.Act, Strike: p.Strike})
 					}

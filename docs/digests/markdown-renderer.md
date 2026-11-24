@@ -11,6 +11,12 @@ The package owns no model, transport, file reader, cache, clipboard or opener.
 Styles and themes reuse `spaceview`; no Markdown dependency is added.
 [1](#source-1) [2](#source-2) [3](#source-3)
 
+[FACT] Layout seeks through ordered, nonoverlapping pieces when a line has
+enough repeated fragment scans to pay for one order check. Fitted tables
+seed one cursor per column because their visual rows interleave columns.
+Small piece lists and reordered or overlapping decorator output use the
+full scan in supplied order. [21](#source-21)
+
 [FACT] Parsing sanitizes invalid UTF-8 and controls, normalizes line endings
 and expands tabs with the chosen width method. Source mode and the existing
 block/inline/lexer behavior share that implementation. Tables retain 32-column,
@@ -129,7 +135,7 @@ component parity, not native terminal, live-room or future file-view behavior.
 11. <a id="source-11"></a> [Replacement geometry](../../internal/markdownview/preview.go#L5) — `TextSub`, `ReplacementBounds`, `ReplacementSourceMap`.
 12. <a id="source-12"></a> [Frozen chat parity](../../internal/chatui/markdown_parity_test.go#L1) — `TestMarkdownFrozenParity`, testdata/markdown-parity.json; no regeneration path.
 13. <a id="source-13"></a> [Plain-consumer regressions](../../internal/markdownview/document_test.go#L15) — generic render/layout, explicit maps, replacement copy/refusal and limit metadata; highlight_test.go retains the lexer corpus.
-14. <a id="source-14"></a> [Subset additions](../../internal/markdownview/improvements_test.go#L64-L320) — list alignment/wrapping/coverage, rule, autolinks, headings, separators against a naive reference; code in body.go `parseLines` (L108), `HeadingColor`, `listRanges` (L435), `tableSeparators` (L903) and inline.go `autolinkEnd` (L152), `listItem`, `alignOrdered` (L229-L300).
+14. <a id="source-14"></a> [Subset additions](../../internal/markdownview/improvements_test.go#L64-L320) — list alignment, wrapping, coverage, rules, autolinks, headings and separators against a naive reference. See body.go `parseLines` (L156), `HeadingColor`, `listRanges` (L1132) and `tableSeparators` (L1685), plus inline.go `autolinkEnd`, `listItem` and `alignOrdered`.
 
 15. <a id="source-15"></a> [Counted table fallbacks](../../internal/markdownview/table_fallback.go#L10) — `TableFitReason`, `labelledTable`, `fitTableInView`; body.go `TableLines`, `FitTableLayout`, `bodyRows`; table_fallback_test.go covers cutoffs, budgets, source/Quote and matched modes; wide_window_test.go covers widening and the widest admitted allocation.
 
@@ -142,3 +148,5 @@ component parity, not native terminal, live-room or future file-view behavior.
 19. <a id="source-19"></a> [Pane-bounded allowance](../../internal/markdownview/table_limit.go#L1) — `tableLayoutBudget`; table_long_test.go covers ordinary45/120-row tables, width sweeps, expansion and generated sparse output; body.go `TableLines` keeps its aligned guard.
 
 20. <a id="source-20"></a> [Grapheme-width limit](../../internal/markdownview/width_limit_test.go#L1) — `isPrepend`, `joinsPrevious`, `TestGraphemeWidthLimits` (each case paints one cell short), `TestPrependMarksArePreserved`; tolerant_test.go `FuzzTolerantMarkdown` skips `knownWidthLimit` texts.
+
+21. <a id="source-21"></a> [Piece traversal](../../internal/markdownview/piece_seek.go#L1) — `canSeekPieces` and `piecesAt` in `bodyRows`, `fitTableColumns`, `labelledTable` and `compactRecord`. Verified at `6411776` and accompanying changes.

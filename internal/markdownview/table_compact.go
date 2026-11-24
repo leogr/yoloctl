@@ -130,6 +130,8 @@ func compactRecord(wm ansi.Method, dl DisplayLine, line int, alloc []int, theme 
 	used := 2 // blank gutter; a UTF-8 toggle glyph is counted below
 	hasClip := false
 	frame := spaceview.Style{FG: theme.Frame}
+	seek := build && len(dl.Cells) >= minSeekFragments && canSeekPieces(dl.Pieces) && cellsInOrder(dl.Cells)
+	cursor := 0
 	for c, cr := range dl.Cells {
 		if c > 0 {
 			used += len(" │ ")
@@ -166,7 +168,11 @@ func compactRecord(wm ansi.Method, dl DisplayLine, line int, alloc []int, theme 
 		if left > 0 {
 			row.Runs = append(row.Runs, Deco(strings.Repeat(" ", left), spaceview.Style{}))
 		}
-		for _, p := range dl.Pieces {
+		pieces := dl.Pieces
+		if seek {
+			pieces = piecesAt(pieces, &cursor, cr[0], cr[0]+end)
+		}
+		for _, p := range pieces {
 			a, b := max(cr[0], p.Start), min(cr[0]+end, p.End)
 			if a < b {
 				row.Runs = append(row.Runs, Run{Text: dl.Text[a:b], Style: p.Style, Copy: true, Start: a, Act: p.Act, Strike: p.Strike})
