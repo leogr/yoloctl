@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/distribution/reference"
@@ -66,6 +67,11 @@ var optionName = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
 var envName = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 var featureID = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`)
 
+var containerEnvSubstitution struct {
+	sync.Once
+	*regexp.Regexp
+}
+
 func (l Lock) Definition() (Metadata, error) {
 	var m Metadata
 	if len(l.Metadata) > maxMetadata {
@@ -92,7 +98,10 @@ func (l Lock) Definition() (Metadata, error) {
 		if !envName.MatchString(k) || strings.ContainsAny(v, "\x00\r\n") || len(v) > 4096 {
 			return m, fmt.Errorf("invalid containerEnv %s", k)
 		}
-		rest := regexp.MustCompile(`\$\{(?:containerEnv:)?[A-Za-z_][A-Za-z0-9_]*\}`).ReplaceAllString(v, "")
+		containerEnvSubstitution.Do(func() {
+			containerEnvSubstitution.Regexp = regexp.MustCompile(`\$\{(?:containerEnv:)?[A-Za-z_][A-Za-z0-9_]*\}`)
+		})
+		rest := containerEnvSubstitution.ReplaceAllString(v, "")
 		if strings.Contains(rest, "${") {
 			return m, fmt.Errorf("unsupported containerEnv substitution for %s", k)
 		}

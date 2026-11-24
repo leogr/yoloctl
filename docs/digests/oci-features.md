@@ -2,6 +2,8 @@
 
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; ignored runtime requests verified on `1faf621b2de05046711d5177863d326146cf122b` and accompanying changes; Feature folders and environment verified on `0a1e47d47001eab39274faf83f3af36419b04f2b` and accompanying changes; re-read cited sources when changing behavior.
 
+Environment validation verified on `4624036d2ea68a359c1e308a4f6b2651921ffba5` and accompanying changes.
+
 [FACT] `box create`, `box copy`, `box set` and `image build` accept
 repeatable `--feature` names or explicit registry references alongside
 `--features`. `--feature-option FEATURE.OPTION=VALUE` uses an unambiguous final
@@ -67,6 +69,10 @@ account map and `launch_env`; a privileged child gets the box value of a
 Feature key. Notices list skipped folders and variables; `box show`/`inspect`
 list declared values. Existing boxes need `box recreate`.
 [17](#source-17) [18](#source-18)
+
+[FACT] Definition validation checks each environment name and value before
+checking supported braced substitutions. The process compiles the substitution
+regexp when an entry first reaches that check and reuses it thereafter. [2](#source-2)
 
 [FACT] Cobra supplies shell and palette completion for selected Feature options,
 boolean/enum/proposed values, built-ins, common references and cached references.
