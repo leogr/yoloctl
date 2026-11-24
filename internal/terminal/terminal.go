@@ -36,9 +36,14 @@ type compiledCore struct {
 	module  wazero.CompiledModule
 }
 
-var core = sync.OnceValues(func() (*compiledCore, error) {
+// core is the process's one compiled core: from the disk cache when the CLI
+// selected one (cache.go), else compiled in memory.
+var core = sync.OnceValues(compileCore)
+
+// buildCore compiles the core with cfg and checks its imports.
+func buildCore(cfg wazero.RuntimeConfig) (*compiledCore, error) {
 	ctx := context.Background()
-	r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().WithMemoryLimitPages(4096).WithCloseOnContextDone(true))
+	r := wazero.NewRuntimeWithConfig(ctx, cfg)
 	b := r.NewHostModuleBuilder("yolo_vt")
 	b.NewFunctionBuilder().WithFunc(func(ctx context.Context, m api.Module, ptr, n uint32) {
 		t := ctx.Value(contextKey{}).(*Terminal)
@@ -99,7 +104,7 @@ var core = sync.OnceValues(func() (*compiledCore, error) {
 		return nil, err
 	}
 	return &compiledCore{r, c}, nil
-})
+}
 
 // Terminal owns one isolated core and its VT parser state.
 type Terminal struct {
@@ -140,7 +145,17 @@ func New(rows, cols, history int, reply func([]byte)) (*Terminal, error) {
 	if !validSize(rows, cols) || history < 0 || uint64(history) > MaxHistoryLines {
 		return nil, errors.New("invalid terminal geometry or history limit")
 	}
-	t, err := newInstance(reply)
+	c, err := core()
+	if err != nil {
+		return nil, fmt.Errorf("compile terminal core: %w", err)
+	}
+	return newOn(c, rows, cols, history, reply)
+}
+
+// newOn is New on a given compiled core (tests compare a cached and an
+// in-memory core this way).
+func newOn(c *compiledCore, rows, cols, history int, reply func([]byte)) (*Terminal, error) {
+	t, err := newInstanceOn(c, reply)
 	if err != nil {
 		return nil, err
 	}
@@ -161,10 +176,15 @@ func New(rows, cols, history int, reply func([]byte)) (*Terminal, error) {
 // A restore gets its own instance, so a failed decode cannot corrupt the live
 // terminal or its local viewport/selection. This allocates no native terminal.
 func newInstance(reply func([]byte)) (*Terminal, error) {
-	core, err := core()
+	c, err := core()
 	if err != nil {
 		return nil, fmt.Errorf("compile terminal core: %w", err)
 	}
+	return newInstanceOn(c, reply)
+}
+
+func newInstanceOn(core *compiledCore, reply func([]byte)) (*Terminal, error) {
+	var err error
 	t := &Terminal{reply: reply, functions: make(map[string]api.Function)}
 	t.ctx = context.WithValue(context.Background(), contextKey{}, t)
 	t.mod, err = core.runtime.InstantiateModule(t.ctx, core.module, wazero.NewModuleConfig().WithName(""))

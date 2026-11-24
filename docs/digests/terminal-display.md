@@ -62,7 +62,7 @@ session screen checkpoints. [6](#source-6) [9](#source-9) [11](#source-11)
 6. <a id="source-6"></a> [frame_test.go](../../internal/tui/term/frame_test.go#L1-L148) — hold boundaries, silent timeout, styles/links and concurrent grid/cursor regressions.
 7. <a id="source-7"></a> [session.go](../../internal/tui/term/session.go#L187) — release of a hold on session completion.
 8. <a id="source-8"></a> [modes.go](../../internal/tui/term/modes.go#L20-L44) — `UpdateFocus` and mode gating.
-9. <a id="source-9"></a> [terminal.go](../../internal/terminal/terminal.go#L46-L78) — event storage.
+9. <a id="source-9"></a> [terminal.go](../../internal/terminal/terminal.go#L51-L83) — event storage.
 10. <a id="source-10"></a> [tui.go](../../internal/tui/tui.go#L1491) — `View`, overlay padding and cursor placement.
 11. <a id="source-11"></a> [frames_test.go](../../internal/tui/frames_test.go#L1-L72) — coherent TUI view and anchored history regressions.
 12. <a id="source-12"></a> [console.go](../../internal/tui/term/console.go#L120-L149) — release of a hold on console completion.

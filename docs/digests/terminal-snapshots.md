@@ -59,7 +59,7 @@ not live Lima or graphical-host parity results. [4](#source-4)
 
 1. <a id="source-1"></a> [snapshot.go](../../internal/terminal/snapshot.go#L13) — envelope, `Snapshot`, `RestoreSnapshot`, size/context bounds and error ownership.
 2. <a id="source-2"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L20-L121) — creation, callback installation and strict native restore.
-3. <a id="source-3"></a> [terminal.go](../../internal/terminal/terminal.go#L39-L203) — interruptible bounded runtime, `New`, isolated instances and call errors.
+3. <a id="source-3"></a> [terminal.go](../../internal/terminal/terminal.go#L39-L223) — runtime from `runtimeConfig` (cache.go: interruptible, bounded), `New`, isolated instances and call errors.
 4. <a id="source-4"></a> [snapshot_test.go](../../internal/terminal/snapshot_test.go#L99) — restoration/continuation/effect/malformed-input tests and `FuzzRestoreSnapshot`.
 5. <a id="source-5"></a> [Pinned Ghostty snapshot format](https://github.com/ghostty-org/ghostty/blob/33da6848d63b3bba2b4f31ab1531d618f2795192/src/terminal/snapshot/main.zig#L18-L89) — version 1 at `33da6848`, verified against the hash-pinned archive.
 6. <a id="source-6"></a> [holder_view.go](../../internal/session/holder_view.go#L225) — native snapshot admission and compatibility subscription.

@@ -157,7 +157,7 @@ were not run. [28](#source-28)
 6. <a id="source-6"></a> [nerdctl v2.3.5 run_security_linux.go](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/cmd/container/run_security_linux.go#L43-L48) — spec options; `dockercompat.go#L665` and `create.go#L670` record it and reserve its label.
 7. <a id="source-7"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L148-L199) — binary verification.
 8. <a id="source-8"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1824-L1830) — runtime preflight.
-9. <a id="source-9"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L35-L39) — early dispatch.
+9. <a id="source-9"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L36-L40) — early dispatch.
 10. <a id="source-10"></a> [internal/boxendpoint/server_linux.go](../../internal/boxendpoint/server_linux.go#L89-L1174) — server, children, reaper, PID 1 and socket.
 11. <a id="source-11"></a> [internal/boxendpoint/boxendpoint.go](../../internal/boxendpoint/boxendpoint.go#L24-L219) — main-session request, limits, argv and environment.
 12. <a id="source-12"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L54-L146) — `ClassifyRuntime`.

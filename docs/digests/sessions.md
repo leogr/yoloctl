@@ -111,7 +111,7 @@ echo-independent readiness and preserved shell state.
 10. <a id="source-10"></a> [internal/session/binary.go](../../internal/session/binary.go#L20) — `EnsureVMBinary`, transfer scripts and `guestBinary`.
 11. <a id="source-11"></a> [Makefile](../../Makefile#L16) — shared build identity and host/guest build targets.
 12. <a id="source-12"></a> [scripts/guest-hashes.go](../../scripts/guest-hashes.go#L1-L35) — native hash/linker-flag generation.
-13. <a id="source-13"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L27) — side-effect-free loader check before CLI initialization.
+13. <a id="source-13"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L28) — side-effect-free loader check before CLI initialization.
 14. <a id="source-14"></a> [cmd/yoloctl/controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L115) — explicit selected bundle deployment.
 15. <a id="source-15"></a> [scripts/smoke/pty-run.py](../../scripts/smoke/pty-run.py#L27) — `diagnostic_output`, `read_pty`, `drain_pty`, `main`.
 16. <a id="source-16"></a> [scripts/test_pty_run.py](../../scripts/test_pty_run.py#L24) — shared smoke fixture, scheduled race, unmocked output/exit, control leakage and timeout regressions.

@@ -9,6 +9,7 @@ import (
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/sandbox"
 	"github.com/leogr/yoloctl/internal/session"
+	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/pkg/prettylog"
 	"github.com/spf13/cobra"
 )
@@ -67,6 +68,10 @@ func newSessionHoldCmd() *cobra.Command {
 			if tombstone == "" {
 				tombstone = session.TombstonePath(agentbox)
 			}
+
+			// The holder runs as root in the VM: its compiled terminal core is
+			// cached on the VM's system disk, which boxes never see.
+			terminal.UseCompilationCache(func() string { return vmTerminalCacheDir })
 
 			// The journal or guest unit relay owns stderr; file records have
 			// timestamps/levels and never use a terminal palette or reader.

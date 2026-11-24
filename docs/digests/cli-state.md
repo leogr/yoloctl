@@ -110,8 +110,8 @@ adding a new command. [3](#source-3) [11](#source-11)
 4. <a id="source-4"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L1328) — space JSON and unavailable declarations.
 5. <a id="source-5"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L1521) — runtime list JSON.
 6. <a id="source-6"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2639) — box state JSON.
-7. <a id="source-7"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L87) — remote/user/runtime exit classification.
-8. <a id="source-8"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L112) — shared root definitions and TUI.
+7. <a id="source-7"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L89) — remote/user/runtime exit classification.
+8. <a id="source-8"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L114) — shared root definitions and TUI.
 9. <a id="source-9"></a> [internal/tui/yoloctlcli/complete.go](../../internal/tui/yoloctlcli/complete.go#L1-L100) — `Complete` and completion result parsing.
 10. <a id="source-10"></a> [internal/tui/palette/palette.go](../../internal/tui/palette/palette.go#L95-L129) — `Submit` through `CompletionInput`.
 11. <a id="source-11"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L29) — native mutation guard.

@@ -14,6 +14,7 @@ import (
 	"github.com/leogr/yoloctl/internal/port"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/spaceenv"
+	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/tui"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
@@ -53,6 +54,7 @@ func main() {
 	if len(os.Args) == 2 && os.Args[1] == mermaid.WorkerArgument {
 		os.Exit(mermaid.WorkerMain())
 	}
+	terminal.UseCompilationCache(hostTerminalCacheDir)
 	ctx, stop := commandSignalContext()
 	defer stop()
 	ctx, closeRequests, err := claimTabRequests(ctx)

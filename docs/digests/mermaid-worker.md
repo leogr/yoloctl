@@ -49,7 +49,7 @@ Under `-race` the tests that assert the real 2 s/4 s limits are skipped.
 
 ## Sources
 
-1. <a id="source-1"></a> [Dispatch](../../cmd/yoloctl/main.go#L53) — early `mermaid.WorkerArgument`; internal/mermaid/worker_main.go `WorkerMain`.
+1. <a id="source-1"></a> [Dispatch](../../cmd/yoloctl/main.go#L54) — early `mermaid.WorkerArgument`; internal/mermaid/worker_main.go `WorkerMain`.
 2. <a id="source-2"></a> [Worker](../../internal/mermaid/worker.go#L31) — `runWorker`, `render` (L80).
 3. <a id="source-3"></a> [Protocol and checks](../../internal/mermaid/protocol.go#L177) — `verifyDrawing`, `Result.valid`, `request.valid`, frames.
 4. <a id="source-4"></a> [Client and cache](../../internal/mermaid/client.go#L147) — `Render`, `exchange`, `startLocked` (L82), `onHost`; cache.go `resultCache` (L36).

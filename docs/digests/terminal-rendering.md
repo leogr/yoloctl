@@ -3,7 +3,7 @@
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; keep-history reset on `003c44131ad5ea54194391b96821ddf3cbfd0aba` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; slave retention on `0d2ab61` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Each terminal owns an isolated libghostty-vt WebAssembly instance under
-wazero. The embedded artifact pins Ghostty revision
+wazero; its compiled core may come from an on-disk cache ([terminal core compile cache](terminal-core-cache.md)). The embedded artifact pins Ghostty revision
 `33da6848d63b3bba2b4f31ab1531d618f2795192` and Zig 0.16.0; the bridge, native patch
 and artifact have manifest hashes. The mouse patch handles buttons 10/11,
 UTF-8 fields and already-routed pixel coordinates. A formatter patch closes an
@@ -88,7 +88,7 @@ or native application parity. [12](#source-12)
 
 ## Sources
 
-1. <a id="source-1"></a> [terminal.go](../../internal/terminal/terminal.go#L1-L313) — imports, memory, ownership, rows, events, cleanup.
+1. <a id="source-1"></a> [terminal.go](../../internal/terminal/terminal.go#L1-L333) — imports, memory, ownership, rows, events, cleanup.
 2. <a id="source-2"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L42) — private ABI, defaults, native rows, keyboard encoder.
 3. <a id="source-3"></a> [build-terminal.py](../../scripts/build-terminal.py#L1-L80) — pins, hashes, regeneration, reproduction.
 4. <a id="source-4"></a> [emulator.go](../../internal/tui/term/emulator.go#L1-L249) — synchronization, interception, reset, close.

@@ -262,6 +262,12 @@ rejection and transport failures are visible. Terminal resets
 retain final output, and process completion cannot wait forever for a grandchild
 to close the PTY. [2](#source-2)
 
+[FACT] The host CLI and the VM's session holders keep the compiled core in an
+on-disk cache under paths grants already refuse, trusting whoever can write it.
+Confined boxes and operator clients compile in memory, as after any cache error;
+a privileged box without the operator grant uses its own config root.
+[60](#source-60)
+
 [FACT] `seams.clipboard` defaults on and controls yoloctl copy-out and explicit
 image reads. Host-terminal copy/paste remains independent; native clipboard
 reads inside a box are unsupported. [3](#source-3) [13](#source-13)
@@ -497,3 +503,4 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 57. <a id="source-57"></a> [Managed chat runtime](../digests/chat-runtime.md).
 58. <a id="source-58"></a> [Native chat composer](../digests/chat-composer.md).
 59. <a id="source-59"></a> [Native chat message display](../digests/chat-display.md).
+60. <a id="source-60"></a> [Terminal core compile cache](../digests/terminal-core-cache.md).
