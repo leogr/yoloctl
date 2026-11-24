@@ -78,7 +78,7 @@ hosts gain no grant. Existing ancestor matching remains unchanged. [18](#source-
 
 6. <a id="source-6"></a> [assets/embed.go](../../assets/embed.go#L1) — embedded assets; the v0.0.72 `SandboxVersion` pins and legacy Rego embed are removed by the retirement (tree `3cc5e841`), the native runtime, its Rego and the generated qualification selection are embedded through `internal/nativeartifacts` (`embedded/selection/`, git-ignored, written by `make build`); `assets/native_openshell.go` keeps an empty default; `assets/sandbox/sandbox-policy.rego` stays only as a test fixture.
 7. <a id="source-7"></a> [internal/features/features_test.go](../../internal/features/features_test.go#L187) — `TestGenerateDockerfile_AgentNpmFeaturesUseLatest`.
-8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L87-L129) — `PTYAllocateCapability`, `ptyGrants`, `PTYGrants`.
+8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L88-L130) — `PTYAllocateCapability`, `ptyGrants`, `PTYGrants`.
 9. <a id="source-9"></a> [internal/sandbox/sandbox.go](../../internal/sandbox/sandbox.go#L113-L139) — `EntrypointArgs` and process-mode selection.
 10. <a id="source-10"></a> [internal/agentbox/policy_golden_test.go](../../internal/agentbox/policy_golden_test.go#L51-L143) — `policyGoldenCases`, `TestPolicyGolden`.
 11. <a id="source-11"></a> [assets/entrypoint_test.go](../../assets/entrypoint_test.go#L11) — prepared-identity no-op, group collisions and rejection before mutation.
@@ -90,7 +90,7 @@ hosts gain no grant. Existing ancestor matching remains unchanged. [18](#source-
 16. <a id="source-16"></a> [OpenShell L7 config](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-network/src/l7/mod.rs#L164) — `parse_l7_config`, `expand_access_presets` at L1460.
 17. <a id="source-17"></a> [OpenShell policy preprocessing](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-network/src/opa.rs#L722) — validation and access expansion.
 
-18. <a id="source-18"></a> [OpenAI capability](../../internal/capabilities/capabilities.go#L172) — `network.openai` executable paths and endpoints.
+18. <a id="source-18"></a> [OpenAI capability](../../internal/capabilities/capabilities.go#L173) — `network.openai` executable paths and endpoints.
 19. <a id="source-19"></a> [Codex egress regressions](../../internal/agentbox/codex_egress_test.go#L19) — `TestCodexEgressGlobScope` checks composed binary paths with OPA glob.match; skips without the optional OPA tool.
 20. <a id="source-20"></a> [Extra mount regressions](../../internal/agentbox/policy_golden_test.go#L383) — `TestPolicyGrantsDeclaredExtraMounts`; golden `extra_mounts`.
 21. <a id="source-21"></a> [Static composition regressions](../../internal/agentbox/compose_surface_test.go#L1) — `TestComposeExplicitNetworkCapabilitiesMatchGoldens`, `TestComposeUnconfinedNetworkKeepsFilesystemPolicy`, `TestComposeExtraReadOnlyMountDesiredPolicy`; `ComposePolicy` and `compilePolicy` in compose.go L40-L226.

@@ -107,7 +107,7 @@ continues to come from the controller grant. [17](#source-17)
 ## Sources
 
 1. <a id="source-1"></a> [internal/features/features.go](../../internal/features/features.go#L114) — built-in operator installation recipe.
-2. <a id="source-2"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L145) — operator filesystem grant.
+2. <a id="source-2"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L146) — operator filesystem grant.
 3. <a id="source-3"></a> [cmd/yoloctl/controller_test.go](../../cmd/yoloctl/controller_test.go#L184) — CLI fidelity, authority and path tests.
 4. <a id="source-4"></a> [cmd/yoloctl/controller_operator.go](../../cmd/yoloctl/controller_operator.go#L28) — authorization, provisioning support, warnings and path translation.
 5. <a id="source-5"></a> [internal/controller/server.go](../../internal/controller/server.go#L249) — `ServeConn`: trusted principal, request admission and execution cancellation.
@@ -137,4 +137,4 @@ continues to come from the controller grant. [17](#source-17)
 
 25. <a id="source-25"></a> [internal/controller/holds.go](../../internal/controller/holds.go#L1) — `heldError`, `loadHolds` and dependency intersections.
 
-26. <a id="source-26"></a> [Controller entry](../../cmd/yoloctl/controller_internal.go#L136) — `runControllerInternal`, `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle` and `prepareRuntimeStorage`.
+26. <a id="source-26"></a> [Controller entry](../../cmd/yoloctl/controller_internal.go#L139) — `runControllerInternal`, `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle` and `prepareRuntimeStorage`.

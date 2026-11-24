@@ -72,7 +72,7 @@ establish native VM/power-loss qualification. [16](#source-16) [19](#source-19)
 ## Sources
 
 1. <a id="source-1"></a> [internal/controller/effects.go](../../internal/controller/effects.go#L1) — checkpoint kinds, `BeginScopedEffects`, `ExpandEffects`, `RecordDocument`, `CompleteEffects`, `serveWorkerCheckpoints`.
-2. <a id="source-2"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L35) — `controllerOperations` gates and footprints.
+2. <a id="source-2"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L40) — `controllerOperations` gates and footprints.
 3. <a id="source-3"></a> [cmd/yoloctl/operation_scope.go](../../cmd/yoloctl/operation_scope.go#L130) — footprint resolution, bounded actual/desired account dependencies and `wrapperGatesEffects`.
 4. <a id="source-4"></a> [internal/controller/recovery.go](../../internal/controller/recovery.go#L1) — evidence types, validation, `LoadRecoveryKey`, fingerprints.
 5. <a id="source-5"></a> [internal/controller/receipts.go](../../internal/controller/receipts.go#L1) — `Receipt` fields, `interrupt`, `terminal`, `begin`.
@@ -84,7 +84,8 @@ establish native VM/power-loss qualification. [16](#source-16) [19](#source-19)
 11. <a id="source-11"></a> [internal/controller/recovery_scheduler.go](../../internal/controller/recovery_scheduler.go#L1) — ledger, `RunRecovery`, `repairStorage`, `publishApplied`.
 12. <a id="source-12"></a> [internal/controller/verifier.go](../../internal/controller/verifier.go#L1) — `RunVerifier` descriptors and bounds.
 13. <a id="source-13"></a> [cmd/yoloctl/controller_verify.go](../../cmd/yoloctl/controller_verify.go#L25) — read-only verifier worker.
-14. <a id="source-14"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L327) — `serveController` current identity verification and degraded recovery.
+14. <a id="source-14"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L336-L385) — `serveController` current identity verification;
+    [degraded recovery](../../cmd/yoloctl/controller_internal.go#L461-L463).
 15. <a id="source-15"></a> [internal/controller/server.go](../../internal/controller/server.go#L1) — admission, gate, ping, receipt views and finalization.
 16. <a id="source-16"></a> [internal/controller/recovery_scheduler_test.go](../../internal/controller/recovery_scheduler_test.go#L1) — storage identity loss/restoration, responsive reads, repair and drain regressions.
 

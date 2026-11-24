@@ -91,7 +91,7 @@ they establish no live VM, SQLite, Unix-socket or AIRC revocation behavior.
 ## Sources
 
 1. <a id="source-1"></a> [Controller state dispatcher](../../cmd/yoloctl/controller_chat.go#L20) — `chatStateRequest`, `chatInventory`, `runControllerChatState`.
-2. <a id="source-2"></a> [Registry and worker](../../cmd/yoloctl/controller_internal.go#L36) — `controllerOperations`, `runControllerWorker`.
+2. <a id="source-2"></a> [Registry and worker](../../cmd/yoloctl/controller_internal.go#L40) — `controllerOperations`, `runControllerWorker`.
 3. <a id="source-3"></a> [Native state store](../../internal/managedchat/store.go#L16) — `Store`, `Ensure`, `Prepare`, `Enroll`, `RevokeTarget`, `Revoke`.
 4. <a id="source-4"></a> [Ownership verification](../../internal/managedchat/verify.go#L14) — `Verify`.
 5. <a id="source-5"></a> [Chat paths](../../internal/layout/chat.go#L24) — path helpers.

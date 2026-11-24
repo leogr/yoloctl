@@ -38,7 +38,7 @@ establish a live pass. [5](#source-5)
 ## Sources
 
 1. <a id="source-1"></a> [Go feature](../../internal/features/features.go#L123) — install fragment, description and `GOTOOLCHAIN=local`.
-2. <a id="source-2"></a> [Go modules capability](../../internal/capabilities/capabilities.go#L284) — `network.go-modules` endpoints and binary.
+2. <a id="source-2"></a> [Go modules capability](../../internal/capabilities/capabilities.go#L285) — `network.go-modules` endpoints and binary.
 3. <a id="source-3"></a> [Policy golden](../../internal/agentbox/testdata/policy_golden/go-modules.yaml#L28) — rendered `go-modules` grant.
 4. <a id="source-4"></a> [Symlink cross-check](../../internal/features/symlink_test.go#L1) — `TestNoCapabilityGrantsAFeatureSymlink`, `TestGoFeatureKeepsItsToolchainAndGrantsTheRealBinary`.
 5. <a id="source-5"></a> [Go smoke](../../scripts/smoke/go-modules.sh#L1) — module download, local toolchain and attributed denial.

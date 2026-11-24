@@ -89,7 +89,7 @@ separate checks. [8](#source-8) [20](#source-20)
 4. <a id="source-4"></a> [Icon table](../../internal/config/tui.go#L144) — OpenCode defaults.
 5. <a id="source-5"></a> [Feature recipe](../../internal/features/opencode.go#L3) — installation.
 6. <a id="source-6"></a> [Upstream installer](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/opencode/script/postinstall.mjs#L23) — native selection and target.
-7. <a id="source-7"></a> [Capabilities](../../internal/capabilities/capabilities.go#L231) — network.opencode.
+7. <a id="source-7"></a> [Capabilities](../../internal/capabilities/capabilities.go#L232) — network.opencode.
 8. <a id="source-8"></a> [Isolated smoke](../../scripts/smoke/opencode.sh#L1) — binary/runtime/persistence checks.
 9. <a id="source-9"></a> [Upstream ChatGPT auth](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/opencode/src/plugin/openai/codex.ts#L471) — headless device flow and endpoints.
 10. <a id="source-10"></a> [Policy tests](../../internal/agentbox/policy_golden_test.go#L50) — compositions and attribution.

@@ -80,7 +80,7 @@ hover and popups with fixtures. No live VM measurement is established by them.
 6. <a id="source-6"></a> [layout.go](../../internal/tui/spaceview/layout.go#L411-L421) — disk hover hints; `tSystemDisk` at L29; click in `popup.go` at L164.
 7. <a id="source-7"></a> [disks.go](../../internal/tui/spaceview/disks.go#L168-L230) — `diskAlerts`, `diskEvents`; title slot in `layout.go` at L255-L270.
 8. <a id="source-8"></a> [data.go](../../internal/tui/spaceview/data.go#L168) — disk events per sample.
-9. <a id="source-9"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L105) — `space.storage` entry; view in `controller_views.go` at L256.
+9. <a id="source-9"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L122) — `space.storage` entry; view in `controller_views.go` at L277.
 10. <a id="source-10"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L308) — `newSpaceStorageCmd`; registered in `controller_lifecycle.go` at L45.
 11. <a id="source-11"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L22-L306) — report types, `collectSpaceStorage`, `runSpaceStorageView`.
 12. <a id="source-12"></a> [storage.go](../../internal/container/storage.go#L129-L245) — keyed/global snapshot measurements and strict parsers.

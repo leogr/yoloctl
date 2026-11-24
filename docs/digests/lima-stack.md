@@ -120,4 +120,4 @@ Disk/owner/target errors fail startup; systemd retries are unchanged. [23](#sour
 
 22. <a id="source-22"></a> [Boot resource application](../../cmd/yoloctl/space_nested_virtualization.go#L1) — `applySpaceBootResources`, verified with accompanying changes on fc48bca3.
 
-23. <a id="source-23"></a> [Controller startup](../../cmd/yoloctl/controller_internal.go#L136) — `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle`; internal/controller/service.go:`ServiceUnit`.
+23. <a id="source-23"></a> [Controller startup](../../cmd/yoloctl/controller_internal.go#L285) — `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle`; internal/controller/service.go:`ServiceUnit`.

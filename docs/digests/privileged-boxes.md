@@ -149,7 +149,7 @@ were not run. [28](#source-28)
 
 ## Sources
 
-1. <a id="source-1"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L131-L139) — `RetiredPrivilegedCapability`, `ErrRetiredPrivileged`; `Lookup` at L338; custom-name refusals in `user.go` at L190 and L332.
+1. <a id="source-1"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L132-L140) — `RetiredPrivilegedCapability`, `ErrRetiredPrivileged`; `Lookup` at L375 (refusal at L384); custom-name refusals in `user.go` at L192 and L334.
 2. <a id="source-2"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L22-L52) — `PrivilegedAuthority`, `PrivilegedOperatorAccess` and `RuntimeFeatures`.
 3. <a id="source-3"></a> [internal/features/privileged.go](../../internal/features/privileged.go#L5-L61) — internal installer and its identity note.
 4. <a id="source-4"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L436-L487) — privileged launch; creation check at L263.

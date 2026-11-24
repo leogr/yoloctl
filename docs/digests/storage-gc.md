@@ -100,8 +100,8 @@ cancellation; the orphan ledger is separate from receipt retention. See
 1. <a id="source-1"></a> [buildkit.go](../../internal/storagegc/buildkit.go#L16) — policy.
 2. <a id="source-2"></a> [BuildKit 0.17 GCPolicy](https://github.com/moby/buildkit/blob/v0.17.0/cmd/buildkitd/config/config.go#L160-L184) — targets.
 3. <a id="source-3"></a> [buildkit_gc.go](../../cmd/yoloctl/buildkit_gc.go#L17) — activation/rollback.
-4. <a id="source-4"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L108) — install-service.
-5. <a id="source-5"></a> [controller_storage.go](../../cmd/yoloctl/controller_storage.go#L27) — scheduler/worker.
+4. <a id="source-4"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L164) — install-service.
+5. <a id="source-5"></a> [controller_storage.go](../../cmd/yoloctl/controller_storage.go#L29) — scheduler/worker.
 6. <a id="source-6"></a> [maintenance.go](../../internal/controller/maintenance.go#L9) — admission.
 7. <a id="source-7"></a> [storage_gc.go](../../cmd/yoloctl/storage_gc.go#L30) — inventory/preflight.
 8. <a id="source-8"></a> [policy.go](../../internal/storagegc/policy.go#L46) — retention.
@@ -112,7 +112,7 @@ cancellation; the orphan ledger is separate from receipt retention. See
 13. <a id="source-13"></a> [controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L151) — deployment.
 14. <a id="source-14"></a> [server.go](../../internal/controller/server.go#L60) — drain/mutations.
 15. <a id="source-15"></a> [storage.go](../../internal/container/storage.go#L27) — snapshot/batch inspection.
-16. <a id="source-16"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L413) — build guard.
+16. <a id="source-16"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L716) — build guard.
 17. <a id="source-17"></a> [image_prune_test.go](../../cmd/yoloctl/image_prune_test.go#L93) — complete inventories.
 18. <a id="source-18"></a> [storage_gc_test.go](../../cmd/yoloctl/storage_gc_test.go#L16) — pressure/remeasurement.
 19. <a id="source-19"></a> [buildkit_gc_test.go](../../cmd/yoloctl/buildkit_gc_test.go#L15) — rollback/markers.
@@ -130,6 +130,6 @@ cancellation; the orphan ledger is separate from receipt retention. See
 31. <a id="source-31"></a> [nerdctl 2.4 inspect](https://github.com/containerd/nerdctl/blob/v2.4.0/pkg/inspecttypes/dockercompat/dockercompat.go#L344-L369) — recorded digest.
 32. <a id="source-32"></a> [Guest builder](../../internal/vmguest/buildkit_linux.go#L1) — `configureBuilder`, shared policy before lazy startup.
 33. <a id="source-33"></a> [controller_images.go](../../cmd/yoloctl/controller_images.go#L487) — returned preflight result and bounded capture, verified on `e05d46a4` and accompanying changes.
-34. <a id="source-34"></a> [controller_storage.go](../../cmd/yoloctl/controller_storage.go#L213) — worker return publication, verified on `e05d46a4` and accompanying changes.
+34. <a id="source-34"></a> [controller_storage.go](../../cmd/yoloctl/controller_storage.go#L218-L225) — worker return publication, verified on `e05d46a4` and accompanying changes.
 35. <a id="source-35"></a> [Subprocess controls](../../cmd/yoloctl/controller_preflight_result_test.go#L1) — returned refusal and interrupted-result boundaries.
 36. <a id="source-36"></a> [Request regression](../../internal/controller/image_failure_test.go#L30) — known-failure propagation without build or retry advice.

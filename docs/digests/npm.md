@@ -63,7 +63,7 @@ the smoke. Its existence is not evidence of a successful live run.
 5. <a id="source-5"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L110-L164) — `npmInstallGlobalAtLatestArgs`, managed prefix and cache.
 6. <a id="source-6"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L41-L57) — `ComposedImageRef`, `composedImageRef`.
 7. <a id="source-7"></a> [internal/agentboximage/composed_test.go](../../internal/agentboximage/composed_test.go#L123-L138) — `TestComposedImageRef_NpmEnvironmentChangesImage`.
-8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L298-L308) — `network.npm`.
+8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L299-L309) — `network.npm`.
 9. <a id="source-9"></a> [npm policy golden](../../internal/agentbox/testdata/policy_golden/npm.yaml#L29-L41) — exact composed grant.
 10. <a id="source-10"></a> [scripts/smoke/npm.sh](../../scripts/smoke/npm.sh#L1) — complete isolated runtime gate.
 11. <a id="source-11"></a> [cmd/yoloctl/autoupdate_test.go](../../cmd/yoloctl/autoupdate_test.go#L11-L56) — `TestNpmAgentMaintenanceUsesExplicitConfigPaths`.

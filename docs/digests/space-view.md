@@ -112,7 +112,7 @@ and local PTYs; they do not establish live-VM or proxy-confined chat coverage.
 1. <a id="source-1"></a> [space_view.go](../../cmd/yoloctl/space_view.go#L30-L139) — `newSpaceViewCmd`, `runSpaceView`.
 2. <a id="source-2"></a> [space_view.go](../../cmd/yoloctl/space_view.go#L143-L244) — `streamSpaceView`, `runViewCommand`, `viewChildEnv`.
 3. <a id="source-3"></a> [controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L43) — host-only registration.
-4. <a id="source-4"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L82-L83) — `space.inventory` and `space.telemetry` registry entries.
+4. <a id="source-4"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L120-L121) — `space.inventory` and `space.telemetry` registry entries.
 5. <a id="source-5"></a> [controller_views.go](../../cmd/yoloctl/controller_views.go#L244-L256) — typed internal views.
 6. <a id="source-6"></a> [controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L83-L111) — `checkControllerSpace`.
 7. <a id="source-7"></a> [server.go](../../internal/controller/server.go#L108-L115) — reads are admitted without active-work accounting.

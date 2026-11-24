@@ -75,7 +75,7 @@ classification, durable evidence or existing admission/cancellation rules.
 
 ## Sources
 
-1. <a id="source-1"></a> [Process bindings](../../cmd/yoloctl/controller_internal.go#L311) — `serveController`; `session_hold.go` `newSessionHoldCmd`; `internal/vmguest/init_linux.go` `Run`; `internal/logging/logging.go` `InitFile`, `NewFileLogger`.
+1. <a id="source-1"></a> [Process bindings](../../cmd/yoloctl/controller_internal.go#L336) — `serveController`; `session_hold.go` `newSessionHoldCmd`; `internal/vmguest/init_linux.go` `Run`; `internal/logging/logging.go` `InitFile`, `NewFileLogger`.
 2. <a id="source-2"></a> [Controller notices](../../cmd/yoloctl/controller_operator.go#L75) — `restoreOperatorEndpoints`, `serveOperatorEndpoints`; `controller_storage.go` `scheduleStorageGC`; `controller_codex_observe.go` `scheduleCodexObserve`; `internal/session/holder.go` agent launch summary.
 3. <a id="source-3"></a> [Append protocol](../../internal/rotatelog/append.go#L35) — `Append`, `appendLocked`, `rotate`; `internal/lima/diagnostics.go` `hostLogAppender`, `appendHostLog`.
 4. <a id="source-4"></a> [Stream writer](../../internal/rotatelog/writer.go#L37) — `Open`, `Write`, `Err`, `BestEffort`; `pipe.go` `Pipe`.

@@ -60,7 +60,7 @@ versions are pinned. The smoke's existence does not establish a live pass.
 5. <a id="source-5"></a> [Python 3.13 venv documentation](https://docs.python.org/3.13/library/venv.html) — isolated environment, executable paths and activation.
 6. <a id="source-6"></a> [pip caching documentation](https://pip.pypa.io/en/stable/topics/caching/) — pip 26.2.1 cache defaults.
 7. <a id="source-7"></a> [scripts/smoke/pip.sh](../../scripts/smoke/pip.sh#L1) — complete isolated runtime gate.
-8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L309) — unchanged `network.pypi` endpoint and executable grants.
+8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L310) — unchanged `network.pypi` endpoint and executable grants.
 9. <a id="source-9"></a> [pip policy golden](../../internal/agentbox/testdata/policy_golden/pip.yaml#L1) — complete composed policy.
 10. <a id="source-10"></a> [internal/agentboximage/composed_test.go](../../internal/agentboximage/composed_test.go#L204) — `TestComposedImageRef_PipEnvironmentChangesImage`.
 11. <a id="source-11"></a> [internal/features/features_test.go](../../internal/features/features_test.go#L100) — `TestPipEnvironmentIncludesPyPIWithoutChangingPolicyOnlyFeature`.
