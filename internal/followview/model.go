@@ -376,12 +376,16 @@ func (m *Model) work(read, render bool) tea.Cmd {
 						}
 					}
 					admitted := m.opts.Navigation.AdmitDestinations(ctx, batch)
-					for s, t := range admitted {
-						result.admissions[s] = t
+					// No new target: the links, bytes and drawings are those of
+					// the view just rendered, so it is already the final one.
+					if len(admitted) > 0 {
+						for s, t := range admitted {
+							result.admissions[s] = t
+						}
+						finalDraw := draw
+						finalDraw.reuse = &result.view.drawn
+						result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, finalDraw, opened, linkview.Policy(result.admissions, string(result.raw)))
 					}
-					finalDraw := draw
-					finalDraw.reuse = &result.view.drawn
-					result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, finalDraw, opened, linkview.Policy(result.admissions, string(result.raw)))
 				}
 			}
 			if result.view != nil {

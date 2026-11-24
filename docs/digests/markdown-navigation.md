@@ -1,6 +1,6 @@
 # Markdown file and browser navigation
 
-Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes.
+Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes; follow link relayout re-read at `ff82fb098295a0c75de64d0e778ecc6b6b239afa` and accompanying changes.
 
 [FACT] Native chat and follow classify only explicit Markdown file destinations.
 Chat pins the selected space's controller-owned default workdir as base/root.
@@ -51,7 +51,9 @@ application. Guarded participant attaches keep their existing route.
 validation and seams.browser callback as chat. On opens explicitly; ask snapshots
 the URL and requires deliberate Ctrl+O with a visible destination; off never
 calls the opener. Esc cancels. Paste, committed text and repeat events cannot
-approve, and browser policy does not govern local file opening. Link-only relayout reuses the current Mermaid drawing outcome. Clipboard
+approve, and browser policy does not govern local file opening. Follow lays a
+view out again for links only when the visible-destination probe admits a new
+target; that relayout reuses the current Mermaid drawing outcome. Clipboard
 behavior is unchanged. [2](#source-2) [4](#source-4) [6](#source-6)
 
 ## Sources

@@ -2,12 +2,15 @@ package followview
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/leogr/yoloctl/internal/filelink"
+	"github.com/leogr/yoloctl/internal/linkview"
 	"github.com/leogr/yoloctl/internal/markdownview"
 )
 
@@ -171,5 +174,51 @@ func TestLocalAdmissionRelayoutReusesMermaidBudget(t *testing.T) {
 	applyWork(t, m, m.work(false, true))
 	if len(renderer.calls) != 1 {
 		t.Fatalf("one refresh spent Mermaid budget %d times", len(renderer.calls))
+	}
+}
+
+// A refresh shows one layout of its bytes with the admissions it ends with,
+// whether or not its probe admitted a new target.
+func TestFollowRefreshViewIsOneLayoutWithFinalAdmissions(t *testing.T) {
+	m, _ := fileModel(t, "[file](a.md) [web](https://example.org)\n\n| A | B |\n| --- | --- |\n| [c](c.md) | d |\n\n```mermaid\nflowchart TD\n A-->B\n```\n", Markdown)
+	m.opts.Mermaid = &fakeRenderer{}
+	readable := false
+	probes := 0
+	m.opts.Navigation = &filelink.Navigator{Context: filelink.Context{Mode: "host", Base: "/p", Root: "/p"}, Probe: func(_ context.Context, targets []filelink.Target) map[filelink.Target]error {
+		probes++
+		out := map[filelink.Target]error{}
+		for _, target := range targets {
+			out[target] = errors.New("unreadable")
+			if readable {
+				out[target] = nil
+			}
+		}
+		return out
+	}}
+	oneLayout := func() *rendered {
+		draw := drawing{renderer: m.opts.Mermaid, reuse: &m.view.drawn}
+		view := renderFileTables(context.Background(), m.raw, false, false, Markdown, m.width, m.method, m.theme, draw, nil, linkview.Policy(m.admissions, string(m.raw)))
+		view.gen = m.view.gen
+		return view
+	}
+	local := func(destination string) bool {
+		for _, row := range m.view.rows {
+			for _, run := range row.Runs {
+				if run.Act == (markdownview.Action{Kind: markdownview.IntentLocalFile, Value: destination}) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	m.gen++
+	applyWork(t, m, m.work(false, true))
+	if probes != 1 || len(m.admissions) != 0 || local("a.md") || !reflect.DeepEqual(m.view, oneLayout()) {
+		t.Fatalf("refused refresh: probes=%d admissions=%d", probes, len(m.admissions))
+	}
+	readable = true
+	applyWork(t, m, key(m, 'r', 0))
+	if probes != 2 || len(m.admissions) != 2 || !local("a.md") || !local("c.md") || !reflect.DeepEqual(m.view, oneLayout()) {
+		t.Fatalf("admitting refresh: probes=%d admissions=%d", probes, len(m.admissions))
 	}
 }
