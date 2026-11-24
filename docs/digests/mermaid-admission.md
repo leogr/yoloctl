@@ -25,7 +25,10 @@ are refused. Sequences admit `participant`/`actor` with `as`, the arrows
 after the operator or `-- "label" -->`: text without a quote, not blank and
 not a Markdown string (`` "`…`" ``). The pinned renderer removes the quotes and
 draws the text as it draws the same text unquoted (`#34;` becomes a quote in
-both). A quoted pipe label may hold any other character. `-- "…" -->` refuses
+both). Mermaid draws every entity code (`#name;`, `#digits;`) as its
+character but the renderer only `#34;`, so a quoted label with another one
+(e.g. `#quot;`) is refused naming it; `#` without that form stays text. A
+quoted pipe label may hold any other character. `-- "…" -->` refuses
 `-->`, `|`, `-.` and `.-` in the text: the renderer ends this form at its
 first `-->`, drops the arrowhead after a `|` and draws the edge dotted after
 `-.` or `.-`. A space between pipe and quote, a quote inside, an unbalanced
@@ -61,7 +64,7 @@ that every admitted combination draws correctly. [3](#source-3)
 
 ## Sources
 
-1. <a id="source-1"></a> [Validator](../../internal/mermaid/admit/admit.go#L1) — `Check`, `checkFlowchart`, `statement`, `node`, `edge`, `quotedText`, `dashQuotedLabel`, `pipeLabel`, `subgraphTitle`, `checkSequence`, `message`, `note`.
+1. <a id="source-1"></a> [Validator](../../internal/mermaid/admit/admit.go#L1) — `Check`, `checkFlowchart`, `statement`, `node`, `edge`, `quotedReason`, `entityCode`, `dashQuotedLabel`, `pipeLabel`, `subgraphTitle`, `checkSequence`, `message`, `note`.
 2. <a id="source-2"></a> [Admission tests](../../internal/mermaid/admit/admit_test.go#L1) — accept/reject table (note placement and quoted edge labels included), empty headers, no size limits, unchanged source, corpus split, `FuzzAdmission`.
 3. <a id="source-3"></a> [Fidelity corpus](../../internal/mermaid/fidelity_test.go#L1) — `TestFidelityCorpusMatchesReviewedGoldens` over testdata/fixtures and testdata/golden.
 4. <a id="source-4"></a> [Quoted label drawings](../../internal/mermaid/quoted_labels_test.go#L1) — `TestQuotedEdgeLabelsDrawAsUnquoted`, `TestQuotedEdgeLabelSpecialCharactersDrawVerbatim` with the embedded artifact at 40, 60 and 80 columns.

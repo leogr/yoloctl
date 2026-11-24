@@ -275,11 +275,36 @@ func edge(s string) (string, string) {
 	return "", "unsupported edge"
 }
 
-// A quoted edge label is one Mermaid string: text without a quote, drawn as
-// that text unquoted (#34; is its quote). A string starting with a backtick
-// is a Markdown string, which the renderer draws with its marks.
-func quotedText(text string) bool {
-	return strings.TrimSpace(text) != "" && !strings.HasPrefix(text, "`")
+// quotedReason checks a quoted edge label, one Mermaid string: text without a
+// quote, drawn as that text unquoted. A string starting with a backtick is a
+// Markdown string, which the renderer draws with its marks.
+func quotedReason(text string) string {
+	if strings.TrimSpace(text) == "" || strings.HasPrefix(text, "`") {
+		return "unsupported edge label"
+	}
+	if code := entityCode(text); code != "" {
+		return "entity code " + code + " is not supported (only #34;)"
+	}
+	return ""
+}
+
+// entityCode returns the first entity code (#name; or #digits;) in s other
+// than #34;. Mermaid draws each as its character; the renderer decodes only
+// #34; (a quote) and draws the others as typed.
+func entityCode(s string) string {
+	for i := 0; i < len(s); i++ {
+		if s[i] != '#' {
+			continue
+		}
+		j := i + 1
+		for j < len(s) && isIDRune(rune(s[j])) {
+			j++
+		}
+		if j > i+1 && j < len(s) && s[j] == ';' && s[i:j+1] != "#34;" {
+			return s[i : j+1]
+		}
+	}
+	return ""
 }
 
 // dashQuotedLabel reads the rest of `-- "label" -->` after its first quote.
@@ -288,9 +313,12 @@ func quotedText(text string) bool {
 func dashQuotedLabel(s string) (string, string) {
 	text, rest, closed := strings.Cut(s, `"`)
 	tail, arrow := strings.CutPrefix(strings.TrimLeft(rest, " "), "-->")
-	if !closed || !arrow || !quotedText(text) || strings.Contains(text, "-->") ||
+	if !closed || !arrow || strings.Contains(text, "-->") ||
 		strings.Contains(text, "|") || strings.Contains(text, "-.") || strings.Contains(text, ".-") {
 		return "", "unsupported edge label"
+	}
+	if reason := quotedReason(text); reason != "" {
+		return "", reason
 	}
 	if tail != "" && strings.ContainsRune("->.=ox", rune(tail[0])) {
 		return "", "unsupported edge"
@@ -303,8 +331,11 @@ func pipeLabel(s string) (string, string) {
 	if quoted, ok := strings.CutPrefix(s, `|"`); ok {
 		text, rest, closed := strings.Cut(quoted, `"`)
 		tail, end := strings.CutPrefix(rest, "|")
-		if !closed || !end || !quotedText(text) {
+		if !closed || !end {
 			return "", "unsupported edge label"
+		}
+		if reason := quotedReason(text); reason != "" {
+			return "", reason
 		}
 		return tail, ""
 	}

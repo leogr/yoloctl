@@ -69,6 +69,14 @@ func TestAcceptAndRejectTable(t *testing.T) {
 		{"flowchart LR\nA -->|\"a (b) [c] {d} | e --> f -.-> g; %% ❯\"| B", ""},
 		{"flowchart LR\nA -- \"a (b) [c] {d}; %% ❯ -- -> == e.g.\" --> B", ""},
 		{"flowchart LR\nA -->|\"say #34;hi#34;\"| B\nA -- \"say #34;hi#34;\" --> C", ""}, // #34; is Mermaid's quote
+		// other entity codes: Mermaid draws their character, the renderer the code
+		{"flowchart LR\nA -->|\"file #2, R&D, C#; # x; #\"| B\nA -- \"issue #12 and #x\" --> C", ""},
+		{"flowchart LR\nA -->|\"say #quot;ok#quot;\"| B", "line 2: entity code #quot; is not supported (only #34;)"},
+		{"flowchart LR\nA -- \"say #quot;ok#quot;\" --> B", "line 2: entity code #quot; is not supported (only #34;)"},
+		{"flowchart LR\nA -->|\"ready #9829;\"| B", "line 2: entity code #9829; is not supported (only #34;)"},
+		{"flowchart LR\nA -- \"rev #35;2\" --> B", "line 2: entity code #35; is not supported (only #34;)"},
+		{"flowchart LR\nA -->|\"#34;#034;\"| B", "line 2: entity code #034; is not supported (only #34;)"},
+		{"flowchart LR\nA -->|\"a ##34;quot; #_x;\"| B", "line 2: entity code #_x; is not supported (only #34;)"},
 		{"flowchart LR\nA -->|\"x| B", "line 2: unsupported edge label"},
 		{"flowchart LR\nA -->|x\"| B", "line 2: unsupported edge label"},
 		{"flowchart LR\nA -- \"x --> B", "line 2: unsupported edge label"},

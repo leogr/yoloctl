@@ -84,6 +84,7 @@ func TestQuotedEdgeLabelSpecialCharactersDrawVerbatim(t *testing.T) {
 		{`a (b) [c] {d}`, `a (b) [c] {d}`, true},
 		{`x; y %% z`, `x; y %% z`, true},
 		{`say #34;hi#34;`, `say "hi"`, true},
+		{`file #2, R&D, C#; # x`, `file #2, R&D, C#; # x`, true},
 		{`a -- b -> c`, `a -- b -> c`, true},
 		{`a | b`, `a | b`, false},
 		{`a --> b`, `a --> b`, false},
