@@ -145,6 +145,7 @@ func stripTags(line string) tagStrip {
 // autolinks, as InlineMarkdownMap reads those.
 func scanTags(line string) []tagToken {
 	var tokens []tagToken
+	noCommentEnd := false
 	for i := 0; i < len(line); {
 		switch c := line[i]; {
 		case c == '\\' && i+1 < len(line):
@@ -163,7 +164,7 @@ func scanTags(line string) []tagToken {
 				i = end + 1
 				continue
 			}
-			if tk, ok := tagAt(line, i); ok {
+			if tk, ok := tagAt(line, i, &noCommentEnd); ok {
 				tokens = append(tokens, tk)
 				i = tk.end
 				continue
@@ -175,11 +176,14 @@ func scanTags(line string) []tagToken {
 }
 
 // tagAt reads a recognized bare tag or a one-line comment at line[i].
-func tagAt(line string, i int) (tagToken, bool) {
+func tagAt(line string, i int, noCommentEnd *bool) (tagToken, bool) {
 	rest := line[i:]
 	if strings.HasPrefix(rest, "<!--") {
-		if end := strings.Index(rest[4:], "-->"); end >= 0 {
-			return tagToken{start: i, end: i + 4 + end + 3, name: "comment"}, true
+		if !*noCommentEnd {
+			if end := strings.Index(rest[4:], "-->"); end >= 0 {
+				return tagToken{start: i, end: i + 4 + end + 3, name: "comment"}, true
+			}
+			*noCommentEnd = true // every later suffix is also missing the delimiter
 		}
 		return tagToken{}, false
 	}

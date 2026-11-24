@@ -65,6 +65,7 @@ func InlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme,
 	flush := func(i int) {
 		emit(plain, i, base)
 	}
+	noLinkDelimiter := false
 	for i := 0; i < len(line); {
 		c := line[i]
 		switch {
@@ -129,8 +130,10 @@ func InlineMarkdownMap(line string, base spaceview.Style, theme spaceview.Theme,
 				plain = i
 				continue
 			}
-		case c == '[':
-			if close := strings.Index(line[i:], "]("); close > 1 {
+		case c == '[' && !noLinkDelimiter:
+			if close := strings.Index(line[i:], "]("); close < 0 {
+				noLinkDelimiter = true // every later suffix is also missing the delimiter
+			} else if close > 1 {
 				textEnd := i + close
 				if urlEnd := strings.IndexByte(line[textEnd+2:], ')'); urlEnd > 0 {
 					url := line[textEnd+2 : textEnd+2+urlEnd]

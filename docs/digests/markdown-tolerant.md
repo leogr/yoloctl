@@ -58,6 +58,12 @@ parsed like any line (D3). Still unsupported: lazy continuation of quotes or lis
 paragraphs, blocks inside a quote, blocks inside a list item beyond the existing
 display, reference links and entities. [1](#source-1)
 
+[FACT] When an inline link opener finds no `]` followed by `(` in its suffix,
+`InlineMarkdownMap` skips that search for subsequent openers on the same line.
+`scanTags` similarly stops looking for `-->` after a miss. Each search still uses
+the nearest delimiter when one exists. Verified at `5b64129` and accompanying
+changes. [2](#source-2) [4](#source-4)
+
 [FACT] Tests: `tolerant_test.go` covers each rule, the corpus cases in
 `testdata/tolerant` (reviewed after-text), Copy and Quote mapping and
 `FuzzTolerantMarkdown`, whose seeds run in every test run (no panic, one source
