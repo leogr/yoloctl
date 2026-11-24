@@ -83,10 +83,10 @@ func TailHostDiagnostics(ctx context.Context, space string, lines int, follow bo
 	defer func() { _ = current.Close() }()
 	selected := make([][]byte, 0)
 	var pending []byte
-	parts := bytes.SplitAfter(history, []byte{'\n'})
-	for _, raw := range parts {
-		if len(raw) == 0 {
-			continue
+	for raw := range bytes.Lines(history) {
+		if raw[len(raw)-1] != '\n' {
+			// Keep the capacity of the original unterminated suffix.
+			raw = history[len(history)-len(raw):]
 		}
 		for len(raw) > hostLogLimit {
 			if hostDiagnosticMatches(raw[:hostLogLimit], space) {
