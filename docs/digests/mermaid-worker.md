@@ -2,6 +2,9 @@
 
 Verification: `b868ea74f8d99085022bed5f53ef34ecfe3ac740` and accompanying changes.
 
+Width reporting verified on `b44aebcad9b93b2efaee1db48e34cb2f5982d4df`
+and accompanying changes.
+
 [FACT] `yoloctl __mermaid-worker` is dispatched before any CLI, controller or
 terminal initialization. Outside the host CLI context (a controller context,
 its context file, or an agent box) it exits 2 before reading anything;
@@ -14,13 +17,14 @@ nonempty UTF-8 source without controls, in a request frame of at most 1 MiB,
 a transport bound). [1](#source-1) [2](#source-2)
 
 [FACT] Outcomes are honest: the deadline is `timeout`; a trap or abort,
-including at the memory limit, is `renderer failed`; exit 3 is a parse error
-and exit 4 too wide with the needed columns. A drawing is accepted only if it is
+including at the memory limit, is `renderer failed`; exit 3 is a parse error.
+Exit 4 reports the width of the attempted layout after accounting for the
+shared blank left margin. A drawing is accepted only if it is
 UTF-8 without controls (TAB and CR included), at most 120 rows (else
 `too tall`) and every row fits the requested width under the view's width
 method. A dense flowchart (K25) ends as a timeout at the real limits and as a
 renderer failure under a 16 MiB test ceiling. [2](#source-2) [3](#source-3)
-[5](#source-5)
+[5](#source-5) [6](#source-6)
 
 [FACT] `Client` starts one worker lazily (minimal environment, own process
 group, 1 s wait delay, discarded stderr), only on the host. Requests are
@@ -50,3 +54,4 @@ Under `-race` the tests that assert the real 2 s/4 s limits are skipped.
 3. <a id="source-3"></a> [Protocol and checks](../../internal/mermaid/protocol.go#L177) — `verifyDrawing`, `Result.valid`, `request.valid`, frames.
 4. <a id="source-4"></a> [Client and cache](../../internal/mermaid/client.go#L147) — `Render`, `exchange`, `startLocked` (L82), `onHost`; cache.go `resultCache` (L36).
 5. <a id="source-5"></a> [Regressions](../../internal/mermaid/client_test.go#L1) — client cache/timeout/busy/hung-worker/protocol/host/too-tall/LRU and cancel-without-throttle tests; worker_test.go controlled trap, real-limit timeout, deadline and output bounds.
+6. <a id="source-6"></a> [Renderer width result](../../third_party/mermaid-text/patches/10-fit-strict-width-with-blank-margin.patch#L26) — `fit_strict_width`; internal/mermaid/half_width_test.go checks the embedded worker at follow pane widths.

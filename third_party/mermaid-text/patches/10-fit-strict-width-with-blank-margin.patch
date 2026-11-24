@@ -1,0 +1,91 @@
+Subject: [PATCH] Fit strict width by shifting shared blank columns
+
+Keep the selected layout. When the widest row would overflow, use only
+the space before the leftmost occupied column and preserve line breaks.
+
+--- a/crates/mermaid-text/src/lib.rs
++++ b/crates/mermaid-text/src/lib.rs
+@@ -758,16 +758,47 @@
+     if opts.max_width_strict
+         && let Some(budget) = opts.max_width
+     {
+-        let actual = out.lines().map(visible_width).max().unwrap_or(0);
+-        if actual > budget {
+-            return Err(Error::TooWide {
+-                requested: budget,
+-                actual,
+-            });
+-        }
++        return fit_strict_width(out, budget, opts.color);
+     }
+ 
+     Ok(out)
++}
++
++// A shared margin can move the whole drawing without changing its layout.
++fn fit_strict_width(drawing: String, budget: usize, color: bool) -> Result<String, Error> {
++    let actual = drawing.lines().map(visible_width).max().unwrap_or(0);
++    if actual <= budget {
++        return Ok(drawing);
++    }
++
++    // Only count plain leading spaces. Leave coloured layouts to the
++    // existing width check, since an escape can occur inside their margin.
++    let margin = if color {
++        0
++    } else {
++        drawing
++            .lines()
++            .filter_map(|row| {
++                let content = row.trim_start_matches(' ');
++                (!content.is_empty()).then_some(row.len() - content.len())
++            })
++            .min()
++            .unwrap_or(0)
++    };
++    let shift = actual - budget;
++    if shift > margin {
++        return Err(Error::TooWide {
++            requested: budget,
++            actual: actual - margin,
++        });
++    }
++
++    let mut fitted = String::with_capacity(drawing.len());
++    for row in drawing.split_inclusive('\n') {
++        let spaces = row.bytes().take(shift).take_while(|&b| b == b' ').count();
++        fitted.push_str(&row[spaces..]);
++    }
++    Ok(fitted)
+ }
+ 
+ /// Display-column width of a single line, ignoring the ANSI escape sequences
+@@ -1237,6 +1268,28 @@
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn strict_width_shifts_only_the_shared_blank_margin() {
++        let drawing = "   │界\n \n     └\n\n";
++        assert_eq!(fit_strict_width(drawing.into(), 6, false).unwrap(), drawing);
++        assert_eq!(
++            fit_strict_width(drawing.into(), 4, false).unwrap(),
++            " │界\n\n   └\n\n",
++        );
++        assert_eq!(
++            fit_strict_width(drawing.into(), 3, false).unwrap(),
++            "│界\n\n  └\n\n",
++        );
++        assert!(matches!(
++            fit_strict_width(drawing.into(), 2, false),
++            Err(Error::TooWide { requested: 2, actual: 3 }),
++        ));
++        assert!(matches!(
++            fit_strict_width(drawing.into(), 5, true),
++            Err(Error::TooWide { requested: 5, actual: 6 }),
++        ));
++    }
++
+     // ---- Rendering tests --------------------------------------------------
+ 
+     #[test]

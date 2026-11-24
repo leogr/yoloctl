@@ -1,1 +1,1 @@
-status: too_wide needs 76
+status: too_wide needs 69

@@ -2,6 +2,9 @@
 
 Verification: `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes.
 
+Strict-width fitting verified on `b44aebcad9b93b2efaee1db48e34cb2f5982d4df`
+and accompanying changes.
+
 [FACT] `internal/mermaid` embeds a Mermaid text-rendering WASI command and its
 manifest. Ordinary Go builds use the committed bytes; regeneration is a
 maintenance operation requiring Rust 1.95.0 and `wasm32-wasip1`. The pins name
@@ -26,8 +29,10 @@ The manifest binds these inputs to the embedded bytes. [1](#source-1)
   top-down/bottom-up rectangular fan-in ports ordered by source position and
   spaced across the available border. These changes preserve labels and the
   sequence renderer. Labels cannot overwrite another routed edge, including
-  in fallback placement; alternative positions stay within the existing canvas.
-  [2](#source-2)
+  in fallback placement; alternative positions stay within the existing canvas;
+- strict-width fitting for uncoloured output using shared leading blank
+  columns, with the original spacing of already fitting drawings.
+  [2](#source-2) [9](#source-9)
 
 [FACT] The diamond outline uses one-eighth horizontal lines and verticals
 (`▁ 🭻…🭶 ▔ ▕ ▏`); the sloped ones are in the Unicode "Symbols for Legacy
@@ -42,12 +47,15 @@ beside the pins. [2](#source-2) [3](#source-3)
 [FACT] The fixed WASI command accepts one width argument from 1 through 4096
 and nonempty UTF-8 source read to the end of stdin (bounded only by the guest
 memory the Go owner grants). It delegates to
-`render_with_options` with strict width. Exit 2 rejects input/arguments, 3 is a
-renderer error, 4 reports too-wide output with its required column count on
-stderr, and 5 reports an output-write error. A successful drawing goes to
+`render_with_options` with strict width. An overflowing drawing shifts left by
+only the missing columns if those columns are blank across its nonblank rows.
+Its rows and their relative positions are preserved. Exit 2 rejects
+input/arguments, 3 is a renderer error, 4 reports the width of the attempted
+drawing after accounting for the shared margin on stderr, and 5 reports an
+output-write error. A successful drawing goes to
 stdout. This command does not implement UI admission, process supervision or
 render scheduling. Embedding the artifact alone does not enable Mermaid fences
-in chat or follow. [4](#source-4) [5](#source-5)
+in chat or follow. [4](#source-4) [5](#source-5) [9](#source-9)
 
 [FACT] The builder verifies source and input hashes, applies patches without
 fuzz, uses a locked release/LTO/abort build, and remaps source/cache paths.
@@ -77,3 +85,4 @@ terminal/font; that remains a visual check. [5](#source-5) [8](#source-8)
 7. <a id="source-7"></a> [Maintenance regressions](../../scripts/test_mermaid_build.py#L1).
 
 8. <a id="source-8"></a> [Routing regression](../../internal/mermaid/edge_routing_test.go#L1) — `TestRuntimeFlowEdgesJoin`, with testdata/fixtures/runtime-edges.mmd.
+9. <a id="source-9"></a> [Strict-width fitting](../../third_party/mermaid-text/patches/10-fit-strict-width-with-blank-margin.patch#L26) — `fit_strict_width` and its unit regression.

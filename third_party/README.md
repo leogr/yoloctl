@@ -133,10 +133,6 @@ for the snapshot and qualification limits.
 patches, Rust 1.95.0 toolchain, WASI target, Cargo lock, wrapper/builder hashes and
 notices for the embedded `internal/mermaid/wasm/mermaid.wasm`. Normal builds need
 only Go. This artifact does not itself enable fenced diagrams in chat or follow.
-Patch 09 joins rectangular flowchart borders using final routed paths, uses
-shafted arrowheads, and orders/spaces vertical fan-in ports. Its updated
-upstream snapshots and the Go embedded-artifact routing regression accompany
-regeneration; sequence drawings remain unchanged.
 
 Maintenance requires Rust 1.95.0, its `wasm32-wasip1` target, Python and `patch`:
 
@@ -166,7 +162,11 @@ The patches, in order:
 - 05: solid sequence lifelines joined to messages;
 - 06: subgraph borders crossed, never followed;
 - 07: a simple top-down fan-out drawn as one trunk;
-- 08: decisions drawn as a shallow diamond (one-eighth lines, `▕ ▏` ends).
+- 08: decisions drawn as a shallow diamond (one-eighth lines, `▕ ▏` ends);
+- 09: rectangular flowchart borders joined to routed paths, shafted arrowheads,
+  and spaced vertical fan-in ports, with the embedded-artifact routing regression;
+- 10: overflowing drawings shift by the missing columns when the shared
+  blank left margin covers them.
 
 Drop each when upstream covers it, keeping its fixtures and goldens. Detailed artifact boundaries and source links:
 [Mermaid artifact](../docs/digests/mermaid-renderer.md).
