@@ -62,7 +62,7 @@ not live Lima or graphical-host parity results. [4](#source-4)
 3. <a id="source-3"></a> [terminal.go](../../internal/terminal/terminal.go#L39-L203) — interruptible bounded runtime, `New`, isolated instances and call errors.
 4. <a id="source-4"></a> [snapshot_test.go](../../internal/terminal/snapshot_test.go#L99) — restoration/continuation/effect/malformed-input tests and `FuzzRestoreSnapshot`.
 5. <a id="source-5"></a> [Pinned Ghostty snapshot format](https://github.com/ghostty-org/ghostty/blob/33da6848d63b3bba2b4f31ab1531d618f2795192/src/terminal/snapshot/main.zig#L18-L89) — version 1 at `33da6848`, verified against the hash-pinned archive.
-6. <a id="source-6"></a> [holder_view.go](../../internal/session/holder_view.go#L213) — native snapshot admission and compatibility subscription.
+6. <a id="source-6"></a> [holder_view.go](../../internal/session/holder_view.go#L225) — native snapshot admission and compatibility subscription.
 7. <a id="source-7"></a> [Pinned Ghostty field classification](https://github.com/ghostty-org/ghostty/blob/33da6848d63b3bba2b4f31ab1531d618f2795192/src/terminal/snapshot/terminal.zig#L215-L243) — retained, local and omitted state at the same verified revision.
 8. <a id="source-8"></a> [geometry_test.go](../../internal/terminal/geometry_test.go#L18) — measured-size restoration.
 9. <a id="source-9"></a> [mouse_test.go](../../internal/terminal/mouse_test.go#L59) — Shift-state restoration.

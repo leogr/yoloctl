@@ -114,14 +114,21 @@ func (h *holder) queueInput(p []byte) bool {
 
 // emitLocked defines the global event order, including output and resize.
 // Every managed view sees each sequence once. Raw views receive only DATA.
+// The sequence advances without managed views; the packet is built for one.
 func (h *holder) emitLocked(kind byte, p []byte) (dropped []*holderClient) {
 	for len(p) > 0 {
 		n := min(len(p), maxPayload-8)
 		h.sequence++
-		packet := sequenced(h.sequence, p[:n])
+		var packet []byte
 		for i := 0; i < len(h.clients); i++ {
 			c := h.clients[i]
-			if c.managed && !c.enqueueFrame(kind, packet) {
+			if !c.managed {
+				continue
+			}
+			if packet == nil {
+				packet = sequenced(h.sequence, p[:n])
+			}
+			if !c.enqueueFrame(kind, packet) {
 				dropped = append(dropped, c)
 				h.removeClientLocked(i)
 				i--

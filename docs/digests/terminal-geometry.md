@@ -67,7 +67,7 @@ behavior or current macOS support. [2](#source-2) [7](#source-7) [10](#source-10
 1. <a id="source-1"></a> [host_geometry.go](../../internal/tui/host_geometry.go#L12) — measurement lifecycle.
 2. <a id="source-2"></a> [host_geometry_test.go](../../internal/tui/host_geometry_test.go#L13) — padded-window, coalescing and real-reader tests.
 3. <a id="source-3"></a> [protocol.go](../../internal/session/protocol.go#L29) — geometry framing and validation.
-4. <a id="source-4"></a> [holder_view.go](../../internal/session/holder_view.go#L132) — serialized `resizeView`, notification flush and ordered event.
+4. <a id="source-4"></a> [holder_view.go](../../internal/session/holder_view.go#L142) — serialized `resizeView`, notification flush and ordered event.
 5. <a id="source-5"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L42) — size callback and restore validation.
 6. <a id="source-6"></a> [geometry.go](../../internal/session/geometry.go#L9) — explicit SSH requests.
 7. <a id="source-7"></a> [geometry_test.go](../../internal/session/geometry_test.go#L12) — SSH and holder replies.
