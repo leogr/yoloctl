@@ -539,7 +539,8 @@ func (h *holder) retainReplay(p []byte) {
 func (h *holder) replay() ([]byte, error) {
 	prelude, err := h.terminalInput.Replay()
 	if errors.Is(err, terminal.ErrReplayContinuation) {
-		n, advanceErr := h.terminalInput.Recover(h.ring.Snapshot())
+		// Recovery copies these bytes into the tracker before Discard moves them.
+		n, advanceErr := h.terminalInput.Recover(h.ring.buf)
 		h.ring.Discard(n)
 		if advanceErr != nil {
 			return nil, advanceErr
@@ -549,7 +550,7 @@ func (h *holder) replay() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	prelude = append(prelude, h.ring.Snapshot()...)
+	prelude = append(prelude, h.ring.buf...)
 	// Withheld OSC/UTF-8 bytes precede their live continuation. A clipboard
 	// sequence completed after this attach is a live effect, not a replay.
 	return append(prelude, h.rawRingFilter.Pending()...), nil

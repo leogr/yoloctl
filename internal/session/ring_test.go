@@ -9,14 +9,14 @@ import (
 func TestRingKeepsMostRecentBytes(t *testing.T) {
 	r := NewRing(10)
 	r.Write([]byte("abcdef"))
-	if got := string(r.Snapshot()); got != "abcdef" {
+	if got := string(r.buf); got != "abcdef" {
 		t.Fatalf("snapshot = %q, want abcdef", got)
 	}
 	r.Write([]byte("ghijkl")) // 12 total, keeps last 10
-	if got := string(r.Snapshot()); got != "cdefghijkl" {
+	if got := string(r.buf); got != "cdefghijkl" {
 		t.Fatalf("snapshot = %q, want cdefghijkl", got)
 	}
-	if got := len(r.Snapshot()); got != 10 {
+	if got := len(r.buf); got != 10 {
 		t.Fatalf("len = %d, want 10", got)
 	}
 }
@@ -24,7 +24,7 @@ func TestRingKeepsMostRecentBytes(t *testing.T) {
 func TestRingOversizeWriteKeepsTail(t *testing.T) {
 	r := NewRing(4)
 	r.Write([]byte("0123456789"))
-	if got := string(r.Snapshot()); got != "6789" {
+	if got := string(r.buf); got != "6789" {
 		t.Fatalf("snapshot = %q, want 6789", got)
 	}
 }
@@ -38,18 +38,8 @@ func TestRingManySmallWrites(t *testing.T) {
 		want.WriteString(chunk)
 	}
 	tail := want.Bytes()[want.Len()-64:]
-	if got := r.Snapshot(); !bytes.Equal(got, tail) {
+	if got := r.buf; !bytes.Equal(got, tail) {
 		t.Fatalf("snapshot = %q, want %q", got, tail)
-	}
-}
-
-func TestRingSnapshotIsACopy(t *testing.T) {
-	r := NewRing(8)
-	r.Write([]byte("hello"))
-	snap := r.Snapshot()
-	r.Write([]byte("WORLD"))
-	if string(snap) != "hello" {
-		t.Fatalf("snapshot mutated to %q", snap)
 	}
 }
 
@@ -61,7 +51,7 @@ func TestRingEvictionPreservesStream(t *testing.T) {
 			p := []byte(chunk)
 			original = append(original, p...)
 			evicted = append(evicted, r.Write(p)...)
-			got := append(append([]byte(nil), evicted...), r.Snapshot()...)
+			got := append(append([]byte(nil), evicted...), r.buf...)
 			if !bytes.Equal(got, original) {
 				t.Fatalf("capacity %d: eviction reordered or lost bytes", capacity)
 			}

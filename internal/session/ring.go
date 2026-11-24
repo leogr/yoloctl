@@ -38,10 +38,5 @@ func (r *Ring) Write(p []byte) (evicted []byte) {
 	return evicted
 }
 
-// Snapshot returns a copy of the buffered bytes, oldest first.
-func (r *Ring) Snapshot() []byte {
-	return append([]byte(nil), r.buf...)
-}
-
 // Discard advances the replay boundary after the tracker consumed this prefix.
 func (r *Ring) Discard(n int) { r.buf = r.buf[:copy(r.buf, r.buf[n:])] }
