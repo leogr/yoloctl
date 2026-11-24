@@ -411,13 +411,41 @@ func Resolve(ctx context.Context, r *Registry, names []string, options map[strin
 			}
 		}
 	}
+	type softOrderNames struct {
+		full  string
+		alias string
+	}
+	var prepared map[string]softOrderNames
+	var sawHint bool
 	for key, l := range nodes {
 		m, _ := l.Definition()
 		for _, after := range m.InstallsAfter {
+			// A soft order hint can only add an edge to another install.
+			if len(aliases) == 1 {
+				continue
+			}
+			if sawHint && prepared == nil {
+				prepared = make(map[string]softOrderNames)
+			}
+			sawHint = true
 			for other, refs := range aliases {
-				for _, candidate := range refs {
-					n, _ := Parse(candidate.Ref)
-					if key != other && (after == reference.TrimNamed(n).Name() || after == Alias(candidate.Ref)) {
+				if key == other {
+					continue
+				}
+				for ref := range refs {
+					names, ok := prepared[ref]
+					if !ok {
+						n, _ := Parse(ref)
+						names = softOrderNames{
+							full:  reference.TrimNamed(n).Name(),
+							alias: path.Base(reference.Path(n)),
+						}
+						// Only remember references this hint actually reaches.
+						if prepared != nil {
+							prepared[ref] = names
+						}
+					}
+					if after == names.full || after == names.alias {
 						edges[key] = append(edges[key], other)
 						break
 					}

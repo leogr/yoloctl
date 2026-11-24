@@ -36,6 +36,12 @@ installer runs as image-build root with typed uppercase option variables,
 are ignored. This installs tools into the existing Ubuntu foundation and does
 not select a Microsoft base image. [2](#source-2) [3](#source-3)
 
+[FACT] The first eligible soft-order hint scans the selected references directly.
+Later hints reuse full tagless names and short aliases for references reached by
+the scans. Each hint stops at the first match for each other installation.
+The resolver sorts each node's edges before traversing them. [2](#source-2)
+Verified on `ffd9e9df71c33aca45ad783b3c6f21cc106fdc51` and accompanying changes.
+
 [FACT] Requests for privileged mode, init replacement, added Linux
 capabilities, security overrides, mounts, entrypoints or lifecycle hooks are
 always ignored, also for privileged boxes: the Feature installs and nothing
