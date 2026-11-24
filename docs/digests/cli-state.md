@@ -1,6 +1,6 @@
 # CLI selection, runtime views, and output
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; completion registration re-read at `63b8a5be7896a88f5ecddf6159e2911fbc512fa1` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; completion registration re-read at `63b8a5be7896a88f5ecddf6159e2911fbc512fa1` and accompanying changes; space help initialization verified at `64117765f5206b36cab025c10250229f3eb59b78` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Flag/context space selection is centralized: explicit flag, nonempty
 `YOLOCTL_SPACE`, global context pin, then `default`; explicit positional targets
@@ -96,6 +96,13 @@ and operation complete spaces; import an archive after its new name; `account
 observe` an account, then an agent. Tree-walking tests require a completer for
 every entity flag and leading positional. [18](#source-18) [29](#source-29)
 
+[FACT] CLI startup annotates `--space` help using each command's regular and
+persistent flag sets. The pass visits declaring parents first and leaves the
+parsed value and changed bit intact. The pinned Cobra v1.10.2 merges flags
+when parsing or rendering help. A permanent test compares both command trees
+and parsed help requests against the eager `LocalFlags` path. [30](#source-30)
+[31](#source-31)
+
 [FACT] Read-only views and completion do not take the mutation space guard.
 Safety inventories and presentation views therefore have different failure
 contracts; a UI fallback is not evidence that destroying an apparently unused
@@ -133,3 +140,6 @@ adding a new command. [3](#source-3) [11](#source-11)
 27. <a id="source-27"></a> [Manifest validation](../../internal/agentbox/agentbox.go#L519-L520) — `Config.Validate` uses the shared box rule.
 28. <a id="source-28"></a> [nerdctl v2.3.5 validator](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/identifiers/validate.go#L25-L45) — `AllowedIdentifierPattern`, `ValidateDockerCompat`.
 29. <a id="source-29"></a> [Completion audit regressions](../../cmd/yoloctl/completion_audit_test.go#L37) — host `__complete` for persistent `--space` and backup/observe positionals; tree-wide entity flag and positional wiring.
+
+30. <a id="source-30"></a> [Space help initialization](../../cmd/yoloctl/main.go#L131) — `describeSpaceFlagHelp` and the pinned Cobra flag behavior.
+31. <a id="source-31"></a> [Help parity](../../cmd/yoloctl/main_test.go#L36) — client and worker help output, flag state and explicit `--help` execution.

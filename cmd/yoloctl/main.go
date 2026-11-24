@@ -131,7 +131,13 @@ func main() {
 // describeSpaceFlagHelp replaces the parser's placeholder in the help display.
 // It leaves the flag value and Changed bit intact for the space resolver.
 func describeSpaceFlagHelp(cmd *cobra.Command) {
-	if f := cmd.LocalFlags().Lookup("space"); f != nil && f.DefValue == defaultSpaceName {
+	// Cobra merges flags when parsing or rendering help. Visit the declaring
+	// parent first so an already merged child sees the updated flag too.
+	f := cmd.Flags().Lookup("space")
+	if f == nil {
+		f = cmd.PersistentFlags().Lookup("space")
+	}
+	if f != nil && f.DefValue == defaultSpaceName {
 		f.DefValue = ""
 		f.Usage += " (omit to use the current space selection)"
 	}
