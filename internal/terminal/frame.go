@@ -80,8 +80,14 @@ func (t *Terminal) Frame(trim bool) (Frame, error) {
 		if err != nil {
 			return Frame{}, err
 		}
-		f.Lines = append(f.Lines, lines...)
-		f.Selection = append(f.Selection, t.spans...)
+		// A frame from one range keeps that read's slices: each read makes
+		// new ones. A mixed frame appends both as before.
+		if end <= f.History {
+			f.Lines, f.Selection = lines, t.spans
+		} else {
+			f.Lines = append(f.Lines, lines...)
+			f.Selection = append(f.Selection, t.spans...)
+		}
 	}
 	if end > f.History {
 		start := max(f.top-f.History, 0)
@@ -89,8 +95,12 @@ func (t *Terminal) Frame(trim bool) (Frame, error) {
 		if err != nil {
 			return Frame{}, err
 		}
-		f.Lines = append(f.Lines, lines...)
-		f.Selection = append(f.Selection, t.spans...)
+		if f.top >= f.History {
+			f.Lines, f.Selection = lines, t.spans
+		} else {
+			f.Lines = append(f.Lines, lines...)
+			f.Selection = append(f.Selection, t.spans...)
+		}
 	}
 	f.Cursor = Cursor{X: t.Get(3), Y: f.History + t.Get(4) - f.top,
 		Shape: t.Get(10), Blink: t.Get(11) != 0}

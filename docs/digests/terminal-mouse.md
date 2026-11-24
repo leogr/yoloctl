@@ -77,7 +77,7 @@ parity in native Ghostty/Kitty. [4](#source-4) [5](#source-5)
 4. <a id="source-4"></a> [mouse_test.go](../../internal/tui/mouse_test.go#L1-L233) — real PTY gesture and console tests.
 5. <a id="source-5"></a> [mouse_test.go](../../internal/terminal/mouse_test.go#L1) — independent wire bytes, pixel rejection and native Shift-state/snapshot tests.
 6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L755) — `Update` host acknowledgments; `View` leaves mouse encoding to the adapter.
-7. <a id="source-7"></a> [frame.go](../../internal/terminal/frame.go#L18-L88) — `Frame.GridStart` and visible history/grid coordinates.
+7. <a id="source-7"></a> [frame.go](../../internal/terminal/frame.go#L18-L96) — `Frame.GridStart` and visible history/grid coordinates.
 8. <a id="source-8"></a> [Ghostty configuration: mouse-shift-capture](https://ghostty.org/docs/config/reference#mouse-shift-capture) — host override semantics, consulted 2026-10-06.
 9. <a id="source-9"></a> [Ghostty XTSHIFTESCAPE](https://ghostty.org/docs/vt/csi/xtshiftescape) — application's request versus host policy, consulted 2026-10-06.
 10. <a id="source-10"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L532) — `yolo_vt_mouse` and the pinned native encoder.

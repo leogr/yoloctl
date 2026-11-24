@@ -54,7 +54,7 @@ session screen checkpoints. [6](#source-6) [9](#source-9) [11](#source-11)
 
 ## Sources
 
-1. <a id="source-1"></a> [frame.go](../../internal/terminal/frame.go#L1-L139) — `Frame`, `Scroll`, `historyBase` and native anchor ownership.
+1. <a id="source-1"></a> [frame.go](../../internal/terminal/frame.go#L1-L152) — `Frame`, `Scroll`, `historyBase` and native anchor ownership.
 2. <a id="source-2"></a> [frame.go](../../internal/tui/term/frame.go#L1-L102) — frame locking, boundary capture, timer epochs and `EndRenderHold`.
 3. <a id="source-3"></a> [frames.go](../../internal/tui/frames.go#L1-L113) — shared frame helpers, cursor composition and `syncFocus`.
 4. <a id="source-4"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L294-L409) — tracked references, hold release and hyperlink row formatting; native callbacks and defaults precede these exports.
