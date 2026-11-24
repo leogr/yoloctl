@@ -131,6 +131,10 @@ func TestSpaceSwitchEmptySameBusyAndBound(t *testing.T) {
 	if m.confirm == nil {
 		t.Fatal("even zero tabs must confirm")
 	}
+	if text := ansi.Strip(m.View().Content); !strings.Contains(text, "Switch this TUI from a to b?") || !strings.Contains(text, "[ Switch ]") ||
+		strings.Contains(text, "close all tabs") || strings.Contains(text, "Close 0") || strings.Contains(text, "Close tabs") {
+		t.Fatalf("zero-tab confirmation names tabs: %q", text)
+	}
 	m.cancelConfirm()
 	started, err := m.console.Run(nil, "", "sh", "-c", "read line")
 	if !started || err != nil {

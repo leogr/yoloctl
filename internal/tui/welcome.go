@@ -22,6 +22,7 @@ type WelcomeStep uint8
 const (
 	WelcomeUnknown WelcomeStep = iota
 	WelcomeNoSpace
+	WelcomeMissingSpace // this TUI's space has no record; other spaces do
 	WelcomeStopped
 	WelcomeUpgrade
 	WelcomeNoOperator
@@ -49,6 +50,9 @@ type welcomeView struct {
 	visit    uint64
 	tip      welcomeTip
 	drag     *welcomeDrag
+	// saveDefault is a space this TUI just moved to after creating it: the
+	// next visit offers to make it the default instead of reading.
+	saveDefault string
 }
 
 type welcomeMsg struct {
@@ -74,12 +78,18 @@ func (m *model) syncWelcome() tea.Cmd {
 	w.tip = welcomeTip{}
 	w.drag = nil
 	w.visit++
+	save := w.saveDefault
+	w.saveDefault = ""
 	if !visiting {
+		return nil
+	}
+	if save != "" && save == w.space {
+		w.tip = welcomeCommandTip("Tip: to save "+save+" as your default, type:", "space use "+save, "")
 		return nil
 	}
 	ctx, cancel := context.WithCancel(w.ctx)
 	w.cancel = cancel
-	read, space, visit := w.read, w.space, w.visit
+	read, space, visit, prefix := w.read, w.space, w.visit, m.panePrefix().String()
 	return func() tea.Msg {
 		defer cancel()
 		status := read(ctx, space)
@@ -99,7 +109,7 @@ func (m *model) syncWelcome() tea.Cmd {
 				login = u.Username
 			}
 		}
-		return welcomeMsg{visit, makeWelcomeTip(status, space, cwd, login)}
+		return welcomeMsg{visit, makeWelcomeTip(status, space, cwd, login, prefix)}
 	}
 }
 
@@ -109,7 +119,7 @@ func welcomeCommandTip(before, command, after string) welcomeTip {
 	return welcomeTip{text: before + "\n  " + command + after + "\n" + welcomeFillHint, command: command}
 }
 
-func makeWelcomeTip(status WelcomeStatus, space, cwd, login string) welcomeTip {
+func makeWelcomeTip(status WelcomeStatus, space, cwd, login, prefix string) welcomeTip {
 	// Cwd is user-owned text. Show control characters as escapes rather than
 	// letting a directory name send terminal controls.
 	path := cwd
@@ -131,6 +141,8 @@ func makeWelcomeTip(status WelcomeStatus, space, cwd, login string) welcomeTip {
 			tip.command = "space create work --workdir . --account " + login
 		}
 		return tip
+	case WelcomeMissingSpace:
+		return welcomeTip{text: fmt.Sprintf("Tip: this TUI uses space %[1]s, which does not exist. To switch to a space that does, click %[1]s ▾ at the top right or press %[2]s then s.", space, prefix)}
 	case WelcomeStopped:
 		return welcomeCommandTip(fmt.Sprintf("Tip: space %s is stopped. To start it, type:", space), "space start "+space, "")
 	case WelcomeUpgrade:

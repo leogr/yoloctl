@@ -167,12 +167,16 @@ type model struct {
 	selectionTickPending bool
 
 	// ctxSpace is pinned at launch; global context changes cannot retarget it.
+	// Only the space menu and a followed palette create change it.
 	ctxSpace         string
 	spaceBound       bool
 	spaceListRequest uint64
 	spaceGeneration  uint64
 	spacePicker      *spacePicker
 	welcome          welcomeView
+	createdSpace     func([]string) string // the space a palette argv creates, or ""
+	created          *consoleRun           // the console command a create may follow
+	consoleRuns      uint64                // console commands started, the newest's run
 
 	sugg        []yoloctlcli.Candidate // last suggestion list (overlay, while typing)
 	suggSel     int                    // selected index into sugg: the ghost / TAB target
@@ -203,7 +207,9 @@ type model struct {
 // Run starts the TUI and blocks until the user quits. ctx cancellation
 // (SIGINT/SIGTERM) also stops it; tab subprocesses are killed on the
 // way out — agents themselves keep running because clients detach.
-func Run(ctx context.Context, readWelcome func(context.Context, string) WelcomeStatus) error {
+// readWelcome and createdSpace come from the CLI: the idle-screen reader and
+// the space a palette argv creates (both run off the event loop).
+func Run(ctx context.Context, readWelcome func(context.Context, string) WelcomeStatus, createdSpace func([]string) string) error {
 	cfg, err := config.LoadTUI()
 	if err != nil {
 		return err
@@ -230,6 +236,9 @@ func Run(ctx context.Context, readWelcome func(context.Context, string) WelcomeS
 		welcomeCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
 		m.welcome = welcomeView{ctx: welcomeCtx, read: readWelcome}
+	}
+	if !m.spaceBound {
+		m.createdSpace = createdSpace
 	}
 	err = runProgram(ctx, p)
 	m.deleteOwnedImages(os.Stdout) // free this TUI's images on the host terminal
@@ -799,6 +808,7 @@ func (m *model) dispatch(args []string) tea.Cmd {
 		m.postNotice(prettylog.KindWarn, "a palette command is still running — wait for it")
 		return nil
 	}
+	m.recordConsoleRun(args, err == nil)
 	m.showConsoleCommand() // a new command shows alone, also when Run echoed an error
 	if err != nil {
 		return nil // Run echoed the error; nothing is running to spin for
@@ -914,7 +924,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		m.checkConfirm()
 		m.syncPlaceholder()
 		m.syncFocus()
-		cmd = tea.Batch(cmd, m.syncMouseShift(), m.syncHostGeometry(), m.syncHostMouseEncoding(), m.syncImages(), m.syncWelcome())
+		cmd = tea.Batch(cmd, m.syncMouseShift(), m.syncHostGeometry(), m.syncHostMouseEncoding(), m.syncImages(), m.syncCreated(), m.syncWelcome())
 	}()
 	if m.imageProbeMsg(msg) {
 		return m, nil
@@ -977,6 +987,9 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		if m.welcome.visiting && msg.visit == m.welcome.visit {
 			m.welcome.tip = msg.tip
 		}
+		return m, nil
+	case createdSpaceMsg:
+		m.followCreated(msg)
 		return m, nil
 	case wakeMsg:
 		m.pending.Store(false)

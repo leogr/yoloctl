@@ -46,6 +46,7 @@ type Console struct {
 	done       chan struct{}
 	closed     bool
 	rows, cols int
+	lastExit   int // the exit code of the last command that ended
 }
 
 // NewConsole builds the console emulator at the given size.
@@ -194,12 +195,20 @@ func (c *Console) pump(cmd *exec.Cmd, ptmx *os.File, releaseSlave func(time.Time
 	code := exitCode(cmd, err)
 	c.echo("\x18\x1b\\" + c.logNotice(code, fmt.Sprintf("exit %d", code)) + "\r\n")
 	c.mu.Lock()
-	c.cmd, c.ptmx = nil, nil
+	c.cmd, c.ptmx, c.lastExit = nil, nil, code
 	c.mu.Unlock()
 
 	if c.onData != nil {
 		c.onData()
 	}
+}
+
+// LastExit is the exit code of the last command that ended, set before the
+// console reports idle; 0 before any command ended.
+func (c *Console) LastExit() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lastExit
 }
 
 // SendInput feeds bytes to the running command's stdin (keystrokes,

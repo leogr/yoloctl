@@ -82,7 +82,7 @@ or live Lima validation. [3](#source-3) [8](#source-8) [10](#source-10)
 2. <a id="source-2"></a> [palette.go](../../internal/terminal/palette.go#L1-L55) — `SetPaletteColor`, native override state and canonical SGR replacement.
 3. <a id="source-3"></a> [palette_test.go](../../internal/terminal/palette_test.go#L1-L68) — inherited indices, local overrides, history and resets.
 4. <a id="source-4"></a> [colors.go](../../internal/tui/colors.go#L16-L122) — `requestHostPalette`, `programOptions`, `filterHostPalette`, `flushHostPalette`, `applyHostPalette`.
-5. <a id="source-5"></a> [tui.go](../../internal/tui/tui.go#L876-L1001) — new-tab `Palette`, `FocusMsg` refresh, `hostPaletteStart`/`hostPaletteFlush` and unfiltered reports.
+5. <a id="source-5"></a> [tui.go](../../internal/tui/tui.go#L886-L1014) — new-tab `Palette`, `FocusMsg` refresh, `hostPaletteStart`/`hostPaletteFlush` and unfiltered reports.
 6. <a id="source-6"></a> [colors.go](../../internal/termio/colors.go#L1-L71) — strict bounded `ParsePaletteReport`.
 7. <a id="source-7"></a> [colors.go](../../internal/terminal/colors.go#L54-L162) — `ColorQueries`: grouped native replies, deferred queries and measured defaults (`Reply`, `Apply`).
 8. <a id="source-8"></a> [palette_test.go](../../internal/tui/term/palette_test.go#L1-L65) — delayed/fragmented queries and console clearing.
@@ -100,5 +100,5 @@ or live Lima validation. [3](#source-3) [8](#source-8) [10](#source-10)
 19. <a id="source-19"></a> [Canonical session state](session-replay.md) — query/color ownership, native snapshots and compatibility replay.
 20. <a id="source-20"></a> [colors_test.go](../../internal/tui/colors_test.go#L66-L249) — `TestHostPaletteBurstThroughHostInputLoop`, `TestHostPalettePartialRepliesFlushAtFixedDeadline`.
 21. <a id="source-21"></a> [chat_view.go](../../cmd/yoloctl/chat_view.go#L111) — standalone chat program without the host palette probe or focus reports.
-22. <a id="source-22"></a> [tui.go](../../internal/tui/tui.go#L162-L173) — `Run` builds its program with `programOptions`.
+22. <a id="source-22"></a> [tui.go](../../internal/tui/tui.go#L162-L174) — `Run` builds its program with `programOptions`.
 23. <a id="source-23"></a> [attach.go](../../internal/tui/attach.go#L18-L26) — `RunAttached` uses the same options.

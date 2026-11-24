@@ -121,19 +121,19 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 
 ## Sources
 
-1. <a id="source-1"></a> [tui.go](../../internal/tui/tui.go#L466) — `opensLiveSurface`, dispatch and `openTab`.
+1. <a id="source-1"></a> [tui.go](../../internal/tui/tui.go#L475) — `opensLiveSurface`, dispatch and `openTab`.
 2. <a id="source-2"></a> [palette.go](../../internal/tui/palette/palette.go#L25) — `Insert`, `set`, `singleLine`, `Submit`, `CompletionInput`.
 3. <a id="source-3"></a> [complete.go](../../internal/tui/yoloctlcli/complete.go#L1-L100) — `Complete` and result parsing.
-4. <a id="source-4"></a> [tui.go](../../internal/tui/tui.go#L1429-L1662) — `handleKey`, `handleRunningKey`, tab close.
+4. <a id="source-4"></a> [tui.go](../../internal/tui/tui.go#L1442-L1675) — `handleKey`, `handleRunningKey`, tab close.
 5. <a id="source-5"></a> [terminal_keys.go](../../internal/tui/terminal_keys.go#L1-L294) — host normalization, `sendKey`, `childKey`, `kittyKey` and functional mapping.
-6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L746) — `Update`, release/paste routing, `sendInput`, input notices and `reportViewErrors`.
+6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L755) — `Update`, release/paste routing, `sendInput`, input notices and `reportViewErrors`.
 7. <a id="source-7"></a> [terminal_keys_test.go](../../internal/tui/terminal_keys_test.go#L1) — negotiated bytes, restored Enter/Ctrl+J, modifier matrix, release ownership, independent modifier oracle and palette Tab reports.
 8. <a id="source-8"></a> [keys_test.go](../../internal/tui/keys_test.go#L1-L122) — legacy decode/encode, Control text, reserved chords and DECCKM.
 9. <a id="source-9"></a> [dependencies_test.go](../../internal/tui/dependencies_test.go#L1-L136) — pinned host decoder/renderer/keyboard-stack regressions and palette input loop.
 10. <a id="source-10"></a> [Mouse delivery and selection boundaries](terminal-mouse.md) — native encoding, gesture ownership, console coordinates and selection limits.
 11. <a id="source-11"></a> [tui.go](../../internal/config/tui.go#L1-L339) — configuration, commented defaults and load.
 12. <a id="source-12"></a> [debug.go](../../internal/tui/debug.go#L1-L28) — opt-in input diagnostics.
-13. <a id="source-13"></a> [tui.go](../../internal/tui/tui.go#L1594) — `View`, host keyboard enhancement requests.
+13. <a id="source-13"></a> [tui.go](../../internal/tui/tui.go#L1607) — `View`, host keyboard enhancement requests.
 14. <a id="source-14"></a> [Display snapshots, history and focus](terminal-display.md) — focus state, mode gating and input-delivery regressions.
 15. <a id="source-15"></a> [Native selection and explicit copy](terminal-selection.md) — local selection and conditional copy-key ownership.
 16. <a id="source-16"></a> [box-attach.sh](../../scripts/smoke/box-attach.sh#L15) — scripted Enter bytes in `pty_run` and shared detach/reattach input fixtures.
@@ -142,16 +142,16 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 18. <a id="source-18"></a> [Compatibility evidence](terminal-compatibility.md) — legacy input, committed text, focus/cursor coverage and limits.
 19. <a id="source-19"></a> [Host integrations](host-integrations.md) — explicit PNG paste ownership and live browser approval.
 20. <a id="source-20"></a> [palette_paste_test.go](../../internal/tui/palette_paste_test.go#L13) — host-reader paste/focus and cursor alignment regression.
-21. <a id="source-21"></a> [tui.go](../../internal/tui/tui.go#L2308) — `inputLine` renders the palette legends and budgets header width. Related helpers: `contextChip` and `promptLine`.
+21. <a id="source-21"></a> [tui.go](../../internal/tui/tui.go#L2321) — `inputLine` renders the palette legends and budgets header width. Related helpers: `contextChip` and `promptLine`.
 22. <a id="source-22"></a> [tui_test.go](../../internal/tui/tui_test.go#L839) — wave width, context position and command echo regressions.
 
-23. <a id="source-23"></a> [Tab labels](../../internal/tui/tui.go#L2351) — `tabStripLabels`.
+23. <a id="source-23"></a> [Tab labels](../../internal/tui/tui.go#L2364) — `tabStripLabels`.
 24. <a id="source-24"></a> [Tab title regressions](../../internal/tui/microfix_ui_test.go#L12) — `TestTabStripStripsOnlyExactLeadingYoloctlPrefix`.
-25. <a id="source-25"></a> [Window title](../../internal/tui/tui.go#L1767-L1792) — `View` title, `titleWrapper` and `windowTitle`.
+25. <a id="source-25"></a> [Window title](../../internal/tui/tui.go#L1780-L1805) — `View` title, `titleWrapper` and `windowTitle`.
 26. <a id="source-26"></a> [Window title regressions](../../internal/tui/microfix_ui_test.go#L43) — `TestWindowTitleCollapsesOnlyExactGeneratedPrefixes`.
 27. <a id="source-27"></a> [TUI pane prefix](tui-pane-prefix.md) — precedence and pane keys.
 28. <a id="source-28"></a> [palette_quit_test.go](../../internal/tui/palette_quit_test.go#L9-L26) — empty/nonempty idle-palette draft quit regression.
 29. <a id="source-29"></a> [Palette arrow routing](../../internal/tui/pane_prefix.go#L138) — notice precedence before the palette handles modified arrows.
 30. <a id="source-30"></a> [Host arrow regression](../../internal/tui/palette_arrows_test.go#L10) — wire sequences with and without notice focus.
 31. <a id="source-31"></a> [session.go](../../internal/tui/term/session.go#L375-L442) — `pump` joins the private stream before `writeExitBanner` uses its retained error.
-32. <a id="source-32"></a> [tui.go](../../internal/tui/tui.go#L1260-L1299) — `reportViewErrors` routes private attachment diagnostics.
+32. <a id="source-32"></a> [tui.go](../../internal/tui/tui.go#L1273-L1312) — `reportViewErrors` routes private attachment diagnostics.

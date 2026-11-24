@@ -23,12 +23,16 @@ write it never fails an operation that succeeded.
 left brand while busy; bold `space ▾` is the rightmost status item. Each TUI pins its default
 independently of global `space use`. The chip or pane-prefix `s` opens a local
 space dropdown; switching asks before closing all tabs and clearing drafts.
-Explicit command targets still win, and a busy palette command must finish
+A successful palette `space create SPACE` switches to SPACE at once when the
+TUI's own space does not exist and no tab is open; otherwise it asks the same
+way. Explicit command targets still win, and a busy palette command must finish
 or be interrupted before switching. [44](#source-44)
 [1](#source-1)
 
 [FACT] The host TUI's idle no-tabs screen shows the first confirmed setup
-step for its selected space or one random tip when setup is complete. It
+step for its selected space or one random tip when setup is complete. A missing
+selected space beside other spaces names the space menu; after following a
+created space, the next visit offers `space use SPACE` once. It
 keeps its generic hint during an outstanding or inconclusive read. Checks run
 at startup and on returning to the screen without polling or starting VMs.
 On the no-tabs screen, clicking a tip's command fills an empty palette input.
@@ -454,7 +458,7 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 23. <a id="source-23"></a> [Participant model and effort](../digests/chat-participant-runtime.md).
 24. <a id="source-24"></a> [Chat message references](../digests/chat-references.md).
 25. <a id="source-25"></a> [Chat message filter and mention identities](../digests/chat-filter.md).
-26. <a id="source-26"></a> [Tab strip](../../internal/tui/tui.go#L2391-L2439) — `tabStrip`: the active tab drops the surface background.
+26. <a id="source-26"></a> [Tab strip](../../internal/tui/tui.go#L2404-L2452) — `tabStrip`: the active tab drops the surface background.
 27. <a id="source-27"></a> [Space view memory readings](../digests/space-view-memory.md).
 28. <a id="source-28"></a> [VM disks in space view and `space storage`](../digests/space-view-disks.md).
 29. <a id="source-29"></a> [Chat thread view](../digests/chat-thread-filter.md).

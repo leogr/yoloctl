@@ -61,7 +61,7 @@ plain text-presentation ⏸ remains a separate host-observation boundary.
 ## Sources
 
 1. <a id="source-1"></a> [Model method and reports](../../internal/chatui/model.go#L270-L274) — `widthMethod`; `update` mode predicate at L420-L425.
-2. <a id="source-2"></a> [TUI predicate](../../internal/tui/tui.go#L923-L930); pins in `go.mod:L13-L16`.
+2. <a id="source-2"></a> [TUI predicate](../../internal/tui/tui.go#L933-L940); pins in `go.mod:L13-L16`.
 3. <a id="source-3"></a> [Row geometry](../../internal/markdownview/rows.go#L36) — `Paint`, `RunsWidth`, `WrapRanges`, `HitRun`, `ActionAt`.
 4. <a id="source-4"></a> [Shared bodies/tables](../../internal/markdownview/body.go#L101) — `parseLines`, `TableLines`, `FitTable`; shared render.go owns tab mapping; chat render.go and editor.go retain draft geometry.
 5. <a id="source-5"></a> [View](../../internal/chatui/view.go#L74) and helpers in roster.go, preview.go, overlay.go, link_prompt.go and marquee.go.

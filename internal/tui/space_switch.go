@@ -332,22 +332,39 @@ func (m *model) acceptSpaceSwitch() {
 		m.paneNotice("the tabs or panes changed: review the list again")
 		return
 	}
-	target := c.space
+	target, created := c.space, c.created
 	m.cancelConfirm()
 	for _, t := range slices.Clone(m.tabs.Tabs) {
 		m.detachTab(t)
 	}
+	m.switchSpace(target, false)
+	if created {
+		m.welcome.saveDefault = target
+	}
+}
+
+// switchSpace moves this TUI, its tabs already closed, to target. The menu's
+// accepted dialog and a followed create share this one reset list. A follow
+// keeps what the user is doing at the palette when the create ends: its
+// draft (and a new-tab draft), an armed prefix, focus and the console view.
+func (m *model) switchSpace(target string, follow bool) {
 	m.spaceGeneration++
 	m.spaceListRequest++
 	m.ctxSpace = target
-	m.spacePicker, m.picker, m.prefix, m.acting, m.notice = nil, nil, nil, nil, nil
-	m.newTab, m.resizeTab, m.placeholderFocus = nil, nil, nil
+	m.created = nil
+	m.closeSpacePicker()
+	m.clearSuggestions() // completions ran in the old space
+	m.picker, m.acting, m.notice = nil, nil, nil
+	m.resizeTab, m.placeholderFocus = nil, nil
 	m.cancelChrome()
 	m.clearTabSelection()
-	m.clearSuggestions()
 	m.keyOwners = nil
 	m.attachPrefix = nil
 	m.selectionPointer = nil
+	if follow {
+		return
+	}
+	m.prefix, m.newTab = nil, nil
 	m.pal.Restore(palette.Draft{}) // history belongs to the palette, not the draft
 	m.resetConsoleView()
 	m.focusPalette = true
@@ -359,7 +376,18 @@ func (m *model) switchSummary() []string {
 	for _, item := range c.all {
 		reviewedTabs[item.tab] = struct{}{}
 	}
-	return []string{fmt.Sprintf("Close %d tabs / %d panes. Chat drafts and local view state are lost.", len(reviewedTabs), len(c.all)), "Established managed sessions keep running; other remote outcomes may be unknown."}
+	if len(c.all) == 0 {
+		return nil // nothing to close: the title asks only to switch
+	}
+	return []string{fmt.Sprintf("Close %s / %s. Chat drafts and local view state are lost.", counted(len(reviewedTabs), "tab"), counted(len(c.all), "pane")), "Established managed sessions keep running; other remote outcomes may be unknown."}
+}
+
+// counted is "1 tab" or "n tabs".
+func counted(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 func (m *model) applySpacePicker(lines []string) {

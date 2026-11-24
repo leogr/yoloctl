@@ -1569,7 +1569,9 @@ so resolution uses YOLOCTL_SPACE if set, otherwise "default".
 
 space use writes the global default. An open TUI keeps its own default;
 use its top-right space menu (or pane prefix then s) to switch that TUI.
-Switching asks before closing its tabs and does not rewrite the global pin.`,
+A space created from its palette is offered the same way, or used at once
+when the TUI's own space does not exist and no tab is open. Switching asks
+before closing its tabs and does not rewrite the global pin.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if reset && len(args) > 0 {

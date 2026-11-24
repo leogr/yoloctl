@@ -37,14 +37,18 @@ func TestWelcomeTipCommands(t *testing.T) {
 		{WelcomeEnroll, "chat enroll lead --connect --recreate", "\"Join the space chat and keep listening for messages\""},
 		{WelcomeOnlyOperator, "chat", "\"@lead create a box for /project with Claude and the go feature\""},
 	} {
-		got := makeWelcomeTip(WelcomeStatus{Step: tc.step, Operator: "lead"}, "work", "/project", "my.user")
+		got := makeWelcomeTip(WelcomeStatus{Step: tc.step, Operator: "lead"}, "work", "/project", "my.user", "^Q")
 		if got.command != tc.command || !strings.Contains(got.text, "\n  "+tc.command+"\n") || !strings.Contains(got.text, tc.line) || !strings.HasSuffix(got.text, hint) {
 			t.Errorf("step %d tip = %+v, want command %q and line %q", tc.step, got, tc.command, tc.line)
 		}
 	}
-	if got := makeWelcomeTip(WelcomeStatus{Step: WelcomeNoSpace}, "", "/my project", "invalid name"); got.command != "space create work --workdir . --account personal" ||
+	if got := makeWelcomeTip(WelcomeStatus{Step: WelcomeNoSpace}, "", "/my project", "invalid name", "^Q"); got.command != "space create work --workdir . --account personal" ||
 		!strings.Contains(got.text, "space create work --workdir /my project --account personal") {
 		t.Fatalf("space name fallback or spaced project path: %+v", got)
+	}
+	if got := makeWelcomeTip(WelcomeStatus{Step: WelcomeMissingSpace}, "default", "", "", "^Q"); got.command != "" ||
+		got.text != "Tip: this TUI uses space default, which does not exist. To switch to a space that does, click default ▾ at the top right or press ^Q then s." {
+		t.Fatalf("missing-space tip = %+v", got)
 	}
 }
 
@@ -108,7 +112,7 @@ func TestWelcomeVisitAndStaleResults(t *testing.T) {
 func TestWelcomeKeysDoNotFill(t *testing.T) {
 	for _, focused := range []bool{false, true} {
 		m := newTestModel(t, 140, 24)
-		m.welcome.tip = makeWelcomeTip(WelcomeStatus{Step: WelcomeStopped}, "work", "", "")
+		m.welcome.tip = makeWelcomeTip(WelcomeStatus{Step: WelcomeStopped}, "work", "", "", "^Q")
 		if focused {
 			m.postNotice(prettylog.KindWarn, "retained")
 			m.openToast()
@@ -145,7 +149,7 @@ func TestWelcomeClickAndDrag(t *testing.T) {
 			if strings.Contains(tc.row, "space-commander") {
 				status = WelcomeStatus{Step: WelcomeEnroll, Operator: "space-commander"}
 			}
-			m.welcome.tip = makeWelcomeTip(status, "work", "", "")
+			m.welcome.tip = makeWelcomeTip(status, "work", "", "", "^Q")
 			if tc.focused {
 				m.postNotice(prettylog.KindWarn, "retained")
 				m.openToast()
@@ -191,7 +195,7 @@ func TestWelcomeClickAndDrag(t *testing.T) {
 
 func TestWelcomeCommandUnderlineMatchesHit(t *testing.T) {
 	m := newTestModel(t, 32, 24)
-	m.welcome.tip = makeWelcomeTip(WelcomeStatus{Step: WelcomeEnroll, Operator: "space-commander"}, "work", "", "")
+	m.welcome.tip = makeWelcomeTip(WelcomeStatus{Step: WelcomeEnroll, Operator: "space-commander"}, "work", "", "", "^Q")
 	rows, commands := m.welcomeLayout()
 	if len(commands) < 3 {
 		t.Fatal("fixture needs a wrapped command and a separate attach command")

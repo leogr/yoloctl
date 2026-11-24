@@ -62,6 +62,7 @@ func asking(ps []*panes.Pane) []*panes.Pane {
 // to the running commands it listed. It never proceeds on its own.
 type closeConfirm struct {
 	space         string // nonempty: close all tabs and change this TUI default
+	created       bool   // the switch follows this TUI's own create of space
 	all           []switchPane
 	tab           *tabs.Tab
 	pane          *panes.Pane // nil when the whole tab closes
@@ -249,6 +250,9 @@ func (m *model) confirmOverlay() *overlay {
 	}
 	if c.space != "" {
 		title = "Switch from " + m.ctxSpace + " to " + c.space + " and close all tabs?"
+		if len(c.all) == 0 {
+			title = "Switch this TUI from " + m.ctxSpace + " to " + c.space + "?"
+		}
 	}
 	selected := confirmKeep
 	if c.close {
@@ -326,6 +330,9 @@ func (m *model) confirmClick(mo tea.Mouse) {
 
 func (m *model) confirmCloseLabel() string {
 	if m.confirm.space != "" {
+		if len(m.confirm.all) == 0 {
+			return "[ Switch ]" // nothing to close
+		}
 		return "[ Close tabs & switch ]"
 	}
 	return confirmClose

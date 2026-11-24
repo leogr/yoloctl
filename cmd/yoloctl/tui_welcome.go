@@ -16,6 +16,7 @@ import (
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/tui"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
+	"github.com/spf13/cobra"
 )
 
 // readWelcomeStatus runs off the UI loop. Advance only on settled observations,
@@ -27,6 +28,8 @@ func readWelcomeStatus(ctx context.Context, space string) tui.WelcomeStatus {
 	if errors.Is(err, os.ErrNotExist) {
 		if names, err := spaceconfig.ListStrict(); err == nil && len(names) == 0 {
 			return tui.WelcomeStatus{Step: tui.WelcomeNoSpace}
+		} else if err == nil && !slices.Contains(names, space) {
+			return tui.WelcomeStatus{Step: tui.WelcomeMissingSpace}
 		}
 	}
 	if err != nil {
@@ -62,6 +65,36 @@ func readWelcomeStatus(ctx context.Context, space string) tui.WelcomeStatus {
 		err := controllerJSON(ctx, boot, "chat.status", nil, nil, &status, io.Discard)
 		return status, err
 	})
+}
+
+// tuiCreatedSpace names the space a palette argv creates: SPACE of
+// `space create SPACE`, found and parsed with the CLI's own space command,
+// aliases and root log flags. Help, a line the flags refuse and a create
+// without SPACE (it creates the TUI's own space) name none. Only a line with
+// the word create builds this small tree; the space commands register no flag
+// completions, so nothing stays in Cobra's process-wide table.
+func tuiCreatedSpace(args []string) string {
+	if !slices.Contains(args, "create") {
+		return ""
+	}
+	root := &cobra.Command{Use: "yoloctl"}
+	addLogFlags(root)
+	root.AddCommand(newSpaceCmd())
+	cmd, rest, err := root.Find(args)
+	if err != nil || cmd != findByPath(root, "space", "create") {
+		return ""
+	}
+	cmd.InitDefaultHelpFlag()
+	if err := cmd.ParseFlags(rest); err != nil {
+		return ""
+	}
+	if help, err := cmd.Flags().GetBool("help"); err != nil || help {
+		return ""
+	}
+	if positional := cmd.Flags().Args(); len(positional) == 1 {
+		return positional[0]
+	}
+	return ""
 }
 
 // A bundle mismatch alone has no ordering (for example two dev builds or a

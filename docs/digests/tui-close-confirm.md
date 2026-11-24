@@ -63,7 +63,7 @@ refreshes after additions or replacements before closing it.
 
 ## Sources
 
-1. <a id="source-1"></a> [Close confirmation](../../internal/tui/confirm_close.go#L1-L300) — `closeEffect`, `requestDetachPane`, `requestDetachTab`, `acceptConfirm`, `checkConfirm`, `confirmKey`, `confirmOverlay`, `confirmClick`.
+1. <a id="source-1"></a> [Close confirmation](../../internal/tui/confirm_close.go#L1-L304) — `closeEffect`, `requestDetachPane`, `requestDetachTab`, `acceptConfirm`, `checkConfirm`, `confirmKey`, `confirmOverlay`, `confirmClick`.
 2. <a id="source-2"></a> [Holder-backed view](../../internal/tui/term/session.go#L344-L346) — `Session.HolderView`.
 3. <a id="source-3"></a> [Routing](../../internal/tui/mouse.go#L196-L211) — the popup's press handling in `handleMouse`; keys and paste in tui.go `Update`, focus in frames.go `syncFocus`, `Popup.Selected` in popup.go.
 4. <a id="source-4"></a> [Popup tests](../../internal/tui/confirm_close_test.go#L1-L335) — `TestCloseClassificationWalksEveryLiveRoute`, `TestHolderBackedViewDetachesAtOnce`, `TestConfirmPopupBindsToItsList` and the others.

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
@@ -81,10 +82,11 @@ func TestWelcomeMissingSelectedSpace(t *testing.T) {
 	if err := os.WriteFile(path, []byte("unreadable as a bootstrap"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"work", "other"} {
-		if got := readWelcomeStatus(t.Context(), name); got.Step != tui.WelcomeUnknown {
-			t.Errorf("uncertain selection %q = %+v", name, got)
-		}
+	if got := readWelcomeStatus(t.Context(), "work"); got.Step != tui.WelcomeMissingSpace {
+		t.Errorf("missing selection beside another space = %+v", got)
+	}
+	if got := readWelcomeStatus(t.Context(), "other"); got.Step != tui.WelcomeUnknown {
+		t.Errorf("unreadable selection = %+v", got)
 	}
 	// A loop makes Stat fail with a non-absence error even when tests run as root.
 	if err := os.Remove(path); err != nil {
@@ -96,4 +98,49 @@ func TestWelcomeMissingSelectedSpace(t *testing.T) {
 	if got := readWelcomeStatus(t.Context(), "work"); got.Step != tui.WelcomeUnknown {
 		t.Errorf("unreadable inventory = %+v, want generic hint", got)
 	}
+}
+
+func TestTUICreatedSpace(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"space", "create", "work", "--workdir", "/p", "--account", "a"}, "work"},
+		{[]string{"space", "create", "--workdir", "/p", "--account", "a", "work"}, "work"},
+		{[]string{"sp", "create", "--workdir=/p", "--account=a", "work"}, "work"},
+		{[]string{"space", "create", "--memory", "8GiB", "--no-start", "lab", "--workdir", "/p", "--account", "a"}, "lab"},
+		{[]string{"space", "--log-level", "debug", "create", "work", "--workdir", "/p", "--account", "a"}, "work"},
+		{[]string{"space", "create", "--", "work"}, "work"},
+		{[]string{"space", "create", "--workdir", "/p", "--account", "a"}, ""}, // the TUI's own space
+		{[]string{"space", "create", "work", "--help"}, ""},
+		{[]string{"space", "create", "work", "-h"}, ""},
+		{[]string{"space", "create", "work", "--bogus"}, ""},
+		{[]string{"space", "create", "work", "other"}, ""},
+		{[]string{"space", "start", "work"}, ""},
+		{[]string{"space", "recreate", "work"}, ""},
+		{[]string{"box", "create", "work", "--agent", "claude"}, ""},
+		{[]string{"space"}, ""},
+		{nil, ""},
+	} {
+		if got := tuiCreatedSpace(tc.args); got != tc.want {
+			t.Errorf("tuiCreatedSpace(%q) = %q, want %q", tc.args, got, tc.want)
+		}
+	}
+	// Lines share no flag values, also concurrently.
+	var wg sync.WaitGroup
+	for i := range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			args := []string{"space", "create", "work", "--help", "--no-start"}
+			want := ""
+			if i%2 == 1 {
+				args, want = []string{"space", "create", "work", "--no-start"}, "work"
+			}
+			if got := tuiCreatedSpace(args); got != want {
+				t.Errorf("tuiCreatedSpace(%q) = %q, want %q", args, got, want)
+			}
+		}()
+	}
+	wg.Wait()
 }

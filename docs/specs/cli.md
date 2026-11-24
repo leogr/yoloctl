@@ -4,7 +4,10 @@
 flags, aliases and completion callbacks. Host selection uses explicit space
 flags/positionals, nonempty `YOLOCTL_SPACE`, global context, then `default`, in
 that order. Operator/native scope remains fixed. The full TUI pins its own default and can
-switch it through its space menu after confirming local tab closure. `box create NAME` chooses
+switch it through its space menu after confirming local tab closure. A
+successful `space create SPACE` from its palette moves it to SPACE: at once
+when its own space does not exist and no tab is open, otherwise after that
+confirmation. `box create NAME` chooses
 the space before resolving account defaults. `box run` and root `run`/`ps` are
 unavailable; use named `box create`, `box attach` and `box list`. [1](#source-1) [2](#source-2) [24](#source-24)
 
