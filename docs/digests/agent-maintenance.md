@@ -79,6 +79,6 @@ the forced update and the maintenance cache owner. [17](#source-17)
 15. <a id="source-15"></a> [Mount guard](../../internal/agentbox/openshell_container_plan_linux.go#L103-L131) — `agentNpmProtected`, `mountOverlaps`; regression `TestNativeContainerPlanProtectsTheAgentNpmFolders`.
 16. <a id="source-16"></a> [Image regression](../../internal/agentbox/resolved_image_test.go#L112-L197) — `TestResolvedImage_AgentNpmPackageSelectsTheManagedPrefix`, `TestResolvedImage_UnsuppliedAgentNpmInstallFollowsOCIFeatures`.
 17. <a id="source-17"></a> [scripts/smoke/image-ensure.sh](../../scripts/smoke/image-ensure.sh#L23-L27) — managed and user package paths, write refusal and forced update.
-18. <a id="source-18"></a> [scripts/smoke/common.sh](../../scripts/smoke/common.sh#L46-L68) — `smoke_check_image_identity` managed-prefix owner and mode.
+18. <a id="source-18"></a> [scripts/smoke/common.sh](../../scripts/smoke/common.sh#L78-L101) — `smoke_check_image_identity` managed-prefix owner and mode.
 19. <a id="source-19"></a> [Package names](../../internal/agentnpm/agentnpm.go#L39-L59) — `ValidatePackage`, `ShellQuote`; used by `Profile.Validate` and the runtime-name parser; regressions in agentnpm_test.go and profile_test.go `TestValidate`.
 20. <a id="source-20"></a> [OCI alias check](../../internal/ocifeature/runtime_env.go#L316-L337) — `networkToolPrefixes`; regression `TestAliasGuardLeavesTheManagedNpmPrefixToLinkGuard`.

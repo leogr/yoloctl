@@ -32,7 +32,7 @@ events are unchanged. There is no new margin, quota or cleanup ownership.
 1. <a id="source-1"></a> [storage_warning.go](../../cmd/yoloctl/storage_warning.go#L1) — `diskReserveWarning`, request filtering and optional startup read.
 2. <a id="source-2"></a> [policy.go](../../internal/storagegc/policy.go#L17) — root statfs, `Low` and `TargetFree`.
 3. <a id="source-3"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L544) — warning after authorization, outside warming retries.
-4. <a id="source-4"></a> [controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L144) — successful host start observation.
+4. <a id="source-4"></a> [controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L174-L189) — successful host start observation.
 5. <a id="source-5"></a> [server.go](../../internal/controller/server.go#L309) — admin ping and opt-in result.
 6. <a id="source-6"></a> [controller_views.go](../../cmd/yoloctl/controller_views.go#L63) — human all-space list, JSON suppression and one notice.
 7. <a id="source-7"></a> [storage_warning_test.go](../../cmd/yoloctl/storage_warning_test.go#L1) — threshold, unknown read, JSON and optional host read controls.

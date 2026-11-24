@@ -41,7 +41,7 @@ count or a host's cgroup layout. [3](#source-3) [5](#source-5) [8](#source-8)
 3. <a id="source-3"></a> [cmd/yoloctl/space_cpu_test.go](../../cmd/yoloctl/space_cpu_test.go#L31) — default, completion, measured/explicit selection and refusal before effects.
 4. <a id="source-4"></a> [internal/resources/cpu_linux.go](../../internal/resources/cpu_linux.go#L20) — `ReadHostCPU`, `walkCgroupBandwidth` and filesystem checks.
 5. <a id="source-5"></a> [CPU regressions](../../internal/resources/cpu_linux_test.go#L28) — ancestor/leaf/unlimited/v1 and subtree-alias fixtures, symlink, oversize and escape refusals.
-6. <a id="source-6"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L216) — `createControllerSpace` selects and validates before image/disk effects.
+6. <a id="source-6"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L320-L336) — `createControllerSpace` selects and validates before image/disk effects.
 7. <a id="source-7"></a> [internal/resources/cpu_darwin.go](../../internal/resources/cpu_darwin.go#L14) — macOS `hw.logicalcpu`.
 8. <a id="source-8"></a> [cmd/yoloctl/space_archive_test.go](../../cmd/yoloctl/space_archive_test.go#L54) — import keeps archived CPUs without measuring.
 9. <a id="source-9"></a> [cmd/yoloctl/space_resources_test.go](../../cmd/yoloctl/space_resources_test.go#L99) — `space set --cpus auto` is refused with other invalid values.

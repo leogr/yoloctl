@@ -97,7 +97,7 @@ rejected. This does not delete native state or change credential import.
 
 1. <a id="source-1"></a> [internal/spaceconfig/bootstrap.go](../../internal/spaceconfig/bootstrap.go#L24) — Bootstrap, Settings, strict schema parsing and `LoadBootstrap`.
 2. <a id="source-2"></a> [internal/layout/layout.go](../../internal/layout/layout.go#L118) — native/host path construction.
-3. <a id="source-3"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L173) — initial account and private initialization seed.
+3. <a id="source-3"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L363-L370) — initial account and private initialization seed.
 4. <a id="source-4"></a> [cmd/yoloctl/controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L25) — host grants and narrow read-only catalog mounts.
 5. <a id="source-5"></a> [internal/lima/template.go](../../internal/lima/template.go#L31) — template boot settings, Lima-selected backend/architecture.
 6. <a id="source-6"></a> [internal/agentbox/agentbox.go](../../internal/agentbox/agentbox.go#L54) — box schema and validation.

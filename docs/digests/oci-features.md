@@ -108,7 +108,7 @@ upstream Feature or either CPU architecture. [8](#source-8) [9](#source-9) [15](
 ## Sources
 
 1. <a id="source-1"></a> [CLI options](../../cmd/yoloctl/agentbox.go#L882) — create/copy flags.
-2. <a id="source-2"></a> [Plan](../../internal/ocifeature/plan.go#L18) — `Definition`, `Compatible`, `RuntimeRequests`, `Values`, `ApplyOptions`, `Resolve`, `Dockerfile`.
+2. <a id="source-2"></a> [Plan](../../internal/ocifeature/plan.go#L75) — `Definition`, `Compatible`, `RuntimeRequests`, `Values`, `ApplyOptions`, `Resolve`, `Dockerfile`.
 3. <a id="source-3"></a> [Persistence](../../internal/agentbox/oci_features.go#L10) — `ResolveFeatures`, `FeaturePlan`.
 4. <a id="source-4"></a> [Registry](../../internal/ocifeature/registry.go#L28) — `Parse`, `get`, `Resolve`, `Files`, `unpack`.
 5. <a id="source-5"></a> [Capability composition](../../internal/agentbox/compose.go#L55) — `EffectiveCapabilities`.

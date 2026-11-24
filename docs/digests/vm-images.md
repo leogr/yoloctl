@@ -145,7 +145,7 @@ mutation. An explicit Lima recreate selects the current build, so no
 17. <a id="source-17"></a> [Recipe tests](../../internal/firecracker/recipe_linux_test.go#L15) — all inputs, default isolation and retained media.
 18. <a id="source-18"></a> [Linux 7 recipe and gate](../../scripts/vm/firecracker/linux7.py#L57) — `kernel`, `verify_image`, `smoke`; two object-directory builds via `--reproduce`.
 19. <a id="source-19"></a> [Runtime probe](../../scripts/smoke/linux7.sh#L23) — Landlock, controllers and telemetry before the full gate.
-20. <a id="source-20"></a> [Per-phase kernel check](../../scripts/smoke/common.sh#L143) — `smoke_ensure_space`.
+20. <a id="source-20"></a> [Per-phase kernel check](../../scripts/smoke/common.sh#L169-L188) — `smoke_ensure_space`.
 21. <a id="source-21"></a> [Bundled recipe](../../assets/vm/firecracker/inputs.py#L24) — `REQUIRED`, `KERNEL_EXTRAS`, `kernel`, `publish_kernel`; exact qualified tool packages in kernel-tools.json.
 22. <a id="source-22"></a> [Bundled provenance](../../assets/vm/firecracker/kernel.json#L1) — source, configuration and compiler identities.
 23. <a id="source-23"></a> [Effective configuration](../../assets/vm/firecracker/kernel.config#L714) — built-in KVM/Intel/AMD; `X86_FRED` at L368.

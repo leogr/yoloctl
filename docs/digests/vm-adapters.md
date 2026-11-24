@@ -55,7 +55,7 @@ observations. [5](#source-5)
 6. <a id="source-6"></a> [Lima preflight](../../internal/lima/socket_paths.go#L21) — `ValidateInstancePaths`, `validateInstanceSocketPath`.
 7. <a id="source-7"></a> [Lima v2.2.1 filenames](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/limatype/filenames/filenames.go#L97-L105) — `LongestSock` includes OpenSSH's temporary suffix.
 8. <a id="source-8"></a> [Lima v2.2.1 creation](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/instance/create.go#L33-L43) — strict `UnixPathMax` bound.
-9. <a id="source-9"></a> [Host lifecycle](../../cmd/yoloctl/controller_lifecycle.go#L91) — `hostControllerLifecycle`, `createControllerSpace`.
+9. <a id="source-9"></a> [Host lifecycle](../../cmd/yoloctl/controller_lifecycle.go#L71) — `hostControllerLifecycle`, `createControllerSpace`.
 10. <a id="source-10"></a> [Import](../../cmd/yoloctl/space_archive.go#L183) — `importSpace` preflight before staging/publication.
 11. <a id="source-11"></a> [Deployment](../../cmd/yoloctl/controller_deploy.go#L167) — `startControllerSpaceImpl` before compatibility/disk work.
 12. <a id="source-12"></a> [Adapter dispatch](../../internal/vm/vm.go#L83) — optional `ValidateInstancePaths`.

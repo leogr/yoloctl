@@ -119,7 +119,7 @@ physical power loss.
 5. <a id="source-5"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L29) — native setup locks and streaming release.
 6. <a id="source-6"></a> [internal/spacelock/lock.go](../../internal/spacelock/lock.go#L16) — stable lock, wait notification and cancellation.
 7. <a id="source-7"></a> [Controller evidence](controller.md) — transport, editor revisions, receipt recovery and drain.
-8. <a id="source-8"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L72-L205) — create/start/recreate/destroy orchestration.
+8. <a id="source-8"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L71-L267) — create/start/recreate/destroy orchestration.
 9. <a id="source-9"></a> [cmd/yoloctl/controller_mounts.go](../../cmd/yoloctl/controller_mounts.go#L36) — dependent checks and mount lifecycle.
 10. <a id="source-10"></a> [cmd/yoloctl/controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L336-L369) — drain and bounded VM stop.
 11. <a id="source-11"></a> [cmd/yoloctl/space_lifecycle.go](../../cmd/yoloctl/space_lifecycle.go#L221) — verified runtime deletion.

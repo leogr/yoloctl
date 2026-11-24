@@ -104,7 +104,7 @@ Disk/owner/target errors fail startup; systemd retries are unchanged. [23](#sour
 6. <a id="source-6"></a> [Reuse](../../internal/lima/lima.go#L55) — `Ensure`, mount updates.
 7. <a id="source-7"></a> [Resources](../../internal/lima/resources.go#L21) — resource-only update.
 8. <a id="source-8"></a> [Disk attachment](../../internal/lima/disk_yaml.go#L16) — `setInstanceAccountDisk`.
-9. <a id="source-9"></a> [Host lifecycle](../../cmd/yoloctl/controller_lifecycle.go#L137) — bundle/disk verification, teardown/recreation.
+9. <a id="source-9"></a> [Host lifecycle](../../cmd/yoloctl/controller_lifecycle.go#L215-L258) — bundle/disk verification, teardown/recreation.
 10. <a id="source-10"></a> [Deployment](../../cmd/yoloctl/controller_deploy.go#L139) — `startControllerSpace`.
 11. <a id="source-11"></a> [Adapter](../../internal/vm/lima.go#L21) — current template.
 12. <a id="source-12"></a> [Preservation regression](../../cmd/yoloctl/space_recreate_test.go#L94) — `TestSpaceRecreatePreservesAccountDiskAndManifests`.

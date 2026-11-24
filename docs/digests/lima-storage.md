@@ -96,7 +96,7 @@ Lima; workloads in Lima host workdirs can still meet it.
 1. <a id="source-1"></a> [Layout](../../internal/layout/layout.go#L55) — name validation and Lima path constructors.
 2. <a id="source-2"></a> [Placement](../../internal/spaceconfig/lima_home.go#L1) — new selection, legacy fallback, disk ownership and home inventory.
 3. <a id="source-3"></a> [Layout regressions](../../internal/layout/lima_home_test.go#L1).
-4. <a id="source-4"></a> [Creation](../../cmd/yoloctl/controller_lifecycle.go#L257) — `createControllerSpace`.
+4. <a id="source-4"></a> [Creation](../../cmd/yoloctl/controller_lifecycle.go#L275) — `createControllerSpace`.
 5. <a id="source-5"></a> [Transport](../../internal/lima/home.go#L52) — paths, per-child home and shell commands.
 6. <a id="source-6"></a> [Inventory](../../internal/lima/list.go#L28) — `Client.List`.
 7. <a id="source-7"></a> [Host exclusions](../../cmd/yoloctl/space_lifecycle.go#L23).
