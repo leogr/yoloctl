@@ -61,7 +61,7 @@ the adapter from `YOLOCTL_TEST_AIRC_BIN_DIR`. [8](#source-8) [9](#source-9)
 
 1. <a id="source-1"></a> [Model and integration types](../../internal/chatui/model.go#L34) — messages, `Options`, `Update`, `submit`, `delivery`, `incoming`, `append`, `evict`.
 
-2. <a id="source-2"></a> [Transcript](../../internal/chatui/transcript.go#L32-L299) — `humanGlyph`, `identify`, `transcript`, `header`; `iconSlot` in hover.go.
+2. <a id="source-2"></a> [Transcript](../../internal/chatui/transcript.go#L48-L424) — `humanGlyph`, `identify`, `transcript`, `header`; `iconSlot` in hover.go.
 3. <a id="source-3"></a> [Browser confirmation](../../internal/chatui/link_prompt.go#L18) — fixed destination and modal input.
 4. <a id="source-4"></a> [Host browser policy](../../cmd/yoloctl/chat_view.go#L730-L748) — `configureChatBrowser`, validation and cancellation.
 5. <a id="source-5"></a> [Scrolling and anchors](../../internal/chatui/render.go#L279) — `moveScroll`, `captureAnchor`; `place` in view.go.

@@ -76,7 +76,7 @@ grapheme-width limit). [6](#source-6)
 ## Sources
 
 1. <a id="source-1"></a> [body.go](../../internal/markdownview/body.go#L156) — `parseLines`, `withoutClosingHashes`, `thematicBreak`, `setextUnderline`, `quoteMarkers`, `tolerantListItem`, `indentedCodeLine`, `fenceIndentOK`, `commentBlockEnd`, `commentLine`, `splitAtBreaks`.
-2. <a id="source-2"></a> [inline.go](../../internal/markdownview/inline.go#L64) — escapes (`#`, `<` added).
+2. <a id="source-2"></a> [inline.go](../../internal/markdownview/inline.go#L38) — `InlineMarkdownMap`: escapes (`#`, `<` added).
 3. <a id="source-3"></a> [blocks.go](../../internal/markdownview/blocks.go#L1) — `indentCols`, `listMarker`, `listContext`.
 4. <a id="source-4"></a> [html_inline.go](../../internal/markdownview/html_inline.go#L1) — `stripTags`, `scanTags`, `tagAt`, `styleTags`.
 5. <a id="source-5"></a> [table cells](../../internal/markdownview/body.go#L1239) — `TableLines`, `tableCell`, `segments`, `cellBreaks`, `fitTableColumns`; table_compact.go `rowClipped`, `compactRecord`; table_fallback.go `labelledTable`; `TestTableCellLineBreakInLinkLabel`, verified at `61397bf` and accompanying changes.

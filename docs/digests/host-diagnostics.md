@@ -92,5 +92,5 @@ exact debug bytes. These are not native macOS/Lima/TUI qualification.
 
 17. <a id="source-17"></a> [Shared appender](../../internal/rotatelog/append.go#L35) — `Append`, `appendLocked`, `rotate`; `internal/lima/diagnostics.go` `hostLogAppender`, `appendHostLog` delegation.
 
-18. <a id="source-18"></a> [Host log reader](../../internal/lima/hostlog.go#L71) — `TailHostDiagnostics`, `hostLogSnapshot`, `followHostLog`; hostlog_test.go history/filter/rotation/privacy controls; rotatelog/read.go `OpenRead`. Snapshot line iteration verified at `4c8feb32ca543724e57161ebf97afb44e7748ccb` and accompanying changes.
+18. <a id="source-18"></a> [Host log reader](../../internal/lima/hostlog.go#L25) — `ParseHostDiagnostic`, `TailHostDiagnostics`, `hostLogSnapshot`, `followHostLog`; hostlog_test.go history/filter/rotation/privacy controls; rotatelog/read.go `OpenRead`. Snapshot line iteration verified at `4c8feb32ca543724e57161ebf97afb44e7748ccb` and accompanying changes.
 19. <a id="source-19"></a> [Host view](../../cmd/yoloctl/host_log.go#L1) — `hostLogRecord`, `tailHostLogWithSettings`; host_log_test.go command, complete-body, exact-debug and failure controls.

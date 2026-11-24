@@ -96,7 +96,7 @@ composed image. [23](#source-23) [24](#source-24)
 15. <a id="source-15"></a> [Antigravity adapter](agy.md) — native installation, auth and runtime contracts.
 16. <a id="source-16"></a> [Pi adapter](pi.md) — install, state, provider and runtime contracts.
 17. <a id="source-17"></a> [OpenCode adapter](opencode.md) — native runtime, account and validation contracts.
-18. <a id="source-18"></a> [OCI plan](../../internal/ocifeature/plan.go#L228) — resolution and Dockerfile generation.
+18. <a id="source-18"></a> [OCI plan](../../internal/ocifeature/plan.go#L312) — `Resolve`; `Plan.Dockerfile` generation.
 19. <a id="source-19"></a> [Codex installer](../../internal/features/codex.go#L3) — `codexInstallDockerfile`.
 20. <a id="source-20"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L14) — default args delegate confinement to OpenShell.
 21. <a id="source-21"></a> [Codex install regression](../../internal/features/features_test.go#L56) — `TestCodexFeatureInstallsBubblewrap`.
