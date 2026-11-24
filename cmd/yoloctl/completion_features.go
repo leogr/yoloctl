@@ -43,19 +43,29 @@ func completeFeatureOptions(cmd *cobra.Command, args []string, prefix string) ([
 	ctx, cancel := context.WithTimeout(cmd.Context(), 1500*time.Millisecond)
 	defer cancel()
 	out := []string{}
+	var aliases map[string]string
+	var countedAlias bool
 	for _, ref := range names {
 		if !ocifeature.IsReference(ref) {
 			continue
 		}
-		qualifier := ocifeature.Alias(ref)
-		count := 0
-		for _, other := range names {
-			if ocifeature.Alias(other) == qualifier {
-				count++
+		qualifier := ref
+		if !strings.HasPrefix(prefix, ref+".") {
+			// A lone short-name lookup can scan the selected names directly.
+			if countedAlias && aliases == nil {
+				aliases = make(map[string]string)
 			}
-		}
-		if count > 1 || strings.HasPrefix(prefix, ref+".") {
-			qualifier = ref
+			countedAlias = true
+			alias := completionFeatureAlias(ref, aliases)
+			count := 0
+			for _, other := range names {
+				if other == ref || completionFeatureAlias(other, aliases) == alias {
+					count++
+				}
+			}
+			if count == 1 {
+				qualifier = alias
+			}
 		}
 		if prefix != "" && !strings.HasPrefix(prefix, qualifier+".") && !strings.HasPrefix(qualifier+".", prefix) {
 			continue
@@ -111,4 +121,18 @@ func completeFeatureOptions(cmd *cobra.Command, args []string, prefix string) ([
 		directive |= cobra.ShellCompDirectiveNoSpace
 	}
 	return out, directive
+}
+
+func completionFeatureAlias(ref string, aliases map[string]string) string {
+	if !ocifeature.IsReference(ref) {
+		return ref
+	}
+	if alias, ok := aliases[ref]; ok {
+		return alias
+	}
+	alias := ocifeature.Alias(ref)
+	if aliases != nil {
+		aliases[ref] = alias
+	}
+	return alias
 }

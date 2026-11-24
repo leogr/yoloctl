@@ -88,6 +88,12 @@ metadata cache is advisory and never becomes an installation lock. There is no
 universal registry search or automatic import of a project's Features.
 [6](#source-6) [7](#source-7) [14](#source-14)
 
+[FACT] Feature option completion keeps an explicitly typed full qualifier.
+The first short-name count scans the selected names directly. Later counts
+reuse OCI aliases, while duplicate references and bare names still count
+toward ambiguity. [6](#source-6)
+Verified on `35772701f5880bd0b7ba417afd80eb43be6c48ae` and accompanying changes.
+
 [FACT] Focused tests exercise public-registry protocol fixtures, integrity errors,
 unsafe archives, authority rejection, dependency cycles, option drift, persistence
 and completion. These do not establish live installer compatibility for every
