@@ -578,7 +578,7 @@ func byteCount(n int) string {
 func (m *Model) replyRow(w, y int) string {
 	t := m.theme
 	bg := spaceview.Style{BG: t.Raised}
-	label := strings.TrimPrefix(m.replyLabel(m.replyTo), "↳ ")
+	label := strings.TrimPrefix(m.replyLabel(m.replyTo, nil), "↳ ")
 	cancel := " ✕ "
 	m.hits = append(m.hits, hit{x0: w - 4, x1: w - 1, y: y, area: hitReplyCancel})
 	runs := []run{

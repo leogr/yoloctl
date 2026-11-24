@@ -307,7 +307,7 @@ func (m *Model) transcript(width int) []transcriptRow {
 		rows = append(rows, m.header(msg, key, w, mark, width, key == selected))
 		indent := []run{mark, deco("   ", spaceview.Style{})}
 		if msg.ReplyTo != "" {
-			label := m.replyLabel(msg.ReplyTo)
+			label := m.replyLabel(msg.ReplyTo, loaded)
 			rows = append(rows, transcriptRow{key: key, line: lineReply, kind: rowDecor, runs: append(slicesCloneRuns(indent),
 				run{Text: truncate(m.widthMethod, label, textWidth, "…"), Style: spaceview.Style{FG: t.Dim}, Act: action{Kind: actReply, Value: msg.ReplyTo}})})
 		}
@@ -438,21 +438,30 @@ func fitRuns(wm ansi.Method, runs []run, width int) []run {
 }
 
 // replyLabel shows the replied-to author and a short snippet when displayed.
-func (m *Model) replyLabel(id string) string {
+// A transcript rebuild passes loaded, its index of each loaded ID's first
+// message; with nil the messages are searched.
+func (m *Model) replyLabel(id string, loaded map[string]int) string {
 	if m.source {
 		return "reply " + id
 	}
-	for i := range m.messages {
-		msg := &m.messages[i]
-		if msg.ID == id {
-			snippet := strings.Join(strings.Fields(plain(msg.Text)), " ")
-			if len([]rune(snippet)) > 60 {
-				snippet = string([]rune(snippet)[:60]) + "…"
+	i, ok := loaded[id]
+	if loaded == nil {
+		for j := range m.messages {
+			if m.messages[j].ID == id {
+				i, ok = j, true
+				break
 			}
-			return "↳ " + m.author(msg).name + ": " + snippet
 		}
 	}
-	return "↳ earlier message"
+	if !ok {
+		return "↳ earlier message"
+	}
+	msg := &m.messages[i]
+	snippet := strings.Join(strings.Fields(plain(msg.Text)), " ")
+	if len([]rune(snippet)) > 60 {
+		snippet = string([]rune(snippet)[:60]) + "…"
+	}
+	return "↳ " + m.author(msg).name + ": " + snippet
 }
 
 // selectedKey is the message the view marks as selected: only an explicit
