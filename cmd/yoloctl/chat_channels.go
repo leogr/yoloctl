@@ -229,18 +229,6 @@ func completeChatChannelMember(cmd *cobra.Command, args []string, prefix string)
 	return candidates, cobra.ShellCompDirectiveNoFileComp
 }
 
-// readChatChannelCatalog is the host's explicit trusted-refresh path for the
-// typed driver. It never joins a channel or resumes a saved preference.
-//
-//nolint:unused // Consumed by the separately integrated host channel view.
-func readChatChannelCatalog(ctx context.Context, cmd *cobra.Command) (chatstream.Catalog, error) {
-	target, err := selectControllerTarget(ctx, cmd)
-	if err != nil {
-		return chatstream.Catalog{}, err
-	}
-	return readChatChannelCatalogTarget(ctx, target)
-}
-
 func readChatChannelCatalogTarget(ctx context.Context, target controllerTarget) (chatstream.Catalog, error) {
 	var snapshot chatChannelSnapshot
 	tail := &stderrTail{}

@@ -126,7 +126,7 @@ view confirmation. [2](#source-2) [7](#source-7) [8](#source-8)
 9. <a id="source-9"></a> [Driver actions](../../internal/chatstream/channel_events.go#L24) — `action` refuses a topic field outside `topic-set` and encodes `topic-clear` as empty text.
 10. <a id="source-10"></a> [Join regressions](../../internal/chatui/checkpoint_ui_test.go#L330) — `TestJoinWaitsForTheServerAndRecoversFromRefusal`.
 
-11. <a id="source-11"></a> [Capture](../../cmd/yoloctl/chat_channels.go#L238) — `readChatChannelCatalogTarget`; `chat.go:106–138` keeps finite calls separate.
+11. <a id="source-11"></a> [Capture](../../cmd/yoloctl/chat_channels.go#L232) — `readChatChannelCatalogTarget`; `chat.go:106–138` keeps finite calls separate.
 12. <a id="source-12"></a> [Diagnostic tests](../../cmd/yoloctl/chat_catalog_diagnostics_test.go#L38) — real controller frames, isolated terminal sinks/concurrent tails.
 13. <a id="source-13"></a> [Recovery](../../internal/chatui/refresh.go#L1) — `refreshResult`, `refreshAccepted`.
 14. <a id="source-14"></a> [Recovery tests](../../internal/chatui/refresh_test.go#L19) — ownership, draft retention, ordering, links and hidden channels.

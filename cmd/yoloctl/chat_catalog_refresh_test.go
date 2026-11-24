@@ -55,7 +55,7 @@ func TestChatChannelHostCatalogShapesThroughRunChannels(t *testing.T) {
 				if err := json.Unmarshal(raw, &decoded); err != nil {
 					t.Fatal(err)
 				}
-				// This is the exact projection used by readChatChannelCatalog.
+				// This is the exact projection used by readChatChannelCatalogTarget.
 				return chatChannelCatalog(decoded)
 			}
 			equal := toCatalog(room)

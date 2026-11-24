@@ -73,7 +73,7 @@ refusal on older servers. None of these proves a VM or live room.
 5. <a id="source-5"></a> [Mutation](../../internal/managedchat/channels.go#L266-L295) — `DeleteChannel`.
 6. <a id="source-6"></a> [Apply](../../cmd/yoloctl/chat_channels_runtime.go#L197-L262) — `mutateChatChannels`, `applyChatChannelProof`.
 7. <a id="source-7"></a> [Rendering](../../internal/managedchat/render.go#L76-L156) — `removed_channels`, `Bootstrap.DeletedChannels`; filled at L288.
-8. <a id="source-8"></a> [Stream header](../../internal/chatstream/protocol.go#L36-L64) — `RoomHeader`; catalog reads in `chatChannelCatalog` (chat_channels.go L255).
+8. <a id="source-8"></a> [Stream header](../../internal/chatstream/protocol.go#L36-L64) — `RoomHeader`; catalog reads in `chatChannelCatalog` (chat_channels.go L243).
 9. <a id="source-9"></a> [Relay](../../cmd/yoloctl/chat_stream.go#L85-L164) — `chatStreamOrigin`, `authorizeChatStreamChannel`.
 10. <a id="source-10"></a> [Catalog](../../internal/chatstream/channel_catalog.go#L30-L174) — header ledger validation, `refreshCatalog`, `markDeleted`.
 11. <a id="source-11"></a> [Driver](../../internal/chatstream/channels_client.go#L14-L239) — `deleted`, `origin`, `send`; history refusal in channel_history.go.
