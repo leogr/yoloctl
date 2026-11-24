@@ -43,9 +43,8 @@ func (l *BoxLock) held() error {
 	return nil
 }
 
-// Space and Box name the locked box.
-func (l *BoxLock) Space() string { return l.space }
-func (l *BoxLock) Box() string   { return l.box }
+// Box names the locked box.
+func (l *BoxLock) Box() string { return l.box }
 
 // Scope is the identity a box's record must carry.
 type Scope struct {
@@ -80,14 +79,6 @@ func Save(l *BoxLock, rec *Record) error {
 		return err
 	}
 	return save(l.space, l.box, rec)
-}
-
-// RemoveLocked deletes the box's record under its lock.
-func RemoveLocked(l *BoxLock) error {
-	if err := l.held(); err != nil {
-		return err
-	}
-	return Remove(l.space, l.box)
 }
 
 // NewRecord starts an empty record for scope.

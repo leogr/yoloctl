@@ -231,7 +231,7 @@ operator-box case was not rerun separately. [26](#source-26)
 3. <a id="source-3"></a> [internal/agentbox/openshell_image.go](../../internal/agentbox/openshell_image.go#L1-L27) — `PreflightNativeImage`, caller contract and refusal wording.
 4. <a id="source-4"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L48-L73) — generated final image starts from the base.
 5. <a id="source-5"></a> [assets/containers/agentbox/Dockerfile](../../assets/containers/agentbox/Dockerfile#L103-L110) — default base startup configuration.
-6. <a id="source-6"></a> [internal/container/image_launch.go](../../internal/container/image_launch.go#L1-L70) — target/configuration/platform binding and named inspection.
+6. <a id="source-6"></a> [internal/container/image_launch.go](../../internal/container/image_launch.go#L1-L69) — target/configuration/platform binding and named inspection.
 7. <a id="source-7"></a> [internal/agentbox/openshell_image_test.go](../../internal/agentbox/openshell_image_test.go#L1-L227) — real prepared-digest input, refusal, transaction ordering and retained strict evidence regressions.
 8. <a id="source-8"></a> [internal/agentbox/openshell_container_plan_linux.go](../../internal/agentbox/openshell_container_plan_linux.go#L139-L203) — post-create identity refusal and launch/bind warning (plain create errors: `openshell_create_transaction.go`).
 9. <a id="source-9"></a> [internal/openshell/activation_peer_linux.go](../../internal/openshell/activation_peer_linux.go#L60-L151) — independent actual-process authorization.

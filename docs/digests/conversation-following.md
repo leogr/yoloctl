@@ -89,7 +89,7 @@ is exercised here. [7](#source-7) [8](#source-8) [13](#source-13)
 ## Sources
 
 1. <a id="source-1"></a> [Record](../../internal/agentsession/record.go#L83-L128) — `Record.Current`, `Assigned`, `Current`; sources and reasons L37-L81; `Validate` L244; `CurrentSource` L340; `retire`, `addPrevious`, `Target` L447-L479.
-2. <a id="source-2"></a> [Allocation](../../internal/agentsession/launch.go#L108-L219) — `Allocate` (learn, switch adoption), `CloseExit`, `SettleResume`.
+2. <a id="source-2"></a> [Allocation](../../internal/agentsession/launch.go#L99-L210) — `Allocate` (learn, switch adoption), `CloseExit`, `SettleResume`.
 3. <a id="source-3"></a> [Fold](../../internal/agentsession/apply.go#L86-L263) — `Apply` rules, `applyLine` (learned assignment, `current`).
 4. <a id="source-4"></a> [Fold regressions](../../internal/agentsession/apply_test.go#L307) — `TestApplyCurrentFollowsTheLastMainStart`, `TestApplyLearnsTheFirstReportedConversation`.
 5. <a id="source-5"></a> [Plan](../../cmd/yoloctl/session_identity.go#L170) — `plan`, `uncertainError`, `checkOwner`, `namesConversation`; target check in `launch` L283; `CloseExit` in `noteExit` and `settle`.
@@ -101,4 +101,4 @@ is exercised here. [7](#source-7) [8](#source-8) [13](#source-13)
 11. <a id="source-11"></a> [box session](../../cmd/yoloctl/box_session.go#L162) — `writeBoxSession`; keys in box_session_test.go `checkConversationShape`.
 12. <a id="source-12"></a> [Card row](../../cmd/yoloctl/chat_participant_runtime.go#L36-L106) — `participantRuntime`, `participantConversation`, `resumeOutcome`; `AgentRuntime.Conversation` and `runtimeRows` in internal/chatui/runtime.go.
 13. <a id="source-13"></a> [Card regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L75) — `TestParticipantConversationIsCertainOnly`; the card row in internal/chatui/ui_package_test.go `TestParticipantsShowObservedModelAndEffortOnly`.
-14. <a id="source-14"></a> [Status line identity](../../internal/agentsession/apply.go#L24-L42) — `Fold`, `FoldFor`, `statusLineIdentity` at L345; `recordedCurrentSource` in record.go L386; `SettleResume` in launch.go L212; tests statusline_identity_test.go, cmd/yoloctl/agy_session_test.go.
+14. <a id="source-14"></a> [Status line identity](../../internal/agentsession/apply.go#L24-L42) — `Fold`, `FoldFor`, `statusLineIdentity` at L345; `recordedCurrentSource` in record.go L386; `SettleResume` in launch.go L203; tests statusline_identity_test.go, cmd/yoloctl/agy_session_test.go.
