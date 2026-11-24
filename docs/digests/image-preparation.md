@@ -5,7 +5,9 @@ Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying change
 [FACT] The VM controller owns jobs capped at
 `max(runtime.NumCPU()-1, 1)` tracked attempts. Copied Dockerfile/context bytes, modes, image digests, platforms and arguments
 form input identity;
-force work has a controller-allocated nonce. Ordinary jobs share work; force callers share only before build. Desired/base reads (including cached/new destinations) honor running publication reservations. Consumers keep separate apply receipts/interests. [1](#source-1) [2](#source-2) [12](#source-12) [13](#source-13)
+force work has a controller-allocated nonce. New jobs compute the current input
+identity at registration. The worker checks running reservations before preflight
+and again before build. Ordinary jobs share work; force callers share only before build. Desired/base reads (including cached/new destinations) honor running publication reservations. Consumers keep separate apply receipts/interests. [1](#source-1) [2](#source-2) [12](#source-12) [13](#source-13)
 
 [FACT] Requesters receive bounded independent stderr build progress, replay for
 joiners and quiet-phase feedback; see [image build progress](image-progress.md).
@@ -113,7 +115,7 @@ not retry. Lost application replies retain the normal fence contract.
 
 ## Sources
 
-1. <a id="source-1"></a> [image_jobs.go](../../internal/controller/image_jobs.go#L1) — `ImageJobs`, `Acquire`, `leave`, `run`.
+1. <a id="source-1"></a> [Image job registration and worker](../../internal/controller/image_jobs.go#L211) — `acquireWithProgress`, `leave`, `run`. Registration and reservation checks verified at `4624036d2ea68a359c1e308a4f6b2651921ffba5` and accompanying changes.
 2. <a id="source-2"></a> [server.go](../../internal/controller/server.go#L1) — private image callback and finalization.
 3. <a id="source-3"></a> [controller_images.go](../../cmd/yoloctl/controller_images.go#L1) — prepare driver and consumption.
 4. <a id="source-4"></a> [space_operation.go](../../cmd/yoloctl/space_operation.go#L1) — deferred apply gate.

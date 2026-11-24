@@ -230,28 +230,6 @@ func (m *ImageJobs) acquireWithProgress(ctx context.Context, recipe ImageRecipe,
 		}
 	}
 	if job == nil {
-		// An unresolved started job must refuse even a fresh force/job ID.
-		m.server.mu.Lock()
-		h, e := m.server.loadHolds("")
-		m.server.mu.Unlock()
-		if e != nil {
-			m.mu.Unlock()
-			return nil, e
-		}
-		incoming := writesImageInput(stable)
-		incoming.Reads = imageBaseReads(recipe)
-		legacyRecipe := imagejob.Copy(recipe)
-		legacyRecipe.Images = nil
-		if legacy, err := legacyRecipe.Identity(); err == nil && legacy != stable {
-			incoming.Writes = append(incoming.Writes, inputResource(legacy))
-		}
-		resources, held, global := h.conflict(incoming)
-		for _, r := range held {
-			if r.unresolved() {
-				m.mu.Unlock()
-				return nil, heldError(m.server.Hello.Space, false, global, resources, []Receipt{r})
-			}
-		}
 		idBytes := sha256.Sum256([]byte(rand.Text()))
 		id := hex.EncodeToString(idBytes[:])
 		attempt := stable
@@ -303,7 +281,6 @@ func (m *ImageJobs) acquireWithProgress(ctx context.Context, recipe ImageRecipe,
 	return &RetainedImage{PinnedImage: result, release: func() { m.leave(job) }}, nil
 }
 
-func writesImageInput(stable string) *Scope { return &Scope{Writes: []Resource{inputResource(stable)}} }
 func imageBaseReads(recipe ImageRecipe) []Resource {
 	var reads []Resource
 	for _, input := range recipe.Images {
