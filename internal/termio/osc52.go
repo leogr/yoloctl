@@ -92,8 +92,12 @@ type OSC52Scanner struct {
 // Feed consumes p and returns output safe to pass to a terminal emulator plus
 // the complete OSC 52 events removed from it.
 func (s *OSC52Scanner) Feed(p []byte) (output []byte, events []OSC52) {
-	s.pending = append(s.pending, p...)
-	input := s.pending
+	// With nothing pending, read p in place: output, events and the carried
+	// suffix below are all copied out of input.
+	input := p
+	if len(s.pending) > 0 {
+		input = append(s.pending, p...)
+	}
 	s.pending = nil
 
 	for len(input) > 0 {

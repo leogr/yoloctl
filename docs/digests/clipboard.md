@@ -57,7 +57,7 @@ recheck the exact installed agent before diagnosing those failures.
 1. <a id="source-1"></a> [internal/termio/osc52.go](../../internal/termio/osc52.go#L46-L64) — `EvaluateOSC52`.
 2. <a id="source-2"></a> [internal/config/tui.go](../../internal/config/tui.go#L217) — `ClipboardEnabled` and deny-only legacy opt-outs.
 3. <a id="source-3"></a> [cmd/yoloctl/session_client.go](../../cmd/yoloctl/session_client.go#L42) — `attachToSession`.
-4. <a id="source-4"></a> [internal/termio/osc52.go](../../internal/termio/osc52.go#L1-L291) — `OSC52Scanner`, `EvaluateOSC52`, `OSC52Filter`.
+4. <a id="source-4"></a> [internal/termio/osc52.go](../../internal/termio/osc52.go#L1-L295) — `OSC52Scanner`, `EvaluateOSC52`, `OSC52Filter`.
 5. <a id="source-5"></a> [internal/tui/term/term_test.go](../../internal/tui/term/term_test.go#L17-L60) — `TestOSC52InterceptedBeforeCore` through `TestOSC52InterceptorDoesNotHoldUTF8Prompt`.
 6. <a id="source-6"></a> [internal/session/holder.go](../../internal/session/holder.go#L388) — `broadcast` and separate clipboard events.
 7. <a id="source-7"></a> [internal/tui/terminal_keys.go](../../internal/tui/terminal_keys.go#L38) — `childKey`, `kittyKey`.
