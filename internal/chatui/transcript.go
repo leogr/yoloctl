@@ -2,6 +2,7 @@ package chatui
 
 import (
 	"hash/fnv"
+	"slices"
 	"strings"
 	"time"
 
@@ -319,7 +320,7 @@ func (m *Model) transcript(width int) []transcriptRow {
 			if br.Decor {
 				row.kind = rowDecor
 			}
-			row.runs = append(slicesCloneRuns(indent), br.Runs...)
+			row.runs = slices.Concat(indent, br.Runs)
 			for i := range row.runs {
 				if row.runs[i].Act.Kind == markdownview.IntentLocalFile {
 					row.runs[i].Act.Extra = key
