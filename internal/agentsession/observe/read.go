@@ -252,7 +252,7 @@ func ReadWithin(ctx context.Context, dir string, gen uint64, cur Cursor, uid int
 		res.Health = HealthInvalid
 		return res, nil
 	}
-	files, ignored, ok := listEvents(gd, uid)
+	files, ignored, ok := listEvents(gd)
 	if err := stopped(); err != nil {
 		return Result{Cursor: cur}, err
 	}
@@ -338,7 +338,7 @@ func eventsName(k uint64) string { return "events." + strconv.FormatUint(k, 10) 
 
 // listEvents returns the sorted events file indices. Any entry that is not a
 // regular file, including the lock, makes the generation invalid.
-func listEvents(gd, uid int) (files []uint64, ignored int, ok bool) {
+func listEvents(gd int) (files []uint64, ignored int, ok bool) {
 	names, err := readNames(gd, RootInodes)
 	if err != nil {
 		return nil, 0, false
