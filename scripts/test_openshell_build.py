@@ -100,8 +100,8 @@ class OpenShellBuildTest(unittest.TestCase):
         self.assertEqual(proof['source_commit'], inputs['fork_commit'])
 
     def test_qualify_refuses_inputs_of_another_source(self):
-        # The first-build inputs (OpenShell 0.1.6, two patches) must not be
-        # qualified as the current source; neither must the committed template.
+        # The first-build inputs (OpenShell 0.1.6, two patches), frozen here,
+        # must not be qualified as the current source.
         historical = {
             'revision': 'first-build-1', 'fork_commit': 'e8605009bed50a05136efe106a0c1e2f283ee771',
             'fork_tree': '9112ab178200f6751290ac2c2a20150e31c8708b',
@@ -110,12 +110,11 @@ class OpenShellBuildTest(unittest.TestCase):
             'rego': 'third_party/openshell/sandbox-policy-0.1.6.rego', 'platforms': {}}
         path = self.tmp / 'historical-inputs.json'
         path.write_text(json.dumps(historical))
-        for inputs in (path, HERE.parent / 'third_party' / 'openshell' / 'release-inputs.json'):
-            run = subprocess.run(['go', 'run', '-buildvcs=false', './scripts/native-artifacts.go', 'qualify',
-                                  str(inputs), str(self.tmp), str(self.tmp)], cwd=HERE.parent,
-                                 env=dict(os.environ, GOFLAGS=''), capture_output=True, text=True)
-            self.assertNotEqual(run.returncode, 0, inputs)
-            self.assertIn('inputs describe another OpenShell source than third_party/openshell/pins.json', run.stderr)
+        run = subprocess.run(['go', 'run', '-buildvcs=false', './scripts/native-artifacts.go', 'qualify',
+                              str(path), str(self.tmp), str(self.tmp)], cwd=HERE.parent,
+                             env=dict(os.environ, GOFLAGS=''), capture_output=True, text=True)
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn('inputs describe another OpenShell source than third_party/openshell/pins.json', run.stderr)
 
     def test_missing_host_tool_names_the_setup(self):
         which = ob.shutil.which

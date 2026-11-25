@@ -3,12 +3,12 @@
 
 Historical audit of the first-build release (OpenShell 0.1.6 with two
 patches, NVIDIA source archive and the first-build evidence). It reads the
-current Go constants, so it audits that release only when run from a
-revision whose constants describe it: the last is f357061 (run it there, for
-example from a detached worktree, with that release's evidence). From the
-v0.1.10 upgrade on, the production build (scripts/openshell-build.py)
-verifies the pinned upstream and every patch tree, and native-artifacts.go
-refuses inputs of another source.
+current Go constants, so it can audit that release only from a revision
+whose constants describe it (the last is f357061), and only with the
+matching first-build source, compiled selection and evidence; a full replay
+there has not been verified. From the v0.1.10 upgrade on, the production
+build (scripts/openshell-build.py) verifies the pinned upstream and every
+patch tree, and native-artifacts.go refuses inputs of another source.
 
 This command never builds Rust, updates pins, regenerates qualification, signs a
 commit or publishes anything. Source archives can be supplied offline; otherwise
