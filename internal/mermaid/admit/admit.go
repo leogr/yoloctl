@@ -64,6 +64,9 @@ func Check(source string) Decision {
 	}
 	switch {
 	case header[0] == "sequenceDiagram" && len(header) == 1:
+		if reason := sequenceSemicolon(lines[first]); reason != "" {
+			return reject(Sequence, "line %d: %s", first+1, reason)
+		}
 		return checkSequence(lines, first+1)
 	case header[0] == "graph" || header[0] == "flowchart":
 		if len(header) != 2 {
@@ -447,16 +450,23 @@ var arrows = []string{"-->>", "->>", "-->", "->"}
 func checkSequence(lines []string, from int) Decision {
 	q := &sequence{}
 	for n := from; n < len(lines); n++ {
-		line := strings.TrimSuffix(strings.TrimSpace(lines[n]), ";")
-		if line == "" || strings.HasPrefix(line, "%%") {
+		raw := strings.TrimSpace(lines[n])
+		line := strings.TrimSuffix(raw, ";")
+		if strings.HasPrefix(raw, "%%") {
+			continue
+		}
+		// Mermaid decodes a code even when its ";" ends the line; the renderer
+		// draws every code as typed.
+		if code := anyEntityCode(raw); code != "" {
+			return reject(Sequence, "line %d: entity code %s is not supported in a sequence diagram", n+1, code)
+		}
+		if reason := sequenceSemicolon(raw); reason != "" {
+			return reject(Sequence, "line %d: %s", n+1, reason)
+		}
+		if line == "" {
 			continue
 		}
 		q.line0 = n + 1
-		// Mermaid decodes a code even when its ";" ends the line; the renderer
-		// draws every code as typed.
-		if code := anyEntityCode(strings.TrimSpace(lines[n])); code != "" {
-			return reject(Sequence, "line %d: entity code %s is not supported in a sequence diagram", n+1, code)
-		}
 		if reason := q.line(line); reason != "" {
 			return reject(Sequence, "line %d: %s", n+1, reason)
 		}
@@ -468,6 +478,24 @@ func checkSequence(lines []string, from int) Decision {
 		return reject(Sequence, "line %d: %s", n, reason)
 	}
 	return Decision{Kind: Sequence}
+}
+
+// sequenceSemicolon refuses a ";" in a sequence line, final or not: Mermaid
+// ends a statement there, the renderer never does (it draws "hi;", makes
+// "participant A;" a participant named "A;", or fails on "end;"). A ";" after
+// a "#" is inside Mermaid's comment; the "#" itself is drawn as text, a known
+// difference kept so that a "#" can be shown at all.
+func sequenceSemicolon(raw string) string {
+	text, _, _ := strings.Cut(raw, "#")
+	i := strings.IndexByte(text, ';')
+	switch {
+	case i < 0:
+		return ""
+	case strings.TrimSpace(text[i+1:]) == "":
+		return `remove the trailing ";"`
+	default:
+		return `a ";" inside a line starts a new statement in Mermaid; put each statement on its own line`
+	}
 }
 
 // notePlacement refuses the notes the renderer draws in the wrong place

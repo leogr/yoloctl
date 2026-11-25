@@ -136,6 +136,20 @@ func TestAcceptAndRejectTable(t *testing.T) {
 		{"sequenceDiagram\nA->>B: say #34;hi#34;", "line 2: entity code #34; is not supported in a sequence diagram"},
 		{"sequenceDiagram\nparticipant A as x #9829;", "line 2: entity code #9829; is not supported in a sequence diagram"},
 		{"sequenceDiagram\nA->>B: ticket 2", ""},
+		{"sequenceDiagram\nA->>B: x;B->>A: y", "line 2: a \";\" inside a line starts a new statement in Mermaid; put each statement on its own line"},                   // two messages drawn as one
+		{"sequenceDiagram\nA->>B: m\nNote over A: a;B->>A: yes", "line 3: a \";\" inside a line starts a new statement in Mermaid; put each statement on its own line"}, // the reply drawn inside the note
+		{"sequenceDiagram\nalt x;y\nA->>B: m\nend", "line 2: a \";\" inside a line starts a new statement in Mermaid; put each statement on its own line"},
+		{"sequenceDiagram\nalt x\nA->>B: m\nelse y;z\nA->>B: n\nend", "line 4: a \";\" inside a line starts a new statement in Mermaid; put each statement on its own line"},
+		{"sequenceDiagram\nparticipant A as Al;ice", "line 2: a \";\" inside a line starts a new statement in Mermaid; put each statement on its own line"},
+		{"sequenceDiagram\nA->>B: x;B->>A: y # c", "line 2: a \";\" inside a line starts a new statement in Mermaid; put each statement on its own line"}, // the first ; comes before the #
+		{"sequenceDiagram\nA->>B: hi;", "line 2: remove the trailing \";\""},                                                                              // drawn "hi;"
+		{"sequenceDiagram\nA->>B: hi; # c", "line 2: remove the trailing \";\""},
+		{"sequenceDiagram\nparticipant A;", "line 2: remove the trailing \";\""}, // a participant named "A;"
+		{"sequenceDiagram\nA->>B: hi\nactivate A;", "line 3: remove the trailing \";\""},
+		{"sequenceDiagram\nalt x\nA->>B: hi\nend;", "line 4: remove the trailing \";\""}, // the renderer fails
+		{"sequenceDiagram;\nA->>B: hi", "line 1: remove the trailing \";\""},             // the renderer fails
+		{"sequenceDiagram\n;\nA->>B: hi", "line 2: remove the trailing \";\""},
+		{"sequenceDiagram\nA->>B: file #2, C#\nA->>B: hi # c;B->>A: next\n%% c;", ""}, // "#" drawn as text: a known difference
 		{"flowchart LR\nsubgraph \"Two\"\nB\nend", "line 2: quoted subgraph titles are not supported"},
 		{"flowchart LR\nsubgraph t[\"Three\"]\nB\nend", "line 2: quoted subgraph titles are not supported"},
 		{"flowchart LR\n\tA --> B", "contains control characters"}, // TAB: the renderer's protocol refuses it

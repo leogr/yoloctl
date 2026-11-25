@@ -42,8 +42,12 @@ draws); `-.` or `.-` in an unquoted `-- … -->` label (the edge turns dotted);
 entity codes other than `#34;` in node text, and every entity code in a
 subgraph title or a sequence diagram, where the renderer draws even `#34;` as
 typed (checked before a line's final `;` is dropped); and Markdown node text
-(`` ["`…`"] ``). A `;` in a plain subgraph title ends the title in Mermaid and
-the renderer alike, so it stays admitted. [1](#source-1) [2](#source-2)
+(`` ["`…`"] ``). In a sequence diagram every `;` before a `#` is refused, a
+trailing one too ("remove the trailing `;`"): Mermaid ends a statement there,
+the renderer never does (it draws `hi;` and a participant `A;`, and fails on
+`end;`). A `#` starts a comment in Mermaid sequence text but is drawn as text:
+a known difference, kept so a `#` can be shown. A `;` ending a plain subgraph
+title is drawn as in Mermaid and stays admitted. [1](#source-1) [2](#source-2)
 
 [FACT] Notes the pinned renderer draws in the wrong place are refused
 (`notePlacement`): it draws a note beside the message before it, and a block's
