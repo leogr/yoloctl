@@ -180,10 +180,7 @@ func fitTableInView(wm ansi.Method, lines []DisplayLine, first, table, width, ro
 	lines = tableLayoutLines(wm, lines)
 	at := func(w int) ([][]BodyRow, TableFitReason, []TableRowID) {
 		if options.CompactTables {
-			rows, reason, denied, applied := compactTable(wm, lines, first, table, w, rowsLeft, theme, options.OpenTableRows)
-			if applied {
-				return rows, reason, denied
-			}
+			return compactTable(wm, lines, first, table, w, rowsLeft, theme, options.OpenTableRows)
 		}
 		rows, reason := FitTableLayout(wm, lines, first, w, rowsLeft, theme)
 		return rows, reason, nil

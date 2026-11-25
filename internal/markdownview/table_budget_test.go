@@ -30,11 +30,9 @@ func TestTableBudgetBoundPreservesAdmission(t *testing.T) {
 					}
 					for _, open := range []map[TableRowID]bool{nil, {{0, 0}: true, {0, 2}: true}} {
 						var why TableFitReason
-						applied := false
 						if compact {
-							_, why, _, applied = compactTable(wm, doc.Lines, 0, 0, width, 100000, p.Theme, open)
-						}
-						if !applied {
+							_, why, _ = compactTable(wm, doc.Lines, 0, 0, width, 100000, p.Theme, open)
+						} else {
 							_, why = FitTableLayout(wm, doc.Lines, 0, width, 100000, p.Theme)
 						}
 						if why == TableFits || why == TableLaidOut {

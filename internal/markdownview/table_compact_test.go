@@ -119,8 +119,8 @@ func TestCompactCellSelectionIncludesHiddenTailAndWholeCrossedCells(t *testing.T
 
 func TestCompactExpansionRespectsRemainingRowsAndBytes(t *testing.T) {
 	doc, o := compactFixture(t, ansi.GraphemeWidth)
-	rows, reason, refused, applied := compactTable(o.Method, doc.Lines, 0, 0, 60, 8, o.Theme, map[TableRowID]bool{{0, 0}: true})
-	if !applied || reason != TableLaidOut || len(refused) != 1 || countLine(flattenTable(rows), 2) != 1 {
+	rows, reason, refused := compactTable(o.Method, doc.Lines, 0, 0, 60, 8, o.Theme, map[TableRowID]bool{{0, 0}: true})
+	if reason != TableLaidOut || len(refused) != 1 || countLine(flattenTable(rows), 2) != 1 {
 		t.Fatal("expansion escaped remaining-row bound", reason, refused)
 	}
 	source := "|heading|" + strings.Repeat("heading|", 31) + "\n|" + strings.Repeat("---|", 32) + "\n|" + (strings.Repeat("w", 200) + " " + strings.Repeat("word ", 8000)) + "|" + strings.Repeat("x|", 31)
@@ -128,8 +128,8 @@ func TestCompactExpansionRespectsRemainingRowsAndBytes(t *testing.T) {
 	if d.Lines[0].Table == nil {
 		t.Fatal("fixture must be admitted")
 	}
-	_, reason, refused, applied = compactTable(o.Method, d.Lines, 0, 0, 170, 100000, o.Theme, map[TableRowID]bool{{0, 0}: true})
-	if !applied || reason != TableLaidOut || len(refused) != 1 {
+	_, reason, refused = compactTable(o.Method, d.Lines, 0, 0, 170, 100000, o.Theme, map[TableRowID]bool{{0, 0}: true})
+	if reason != TableLaidOut || len(refused) != 1 {
 		t.Fatal("byte-bound expansion was not refused", reason, refused)
 	}
 }

@@ -216,13 +216,13 @@ func tableCost(wm ansi.Method, rows [][]BodyRow, width int, theme spaceview.Them
 	return bytes, count
 }
 
-func compactTable(wm ansi.Method, lines []DisplayLine, first, table, width, rowsLeft int, theme spaceview.Theme, open map[TableRowID]bool) ([][]BodyRow, TableFitReason, []TableRowID, bool) {
+func compactTable(wm ansi.Method, lines []DisplayLine, first, table, width, rowsLeft int, theme spaceview.Theme, open map[TableRowID]bool) ([][]BodyRow, TableFitReason, []TableRowID) {
 	tbl := lines[0].Table
 	// A uses the whole width without a control gutter. Saved B choices are
 	// dormant here; no table-row actions are emitted.
 	if _, ok := WaterFill(tbl.Natural, tbl.WordFloor, width-3*(len(tbl.Natural)-1)); ok {
 		rows, why := fitTableColumns(wm, lines, first, width, rowsLeft, theme, tbl.WordFloor, false, false)
-		return rows, why, nil, true
+		return rows, why, nil
 	}
 	end := 1
 	for end < len(lines) && lines[end].Table == tbl {
@@ -231,7 +231,7 @@ func compactTable(wm ansi.Method, lines []DisplayLine, first, table, width, rows
 	lines = lines[:end]
 	alloc, reason := compactColumns(tbl, width)
 	if alloc == nil {
-		return nil, reason, nil, true
+		return nil, reason, nil
 	}
 	gutter := 0
 	for _, line := range lines[2:] {
@@ -244,11 +244,11 @@ func compactTable(wm ansi.Method, lines []DisplayLine, first, table, width, rows
 		alloc, reason = compactColumns(tbl, width-gutter)
 	}
 	if alloc == nil {
-		return nil, reason, nil, true
+		return nil, reason, nil
 	}
 	header, reason := fitTableColumns(wm, lines[:2], first, width-gutter, rowsLeft, theme, tbl.CompactFloor, false, true)
 	if header == nil {
-		return nil, reason, nil, true
+		return nil, reason, nil
 	}
 	headerRule := header[1][0].Runs[0].Text
 	for i := range header {
@@ -275,10 +275,10 @@ func compactTable(wm ansi.Method, lines []DisplayLine, first, table, width, rows
 	count += max(len(lines)-3, 0)
 	budget := tableLayoutBudget(tbl, width-gutter)
 	if bytes > budget {
-		return nil, TableOverBudget, nil, true
+		return nil, TableOverBudget, nil
 	}
 	if count >= rowsLeft {
-		return nil, TableNoRows, nil, true
+		return nil, TableNoRows, nil
 	}
 	var refused []TableRowID
 	for i, dl := range lines[2:] {
@@ -338,5 +338,5 @@ func compactTable(wm ansi.Method, lines []DisplayLine, first, table, width, rows
 		}
 		base[index] = expanded
 	}
-	return base, TableLaidOut, refused, true
+	return base, TableLaidOut, refused
 }

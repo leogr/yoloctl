@@ -67,7 +67,7 @@ func TestWideBudgetRetryUsesWidestAdmittedAllocation(t *testing.T) {
 	p := documentOptions()
 	doc := Parse("|"+strings.Repeat("h", 65536)+"|b|\n|---|---|\n"+strings.Repeat("|x|y|\n", 512), p)
 	options := LayoutOptions{Method: p.Method, Theme: p.Theme, CompactTables: true, UnlimitedRows: true}
-	_, reason, _, _ := compactTable(p.Method, doc.Lines, 0, 0, 5000, 50000, p.Theme, nil)
+	_, reason, _ := compactTable(p.Method, doc.Lines, 0, 0, 5000, 50000, p.Theme, nil)
 	if reason != TableOverBudget {
 		t.Fatal("fixture no longer crosses the budget at5000", reason)
 	}
@@ -96,7 +96,7 @@ func TestWideBudgetRetryUsesWidestAdmittedAllocation(t *testing.T) {
 		if !measure.couldFit(width, true) {
 			continue
 		}
-		_, why, _, _ := compactTable(p.Method, doc.Lines, 0, 0, width, 50000, p.Theme, nil)
+		_, why, _ := compactTable(p.Method, doc.Lines, 0, 0, width, 50000, p.Theme, nil)
 		if why == TableLaidOut || why == TableFits {
 			t.Fatalf("skipped wider admitted allocation%d", width)
 		}

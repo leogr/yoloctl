@@ -142,7 +142,7 @@ func TestSparseWrappedAndExpandedTablesRemainBounded(t *testing.T) {
 	for row := range 32 {
 		open[TableRowID{Table: 0, Row: row}] = true
 	}
-	compact, why, refused, _ := compactTable(p.Method, doc.Lines, 0, 0, 220, 1000000, p.Theme, open)
+	compact, why, refused := compactTable(p.Method, doc.Lines, 0, 0, 220, 1000000, p.Theme, open)
 	if why != TableLaidOut || len(refused) == 0 {
 		t.Fatal("sparse expansion guard lost", why, len(refused))
 	}
