@@ -9,16 +9,12 @@ import (
 	"syscall"
 )
 
-// Clear empties and recreates only the verified named cache leaf. The caller
-// must hold normal box admission and prove that its container is not running.
-// Removed reports the reduction in this directory's allocated-byte footprint,
-// not a reservation or a promise about globally available filesystem space.
-func Clear(ctx context.Context, name string, uid, gid int) (uint64, error) {
-	return clear(ctx, Root, name, uid, gid)
-}
-
-// ClearWithDirectories restores the feature directories before measuring the
-// final footprint, so reported freed bytes exclude their recreated allocation.
+// ClearWithDirectories empties and recreates only the verified named cache
+// leaf. The caller must hold normal box admission and prove that its container
+// is not running. It restores the feature directories before measuring the
+// final footprint, so reported freed bytes exclude their recreated allocation;
+// they report the reduction in this directory's allocated-byte footprint, not
+// a reservation or a promise about globally available filesystem space.
 func ClearWithDirectories(ctx context.Context, name string, uid, gid int, dirs []string) (uint64, error) {
 	return clear(ctx, Root, name, uid, gid, dirs...)
 }
