@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Isolated stop/recreate regression: TERM reaches the supervised workload,
+# Isolated stop/recreate regression: the native helper stops its children,
 # shutdown stays below the runtime's 30-second escalation, and peers survive.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
@@ -31,8 +31,11 @@ done
 
 smoke_info "confined shutdown: repeated stop/start and cached recreate"
 python3 - <<'PY'
+import hashlib
 import json
 import os
+import re
+import signal
 import subprocess
 import time
 
@@ -42,20 +45,37 @@ space = os.environ["SMOKE_SPACE"]
 def run(*args):
     return subprocess.run([cli, *args], check=True, text=True, stdout=subprocess.PIPE).stdout
 
+def guest(*args):
+    return run("space", "ssh", space, "--root", "--", *args)
+
 def timed(*args):
     start = time.monotonic()
     run(*args)
     elapsed = time.monotonic() - start
     print(f"{' '.join(args)}: {elapsed:.3f}s", flush=True)
     # This gate catches the observed fixed 30s wait, not small machine-to-machine
-    # performance variation. Container exit status separately proves TERM.
+    # performance variation. Verify the container and helper outcomes separately.
     assert elapsed < 15, f"routine teardown reached the escalation delay: {elapsed:.3f}s"
 
 for _ in range(3):
+    container, = json.loads(guest("nerdctl", "inspect", "smoke-stop"))
+    assert container["State"]["Running"] is True, container["State"]
+    container_id = container["Id"]
+    native_root, = (mount["Source"] for mount in container["Mounts"]
+                    if mount["Destination"] == "/.openshell/native")
+    assert native_root == container["Config"]["Labels"]["yoloctl.openshell.control_root"], native_root
+    record = guest("cat", "--", f"{native_root}/current.json")
+    generation = json.loads(record)["generation"]
+    assert re.fullmatch(r"g[0-9a-f]{48}", generation), generation
+
     timed("box", "stop", "smoke-stop", "--space", space)
-    state = json.loads(run("space", "ssh", space, "--root", "--", "nerdctl", "inspect",
-                           "--format", "{{json .State}}", "smoke-stop"))
-    assert state["Running"] is False and state["ExitCode"] == 143, state
+    state = json.loads(guest("nerdctl", "inspect", "--format", "{{json .State}}", container_id))
+    assert state["Running"] is False and state["ExitCode"] == 0, state
+    status = json.loads(guest("cat", "--", f"{native_root}/generations/{generation}/status/runtime.json"))
+    assert status["record_sha256"] == hashlib.sha256(record.encode()).hexdigest(), status
+    assert (status["phase"], status["reason"]) == ("stopped", "stopped"), status
+    exits = (status["supervisor_exit"], status["boundary_exit"])
+    assert all(type(code) is int and code != -signal.SIGKILL for code in exits), status
     assert "peer-alive" in run("box", "exec", "smoke-stop-peer", "--space", space,
                                 "--", "/bin/echo", "peer-alive")
     timed("box", "start", "smoke-stop", "--space", space, "--no-attach")

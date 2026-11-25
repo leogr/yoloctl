@@ -387,8 +387,10 @@ The phases are:
   with the entrypoint bypassed), cached-image selection, a small final ownership
   layer, apt/npm cache retention across base refresh and composed rebuild but absence from image
   layers, and default lifecycle autoupdate with an intentionally inaccessible `~/.npm`;
-- `smoke-box-stop`: confined SIGTERM shutdown, exit 143, repeated stop/start,
-  cached recreate without the 30-second escalation, and an unaffected peer;
+- `smoke-box-stop`: native confined shutdown, container exit 0 and the
+  selected generation's stopped status with both child exits observed
+  without SIGKILL, repeated stop/start, cached recreate without the
+  30-second escalation, and an unaffected peer;
 - `smoke-memory`: a shared box allocates over 2 GiB, child/pool OOM completes
   within 30 seconds and leaves a peer alive, resource-only edits converge,
   boxes/BuildKit/RUN steps share the bounded pool, and builder death permits a

@@ -2,6 +2,9 @@
 
 Verification: `0bfec5a3ac693f226a04d280634025bf35d66e1a` and accompanying changes (saved-declaration errors); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer consent removal); exact inspect selection at `820e87cf0fdec4c48c82d51eb2a8296504b61b01` and accompanying changes; runtime target selection at `9169119ca6b27e530064dc49b8b7a1d06c17397b` and accompanying changes; box start/stop results at `19fe5134273d38642397a288132586b4e94dcd10` and accompanying changes; other facts at `1d265df3`; re-read cited sources when changing behavior; holding and source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; legacy DNAT PATH at `f3a4aa1` and accompanying changes. nerdctl inspect sources re-read at `fcd4a112` and accompanying changes.
 
+Native stop and smoke verified against `9829771d01bcb3ca14f7ec99e8b064f6ac77d4ba`
+and accompanying changes.
+
 [FACT] Explicit reconcile selects create, recreate, restart, then live port changes. Account,
 agent, mounts/workdir access, image, literal env and network mode can require
 recreation; operator infrastructure changes also recreate. Other policy changes
@@ -63,13 +66,17 @@ declaration-only deletion. A confirmed absent container still permits normal
 cleanup; failed and partial inventories are regression-tested to leave
 declaration bytes unchanged. [20](#source-20) [21](#source-21)
 
-[FACT] Graceful stop requests `kill -TERM -1` through private OpenShell SSH as
-the confined user without a PTY, leaving PID 1 to reap and clean up. Its
-three-second budget precedes `nerdctl stop --time 30` and SIGKILL escalation.
-Modern runc's obsolete `--all` cannot broadcast SIGTERM. Smoke checks cover
-exit 143, repeated stop/start, cached recreate and peer survival.
+[FACT] Native confined stop uses `nerdctl stop` on the exact container ID.
+The helper handles TERM as PID 1, reaps both children and exits 0 on clean
+shutdown. The smoke checks that exit and the selected generation's stopped
+status with both child exits observed without SIGKILL. It repeats stop/start,
+checks cached recreate below the engine's escalation delay and checks peer
+survival. Legacy confined teardown requests `kill -TERM -1` through private
+OpenShell SSH with a three-second budget before the engine stop. Modern runc's
+obsolete `--all` cannot broadcast SIGTERM.
 [15](#source-15) [16](#source-16) [17](#source-17)
-[18](#source-18) [19](#source-19)
+[18](#source-18) [19](#source-19) [38](#source-38) [39](#source-39)
+[40](#source-40) [41](#source-41)
 
 [FACT] Host boot/adapter locks are separate from native space-before-entity
 locks; none cross the host/guest filesystem boundary. Builds/npm updates serialize
@@ -157,3 +164,7 @@ physical power loss.
 36. <a id="source-36"></a> [Declaration permission comparison](../../cmd/yoloctl/saved_permissions.go#L16) — immutable prior snapshot and removal warning, not runtime proof.
 
 37. <a id="source-37"></a> [Environment drift](../../internal/agentbox/diff.go#L388) — `envRecreateReason`; verified at `ed0f79a6f4e9e03e8c0777ec612b58315cbf86b1` and accompanying changes.
+38. <a id="source-38"></a> [Native engine stop](../../internal/agentbox/openshell_stop_linux.go#L279-L284) — exact container ID.
+39. <a id="source-39"></a> [PID 1 signal and cleanup](../../internal/openshell/runtime_main_linux.go#L40-L80) — TERM handling, child reaping and final status.
+40. <a id="source-40"></a> [Helper exit code](../../internal/openshell/runtime_manifest_linux.go#L19-L34) — `projectedRuntimeResult`.
+41. <a id="source-41"></a> [Generation status](../../internal/openshell/runtime_status_linux.go#L81-L114) — child wait results and the retained observation.
