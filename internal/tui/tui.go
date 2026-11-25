@@ -83,6 +83,7 @@ const spinnerInterval = 100 * time.Millisecond
 // on by the time the subprocess answers).
 type suggestionsMsg struct {
 	Generation uint64
+	Shown      uint64 // Console.Shown at the request: newer output drops the answer
 	Line       string
 	Items      []yoloctlcli.Candidate
 	Nav        bool // arrive in menu-steering (the ↓-on-empty reveal); typing leaves it false
@@ -113,8 +114,9 @@ type model struct {
 
 	width, height       int
 	focusPalette        bool
-	scrollOff           int  // lines back into the focused surface's scrollback; 0 = live
-	consoleHistory      bool // the palette shows every retained command (Ctrl+R), not the last one
+	scrollOff           int    // lines back into the focused surface's scrollback; 0 = live
+	consoleHistory      bool   // the palette shows every retained command (Ctrl+R), not the last one
+	editedOver          uint64 // the console output (Console.Shown) the person last edited the line over
 	notices             []toastNotice
 	noticeIndex         int
 	noticeFocused       bool
@@ -1073,7 +1075,7 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		return m, nil
 
 	case suggestionsMsg:
-		if line, _ := m.pal.Line(); m.focusPalette && line == msg.Line && msg.Generation == m.spaceGeneration {
+		if line, _ := m.pal.Line(); m.focusPalette && line == msg.Line && msg.Generation == m.spaceGeneration && msg.Shown == m.console.Shown() {
 			// A fresh list resets the selection to the first item (the
 			// default ghost / TAB target); typing re-anchors here and stays
 			// out of steering, a ↓-on-empty reveal arrives already steering.
@@ -1227,8 +1229,8 @@ func (m *model) Update(msg tea.Msg) (next tea.Model, cmd tea.Cmd) {
 		if m.focusPalette && m.console.Busy() {
 			m.sendInput(m.console, pasteBytes(msg.Content, m.console.BracketedPaste()))
 		} else if m.focusPalette {
-			m.pal.Insert(msg.Content)
-			m.refreshSuggestions()
+			m.edit(func() { m.pal.Insert(msg.Content) })
+			m.refreshSuggestions(true)
 		} else if t := m.tabs.Focused(); t != nil && t.Empty() {
 			m.postNotice(prettylog.KindWarn, "nothing takes input here") // the empty pane's input is the palette
 		} else if t != nil && !t.Exited {
@@ -1552,20 +1554,19 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// While steering the menu with ↑/↓, Enter picks the selection
 		// (like TAB) instead of submitting — you confirm, then run.
 		if m.suggNav && len(m.sugg) > 0 {
-			m.completePalette()
-			m.refreshSuggestions()
+			m.edit(m.completePalette)
+			m.refreshSuggestions(true)
 		} else if args := m.pal.Submit(); args != nil {
 			return m, m.dispatch(args)
 		}
 	case k.Code == tea.KeyBackspace:
-		m.pal.Backspace()
-		m.refreshSuggestions()
+		// At the line's start nothing changes, and nothing asks again.
+		m.refreshSuggestions(m.edit(m.pal.Backspace))
 	case k.Code == tea.KeyDelete:
-		m.pal.Delete() // forward delete (Del key, ESC[3~)
-		m.refreshSuggestions()
+		m.refreshSuggestions(m.edit(m.pal.Delete)) // forward delete (Del key, ESC[3~); a no-op at the end
 	case k.Code == tea.KeyTab && k.Mod & ^(tea.ModCapsLock|tea.ModNumLock) == 0:
-		m.completePalette()
-		m.refreshSuggestions()
+		m.edit(m.completePalette)
+		m.refreshSuggestions(true) // an explicit request, also when nothing completed
 	// Tab switching: Ctrl/Alt+arrows cycle, Ctrl/Alt+digit jumps —
 	// where the host terminal doesn't shadow them (eyeball finding E3:
 	// ghostty claims Alt+digit; plain arrows stay line-editing keys).
@@ -1609,7 +1610,7 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.suggSel, m.suggNav = 0, true
 		default: // browse history back — no menu, so the next Up keeps going
 			m.clearSuggestions()
-			m.pal.HistPrev()
+			m.edit(m.pal.HistPrev)
 		}
 	case k.Code == tea.KeyDown:
 		switch line, _ := m.pal.Line(); {
@@ -1619,7 +1620,7 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.showAllSuggestions() // past the draft: ↓ reveals the full menu
 		default: // browse history forward — no menu hijack
 			m.clearSuggestions()
-			m.pal.HistNext()
+			m.edit(m.pal.HistNext)
 		}
 	case k.Code == tea.KeyLeft:
 		m.pal.Left()
@@ -1631,8 +1632,8 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.pal.End()
 	default:
 		if k.Text != "" && k.Mod&^(tea.ModShift|tea.ModCapsLock|tea.ModNumLock) == 0 {
-			m.pal.Insert(k.Text)
-			m.refreshSuggestions()
+			m.edit(func() { m.pal.Insert(k.Text) })
+			m.refreshSuggestions(true)
 		}
 	}
 	return m, nil
@@ -1759,53 +1760,63 @@ func (m *model) clearSuggestions() {
 // refreshSuggestions recomputes the overlay's as-you-type list off the
 // event loop (a `yoloctl __complete` subprocess answers in a few ms
 // against the on-disk registries; staleness is guarded by line
-// comparison on delivery).
-func (m *model) refreshSuggestions() {
+// comparison on delivery). ask is false for a key that left the text as it
+// was: its answer could cover output that appeared under the unchanged draft.
+func (m *model) refreshSuggestions(ask bool) {
 	m.suggNav = false // any line edit exits menu-steering (Enter runs again)
 	line, _ := m.pal.Line()
 	if line == "" {
 		m.sugg, m.suggSel = nil, 0
 		return
 	}
-	// Suggestions replace the display, not native history. Backspacing to
-	// an empty line can show the retained console again.
-	if !m.console.Busy() && m.consoleContentRows() > 0 {
+	// An edit leaves the history view (also a paste, which skips the key
+	// path) and hides the last command's output, not native history.
+	// Backspacing to an empty line shows it again, at its live tail.
+	if !m.console.Busy() && (m.consoleHistory || m.console.Frame().ContentRows > 0) {
 		m.resetConsoleView()
 	}
-	if m.program == nil { // model under test
+	if !ask {
 		return
 	}
 	words, last, ok := m.pal.CompletionInput()
 	if !ok {
 		return
 	}
-	request := m.suggestionsCommand(line, words, last, false)
-	program := m.program
-	go func() { program.Send(request()) }()
+	askCompletion(m, m.suggestionsCommand(line, words, last, false))
 }
+
+// askCompletion runs one completion request off the event loop and delivers
+// its answer. A model under test has no program; tests replace it to run the
+// request and deliver the answer themselves.
+var askCompletion = func(m *model, request tea.Cmd) {
+	if program := m.program; program != nil {
+		go func() { program.Send(request()) }()
+	}
+}
+
+// completeCLI is the binary's own completion (`yoloctl __complete`); a seam
+// for tests, whose binary is the test binary.
+var completeCLI = yoloctlcli.Complete
 
 // showAllSuggestions reveals the full top-level menu for an empty palette
 // and enters menu-steering — the special case where ↓ on a bare prompt
 // lists every command (a shell's TAB-on-empty). Async like
 // refreshSuggestions; the result lands with Nav set so it arrives steering.
 func (m *model) showAllSuggestions() {
-	if m.program == nil { // no event loop under test
-		return
-	}
-	request := m.suggestionsCommand("", nil, "", true)
-	program := m.program
-	go func() { program.Send(request()) }()
+	askCompletion(m, m.suggestionsCommand("", nil, "", true))
 }
 
-// Both asynchronous paths capture environment and generation on the event
-// loop. Completion finishing after a switch cannot repopulate the new pin.
+// Both asynchronous paths capture environment, generation and the shown
+// output on the event loop. Completion finishing after a switch cannot
+// repopulate the new pin, nor cover output that began after its request (a
+// failure report, a prefix c command under its returned draft).
 func (m *model) suggestionsCommand(line string, words []string, last string, nav bool) tea.Cmd {
-	env, generation := m.childEnv(), m.spaceGeneration
+	env, generation, shown := m.childEnv(), m.spaceGeneration, m.console.Shown()
 	words = slices.Clone(words)
 	return func() tea.Msg {
-		items, directive := yoloctlcli.Complete(context.Background(), words, last, env)
+		items, directive := completeCLI(context.Background(), words, last, env)
 		matched := matchCandidates(items, last)
-		return suggestionsMsg{Generation: generation, Line: line, Items: matched, Nav: nav, NoSpace: noSpaceGoverns(matched, directive)}
+		return suggestionsMsg{Generation: generation, Shown: shown, Line: line, Items: matched, Nav: nav, NoSpace: noSpaceGoverns(matched, directive)}
 	}
 }
 
@@ -1843,7 +1854,7 @@ func (m *model) completePalette() {
 			return
 		}
 	}
-	items, directive := yoloctlcli.Complete(context.Background(), words, last, m.childEnv())
+	items, directive := completeCLI(context.Background(), words, last, m.childEnv())
 	if matched := matchCandidates(items, last); len(matched) > 0 {
 		v := matched[0].Value
 		m.pal.ApplyCompletion(v + completionTerminator(v, noSpaceGoverns(matched, directive)))

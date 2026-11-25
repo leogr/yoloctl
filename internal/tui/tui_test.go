@@ -2101,7 +2101,7 @@ func TestConsoleHistoryWinsOverCompletionMenu(t *testing.T) {
 			m.console.ShowError("EARLIER_OUTPUT")
 			m.console.ShowError("LATEST_OUTPUT")
 			m.pal.Insert("bo")
-			msg := suggestionsMsg{Generation: m.spaceGeneration, Line: "bo", Items: candidates("box"), Nav: true}
+			msg := suggestionsMsg{Generation: m.spaceGeneration, Shown: m.console.Shown(), Line: "bo", Items: candidates("box"), Nav: true}
 			if !late {
 				_, _ = m.Update(msg)
 			}
@@ -2127,7 +2127,7 @@ func TestConsoleHistoryWinsOverCompletionMenu(t *testing.T) {
 			if line, _ := m.pal.Line(); m.consoleHistory || line != "box" {
 				t.Fatalf("editing key: history=%t line %q", m.consoleHistory, line)
 			}
-			_, _ = m.Update(suggestionsMsg{Generation: m.spaceGeneration, Line: "box", Items: candidates("box"), Nav: true})
+			_, _ = m.Update(suggestionsMsg{Generation: m.spaceGeneration, Shown: m.console.Shown(), Line: "box", Items: candidates("box"), Nav: true})
 			if view := m.View().Content; !m.menuShown() || strings.Contains(view, "EARLIER_OUTPUT") {
 				t.Fatalf("menu did not return after editing:\n%s", view)
 			}

@@ -120,8 +120,8 @@ echo-independent readiness and preserved shell state.
 19. <a id="source-19"></a> [internal/config/tui.go](../../internal/config/tui.go#L131-L339) — defaults, `GetAgentIcons`, `AgentIconGlyphs`, `LoadTUI` preservation.
 20. <a id="source-20"></a> [title_test.go](../../internal/session/title_test.go#L170) — literal expansion, generic-box and agentless conventional-label contracts.
 21. <a id="source-21"></a> [tabicon_test.go](../../internal/tui/tabicon_test.go#L1-L214) — inactive styles, icon spacing, negotiation, truncation and shared-glyph stability.
-22. <a id="source-22"></a> [tui.go](../../internal/tui/tui.go#L2215) — `tabSegments`, `tabStripLabels`, `tabStrip`, `tabAt`.
-23. <a id="source-23"></a> [width negotiation](../../internal/tui/tui.go#L769) — `Update` mirrors renderer mode-2027 support.
+22. <a id="source-22"></a> [tui.go](../../internal/tui/tui.go#L2219) — `tabSegments`, `tabStripLabels`, `tabStrip`, `tabAt`.
+23. <a id="source-23"></a> [width negotiation](../../internal/tui/tui.go#L770) — `Update` mirrors renderer mode-2027 support.
 24. <a id="source-24"></a> [Managed view transport](session-views.md) — frontend selection, private descriptors and protocol identities.
 25. <a id="source-25"></a> [holder_title_test.go](../../internal/session/holder_title_test.go#L10) — `TestHolderInitialTitleAndAgentUpdates`: silent startup, templates, live updates and both attachment modes.
 26. <a id="source-26"></a> [internal/vmservice/service.go](../../internal/vmservice/service.go#L1) — guest service selection

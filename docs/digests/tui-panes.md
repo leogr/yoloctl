@@ -80,7 +80,7 @@ without a PTY (`fs.pty.allocate`). [3](#source-3) [6](#source-6) [8](#source-8)
 2. <a id="source-2"></a> [Tabs](../../internal/tui/tabs/tabs.go#L1-L238) — `Tab.Layout`, `Focused`, `CloseCurrent`, `ClosePane`, `Owner`, `Select`.
 3. <a id="source-3"></a> [Layout tests](../../internal/tui/panes/layout_test.go#L1) — geometry, refusal, focus, resize, removal, hit-testing.
 4. <a id="source-4"></a> [Per-pane geometry and focus](../../internal/tui/host_geometry.go#L57-L91) — `resizeSurfaces`, `laidOut` (pane rectangles on demand), `layoutTab` (also resizes sessions); `syncFocus` and `eachPane` in frames.go; `closeFocusedPane`, `startPane` in tui.go.
-5. <a id="source-5"></a> [View](../../internal/tui/tui.go#L1739-L1832) — `composePanes`, `View`; `hostCursor` at L1952.
+5. <a id="source-5"></a> [View](../../internal/tui/tui.go#L1742-L1836) — `composePanes`, `View`; `hostCursor` at L1952.
 6. <a id="source-6"></a> [Composer](../../internal/tui/panes/compose.go#L1-L348) — `Compose`, `placeRow`, `drawBorders`, `renderRow`; goldens in panes/testdata via compose_test.go.
 7. <a id="source-7"></a> [Selection rows](../../internal/tui/selection.go#L120) — `selectionLines` per pane frame.
 8. <a id="source-8"></a> [Model tests](../../internal/tui/panes_view_test.go#L1) — undivided path seam, divided composition, cursor, title, benchmarks.

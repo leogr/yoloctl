@@ -93,11 +93,11 @@ or native application parity. [12](#source-12)
 3. <a id="source-3"></a> [build-terminal.py](../../scripts/build-terminal.py#L1-L80) — pins, hashes, regeneration, reproduction.
 4. <a id="source-4"></a> [emulator.go](../../internal/tui/term/emulator.go#L1-L249) — synchronization, interception, reset, close.
 5. <a id="source-5"></a> [handler.go](../../internal/tui/term/handler.go#L10) — `SetColors`; shared query handling in `internal/terminal/colors.go`.
-6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L1638) — `View`, `hostCursor`, `runningCursor`.
+6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L1641) — `View`, `hostCursor`, `runningCursor`.
 7. <a id="source-7"></a> [input.go](../../internal/tui/term/input.go#L11) — queue bounds, prepared input, failures, close.
 8. <a id="source-8"></a> [pty_test.go](../../internal/tui/term/pty_test.go#L1-L52) — PTY close with blocked I/O, retained slave.
 9. <a id="source-9"></a> [session.go](../../internal/tui/term/session.go#L66) — `Start`, pumps, reset/banner, `Wait`, `Close`.
-10. <a id="source-10"></a> [console.go](../../internal/tui/term/console.go#L15-L264) — direct-child completion, ordered reuse, `Kill`, `Close`.
+10. <a id="source-10"></a> [console.go](../../internal/tui/term/console.go#L15-L274) — direct-child completion, ordered reuse, `Kill`, `Close`.
 11. <a id="source-11"></a> [reset.go](../../internal/termio/reset.go#L1-L49) — `SessionEndResetInPlace`, `SessionEndResetHost`.
 12. <a id="source-12"></a> [fidelity_test.go](../../internal/tui/term/fidelity_test.go#L1-L128) — strict harness, JSON/source map, fragmented writes.
 13. <a id="source-13"></a> [Display snapshots, history and focus](terminal-display.md) — frames, synchronized output, acceptance.

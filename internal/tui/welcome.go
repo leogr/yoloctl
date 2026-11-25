@@ -199,7 +199,7 @@ func (m *model) canFillWelcome() bool {
 
 func (m *model) fillWelcome(command string) {
 	m.focusPalette = true
-	m.pal.Insert(command)
+	m.edit(func() { m.pal.Insert(command) })
 	m.clearSuggestions()
 }
 

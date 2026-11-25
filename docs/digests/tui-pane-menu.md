@@ -73,5 +73,5 @@ golden of the menu over two panes. [5](#source-5)
 1. <a id="source-1"></a> [Pane menu](../../internal/tui/pane_menu.go#L1-L532) — `menuRows`, `paneNotice`, `keepNotice`, `bindingWhy`, `runBinding`, `placeOverlay`, `menuOverlay`, `noticeOverlay`, `applyOverlay`, `spliceRow`, `overlayHit`, `overlayMouse`.
 2. <a id="source-2"></a> [Prefix dispatch](../../internal/tui/pane_prefix.go#L78-L240) — `prefixRoute`, `prefixedKey`, `disarmPrefix`, `checkPrefix`; `paneKeys` at L421.
 3. <a id="source-3"></a> [Mouse routing](../../internal/tui/mouse.go#L196-L203) — `handleMouse` calls `overlayMouse` before the prefix and chrome routes; `mouseTarget` gives no hover owner while it shows.
-4. <a id="source-4"></a> [View](../../internal/tui/tui.go#L1789-L1797) — `applyOverlay` on the base rows; `hostCursor`.
+4. <a id="source-4"></a> [View](../../internal/tui/tui.go#L1793-L1801) — `applyOverlay` on the base rows; `hostCursor`.
 5. <a id="source-5"></a> [Menu tests](../../internal/tui/pane_menu_test.go#L1-L622) — `TestPaneMenuOpensAtThePaneTopLeft`, `TestPaneMenuRefusalsStayInTheFooter`, `TestPaneMenuNoticeOutlivesItsMenu`, `TestPaneMenuGolden` and others; golden in internal/tui/testdata.

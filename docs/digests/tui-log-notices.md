@@ -1,6 +1,6 @@
 # TUI log notices
 
-Verification: `16684468ac1f193e1ee81155621dd08fec236391` and accompanying changes; console-history facts retained from `e05d46a4`.
+Verification: `16684468ac1f193e1ee81155621dd08fec236391` and accompanying changes; console-history facts retained from `e05d46a4`; palette-edit facts on `f357061bf0f425f6d0a007d6fb31f575f038c827` and its accompanying change.
 
 [FACT] Host-owned TUI interaction messages, pane-menu refusals and terminal exit
 notices use `prettylog` kinds, glyphs and bounded message escaping. Errors use
@@ -38,6 +38,18 @@ instead. While shown, history owns the overlay over an open or late completion
 menu and keeps the draft; Ctrl+R, PgUp/PgDn, Esc and the palette key act on
 the view, and any other key returns to editing first. Esc, focus changes and a
 new command or error return to the last command; hiding never erases history.
+Editing the line (typing, paste, deletion, completion, history recall or a
+welcome tip) hides the shown output below it, so the area shows the completion
+menu or nothing. `Console.begin` numbers each output (`Console.Shown`) and the
+model records the one an edit that changed the text was made over; restoring
+a set-aside draft is not an edit. Output that begins later under a draft,
+such as a prefix c command whose draft returns at once or a failure report,
+shows until the next such edit: a Backspace or Delete that leaves the text as
+it was asks for no completion (Tab is an explicit request and always asks),
+and an answer requested before that output is dropped. An empty line shows
+the last command again, an edit (a paste too) leaves the history view, Ctrl+R
+history still shows over a draft, a running command always shows, and hidden
+output does not scroll.
 Closing an idle palette (Esc, the palette key, opening, reusing or focusing
 a tab, or detaching a pane with Ctrl+Q x) also clears the shown last command
 through `Console.ClearShown`, so reopening shows no previous output; Ctrl+R
@@ -51,7 +63,7 @@ clears when the palette was already closed. [4](#source-4) [7](#source-7) [8](#s
 
 1. <a id="source-1"></a> [Notice records](../../internal/tui/log_notices.go#L19) — `noticeRecord`, `noticeLineOptions`, `noticeFooter`.
 2. <a id="source-2"></a> [Notice regressions](../../internal/tui/log_notices_test.go#L23) — error-level refusal, escaping, bounds, shared light/dark theme.
-3. <a id="source-3"></a> [TUI](../../internal/tui/tui.go#L298) — `updateTerminalColors`, `startPane`, background response, `inputLine`.
+3. <a id="source-3"></a> [TUI](../../internal/tui/tui.go#L299) — `updateTerminalColors`, `startPane`, background response, `inputLine`.
 4. <a id="source-4"></a> [Terminal notices](../../internal/tui/term/log_notices.go#L16) — `SetLogPalette`, `logNoticeOptions`; console.go `Run`, `ShowError`, `pump`; session.go `writeExitBanner`.
 5. <a id="source-5"></a> [Toast roles](../../internal/tui/spaceview/log_notices.go#L5) — `Theme.LogTone`.
 6. <a id="source-6"></a> [Toast regressions](../../internal/tui/spaceview/log_notices_test.go#L10) — semantic roles in both themes.
@@ -60,8 +72,8 @@ clears when the palette was already closed. [4](#source-4) [7](#source-7) [8](#s
 9. <a id="source-9"></a> [Toast model](../../internal/tui/spaceview/model.go#L347) — `say` and event classification.
 10. <a id="source-10"></a> [Toast rendering](../../internal/tui/spaceview/layout.go#L328) — shared glyphs and semantic tone.
 11. <a id="source-11"></a> [Disk warnings](../../internal/tui/spaceview/disks.go#L204) — `diskEvents`.
-12. <a id="source-12"></a> [Console history](../../internal/tui/term/console.go#L1) — `Console.history`, `begin`, `ClearShown`, `HistoryFrame`, `History`, the pump/echo writes to both; emulator.go `ClearKeepHistory`, `reset`; native `Terminal.ResetKeepHistory`.
+12. <a id="source-12"></a> [Console history](../../internal/tui/term/console.go#L1) — `Console.history`, `begin`, `Shown`, `ClearShown`, `HistoryFrame`, `History`, the pump/echo writes to both; emulator.go `ClearKeepHistory`, `reset`; native `Terminal.ResetKeepHistory`.
 13. <a id="source-13"></a> [Consecutive-command regression](../../internal/tui/term/console_test.go#L57) — last output shown alone; history order, exit notices, blank lines and fresh input modes; `TestConsoleHistoryRotatesByLines`, `TestConsoleClearShownKeepsHistory`; lifecycle_test.go keeps old direct-child text in history only and rejects the late descendant's output and clipboard tail.
-14. <a id="source-14"></a> [History view and UI transitions](../../internal/tui/tui.go#L1) — the Ctrl+R case, `consoleHistory`, `showConsoleCommand`, `resetConsoleView`, `closeConsoleView`, `paletteClosed`, `activatePane`, `openTab`, `leavePaletteForTab`, `refreshSuggestions`, the palette legend; frames.go `consoleDisplayFrame`, `scroller`; `menuShown`; tui_test.go `TestOverlayShowsOneCommandAndCtrlRShowsHistory`, `TestConsoleHistoryWinsOverCompletionMenu`, `TestClickTabIdlePreservesConsoleHistory`, `TestClosingPaletteKeepsARunningCommandsOutput`, `TestPaneRoutesClosingThePaletteClearIt`, `TestRequestWithPaletteClosedKeepsItsOutput`, `TestRequestReuseLeavesTheHistoryView`; pane_prefix.go `x`; confirm_close.go `clearPalette`, `cancelConfirm`, `acceptConfirm`.
+14. <a id="source-14"></a> [History view and UI transitions](../../internal/tui/tui.go#L1) — the Ctrl+R case, `consoleHistory`, `showConsoleCommand`, `resetConsoleView`, `closeConsoleView`, `paletteClosed`, `activatePane`, `openTab`, `leavePaletteForTab`, `refreshSuggestions`, the palette legend; frames.go `consoleDisplayFrame`, `drafting`, `edit`, `scroller`; `menuShown`; `suggestionsCommand`, `askCompletion` and the `suggestionsMsg` case; welcome.go `fillWelcome`; palette_draft_output_test.go `TestPaletteEditHidesPreviousOutput`, `TestPalettePasteLeavesHistory`, `TestPaletteNoOpKeyKeepsFreshOutput`; tui_test.go `TestOverlayShowsOneCommandAndCtrlRShowsHistory`, `TestConsoleHistoryWinsOverCompletionMenu`, `TestClickTabIdlePreservesConsoleHistory`, `TestClosingPaletteKeepsARunningCommandsOutput`, `TestPaneRoutesClosingThePaletteClearIt`, `TestRequestWithPaletteClosedKeepsItsOutput`, `TestRequestReuseLeavesTheHistoryView`; pane_prefix.go `x`; confirm_close.go `clearPalette`, `cancelConfirm`, `acceptConfirm`.
 
 15. <a id="source-15"></a> [Persistent outer feedback](../../internal/tui/notices.go#L24) — captured emission, queue/layout and input; notices_test.go covers ownership and dismissal.

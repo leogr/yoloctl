@@ -185,7 +185,7 @@ func TestFollowCreateBusyPaletteOnlyNotifies(t *testing.T) {
 			}
 		}, nil},
 		{"suggestions on an empty line", func(m *model) {
-			_, _ = m.Update(suggestionsMsg{Line: "", Items: candidates("agent", "box", "space"), Nav: true, Generation: m.spaceGeneration})
+			_, _ = m.Update(suggestionsMsg{Line: "", Items: candidates("agent", "box", "space"), Nav: true, Generation: m.spaceGeneration, Shown: m.console.Shown()})
 			if !m.menuShown() || !strings.Contains(ansi.Strip(m.View().Content), "agent") {
 				t.Fatal("Down on the empty palette did not show the suggestions")
 			}

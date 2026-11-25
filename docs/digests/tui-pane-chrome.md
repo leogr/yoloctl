@@ -86,7 +86,7 @@ degradation order and wide titles.
 3. <a id="source-3"></a> [Composer](../../internal/tui/panes/compose.go#L11-L320) — `barColors`, `Compose`, `drawBorders`, `drawBar`.
 4. <a id="source-4"></a> [Layout tests](../../internal/tui/panes/layout_test.go#L221-L365) — `TestCanSplitCountsBars`, `TestBarAndBorderHitTesting`, `TestPreviewClampsAndCommitsOnce`, `TestPreviewKeepsEveryPaneAtSkewedRatios`.
 5. <a id="source-5"></a> [Composer tests](../../internal/tui/panes/compose_test.go#L74-L386) — goldens in panes/testdata.
-6. <a id="source-6"></a> [Strip](../../internal/tui/tui.go#L2356-L2530) — `tabCloseW`, `tabSegments`, `tabStrip`, `tabCloseAt`.
+6. <a id="source-6"></a> [Strip](../../internal/tui/tui.go#L2360-L2534) — `tabCloseW`, `tabSegments`, `tabStrip`, `tabCloseAt`.
 7. <a id="source-7"></a> [Chrome gestures](../../internal/tui/chrome_gestures.go#L1-L304) — `chromeAt`, `startChrome`, `chromeMotion`, `chromeRelease`, `cancelChrome`, `checkChrome`, `detachPane`, `detachTab`; `tabs.Model.CloseTab`.
 8. <a id="source-8"></a> [Mouse routing](../../internal/tui/mouse.go#L339-L398) — `chromeMouse`; Esc and focus loss in tui.go `Update`.
 9. <a id="source-9"></a> [Gesture tests](../../internal/tui/chrome_gestures_test.go#L1-L539) — `TestStripCloseAndReleaseActivation`, `TestResizeDragPreviewsThenCommitsOnce`, `TestSeparatorBarIsASplitHandle` and the others.

@@ -128,7 +128,7 @@ holder view are unaffected. [24](#source-24)
 15. <a id="source-15"></a> [view_test.go](../../internal/session/view_test.go#L17) — ordered buffered stdin, EOF/status preservation and malformed state/event rejection.
 16. <a id="source-16"></a> [signals.go](../../cmd/yoloctl/signals.go#L20) — `commandSignalContext` owns process signals.
 17. <a id="source-17"></a> [signals_tui_test.go](../../cmd/yoloctl/signals_tui_test.go#L22) — real signal context/frontends, termios and mode cleanup; private acknowledgment precedes late output, drained concurrently with process exit.
-18. <a id="source-18"></a> [tui.go](../../internal/tui/tui.go#L159) — `Run` and shared `runProgram` use graceful context-driven shutdown without a second signal handler.
+18. <a id="source-18"></a> [tui.go](../../internal/tui/tui.go#L160) — `Run` and shared `runProgram` use graceful context-driven shutdown without a second signal handler.
 19. <a id="source-19"></a> [Measured geometry](terminal-geometry.md) — native query state, snapshots, font changes and compatibility limits.
 20. <a id="source-20"></a> [Host integrations](host-integrations.md) — upload/browser admission, explicit host policies and private transport tests.
 21. <a id="source-21"></a> [Box-use](box-use.md) — structured interface, collaboration, bounds and tests.

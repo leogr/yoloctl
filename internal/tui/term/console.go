@@ -46,7 +46,8 @@ type Console struct {
 	done       chan struct{}
 	closed     bool
 	rows, cols int
-	lastExit   int // the exit code of the last command that ended
+	lastExit   int    // the exit code of the last command that ended
+	shown      uint64 // counts begun outputs: the shown one's identity
 }
 
 // NewConsole builds the console emulator at the given size.
@@ -67,6 +68,7 @@ func NewConsole(rows, cols int, scrollbackLines int, onData func()) *Console {
 // cleared, and history keeps earlier commands with one blank line before
 // the next. Old pumps have joined before c.cmd becomes nil.
 func (c *Console) begin() {
+	c.shown++
 	c.Clear()
 	c.history.ClearKeepHistory()
 	if c.historyUsed {
@@ -209,6 +211,14 @@ func (c *Console) LastExit() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.lastExit
+}
+
+// Shown identifies the shown output: each command or error that begins
+// output gets a new value.
+func (c *Console) Shown() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.shown
 }
 
 // SendInput feeds bytes to the running command's stdin (keystrokes,

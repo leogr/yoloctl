@@ -49,12 +49,48 @@ func (m *model) consoleFrame() terminal.Frame {
 }
 
 // consoleDisplayFrame is the palette console's frame with every image
-// placeholder neutralized: the console never displays a preview.
+// placeholder neutralized: the console never displays a preview. Below a
+// line edited over it, it is empty (see drafting).
 func (m *model) consoleDisplayFrame() terminal.Frame {
 	if m.consoleHistory {
 		return m.filterImages(nil, m.console.HistoryFrame())
 	}
+	if m.drafting() {
+		return terminal.Frame{}
+	}
 	return m.filterImages(nil, m.console.Frame())
+}
+
+// drafting reports an idle palette whose line the person edited after the
+// shown output appeared. The area below that line belongs to completion:
+// the menu or nothing, never the previous command's output, which shows
+// again on an empty line. Output that appears under a draft (a command run
+// through prefix c, a failure report) shows until the next edit; Ctrl+R
+// history still shows over a draft, and a running command always shows.
+func (m *model) drafting() bool {
+	if m.console == nil || m.consoleHistory {
+		return false
+	}
+	line, _ := m.pal.Line()
+	return line != "" && m.editedOver == m.console.Shown() && !m.console.Busy()
+}
+
+// edit applies one of the person's line edits (typing, paste, deletion,
+// completion, history recall, a welcome tip), records the shown output it
+// edited over and reports whether the text changed. An edit that left the
+// text as it was (Delete at the end, TAB without a completion) keeps fresh
+// output shown. Restoring a set-aside draft is not an edit.
+func (m *model) edit(change func()) bool {
+	before, _ := m.pal.Line()
+	change()
+	line, _ := m.pal.Line()
+	if line == before {
+		return false
+	}
+	if m.console != nil {
+		m.editedOver = m.console.Shown()
+	}
+	return true
 }
 
 // sessionFrame is a session's frame with image placeholders admitted only
@@ -103,8 +139,11 @@ type scrollSurface interface {
 
 func (m *model) scroller() scrollSurface {
 	if m.focusPalette {
-		if m.consoleHistory {
+		switch {
+		case m.consoleHistory:
 			return m.console.History()
+		case m.drafting():
+			return nil // the hidden output does not scroll
 		}
 		return m.console
 	}

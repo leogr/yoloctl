@@ -70,7 +70,7 @@ characters (copy maps them to chips, see the terminal selection digest).
 ## Sources
 
 1. <a id="source-1"></a> [filter.go](../../internal/chatimage/filter.go#L1-L212) — `Placement`, `Registry`, `diacriticIndex`, `FilterLine`, `escapeLen`, `NeutralizeText`; tests in filter_test.go.
-2. <a id="source-2"></a> [frames.go](../../internal/tui/frames.go#L40-L83) — `consoleDisplayFrame`, `sessionFrame`, `filterImages`; `View` captures in tui.go.
+2. <a id="source-2"></a> [frames.go](../../internal/tui/frames.go#L40-L109) — `consoleDisplayFrame`, `sessionFrame`, `filterImages`; `View` captures in tui.go.
 3. <a id="source-3"></a> [image_filter_test.go](../../internal/tui/image_filter_test.go#L1) — owner, forging pane, console, composed view, release and a placeholder title; `emulator.Title` and the browser popup URL use `NeutralizeText`.
 4. <a id="source-4"></a> [protocol.go](../../internal/chatimage/protocol.go#L1-L285) — `Frame`, `Validate`, `Conn.Send`/`Receive`, `ChannelPair`, `InheritedChannel`; tests in protocol_test.go.
 5. <a id="source-5"></a> [session.go](../../internal/tui/term/session.go#L89) — `Options.OnImage`, channel setup in `Start`, reader, close in `pump`, `SendImage`; image_channel_test.go with a real child.

@@ -420,8 +420,12 @@ time and resets transient terminal/input state before the next prompt. Its
 history keeps every command, with a blank line between commands, under the
 `scrollback_lines` line ring; Ctrl+R in the idle palette toggles it, newest
 last, over any completion menu and keeping the draft. An editing key, Esc,
-focus changes and a new command return to the last command. Closing the idle
-palette clears that shown output, so reopening shows none; history keeps it.
+focus changes and a new command return to the last command. Editing the line
+hides that output below it: the area shows the completion menu or nothing, and
+an empty line shows the last command again. Output that appears under a draft
+shows until the next edit that changes the text; a Backspace or Delete that
+changes nothing and earlier completion answers cannot cover it. Closing the idle palette clears that shown output,
+so reopening shows none; history keeps it.
 No disk log or row replay is added. [48](#source-48)
 
 [FACT] The read-only audit view uses shared severity glyphs/theme roles and
@@ -458,7 +462,7 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 23. <a id="source-23"></a> [Participant model and effort](../digests/chat-participant-runtime.md).
 24. <a id="source-24"></a> [Chat message references](../digests/chat-references.md).
 25. <a id="source-25"></a> [Chat message filter and mention identities](../digests/chat-filter.md).
-26. <a id="source-26"></a> [Tab strip](../../internal/tui/tui.go#L2404-L2452) — `tabStrip`: the active tab drops the surface background.
+26. <a id="source-26"></a> [Tab strip](../../internal/tui/tui.go#L2408-L2456) — `tabStrip`: the active tab drops the surface background.
 27. <a id="source-27"></a> [Space view memory readings](../digests/space-view-memory.md).
 28. <a id="source-28"></a> [VM disks in space view and `space storage`](../digests/space-view-disks.md).
 29. <a id="source-29"></a> [Chat thread view](../digests/chat-thread-filter.md).

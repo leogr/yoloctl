@@ -106,6 +106,6 @@ success nor graphical parity. [2](#source-2) [7](#source-7)
 14. <a id="source-14"></a> [box_use_cli.go](../../cmd/yoloctl/box_use_cli.go#L21) — CLI, validation, delegation and completion.
 15. <a id="source-15"></a> [batch.go](../../internal/boxuse/batch.go#L31) — `ReadBatch`, `Batch.Run`, `exchange`.
 16. <a id="source-16"></a> [batch_test.go](../../internal/boxuse/batch_test.go#L16) — bounds, failures, cleanup and local revisions.
-17. <a id="source-17"></a> [tui.go](../../internal/tui/tui.go#L593) — `boxUseReadsStdin`.
+17. <a id="source-17"></a> [tui.go](../../internal/tui/tui.go#L594) — `boxUseReadsStdin`.
 18. <a id="source-18"></a> [input.go](../../internal/boxuse/input.go#L21) — `validateInput`.
 19. <a id="source-19"></a> [box_use_cli_test.go](../../cmd/yoloctl/box_use_cli_test.go#L102) — finite batch frontend, regular-file/pipe and null-device stdin.

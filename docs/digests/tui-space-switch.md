@@ -86,7 +86,7 @@ proof.
 1. <a id="source-1"></a> [Shared resolver](../../internal/config/context.go#L107) — `SpaceEnv`, `ResolveSpace`, `SourceEnvironment`.
 2. <a id="source-2"></a> [CLI selection](../../cmd/yoloctl/context.go#L25) — `resolveSpacePositional`, `selectedSpace`.
 3. <a id="source-3"></a> [Switcher](../../internal/tui/space_switch.go#L25) — `initSpace`, `childEnv`, picker, snapshot, `acceptSpaceSwitch`.
-4. <a id="source-4"></a> [TUI](../../internal/tui/tui.go#L184) — `Run`, `dispatch`, `startPane`, `Update`, `suggestionsCommand`, `completePalette`, `contextChip`.
+4. <a id="source-4"></a> [TUI](../../internal/tui/tui.go#L185) — `Run`, `dispatch`, `startPane`, `Update`, `suggestionsCommand`, `completePalette`, `contextChip`.
 5. <a id="source-5"></a> [Completion subprocess](../../internal/tui/yoloctlcli/complete.go#L47) — `Complete`.
 6. <a id="source-6"></a> [Pane bindings](../../internal/tui/pane_prefix.go#L425) — `paneKeys`.
 7. <a id="source-7"></a> [Close confirmation](../../internal/tui/confirm_close.go#L62) — aggregate confirmation, `closeEffect`, `checkConfirm`, labels.
@@ -101,4 +101,4 @@ proof.
 16. <a id="source-16"></a> [Resolver regressions](../../internal/config/context_test.go#L142) — `TestResolveSpaceEnvironment`.
 17. <a id="source-17"></a> [Created-space follow](../../internal/tui/space_follow.go#L1) — `recordConsoleRun`, `syncCreated`, `followCreated`.
 18. <a id="source-18"></a> [Palette create argv](../../cmd/yoloctl/tui_welcome.go#L76) — `tuiCreatedSpace`.
-19. <a id="source-19"></a> [Console exit code](../../internal/tui/term/console.go#L208) — `Console.LastExit`.
+19. <a id="source-19"></a> [Console exit code](../../internal/tui/term/console.go#L210) — `Console.LastExit`.
