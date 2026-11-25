@@ -78,8 +78,12 @@ func featureGrants(plan ocifeature.Plan, eff *capabilities.EffectiveSet, mounts 
 			binaries = append(binaries, g.Binaries...)
 		}
 	}
-	var out []FeatureGrant
-	for _, cand := range plan.PathCandidates() {
+	candidates := plan.PathCandidates()
+	if len(candidates) == 0 {
+		return nil
+	}
+	out := make([]FeatureGrant, 0, len(candidates))
+	for _, cand := range candidates {
 		g := FeatureGrant{Ref: cand.Ref, Source: cand.Source, Path: cand.Path, ReadWrite: cand.ReadWrite}
 		switch {
 		case ocifeature.ProtectedPath(g.Path):
