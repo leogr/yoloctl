@@ -96,7 +96,7 @@ func composedImageRef(base string, candidates []string, uid, gid int, plans ...o
 // Composed refs are non-catalog, so they cannot route through EnsureImage
 // (which no-ops them); this is their dedicated build path.
 func EnsureComposedImage(ctx context.Context, c Client, base string, candidates []string, opts Options) (string, error) {
-	if ref, handled, err := preparedImage(ctx, c, base, candidates, opts); handled {
+	if ref, handled, err := preparedImage(ctx, base, candidates, opts); handled {
 		return ref, err
 	}
 	if opts.Notice == nil {

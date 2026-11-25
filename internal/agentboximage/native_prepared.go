@@ -13,7 +13,7 @@ func RequirePreparedImage(ctx context.Context, c Client, base string, candidates
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	ref, handled, err := preparedImage(ctx, c, base, candidates, opts)
+	ref, handled, err := preparedImage(ctx, base, candidates, opts)
 	if err != nil {
 		return "", err
 	}
