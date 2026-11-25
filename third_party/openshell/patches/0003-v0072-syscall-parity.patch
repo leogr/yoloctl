@@ -13,8 +13,10 @@ suites inside every box. Restored, as in v0.0.72:
   sched_setscheduler and setpriority: since v0.1.10 (#5212) upstream runs a
   caller-only call (pid 0) natively and sends a named target to the broker
   (src/linux/process_sched.rs), which allows only the caller's own thread
-  group. yoloctl's broker rule allows any target except the trusted
-  sandbox's thread group, and setpriority also with PRIO_PGRP and PRIO_USER.
+  group. yoloctl's broker rule allows a named process target in the caller's
+  own thread group or outside the trusted sandbox's; setpriority with
+  PRIO_PGRP or PRIO_USER is continued to the kernel without a membership
+  check, as the 0.1.6 filter allowed it (ordinary kernel permissions decide).
   The child filter still denies the sandbox leader as defense in depth
 - allowed again with PID zero or a negative PID (process groups, killpg),
   except a signal to the sandbox's own process group (-sandbox TGID):
@@ -207,7 +209,7 @@ index 1d37444125ca335916e8a1f21e186ca95d4364f2..b0d8976944dd0fc5a32e296265113d1c
      fn filter_allows_own_group_scheduling_and_limit_calls() {
          // SAFETY: the child uses only raw syscalls after fork and exits with
 diff --git a/crates/openshell-sandbox/src/linux/process_sched.rs b/crates/openshell-sandbox/src/linux/process_sched.rs
-index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..db622ee085667787863bbe493db9a9e13a3b117a 100644
+index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..240e8c7f9b8ca34febd6252409364d0b9636f9b5 100644
 --- a/crates/openshell-sandbox/src/linux/process_sched.rs
 +++ b/crates/openshell-sandbox/src/linux/process_sched.rs
 @@ -8,7 +8,8 @@
@@ -230,15 +232,16 @@ index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..db622ee085667787863bbe493db9a9e1
  ///
  /// `setpriority` accepts only `PRIO_PROCESS`. `PRIO_USER` with `who = 0` would
  /// touch every process of the shared workload UID, and `PRIO_PGRP` with
-@@ -148,9 +150,15 @@ pub(crate) fn is_mediated(syscall: i64) -> bool {
+@@ -148,9 +150,16 @@ pub(crate) fn is_mediated(syscall: i64) -> bool {
  ///
  /// A syscall outside the mediated set cannot be decided here, so it fails
  /// closed with ENOSYS as an unhandled notification.
 +///
-+/// yoloctl: as in OpenShell v0.0.72, a named target may be any process except
-+/// the trusted sandbox (`sandbox_tgid`), and `setpriority` also accepts
-+/// `PRIO_PGRP` and `PRIO_USER`. Ordinary Unix permission checks still apply;
-+/// tools such as `renice` and `ionice -p` act on other workload processes.
++/// yoloctl: as in OpenShell v0.0.72, a named process target may be any
++/// process except the trusted sandbox (`sandbox_tgid`); tools such as `renice`
++/// and `ionice -p` act on other workload processes. `setpriority` with
++/// `PRIO_PGRP` or `PRIO_USER` is continued to the kernel without a membership
++/// check, as the 0.1.6 filter allowed it: ordinary kernel permissions decide.
  pub fn mediate_process_sched(
      listener: &NotificationListener,
      notification: Notification,
@@ -246,7 +249,7 @@ index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..db622ee085667787863bbe493db9a9e1
  ) -> io::Result<()> {
      listener.validate_id(notification.id)?;
      let syscall = i64::from(notification.syscall);
-@@ -159,9 +167,7 @@ pub fn mediate_process_sched(
+@@ -159,9 +168,7 @@ pub fn mediate_process_sched(
      if syscall == libc::SYS_setpriority {
          match scalar_int(notification.args[0]).cast_unsigned() {
              PRIO_PROCESS => {}
@@ -257,7 +260,7 @@ index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..db622ee085667787863bbe493db9a9e1
              _ => return Err(io::Error::from_raw_os_error(libc::EINVAL)),
          }
      }
-@@ -174,7 +180,10 @@ pub fn mediate_process_sched(
+@@ -174,7 +181,10 @@ pub fn mediate_process_sched(
          return Err(io::Error::from_raw_os_error(negative_target_errno(syscall)));
      }
      let caller_group = resolve_caller_group(notification.tid)?;
@@ -269,7 +272,7 @@ index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..db622ee085667787863bbe493db9a9e1
          return Err(io::Error::from_raw_os_error(libc::EPERM));
      }
      // Continuing an inspected numeric target has the reuse window documented
-@@ -218,12 +227,69 @@ fn resolve_target_group(tid: u32) -> io::Result<u32> {
+@@ -218,12 +228,69 @@ fn resolve_target_group(tid: u32) -> io::Result<u32> {
  }
  
  #[cfg(test)]

@@ -108,10 +108,13 @@ sandbox's own group; broadcast `kill(-1)` and queued group signals stay
 denied, as upstream decided. Since v0.1.10 (#5212) upstream sends a
 scheduling, priority or limit call that names a target to the broker
 (`mediate_process_sched`), which allows only the caller's own thread group;
-patch 3 widens that rule to any target outside the trusted sandbox's thread
-group (and `setpriority` also with `PRIO_PGRP` and `PRIO_USER`), so `renice`
-and `ionice -p` act on other workload processes as before, while the broker
-also protects sandbox worker threads, not only the leader. The workload has no capabilities
+patch 3 widens that rule for a named process target to any target outside
+the trusted sandbox's thread group, so `renice` and `ionice -p` act on other
+workload processes as before, and the broker's membership check protects
+sandbox worker threads, not only the leader, for named targets. `setpriority`
+with `PRIO_PGRP` or `PRIO_USER` is continued to the kernel without that
+membership check, as the 0.1.6 filter allowed it: ordinary kernel permissions
+decide. The workload has no capabilities
 and runs with no_new_privs, so the kernel still refuses any real identity or
 capability gain; every deny v0.0.72 also had is kept. Releases may carry these
 optional third and fourth patches; two- and three-patch releases stay valid
