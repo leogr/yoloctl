@@ -1,8 +1,8 @@
 package chatui
 
 import (
-	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/leogr/yoloctl/internal/tui/spaceview"
 )
@@ -17,12 +17,12 @@ func (m *Model) channelStrip(width, y int) string {
 		totalMentions += m.views[name].unreadMentions
 	}
 	overflow := func(hidden, unread, mentions int) string {
-		label := fmt.Sprintf("+%d", hidden)
+		label := appendChannelCount("", "+", hidden)
 		if mentions > 0 {
-			label += fmt.Sprintf(" @%d", mentions)
+			label = appendChannelCount(label, " @", mentions)
 		}
 		if unread > 0 {
-			label += fmt.Sprintf(" %d", unread)
+			label = appendChannelCount(label, " ", unread)
 		}
 		return label
 	}
@@ -34,10 +34,10 @@ func (m *Model) channelStrip(width, y int) string {
 		v := m.views[name]
 		label := name
 		if v.unreadMentions > 0 {
-			label += fmt.Sprintf(" @%d", v.unreadMentions)
+			label = appendChannelCount(label, " @", v.unreadMentions)
 		}
 		if v.unread > 0 {
-			label += fmt.Sprintf(" %d", v.unread)
+			label = appendChannelCount(label, " ", v.unread)
 		}
 		if i < len(m.order)-1 {
 			label += "  "
@@ -70,10 +70,10 @@ func (m *Model) channelStrip(width, y int) string {
 			v := m.views[name]
 			badge := ""
 			if v.unreadMentions > 0 {
-				badge += fmt.Sprintf(" @%d", v.unreadMentions)
+				badge = appendChannelCount(badge, " @", v.unreadMentions)
 			}
 			if v.unread > 0 {
-				badge += fmt.Sprintf(" %d", v.unread)
+				badge = appendChannelCount(badge, " ", v.unread)
 			}
 			nameMin := min(m.widthMethod.StringWidth(name), 4)
 			budget := min(max(width/3, 9, m.widthMethod.StringWidth(badge)+nameMin+2), 24, width-reserve-x)
@@ -110,4 +110,9 @@ func (m *Model) channelStrip(width, y int) string {
 		m.hits = append(m.hits, hit{x0: x, x1: x + m.widthMethod.StringWidth(label), y: y, area: hitTop, id: "channels"})
 	}
 	return paint(m.widthMethod, runs, width, 0, nil, spaceview.Style{})
+}
+
+func appendChannelCount(label, prefix string, count int) string {
+	var digits [20]byte // signed 64-bit decimal fits in 20 bytes
+	return label + prefix + string(strconv.AppendInt(digits[:0], int64(count), 10))
 }
