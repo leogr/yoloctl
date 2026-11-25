@@ -584,7 +584,7 @@ func TestChatEnsureOutcomeRequiresAReadyServer(t *testing.T) {
 	} {
 		var errw bytes.Buffer
 		t.Cleanup(bindCLITestLogger(t, &errw))
-		err := chatEnsureOutcome(c.status, &errw)
+		err := chatEnsureOutcome(c.status)
 		if (err == nil) != (c.err == "") || err != nil && err.Error() != c.err || !strings.Contains(errw.String(), c.shown) || c.shown == "" && errw.Len() != 0 {
 			t.Errorf("%+v: error %v, shown %q", c.status, err, errw.String())
 		}

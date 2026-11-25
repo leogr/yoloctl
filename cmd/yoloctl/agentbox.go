@@ -354,7 +354,7 @@ declared box.
 			// the manifest or agent definition cannot be loaded — the box show
 			// output stays useful.
 			state := resolveAgentStateForShow(spaceName, args[0])
-			meta := loadAgentboxShowMetadata(cmd.Context(), client, d, spaceName, args[0], cmd.ErrOrStderr())
+			meta := loadAgentboxShowMetadata(cmd.Context(), client, d, spaceName, args[0])
 			sess := sessionStatusFromBoxState(resolved.Session)
 			if asJSON {
 				return writeAgentboxShowJSON(cmd.OutOrStdout(), d, spaceName, ll, state, meta, sess, &resolved)
@@ -795,7 +795,7 @@ func startAgentboxCore(cmd *cobra.Command, spaceName, name string, noAutoupdate,
 			if err := liveHolderError(cmd.Context(), c, name); err != nil {
 				return err
 			}
-			return retireForNewSession(lock, tracking, errw)
+			return retireForNewSession(lock, tracking)
 		}
 		return nil
 	}
@@ -846,7 +846,7 @@ func startAgentboxCore(cmd *cobra.Command, spaceName, name string, noAutoupdate,
 		if noAutoupdate {
 			return nil
 		}
-		if err := autoupdateAgentboxIfNeeded(ctx, c, name, cfg.Agent, errw, updated); err != nil {
+		if err := autoupdateAgentboxIfNeeded(ctx, c, name, cfg.Agent, updated); err != nil {
 			return fmt.Errorf("autoupdate %s: %w", name, err)
 		}
 		return nil
@@ -859,7 +859,7 @@ func startAgentboxCore(cmd *cobra.Command, spaceName, name string, noAutoupdate,
 			if err != nil {
 				return err
 			}
-			if err := printReconcileResult(cmd.OutOrStdout(), name, result); err != nil {
+			if err := printReconcileResult(name, result); err != nil {
 				return err
 			}
 			if err := applySessionStart(lock, tracking, true, newSession, errw); err != nil {
@@ -1318,10 +1318,10 @@ func resolveEffectiveWorkdir(spaceName, agentboxName, workdirFlag, workdirMode s
 		// The host's "using space:" line already named the space.
 		cliNotice(logging.Box, "default workdir %s (override with --workdir PATH or --workdir-mode ephemeral)", workdir)
 	}
-	return buildWorkdir(agentboxName, workdir, agentbox.WorkdirModeHost, notice)
+	return buildWorkdir(agentboxName, workdir, agentbox.WorkdirModeHost)
 }
 
-func buildWorkdir(name, workdir, workdirMode string, notice io.Writer) (agentbox.Workdir, error) {
+func buildWorkdir(name, workdir, workdirMode string) (agentbox.Workdir, error) {
 	switch {
 	case workdirMode == agentbox.WorkdirModeEphemeral && workdir != "":
 		return agentbox.Workdir{}, asUserError(errors.New("--workdir is incompatible with --workdir-mode ephemeral"))
@@ -1888,7 +1888,7 @@ func createAgentbox(ctx context.Context, opts agentboxCreateOptions, notice io.W
 	}
 
 	if !opts.NoAutoupdate {
-		if err := autoupdateAgentboxIfNeeded(ctx, c, opts.Name, opts.Agent, notice, updated); err != nil {
+		if err := autoupdateAgentboxIfNeeded(ctx, c, opts.Name, opts.Agent, updated); err != nil {
 			return fmt.Errorf("autoupdate %s: %w", opts.Name, err)
 		}
 	}
@@ -2509,7 +2509,7 @@ func isContainerGone(err error) bool {
 // account and agent would otherwise inherit the conversation. The kept
 // declaration lets a repeated destroy finish. A manifest removal failure is
 // a warning (the runtime teardown already succeeded); a missing file is fine.
-func removeAgentboxConfig(space, name string, notice io.Writer) error {
+func removeAgentboxConfig(space, name string) error {
 	if err := removeSessionRecordFn(space, name); err != nil {
 		return fmt.Errorf("box %s runtime was removed, but its conversation record could not be removed (%w); its declaration is kept. Inspect the cause, then run yoloctl box destroy %s --space %s again to finish", name, err, name, space)
 	}
@@ -2718,7 +2718,7 @@ func recreateAgentbox(cmd *cobra.Command, spaceName, name string, force, noAutou
 			return err
 		}
 		if !noAutoupdate {
-			if err := autoupdateAgentboxIfNeeded(ctx, c, name, cfg.Agent, errw, updated); err != nil {
+			if err := autoupdateAgentboxIfNeeded(ctx, c, name, cfg.Agent, updated); err != nil {
 				return fmt.Errorf("autoupdate %s: %w", name, err)
 			}
 		}
@@ -3062,7 +3062,7 @@ type agentboxRow struct {
 // Best-effort: per-space failures (VM unreachable, containerd down)
 // emit a stderr warning and continue, so a flaky one space doesn't
 // hide agentboxes in another.
-func listAgentboxesAcrossSpaces(ctx context.Context, stderr io.Writer) ([]agentboxRow, error) {
+func listAgentboxesAcrossSpaces(ctx context.Context) ([]agentboxRow, error) {
 	instances, err := vmhost.New().List(ctx)
 	if err != nil {
 		return nil, err

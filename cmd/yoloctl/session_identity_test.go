@@ -766,7 +766,7 @@ func TestDestroyKeepsTheDeclarationWhenTheRecordStays(t *testing.T) {
 	old := removeSessionRecordFn
 	t.Cleanup(func() { removeSessionRecordFn = old })
 	removeSessionRecordFn = func(string, string) error { return errors.New("disk busy") }
-	if err := removeAgentboxConfig("work", "coder", io.Discard); err == nil || !strings.Contains(err.Error(), "its declaration is kept. Inspect the cause, then run yoloctl box destroy coder --space work again") {
+	if err := removeAgentboxConfig("work", "coder"); err == nil || !strings.Contains(err.Error(), "its declaration is kept. Inspect the cause, then run yoloctl box destroy coder --space work again") {
 		t.Fatalf("record removal failure did not stop destroy: %v", err)
 	}
 	if _, err := os.Stat(manifest); err != nil {
@@ -776,7 +776,7 @@ func TestDestroyKeepsTheDeclarationWhenTheRecordStays(t *testing.T) {
 		t.Fatal("the record vanished")
 	}
 	removeSessionRecordFn = old
-	if err := removeAgentboxConfig("work", "coder", io.Discard); err != nil {
+	if err := removeAgentboxConfig("work", "coder"); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok, _ := agentsession.Load("work", "coder"); ok {

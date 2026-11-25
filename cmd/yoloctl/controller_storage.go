@@ -166,7 +166,7 @@ func collectControllerStorage(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := nativeStorageCollector(c.Space, os.Stderr, aliases...).collect(ctx, nil, os.Stderr); err != nil {
+	if err := nativeStorageCollector(c.Space, os.Stderr, aliases...).collect(ctx, nil); err != nil {
 		return err
 	}
 	return trimGuestStorage(ctx, c)

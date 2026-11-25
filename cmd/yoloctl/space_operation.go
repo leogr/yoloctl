@@ -182,7 +182,7 @@ func registerSpaceOperations(root *cobra.Command) {
 				if err := releaseSpaceOperation(cmd.Context()); err != nil {
 					return err
 				}
-				return finishAttach(attachToSession(cmd.Context(), space, args[0]), cmd.ErrOrStderr(), space, args[0])
+				return finishAttach(attachToSession(cmd.Context(), space, args[0]), space, args[0])
 			}
 		}
 		if path == "image prune" {

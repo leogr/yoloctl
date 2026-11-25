@@ -206,7 +206,7 @@ func nativeStorageCollector(space string, out io.Writer, legacyAliases ...string
 	}
 }
 
-func (c storageCollector) collect(ctx context.Context, extra []string, out io.Writer) error {
+func (c storageCollector) collect(ctx context.Context, extra []string) error {
 	before, err := c.disk()
 	if err != nil {
 		return err
@@ -263,7 +263,7 @@ func (c storageCollector) beforeBuild(ctx context.Context, refs []string, out io
 				gib(disk.Available), gib(disk.TargetFree()), gib(reserve.Reserve.AdmissionFree(disk)), reserve.description(), storageCacheRemedy, ctx.Err())
 		}
 	}()
-	if err := c.collect(ctx, refs, out); err != nil {
+	if err := c.collect(ctx, refs); err != nil {
 		return err
 	}
 	disk, err = c.disk()

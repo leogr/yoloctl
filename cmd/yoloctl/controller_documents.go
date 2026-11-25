@@ -156,7 +156,7 @@ func runControllerDocument(ctx context.Context, req controller.Request, catalogD
 	if kind == "account" {
 		lockEntity = func() (func(), error) { return account.Lock(req.Space, name) }
 	}
-	release, err := lockManifestEdit(ctx, os.Stderr, req.Space, lockEntity)
+	release, err := lockManifestEdit(ctx, req.Space, lockEntity)
 	if err != nil {
 		return true, err
 	}
@@ -200,7 +200,7 @@ func runControllerDocument(ctx context.Context, req controller.Request, catalogD
 			return true, err
 		}
 		cliInfo(logging.Host, "saved account %s", name)
-		printSecretPickupNote(os.Stderr, name)
+		printSecretPickupNote(name)
 		return true, nil
 	}
 	// The old bytes are from the locked revision, not the edited payload.
@@ -336,7 +336,7 @@ func applyControllerAuthImport(ctx context.Context, req controller.Request) (res
 			return err
 		}
 		cliInfo(logging.Host, "imported %s API key into account %s (secret %s)", target.profile.Name, target.name, rule.Secret)
-		printSecretPickupNote(os.Stderr, target.name)
+		printSecretPickupNote(target.name)
 		return nil
 	}
 	if err := accountStopUsers(ctx, target.space, target.name, false, os.Stderr); err != nil {

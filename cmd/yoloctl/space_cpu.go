@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"strconv"
 
 	"github.com/leogr/yoloctl/internal/logging"
@@ -16,13 +15,13 @@ var readHostCPU = resources.ReadHostCPU
 
 func selectSpaceCPUs(cmd *cobra.Command, backend string) (int, error) {
 	value, _ := cmd.Flags().GetString("cpus")
-	return resolveSpaceCPUs(cmd.Context(), backend, value, cmd.ErrOrStderr())
+	return resolveSpaceCPUs(cmd.Context(), backend, value)
 }
 
 // resolveSpaceCPUs chooses a new space's boot vCPU count once. Only creation
 // measures the host: start, recreate and import keep the saved count, and
 // space set accepts only explicit counts.
-func resolveSpaceCPUs(ctx context.Context, backend, value string, errw io.Writer) (int, error) {
+func resolveSpaceCPUs(ctx context.Context, backend, value string) (int, error) {
 	if value != "auto" {
 		n, err := strconv.ParseUint(value, 10, 31)
 		if err != nil || n == 0 {

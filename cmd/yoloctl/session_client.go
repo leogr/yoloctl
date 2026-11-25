@@ -267,7 +267,7 @@ func (p *paintedWriter) painted() bool { return p.set.Load() }
 // attachToSession restored the terminal, so the notice renders sanely.
 // The reattach hint is always space-qualified so it works verbatim
 // regardless of the caller's pinned/default space.
-func finishAttach(err error, errw io.Writer, space, name string) error {
+func finishAttach(err error, space, name string) error {
 	if errors.Is(err, context.Canceled) {
 		cliNotice(logging.Session, "detached — the session keeps running; reattach: yoloctl box attach %s --space %s", name, space)
 		return nil
@@ -305,7 +305,7 @@ func ensureAndAttachSession(ctx context.Context, c *container.Client, space, nam
 	if err != nil {
 		return err
 	}
-	attachErr := finishAttach(attachToSession(ctx, space, name), errw, space, name)
+	attachErr := finishAttach(attachToSession(ctx, space, name), space, name)
 	if shouldWarnPostAutoupdate(agentUpdated, attachErr) {
 		var se *session.ExitError
 		if errors.As(attachErr, &se) {
@@ -585,7 +585,7 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 			}
 		}
 		if !noAutoupdate {
-			if err := autoupdateAgentboxIfNeeded(ctx, c, name, cfg.Agent, errw, updated); err != nil {
+			if err := autoupdateAgentboxIfNeeded(ctx, c, name, cfg.Agent, updated); err != nil {
 				return "", fmt.Errorf("autoupdate %s: %w", name, err)
 			}
 		}
@@ -600,7 +600,7 @@ func ensureAgentSession(ctx context.Context, c *container.Client, space, name st
 		return "", err
 	}
 	termName, cols, rows := sessionTermGeometry()
-	ringBytes, titleTemplate, titleStrip := sessionHolderTuning(ctx, errw, name, space, cfg.Agent, cfg.Account)
+	ringBytes, titleTemplate, titleStrip := sessionHolderTuning(ctx, name, space, cfg.Agent, cfg.Account)
 	// A managed launch (an agent or a declared session command) learns how
 	// its box starts a session (directive 56); a plain shell never asks.
 	managed := cfg.HasAgent() || len(cfg.SessionCommand) > 0
@@ -699,7 +699,7 @@ func resolveSessionArgv(_ string, cfg *agentbox.Config) ([]string, error) {
 // warns once and falls back to the default composition rather than
 // blocking the session. Applied at holder start only — never
 // retroactively.
-func sessionHolderTuning(ctx context.Context, errw io.Writer, box, space, agent, account string) (ringBytes int, titleTemplate, titleStrip string) {
+func sessionHolderTuning(ctx context.Context, box, space, agent, account string) (ringBytes int, titleTemplate, titleStrip string) {
 	t := &config.TUI{}
 	icons := t.AgentIconGlyphs()
 	if spaceenv.Native() {

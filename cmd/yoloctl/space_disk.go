@@ -50,13 +50,13 @@ func resolveSpaceDisk(value, backend string, available uint64, path string, errw
 				gib(available), path, gib(need), size/spaceconfig.GiB))
 		}
 	}
-	diskCapacityNotice(errw, backend, size, available)
+	diskCapacityNotice(backend, size, available)
 	return spaceconfig.DiskSize(size), nil
 }
 
 // diskCapacityNotice says when the host has less free space than the disk:
 // the disk is sparse, so this is allowed, but the VM cannot fill it.
-func diskCapacityNotice(errw io.Writer, backend string, size, available uint64) {
+func diskCapacityNotice(backend string, size, available uint64) {
 	if size <= available {
 		return
 	}
@@ -90,7 +90,7 @@ func growSpaceDisk(boot *spaceconfig.Bootstrap, requested string, errw io.Writer
 		return boot.VM.Disk, nil
 	}
 	if available, _, err := measureSpaceBacking(boot.VM.Backend, boot.Name); err == nil {
-		diskCapacityNotice(errw, boot.VM.Backend, size, available)
+		diskCapacityNotice(boot.VM.Backend, size, available)
 	}
 	return spaceconfig.DiskSize(size), nil
 }
@@ -155,7 +155,7 @@ func selectSpaceDataDisk(cmd *cobra.Command) (string, error) {
 // It refuses, changing nothing, when the adapter cannot grow offline, the
 // image predates the grow, the disk is not as recorded, or no cheap copy is
 // possible without noBackup.
-func growSpaceDataDisk(boot *spaceconfig.Bootstrap, requested string, noBackup bool, out io.Writer) error {
+func growSpaceDataDisk(boot *spaceconfig.Bootstrap, requested string, noBackup bool) error {
 	from, err := spaceconfig.DataDiskBytes(boot.VM.DataDisk)
 	if err != nil {
 		return err
@@ -225,7 +225,7 @@ func growSpaceDataDisk(boot *spaceconfig.Bootstrap, requested string, noBackup b
 // stopped (the adapter verifies it under the instance lock): the disk's
 // filesystem is the space's at the new size and the last boot logged init's
 // clean check. It then drops the checkpoint and the pre-grow copy.
-func settleDataDiskGrow(boot *spaceconfig.Bootstrap, out io.Writer) error {
+func settleDataDiskGrow(boot *spaceconfig.Bootstrap) error {
 	grow := boot.DataDiskGrow
 	if grow == nil || grow.Phase != spaceconfig.GrowExtended {
 		return nil

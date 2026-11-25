@@ -175,7 +175,7 @@ func TestShouldWarnPostAutoupdate(t *testing.T) {
 func TestFinishAttachDetachHint(t *testing.T) {
 	var buf bytes.Buffer
 	t.Cleanup(bindCLITestLogger(t, &buf))
-	if err := finishAttach(context.Canceled, &buf, "staging", "coder"); err != nil {
+	if err := finishAttach(context.Canceled, "staging", "coder"); err != nil {
 		t.Fatalf("a cancellation is a detach, not an error: %v", err)
 	}
 	if !strings.Contains(buf.String(), "reattach: yoloctl box attach coder --space staging") {
@@ -183,12 +183,12 @@ func TestFinishAttachDetachHint(t *testing.T) {
 	}
 
 	buf.Reset()
-	if err := finishAttach(nil, &buf, "default", "coder"); err != nil || buf.Len() != 0 {
+	if err := finishAttach(nil, "default", "coder"); err != nil || buf.Len() != 0 {
 		t.Errorf("clean exit must pass through silently: err=%v out=%q", err, buf.String())
 	}
 
 	exitErr := &session.ExitError{Status: 3}
-	if err := finishAttach(exitErr, &buf, "default", "coder"); !errors.Is(err, exitErr) {
+	if err := finishAttach(exitErr, "default", "coder"); !errors.Is(err, exitErr) {
 		t.Errorf("a session exit must pass through, got %v", err)
 	}
 }

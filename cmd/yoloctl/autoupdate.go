@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/agentnpm"
@@ -25,7 +24,7 @@ import (
 // outer container. yoloctl must never execute an agent workload there,
 // including native --version or self-update commands.
 // updated records a completed installation for post-launch failure diagnostics.
-func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentboxName, agentName string, notice io.Writer, updated *bool) error {
+func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentboxName, agentName string, updated *bool) error {
 	if !hasRealAgent(agentName) {
 		// Generic-shell box (no --agent, or agent "none"). Nothing to
 		// autoupdate; the user opted out of agent-profile machinery

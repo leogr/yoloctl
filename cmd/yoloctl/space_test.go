@@ -417,7 +417,7 @@ func TestPurgeSpaceBundle_Boundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := purgeSpaceBundle(target, io.Discard); err != nil {
+	if err := purgeSpaceBundle(target); err != nil {
 		t.Fatalf("purgeSpaceBundle: %v", err)
 	}
 

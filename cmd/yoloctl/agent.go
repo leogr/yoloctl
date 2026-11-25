@@ -364,7 +364,7 @@ stderr but don't fail the command — useful information is still
 emitted for the packages that did respond.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAgentVersions(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr())
+			return runAgentVersions(cmd.Context(), cmd.OutOrStdout())
 		},
 	}
 }
@@ -374,7 +374,7 @@ emitted for the packages that did respond.`,
 // Profiles without a managed distribution are skipped (the table just doesn't
 // list them). Goes through agentprofile.All so user-added profiles
 // participate identically to the built-ins.
-func runAgentVersions(ctx context.Context, out, errw io.Writer) error {
+func runAgentVersions(ctx context.Context, out io.Writer) error {
 	profiles, err := agentprofile.All()
 	if err != nil {
 		return err

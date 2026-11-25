@@ -154,7 +154,7 @@ are preserved.`,
 			// Delete the per-agentbox declaration unless asked to keep it.
 			// Host workdir + agent-state are never touched here.
 			if !keepManifest {
-				if err := removeAgentboxConfig(spaceName, name, cmd.ErrOrStderr()); err != nil {
+				if err := removeAgentboxConfig(spaceName, name); err != nil {
 					return err
 				}
 				// The name's chat membership would otherwise refuse a later

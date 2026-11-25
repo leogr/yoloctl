@@ -193,7 +193,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 					return err
 				}
 				// A stopped VM is when a finished data disk grow is recorded.
-				if err := settleDataDiskGrow(boot, cmd.OutOrStdout()); err != nil {
+				if err := settleDataDiskGrow(boot); err != nil {
 					cliWarn(logging.Host, "data disk grow not recorded yet: %v", err)
 				}
 				return nil
@@ -251,7 +251,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 					if err := vmhost.New().DeleteAccountDisk(cmd.Context(), boot.DiskID); err != nil {
 						return fmt.Errorf("delete persistent disk (bootstrap retained for retry): %w", err)
 					}
-					return purgeSpaceBundle(space, cmd.ErrOrStderr())
+					return purgeSpaceBundle(space)
 				}
 				if err := startControllerSpace(cmd.Context(), boot, boot.VM.Backend != "firecracker", nil, cmd.ErrOrStderr()); err != nil {
 					return fmt.Errorf("replacement failed; persistent data retained; retry space start %s: %w", space, err)

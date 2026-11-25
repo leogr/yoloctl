@@ -147,14 +147,14 @@ func runReconcile(ctx context.Context, out, errw io.Writer, spaceName, name stri
 		if err != nil {
 			return err
 		}
-		return printReconcileResult(out, name, result)
+		return printReconcileResult(name, result)
 	}
 	if err := preflightAgentboxRuntime(ctx, client, cfg, true); err != nil {
 		return err
 	}
 	inspector := agentbox.LiveInspector{Client: client}
 	applier := newManagedLiveApplier(client, errw)
-	return runRebuild(ctx, lock, out, errw, client, cfg, name, inspector, applier)
+	return runRebuild(ctx, lock, errw, client, cfg, name, inspector, applier)
 }
 
 // runRebuild forces a fresh build of the box's feature-composed runtime image
@@ -165,7 +165,7 @@ func runReconcile(ctx context.Context, out, errw io.Writer, spaceName, name stri
 // (cache-busted), then we drive a recreate directly rather than reading a Diff
 // verdict. The subsequent Create's image-ensure finds the freshly-built tag
 // present and reuses it.
-func runRebuild(ctx context.Context, lock *agentsession.BoxLock, out, errw io.Writer, client *container.Client, cfg *agentbox.Config, name string, inspector agentbox.LiveInspector, applier agentbox.Applier) error {
+func runRebuild(ctx context.Context, lock *agentsession.BoxLock, errw io.Writer, client *container.Client, cfg *agentbox.Config, name string, inspector agentbox.LiveInspector, applier agentbox.Applier) error {
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("validate config: %w", err)
 	}
@@ -300,7 +300,7 @@ creates one (a missing YAML is a clear error).`,
 func runEdit(ctx context.Context, out io.Writer, spaceName, name string) error {
 	var box *agentsession.BoxLock
 	lock := func() (func(), error) {
-		return lockManifestEdit(ctx, out, spaceName, func() (func(), error) {
+		return lockManifestEdit(ctx, spaceName, func() (func(), error) {
 			l, err := lockSessionBoxFn(spaceName, name)
 			if err != nil {
 				return nil, err
@@ -768,7 +768,7 @@ func reconcileAndPrint(ctx context.Context, lock *agentsession.BoxLock, out io.W
 	if err != nil {
 		return savedDeclarationError(ctx, cfg, err)
 	}
-	return printReconcileResult(out, name, result)
+	return printReconcileResult(name, result)
 }
 
 // reconcileManaged preflights and reconciles a managed box whose box lock
@@ -858,7 +858,7 @@ func mutateAndReconcile(
 // printReconcileResult writes the apply summary in the same shape
 // as the dry-run plan, but with verbs that reflect what actually
 // happened.
-func printReconcileResult(out io.Writer, name string, r agentbox.ReconcileResult) error {
+func printReconcileResult(name string, r agentbox.ReconcileResult) error {
 	switch {
 	case r.ContainerCreated:
 		cliInfo(logging.Box, "box %s: container created", name)

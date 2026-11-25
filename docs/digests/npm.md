@@ -60,7 +60,7 @@ the smoke. Its existence is not evidence of a successful live run.
 2. <a id="source-2"></a> [internal/features/npm.go](../../internal/features/npm.go#L11) — `npmInstallDockerfile` runtime verification and user config.
 3. <a id="source-3"></a> [assets/containers/agentbox/Dockerfile](../../assets/containers/agentbox/Dockerfile#L9) — Node version/install, sandbox identity and global-command PATH.
 4. <a id="source-4"></a> [assets/containers/agentbox/yoloctl-entrypoint.sh](../../assets/containers/agentbox/yoloctl-entrypoint.sh#L28-L46) — identity alignment and home ownership.
-5. <a id="source-5"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L110-L164) — `npmInstallGlobalAtLatestArgs`, managed prefix and cache.
+5. <a id="source-5"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L109-L163) — `npmInstallGlobalAtLatestArgs`, managed prefix and cache.
 6. <a id="source-6"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L41-L57) — `ComposedImageRef`, `composedImageRef`.
 7. <a id="source-7"></a> [internal/agentboximage/composed_test.go](../../internal/agentboximage/composed_test.go#L123-L138) — `TestComposedImageRef_NpmEnvironmentChangesImage`.
 8. <a id="source-8"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L299-L309) — `network.npm`.

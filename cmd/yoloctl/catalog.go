@@ -224,7 +224,7 @@ saved it. Built-ins are read-only — copy a built-in to a custom name first
 (yoloctl %[1]s copy SRC NEWNAME).`, k.name),
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runCatalogEdit(cmd.Context(), cmd.OutOrStdout(), k, args[0])
+			return runCatalogEdit(cmd.Context(), k, args[0])
 		},
 	}
 	return cmd
@@ -233,7 +233,7 @@ saved it. Built-ins are read-only — copy a built-in to a custom name first
 // runCatalogEdit edits a custom item in place, then reloads+validates it. A
 // built-in NAME is rejected with a copy-first hint; a missing custom item is
 // rejected with a clear error.
-func runCatalogEdit(ctx context.Context, out io.Writer, k catalogKind, name string) error {
+func runCatalogEdit(ctx context.Context, k catalogKind, name string) error {
 	if k.isBuiltin(name) {
 		return asUserError(fmt.Errorf(
 			"%s %q is a built-in and is read-only; copy it to a custom name first: yoloctl %s copy %s my-%s",

@@ -134,7 +134,7 @@ func TestStorageIdleCleanupKeepsBudget(t *testing.T) {
 				return nil
 			},
 		}
-		if err := c.collect(t.Context(), nil, io.Discard); err != nil || pruned != (removed > 0) {
+		if err := c.collect(t.Context(), nil); err != nil || pruned != (removed > 0) {
 			t.Fatalf("pruned=%v, %v", pruned, err)
 		}
 	}

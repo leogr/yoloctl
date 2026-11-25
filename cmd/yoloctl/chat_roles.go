@@ -116,7 +116,7 @@ func synchronizeChatRoles(ctx context.Context, space string, store managedchat.S
 	}
 	for _, box := range boxes {
 		if box.Name == next.Server.Name && box.Runtime == boxstate.RuntimeRunning {
-			if err := applyChangedChatRoles(ctx, next, proof, box.Config, notice); err != nil {
+			if err := applyChangedChatRoles(ctx, next, proof, box.Config); err != nil {
 				return fmt.Errorf("channel roles saved; runtime application pending (inspect chat status, then explicitly chat ensure): %w", err)
 			}
 			return nil
@@ -126,7 +126,7 @@ func synchronizeChatRoles(ctx context.Context, space string, store managedchat.S
 	return nil
 }
 
-func applyChangedChatRoles(ctx context.Context, r *managedchat.Room, proof managedchat.Rendered, cfg *agentbox.Config, notice io.Writer) error {
+func applyChangedChatRoles(ctx context.Context, r *managedchat.Room, proof managedchat.Rendered, cfg *agentbox.Config) error {
 	// Validate the reserved declaration, current container identity and binds
 	// before treating a missing holder as a legitimate stopped workload.
 	control, _, err := chatRoleServerControl(ctx, r, cfg)

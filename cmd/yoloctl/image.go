@@ -186,7 +186,7 @@ mutually exclusive with --space.
 			var rows []imageRow
 			if allSpaces {
 				var err error
-				rows, err = listImagesAllSpaces(cmd.Context(), filter, cmd.ErrOrStderr())
+				rows, err = listImagesAllSpaces(cmd.Context(), filter)
 				if err != nil {
 					return err
 				}
@@ -235,7 +235,7 @@ func tagImageRows(space string, imgs []container.Image) []imageRow {
 // shells nerdctl inside the VM), so it's skipped with a notice rather than
 // failing the whole command; likewise a per-VM list error degrades to a
 // notice so one broken space doesn't sink the aggregate.
-func listImagesAllSpaces(ctx context.Context, filter string, notice io.Writer) ([]imageRow, error) {
+func listImagesAllSpaces(ctx context.Context, filter string) ([]imageRow, error) {
 	instances, err := vmhost.New().List(ctx)
 	if err != nil {
 		return nil, err

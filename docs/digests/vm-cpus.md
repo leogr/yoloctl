@@ -36,9 +36,9 @@ count or a host's cgroup layout. [3](#source-3) [5](#source-5) [8](#source-8)
 
 ## Sources
 
-1. <a id="source-1"></a> [cmd/yoloctl/space_cpu.go](../../cmd/yoloctl/space_cpu.go#L24) — `resolveSpaceCPUs`: explicit parse, measurement, clipping and basis message.
+1. <a id="source-1"></a> [cmd/yoloctl/space_cpu.go](../../cmd/yoloctl/space_cpu.go#L23) — `resolveSpaceCPUs`: explicit parse, measurement, clipping and basis message.
 2. <a id="source-2"></a> [internal/resources/cpu.go](../../internal/resources/cpu.go#L28) — `VMCPUs` rounding/clipping, membership, mountinfo and limit decoders.
-3. <a id="source-3"></a> [cmd/yoloctl/space_cpu_test.go](../../cmd/yoloctl/space_cpu_test.go#L31) — default, completion, measured/explicit selection and refusal before effects.
+3. <a id="source-3"></a> [cmd/yoloctl/space_cpu_test.go](../../cmd/yoloctl/space_cpu_test.go#L30) — default, completion, measured/explicit selection and refusal before effects.
 4. <a id="source-4"></a> [internal/resources/cpu_linux.go](../../internal/resources/cpu_linux.go#L20) — `ReadHostCPU`, `walkCgroupBandwidth` and filesystem checks.
 5. <a id="source-5"></a> [CPU regressions](../../internal/resources/cpu_linux_test.go#L28) — ancestor/leaf/unlimited/v1 and subtree-alias fixtures, symlink, oversize and escape refusals.
 6. <a id="source-6"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L320-L336) — `createControllerSpace` selects and validates before image/disk effects.

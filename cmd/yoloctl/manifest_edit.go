@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"os"
 
 	"github.com/leogr/yoloctl/internal/layout"
@@ -45,7 +44,7 @@ func (s editSnapshot) unchanged() bool {
 // Editors own no locks. Both phases acquire space before entity, and the second
 // checks the exact files captured in the first (including replacement of a
 // space or identity with identical text). Reconcile remains inside the guard.
-func lockManifestEdit(ctx context.Context, notice io.Writer, space string, entity func() (func(), error)) (func(), error) {
+func lockManifestEdit(ctx context.Context, space string, entity func() (func(), error)) (func(), error) {
 	unlockSpace, err := spacelock.AcquireWithWait(ctx, space, true, func() {
 		cliInfo(logging.Host, "Waiting for another operation in space %s; Ctrl-C cancels.", space)
 	})

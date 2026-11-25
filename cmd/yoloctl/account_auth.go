@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -251,7 +250,7 @@ Native import refuses to overwrite state used by a running box.
 				return err
 			}
 			if doc.SecretValue != "" {
-				return importSecretIntoAccount(target, *target.profile.Auth.ImportSecret, cmd.OutOrStdout(), cmd.ErrOrStderr())
+				return importSecretIntoAccount(target, *target.profile.Auth.ImportSecret)
 			}
 			writes, err := nativeAuthWrites(target, doc)
 			if err != nil {
@@ -294,7 +293,7 @@ Native import refuses to overwrite state used by a running box.
 // the file path and field/secret names. The account must exist. Its lock is
 // held from validation through the secret Save so a concurrent destroy or
 // mutation can't interleave with the load-modify-write.
-func importSecretIntoAccount(t accountAuthTarget, rule agentprofile.ImportSecret, out, errw io.Writer) error {
+func importSecretIntoAccount(t accountAuthTarget, rule agentprofile.ImportSecret) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err

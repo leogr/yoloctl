@@ -118,7 +118,7 @@ func ensureControllerChat(ctx context.Context, boot *spaceconfig.Bootstrap, errw
 	if room != "" && (status.Room == nil || status.Room.ID != room) {
 		return errors.New("chat ensure reported a different room")
 	}
-	return chatEnsureOutcome(status, errw)
+	return chatEnsureOutcome(status)
 }
 
 func isTerminalWriter(w io.Writer) bool {
@@ -161,7 +161,7 @@ const chatEnsureReplyLimit = 2 << 20
 // the room's server ready, keeping the reported pending reasons otherwise.
 // Participant changes still pending behind a ready server are shown, not
 // hidden.
-func chatEnsureOutcome(status managedchat.Status, errw io.Writer) error {
+func chatEnsureOutcome(status managedchat.Status) error {
 	switch {
 	case status.Room == nil:
 		return errors.New("chat ensure reported no managed room")

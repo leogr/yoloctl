@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,7 +53,7 @@ func TestImportSecretIntoAccount_ExtractsToSecret(t *testing.T) {
 	}
 	tgt := claudeAuthTarget(t, "personal")
 
-	if err := importSecretIntoAccount(tgt, *tgt.profile.Auth.ImportSecret, io.Discard, io.Discard); err != nil {
+	if err := importSecretIntoAccount(tgt, *tgt.profile.Auth.ImportSecret); err != nil {
 		t.Fatalf("importSecretIntoAccount: %v", err)
 	}
 	acct, err := account.Load("default", "personal")
@@ -74,7 +73,7 @@ func TestImportSecretIntoAccount_RejectsMissingAccount(t *testing.T) {
 	writeHostClaudeJSON(t, home, "sk-auto-456")
 
 	tgt := claudeAuthTarget(t, account.Default)
-	if err := importSecretIntoAccount(tgt, *tgt.profile.Auth.ImportSecret, io.Discard, io.Discard); err == nil {
+	if err := importSecretIntoAccount(tgt, *tgt.profile.Auth.ImportSecret); err == nil {
 		t.Fatal("missing default should fail")
 	}
 	if ok, _ := account.Exists("default", account.Default); ok {
@@ -82,7 +81,7 @@ func TestImportSecretIntoAccount_RejectsMissingAccount(t *testing.T) {
 	}
 
 	named := claudeAuthTarget(t, "personal")
-	if err := importSecretIntoAccount(named, *named.profile.Auth.ImportSecret, io.Discard, io.Discard); err == nil {
+	if err := importSecretIntoAccount(named, *named.profile.Auth.ImportSecret); err == nil {
 		t.Fatal("import into a missing named account must fail with the create hint")
 	}
 	if ok, _ := account.Exists("default", "personal"); ok {
@@ -104,12 +103,14 @@ func TestImportSecretIntoAccount_NeverLogsValue(t *testing.T) {
 	}
 	tgt := claudeAuthTarget(t, "personal")
 
-	var out, errw strings.Builder
-	if err := importSecretIntoAccount(tgt, *tgt.profile.Auth.ImportSecret, &out, &errw); err != nil {
+	// The import writes only through the process logger.
+	var logged strings.Builder
+	t.Cleanup(bindCLITestLogger(t, &logged))
+	if err := importSecretIntoAccount(tgt, *tgt.profile.Auth.ImportSecret); err != nil {
 		t.Fatalf("import: %v", err)
 	}
-	if strings.Contains(out.String(), secret) || strings.Contains(errw.String(), secret) {
-		t.Fatalf("secret value leaked into output:\nout=%q\nerr=%q", out.String(), errw.String())
+	if strings.Contains(logged.String(), secret) {
+		t.Fatalf("secret value leaked into output:\n%q", logged.String())
 	}
 }
 

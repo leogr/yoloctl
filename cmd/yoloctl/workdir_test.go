@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"io"
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
@@ -29,17 +28,17 @@ func TestIsContainerGone(t *testing.T) {
 
 func TestBuildWorkdir_Validation(t *testing.T) {
 	// --workdir and --workdir-mode ephemeral are mutually exclusive.
-	if _, err := buildWorkdir("box", "/tmp/x", agentbox.WorkdirModeEphemeral, io.Discard); err == nil {
+	if _, err := buildWorkdir("box", "/tmp/x", agentbox.WorkdirModeEphemeral); err == nil {
 		t.Error("expected error for --workdir + --workdir-mode ephemeral")
 	}
 	// Host mode with no workdir → required-workdir error.
-	if _, err := buildWorkdir("box", "", agentbox.WorkdirModeHost, io.Discard); err == nil {
+	if _, err := buildWorkdir("box", "", agentbox.WorkdirModeHost); err == nil {
 		t.Error("expected error when neither --workdir nor --workdir-mode ephemeral is set")
 	}
 }
 
 func TestBuildWorkdir_Ephemeral(t *testing.T) {
-	wd, err := buildWorkdir("box", "", agentbox.WorkdirModeEphemeral, io.Discard)
+	wd, err := buildWorkdir("box", "", agentbox.WorkdirModeEphemeral)
 	if err != nil {
 		t.Fatalf("buildWorkdir ephemeral: %v", err)
 	}
@@ -54,7 +53,7 @@ func TestBuildWorkdir_Ephemeral(t *testing.T) {
 func TestBuildWorkdir_HostCreatesMissingDir(t *testing.T) {
 	parent := t.TempDir()
 	workdir := parent + "/newrepo" // does not exist yet
-	wd, err := buildWorkdir("box", workdir, agentbox.WorkdirModeHost, io.Discard)
+	wd, err := buildWorkdir("box", workdir, agentbox.WorkdirModeHost)
 	if err != nil {
 		t.Fatalf("buildWorkdir host: %v", err)
 	}

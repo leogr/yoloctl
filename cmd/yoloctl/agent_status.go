@@ -57,7 +57,7 @@ for an offline view that only probes installed versions.
 			var rows []agentboxRow
 			if allSpaces {
 				var err error
-				rows, err = listAgentboxesAcrossSpaces(cmd.Context(), cmd.ErrOrStderr())
+				rows, err = listAgentboxesAcrossSpaces(cmd.Context())
 				if err != nil {
 					return err
 				}
@@ -351,7 +351,7 @@ func (v semverCore) greaterThan(other semverCore) bool {
 	return v.patch > other.patch
 }
 
-func loadAgentboxShowMetadata(ctx context.Context, c *container.Client, d *container.Details, space, name string, errw io.Writer) agentboxShowMetadata {
+func loadAgentboxShowMetadata(ctx context.Context, c *container.Client, d *container.Details, space, name string) agentboxShowMetadata {
 	meta := agentboxShowMetadata{
 		AgentName: d.Labels[agentbox.LabelAgent],
 		Runtime:   agentbox.ClassifyRuntime(d),

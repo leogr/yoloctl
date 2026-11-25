@@ -69,7 +69,7 @@ the forced update and the maintenance cache owner. [17](#source-17)
 5. <a id="source-5"></a> [internal/features/agentnpm.go](../../internal/features/agentnpm.go#L1-L134) — runtime feature name, `LookupRuntime`, `npmInstaller`, `recipe`, `agentNpmInstallDockerfile`, `agentNpmFinalPath`.
 6. <a id="source-6"></a> [internal/features/features.go](../../internal/features/features.go#L390-L451) — `renderDockerfile`.
 7. <a id="source-7"></a> [Rendering regressions](../../internal/features/agentnpm_test.go#L1-L150) — tool vs agent, first supplier, appended/pinned/duplicate, OpenCode check, names.
-8. <a id="source-8"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L98-L175) — `agentMaintenanceExecArgs`, `npmInstallGlobalAtLatest`, `predatesAgentNpm`, `npmInstallGlobalAtLatestArgs`, `fetchInstalledNpmVersion`.
+8. <a id="source-8"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L97-L174) — `agentMaintenanceExecArgs`, `npmInstallGlobalAtLatest`, `predatesAgentNpm`, `npmInstallGlobalAtLatestArgs`, `fetchInstalledNpmVersion`.
 9. <a id="source-9"></a> [Native install argv](../../cmd/yoloctl/agent_distribution.go#L101-L119) — `nativeInstallArgs` uses the shared exec builder.
 10. <a id="source-10"></a> [Maintenance argv regression](../../cmd/yoloctl/autoupdate_test.go#L11-L64) — `TestNpmAgentMaintenanceUsesExplicitConfigPaths`, `TestNpmAgentMaintenanceEndsOptionsBeforeThePackage`.
 11. <a id="source-11"></a> [Target and failure regressions](../../cmd/yoloctl/container_target_test.go#L65-L203) — `TestMaintenanceExecsUseSystemPathAndExactlySelectedContainer`, `TestNpmMaintenanceFailureExplainsSystemPathAndAutoupdateOptOut`, `TestNpmMaintenanceOnABoxWithoutTheManagedFolderNamesRecreate`.

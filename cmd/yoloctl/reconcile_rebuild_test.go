@@ -41,13 +41,13 @@ func TestRebuildValidatesBeforeBuilding(t *testing.T) {
 	for _, privileged := range []bool{false, true} {
 		explicit := &agentbox.Config{Name: "coder", Space: "default", Image: "img:1", Workdir: agentbox.NewEphemeralWorkdir("coder"),
 			Features: []string{"go"}, Capabilities: []string{capabilities.RetiredPrivilegedCapability}, Privileged: privileged}
-		err := runRebuild(t.Context(), nil, io.Discard, io.Discard, container.New("default"), explicit, "coder", agentbox.LiveInspector{}, nil)
+		err := runRebuild(t.Context(), nil, io.Discard, container.New("default"), explicit, "coder", agentbox.LiveInspector{}, nil)
 		if !errors.Is(err, capabilities.ErrRetiredPrivileged) {
 			t.Fatalf("explicit, privileged=%v: rebuild = %v", privileged, err)
 		}
 		required := &agentbox.Config{Name: "coder", Space: "default", Image: "img:1", Workdir: agentbox.NewEphemeralWorkdir("coder"),
 			Features: []string{"go", "kernel-dev"}, Privileged: privileged}
-		err = runRebuild(t.Context(), nil, io.Discard, io.Discard, container.New("default"), required, "coder", agentbox.LiveInspector{}, nil)
+		err = runRebuild(t.Context(), nil, io.Discard, container.New("default"), required, "coder", agentbox.LiveInspector{}, nil)
 		if err == nil || !strings.Contains(err.Error(), `feature "kernel-dev" requires the retired `+capabilities.RetiredPrivilegedCapability+` capability`) {
 			t.Fatalf("feature-required, privileged=%v: rebuild = %v", privileged, err)
 		}

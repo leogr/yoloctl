@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,13 +63,13 @@ func TestAutomaticSpaceCPUsUseMeasuredCapacity(t *testing.T) {
 		calls := stubHostCPU(t, tc.host, nil)
 		var out bytes.Buffer
 		t.Cleanup(bindCLITestLogger(t, &out))
-		got, err := resolveSpaceCPUs(t.Context(), tc.backend, "auto", &out)
+		got, err := resolveSpaceCPUs(t.Context(), tc.backend, "auto")
 		if err != nil || got != tc.want || *calls != 1 || !strings.Contains(out.String(), "automatic") || !strings.Contains(out.String(), tc.basis) {
 			t.Fatalf("%s %+v: %d, %v, %q", tc.backend, tc.host, got, err, out.String())
 		}
 	}
 	stubHostCPU(t, resources.HostCPU{}, errors.New("cgroup unreadable"))
-	if _, err := resolveSpaceCPUs(t.Context(), "lima", "auto", io.Discard); err == nil || !strings.Contains(err.Error(), "--cpus") {
+	if _, err := resolveSpaceCPUs(t.Context(), "lima", "auto"); err == nil || !strings.Contains(err.Error(), "--cpus") {
 		t.Fatalf("measurement failure lacks the explicit remedy: %v", err)
 	}
 }
@@ -79,11 +78,11 @@ func TestExplicitSpaceCPUsNeverProbe(t *testing.T) {
 	calls := stubHostCPU(t, resources.HostCPU{Logical: 2}, nil)
 	var out bytes.Buffer
 	t.Cleanup(bindCLITestLogger(t, &out))
-	if got, err := resolveSpaceCPUs(t.Context(), "lima", "48", &out); err != nil || got != 48 || !strings.Contains(out.String(), "explicit") {
+	if got, err := resolveSpaceCPUs(t.Context(), "lima", "48"); err != nil || got != 48 || !strings.Contains(out.String(), "explicit") {
 		t.Fatalf("explicit oversubscription must be kept: %d, %v, %q", got, err, out.String())
 	}
 	for _, value := range []string{"0", "-1", "+2", "1.5", "", " 4", "auto ", "2147483648"} {
-		if _, err := resolveSpaceCPUs(t.Context(), "lima", value, io.Discard); err == nil {
+		if _, err := resolveSpaceCPUs(t.Context(), "lima", value); err == nil {
 			t.Fatalf("accepted --cpus %q", value)
 		}
 	}

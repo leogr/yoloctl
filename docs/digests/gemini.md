@@ -91,7 +91,7 @@ available with its own launch and authentication conventions.
 5. <a id="source-5"></a> [internal/agentbox/policy_golden_test.go](../../internal/agentbox/policy_golden_test.go#L50) — Gemini policy cases and binary attribution.
 6. <a id="source-6"></a> [Gemini v0.62.0 OAuth](https://github.com/google-gemini/gemini-cli/blob/v0.62.0/packages/core/src/code_assist/oauth2.ts#L260) — manual login, credential storage and user-info endpoint.
 7. <a id="source-7"></a> [Gemini v0.62.0 Code Assist](https://github.com/google-gemini/gemini-cli/blob/v0.62.0/packages/core/src/code_assist/server.ts#L73) — service endpoint.
-8. <a id="source-8"></a> [cmd/yoloctl/account_auth.go](../../cmd/yoloctl/account_auth.go#L132) — host paths, import and presence status.
+8. <a id="source-8"></a> [cmd/yoloctl/account_auth.go](../../cmd/yoloctl/account_auth.go#L131) — host paths, import and presence status.
 9. <a id="source-9"></a> [Gemini v0.62.0 headless auth](https://github.com/google-gemini/gemini-cli/blob/v0.62.0/packages/cli/src/validateNonInterActiveAuth.ts#L20) — configured/environment auth selection.
 10. <a id="source-10"></a> [scripts/smoke/gemini.sh](../../scripts/smoke/gemini.sh#L1) — isolated runtime and opt-in provider checks.
 

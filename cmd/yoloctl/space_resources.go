@@ -218,7 +218,7 @@ func changeSpaceResources(cmd *cobra.Command, name string, expected *spaceResour
 		return err
 	}
 	// A grow that finished at the last start is recorded first.
-	if err := settleDataDiskGrow(current.boot, cmd.OutOrStdout()); err != nil {
+	if err := settleDataDiskGrow(current.boot); err != nil {
 		return err
 	}
 	doc := spaceResourceDocument{CPUs: current.boot.VM.CPUs, Memory: current.boot.VM.Memory, Disk: current.boot.VM.Disk, DataDisk: dataDiskSetting(current.boot), LayerCompression: current.boot.ImageLayerCompression, NestedVirtualization: current.boot.VM.NestedVirtualization}
@@ -264,7 +264,7 @@ func changeSpaceResources(cmd *cobra.Command, name string, expected *spaceResour
 	g := current.boot.DataDiskGrow
 	resume := g != nil && g.Phase == spaceconfig.GrowRequested && doc.DataDisk == spaceconfig.DiskSize(g.To)
 	if doc.DataDisk != dataDiskSetting(current.boot) || resume {
-		return growSpaceDataDisk(current.boot, doc.DataDisk, doc.NoBackup, cmd.OutOrStdout())
+		return growSpaceDataDisk(current.boot, doc.DataDisk, doc.NoBackup)
 	}
 	return nil
 }

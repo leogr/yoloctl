@@ -938,7 +938,7 @@ Use space recreate for a fresh VM that preserves accounts and declarations.
 			if err := vmhost.New().DeleteAccountDisk(cmd.Context(), cfg.AccountDiskID); err != nil {
 				return fmt.Errorf("delete account disk (space declarations kept for retry): %w", err)
 			}
-			return purgeSpaceBundle(name, cmd.ErrOrStderr())
+			return purgeSpaceBundle(name)
 		}}
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Skip confirmation (deletes this space's accounts)")
 	return cmd
@@ -1005,7 +1005,7 @@ var (
 	}
 )
 
-func purgeSpaceBundle(name string, stderr io.Writer) error {
+func purgeSpaceBundle(name string) error {
 	bundle, err := layout.SpaceBundleDir(name)
 	if err != nil {
 		return err
@@ -1076,7 +1076,7 @@ connecting.
 					"space ssh needs a terminal for an interactive shell; " +
 						"pass '-- CMD [ARGS...]' to run a command instead"))
 			}
-			if err := ensureSpaceRunningForShell(cmd.Context(), name, start, cmd.ErrOrStderr()); err != nil {
+			if err := ensureSpaceRunningForShell(cmd.Context(), name, start); err != nil {
 				return err
 			}
 			// limactl/ssh allocate a remote PTY automatically when stdin is a
@@ -1147,7 +1147,7 @@ func spaceShellLimaArgs(space string, root bool, remote []string) []string {
 // missing space is a hard error. A stopped space errors with a
 // `space start` hint unless start=true, in which case its mounts are
 // refreshed and it is booted first (mirrors `space start`).
-func ensureSpaceRunningForShell(ctx context.Context, name string, start bool, stderr io.Writer) error {
+func ensureSpaceRunningForShell(ctx context.Context, name string, start bool) error {
 	inst, found, err := findSpaceInstance(ctx, name)
 	if err != nil {
 		return err

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -450,7 +449,7 @@ func TestCopyOptionsFromSource_SymlinkRetargetKeepsCanonicalWorkdir(t *testing.T
 	if opts.Workdir != realA {
 		t.Errorf("inherited workdir = %q, want the source's canonical %q (not the retargeted link)", opts.Workdir, realA)
 	}
-	wd, err := buildWorkdir("dst", opts.Workdir, opts.WorkdirMode, io.Discard)
+	wd, err := buildWorkdir("dst", opts.Workdir, opts.WorkdirMode)
 	if err != nil {
 		t.Fatalf("buildWorkdir: %v", err)
 	}

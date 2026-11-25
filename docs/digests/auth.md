@@ -85,7 +85,7 @@ selects a home-relative host import directory; custom XDG roots use --file. [14]
 2. <a id="source-2"></a> [internal/agentprofile/builtin/claude.yaml](../../internal/agentprofile/builtin/claude.yaml#L46-L116) — `launch_env`, `auth`, `secret_injection`.
 3. <a id="source-3"></a> [internal/agentprofile/builtin/codex.yaml](../../internal/agentprofile/builtin/codex.yaml#L13) — `command`, `requires_features`, `auth` (line 89).
 4. <a id="source-4"></a> [cmd/yoloctl/launchenv.go](../../cmd/yoloctl/launchenv.go#L26-L42) — `applyLaunchEnv`.
-5. <a id="source-5"></a> [cmd/yoloctl/account_auth.go](../../cmd/yoloctl/account_auth.go#L133-L404) — `resolveAccountAuthTarget`, `defaultHostAuthPaths`, `newAccountAuthImportCmd`, `importSecretIntoAccount`, `accountAuthStatus`.
+5. <a id="source-5"></a> [cmd/yoloctl/account_auth.go](../../cmd/yoloctl/account_auth.go#L132-L403) — `resolveAccountAuthTarget`, `defaultHostAuthPaths`, `newAccountAuthImportCmd`, `importSecretIntoAccount`, `accountAuthStatus`.
 6. <a id="source-6"></a> [cmd/yoloctl/space_lifecycle.go](../../cmd/yoloctl/space_lifecycle.go#L80) — authoritative consumer matching.
 7. <a id="source-7"></a> [cmd/yoloctl/account.go](../../cmd/yoloctl/account.go#L210) — show, edit, deletion, secret commands.
 8. <a id="source-8"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L214) — account-reference drift.

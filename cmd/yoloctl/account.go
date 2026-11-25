@@ -374,7 +374,7 @@ UNTOUCHED. Hand-editing secret values is allowed.
 // discarded on invalid input; a concurrent-change conflict retains the copy).
 func runAccountEdit(cmd *cobra.Command, space, name string) error {
 	lock := func() (func(), error) {
-		return lockManifestEdit(cmd.Context(), cmd.ErrOrStderr(), space, func() (func(), error) { return account.Lock(space, name) })
+		return lockManifestEdit(cmd.Context(), space, func() (func(), error) { return account.Lock(space, name) })
 	}
 	release, err := lock()
 	if err != nil {
@@ -466,7 +466,7 @@ func runAccountEdit(cmd *cobra.Command, space, name string) error {
 		return err
 	}
 	cliInfo(logging.Box, "saved account %s", name)
-	printSecretPickupNote(cmd.ErrOrStderr(), name)
+	printSecretPickupNote(name)
 	return nil
 }
 
@@ -521,7 +521,7 @@ func runAccountDestroy(cmd *cobra.Command, space, name string, force, yes bool) 
 
 	// Scan the owning space before touching native state. Unreadable box
 	// declarations are reported, never silently skipped.
-	referencing, err := boxesReferencingSpace(space, stderr, force, func(r boxRefs) bool { return r.Account == name })
+	referencing, err := boxesReferencingSpace(space, force, func(r boxRefs) bool { return r.Account == name })
 	if err != nil {
 		return err
 	}
@@ -582,9 +582,9 @@ type boxRefs struct {
 // even that fails, the scan refuses to conclude that the name is unused unless
 // --force was given; forced deletion reports the box and any decoded fields.
 func boxesReferencing(stderr io.Writer, force bool, match func(boxRefs) bool) ([]string, error) {
-	return boxesReferencingSpace("", stderr, force, match)
+	return boxesReferencingSpace("", force, match)
 }
-func boxesReferencingSpace(space string, stderr io.Writer, force bool, match func(boxRefs) bool) ([]string, error) {
+func boxesReferencingSpace(space string, force bool, match func(boxRefs) bool) ([]string, error) {
 	refs, err := agentbox.ListAllAgentboxes()
 	if err != nil {
 		return nil, err
@@ -661,7 +661,7 @@ box explicitly.`,
 // printSecretPickupNote is the courtesy note after an account content change:
 // account content never produces a reconcile action, and environment
 // injection is container-create-time.
-func printSecretPickupNote(w io.Writer, name string) {
+func printSecretPickupNote(name string) {
 	cliNotice(logging.Box, "running boxes selecting account %s are not updated automatically; recreate an affected box to replace its environment-injected credentials", name)
 }
 
@@ -719,7 +719,7 @@ never echoed or logged.
 			}
 			// Confirmation deliberately omits the value.
 			cliInfo(logging.Box, "set secret %s on account %s", key, name)
-			printSecretPickupNote(cmd.ErrOrStderr(), name)
+			printSecretPickupNote(name)
 			return nil
 		},
 	}
@@ -765,7 +765,7 @@ its create-time environment until explicitly recreated.
 				return err
 			}
 			cliInfo(logging.Box, "unset secret %s on account %s", key, name)
-			printSecretPickupNote(cmd.ErrOrStderr(), name)
+			printSecretPickupNote(name)
 			return nil
 		},
 	}

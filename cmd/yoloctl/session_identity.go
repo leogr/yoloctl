@@ -388,7 +388,7 @@ func (l *trackedLaunch) settle(ctx context.Context, c *container.Client, generat
 // retireForNewSession replaces the box's conversation for start or restart
 // --new-session once nothing can still run it: the caller holds the box
 // lock and has proven a fresh sandbox or a stopped holder.
-func retireForNewSession(l *agentsession.BoxLock, t *conversationTracking, errw io.Writer) error {
+func retireForNewSession(l *agentsession.BoxLock, t *conversationTracking) error {
 	rec, err := agentsession.LoadLocked(l, t.scope, sessionNow())
 	if err != nil || rec == nil || (rec.Assigned == nil && rec.Current == nil) {
 		return err
@@ -426,7 +426,7 @@ func applySessionStart(l *agentsession.BoxLock, t *conversationTracking, fresh, 
 		}
 	}
 	if newSession {
-		return retireForNewSession(l, t, errw)
+		return retireForNewSession(l, t)
 	}
 	return nil
 }
