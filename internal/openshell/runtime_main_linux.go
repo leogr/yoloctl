@@ -68,8 +68,9 @@ func runRuntimePID1(ctx context.Context, launch HelperLaunch, release QualifiedR
 	}
 	defer func() { err = errors.Join(err, artifacts.Close()) }()
 	var children []*runtimeProcess
+	supervisorFirst := false
 	defer func() {
-		err = errors.Join(err, stopRuntimeChildren(children))
+		err = errors.Join(err, stopRuntimeChildren(children, supervisorFirst && err == nil))
 		phase, reason := "stopped", "stopped"
 		for _, child := range children {
 			if !child.exited {
@@ -91,7 +92,8 @@ func runRuntimePID1(ctx context.Context, launch HelperLaunch, release QualifiedR
 		clear(body)
 	}
 	material.files = nil
-	return monitorRuntime(ctx, record, shared, children)
+	supervisorFirst, err = monitorRuntime(ctx, record, shared, children, readRuntimeMainExitAt)
+	return err
 }
 
 func runtimePhase(everReady, supervisorAlive, boundaryAlive, upstreamReady bool, probeErr error) (string, string, error) {
@@ -119,10 +121,10 @@ func runtimePhase(everReady, supervisorAlive, boundaryAlive, upstreamReady bool,
 	return "starting", "startup", nil
 }
 
-func monitorRuntime(ctx context.Context, record RuntimeRecord, shared runtimeShared, children []*runtimeProcess) (err error) {
+func monitorRuntime(ctx context.Context, record RuntimeRecord, shared runtimeShared, children []*runtimeProcess, readMainExit func(*os.File, int, int) (*runtimeMainExit, error)) (supervisorFirst bool, err error) {
 	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(record.SSHHostPublicKey))
 	if err != nil {
-		return err
+		return false, err
 	}
 	var admission atomic.Bool
 	relayCtx, cancelRelay := context.WithCancel(context.Background())
@@ -166,7 +168,7 @@ func monitorRuntime(ctx context.Context, record RuntimeRecord, shared runtimeSha
 		// Existing relays/children remain alive until attachment completion or
 		// the single overall deadline. A read error never supplies completion.
 		if mainDrain == nil {
-			mainExit, readErr := readRuntimeMainExitAt(shared.supervisorRun, int(SupervisorUID), int(SupervisorGID))
+			mainExit, readErr := readMainExit(shared.supervisorRun, int(SupervisorUID), int(SupervisorGID))
 			if readErr != nil {
 				if !mainExitReadErrorReported {
 					_, _ = fmt.Fprintln(os.Stderr, "OpenShell main-exit marker unavailable:", readErr)
@@ -191,26 +193,26 @@ func monitorRuntime(ctx context.Context, record RuntimeRecord, shared runtimeSha
 				attachmentsReadErrorReported = false
 			}
 			if mainDrain.complete(time.Now(), ended) {
-				return mainDrain.result
+				return false, mainDrain.result
 			}
 			select {
 			case <-ctx.Done():
-				return mainDrain.result
+				return false, mainDrain.result
 			case relayErr := <-relayDone:
 				relayDone = nil
 				if relayErr == nil {
 					relayErr = errors.New("public SSH relay ended unexpectedly")
 				}
-				return errors.Join(mainDrain.result, relayErr)
+				return false, errors.Join(mainDrain.result, relayErr)
 			case <-ticker.C:
 			}
 			continue
 		}
 		if ctx.Err() != nil {
-			return nil
+			return lastPhase == "ready", nil
 		}
 		if err := reapRuntimeChildren(children); err != nil {
-			return err
+			return false, err
 		}
 		supervisorAlive, boundaryAlive := false, false
 		for _, child := range children {
@@ -224,23 +226,26 @@ func monitorRuntime(ctx context.Context, record RuntimeRecord, shared runtimeSha
 		now := time.Now()
 		if supervisorAlive && boundaryAlive && (lastProbe.IsZero() || now.Sub(lastProbe) >= time.Second) {
 			upstreamReady, probeErr = probeRuntimeReadyAt(ctx, shared.supervisorRun, key, int(SupervisorUID), int(SupervisorGID))
+			if stopping, ordered := runtimeStopAfterProbe(ctx, lastPhase, probeErr); stopping {
+				return ordered, nil
+			}
 			lastProbe = time.Now()
 		}
 		phase, reason, decisionErr := runtimePhase(everReady, supervisorAlive, boundaryAlive, upstreamReady, probeErr)
 		if decisionErr != nil {
-			return decisionErr
+			return false, decisionErr
 		}
 		if !everReady && !time.Now().Before(initialDeadline) {
-			return errors.New("OpenShell initial attach/SSH readiness timed out")
+			return false, errors.New("OpenShell initial attach/SSH readiness timed out")
 		}
 		if phase == "ready" && endpoint == nil {
 			publicDirectory, err = openRuntimeInfrastructure(publicRuntimeSSHDirectory)
 			if err != nil {
-				return err
+				return false, err
 			}
 			endpoint, err = listenRuntimeSSHAt(publicDirectory, 0, 0)
 			if err != nil {
-				return err
+				return false, err
 			}
 			relayDone = make(chan error, 1)
 			target := fmt.Sprintf("/proc/self/fd/%d/ssh/ssh.sock", shared.supervisorRun.Fd())
@@ -264,7 +269,7 @@ func monitorRuntime(ctx context.Context, record RuntimeRecord, shared runtimeSha
 			if writeErr != nil {
 				admission.Store(false)
 				if !everReady {
-					return writeErr
+					return false, writeErr
 				}
 				// Retrying a current observation never retries an application
 				// operation or proves its lost reply. Preserve running children.
@@ -282,15 +287,22 @@ func monitorRuntime(ctx context.Context, record RuntimeRecord, shared runtimeSha
 		}
 		select {
 		case <-ctx.Done():
-			return nil
+			return lastPhase == "ready", nil
 		case relayErr := <-relayDone:
 			// Consume once; deferred cleanup must not wait for this value twice.
 			relayDone = nil
 			if relayErr == nil {
 				relayErr = errors.New("public SSH relay ended unexpectedly")
 			}
-			return relayErr
+			return false, relayErr
 		case <-ticker.C:
 		}
 	}
+}
+
+func runtimeStopAfterProbe(ctx context.Context, lastPhase string, probeErr error) (stopping, supervisorFirst bool) {
+	// Cancelling the SSH handshake can return false, nil. Keep the last
+	// completed observation when deciding how to shut down.
+	stopping = ctx.Err() != nil && probeErr == nil
+	return stopping, stopping && lastPhase == "ready"
 }

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -227,16 +228,32 @@ func TestMonitorRuntimeUsesMainExitBeforeReadinessAndKeepsAbsentBehavior(t *test
 	shared := runtimeShared{supervisorRun: fd}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := monitorRuntime(ctx, f.record, shared, nil); err != nil {
-		t.Fatal("absent marker changed ordinary cancellation", err)
+	if ordered, err := monitorRuntime(ctx, f.record, shared, nil, readRuntimeMainExitAt); ordered || err != nil {
+		t.Fatal("absent marker changed startup cancellation", ordered, err)
 	}
 	if err := os.Symlink("missing", filepath.Join(dir, runtimeMainExitName)); err != nil {
 		t.Fatal(err)
 	}
 	var outcome *runtimeMainExit
-	if err := monitorRuntime(t.Context(), f.record, shared, nil); !errors.As(err, &outcome) || outcome.code != nil {
-		t.Fatal("monitor missed its invalid marker decision", err)
+	if ordered, err := monitorRuntime(ctx, f.record, shared, nil, readRuntimeMainExitAt); ordered || !errors.As(err, &outcome) || outcome.code != nil {
+		t.Fatal("stop superseded the main-exit decision", ordered, err)
 	}
+
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		started := time.Now()
+		code := 7
+		mainExit := &runtimeMainExit{code: &code}
+		readMainExit := func(*os.File, int, int) (*runtimeMainExit, error) {
+			cancel()
+			return mainExit, nil
+		}
+		ordered, err := monitorRuntime(ctx, f.record, shared, nil, readMainExit)
+		if ordered || !errors.Is(err, mainExit) || time.Since(started) != 0 {
+			t.Fatalf("stop during main-exit drain: ordered=%v result=%v elapsed=%v", ordered, err, time.Since(started))
+		}
+	})
 }
 
 func TestRuntimeMainExitDiagnosticKeepsCleanupErrorsOnly(t *testing.T) {

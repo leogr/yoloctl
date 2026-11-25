@@ -115,21 +115,38 @@ func signalRuntimeChildren(children []*runtimeProcess, signal os.Signal) error {
 	return err
 }
 
-func stopRuntimeChildren(children []*runtimeProcess) error {
+func stopRuntimeChildren(children []*runtimeProcess, supervisorFirst bool) error {
+	return stopRuntimeChildrenWith(children, supervisorFirst, signalRuntimeChildren, reapRuntimeChildren)
+}
+
+func stopRuntimeChildrenWith(children []*runtimeProcess, supervisorFirst bool, signal func([]*runtimeProcess, os.Signal) error, reap func([]*runtimeProcess) error) error {
 	if len(children) == 0 {
 		return nil
 	}
-	err := signalRuntimeChildren(children, syscall.SIGTERM)
+	first := children
+	var supervisor, boundary *runtimeProcess
+	var err error
+	if supervisorFirst && len(children) == 2 && children[0].role == runtimeSupervisor && children[1].role == runtimeBoundary {
+		// The monitor has stopped. Account for any exits since its last check
+		// before deciding whether both children are still available.
+		err = reap(children)
+		if err == nil && !children[0].exited && !children[1].exited {
+			supervisor, boundary = children[0], children[1]
+			first = children[:1]
+		}
+	}
+	err = errors.Join(err, signal(first, syscall.SIGTERM))
 	for _, stage := range []struct {
 		duration time.Duration
 		force    bool
 	}{{5 * time.Second, false}, {3 * time.Second, true}} {
 		if stage.force {
-			err = errors.Join(err, signalRuntimeChildren(children, syscall.SIGKILL))
+			err = errors.Join(err, signal(children, syscall.SIGKILL))
 		}
 		deadline := time.Now().Add(stage.duration)
 		for {
-			if reapErr := reapRuntimeChildren(children); reapErr != nil {
+			// Wait4(-1) can return either exact child in either phase.
+			if reapErr := reap(children); reapErr != nil {
 				return errors.Join(err, reapErr)
 			}
 			alive := false
@@ -141,6 +158,12 @@ func stopRuntimeChildren(children []*runtimeProcess) error {
 			}
 			if !time.Now().Before(deadline) {
 				break
+			}
+			if !stage.force && supervisor != nil && supervisor.exited {
+				if !boundary.exited {
+					err = errors.Join(err, signal(children[1:], syscall.SIGTERM))
+				}
+				supervisor = nil
 			}
 			time.Sleep(20 * time.Millisecond)
 		}

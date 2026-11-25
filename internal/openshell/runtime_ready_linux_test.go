@@ -90,6 +90,36 @@ func TestRuntimeReadinessRequiresRespondingSSHAndTheGenerationKey(t *testing.T) 
 		t.Fatal(err)
 	}
 	defer func() { _ = stalled.Close() }()
+
+	// Cancel as an explicit stop would, after the private SSH connection is
+	// accepted and while it is still waiting for the server handshake.
+	probeCtx, cancelProbe := context.WithCancel(t.Context())
+	defer cancelProbe()
+	probeReturned := make(chan struct{})
+	go func() {
+		conn, err := stalled.AcceptUnix()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		cancelProbe()
+		<-probeReturned
+	}()
+	probeReady, probeErr := probeRuntimeReadyAt(probeCtx, dir, signer.PublicKey(), os.Geteuid(), os.Getegid())
+	close(probeReturned)
+	if probeReady || probeErr != nil || probeCtx.Err() == nil {
+		t.Fatal("expected stop to interrupt the probe", probeReady, probeErr, probeCtx.Err())
+	}
+	if stopping, ordered := runtimeStopAfterProbe(probeCtx, "ready", probeErr); !stopping || !ordered {
+		t.Fatal("stop during the probe lost previous readiness", stopping, ordered)
+	}
+	if stopping, ordered := runtimeStopAfterProbe(probeCtx, "degraded", probeErr); !stopping || ordered {
+		t.Fatal("stop during the probe did not preserve degradation", stopping, ordered)
+	}
+	if stopping, ordered := runtimeStopAfterProbe(t.Context(), "ready", nil); stopping || ordered {
+		t.Fatal("a completed probe was treated as cancelled", stopping, ordered)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	if ready, err := probeRuntimeReadyAt(ctx, dir, signer.PublicKey(), os.Geteuid(), os.Getegid()); ready || err != nil {

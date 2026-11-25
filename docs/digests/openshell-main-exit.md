@@ -1,7 +1,19 @@
-# Native OpenShell main-exit observation
+# Native OpenShell shutdown and main-exit observation
 
-Verification: `6e71f7dff5b841a32da02737b50dc206058ff225` and accompanying changes;
-upstream OpenShell `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47`.
+Verification: `6e71f7dff5b841a32da02737b50dc206058ff225` and accompanying changes,
+with upstream OpenShell `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47`.
+Shutdown ordering at `f357061bf0f425f6d0a007d6fb31f575f038c827` and accompanying changes.
+
+[FACT] On a requested stop of a ready native box with both children alive,
+PID 1 sends TERM to the supervisor first, keeping the boundary available for
+the supervisor's shutdown protocol. After reaping the supervisor, PID 1
+sends TERM to any remaining boundary within the same five-second grace.
+One reaper retains both original wait results. At expiry, survivors get
+SIGKILL and up to three seconds for reaping. A stop-cancelled readiness
+probe keeps the last completed observation. Startup, degradation, errors,
+missing children and main-exit cleanup use the parallel TERM route.
+Existing boxes use their installed helper until explicit recreation.
+[1](#source-1) [11](#source-11) [12](#source-12)
 
 [FACT] Native PID 1 observes `main-exit` through its retained supervisor-run
 directory on the existing 100 ms monitor loop. Before starting children it
@@ -41,9 +53,9 @@ or status to a client. [6](#source-6) [7](#source-7) [8](#source-8) [9](#source-
 
 ## Sources
 
-1. <a id="source-1"></a> [runtime_main_linux.go](../../internal/openshell/runtime_main_linux.go#L1-L296) — `runRuntimePID1`, `monitorRuntime`: marker decision, admission, relay and child cleanup.
+1. <a id="source-1"></a> [runtime_main_linux.go](../../internal/openshell/runtime_main_linux.go#L45-L308) — `runRuntimePID1`, `monitorRuntime`, `runtimeStopAfterProbe`: marker decision, stop order, admission, relay and child cleanup.
 2. <a id="source-2"></a> [runtime_main_exit_linux.go](../../internal/openshell/runtime_main_exit_linux.go#L1-L184) — descriptor-relative parsing, stale removal, outcome and final observation.
-3. <a id="source-3"></a> [runtime_main_exit_linux_test.go](../../internal/openshell/runtime_main_exit_linux_test.go#L1-L285) — format/type/owner, unavailable, exact-run and monitor controls.
+3. <a id="source-3"></a> [runtime_main_exit_linux_test.go](../../internal/openshell/runtime_main_exit_linux_test.go#L1-L302) — format/type/owner, unavailable, exact-run and monitor controls.
 4. <a id="source-4"></a> [runtime_status_linux.go](../../internal/openshell/runtime_status_linux.go#L1-L137) — `RuntimeStatus`, `DecodeRuntimeStatus`, phase/code validation.
 5. <a id="source-5"></a> [runtime_manifest_linux.go](../../internal/openshell/runtime_manifest_linux.go#L1-L109) — `ProjectedRuntimeMain`, `projectedRuntimeResult`.
 6. <a id="source-6"></a> [pinned supervisor lib.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-supervisor/src/lib.rs) — `persist_main_exit_marker`, `write_private_file_atomically`, main-exit atomic publication; the local attachment-ended extension is integrated separately.
@@ -52,3 +64,5 @@ or status to a client. [6](#source-6) [7](#source-7) [8](#source-8) [9](#source-
 
 9. <a id="source-9"></a> [ordering controls](../../internal/openshell/runtime_main_exit_ordering_linux_test.go#L1-L145) — fake-clock deadline/early end, invalid or unavailable completion evidence, stale markers and narrow cleanup inventory.
 10. <a id="source-10"></a> [endpoint](../../internal/boxendpoint/server_linux.go#L20-L46) — `DefaultCloseTimeout`, pinned equal by the ordering test.
+11. <a id="source-11"></a> [Child signalling and reaping](../../internal/openshell/runtime_process_linux.go#L60-L172) — exact waits, graceful order and forced cleanup.
+12. <a id="source-12"></a> [Existing helper pin](../../internal/openshell/helper_pins.go#L95-L113) — previously installed helper remains in use.

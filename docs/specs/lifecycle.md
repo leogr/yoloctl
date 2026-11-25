@@ -65,7 +65,10 @@ network cleanup. A running container does not prove a living agent session;
 a box that is not running is listed as stopped, its last exit or lost session
 beside it ([stop-box](../digests/stop-box.md)).
 A current confined box's stop is the engine stop of the exact container, with
-its checks. A privileged box and a box on the old upstream runtime are first
+its checks. A ready native box using the updated helper signals its supervisor
+first, then any remaining boundary in the same five-second grace. Existing boxes
+take the updated helper on explicit recreate. [31](#source-31)
+A privileged box and a box on the old upstream runtime are first
 signalled over the box's SSH endpoint and then stopped by the engine; that
 route does not depend on PID 1 forwarding SIGTERM.
 A sandbox socket inode does not prove a listening SSH endpoint. Readiness
@@ -289,3 +292,4 @@ features place their caches inside this bind by default. [25](#source-25)
 
 29. <a id="source-29"></a> [Space upgrade](../digests/space-upgrade.md).
 30. <a id="source-30"></a> [Firecracker process and disk proof](../digests/firecracker-runtime.md).
+31. <a id="source-31"></a> [Native shutdown and main-exit observation](../digests/openshell-main-exit.md).
