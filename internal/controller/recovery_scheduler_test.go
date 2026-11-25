@@ -184,11 +184,11 @@ func TestStorageRepairRechecksExecutionsAfterIdentityVerification(t *testing.T) 
 	}
 	s.mu.Lock()
 	entry := s.executions[r.ID]
-	h, err := s.loadHolds("")
+	h := s.loadHolds("")
 	s.mu.Unlock()
 	_, conflicts, _ := h.conflict(writes(box("web")))
-	if err != nil || entry == nil || entry.settled || len(conflicts) != 1 {
-		t.Fatal("record repair lost live owner", entry, conflicts, err)
+	if entry == nil || entry.settled || len(conflicts) != 1 {
+		t.Fatal("record repair lost live owner", entry, conflicts)
 	}
 	saved, err := s.Receipts.Read(r.ID)
 	if err != nil || saved.State != "pending" {

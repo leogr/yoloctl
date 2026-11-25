@@ -35,10 +35,7 @@ func TestImageOverlapMatrixForReservationsAndHolds(t *testing.T) {
 				} else {
 					seedReceipt(t, s, "image-reservation-12345", state, writes(tc.held), func(r *Receipt) { r.ProofVersion = 2 })
 				}
-				h, err := s.loadHolds("")
-				if err != nil {
-					t.Fatal(err)
-				}
+				h := s.loadHolds("")
 				scope := uses([]Resource{box("consumer")}, []Resource{tc.access})
 				if tc.writing {
 					scope = writes(tc.access)

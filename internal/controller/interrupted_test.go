@@ -164,10 +164,7 @@ func TestRunningReservationsStillCoverAllDependencyKinds(t *testing.T) {
 		t.Run(resource.Kind, func(t *testing.T) {
 			s := storeServer(t)
 			r := seedLiveExecution(t, s, "running-dependency-0123456789", writes(resource), nil)
-			h, err := s.loadHolds("")
-			if err != nil {
-				t.Fatal(err)
-			}
+			h := s.loadHolds("")
 			_, conflicts, _ := h.conflict(&Scope{Reads: []Resource{resource}})
 			if len(conflicts) != 1 || conflicts[0].ID != r.ID {
 				t.Fatal("running dependency lost its reservation", conflicts)
@@ -176,10 +173,7 @@ func TestRunningReservationsStillCoverAllDependencyKinds(t *testing.T) {
 			if err := s.persistExecution(*r, true); err != nil {
 				t.Fatal(err)
 			}
-			h, err = s.loadHolds("")
-			if err != nil {
-				t.Fatal(err)
-			}
+			h = s.loadHolds("")
 			_, conflicts, _ = h.conflict(&Scope{Reads: []Resource{resource}})
 			if len(conflicts) != 0 {
 				t.Fatal("ended dependency remained reserved", conflicts)

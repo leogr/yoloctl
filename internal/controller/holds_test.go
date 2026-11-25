@@ -124,10 +124,10 @@ func TestFinishedReceiptsNeverFenceIncludingLegacyAndForeignScope(t *testing.T) 
 func TestRunningRefusalRedactsOtherOperatorsAndKeepsHostIDs(t *testing.T) {
 	resource := []Resource{box("web")}
 	receipts := []Receipt{{ID: "private-request-id", Method: "account.auth.import"}}
-	if err := heldError("work", false, false, resource, receipts); err == nil || strings.Contains(err.Error(), "private-request-id") || strings.Contains(err.Error(), "auth") || !strings.Contains(err.Error(), "box web") {
+	if err := heldError("work", false, resource, receipts); err == nil || strings.Contains(err.Error(), "private-request-id") || strings.Contains(err.Error(), "auth") || !strings.Contains(err.Error(), "box web") {
 		t.Fatal(err)
 	}
-	if err := heldError("work", true, false, resource, receipts); !strings.Contains(err.Error(), "private-request-id") {
+	if err := heldError("work", true, resource, receipts); !strings.Contains(err.Error(), "private-request-id") {
 		t.Fatal(err)
 	}
 }

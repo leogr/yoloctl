@@ -112,7 +112,7 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 		candidateWork.LogFD = candidateWork.PIDNamespaceBootstrapFD + 1
 		var phaseChild *os.File
 		if phaseFD != 0 {
-			_, phaseChild = observation.pipe()
+			phaseChild = observation.pipe()
 		}
 		candidate, proofErr := streams.WorkerHandoff.Prepare(candidateWork, workerHandoffFiles{Payload: payloadRead, Checkpoint: releasedWrite, View: viewChild, Phase: phaseChild})
 		if proofErr == nil && candidate != nil {

@@ -365,7 +365,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		}
 		s.mu.Lock()
 		all, historyErr := s.operationViews()
-		summary := explainHolds(nil, s)
+		summary := explainHolds(s)
 		var orphans []ImageOrphan
 		orphanErr := s.nativeStorageFailure
 		if orphanErr == nil {
@@ -654,15 +654,12 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 				// The second, authoritative check: a hold created while this
 				// worker waited for its lock still refuses an intersecting
 				// effect.
-				current, err := s.loadHolds(receipt.ID)
-				if err != nil {
-					return err
-				}
+				current := s.loadHolds(receipt.ID)
 				if operation.Beside {
 					current = current.unresolvedOnly()
 				}
-				if resources, held, global := current.conflict(scope); len(held) != 0 {
-					return heldError(s.Hello.Space, principal.Admin(), global, resources, held)
+				if resources, held, _ := current.conflict(scope); len(held) != 0 {
+					return heldError(s.Hello.Space, principal.Admin(), resources, held)
 				}
 				next := *receipt
 				// Scope and verifier are durable in the same update that
@@ -763,11 +760,10 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 				scope = &Scope{Writes: []Resource{{Kind: ResourceImages}}}
 			}
 			s.mu.Lock()
-			h, err := s.loadHolds(req.ID)
-			if err == nil {
-				if resources, held, global := h.conflict(scope); len(held) != 0 {
-					err = heldError(s.Hello.Space, principal.Admin(), global, resources, held)
-				}
+			h := s.loadHolds(req.ID)
+			var err error
+			if resources, held, _ := h.conflict(scope); len(held) != 0 {
+				err = heldError(s.Hello.Space, principal.Admin(), resources, held)
 			}
 			s.mu.Unlock()
 			return ImageReply{}, err
@@ -1002,12 +998,9 @@ func (e *receiptEvidence) ExpandEffects(_ context.Context, writes []Resource) er
 		if r.Scope == nil || r.Scope.Global {
 			return nil // already the whole space
 		}
-		current, err := e.server.loadHolds(r.ID)
-		if err != nil {
-			return err
-		}
-		if resources, held, global := current.conflict(&Scope{Writes: writes}); len(held) != 0 {
-			return heldError(e.server.Hello.Space, e.admin, global, resources, held)
+		current := e.server.loadHolds(r.ID)
+		if resources, held, _ := current.conflict(&Scope{Writes: writes}); len(held) != 0 {
+			return heldError(e.server.Hello.Space, e.admin, resources, held)
 		}
 		for _, w := range writes {
 			if err := w.validate(); err != nil {

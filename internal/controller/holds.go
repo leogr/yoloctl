@@ -41,7 +41,7 @@ func (s *Server) boundedScope(r Receipt) *Scope {
 
 // loadHolds reads the complete live admission table. Callers hold s.mu.
 // Historical files and recording health never authorize or exclude work.
-func (s *Server) loadHolds(exclude string) (holds, error) {
+func (s *Server) loadHolds(exclude string) holds {
 	h := holds{writes: map[Resource][]Receipt{}}
 	var all []Receipt
 	for _, e := range s.executions {
@@ -63,7 +63,7 @@ func (s *Server) loadHolds(exclude string) (holds, error) {
 			h.writes[w] = append(h.writes[w], r)
 		}
 	}
-	return h, nil
+	return h
 }
 
 // unresolvedOnly is the stop-beside-other-operations policy: running
@@ -130,7 +130,7 @@ func resourcesOverlap(held, access Resource, writing bool) bool {
 // heldError explains a refused effect. Hosts see the receipts to inspect;
 // a box operator sees only the resources it asked to use, never receipt
 // identities or another principal's operations.
-func heldError(space string, admin, global bool, resources []Resource, receipts []Receipt) error {
+func heldError(space string, admin bool, resources []Resource, receipts []Receipt) error {
 	if !admin {
 		var names []string
 		for _, resource := range resources {
@@ -176,11 +176,7 @@ func (s *Server) notifyReceipts() {
 func (s *Server) awaitReservations(ctx context.Context, id string, scope *Scope) error {
 	for {
 		s.mu.Lock()
-		current, err := s.loadHolds(id)
-		if err != nil {
-			s.mu.Unlock()
-			return err
-		}
+		current := s.loadHolds(id)
 		_, held, _ := current.conflict(scope)
 		running := len(held) != 0
 		for _, r := range held {
@@ -242,7 +238,7 @@ func (s *Server) explainOutcome(r Receipt) string {
 }
 
 // explainHolds summarizes the current holds for the host's receipt list.
-func explainHolds(all []Receipt, s *Server) string {
+func explainHolds(s *Server) string {
 	var barriers strings.Builder
 	if s.receiptFailure != nil {
 		barriers.WriteString("Some operation records await storage repair; commands continue and current executions are shown from memory.\n")
@@ -264,10 +260,7 @@ func publicReceipt(r Receipt) Receipt {
 func (s *Server) CheckImageCleanup(exclude string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.loadHolds(exclude)
-	if err != nil {
-		return err
-	}
+	h := s.loadHolds(exclude)
 	_, running, _ := h.conflict(&Scope{Writes: []Resource{{Kind: ResourceImages}}})
 	if len(running) != 0 {
 		return fmt.Errorf("image store is reserved by running work in space %s", s.Hello.Space)
@@ -280,10 +273,7 @@ func (s *Server) CheckImageCleanup(exclude string) error {
 func (s *Server) CheckAuditReconcile() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	h, err := s.loadHolds("")
-	if err != nil {
-		return err
-	}
+	h := s.loadHolds("")
 	_, running, _ := h.conflict(&Scope{Writes: []Resource{{Kind: ResourceAudit}}})
 	if len(running) != 0 {
 		return fmt.Errorf("audit state is reserved by running work in space %s", s.Hello.Space)

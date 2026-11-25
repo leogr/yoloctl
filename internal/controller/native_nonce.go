@@ -175,13 +175,9 @@ func (o *nativeNonceOwner) checkReceipt(ctx context.Context, box string) error {
 			entry.durableWarned = true
 		}
 	}
-	current, err := s.loadHolds(r.ID)
-	if err != nil {
-		s.record(*r, err, false, false, "")
-		return &EffectsUncertain{Cause: err}
-	}
-	if resources, held, global := current.conflict(&Scope{Writes: []Resource{{Kind: ResourceBox, Name: box}}}); len(held) != 0 {
-		return heldError(s.Hello.Space, o.principal.Admin(), global, resources, held)
+	current := s.loadHolds(r.ID)
+	if resources, held, _ := current.conflict(&Scope{Writes: []Resource{{Kind: ResourceBox, Name: box}}}); len(held) != 0 {
+		return heldError(s.Hello.Space, o.principal.Admin(), resources, held)
 	}
 	return nil
 }

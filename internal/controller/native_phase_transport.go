@@ -19,7 +19,7 @@ func prepareNativePhaseTransport(cmd *exec.Cmd, observation *WorkerObservation) 
 	if observation == nil || !nativePhaseTransportAvailable {
 		return 0, nil, noop
 	}
-	_, write := observation.pipe()
+	write := observation.pipe()
 	if write == nil {
 		return 0, nil, noop
 	}

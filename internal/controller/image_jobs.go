@@ -472,27 +472,24 @@ func (m *ImageJobs) run(j *imageJob) {
 		} else if e := j.ctx.Err(); e != nil {
 			err = e
 		} else {
-			var h holds
-			h, err = server.loadHolds(j.phase.JobID)
-			if err == nil {
-				if resources, held, global := h.conflict(scope); len(held) != 0 {
-					err = heldError(server.Hello.Space, true, global, resources, held)
-				} else {
-					var r Receipt
-					r, err = server.beginImageJob(j.phase.JobID)
-					if r.ID != "" {
-						j.phase.Stage = "preflight"
-						phase := j.phase
-						r.ProofVersion, r.EffectPhase, r.Scope, r.Image = 2, EffectStarted, scope, &phase
-						j.receipt = r
-					}
-					if err == nil {
-						err = server.saveImageJob(j.receipt)
-						permitted = err == nil
-					}
-					if err != nil {
-						server.record(j.receipt, err, false, false, "")
-					}
+			h := server.loadHolds(j.phase.JobID)
+			if resources, held, _ := h.conflict(scope); len(held) != 0 {
+				err = heldError(server.Hello.Space, true, resources, held)
+			} else {
+				var r Receipt
+				r, err = server.beginImageJob(j.phase.JobID)
+				if r.ID != "" {
+					j.phase.Stage = "preflight"
+					phase := j.phase
+					r.ProofVersion, r.EffectPhase, r.Scope, r.Image = 2, EffectStarted, scope, &phase
+					j.receipt = r
+				}
+				if err == nil {
+					err = server.saveImageJob(j.receipt)
+					permitted = err == nil
+				}
+				if err != nil {
+					server.record(j.receipt, err, false, false, "")
 				}
 			}
 		}
@@ -520,21 +517,18 @@ func (m *ImageJobs) run(j *imageJob) {
 		} else if server.draining || server.nativeStorageFailure != nil || m.cleaning {
 			err = errors.New("image build admission changed before permission")
 		} else {
-			var h holds
-			h, err = server.loadHolds(j.phase.JobID)
-			if err == nil {
-				if resources, held, global := h.conflict(scope); len(held) != 0 {
-					err = heldError(server.Hello.Space, true, global, resources, held)
+			h := server.loadHolds(j.phase.JobID)
+			if resources, held, _ := h.conflict(scope); len(held) != 0 {
+				err = heldError(server.Hello.Space, true, resources, held)
+			} else {
+				j.phase.Stage = "build"
+				phase := j.phase
+				j.receipt.Image = &phase
+				err = server.saveImageJob(j.receipt)
+				if err == nil {
+					j.building = true
 				} else {
-					j.phase.Stage = "build"
-					phase := j.phase
-					j.receipt.Image = &phase
-					err = server.saveImageJob(j.receipt)
-					if err == nil {
-						j.building = true
-					} else {
-						server.record(j.receipt, err, false, false, "")
-					}
+					server.record(j.receipt, err, false, false, "")
 				}
 			}
 		}

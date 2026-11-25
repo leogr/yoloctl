@@ -194,7 +194,7 @@ func TestNativePhaseIndependentDrainClosesOnlyAfterExitBound(t *testing.T) {
 	s := NewNativePhaseStore()
 	parent := nativePhaseTestParent(1)
 	o := s.Reserve(parent)
-	_, write := o.pipe()
+	write := o.pipe()
 	if write == nil {
 		t.Fatal("diagnostic pipe unavailable")
 	}

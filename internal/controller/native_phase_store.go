@@ -332,15 +332,15 @@ func (o *WorkerObservation) Result(status int, outcome string, scope *Scope) {
 	})
 }
 
-func (o *WorkerObservation) pipe() (*os.File, *os.File) {
+func (o *WorkerObservation) pipe() *os.File {
 	if o == nil {
-		return nil, nil
+		return nil
 	}
 	o.store.mu.Lock()
 	entry := o.entryLocked()
 	if entry == nil || entry.capture || entry.completed != 0 {
 		o.store.mu.Unlock()
-		return nil, nil
+		return nil
 	}
 	// Reserve the single transport before any capture resources are created.
 	entry.capture = true
@@ -353,10 +353,10 @@ func (o *WorkerObservation) pipe() (*os.File, *os.File) {
 			o.finishUnavailableLocked(entry)
 		}
 		o.store.mu.Unlock()
-		return nil, nil
+		return nil
 	}
 	go o.drain(read)
-	return read, write
+	return write
 }
 
 func (o *WorkerObservation) drain(read *os.File) {

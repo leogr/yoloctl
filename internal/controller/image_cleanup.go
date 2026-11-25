@@ -54,19 +54,16 @@ func (m *ImageJobs) Cleanup(ctx context.Context, run func(context.Context, func(
 	} else if ctx.Err() != nil {
 		err = ctx.Err()
 	} else {
-		var h holds
-		h, err = server.loadHolds("")
-		if err == nil {
-			if resources, held, global := h.conflict(scope); len(held) != 0 {
-				err = heldError(server.Hello.Space, true, global, resources, held)
-			} else {
-				var live *Receipt
-				live, err = server.beginExecution(Request{ID: id, Method: "image.cleanup", Dash: -1}, Principal{}, true)
-				if live != nil {
-					r = *live
-				}
-				storeErr = err
+		h := server.loadHolds("")
+		if resources, held, _ := h.conflict(scope); len(held) != 0 {
+			err = heldError(server.Hello.Space, true, resources, held)
+		} else {
+			var live *Receipt
+			live, err = server.beginExecution(Request{ID: id, Method: "image.cleanup", Dash: -1}, Principal{}, true)
+			if live != nil {
+				r = *live
 			}
+			storeErr = err
 		}
 	}
 	if err != nil {
@@ -112,15 +109,12 @@ func (m *ImageJobs) Cleanup(ctx context.Context, run func(context.Context, func(
 		if r.EffectPhase != EffectWaiting {
 			return errors.New("cleanup already permitted")
 		}
-		h, err := server.loadHolds(id)
-		if err != nil {
-			return err
-		}
-		if resources, held, global := h.conflict(scope); len(held) != 0 {
-			return heldError(server.Hello.Space, true, global, resources, held)
+		h := server.loadHolds(id)
+		if resources, held, _ := h.conflict(scope); len(held) != 0 {
+			return heldError(server.Hello.Space, true, resources, held)
 		}
 		r.EffectPhase, r.Scope = EffectStarted, scope
-		err = server.persistExecution(r, false)
+		err := server.persistExecution(r, false)
 		if err != nil {
 			server.record(r, err, false, false, "")
 		}
