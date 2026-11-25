@@ -14,10 +14,6 @@ import (
 var files embed.FS
 
 func Manifest() []byte { raw, _ := files.ReadFile("embedded/manifest.json"); return raw }
-func QualificationDigest() string {
-	sum := sha256.Sum256(Manifest())
-	return hex.EncodeToString(sum[:])
-}
 func Plugin(arch string) ([]byte, string, error) {
 	var manifest struct {
 		Artifacts map[string]struct {
