@@ -150,8 +150,8 @@ func spread(left, right line, n int, pad Style) line {
 // following cell is a continuation with empty text.
 type cell struct {
 	text  string
-	style Style
 	hit   int
+	style Style
 	cont  bool
 }
 
