@@ -88,7 +88,7 @@ func TestAcceptAndRejectTable(t *testing.T) {
 		{"flowchart LR\nA -- \"x\" y --> B", "line 2: unsupported edge label"},
 		{"flowchart LR\nA -- y \"x\" --> B", "line 2: unsupported edge label"},
 		{"flowchart LR\nA -->| \"x\" | B", "line 2: unsupported edge label"},
-		{"flowchart LR\nA --> |\"x\"| B", "line 2: unsupported edge label"}, // drawn as a node "|"x"| B"
+		{"flowchart LR\nA --> |\"x\"| B", "line 2: an edge label must follow its arrow without a space"}, // drawn as a node "|"x"| B"
 		{"flowchart LR\nA -->|\"x\" | B", "line 2: unsupported edge label"},
 		{"flowchart LR\nA -->|\"\"| B", "line 2: unsupported edge label"},
 		{"flowchart LR\nA -- \" \" --> B", "line 2: unsupported edge label"},
@@ -110,6 +110,32 @@ func TestAcceptAndRejectTable(t *testing.T) {
 		{"flowchart LR\nA -- \"x\" -.-> B", "line 2: unsupported edge label"},
 		{"flowchart LR\nA -- \"x\" -->> B", "line 2: unsupported edge"},
 		{"flowchart LR\nA -- \"x\" -->o B", "line 2: unsupported edge"},
+		// shapes the pinned renderer misdraws, refused so they show as source
+		{"flowchart LR\nA --> |x| B", "line 2: an edge label must follow its arrow without a space"}, // drawn as a node "|x| B"
+		{"flowchart LR\nA ---  |x| B", "line 2: an edge label must follow its arrow without a space"},
+		{"flowchart LR\nA -->|a;b| B", `line 2: a ";" in an edge label needs quotes`}, // the statement ends at ;
+		{"flowchart LR\nA -- a;b --> B", `line 2: a ";" in an edge label needs quotes`},
+		{"flowchart LR\nA -->|say #34;hi#34;| B", `line 2: a ";" in an edge label needs quotes`},
+		{"flowchart LR\nA -->|\"a;b\"| B\nA -- \"a;b\" --> C", ""},          // quoted, it draws
+		{"flowchart LR\nA -- a-.b --> B", "line 2: unsupported edge label"}, // drawn dotted
+		{"flowchart LR\nA -- v1.-rc --> B", "line 2: unsupported edge label"},
+		{"flowchart LR\nA -->|a-.b| B\nA -- a.b --> C\nA -- a- b --> D", ""},
+		{"flowchart LR\nA[x #quot;y#quot;] --> B", "line 2: entity code #quot; is not supported (only #34;)"},
+		{"flowchart LR\nA[\"x #9829;\"] --> B", "line 2: entity code #9829; is not supported (only #34;)"},
+		{"flowchart LR\nA{a #35; b} --> B", "line 2: entity code #35; is not supported (only #34;)"},
+		{"flowchart LR\nA[say #34;hi#34;] --> B[\"file #2, C#\"]", ""},
+		{"flowchart LR\nA[\"`**md**`\"] --> B", "line 2: Markdown node text is not supported"},
+		{"flowchart LR\nA[`code`] --> B", ""}, // unquoted backticks are text in Mermaid too
+		{"flowchart LR\nsubgraph s[say #34;hi#34;]\nA\nend", "line 2: entity code #34; is not supported in a subgraph title"},
+		{"flowchart LR\nsubgraph two words #quot;x\nA\nend", "line 2: entity code #quot; is not supported in a subgraph title"},
+		{"flowchart LR\nsubgraph two words #quot;\nA\nend", "line 2: entity code #quot; is not supported in a subgraph title"}, // its ; ends the line
+		{"flowchart LR\nsubgraph two words;x\nA\nend", ""},                                                                     // Mermaid also ends the title at ;
+		{"flowchart LR\nsubgraph s[t;u]\nA\nend", ""},
+		{"flowchart LR\nA[a;b] --> B[\"c;d\"]", ""}, // ; inside brackets draws
+		{"sequenceDiagram\nA->>B: say #quot;hi#quot;", "line 2: entity code #quot; is not supported in a sequence diagram"},
+		{"sequenceDiagram\nA->>B: say #34;hi#34;", "line 2: entity code #34; is not supported in a sequence diagram"},
+		{"sequenceDiagram\nparticipant A as x #9829;", "line 2: entity code #9829; is not supported in a sequence diagram"},
+		{"sequenceDiagram\nA->>B: ticket 2", ""},
 		{"flowchart LR\nsubgraph \"Two\"\nB\nend", "line 2: quoted subgraph titles are not supported"},
 		{"flowchart LR\nsubgraph t[\"Three\"]\nB\nend", "line 2: quoted subgraph titles are not supported"},
 		{"flowchart LR\n\tA --> B", "contains control characters"}, // TAB: the renderer's protocol refuses it

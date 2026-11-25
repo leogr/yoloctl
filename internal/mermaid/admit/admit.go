@@ -104,6 +104,13 @@ func checkFlowchart(lines []string, from int) Decision {
 		if line == "" || strings.HasPrefix(line, "%%") {
 			continue
 		}
+		if rest, ok := strings.CutPrefix(line, "subgraph"); ok && (rest == "" || rest[0] == ' ' || rest[0] == '\t') {
+			// The renderer draws every code in a title as typed, also one whose
+			// ";" ends the line, which Mermaid still decodes.
+			if code := anyEntityCode(strings.TrimSpace(lines[n])); code != "" {
+				return reject(Flowchart, "line %d: entity code %s is not supported in a subgraph title", n+1, code)
+			}
+		}
 		if reason := f.line(line); reason != "" {
 			return reject(Flowchart, "line %d: %s", n+1, reason)
 		}
@@ -213,9 +220,15 @@ func node(s string) (string, string) {
 	if len(rest) > 1 && strings.ContainsRune("[({/\\>", rune(rest[1])) {
 		return "", "unsupported node shape"
 	}
-	_, tail, ok := bracketText(rest, open, closing)
+	text, tail, ok := bracketText(rest, open, closing)
 	if !ok {
 		return "", "unsupported node text"
+	}
+	if rest[1] == '"' && strings.HasPrefix(text, "`") {
+		return "", "Markdown node text is not supported" // drawn with its marks
+	}
+	if code := entityCode(text); code != "" {
+		return "", "entity code " + code + " is not supported (only #34;)"
 	}
 	return tail, ""
 }
@@ -264,8 +277,12 @@ func edge(s string) (string, string) {
 		}
 		text, tail, found := strings.Cut(rest, "-->")
 		text = strings.TrimSpace(text)
-		if !found || text == "" || strings.ContainsAny(text, "|\"[]{}()") {
+		if !found || text == "" || strings.ContainsAny(text, "|\"[]{}()") ||
+			strings.Contains(text, "-.") || strings.Contains(text, ".-") { // read as a dotted edge
 			return "", "unsupported edge label"
+		}
+		if reason := plainLabelReason(text); reason != "" {
+			return "", reason
 		}
 		if tail != "" && strings.ContainsRune("->.=ox", rune(tail[0])) {
 			return "", "unsupported edge"
@@ -296,7 +313,13 @@ func quotedReason(text string) string {
 // entityCode returns the first entity code (#name; or #digits;) in s other
 // than #34;. Mermaid draws each as its character; the renderer decodes only
 // #34; (a quote) and draws the others as typed.
-func entityCode(s string) string {
+func entityCode(s string) string { return entityCodeExcept(s, "#34;") }
+
+// anyEntityCode returns the first entity code in s, #34; included: subgraph
+// titles and sequence text draw every code as typed.
+func anyEntityCode(s string) string { return entityCodeExcept(s, "") }
+
+func entityCodeExcept(s, allowed string) string {
 	for i := 0; i < len(s); i++ {
 		if s[i] != '#' {
 			continue
@@ -305,7 +328,7 @@ func entityCode(s string) string {
 		for j < len(s) && isIDRune(rune(s[j])) {
 			j++
 		}
-		if j > i+1 && j < len(s) && s[j] == ';' && s[i:j+1] != "#34;" {
+		if j > i+1 && j < len(s) && s[j] == ';' && s[i:j+1] != allowed {
 			return s[i : j+1]
 		}
 	}
@@ -344,15 +367,31 @@ func pipeLabel(s string) (string, string) {
 		}
 		return tail, ""
 	}
-	t := strings.TrimLeft(s, " \t")
-	if !strings.HasPrefix(t, "|") {
+	if t := strings.TrimLeft(s, " \t"); t != s && strings.HasPrefix(t, "|") {
+		// The renderer draws a label after a space as part of the next node.
+		return "", "an edge label must follow its arrow without a space"
+	}
+	if !strings.HasPrefix(s, "|") {
 		return s, ""
 	}
-	text, rest, ok := strings.Cut(t[1:], "|")
+	text, rest, ok := strings.Cut(s[1:], "|")
 	if !ok || strings.ContainsAny(text, `"`) {
 		return "", "unsupported edge label"
 	}
+	if reason := plainLabelReason(text); reason != "" {
+		return "", reason
+	}
 	return rest, ""
+}
+
+// plainLabelReason checks an unquoted edge label: the renderer ends a
+// statement at its ";", which a quoted label keeps. Every entity code ends in
+// ";", so it needs quotes too, where #34; is drawn as a quote.
+func plainLabelReason(text string) string {
+	if strings.Contains(text, ";") {
+		return `a ";" in an edge label needs quotes`
+	}
+	return ""
 }
 
 // ---- sequence -----------------------------------------------------------
@@ -413,6 +452,11 @@ func checkSequence(lines []string, from int) Decision {
 			continue
 		}
 		q.line0 = n + 1
+		// Mermaid decodes a code even when its ";" ends the line; the renderer
+		// draws every code as typed.
+		if code := anyEntityCode(strings.TrimSpace(lines[n])); code != "" {
+			return reject(Sequence, "line %d: entity code %s is not supported in a sequence diagram", n+1, code)
+		}
 		if reason := q.line(line); reason != "" {
 			return reject(Sequence, "line %d: %s", n+1, reason)
 		}

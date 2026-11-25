@@ -1,6 +1,6 @@
 # Mermaid admission and fidelity corpus
 
-Verification: `64117765f5206b36cab025c10250229f3eb59b78` and accompanying changes.
+Verification: `9829771d01bcb3ca14f7ec99e8b064f6ac77d4ba` and accompanying changes.
 
 [FACT] `admit.Check` decides whether a fence may be drawn and never rewrites it:
 the renderer gets the original source. It accepts `graph|flowchart` with TD,
@@ -35,6 +35,16 @@ first `-->`, drops the arrowhead after a `|` and draws the edge dotted after
 renderer keeps it, where an unquoted label is trimmed), a quote inside, an
 unbalanced quote or text beside the string is refused. [1](#source-1) [2](#source-2) [4](#source-4)
 
+[FACT] Shapes the pinned renderer misdraws are refused with a reason, so the
+view shows their source: a pipe label after a space (drawn as part of the next
+node); a `;` in an unquoted edge label (it ends the statement there; quoted, it
+draws); `-.` or `.-` in an unquoted `-- … -->` label (the edge turns dotted);
+entity codes other than `#34;` in node text, and every entity code in a
+subgraph title or a sequence diagram, where the renderer draws even `#34;` as
+typed (checked before a line's final `;` is dropped); and Markdown node text
+(`` ["`…`"] ``). A `;` in a plain subgraph title ends the title in Mermaid and
+the renderer alike, so it stays admitted. [1](#source-1) [2](#source-2)
+
 [FACT] Notes the pinned renderer draws in the wrong place are refused
 (`notePlacement`): it draws a note beside the message before it, and a block's
 frame spans only its messages' participants. So a note right after a block's
@@ -65,7 +75,7 @@ that every admitted combination draws correctly. [3](#source-3)
 
 ## Sources
 
-1. <a id="source-1"></a> [Validator](../../internal/mermaid/admit/admit.go#L1) — `Check`, `checkFlowchart`, `statement`, `node`, `edge`, `quotedReason`, `entityCode`, `dashQuotedLabel`, `pipeLabel`, `subgraphTitle`, `checkSequence`, `message`, `note`.
-2. <a id="source-2"></a> [Admission tests](../../internal/mermaid/admit/admit_test.go#L1) — accept/reject table (note placement and quoted edge labels included), empty headers, no size limits, unchanged source, corpus split, `FuzzAdmission`.
+1. <a id="source-1"></a> [Validator](../../internal/mermaid/admit/admit.go#L1) — `Check`, `checkFlowchart`, `statement`, `node`, `edge`, `quotedReason`, `entityCode`, `anyEntityCode`, `dashQuotedLabel`, `pipeLabel`, `plainLabelReason`, `subgraphTitle`, `checkSequence`, `message`, `note`.
+2. <a id="source-2"></a> [Admission tests](../../internal/mermaid/admit/admit_test.go#L1) — accept/reject table (note placement, quoted edge labels and misdrawn shapes included), empty headers, no size limits, unchanged source, corpus split, `FuzzAdmission`.
 3. <a id="source-3"></a> [Fidelity corpus](../../internal/mermaid/fidelity_test.go#L1) — `TestFidelityCorpusMatchesReviewedGoldens` over testdata/fixtures and testdata/golden.
 4. <a id="source-4"></a> [Quoted label drawings](../../internal/mermaid/quoted_labels_test.go#L1) — `TestQuotedEdgeLabelsDrawAsUnquoted`, `TestQuotedEdgeLabelSpecialCharactersDrawVerbatim` with the embedded artifact at 40, 60 and 80 columns.
