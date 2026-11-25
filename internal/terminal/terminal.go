@@ -187,7 +187,8 @@ func newInstanceOn(core *compiledCore, reply func([]byte)) (*Terminal, error) {
 	var err error
 	t := &Terminal{reply: reply, functions: make(map[string]api.Function)}
 	t.ctx = context.WithValue(context.Background(), contextKey{}, t)
-	t.mod, err = core.runtime.InstantiateModule(t.ctx, core.module, wazero.NewModuleConfig().WithName(""))
+	// The allocator applies to instantiation only; calls keep t.ctx.
+	t.mod, err = core.runtime.InstantiateModule(withCoreMemory(t.ctx), core.module, wazero.NewModuleConfig().WithName(""))
 	if err != nil {
 		return nil, fmt.Errorf("instantiate terminal core: %w", err)
 	}
@@ -207,6 +208,44 @@ func newInstanceOn(core *compiledCore, reply func([]byte)) (*Terminal, error) {
 	// and constructor failures held by the shared runtime's module registry.
 	t.cleanup = runtime.AddCleanup(t, func(m api.Module) { _ = m.Close(context.Background()) }, t.mod)
 	return t, nil
+}
+
+// The core's memory is unmapped when its module closes, and a Go cleanup
+// closes the module once the Terminal is unreachable. Outside the core's own
+// callbacks, every access goes through these helpers: each finishes its copy
+// before it lets t go, so no borrowed slice of that memory escapes.
+
+// appendCore appends n bytes at ptr to dst.
+func (t *Terminal) appendCore(dst []byte, ptr, n uint32) ([]byte, bool) {
+	p, ok := t.mod.Memory().Read(ptr, n)
+	if ok {
+		dst = append(dst, p...)
+	}
+	runtime.KeepAlive(t)
+	return dst, ok
+}
+
+// stringCore returns n bytes at ptr as a string.
+func (t *Terminal) stringCore(ptr, n uint32) (string, bool) {
+	p, ok := t.mod.Memory().Read(ptr, n)
+	s := ""
+	if ok {
+		s = string(p)
+	}
+	runtime.KeepAlive(t)
+	return s, ok
+}
+
+func (t *Terminal) uint32Core(ptr uint32) (uint32, bool) {
+	v, ok := t.mod.Memory().ReadUint32Le(ptr)
+	runtime.KeepAlive(t)
+	return v, ok
+}
+
+func (t *Terminal) writeCore(ptr uint32, p []byte) bool {
+	ok := t.mod.Memory().Write(ptr, p)
+	runtime.KeepAlive(t)
+	return ok
 }
 
 func (t *Terminal) call(name string, args ...uint64) uint64 {
@@ -239,7 +278,7 @@ func (t *Terminal) Write(p []byte) (int, error) {
 	n := 0
 	for len(p) > 0 && t.err == nil {
 		chunk := min(len(p), scratchSize)
-		if !t.mod.Memory().Write(uint32(t.scratch), p[:chunk]) {
+		if !t.writeCore(uint32(t.scratch), p[:chunk]) {
 			t.err = errors.New("terminal input outside scratch memory")
 			break
 		}
@@ -298,11 +337,8 @@ func (t *Terminal) SetColor(slot int, value color.Color) {
 
 func (t *Terminal) Title() string {
 	n := t.call("yolo_vt_title", t.ptr, t.scratch, scratchSize)
-	p, ok := t.mod.Memory().Read(uint32(t.scratch), uint32(n))
-	if !ok {
-		return ""
-	}
-	return string(p)
+	title, _ := t.stringCore(uint32(t.scratch), uint32(n))
+	return title
 }
 
 func (t *Terminal) Lines(history, plain bool, start, count int) ([]string, error) {

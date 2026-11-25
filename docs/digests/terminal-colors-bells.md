@@ -88,7 +88,7 @@ or live Lima validation. [3](#source-3) [8](#source-8) [10](#source-10)
 8. <a id="source-8"></a> [palette_test.go](../../internal/tui/term/palette_test.go#L1-L65) — delayed/fragmented queries and console clearing.
 9. <a id="source-9"></a> [emulator.go](../../internal/tui/term/emulator.go#L69-L111) — `writeOutput`: counted native events and unlocked callbacks.
 10. <a id="source-10"></a> [bell_test.go](../../internal/tui/bell_test.go#L1-L48) — bells through the real Bubble Tea writer.
-11. <a id="source-11"></a> [bell.go](../../internal/terminal/bell.go#L1-L32) — separate stream ownership and bounded filtering.
+11. <a id="source-11"></a> [bell.go](../../internal/terminal/bell.go#L1-L31) — separate stream ownership and bounded filtering.
 12. <a id="source-12"></a> [xterm operating-system commands](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Operating-System-Commands) — OSC 4 queries/reports and reset controls, consulted 2026-10-02.
 13. <a id="source-13"></a> [terminal_state.go](../../internal/session/terminal_state.go#L1-L90) — filter errors, evicted-prefix ownership and replay admission.
 14. <a id="source-14"></a> [bell_test.go](../../internal/terminal/bell_test.go#L1-L66) — native classification and Unicode boundaries.

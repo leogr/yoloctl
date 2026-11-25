@@ -63,11 +63,11 @@ func (t *Terminal) SelectedText(limit int) (string, error) {
 	if n > uint64(limit) {
 		return "", errors.New("selection exceeds clipboard size limit")
 	}
-	text, ok := t.mod.Memory().Read(uint32(p), uint32(n))
+	text, ok := t.stringCore(uint32(p), uint32(n))
 	if !ok {
 		return "", errors.New("selection text outside memory")
 	}
-	return string(text), nil
+	return text, nil
 }
 
 // SelectedStyledText is SelectedText with each cell's style as SGR, in
@@ -90,9 +90,9 @@ func (t *Terminal) SelectedStyledText(limit int) (string, error) {
 	if n > uint64(limit) {
 		return "", errors.New("selection exceeds size limit")
 	}
-	text, ok := t.mod.Memory().Read(uint32(p), uint32(n))
+	text, ok := t.stringCore(uint32(p), uint32(n))
 	if !ok {
 		return "", errors.New("selection text outside memory")
 	}
-	return string(text), nil
+	return text, nil
 }

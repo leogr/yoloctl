@@ -40,11 +40,11 @@ func (t *Terminal) InputReplay() ([]byte, error) {
 	if n > scratchSize {
 		return nil, ErrReplayContinuation
 	}
-	p, ok := t.mod.Memory().Read(uint32(t.scratch), uint32(n))
+	p, ok := t.appendCore(nil, uint32(t.scratch), uint32(n))
 	if !ok {
 		return nil, errors.New("terminal input replay outside scratch memory")
 	}
-	return append([]byte(nil), p...), nil
+	return p, nil
 }
 
 // WriteUntilGround consumes at most the prefix ending at the next native parser
@@ -55,7 +55,7 @@ func (t *Terminal) WriteUntilGround(p []byte) (int, error) {
 	n := 0
 	for len(p) > 0 && t.err == nil {
 		chunk := min(len(p), scratchSize-4)
-		if !t.mod.Memory().Write(uint32(t.scratch), p[:chunk]) {
+		if !t.writeCore(uint32(t.scratch), p[:chunk]) {
 			return n, errors.New("terminal recovery input outside scratch memory")
 		}
 		out := uint32(t.scratch + scratchSize - 4)
@@ -63,7 +63,7 @@ func (t *Terminal) WriteUntilGround(p []byte) (int, error) {
 		if t.err != nil {
 			return n, t.err
 		}
-		consumed, ok := t.mod.Memory().ReadUint32Le(out)
+		consumed, ok := t.uint32Core(out)
 		// GhosttyResult: success=0, no_value=-4 (consumed without reaching ground).
 		if !ok || consumed > uint32(chunk) || (status != 0 && status != -4) || (status == -4 && consumed != uint32(chunk)) {
 			return n, errors.New("invalid terminal recovery result")

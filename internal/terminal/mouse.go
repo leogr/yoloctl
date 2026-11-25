@@ -90,9 +90,9 @@ func (t *Terminal) EncodeMouse(m Mouse) ([]byte, error) {
 	if n > scratchSize {
 		return nil, errors.New("terminal cannot encode this mouse event")
 	}
-	p, ok := t.mod.Memory().Read(uint32(t.scratch), uint32(n))
+	p, ok := t.appendCore(nil, uint32(t.scratch), uint32(n))
 	if !ok {
 		return nil, errors.New("terminal mouse result outside memory")
 	}
-	return append([]byte(nil), p...), nil
+	return p, nil
 }

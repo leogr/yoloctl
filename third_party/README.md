@@ -99,6 +99,34 @@ artifact, then `--check` requires byte-identical reproduction. Review this
 patch when upgrading Ghostty and remove each part once upstream covers its
 boundary. Keep the manifest check and focused mouse and row regressions passing.
 
+### Core memory allocator
+
+[`core_memory_unix.go`](../internal/terminal/core_memory_unix.go) gives each
+core instance its linear memory through wazero's experimental allocator API:
+`experimental.WithMemoryAllocator`, `experimental.MemoryAllocator` and
+`experimental.LinearMemory`, at the pinned wazero v1.12.0. It reserves the
+instance's maximum (256 MiB) as `PROT_NONE`, `MAP_NORESERVE` address space,
+commits pages with `mprotect` as the core grows, returns slices whose capacity
+ends at the committed length, and unmaps the reservation in `Free`. When the
+reservation fails, or a later commit fails, that instance continues with
+wazero's own heap growth, copying what it holds. Other systems keep wazero's
+own growth ([`core_memory_other.go`](../internal/terminal/core_memory_other.go)).
+Because `Free` unmaps the memory, and a Go cleanup closes the module once a
+`Terminal` is unreachable, code outside the core's own callbacks reaches the
+memory only through the `Terminal` helpers in `terminal.go` (`appendCore`,
+`stringCore`, `uint32Core`, `writeCore`). They finish each copy before they let
+the `Terminal` go, so no slice of mapped memory outlives its owner.
+
+The experimental package has no compatibility promise. When upgrading wazero,
+a changed signature fails the build: adapt the allocator, or delete both files
+and the `withCoreMemory` call in `newInstance`, which restores wazero's own
+growth and changes nothing else. Also check that wazero still calls
+`Reallocate` for every growth, treats a nil result as a refused growth,
+assigns the returned slice before the guest runs again, and calls `Free` once
+when the module closes.
+[`core_memory_unix_test.go`](../internal/terminal/core_memory_unix_test.go)
+compares every path with wazero's own growth, including a restore.
+
 ## Pinned SFTP server
 
 `sftp-v2/` contains production Go sources, module files and LICENSE from

@@ -18,7 +18,7 @@ func (t *Terminal) FilterPassthrough(p []byte) ([]byte, error) {
 	defer func() { t.filtering = false; t.filtered = nil }()
 	for len(p) > 0 && t.err == nil {
 		n := min(len(p), scratchSize)
-		if !t.mod.Memory().Write(uint32(t.scratch), p[:n]) {
+		if !t.writeCore(uint32(t.scratch), p[:n]) {
 			return nil, errors.New("terminal passthrough input outside memory")
 		}
 		if t.call("yolo_vt_passthrough", t.passthrough, t.scratch, uint64(n)) != 0 && t.err == nil {

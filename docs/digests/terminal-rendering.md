@@ -1,6 +1,6 @@
 # VT rendering and PTY child lifecycle
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; keep-history reset on `003c44131ad5ea54194391b96821ddf3cbfd0aba` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; slave retention on `0d2ab61` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; keep-history reset on `003c44131ad5ea54194391b96821ddf3cbfd0aba` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; slave retention on `0d2ab61` and accompanying changes; core memory allocator on `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Each terminal owns an isolated libghostty-vt WebAssembly instance under
 wazero; its compiled core may come from an on-disk cache ([terminal core compile cache](terminal-core-cache.md)). The embedded artifact pins
@@ -20,7 +20,9 @@ gesture and makes new cells output again (OSC 133 state). [25](#source-25) Norma
 The maintenance builder needs `patch`, verifies the source archive, rebuilds the private bridge and can require byte
 identity. Module memory is capped at 256 MiB, with only reply/row/event imports
 and no WASI, filesystem or network imports. Owners serialize calls and close
-instances. [1](#source-1) [2](#source-2) [3](#source-3)
+instances. [1](#source-1) [2](#source-2) [3](#source-3) On Unix the memory is
+an address reservation outside the Go heap, committed as the core grows; a
+failed reservation or commit falls back to wazero's heap growth. [27](#source-27)
 
 [FACT] Native snapshots restore a separate instance after exact core/version,
 size and decoder validation. Snapshot creation does not emit past effects.
@@ -92,7 +94,7 @@ or native application parity. [12](#source-12)
 
 ## Sources
 
-1. <a id="source-1"></a> [terminal.go](../../internal/terminal/terminal.go#L1-L333) — imports, memory, ownership, rows, events, cleanup.
+1. <a id="source-1"></a> [terminal.go](../../internal/terminal/terminal.go#L1-L369) — imports, memory, ownership, rows, events, cleanup.
 2. <a id="source-2"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L42) — private ABI, defaults, native rows, keyboard encoder.
 3. <a id="source-3"></a> [build-terminal.py](../../scripts/build-terminal.py#L1-L80) — pins, hashes, regeneration, reproduction.
 4. <a id="source-4"></a> [emulator.go](../../internal/tui/term/emulator.go#L1-L249) — synchronization, interception, reset, close.
@@ -118,3 +120,4 @@ or native application parity. [12](#source-12)
 24. <a id="source-24"></a> [pty_output_test.go](../../internal/tui/term/pty_output_test.go#L23-L102) — late-read regression.
 25. <a id="source-25"></a> [native.patch](../../internal/terminal/wasm/native.patch#L65-L342) — `resetKeepHistory`, `resetTransient`; bridge `yolo_vt_reset_keep_history`; reset_keep_history_test.go and term handler_test.go `TestClearKeepHistoryKeepsRowsResetsState`.
 26. <a id="source-26"></a> [native.patch](../../internal/terminal/wasm/native.patch#L388-L420) — the embedded Unicode width table uses uucode’s width flag for appended skin-tone modifiers.
+27. <a id="source-27"></a> [core_memory_unix.go](../../internal/terminal/core_memory_unix.go#L1) — wazero experimental allocator, reservation, commit, heap fallback; maintenance in third_party/README.md.

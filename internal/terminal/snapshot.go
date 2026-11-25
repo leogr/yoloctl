@@ -46,7 +46,7 @@ func (t *Terminal) Snapshot() ([]byte, error) {
 	if t.err != nil {
 		return nil, t.err
 	}
-	n, ok := t.mod.Memory().ReadUint32Le(uint32(t.scratch))
+	n, ok := t.uint32Core(uint32(t.scratch))
 	if !ok {
 		return nil, errors.New("terminal snapshot size outside memory")
 	}
@@ -63,7 +63,7 @@ func (t *Terminal) Snapshot() ([]byte, error) {
 		}
 		defer t.call("ghostty_wasm_free", ptr, capacity)
 		status = int32(t.call("ghostty_snapshot_encode_buf", t.ptr, ptr, capacity, t.scratch))
-		n, ok = t.mod.Memory().ReadUint32Le(uint32(t.scratch))
+		n, ok = t.uint32Core(uint32(t.scratch))
 	}
 	if t.err != nil {
 		return nil, t.err
@@ -74,15 +74,14 @@ func (t *Terminal) Snapshot() ([]byte, error) {
 	if !ok || n == 0 || uint64(n) > capacity {
 		return nil, errors.New("invalid terminal snapshot size")
 	}
-	p, ok := t.mod.Memory().Read(uint32(ptr), n)
-	if !ok {
-		return nil, errors.New("terminal snapshot outside memory")
-	}
-	out := make([]byte, snapshotHeaderSize+int(n))
+	out := make([]byte, snapshotHeaderSize, snapshotHeaderSize+int(n))
 	copy(out, snapshotMagic)
 	copy(out[len(snapshotMagic):], snapshotCore[:])
 	binary.LittleEndian.PutUint32(out[snapshotHeaderSize-4:], uint32(t.history))
-	copy(out[snapshotHeaderSize:], p)
+	out, ok = t.appendCore(out, uint32(ptr), n)
+	if !ok {
+		return nil, errors.New("terminal snapshot outside memory")
+	}
 	return out, nil
 }
 
@@ -124,7 +123,7 @@ func RestoreSnapshot(ctx context.Context, data []byte, reply func([]byte)) (*Ter
 	if t.err != nil {
 		return nil, fmt.Errorf("allocate terminal snapshot: %w", errors.Join(decodeContext.Err(), t.err))
 	}
-	if ptr == 0 || !t.mod.Memory().Write(uint32(ptr), data) {
+	if ptr == 0 || !t.writeCore(uint32(ptr), data) {
 		return nil, errors.New("cannot allocate terminal snapshot")
 	}
 	status := int32(t.call("yolo_vt_snapshot_restore", ptr, uint64(len(data)), uint64(t.history), t.scratch))
@@ -135,7 +134,7 @@ func RestoreSnapshot(ctx context.Context, data []byte, reply func([]byte)) (*Ter
 	if status != 0 {
 		return nil, fmt.Errorf("invalid terminal snapshot (native result %d)", status)
 	}
-	native, ok := t.mod.Memory().ReadUint32Le(uint32(t.scratch))
+	native, ok := t.uint32Core(uint32(t.scratch))
 	if !ok || native == 0 {
 		return nil, errors.New("terminal snapshot returned no terminal")
 	}
