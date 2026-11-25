@@ -14,9 +14,9 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "internal/terminal/wasm"
-REVISION = "33da6848d63b3bba2b4f31ab1531d618f2795192"
-SOURCE_SHA256 = "bbda18d6f6666ff05dec33974c134483b096fe321ff68a22eba9399b70354de6"
-ZIG_VERSION = "0.16.0"
+REVISION = "573c4a21e02311ae87844af26b6a7a179f82858e"
+SOURCE_SHA256 = "cf514fe054ed8abe849a0e136eb82e036fadeb7ed48f24127d85f801341c5642"
+ZIG_VERSION = "0.17.1"
 
 
 def digest(path):
@@ -31,7 +31,7 @@ def main():
     args = parser.parse_args()
     zig = shutil.which(args.zig)
     if not zig:
-        parser.error("Zig 0.16.0 is required to regenerate the artifact")
+        parser.error(f"Zig {ZIG_VERSION} is required to regenerate the artifact")
     zig = str(Path(zig).resolve())
     version = subprocess.check_output([zig, "version"], text=True).strip()
     if version != ZIG_VERSION:
@@ -55,8 +55,8 @@ def main():
             dest.write('\ncomptime { _ = @import("yolo_bridge.zig"); }\n')
         subprocess.run([
             zig, "build", "-Demit-lib-vt=true", "-Dtarget=wasm32-freestanding",
-            "-Doptimize=ReleaseSmall", "-Dversion-string=1.3.2-dev-yoloctl",
-            "-Dlib-version-string=0.0.0", "--cache-dir", str(work / "cache"),
+            "-Doptimize=ReleaseSmall", "-Dversion-string=1.4.1-dev-yoloctl",
+            "-Dlib-version-string=1.0.2", "--cache-dir", str(work / "cache"),
         ], cwd=source, check=True)
         artifact = source / "zig-out/bin/ghostty-vt.wasm"
         metadata = {

@@ -253,14 +253,14 @@ const PassthroughHandler = struct {
             .erase_line_right, .erase_line_left, .erase_line_complete, .erase_line_right_unless_pending_wrap,
             .delete_chars, .erase_chars, .insert_lines, .insert_blanks, .delete_lines,
             .scroll_up, .scroll_down, .tab_clear_current, .tab_clear_all, .tab_set, .tab_reset,
-            .index, .next_line, .reverse_index, .full_reset,
+            .index, .next_line, .reverse_index, .full_reset, .soft_reset,
             .top_and_bottom_margin, .left_and_right_margin, .left_and_right_margin_ambiguous,
             .save_cursor, .restore_cursor, .modify_key_format, .mouse_shift_capture,
             .protected_mode_off, .protected_mode_iso, .protected_mode_dec,
             .title_push, .title_pop, .kitty_keyboard_push, .kitty_keyboard_pop,
             .kitty_keyboard_set, .kitty_keyboard_set_or, .kitty_keyboard_set_not,
             .end_hyperlink, .start_hyperlink, .active_status_display, .decaln,
-            .window_title, .mouse_shape, .configure_charset, .set_attribute,
+            .window_title, .mouse_shape, .configure_charset, .set_attributes,
             .mouse_shape_reset => self.allowed = true,
             .set_mode, .reset_mode, .save_mode, .restore_mode => {
                 self.allowed = true;
@@ -408,16 +408,16 @@ export fn yolo_vt_rows(t: c.terminal.Terminal, history: bool, start: u32, count:
     var segment: std.Io.Writer.Allocating = .init(v.gpa());
     defer segment.deinit();
     var f: formatter.ScreenFormatter = .init(screen, .{
-        .emit = if (plain) .plain else .vt, .unwrap = false, .trim = plain,
+        .emit = if (plain) .plain else .vt, .unwrap = false, .trim = plain, .vt_literal_cells = true,
         .foreground = v.colors.foreground.get(), .background = v.colors.background.get(),
         .palette = null,
     });
     for (start..start + count) |y| {
         const top = screen.pages.pin(if (history) .{ .history = .{ .x = 0, .y = @intCast(y) } } else .{ .active = .{ .x = 0, .y = @intCast(y) } }) orelse return 2;
         out.clearRetainingCapacity();
-        // The pinned formatter emits cell hyperlinks only for HTML. Split VT
-        // rows into hyperlink runs, retaining native text/style formatting.
-        // No raw application controls are forwarded by this rendering path.
+        // Format native text and style, then add sanitized OSC 8 around
+        // the core's hyperlink runs. Literal blanks retain their columns.
+        // Application output enters this path only through the native grid.
         const page = top.node.page();
         const cells = top.cells(.all);
         var x: u16 = 0;
@@ -533,7 +533,7 @@ export fn yolo_vt_selection_vt(t: c.terminal.Terminal, buf: [*]u8, len: usize) u
     // No default colours or palette: the formatter would emit them as OSC
     // 10/11/4 headers. Cells keep their own SGR colours.
     var f: formatter.ScreenFormatter = .init(v.screens.active, .{
-        .emit = .vt, .unwrap = true, .trim = true,
+        .emit = .vt, .unwrap = true, .trim = true, .vt_literal_cells = true,
         .foreground = null, .background = null, .palette = null,
     });
     f.content = .{ .selection = sel };
@@ -675,4 +675,13 @@ export fn yolo_vt_input_replay(t: c.terminal.Terminal, buf: [*]u8, len: usize) u
     var w: std.Io.Writer = .fixed(buf[0..len]);
     inputReplay(t, &w) catch return 0xffffffff;
     return @intCast(w.end);
+}
+
+// Adapt the core's boundary writer to the replay tracker's consumed-byte ABI.
+export fn yolo_vt_write_until_ground(t: c.terminal.Terminal, input: [*]const u8, len: usize, consumed: *usize) i32 {
+    var stop: c.terminal.WriteStop = .{};
+    const ground: u32 = @intCast(@intFromEnum(c.terminal.Boundary.ground));
+    const status = c.terminal.vt_write_until(t, input, len, ground, &stop);
+    consumed.* = stop.consumed;
+    return @intFromEnum(status);
 }

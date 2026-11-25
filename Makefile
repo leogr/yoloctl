@@ -385,7 +385,7 @@ help:
 	@echo "  build-darwin-amd64      Build for macOS Intel"
 	@echo "  test                    Run unit tests"
 	@echo "  test-terminal-fidelity  Run the core and host-input/PTY acceptance corpus"
-	@echo "  terminal-artifact-check Verify the pinned WASM rebuild (requires Zig 0.16.0)"
+	@echo "  terminal-artifact-check Verify the pinned WASM rebuild (requires Zig 0.17.1)"
 	@echo "  test-rego               Run OPA tests on sandbox-policy.rego (requires opa on PATH)"
 	@echo "  smoke-live-vm           Full isolated VM runtime smoke gate"
 	@echo "  smoke-vm-startup        Fresh-space creation/restart timings and guest memory"

@@ -48,7 +48,7 @@ func TestPassthroughNeverInvitesAnotherTerminalReply(t *testing.T) {
 }
 
 func TestPassthroughPreservesOrdinaryDisplayAndInputModes(t *testing.T) {
-	stream := "héllo 👩‍💻\r\n\x1b[2;3H\x1b[38;2;1;2;3mcolor\x1b[0m\x1b[?2004h\x1b[>3u\x1b]2;title\x1b\\\x1b]52;c;Y29weQ==\x1b\\"
+	stream := "héllo 👩‍💻\r\n\x1b[2;3H\x1b[38;2;1;2;3mcolor\x1b[0m\x1b[?2004h\x1b[>3u\x1b]2;title\x1b\\\x1b]52;c;Y29weQ==\x1b\\\x1b[!p"
 	filter, err := terminal.New(1, 1, 0, nil)
 	if err != nil {
 		t.Fatal(err)

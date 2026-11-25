@@ -85,7 +85,7 @@ agent preferences still win. [12](#source-12) [13](#source-13) [14](#source-14)
 7. <a id="source-7"></a> [selection_test.go](../../internal/terminal/selection_test.go#L1-L123) — native text, history/reflow, screen invalidation and eviction contracts.
 8. <a id="source-8"></a> [selection_test.go](../../internal/tui/term/selection_test.go#L1-L37) — held-output selection and copy regression.
 9. <a id="source-9"></a> [Clipboard boundary](clipboard.md) — outer OSC 52 validation, bounds and opt-out.
-10. <a id="source-10"></a> [Ghostty Config.zig at the pinned core revision](https://github.com/ghostty-org/ghostty/blob/33da6848d63b3bba2b4f31ab1531d618f2795192/src/config/Config.zig#L6642-L6656) — default platform copy chord with `performable` flag.
+10. <a id="source-10"></a> [Ghostty Config.zig at the pinned core revision](https://github.com/ghostty-org/ghostty/blob/573c4a21e02311ae87844af26b6a7a179f82858e/src/config/Config.zig#L6720-L6734) — default platform copy chord with `performable` flag.
 11. <a id="source-11"></a> [Ghostty performable keybindings](https://ghostty.org/docs/config/keybind#performable) — conditional key consumption, consulted 2026-10-02.
 12. <a id="source-12"></a> [Codex local_settings.rs at rust-v0.162.1](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/tui/src/local_settings.rs#L200) — automatic copy preferences.
 13. <a id="source-13"></a> [Codex terminal detection at rust-v0.162.1](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/terminal-detection/src/lib.rs#L248) — terminal environment detection.

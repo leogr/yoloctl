@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/leogr/yoloctl/internal/tui/panes"
 	"github.com/leogr/yoloctl/internal/tui/term"
 )
 
@@ -164,7 +165,7 @@ func TestHostCompatibilityFocusOwnership(t *testing.T) {
 // characters; ZWJ/ambiguous-width policies on arbitrary hosts are not asserted.
 func TestHostCompatibilityUnicodeCellsAndCursor(t *testing.T) {
 	for _, standalone := range []bool{false, true} {
-		m := newTestModel(t, 40, 12)
+		m := newTestModel(t, 48, 12)
 		m.standalone = standalone
 		s := frameTestTab(t, m)
 		_, _ = s.Write([]byte("\x1b[2J\x1b[2;3HA界e\u0301🙂"))
@@ -183,13 +184,42 @@ func TestHostCompatibilityUnicodeCellsAndCursor(t *testing.T) {
 				t.Fatalf("standalone=%t style=%d: host cursor=%+v", standalone, style, c)
 			}
 			for _, method := range []ansi.Method{ansi.WcWidth, ansi.GraphemeWidth} {
-				buf := uv.NewScreenBuffer(40, 12)
+				buf := uv.NewScreenBuffer(m.width, m.height)
 				buf.Method = method
 				uv.NewStyledString(v.Content).Draw(buf, buf.Bounds())
 				for x, text := range map[int]string{2: "A", 3: "界", 5: "e\u0301", 6: "🙂"} {
 					if cell := buf.CellAt(x, c.Y); cell.Content != text {
 						t.Fatalf("method=%d cell (%d,%d)=%+v, want %q", method, x, c.Y, cell, text)
 					}
+				}
+			}
+		}
+		// A modifier on a text-default emoji keeps the base narrow in the
+		// embedded build. Check the same row through the native cursor and
+		// the host grapheme renderer, next to ordinary and wide clusters.
+		if _, err := s.Write([]byte("\x1b[2J\x1b[2;3H☝🏻Ze\u0301👋🏿Q")); err != nil {
+			t.Fatal(err)
+		}
+		for _, split := range []bool{false, true} {
+			if split {
+				layout := m.laidOut(m.tabs.Current())
+				focused := m.tabs.Focused()
+				if err := layout.Split(true, &panes.Pane{}); err != nil {
+					t.Fatal(err)
+				}
+				layout.SetFocus(focused)
+			}
+			v := m.View()
+			y := 1 + m.chromeRows()
+			if c := v.Cursor; c == nil || c.X != 8 || c.Y != y {
+				t.Fatalf("standalone=%t split=%t: host cursor after modified emoji = %+v, want (8,%d)", standalone, split, c, y)
+			}
+			buf := uv.NewScreenBuffer(m.width, m.height)
+			buf.Method = ansi.GraphemeWidth
+			uv.NewStyledString(v.Content).Draw(buf, buf.Bounds())
+			for x, text := range map[int]string{2: "☝🏻", 3: "Z", 4: "e\u0301", 5: "👋🏿", 7: "Q"} {
+				if cell := buf.CellAt(x, y); cell.Content != text {
+					t.Fatalf("standalone=%t split=%t: cell (%d,%d)=%+v, want %q", standalone, split, x, y, cell, text)
 				}
 			}
 		}

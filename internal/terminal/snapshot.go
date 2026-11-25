@@ -36,7 +36,7 @@ func CoreIdentity() string { return fmt.Sprintf("%x", snapshotCore) }
 // It is opaque state for this exact core/bridge, not VT output and not a stable
 // storage format. The owner must serialize this with every Terminal operation.
 // Effects (bells/replies), selection, viewport and callbacks are not captured.
-// The pinned native format does not carry Kitty images or glyph registrations.
+// The freestanding core excludes Kitty graphics. Glyph registrations stay local.
 func (t *Terminal) Snapshot() ([]byte, error) {
 	if t.err != nil {
 		return nil, t.err

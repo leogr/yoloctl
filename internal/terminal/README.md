@@ -24,7 +24,7 @@ tests and current limits.
 
 Mouse reports use the native encoder. Local selection uses native tracked pins
 and wrap/grapheme metadata; the formatter returns bounded plain text for explicit
-copy. The private bridge ABI is 6 (snapshots, measured geometry and mouse state).
+copy.
 See [mouse](../../docs/digests/terminal-mouse.md) and
 [selection](../../docs/digests/terminal-selection.md) evidence for boundaries.
 
@@ -37,7 +37,7 @@ native stream neutralizes historical bells before retention. See
 `Snapshot`/`RestoreSnapshot` capture native state and restore a new isolated
 instance with callbacks and parser continuation. The envelope requires the exact
 embedded core hash; size, memory and decode time are bounded. Managed attachment uses this API over private channels. It does not serialize
-frontend filters or image resources. See [snapshot evidence](../../docs/digests/terminal-snapshots.md).
+frontend filters or glyph registrations. The freestanding core excludes Kitty graphics. See [snapshot evidence](../../docs/digests/terminal-snapshots.md).
 
 Compatibility attachment uses a separate 1×1 instance without scrollback or reply output
 to model the evicted replay prefix. Its VT prelude restores input modes, both
@@ -50,7 +50,7 @@ Managed views instead receive full snapshots and sequenced events; the holder
 answers queries once. See
 [input replay evidence](../../docs/digests/session-replay.md).
 
-To check a reproducible build, install Zig **0.16.0** and use Python 3.12+:
+To check a reproducible build, install Zig **0.17.1** and use Python 3.12+:
 
 ```sh
 python3 scripts/build-terminal.py --zig /path/to/zig --check

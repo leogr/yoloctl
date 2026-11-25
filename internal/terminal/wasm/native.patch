@@ -1,17 +1,19 @@
+diff --git a/src/input/mouse_encode.zig b/src/input/mouse_encode.zig
+index e1880cf..df057a5 100644
 --- a/src/input/mouse_encode.zig
 +++ b/src/input/mouse_encode.zig
-@@ -22,6 +22,10 @@
-     /// pixel coordinates (for SGR-Pixels), as well as to determine
+@@ -23,6 +23,10 @@ pub const Options = struct {
      /// whether a position falls outside the visible viewport.
      size: renderer_size.Size,
-+
+ 
 +    /// Already-routed terminal-space reports have no physical window padding.
 +    /// The caller owns viewport admission; keep their signed coordinates.
 +    position_is_report: bool = false,
- 
++
      /// Whether any mouse button is currently pressed. When a motion
      /// event occurs outside the viewport, it is only reported if a
-@@ -87,7 +91,7 @@
+     /// button is held down and the event mode supports motion tracking.
+@@ -87,7 +91,7 @@ pub fn encode(
  
      // Handle scenarios where the mouse position is outside the viewport.
      // We always report release events no matter where they happen.
@@ -20,23 +22,7 @@
          posOutOfViewport(event.pos, opts.size))
      {
          // If we don't have a motion-tracking event mode, do nothing,
-@@ -134,10 +138,12 @@
-         .utf8 => {
-             try writer.writeAll("\x1B[M");
- 
--            // The button code always fits in a single byte.
--            try writer.writeByte(32 + button_code);
--
-+            // All three fields are UTF-8 codepoints. Extended buttons can
-+            // put Cb + 32 above ASCII even though it fits in a byte.
-             var buf: [4]u8 = undefined;
-+            const cb_len = std.unicode.utf8Encode(@as(u21, button_code) + 32, &buf) catch unreachable;
-+            try writer.writeAll(buf[0..cb_len]);
-+
-             const x_cp: u21 = @intCast(@as(u32, cell.x) + 33);
-             const y_cp: u21 = @intCast(cell.y + 33);
- 
-@@ -222,6 +228,8 @@
+@@ -220,6 +224,8 @@ fn buttonCode(event: Event, opts: Options) ?u8 {
              .seven => 67,
              .eight => 128,
              .nine => 129,
@@ -45,48 +31,26 @@
              else => return null,
          };
      };
-@@ -612,12 +620,12 @@
+@@ -626,12 +632,12 @@ test "urxvt release uses legacy button 3 encoding" {
      try testing.expectEqualStrings("\x1B[35;3;4M", writer.buffered());
  }
  
 -test "unsupported button is ignored" {
--    var data: [32]u8 = undefined;
--    var writer: std.Io.Writer = .fixed(&data);
--    var last: ?point.Coordinate = null;
--    try encode(&writer, .{
--        .button = .ten,
 +test "unknown button is ignored" {
-+    var data: [32]u8 = undefined;
-+    var writer: std.Io.Writer = .fixed(&data);
-+    var last: ?point.Coordinate = null;
-+    try encode(&writer, .{
+     var data: [32]u8 = undefined;
+     var writer: std.Io.Writer = .fixed(&data);
+     var last: ?point.Coordinate = null;
+     try encode(&writer, .{
+-        .button = .ten,
 +        .button = .unknown,
          .action = .press,
          .pos = .{ .x = 1, .y = 1 },
      }, .{
---- a/src/terminal/formatter.zig
-+++ b/src/terminal/formatter.zig
-@@ -1345,6 +1345,17 @@
- 
-                     // Cells with no text are blank
-                     if (!cell.hasText()) {
-+                        // yoloctl: a styled blank is not blank (above), so
-+                        // this one renders unstyled. Close an open VT style
-+                        // first, or the spaces emitted for it later would
-+                        // inherit it (an underline running into erased cells).
-+                        if (comptime emit == .vt) {
-+                            if (!style.default()) {
-+                                try self.formatStyleClose(emit, writer);
-+                                style = .{};
-+                                style_id = 0;
-+                            }
-+                        }
-                         blank_cells += 1;
-                         continue;
-                     }
+diff --git a/src/terminal/Terminal.zig b/src/terminal/Terminal.zig
+index 2862273..d1f3a6f 100644
 --- a/src/terminal/Terminal.zig
 +++ b/src/terminal/Terminal.zig
-@@ -4971,6 +4971,90 @@
+@@ -5970,6 +5970,93 @@ pub fn fullReset(self: *Terminal) void {
      self.flags.dirty.clear = true;
  }
  
@@ -107,6 +71,7 @@
 +    self.flags = .{
 +        .visible = self.flags.visible,
 +        .resize_pull_scrollback = self.flags.resize_pull_scrollback,
++        .xt_checksum = self.default_xt_checksum,
 +    };
 +    self.modes.reset();
 +    self.tabstops.reset(TABSTOP_INTERVAL);
@@ -138,12 +103,14 @@
 +    if (comptime build_options.kitty_graphics) {
 +        const image_limits = screen.kitty_images.image_limits;
 +        const total_limit = screen.kitty_images.total_limit;
++        const dirty = screen.kitty_images.dirty;
 +        screen.kitty_images.deinit(screen.alloc, screen);
 +        screen.kitty_images = .{
-+            .dirty = true,
++            .dirty = dirty,
 +            .image_limits = image_limits,
 +            .total_limit = total_limit,
 +        };
++        screen.kitty_images.markDirty();
 +    }
 +    screen.saved_cursor = null;
 +    screen.charset = .{};
@@ -174,12 +141,67 @@
 +    self.flags.dirty.clear = true;
 +}
 +
- /// Returns true if the point is dirty, used for testing.
- fn isDirty(t: *const Terminal, pt: point.Point) bool {
-     return t.screens.active.pages.getCell(pt).?.isDirty();
+ /// DECSTR - Soft Terminal Reset. Resets the modes and state a program may
+ /// have left behind, without clearing the screen or moving the cursor.
+ /// Beyond what the VT510 manual lists, this also resets what xterm's soft
+@@ -6910,19 +6997,14 @@ test "Terminal: Fitzpatrick skin tone next valid base" {
+     }
+ }
+ 
+-test "Terminal: Fitzpatrick skin tone widens a narrow base like VS16" {
+-    // Every emoji that accepts a skin tone but is drawn as text by
+-    // default (Emoji_Modifier_Base minus Emoji_Presentation in
+-    // emoji-data.txt). Each is narrow on its own. A skin tone modifier
+-    // asks for the emoji form, so base + modifier must lay out exactly
+-    // like base + VS16.
++test "Terminal: VS16 widens a narrow base with or without wraparound" {
++    // Text-default emoji that accept either a skin tone or VS16.
+     const bases = [_]u21{
+         0x261D,  0x26F9,  0x270C,  0x270D,  0x1F3CB,
+         0x1F3CC, 0x1F574, 0x1F575, 0x1F590,
+     };
+ 
+-    // A 3 column screen, with the base printed in each column. VS16 and
+-    // every modifier must produce the same expected result.
++    // A three-column screen, with the base printed in each column.
+     const Case = struct {
+         x: u16,
+         wraparound: bool,
+@@ -6947,9 +7029,8 @@ test "Terminal: Fitzpatrick skin tone widens a narrow base like VS16" {
+         .{ .x = 2, .wraparound = false, .base_x = 2, .base_y = 0, .wide = false, .cursor_x = 2, .cursor_y = 0, .pending_wrap = true },
+     };
+ 
+-    const seconds = [_]u21{ 0xFE0F, 0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF };
+-
+-    for (cases) |c| for (bases) |base| for (seconds) |second| {
++    const selector: u21 = 0xFE0F;
++    for (cases) |c| for (bases) |base| {
+         var t = try init(testing.io, testing.allocator, .{ .cols = 3, .rows = 5 });
+         defer t.deinit(testing.allocator);
+         t.modes.set(.grapheme_cluster, true);
+@@ -6957,7 +7038,7 @@ test "Terminal: Fitzpatrick skin tone widens a narrow base like VS16" {
+ 
+         t.setCursorPos(1, c.x + 1);
+         try t.print(base);
+-        try t.print(second);
++        try t.print(selector);
+ 
+         const cursor = &t.screens.active.cursor;
+         try testing.expectEqual(@as(usize, c.cursor_x), cursor.x);
+@@ -6974,7 +7055,7 @@ test "Terminal: Fitzpatrick skin tone widens a narrow base like VS16" {
+             try testing.expectEqual(Cell.Wide.wide, cell.wide);
+             try testing.expectEqualSlices(
+                 u21,
+-                &.{second},
++                &.{selector},
+                 list_cell.node.page().lookupGrapheme(cell).?,
+             );
+ 
+diff --git a/src/terminal/c/terminal.zig b/src/terminal/c/terminal.zig
+index 035b0cf..6f713ef 100644
 --- a/src/terminal/c/terminal.zig
 +++ b/src/terminal/c/terminal.zig
-@@ -1600,6 +1600,34 @@
+@@ -1871,6 +1871,34 @@ pub fn reset(terminal_: Terminal) callconv(lib.calling_conv) void {
      if (sync) Effects.renderHoldTrampoline(&wrapper.stream.handler, false);
  }
  
@@ -214,9 +236,90 @@
  /// C: GhosttyKittyGraphics
  pub const KittyGraphics = kitty_gfx_c.KittyGraphics;
  
+diff --git a/src/terminal/formatter.zig b/src/terminal/formatter.zig
+index 3ba5173..ead662d 100644
+--- a/src/terminal/formatter.zig
++++ b/src/terminal/formatter.zig
+@@ -97,6 +97,10 @@ pub const Options = struct {
+     /// Whitespace is currently only space characters (0x20).
+     trim: bool = true,
+ 
++    /// In VT output, write literal blank cells and leave hyperlinks to the
++    /// caller. This keeps rows usable by readers that handle text and SGR.
++    vt_literal_cells: bool = false,
++
+     /// Replace matching Unicode codepoints with some other values.
+     /// This will use the last matching range found in the list.
+     codepoint_map: ?std.MultiArrayList(CodepointMap) = .{},
+@@ -1253,7 +1257,8 @@ pub const PageFormatter = struct {
+         var current_hyperlink_id: ?hyperlink.Id = null;
+ 
+         // Most pages hold no hyperlinks, so check once instead of per cell.
+-        const page_hyperlinks = self.page.hyperlinkCount() > 0;
++        const page_hyperlinks = self.page.hyperlinkCount() > 0 and
++            !(emit == .vt and self.opts.vt_literal_cells);
+ 
+         for (start_y..end_y + 1) |y_usize| {
+             const y: size.CellCountInt = @intCast(y_usize);
+@@ -1452,6 +1457,17 @@ pub const PageFormatter = struct {
+ 
+                     // Cells with no text are blank
+                     if (!cell.hasText()) {
++                        // yoloctl: a styled blank is not blank (above), so
++                        // this one renders unstyled. Close an open VT style
++                        // first, or the spaces emitted for it later would
++                        // inherit it (an underline running into erased cells).
++                        if (comptime emit == .vt) {
++                            if (!style.default()) {
++                                try self.formatStyleClose(emit, writer);
++                                style = .{};
++                                style_id = 0;
++                            }
++                        }
+                         blank_cells += 1;
+                         continue;
+                     }
+@@ -1468,7 +1484,7 @@ pub const PageFormatter = struct {
+                 // This cell is not blank. If we have accumulated blank cells
+                 // then we want to emit them now.
+                 if (comptime emit == .vt) if (blank_cells > 0) {
+-                    if (blank_cells <= cell_i) {
++                    if (blank_cells <= cell_i and !self.opts.vt_literal_cells) {
+                         // Blanks on this row are stepped over (CUF).
+                         // Spaces would turn them into text, in the pen
+                         // of the text before them.
+@@ -1671,7 +1687,7 @@ pub const PageFormatter = struct {
+                         // pen is already the background, from the style
+                         // block above. A run of the same background is
+                         // erased at once, then stepped over (CUF).
+-                        if (comptime emit == .vt) {
++                        if ((comptime emit == .vt) and !self.opts.vt_literal_cells) {
+                             var run: usize = 1;
+                             while (cell_i + run < cells_subset.len and
+                                 sameBackground(cell, &cells_subset[cell_i + run])) run += 1;
+@@ -1694,7 +1710,7 @@ pub const PageFormatter = struct {
+                             continue;
+                         }
+ 
+-                        // HTML emits a space, in the background's style.
++                        // HTML and literal VT emit a space carrying the background.
+                         try writer.writeByte(' ');
+                         if (self.point_map) |*map| map.map.append(
+                             map.alloc,
+@@ -1851,7 +1867,7 @@ pub const PageFormatter = struct {
+             // This cell produces output: materialize accumulated blanks.
+             // VT steps over them (CUF), which the caller guarantees stays
+             // on this row.
+-            if (comptime emit == .vt) if (pending > 0) {
++            if (comptime emit == .vt) if (pending > 0 and !self.opts.vt_literal_cells) {
+                 try writer.writeAll(buf[0..len]);
+                 len = 0;
+                 try self.writeBlankStep(writer, pending, x, run_y);
+diff --git a/src/terminal/stream_terminal.zig b/src/terminal/stream_terminal.zig
+index eed9c74..1da1fe8 100644
 --- a/src/terminal/stream_terminal.zig
 +++ b/src/terminal/stream_terminal.zig
-@@ -448,6 +448,20 @@
+@@ -513,6 +513,20 @@ pub const Handler = struct {
          };
      }
  
@@ -237,3 +340,81 @@
      pub fn deinit(self: *Handler) void {
          self.kittyClipboardAbort();
          self.kitty_clipboard_grants.deinit(self.terminal.gpa());
+diff --git a/src/unicode/grapheme.zig b/src/unicode/grapheme.zig
+index f2f0a88..0af9090 100644
+--- a/src/unicode/grapheme.zig
++++ b/src/unicode/grapheme.zig
+@@ -372,13 +372,12 @@ test "grapheme width: emoji sequences" {
+     try testing.expectEqual(GraphemeWidth{ .len = 2, .width = 2 }, graphemeWidth(u21, &.{ 0x1F44B, 0x1F3FF }));
+ }
+ 
+-test "grapheme width: emoji modifiers widen text-default bases" {
++test "grapheme width: emoji modifiers preserve text-default base width" {
+     const testing = std.testing;
+ 
+     // Every emoji that accepts a skin tone but is drawn as text by
+     // default (Emoji_Modifier_Base minus Emoji_Presentation in
+-    // emoji-data.txt). Each is narrow on its own, and a modifier asks
+-    // for its emoji form, which is wide.
++    // emoji-data.txt). Keep the base width when a modifier joins it.
+     const bases = [_]u21{
+         0x261D,  0x26F9,  0x270C,  0x270D,  0x1F3CB,
+         0x1F3CC, 0x1F574, 0x1F575, 0x1F590,
+@@ -387,8 +386,8 @@ test "grapheme width: emoji modifiers widen text-default bases" {
+         try testing.expectEqual(GraphemeWidth{ .len = 1, .width = 1 }, graphemeWidth(u21, &.{base}));
+         for (0x1F3FB..0x1F400) |modifier_usize| {
+             const modifier: u21 = @intCast(modifier_usize);
+-            try testing.expectEqual(GraphemeWidthEffect.wide, graphemeWidthEffect(base, modifier));
+-            try testing.expectEqual(GraphemeWidth{ .len = 2, .width = 2 }, graphemeWidth(u21, &.{ base, modifier }));
++            try testing.expectEqual(GraphemeWidthEffect.no_change, graphemeWidthEffect(base, modifier));
++            try testing.expectEqual(GraphemeWidth{ .len = 2, .width = 1 }, graphemeWidth(u21, &.{ base, modifier }));
+         }
+     }
+ 
+@@ -397,10 +396,10 @@ test "grapheme width: emoji modifiers widen text-default bases" {
+     try testing.expectEqual(GraphemeWidth{ .len = 1, .width = 2 }, graphemeWidth(u21, &.{0x1F3FB}));
+ 
+     // The exception is a Prepend code point, which joins whatever comes
+-    // after it (Unicode rule GB9b). A modifier then widens the cluster,
+-    // as any other visible code point does.
++    // after it (Unicode rule GB9b). A joined skin tone keeps that width.
+     try testing.expectEqual(GraphemeWidth{ .len = 2, .width = 2 }, graphemeWidth(u21, &.{ 0x0600, 'a' }));
+-    try testing.expectEqual(GraphemeWidth{ .len = 2, .width = 2 }, graphemeWidth(u21, &.{ 0x0600, 0x1F3FB }));
++    const prepend = graphemeWidth(u21, &.{0x0600});
++    try testing.expectEqual(GraphemeWidth{ .len = 2, .width = prepend.width }, graphemeWidth(u21, &.{ 0x0600, 0x1F3FB }));
+ }
+ 
+ test "grapheme width: spacing marks can widen narrow clusters" {
+diff --git a/src/unicode/props_uucode.zig b/src/unicode/props_uucode.zig
+index 202b8ef..911a7be 100644
+--- a/src/unicode/props_uucode.zig
++++ b/src/unicode/props_uucode.zig
+@@ -13,24 +13,12 @@ pub fn get(cp: u21) Properties {
+         .emoji_vs_base = false,
+     };
+ 
+-    const grapheme_break = uucode.get(.grapheme_break_no_control, cp);
+     return .{
+         .width = uucode.get(.width, cp),
+-        // uucode marks the skin tone modifiers (U+1F3FB through U+1F3FF)
+-        // as zero width inside a cluster because its own width function
+-        // handles them separately. Ghostty's does not, so we clear the
+-        // flag and graphemeWidthEffect widens the cluster, as it does
+-        // for VS16.
+-        //
+-        // A modifier only joins a cluster after an emoji that accepts
+-        // skin tones or after a Prepend code point. After an emoji, the
+-        // modifier asks for its emoji form (UTS #51, section 2.4), so a
+-        // base that is narrow on its own, such as U+261D, becomes 2
+-        // cells. After a Prepend, the cluster widens as it would for any
+-        // other visible code point.
+-        .width_zero_in_grapheme = uucode.get(.wcwidth_zero_in_grapheme, cp) and
+-            grapheme_break != .emoji_modifier,
+-        .grapheme_break = grapheme_break,
++        // Keep the embedded grid aligned with yoloctl's host renderer.
++        // Appended skin tone modifiers keep the base's width in both.
++        .width_zero_in_grapheme = uucode.get(.wcwidth_zero_in_grapheme, cp),
++        .grapheme_break = uucode.get(.grapheme_break_no_control, cp),
+         .emoji_vs_base = uucode.get(.is_emoji_vs_base, cp),
+     };
+ }

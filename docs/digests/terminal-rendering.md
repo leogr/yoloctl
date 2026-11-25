@@ -3,12 +3,16 @@
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; keep-history reset on `003c44131ad5ea54194391b96821ddf3cbfd0aba` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; slave retention on `0d2ab61` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Each terminal owns an isolated libghostty-vt WebAssembly instance under
-wazero; its compiled core may come from an on-disk cache ([terminal core compile cache](terminal-core-cache.md)). The embedded artifact pins Ghostty revision
-`33da6848d63b3bba2b4f31ab1531d618f2795192` and Zig 0.16.0; the bridge, native patch
-and artifact have manifest hashes. The mouse patch handles buttons 10/11,
-UTF-8 fields and already-routed pixel coordinates. A formatter patch closes an
-open VT style before erased, unstyled cells, so exported rows do not extend an
-underline or background into them. [19](#source-19) [20](#source-20) A patched
+wazero; its compiled core may come from an on-disk cache ([terminal core compile cache](terminal-core-cache.md)). The embedded artifact pins
+libghostty-vt 1.0.2 at `573c4a21e02311ae87844af26b6a7a179f82858e` and Zig 0.17.1.
+The bridge, native patch and artifact have manifest hashes. The mouse patch
+handles buttons 10/11 and already-routed pixel coordinates. The upstream
+encoder handles UTF-8 mouse fields. The formatter emits literal blanks and
+preserves the background of erased cells carrying one. The bridge owns
+hyperlinks in display rows. Unstyled erased cells close an open VT style,
+so their spaces keep the default pen. [19](#source-19) [20](#source-20)
+Appended emoji skin-tone modifiers keep the base width so pane grapheme
+placement agrees with the embedded grid. [26](#source-26) A patched
 `resetKeepHistory` (bridge ABI 8, Go `ResetKeepHistory`, emulator
 `ClearKeepHistory`) resets like a full reset but keeps primary rows and
 scrollback and continues on a fresh line below them; it also ends any selection
@@ -106,10 +110,11 @@ or native application parity. [12](#source-12)
 16. <a id="source-16"></a> [lifecycle_test.go](../../internal/tui/term/lifecycle_test.go#L92) — descendant console reuse, sustained-output contracts.
 17. <a id="source-17"></a> [Measured geometry and pixel input](terminal-geometry.md) — queries, geometry transport, input decoding.
 18. <a id="source-18"></a> [Compatibility evidence](terminal-compatibility.md) — text, focus/cursor, host-input/PTY acceptance.
-19. <a id="source-19"></a> [native.patch](../../internal/terminal/wasm/native.patch#L67-L86) — formatter style close before blank cells.
+19. <a id="source-19"></a> [native.patch](../../internal/terminal/wasm/native.patch#L239-L317) — literal VT cells, hyperlink ownership and style closure before erased cells.
 20. <a id="source-20"></a> [terminal_test.go](../../internal/terminal/terminal_test.go#L96-L114) — `TestErasedCellsDoNotInheritStyle`.
 21. <a id="source-21"></a> [terminal_reader.go](../../third_party/ultraviolet/terminal_reader.go#L289-L296) — split string-terminator wait.
 22. <a id="source-22"></a> [stray_backslash_test.go](../../internal/tui/stray_backslash_test.go#L159) — `TestSTReplySplitAtEveryPoint`, OSC/DCS/APC splits.
 23. <a id="source-23"></a> [pty.go](../../internal/tui/term/pty.go#L28-L90) — retained slave, bounded release.
 24. <a id="source-24"></a> [pty_output_test.go](../../internal/tui/term/pty_output_test.go#L23-L102) — late-read regression.
-25. <a id="source-25"></a> [native.patch](../../internal/terminal/wasm/native.patch#L87-L236) — `resetKeepHistory`, `resetTransient`; bridge `yolo_vt_reset_keep_history`; reset_keep_history_test.go and term handler_test.go `TestClearKeepHistoryKeepsRowsResetsState`.
+25. <a id="source-25"></a> [native.patch](../../internal/terminal/wasm/native.patch#L65-L342) — `resetKeepHistory`, `resetTransient`; bridge `yolo_vt_reset_keep_history`; reset_keep_history_test.go and term handler_test.go `TestClearKeepHistoryKeepsRowsResetsState`.
+26. <a id="source-26"></a> [native.patch](../../internal/terminal/wasm/native.patch#L388-L420) — the embedded Unicode width table uses uucode’s width flag for appended skin-tone modifiers.

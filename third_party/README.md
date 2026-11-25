@@ -59,21 +59,26 @@ The embedded Ghostty WASM uses the archive, Zig version and bridge recorded by
 [`build-terminal.py`](../scripts/build-terminal.py). Its
 [`native.patch`](../internal/terminal/wasm/native.patch) adds the standard mouse
 button 10/11 codes (130/131) missing from the pinned native encoder and adjusts
-the upstream unknown-button test. It also encodes the button field as UTF-8
-in mode 1005; extra buttons otherwise produced invalid UTF-8. An explicit
+the upstream unknown-button test. Upstream libghostty-vt 1.0.2 encodes the
+mode 1005 fields as UTF-8. An explicit
 already-routed option skips physical-window admission for pixel reports whose
 host padding is unknown, preserving valid signed coordinates. Tracking,
 modifiers, format encoding and release rules remain native. The adapter tests independent wire bytes
 in [`mouse_test.go`](../internal/terminal/mouse_test.go), including legacy
 releases and X10 exclusion; TUI tests use a real PTY to check gesture ownership.
 
-The patch also closes an open VT style before the row formatter counts an
+The bridge selects literal blanks and owns OSC 8 serialization for display
+rows. The formatter also closes an open VT style before it counts an
 unstyled empty cell as blank. Upstream wrote those spaces under the previous
 cell's style, so an underline or background ran into cells that a renderer had
 erased with ECH. [`terminal_test.go`](../internal/terminal/terminal_test.go)
-checks both cases.
+checks both cases. Appending a skin-tone modifier retains the base's width
+in the embedded grapheme grid, matching the pinned host grapheme renderer for
+these clusters. Standalone modifiers use their codepoint width. The
+[host fixture](../internal/tui/host_compatibility_test.go) checks the rendered
+cells and cursor with narrow and wide bases and an ordinary combining cluster.
 
-Finally the patch adds `resetKeepHistory`, a reset that keeps the primary
+The patch adds `resetKeepHistory`, a reset that keeps the primary
 screen's rows: `Terminal.resetKeepHistory` repeats `fullReset` except
 `Screen.reset`'s page reset (it resets the same cursor pen, hyperlink, semantic
 content, charset, keyboard, protection, semantic-prompt, selection and Kitty
@@ -82,9 +87,11 @@ alternate screen, and moves the cursor to a fresh line below the last text),
 `Handler.resetTransient` drops in-progress APC/DCS/Kitty clipboard state and
 grants, and the C wrapper's `resetKeepHistory` returns the stream to a new
 parser, UTF-8 decoder and continuation. The Go caller also ends the separate
-selection gesture first. Upstream has no such reset and DECSTR is
-unimplemented. [`reset_keep_history_test.go`](../internal/terminal/reset_keep_history_test.go)
+selection gesture first. The upstream DECSTR implementation leaves existing rows and the cursor in
+place. The adapter's reset moves the cursor below retained text. [`reset_keep_history_test.go`](../internal/terminal/reset_keep_history_test.go)
 compares the next command against a fresh terminal after unfinished controls.
+The freestanding build excludes Kitty graphics. The snapshot regression
+feeds an image upload and checks the snapshot bytes.
 
 Regeneration requires the pinned Zig toolchain and `patch`; normal builds need
 neither. The builder hashes the source archive, copied patch, bridge and

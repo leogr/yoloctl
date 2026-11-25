@@ -42,7 +42,10 @@ owner and no unsolicited reports at the third peer. [7](#source-7)
 [FACT] Cursor/cell tests compose the host-facing view in tab and standalone
 layouts. They check all DECSCUSR values 0–6, hide/show, suppression after exit,
 and fixed cell positions for ASCII, CJK, combining accents and a single-codepoint
-emoji under both host width methods. Concurrent frame tests separately check
+emoji under both host width methods. The grapheme-width view also checks the
+cells and cursor after skin-tone modifiers on narrow and wide emoji, next to an
+ordinary combining cluster. That case exercises both undivided and split views.
+Concurrent frame tests separately check
 that cursor and grid are coherent. These fixtures do not measure glyph rasterization,
 cursor blink timing, ZWJ font policies or desktop IME candidate placement.
 [8](#source-8) [9](#source-9)
@@ -55,11 +58,11 @@ exit. Its guest audit is not a graphical-terminal oracle. [10](#source-10)
 
 1. <a id="source-1"></a> [Makefile](../../Makefile#L58-L61) — `test-terminal-fidelity`.
 2. <a id="source-2"></a> [fidelity_test.go](../../internal/tui/term/fidelity_test.go#L47-L128) — `TestTerminalFidelity`, independent expectations and chunk schedules.
-3. <a id="source-3"></a> [host_compatibility_test.go](../../internal/tui/host_compatibility_test.go#L18-L138) — raw peer, input harness, literal wire and palette cases.
+3. <a id="source-3"></a> [host_compatibility_test.go](../../internal/tui/host_compatibility_test.go#L19-L139) — raw peer, input harness, literal wire and palette cases.
 4. <a id="source-4"></a> [Kitty text events](https://sw.kovidgoyal.net/kitty/keyboard-protocol/#text-as-code-points) — text-only key 0 and associated codepoints; accessed 2026-10-06.
 5. <a id="source-5"></a> [decoder.go](../../third_party/ultraviolet/decoder.go#L1391-L1490) — `parseKittyKeyboard`, text-only and control-key distinction.
 6. <a id="source-6"></a> [terminal_keys.go](../../internal/tui/terminal_keys.go#L31-L244) — `sendKey`, `childKey`, `kittyKey`.
-7. <a id="source-7"></a> [host_compatibility_test.go](../../internal/tui/host_compatibility_test.go#L140-L160) — `TestHostCompatibilityFocusOwnership`.
-8. <a id="source-8"></a> [host_compatibility_test.go](../../internal/tui/host_compatibility_test.go#L165-L209) — `TestHostCompatibilityUnicodeCellsAndCursor`.
+7. <a id="source-7"></a> [host_compatibility_test.go](../../internal/tui/host_compatibility_test.go#L141-L161) — `TestHostCompatibilityFocusOwnership`.
+8. <a id="source-8"></a> [host_compatibility_test.go](../../internal/tui/host_compatibility_test.go#L166-L239) — `TestHostCompatibilityUnicodeCellsAndCursor`.
 9. <a id="source-9"></a> [frames_test.go](../../internal/tui/frames_test.go#L25-L53) — `TestViewCapturesCursorWithGrid`, concurrent coherent-frame assertions.
 10. <a id="source-10"></a> [attach-mixed.py](../../scripts/smoke/attach-mixed.py#L1) — PTY frontends, guest input/resize audit and completion checks.

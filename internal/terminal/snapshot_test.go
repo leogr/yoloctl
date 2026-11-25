@@ -343,3 +343,19 @@ func FuzzRestoreSnapshot(f *testing.F) {
 		}
 	})
 }
+
+func TestSnapshotIgnoresKittyGraphics(t *testing.T) {
+	var replies bytes.Buffer
+	vt := newTestTerminal(t, 3, 20, 20, &replies)
+	before := captureTestSnapshot(t, vt)
+	if _, err := vt.Write([]byte("\x1b_Ga=t,f=32,s=1,v=1,i=91;/wAA/w==\x1b\\")); err != nil {
+		t.Fatal(err)
+	}
+	if got := replies.String(); got != "" {
+		t.Fatalf("freestanding core emitted a Kitty graphics reply: %q", got)
+	}
+	after := captureTestSnapshot(t, vt)
+	if !bytes.Equal(before, after) {
+		t.Fatalf("upload changed the snapshot (%d bytes before, %d after)", len(before), len(after))
+	}
+}

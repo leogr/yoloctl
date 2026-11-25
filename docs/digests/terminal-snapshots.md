@@ -40,11 +40,12 @@ preference. Restoration does not emit size notifications. Subsequent queries
 use the restored geometry. [8](#source-8) [9](#source-9)
 
 [FACT] The pinned upstream snapshot format is version 1 and explicitly unstable.
-It omits Kitty image resources and glyph registrations. Focus, selection,
+The freestanding core excludes Kitty graphics. Glyph registrations stay local.
+Focus, selection,
 viewport, tracked references and caches are destination-local or reset. Adapter
 and host effects/filters outside the native core need separate ownership; this
 snapshot is not proof that an entire session frontend has been restored.
-[5](#source-5) [6](#source-6) [7](#source-7)
+[5](#source-5) [6](#source-6) [7](#source-7) [10](#source-10)
 
 [FACT] Regression coverage compares uninterrupted/restored frames, history,
 queries and input encoding across state scenarios, subsequent screen switches
@@ -61,8 +62,9 @@ not live Lima or graphical-host parity results. [4](#source-4)
 2. <a id="source-2"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L20-L121) — creation, callback installation and strict native restore.
 3. <a id="source-3"></a> [terminal.go](../../internal/terminal/terminal.go#L39-L223) — runtime from `runtimeConfig` (cache.go: interruptible, bounded), `New`, isolated instances and call errors.
 4. <a id="source-4"></a> [snapshot_test.go](../../internal/terminal/snapshot_test.go#L99) — restoration/continuation/effect/malformed-input tests and `FuzzRestoreSnapshot`.
-5. <a id="source-5"></a> [Pinned Ghostty snapshot format](https://github.com/ghostty-org/ghostty/blob/33da6848d63b3bba2b4f31ab1531d618f2795192/src/terminal/snapshot/main.zig#L18-L89) — version 1 at `33da6848`, verified against the hash-pinned archive.
+5. <a id="source-5"></a> [Pinned Ghostty snapshot format](https://github.com/ghostty-org/ghostty/blob/573c4a21e02311ae87844af26b6a7a179f82858e/src/terminal/snapshot/main.zig#L19-L93) — version 1 at `573c4a21`, verified against the hash-pinned archive.
 6. <a id="source-6"></a> [holder_view.go](../../internal/session/holder_view.go#L225) — native snapshot admission and compatibility subscription.
-7. <a id="source-7"></a> [Pinned Ghostty field classification](https://github.com/ghostty-org/ghostty/blob/33da6848d63b3bba2b4f31ab1531d618f2795192/src/terminal/snapshot/terminal.zig#L215-L243) — retained, local and omitted state at the same verified revision.
+7. <a id="source-7"></a> [Pinned Ghostty field classification](https://github.com/ghostty-org/ghostty/blob/573c4a21e02311ae87844af26b6a7a179f82858e/src/terminal/snapshot/terminal.zig#L217-L237) — retained, local and omitted state at the same verified revision.
 8. <a id="source-8"></a> [geometry_test.go](../../internal/terminal/geometry_test.go#L18) — measured-size restoration.
 9. <a id="source-9"></a> [mouse_test.go](../../internal/terminal/mouse_test.go#L59) — Shift-state restoration.
+10. <a id="source-10"></a> [Ghostty freestanding build options](https://github.com/ghostty-org/ghostty/blob/573c4a21e02311ae87844af26b6a7a179f82858e/src/terminal/build_options.zig#L270-L277) — freestanding targets disable Kitty graphics. `TestSnapshotIgnoresKittyGraphics` exercises the embedded build.

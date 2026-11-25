@@ -59,7 +59,7 @@ func (t *Terminal) WriteUntilGround(p []byte) (int, error) {
 			return n, errors.New("terminal recovery input outside scratch memory")
 		}
 		out := uint32(t.scratch + scratchSize - 4)
-		status := int32(t.call("ghostty_terminal_vt_write_until_ground", t.ptr, t.scratch, uint64(chunk), uint64(out)))
+		status := int32(t.call("yolo_vt_write_until_ground", t.ptr, t.scratch, uint64(chunk), uint64(out)))
 		if t.err != nil {
 			return n, t.err
 		}

@@ -15,8 +15,8 @@ order. A drag without an observed press is not sent to a child. [1](#source-1)
 [FACT] The native core encodes cell-based X10, normal, UTF-8, SGR and urxvt mouse
 reports, applying its effective tracking/format state and event filtering.
 Buttons 10/11 retain their gesture owners; a narrow native patch supplies their
-standard codes 130/131 and UTF-8 encodes the button field in mode 1005.
-[13](#source-13)
+standard codes 130/131. The upstream encoder emits UTF-8 for the button
+field in mode 1005. [13](#source-13) [5](#source-5)
 Effective enums matter: resetting a mode can change the active behavior even
 when another stored DEC bit remains set. Mode 1016 needs measured host and
 canonical geometry; missing measurements produce a visible error.
@@ -83,7 +83,7 @@ parity in native Ghostty/Kitty. [4](#source-4) [5](#source-5)
 10. <a id="source-10"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L532) — `yolo_vt_mouse` and the pinned native encoder.
 11. <a id="source-11"></a> [xterm mouse tracking](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Mouse-Tracking) — protocol byte definitions, consulted 2026-10-02.
 12. <a id="source-12"></a> [Native selection and explicit copy](terminal-selection.md) — local selection eligibility, text and host-copy boundary.
-13. <a id="source-13"></a> [native.patch](../../internal/terminal/wasm/native.patch#L1) — native extra-button and UTF-8 field fixes.
+13. <a id="source-13"></a> [native.patch](../../internal/terminal/wasm/native.patch#L25-L48) — native extra-button codes and the unsupported-button test.
 14. <a id="source-14"></a> [host_mouse.go](../../internal/tui/host_mouse.go#L10) — preference/gesture selection, serialized host commands and cleanup.
 15. <a id="source-15"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L601) — `inputReplay` Shift preference and continuation.
 16. <a id="source-16"></a> [reset.go](../../internal/termio/reset.go#L34) — session cleanup.
