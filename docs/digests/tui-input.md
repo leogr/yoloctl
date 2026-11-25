@@ -124,7 +124,7 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 1. <a id="source-1"></a> [tui.go](../../internal/tui/tui.go#L476) — `opensLiveSurface`, dispatch and `openTab`.
 2. <a id="source-2"></a> [palette.go](../../internal/tui/palette/palette.go#L25) — `Insert`, `set`, `singleLine`, `Submit`, `CompletionInput`.
 3. <a id="source-3"></a> [complete.go](../../internal/tui/yoloctlcli/complete.go#L1-L100) — `Complete` and result parsing.
-4. <a id="source-4"></a> [tui.go](../../internal/tui/tui.go#L1443-L1678) — `handleKey`, `handleRunningKey`, tab close.
+4. <a id="source-4"></a> [tui.go](../../internal/tui/tui.go#L1443-L1679) — `handleKey`, `handleRunningKey`, tab close.
 5. <a id="source-5"></a> [terminal_keys.go](../../internal/tui/terminal_keys.go#L1-L294) — host normalization, `sendKey`, `childKey`, `kittyKey` and functional mapping.
 6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L756) — `Update`, release/paste routing, `sendInput`, input notices and `reportViewErrors`.
 7. <a id="source-7"></a> [terminal_keys_test.go](../../internal/tui/terminal_keys_test.go#L1) — negotiated bytes, restored Enter/Ctrl+J, modifier matrix, release ownership, independent modifier oracle and palette Tab reports.
@@ -133,7 +133,7 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 10. <a id="source-10"></a> [Mouse delivery and selection boundaries](terminal-mouse.md) — native encoding, gesture ownership, console coordinates and selection limits.
 11. <a id="source-11"></a> [tui.go](../../internal/config/tui.go#L1-L339) — configuration, commented defaults and load.
 12. <a id="source-12"></a> [debug.go](../../internal/tui/debug.go#L1-L28) — opt-in input diagnostics.
-13. <a id="source-13"></a> [tui.go](../../internal/tui/tui.go#L1608) — `View`, host keyboard enhancement requests.
+13. <a id="source-13"></a> [tui.go](../../internal/tui/tui.go#L1609) — `View`, host keyboard enhancement requests.
 14. <a id="source-14"></a> [Display snapshots, history and focus](terminal-display.md) — focus state, mode gating and input-delivery regressions.
 15. <a id="source-15"></a> [Native selection and explicit copy](terminal-selection.md) — local selection and conditional copy-key ownership.
 16. <a id="source-16"></a> [box-attach.sh](../../scripts/smoke/box-attach.sh#L15) — scripted Enter bytes in `pty_run` and shared detach/reattach input fixtures.

@@ -1491,7 +1491,8 @@ func (m *model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case cur.Exited:
 			// The child is gone; the tab shows its exit status + a close
 			// hint. Chrome keys still work; Enter/Ctrl+W dismiss it.
-			return m, m.handleExitedTabKey(k)
+			m.handleExitedTabKey(k)
+			return m, nil
 		default:
 			m.scrollToLive()
 			m.sendKey(cur.Session, k, false)
@@ -1689,7 +1690,7 @@ func (m *model) handleRunningKey(k tea.Key, paletteKey bool) (tea.Model, tea.Cmd
 // a session detach. On eligible ended views, r re-attaches or reopens in place.
 // Scroll and tab-nav chrome stay live (there is no child left to feed);
 // every other key is inert.
-func (m *model) handleExitedTabKey(k tea.Key) tea.Cmd {
+func (m *model) handleExitedTabKey(k tea.Key) {
 	switch {
 	case k.Code == tea.KeyEnter,
 		k.Code == 'w' && k.Mod&tea.ModCtrl != 0:
@@ -1712,7 +1713,6 @@ func (m *model) handleExitedTabKey(k tea.Key) tea.Cmd {
 		m.tabs.Select(int(k.Code - '1'))
 		m.scrollToLive()
 	}
-	return nil
 }
 
 // resetConsoleView returns the console to its live tail and clears palette

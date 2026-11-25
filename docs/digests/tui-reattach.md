@@ -67,7 +67,7 @@ The end banner says `Press Enter to close` and appends any `EndHint`
 ## Sources
 
 1. <a id="source-1"></a> [Re-attach](../../internal/tui/reattach.go#L1) — `reattachArgs`, `viewEndAction`, `viewActionForPane`, `reattachHint`, `reattachable`, `reattachPane`, `endedButtonSlots`, `applyEndedButtons`, `endedButtonClick`, `closeEndedPane`.
-2. <a id="source-2"></a> [Pane start and keys](../../internal/tui/tui.go#L1681) — `handleExitedTabKey`; `startPane` (L842) sets `Args` and `EndHint`; `Pane.Args` in panes/layout.go.
+2. <a id="source-2"></a> [Pane start and keys](../../internal/tui/tui.go#L1682) — `handleExitedTabKey`; `startPane` (L842) sets `Args` and `EndHint`; `Pane.Args` in panes/layout.go.
 3. <a id="source-3"></a> [Mouse routing](../../internal/tui/mouse.go#L262-L265) — `handleMouse` calls `endedButtonClick` after popups and before chrome.
 4. <a id="source-4"></a> [Drawing order](../../internal/tui/tui.go#L1939) — `applyEndedButtons` before `applyOverlay`.
 5. <a id="source-5"></a> [Tests](../../internal/tui/reattach_test.go#L17) — `TestReattachArgs`, `TestEndedAttachReattachesInPlace`, `TestReattachOnlyEndedAttachViews`, `TestReattachButton`, `TestCloseEndedViewButton`, `TestReattachKeyIgnoresLockModifiers`; `reopen_test.go`, `reopen_launch_test.go` and `reopen_args_test.go` cover non-box actions, actual child argv/context changes, exclusions and clipping.
