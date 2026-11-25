@@ -217,13 +217,28 @@ func TestBoxUseControllerUsesPrivateStateAndOriginalInput(t *testing.T) {
 			t.Fatalf("input = %q", delivered)
 		}
 	}
+	waitAfter := func(id string, since uint64) map[string]any {
+		t.Helper()
+		send(fmt.Sprintf(`{"id":%q,"op":"wait","since":%d,"settle_ms":0}`, id, since))
+		response := next("wait")
+		screen := response["screen"].(map[string]any)
+		if response["timed_out"] == true || uint64(screen["revision"].(float64)) <= since {
+			t.Fatalf("wait after revision %d did not observe a change: %+v", since, response)
+		}
+		return screen
+	}
 	// Own acceptance advances this attachment's revision; wait from after it.
 	send(`{"id":"3b","op":"screen"}`)
 	revision := uint64(next("screen")["screen"].(map[string]any)["revision"].(float64))
 	events <- func(e *boxUseEmitter) error { return e.accept("another-agent", 17) }
+	accepted := waitAfter("4a", revision)
+	if accepted["input"].(map[string]any)["last_peer"] != "another-agent" {
+		t.Fatalf("peer acceptance not observed: %+v", accepted)
+	}
+	// A peer acceptance can satisfy a wait without changing any screen text.
+	// Send the screen data after observing that acceptance, then wait from its revision.
 	events <- func(e *boxUseEmitter) error { return e.emit('d', []byte("\x1b[2;1H> peer steering")) }
-	send(fmt.Sprintf(`{"id":"4","op":"wait","since":%d,"timeout_ms":1000,"settle_ms":10}`, revision))
-	wait := next("wait")
+	wait := waitAfter("4", uint64(accepted["revision"].(float64)))
 	encoded, _ = json.Marshal(wait)
 	if !bytes.Contains(encoded, []byte("another-agent")) || !bytes.Contains(encoded, []byte("peer steering")) {
 		t.Fatalf("missing collaboration: %s", encoded)
