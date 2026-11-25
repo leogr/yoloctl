@@ -99,5 +99,5 @@ These tests do not establish a live-VM pass or graphical parity.
 13. <a id="source-13"></a> [terminal_state_test.go](../../internal/session/terminal_state_test.go#L68) — overflow, continuation and input-state comparisons.
 14. <a id="source-14"></a> [managed.go](../../internal/tui/term/managed.go#L98) — per-view history cap and typed hold release; native/local separation in `internal/terminal/frame.go:SetHistoryViewLimit`; regressions in `managed_test.go`.
 15. <a id="source-15"></a> [attach-mixed.py](../../scripts/smoke/attach-mixed.py#L143) — `prepare_python_probe`, `Driver.start_flood`, `check_live_rejoin`, `wait_audit` and `run`, invoked by `box-attach.sh`.
-16. <a id="source-16"></a> [test_attach_mixed.py](../../scripts/test_attach_mixed.py#L22) — local PTY driver/probe, fragmented repaint/rejoin, canonical/Readline startup and audit negative controls.
+16. <a id="source-16"></a> [test_attach_mixed.py](../../scripts/test_attach_mixed.py#L24) — local PTY driver/probe, fragmented repaint/rejoin, canonical/Readline startup and audit negative controls.
 17. <a id="source-17"></a> [attach-probe.py](../../scripts/smoke/attach-probe.py#L20) — guest `run`: raw input, paced output, resize and cursor-reply audit.

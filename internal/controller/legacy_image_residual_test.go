@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/containerd/containerd/v2/core/images"
@@ -134,40 +135,47 @@ func TestLegacyResidualDoesNotInventOwnershipForKnownOrV1Jobs(t *testing.T) {
 }
 
 func TestLegacyBootObservationDoesNotTrustHistoricalIncarnationOrClocks(t *testing.T) {
-	s := storeServer(t)
-	r := legacyResidualReceipt(t, s)
-	if _, err := s.Receipts.Recover(); err != nil {
-		t.Fatal(err)
-	}
-	r, err := s.Receipts.Read(r.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := newLocalRetainFixture(t, false, false)
-	boot := strings.Repeat("b", 64)
-	f.backend.ConfigureLegacy(s, boot)
-	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-	defer cancel()
-	if err := f.backend.Sweep(ctx, []Receipt{r}); err != nil {
-		t.Fatal(err)
-	}
-	r, err = s.Receipts.Read(r.ID)
-	if err != nil || r.Image.LegacyBoot != boot || !r.Image.Residual || r.Image.LegacyAliasPending {
-		t.Fatal(r, err)
-	}
-	for _, started := range []time.Time{time.Unix(1, 0), time.Now().Add(30 * 365 * 24 * time.Hour)} {
-		r.Started = started
-		if err := s.Receipts.Save(r); err != nil {
+	synctest.Test(t, func(t *testing.T) {
+		s := storeServer(t)
+		r := legacyResidualReceipt(t, s)
+		if _, err := s.Receipts.Recover(); err != nil {
 			t.Fatal(err)
 		}
+		r, err := s.Receipts.Read(r.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f := newLocalRetainFixture(t, false, false)
+		boot := strings.Repeat("b", 64)
+		f.backend.ConfigureLegacy(s, boot)
+		// The fake containerd checks for a deadline. Virtual time keeps
+		// that check independent of receipt I/O latency.
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		defer cancel()
 		if err := f.backend.Sweep(ctx, []Receipt{r}); err != nil {
 			t.Fatal(err)
 		}
-		got, err := s.Receipts.Read(r.ID)
-		if err != nil || !sameReceipt(r, got) {
-			t.Fatal("clock changed ownership", err)
+		r, err = s.Receipts.Read(r.ID)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
+		if r.Image.LegacyBoot != boot || !r.Image.Residual || r.Image.LegacyAliasPending {
+			t.Fatalf("first observation did not retain ownership for boot %s: %+v", boot, r.Image)
+		}
+		for _, started := range []time.Time{time.Unix(1, 0), time.Now().Add(30 * 365 * 24 * time.Hour)} {
+			r.Started = started
+			if err := s.Receipts.Save(r); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.backend.Sweep(ctx, []Receipt{r}); err != nil {
+				t.Fatal(err)
+			}
+			got, err := s.Receipts.Read(r.ID)
+			if err != nil || !sameReceipt(r, got) {
+				t.Fatal("clock changed ownership", err)
+			}
+		}
+	})
 }
 
 func TestLegacyBootPublicationFailureRetainsAliasAndLease(t *testing.T) {

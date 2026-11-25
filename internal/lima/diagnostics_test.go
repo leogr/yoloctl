@@ -190,14 +190,31 @@ func TestLimaFailureReturnsSanitizedDiagnosticsAndExitStatus(t *testing.T) {
 
 func TestLimaDiagnosticsDoNotWaitForDaemonStderr(t *testing.T) {
 	t.Setenv("YOLOCTL_DEBUG", "1")
-	c := diagnosticFixture(t, "echo before-daemon >&2\nsleep 5 >/dev/null &\nexit 0\n")
-	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
-	defer cancel()
-	if err := c.Stop(ctx, "fixture"); err != nil {
+	c := diagnosticFixture(t, "exec 3< \"$LIMA_TEST_RELEASE\" || exit 1\necho before-daemon >&2\ncat <&3 >/dev/null &\n")
+	fifo := filepath.Join(filepath.Dir(c.binary), "daemon-release")
+	t.Setenv("LIMA_TEST_RELEASE", fifo)
+	if err := unix.Mkfifo(fifo, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if ctx.Err() != nil || !strings.Contains(readDiagnostics(t), "before-daemon") {
-		t.Fatal("waited for descendant or lost stderr")
+	// The initial reader lets the test open its writer before starting Stop.
+	peer, err := os.OpenFile(fifo, os.O_RDONLY|unix.O_NONBLOCK, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = peer.Close() }()
+	release, err := os.OpenFile(fifo, os.O_WRONLY|unix.O_NONBLOCK, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = release.Close() }()
+
+	// The descendant inherits stderr and waits for the FIFO writer to close.
+	// Stop must return while that writer is still open.
+	if err := c.Stop(t.Context(), "fixture"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(readDiagnostics(t), "before-daemon") {
+		t.Fatal("lost stderr")
 	}
 }
 

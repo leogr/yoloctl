@@ -88,7 +88,7 @@ exact debug bytes. These are not native macOS/Lima/TUI qualification.
 14. <a id="source-14"></a> [Lima v2.2.1 instance enumeration](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/store/store.go#L47-L70) — directory-only, dot/underscore exclusions.
 15. <a id="source-15"></a> [Stop regression](../../cmd/yoloctl/lima_log_failure_stop_test.go#L1-L56) — `stopSpaceRuntime` with a planted log; `RecordSpaceDiagnostics` callers in `chat_stream_stderr.go` and `space_view.go`.
 
-16. <a id="source-16"></a> [Stale-generation regression](../../internal/lima/diagnostics_test.go#L316) — `TestHostDiagnosticsReopensUnlinkedGeneration` uses two production rotations, a retained unlinked descriptor and current hardlink/mode negatives; `appendLocked` in internal/rotatelog/append.go checks identity before current-file validation.
+16. <a id="source-16"></a> [Stale-generation regression](../../internal/lima/diagnostics_test.go#L333) — `TestHostDiagnosticsReopensUnlinkedGeneration` uses two production rotations, a retained unlinked descriptor and current hardlink/mode negatives; `appendLocked` in internal/rotatelog/append.go checks identity before current-file validation.
 
 17. <a id="source-17"></a> [Shared appender](../../internal/rotatelog/append.go#L35) — `Append`, `appendLocked`, `rotate`; `internal/lima/diagnostics.go` `hostLogAppender`, `appendHostLog` delegation.
 

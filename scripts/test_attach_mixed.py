@@ -1,5 +1,6 @@
 """Mixed-attach smoke driver/probe regressions on real local PTYs, without Lima."""
 
+import errno
 import importlib.util
 import json
 import os
@@ -10,6 +11,7 @@ import sys
 import tempfile
 import termios
 import threading
+import time
 import unittest
 
 
@@ -207,50 +209,73 @@ with open(audit, "w", buffering=1) as output:
                 driver.close()
 
     def test_staged_probe_survives_shell_input_modes_and_does_not_echo_readiness(self):
-        # Output from a shell command can arrive before Bash re-enters
-        # Readline. Exercise the exact smoke payload on both sides of that
-        # transition. Source/argv/env must not enter the terminal's input queue.
+        # Exercise the staged command before and after Bash enters Readline.
+        prompt = b"mixed-test-shell> "
+        ready = b"MIXED_READY_shell-token"
+        staging = self.root / "staged probes"
+        staging.mkdir()
+
+        def wait_for(view, description, predicate):
+            while not (result := predicate()):
+                if view.eof and view.status is not None:
+                    self.fail(f"view exited {view.status} before {description}: {view.tail[-400:]!r}")
+                if time.monotonic() >= deadline:
+                    self.fail(f"fixture timed out waiting for {description}: {view.tail[-400:]!r}")
+                self.driver.pump()
+            return result
+
+        release = self.root / "canonical-release"
+        os.mkfifo(release)
+
+        def open_release():
+            try:
+                fd = os.open(release, os.O_WRONLY | os.O_NONBLOCK)
+            except OSError as error:
+                if error.errno != errno.ENXIO:
+                    raise
+                return None  # Bash has yet to open the reader.
+            return os.fdopen(fd, "w")
+
         for mode in ("readline", "canonical"):
             with self.subTest(mode=mode):
-                view = self.driver.start(mode, ["bash", "--noprofile", "--norc", "-i"])
-                if mode == "canonical":
-                    self.driver.send(view, b"kill -STOP $$\r")
-
-                    def stopped():
-                        pid, status = os.waitpid(view.pid, os.WNOHANG | os.WUNTRACED)
-                        if pid:
-                            self.assertTrue(os.WIFSTOPPED(status))
-                        return bool(pid)
-
-                    self.driver.wait("shell stopped before Readline", stopped, timeout=5)
-                    self.assertTrue(termios.tcgetattr(view.master)[3] & termios.ICANON)
-                else:
-                    self.driver.wait("Readline", lambda: not (
-                        termios.tcgetattr(view.master)[3] & termios.ICANON), timeout=5)
+                # One watchdog for a stalled fixture. Each phase advances on its event.
+                deadline = time.monotonic() + 30
+                view = self.driver.start(mode, ["env", f"PS1={prompt.decode('ascii')}", "PROMPT_COMMAND=",
+                                                f"MIXED_TEST_RELEASE={release}",
+                                                "bash", "--noprofile", "--norc", "-i"])
+                wait_for(view, "shell prompt", lambda: prompt in view.tail)
+                self.assertFalse(termios.tcgetattr(view.master)[3] & termios.ICANON)
 
                 audit = self.root / (mode + " audit with spaces.jsonl")
                 command = mixed.prepare_python_probe([], SCRIPT.with_name("attach-probe.py").read_bytes(),
-                                                     str(audit), "shell-token", directory=str(self.root))
+                                                     str(audit), "shell-token", directory=str(staging))
                 self.assertLess(len(command), 255)
                 self.assertTrue(command.endswith(b"\r"))
                 self.assertEqual(command.count(b"\r"), 1)
                 self.assertNotIn(b"MIXED_READY_", command)
+                prompts = view.tail.count(prompt)
                 if mode == "canonical":
-                    try:
+                    self.driver.send(view, b"printf 'MIXED_CANONICAL_%s\\n' ready; "
+                                           b"read -r _ < \"$MIXED_TEST_RELEASE\"\r")
+                    wait_for(view, "shell waiting on the release pipe",
+                             lambda: b"MIXED_CANONICAL_ready\r\n" in view.tail)
+                    with wait_for(view, "release pipe reader", open_release) as shell:
+                        self.assertTrue(termios.tcgetattr(view.master)[3] & termios.ICANON)
                         self.driver.send(view, command)
-                        # Echo proves the line was processed while canonical,
-                        # before Bash can consume it or change terminal modes.
-                        self.driver.wait("canonical echo", lambda: command[-33:-1] in view.tail, timeout=5)
-                    finally:
-                        os.kill(view.pid, signal.SIGCONT)
+                        # Wait for the whole canonical line, including the
+                        # echoed newline, before Bash can switch modes again.
+                        wait_for(view, "canonical line", lambda: command[:-1] + b"\r\n" in view.tail)
+                        shell.write("continue\n")
+                    prompts += 1  # Bash prompts again as it re-enters Readline.
                 else:
                     self.driver.send(view, command)
-                self.driver.wait("staged probe", lambda: b"MIXED_READY_shell-token" in view.tail, timeout=10)
+                wait_for(view, "staged probe", lambda: ready in view.tail or view.tail.count(prompt) > prompts)
+                self.assertIn(ready, view.tail, view.tail[-400:])
                 self.driver.send(view, b"+")
-                self.driver.wait("changing output", lambda: len(set(re.findall(
-                    rb"0123456789 ([0-9a-f]{8})", view.tail))) >= 2, timeout=5)
+                wait_for(view, "changing output", lambda: len(set(re.findall(
+                    rb"0123456789 ([0-9a-f]{8})", view.tail))) >= 2)
                 self.driver.send(view, b"!")
-                self.driver.wait("exec exit", lambda: view.status is not None, timeout=5)
+                wait_for(view, "exec exit", lambda: view.status is not None)
                 self.assertEqual(view.status, 7)
                 mixed.validate_audit(mixed.audit_events(audit.read_bytes()), {}, final=True, queries_sent=0)
 
