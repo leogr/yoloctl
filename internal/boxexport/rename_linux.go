@@ -1,9 +1,17 @@
 package boxexport
 
-import "golang.org/x/sys/unix"
+import (
+	"fmt"
+
+	"golang.org/x/sys/unix"
+)
 
 func renameExclusive(from int, old string, to int, name string) error {
-	return unix.Renameat2(from, old, to, name, unix.RENAME_NOREPLACE)
+	err := unix.Renameat2(from, old, to, name, unix.RENAME_NOREPLACE)
+	if err == unix.EINVAL {
+		return fmt.Errorf("the destination may not support moving files into place without overwriting. Choose a local folder outside any SSHFS mount (%w)", err)
+	}
+	return err
 }
 
 func pathDirectoryFlags() int {

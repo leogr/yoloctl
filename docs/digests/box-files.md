@@ -1,6 +1,7 @@
 # Host recovery of box files
 
 Verification: `ee88de4d528a26a107e3f38384423565b8d773fe` and accompanying changes; re-read cited symbols when changing behavior.
+Linux publication diagnostic verified on `f357061bf0f425f6d0a007d6fb31f575f038c827` and accompanying changes.
 
 [FACT] Host-only `box cp BOX:PATH DEST|- [--space SPACE] [--overwrite]`
 exports a retained running or stopped container without starting, stopping,
@@ -40,8 +41,10 @@ publication never replaces a racing entry. Existing directories merge; a later
 failure explicitly reports a partially published prefix. `--overwrite` replaces
 regular files atomically and never follows a destination link or changes a
 file into a directory. Parent paths containing ordinary symlinks refuse;
-macOS's system `/tmp`, `/var`, `/etc` aliases are normalized. [6](#source-6)
-[7](#source-7)
+macOS's system `/tmp`, `/var`, `/etc` aliases are normalized. On Linux, an
+`EINVAL` from the exclusive move reports a possible filesystem limitation
+and suggests a local folder outside any SSHFS mount. [6](#source-6) [7](#source-7)
+[12](#source-12)
 
 [FACT] Extracted files belong to the host caller and retain their staging
 inode's group after rename. The OS may inherit the staging parent's group,
@@ -75,3 +78,4 @@ retry occurs. [1](#source-1) [6](#source-6)
 9. <a id="source-9"></a> [Server authorization](../../internal/controller/protocol.go#L231-L266) — `Authorize`, `BoxAllowed`.
 10. <a id="source-10"></a> [Export-only record decoder](../../internal/openshell/export_record_linux.go#L10-L49) — `DecodeExportRecord`.
 11. <a id="source-11"></a> [nerdctl v2.3.5 source resolution](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/containerutil/cp_resolve_linux.go) — relative-root, source-link and mount mapping.
+12. <a id="source-12"></a> [Linux exclusive move](../../internal/boxexport/rename_linux.go#L9-L15) — `renameExclusive` diagnoses `EINVAL` while preserving the errno.
