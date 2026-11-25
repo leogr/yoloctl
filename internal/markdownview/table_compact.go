@@ -1,7 +1,6 @@
 package markdownview
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -12,7 +11,12 @@ import (
 // TableRowID is local to one document. Views own message/file identity.
 type TableRowID struct{ Table, Row int }
 
-func (id TableRowID) String() string { return fmt.Sprintf("%d:%d", id.Table, id.Row) }
+func (id TableRowID) String() string {
+	var buf [2*20 + 1]byte // two signed 64-bit decimals and the colon
+	p := strconv.AppendInt(buf[:0], int64(id.Table), 10)
+	p = append(p, ':')
+	return string(strconv.AppendInt(p, int64(id.Row), 10))
+}
 func ParseTableRowID(s string) (TableRowID, bool) {
 	a, b, ok := strings.Cut(s, ":")
 	if !ok {
