@@ -308,6 +308,9 @@ func TestQualifiedPatchStackAcceptsOptionalSeventhAndEighthPatches(t *testing.T)
 	}
 }
 
+// An existing box's recorded manifest may name an earlier source: it loads
+// under that source's own complete rules for existing-box reads, and never
+// for a new box. Fields of two sources cannot be mixed.
 func TestRecordedReleaseAcceptsAnEarlierSourceOnlyForExistingBoxes(t *testing.T) {
 	earlier := sourceRelease{
 		version: "0.0.9-fixture", upstreamCommit: strings.Repeat("d", 40), upstreamTree: strings.Repeat("e", 40),

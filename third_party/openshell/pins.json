@@ -24,33 +24,33 @@
     },
     {
       "file": "patches/0003-v0072-syscall-parity.patch",
-      "sha256": "2d2297edb65ec94e2e7a4146f127319be25d54c021df7c2867475224999fe721",
-      "result_tree": "14e34790ef878009f3538897756bc34a8f2f8917"
+      "sha256": "de218914df2907d35e3c14e8d4ecdda5f89d05a51e39719c8522eb29d9720ba8",
+      "result_tree": "67e5d7ac93ddc007d7ee93299588f5b7df01ccb2"
     },
     {
       "file": "patches/0004-v0072-process-group-signals.patch",
       "sha256": "545a760926dd20dd5f4baad88d5ca314945a659a515c6fdaa20ebfd4c488eb2c",
-      "result_tree": "b0c19b14e6183c2c6f69b2462e78ad76c444c04d"
+      "result_tree": "2197b7c19ebe1c1c6bc729923e37ed9cd84487a8"
     },
     {
       "file": "patches/0005-main-raw-input.patch",
       "sha256": "aeedf24cea76630576efb3ab0c62c52f28576b525111ac2a10fa455f50d19f25",
-      "result_tree": "0c40a6edb9ef336b6248dc0ac4e34d4c80aba4c6"
+      "result_tree": "7ab989adef035a42973b462db64ff1e80a98ec1b"
     },
     {
       "file": "patches/0006-main-attachments-ended.patch",
       "sha256": "6adbb543bda10baf5d617162a03a67b9046e087511c8028ac19df274cb4b1934",
-      "result_tree": "80f394c9f13292830abc190cf4ecaa375f6ea7c1"
+      "result_tree": "634a81ea91bd4922a022e5f9d43f2d389da11fc5"
     },
     {
       "file": "patches/0007-main-output-backpressure.patch",
       "sha256": "b4e584e06f4090c825435759d4fce8953b6aaee86c4505a678a8057612bc2655",
-      "result_tree": "bd3d79fe1abe3eb93534135301e8d5c8b1945dc2"
+      "result_tree": "de9db6c42e9c532f9c9af3662d82719cccf40368"
     },
     {
       "file": "patches/0008-cargo-ca-bundle.patch",
       "sha256": "cd012810762ba98a21316195dea9820a7be410b13d075609eaeb94dd0d390035",
-      "result_tree": "470c726bd32f1205bef0fd202ffd1802b846d6d4"
+      "result_tree": "9e310ff9a8f58c80409f2d9b2802e9fc6781130b"
     }
   ],
   "source_dir": "openshell-0.1.10-patched",

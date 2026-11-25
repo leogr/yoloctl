@@ -39,7 +39,7 @@ const (
 )
 
 // NoLoginShellEnv is the upstream SSH env request that makes the server run
-// the hand-over command with a non-login shell (pinned OpenShell ac7f615c,
+// the hand-over command with a non-login shell (OpenShell v0.1.10 152c59d3,
 // openshell-supervisor-process ssh.rs NO_LOGIN_SHELL_ENV).
 const NoLoginShellEnv = "OPENSHELL_NO_LOGIN_SHELL"
 

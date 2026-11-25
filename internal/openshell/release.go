@@ -198,7 +198,6 @@ func qualifiedPatchStack(p ReleasePins) bool { return currentRelease.patchStack(
 // Manifest returns the exact reviewed bytes for a read-only runtime projection.
 // Callers cannot mutate the retained qualification or reconstruct another JSON
 // encoding that merely describes the same pins.
-
 func (r QualifiedRelease) Manifest() []byte { return bytes.Clone(r.manifest) }
 
 func sha256Hex(raw []byte) string {

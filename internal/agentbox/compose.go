@@ -362,8 +362,8 @@ func lintPathOverlap(readWrite []string) error {
 // lintHostPattern rejects a network endpoint host that openshell-sandbox's L7
 // policy validator would reject — which makes the sandbox fail to start (the
 // SSH socket never opens) instead of producing a clear error. It mirrors
-// upstream validate_host_wildcard (NVIDIA/OpenShell v0.0.72,
-// crates/openshell-supervisor-network/src/l7/mod.rs) byte-for-byte: a literal
+// upstream validate_host_wildcard (OpenShell v0.1.10,
+// crates/openshell-policy-runtime-interface/src/l7/mod.rs) byte-for-byte: a literal
 // host is always fine; a wildcard host must be a per-domain pattern
 // (`*.example.com` / `**.example.com`) — never match-all (`*`, `**`), never a
 // wildcard outside the first DNS label, never a recursive `**` that is not the

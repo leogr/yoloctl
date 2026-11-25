@@ -209,7 +209,7 @@ index 1d37444125ca335916e8a1f21e186ca95d4364f2..b0d8976944dd0fc5a32e296265113d1c
      fn filter_allows_own_group_scheduling_and_limit_calls() {
          // SAFETY: the child uses only raw syscalls after fork and exits with
 diff --git a/crates/openshell-sandbox/src/linux/process_sched.rs b/crates/openshell-sandbox/src/linux/process_sched.rs
-index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..240e8c7f9b8ca34febd6252409364d0b9636f9b5 100644
+index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..501729ceb1584411636fb1385a7ffdf9e90677d6 100644
 --- a/crates/openshell-sandbox/src/linux/process_sched.rs
 +++ b/crates/openshell-sandbox/src/linux/process_sched.rs
 @@ -8,7 +8,8 @@
@@ -222,7 +222,7 @@ index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..240e8c7f9b8ca34febd6252409364d0b
  //! semantics, where one workload thread may legitimately reconfigure its own
  //! affinity, parameters, scheduler, nice value, or limits, and may do the same
  //! for a sibling thread or process in its group.
-@@ -130,7 +131,8 @@ pub(crate) fn is_mediated(syscall: i64) -> bool {
+@@ -130,14 +131,14 @@ pub(crate) fn is_mediated(syscall: i64) -> bool {
  /// listener filter runs those calls natively, so they are not expected here;
  /// one that arrives anyway is allowed without reading a thread group, since
  /// the comparison is vacuous. A named target is resolved through procfs and
@@ -230,9 +230,21 @@ index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..240e8c7f9b8ca34febd6252409364d0b
 +/// must share the caller's thread group or, with yoloctl, be outside the
 +/// trusted sandbox's.
  ///
- /// `setpriority` accepts only `PRIO_PROCESS`. `PRIO_USER` with `who = 0` would
- /// touch every process of the shared workload UID, and `PRIO_PGRP` with
-@@ -148,9 +150,16 @@ pub(crate) fn is_mediated(syscall: i64) -> bool {
+-/// `setpriority` accepts only `PRIO_PROCESS`. `PRIO_USER` with `who = 0` would
+-/// touch every process of the shared workload UID, and `PRIO_PGRP` with
+-/// `who = 0` names a process group an untrusted child could rejoin before
+-/// calling, exactly as the static kill pid-zero deny reasons. Both stay denied
+-/// with EPERM, while a selector the kernel does not define keeps the native
+-/// EINVAL.
++/// Upstream's `setpriority` accepts only `PRIO_PROCESS`: `PRIO_USER` with
++/// `who = 0` would touch every process of the shared workload UID, and
++/// `PRIO_PGRP` with `who = 0` names a process group an untrusted child could
++/// rejoin before calling. yoloctl continues both, as the 0.1.6 filter did (see
++/// above); a selector the kernel does not define keeps the native EINVAL.
+ ///
+ /// A negative target keeps the errno its syscall returns natively: the
+ /// `sched_setparam`/`sched_setscheduler`/`sched_setattr` trio rejects it with
+@@ -148,9 +149,16 @@ pub(crate) fn is_mediated(syscall: i64) -> bool {
  ///
  /// A syscall outside the mediated set cannot be decided here, so it fails
  /// closed with ENOSYS as an unhandled notification.
@@ -249,7 +261,7 @@ index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..240e8c7f9b8ca34febd6252409364d0b
  ) -> io::Result<()> {
      listener.validate_id(notification.id)?;
      let syscall = i64::from(notification.syscall);
-@@ -159,9 +168,7 @@ pub fn mediate_process_sched(
+@@ -159,9 +167,7 @@ pub fn mediate_process_sched(
      if syscall == libc::SYS_setpriority {
          match scalar_int(notification.args[0]).cast_unsigned() {
              PRIO_PROCESS => {}
@@ -260,7 +272,7 @@ index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..240e8c7f9b8ca34febd6252409364d0b
              _ => return Err(io::Error::from_raw_os_error(libc::EINVAL)),
          }
      }
-@@ -174,7 +181,10 @@ pub fn mediate_process_sched(
+@@ -174,7 +180,10 @@ pub fn mediate_process_sched(
          return Err(io::Error::from_raw_os_error(negative_target_errno(syscall)));
      }
      let caller_group = resolve_caller_group(notification.tid)?;
@@ -272,7 +284,7 @@ index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..240e8c7f9b8ca34febd6252409364d0b
          return Err(io::Error::from_raw_os_error(libc::EPERM));
      }
      // Continuing an inspected numeric target has the reuse window documented
-@@ -218,12 +228,69 @@ fn resolve_target_group(tid: u32) -> io::Result<u32> {
+@@ -218,12 +227,69 @@ fn resolve_target_group(tid: u32) -> io::Result<u32> {
  }
  
  #[cfg(test)]

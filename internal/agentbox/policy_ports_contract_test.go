@@ -12,7 +12,7 @@ import (
 )
 
 // This historical Rego is retained ONLY as an emitter/OPA regression fixture.
-// Native boxes load the separately qualified 0.1.6 Rego, not this file; no VM
+// Native boxes load the separately qualified OpenShell Rego, not this file; no VM
 // provisioning or executable embeds this historical fixture anymore.
 const liveRegoPath = "../../assets/sandbox/sandbox-policy.rego"
 

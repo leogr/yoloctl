@@ -98,7 +98,7 @@ v0.0.72 allowed, so GNU make (posix_spawn with `POSIX_SPAWN_RESETIDS`), `nice`,
 (`0003-v0072-syscall-parity.patch`) restores them as in v0.0.72: `capset`,
 `setuid`, `setgid`, `setreuid`, `setregid`, `setresuid`, `setresgid`,
 `setfsuid`, `setfsgid`, `setgroups`, `ioprio_set`; `prlimit64`,
-`sched_set*` and `setpriority` on any process except the sandbox; and
+`sched_set*` and `setpriority` on any named process except the sandbox; and
 `kill`/`rt_sigqueueinfo` with PID zero or a negative PID (process groups,
 `killpg`) except the sandbox's own group. Those sandbox-targeted denies stay:
 the sandbox startup probe requires them. Patch 4 (`0004-v0072-process-group-signals.patch`)
@@ -113,8 +113,9 @@ the trusted sandbox's thread group, so `renice` and `ionice -p` act on other
 workload processes as before, and the broker's membership check protects
 sandbox worker threads, not only the leader, for named targets. `setpriority`
 with `PRIO_PGRP` or `PRIO_USER` is continued to the kernel without that
-membership check, as the 0.1.6 filter allowed it: ordinary kernel permissions
-decide. The workload has no capabilities
+membership check, as the 0.1.6 filter allowed it. The sandbox runs as the
+workload's user, so a group or user selection that includes it (`renice -g`,
+`renice -u`) reaches it too, as on 0.1.6 and v0.0.72. The workload has no capabilities
 and runs with no_new_privs, so the kernel still refuses any real identity or
 capability gain; every deny v0.0.72 also had is kept. Releases may carry these
 optional third and fourth patches; two- and three-patch releases stay valid
@@ -267,7 +268,7 @@ operator-box case was not rerun separately. [26](#source-26)
 16. <a id="source-16"></a> [nerdctl 2.3.5 ImageFromNative](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/inspecttypes/dockercompat/dockercompat.go#L650-L692) — target aliases, distinct platform configuration ID and bound image configuration.
 17. <a id="source-17"></a> [cmd/yoloctl/openshell_default.go](../../cmd/yoloctl/openshell_default.go#L13-L48) — `defaultCreationContext`, `qualifyDefaultNativeCreation`, `checkDefaultNativeCreation` (native space, not privileged; the operator grant is validated, no longer refused).
 18. <a id="source-18"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L378-L400) — `LiveApplier.Recreate` ends in `Create`, which takes the native selection when bound; `Restart` is native-only.
-19. <a id="source-19"></a> [cmd/yoloctl/version.go](../../cmd/yoloctl/version.go#L1) — reports v0.1.6 (retirement tree `3cc5e841`).
+19. <a id="source-19"></a> [cmd/yoloctl/version.go](../../cmd/yoloctl/version.go#L1) — reports the runtime version, v0.1.10 (`assets/embed.go` `SandboxVersion`).
 20. <a id="source-20"></a> [internal/agentbox/openshell_legacy.go](../../internal/agentbox/openshell_legacy.go#L1) — `LegacyRuntimeError`, `LegacyRuntime`, `withoutLegacyOpenShellBinds` (privileged bind trimming).
 21. <a id="source-21"></a> [internal/agentbox/openshell_policy_read.go](../../internal/agentbox/openshell_policy_read.go#L1) — `LiveInspector.ReadRuntimePolicy`; `buildInspectRuntime` in cmd/yoloctl/agentbox_inspect.go (policy-view tree `ad168599`); `TestRuntimePolicyViewNeverHashesLegacyMirrorForNativeFailure`.
 22. <a id="source-22"></a> [internal/controller](../../internal/controller/server.go#L1) — `ServeNativeOperator`, `CloseNativeOperators` in `operator_native_serve.go`, `retireOperatorListener` in `operator_retire.go`; `operator.ProvisionNative` in internal/operator/native_publisher_linux.go; warning-only operator cleanup steps in internal/agentbox/openshell_remove_linux.go.
