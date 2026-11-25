@@ -83,16 +83,17 @@ init companion can still use an explicit prepared image.
 
 ## Linux 7 recipe and qualification
 
-`linux7.py` builds checksum-pinned upstream Linux 7.2.11 with Ubuntu 24.04
-userspace and the existing Firecracker/runtime pins. It adapts the pinned 6.18
+`linux7.py` builds checksum-pinned upstream Linux 7.3.6. The image uses Ubuntu
+24.04 userspace, the pinned Firecracker VMM and nerdctl-full 2.4.2 with the
+`buildg` debugger omitted. The kernel recipe adapts the pinned 6.18
 configuration using `olddefconfig`, saves `config.diff`, and checks required
 confinement, filesystem, networking and resource-control options before compiling.
 Pressure telemetry is enabled. KVM (`VIRTUALIZATION`, `KVM`, `KVM_INTEL`,
 `KVM_AMD`) must be built in, with no module tree, for nested Firecracker in
 privileged development boxes; `KVM_INTEL` also selects `X86_FRED`. Nesting
 additionally needs host nested virtualization. A reported 2026-10-24 AMD host
-run booted, executed in and attached to an inner Firecracker space; inner
-teardown, Intel hosts and the full `linux7.py smoke` were not run.
+run on Linux 7.2.11 booted, executed in and attached to an inner Firecracker
+space. Check nesting separately on the selected kernel.
 This is the bundled default kernel;
 Firecracker 1.17's [supported guest series](https://github.com/firecracker-microvm/firecracker/blob/v1.17.0/docs/kernel-policy.md)
 does not include Linux 7.

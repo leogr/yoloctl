@@ -1,6 +1,6 @@
 # Audit rule paths and container recognition
 
-Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes; upstream citations re-read at OpenShell v0.1.10 `152c59d3178039e3fbb4a5595f9fff7216a6be92` (main `f357061bf0f425f6d0a007d6fb31f575f038c827` and accompanying changes).
+Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes; upstream citations re-read at OpenShell v0.1.10 `152c59d3178039e3fbb4a5595f9fff7216a6be92` (main `f357061bf0f425f6d0a007d6fb31f575f038c827` and accompanying changes). Bundled runc sources re-read at `fcd4a112` and accompanying changes.
 
 [FACT] Filesystem rules distinguish changed paths from symbolic-link payloads.
 In libs0.26.1, symlink/symlinkat `fs.path.source` is the new link location;
@@ -115,7 +115,7 @@ do not prove live selection or noise rates.
 
 21. <a id="source-21"></a> [Upstream startup qualification](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/main.rs#L117) — `qualify_runtime`, socket reads L664/882, `probe_child_self_protection` L1209–1244; `run_boundary` L1794; both modes retained.
 
-22. <a id="source-22"></a> [Packaged runc](https://github.com/containerd/nerdctl/blob/v2.3.5/Dockerfile#L19) — runc1.5.1 pin.
-23. <a id="source-23"></a> [runc init](https://github.com/opencontainers/runc/blob/8f2685a471d3347a686ad3909783d8aafc6bb208/libcontainer/nsenter/nsexec.c#L855) — stage names, namespace setup.
+22. <a id="source-22"></a> [Packaged runc](https://github.com/containerd/nerdctl/blob/v2.4.2/Dockerfile#L21) — runc 1.5.2 pin.
+23. <a id="source-23"></a> [runc init](https://github.com/opencontainers/runc/blob/29dd3dc2b13b4123162e5fe132504bb4b15569f1/libcontainer/nsenter/nsexec.c#L862) — stage names, namespace setup.
 
 24. <a id="source-24"></a> [Container extraction](https://github.com/falcosecurity/plugins/blob/plugins/container/v0.7.6/plugins/container/src/caps/extract/extract.cpp#L538-L624) — native metadata lookup; label extraction L769–776, separate from yolo snapshot.

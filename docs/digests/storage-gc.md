@@ -1,6 +1,6 @@
 # Automatic VM storage cleanup
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. nerdctl image identity re-read at `fcd4a112` and accompanying changes.
 
 [FACT] Lima deployment and Firecracker guest boot configure the rootful BuildKit containerd worker
 in namespace `default`. GC targets 10% of root capacity, capped at 4 GiB,
@@ -46,11 +46,11 @@ response count, identity and reference association before any deletion.
 Normalized names, aliases and immutable identities retain candidates.
 [7](#source-7) [8](#source-8) [15](#source-15) [25](#source-25) [29](#source-29)
 
-[FACT] nerdctl 2.3.5 reports a mutable image name: retention uses the actual
-overlayfs snapshot parent's OCI ChainID, potentially retaining extra images with
-identical layers. nerdctl 2.4 can report a recorded manifest/index digest;
-containers without that label still need snapshot lookup. Manifest and platform
-config digests differ; retention matches both. Incomplete inventories abort,
+[FACT] nerdctl 2.4.2 reports the recorded manifest/index digest for containers
+with its image digest label. For older or unlabelled containers that report a
+mutable image name, retention uses the actual overlayfs snapshot parent's OCI
+ChainID. This fallback can retain extra images with identical layers. Manifest
+and platform config digests differ. Retention matches both. Incomplete inventories abort,
 including unnamed containers (with their ID in the error). Untagged image rows
 are skipped. `image prune` shares these rules. [7](#source-7) [8](#source-8)
 [15](#source-15) [21](#source-21) [22](#source-22) [26](#source-26) [31](#source-31)
@@ -122,7 +122,7 @@ cancellation; the orphan ledger is separate from receipt retention. See
 23. <a id="source-23"></a> [BuildKit 0.31.2 pruning](https://github.com/moby/buildkit/blob/v0.31.2/cache/manager.go#L1042-L1162) — shared/active cache.
 24. <a id="source-24"></a> [Lima 2.0 boot](https://github.com/lima-vm/lima/blob/v2.0.0/pkg/cidata/cidata.TEMPLATE.d/boot/40-install-containerd.sh#L60-L73) — preserves config.
 25. <a id="source-25"></a> [ValidateImage](../../internal/agentbox/resolved_image.go#L12) — declared references.
-26. <a id="source-26"></a> [nerdctl 2.3.5 inspect](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/inspecttypes/dockercompat/dockercompat.go#L344-L351) — mutable name.
+26. <a id="source-26"></a> [nerdctl 2.4.2 inspect](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/inspecttypes/dockercompat/dockercompat.go#L352-L365) — recorded digest with a mutable-name fallback.
 27. <a id="source-27"></a> [controller_storage_test.go](../../cmd/yoloctl/controller_storage_test.go#L16) — scheduler/process tests.
 28. <a id="source-28"></a> [Lima 1.2 boot](https://github.com/lima-vm/lima/blob/v1.2.0/pkg/cidata/cidata.TEMPLATE.d/boot/40-install-containerd.sh#L44-L64) — overwrites config.
 29. <a id="source-29"></a> [Save](../../internal/agentbox/agentbox.go#L557) — persistence validation.

@@ -135,17 +135,16 @@ func parseNativeOperatorProjection(raw []byte, cid, box string) (NativeOperatorS
 		if !related {
 			continue
 		}
-		// nerdctl 2.3.5 ProcessFlagV leaves Linux DefaultMountType
-		// ("none") when it appends an implicit rbind for -v src:dst:ro.
-		// Explicit bind/rbind opts produce type "bind". In both profiles
-		// the actual bind flag AND ro are required below, independently.
+		// nerdctl uses type "none" with an implicit rbind for -v src:dst:ro
+		// and type "bind" with an explicit bind option. The bind flag and
+		// the plain or recursive read-only flag are independent evidence.
 		if !selection.Enabled || mount.Destination != operator.Mount || count != 0 || mount.Source != selection.Endpoint.Directory() || (mount.Type != "bind" && mount.Type != "none") {
 			return fail()
 		}
 		readOnly, bind := 0, 0
 		for _, option := range mount.Options {
 			switch option {
-			case "ro":
+			case "ro", "rro":
 				readOnly++
 			case "bind", "rbind":
 				bind++

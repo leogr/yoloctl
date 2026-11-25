@@ -315,7 +315,7 @@ func (s *imageWarmState) consume(ctx context.Context, p agentboximage.PreparedCo
 	if err := s.publishPrepared(ctx, p, entry); err != nil {
 		return "", true, err
 	}
-	// nerdctl v2.3.5 resolves a bare OCI target digest through its image
+	// nerdctl v2.4.2 resolves a bare OCI target digest through its image
 	// walker. A name@digest needs a separate alias, deliberately not exported.
 	return entry.pin.Digest, true, nil
 }

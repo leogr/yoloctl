@@ -72,7 +72,7 @@ diagnostic and cleanup limits remain separate. [1](#source-1) [3](#source-3) [6]
 [18](#source-18) [19](#source-19)
 
 [FACT] New/recreated Lima VMs use pinned Ubuntu Minimal 24.04 images and
-nerdctl-full 2.3.5 archives for both guest architectures. Existing unpinned VMs
+nerdctl-full 2.4.2 archives for both guest architectures. Existing unpinned VMs
 need the explicit host stack-upgrade route. [6](#source-6) Provisioning reuses
 installed dependencies and verified OpenShell binaries, but upgrades an older CA
 package through apt. This does not establish a measured startup or memory

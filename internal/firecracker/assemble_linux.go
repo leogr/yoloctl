@@ -136,6 +136,9 @@ func (t imageTree) resolve(name string) (imageEntry, error) {
 }
 
 func (t imageTree) verifyRuntime() error {
+	if _, installed := t["usr/local/bin/buildg"]; installed {
+		return errors.New("guest image contains excluded buildg executable")
+	}
 	needed := []string{"/usr/sbin/sshd", "/usr/bin/ssh", "/usr/bin/sshfs", "/usr/bin/sudo", "/usr/bin/socat", "/usr/sbin/ip", "/usr/sbin/iptables", "/usr/sbin/ip6tables", "/usr/sbin/iptables-save", "/usr/sbin/nft", "/usr/bin/python3", "/usr/bin/findmnt", "/usr/bin/nsenter", "/usr/bin/setsid", "/usr/bin/flock", "/usr/bin/curl", "/usr/sbin/blkid", "/usr/sbin/fstrim", "/usr/sbin/e2fsck", "/usr/sbin/resize2fs", "/bin/bash"}
 	search := []string{"/lib/x86_64-linux-gnu", "/usr/lib/x86_64-linux-gnu", "/lib64", "/lib", "/usr/libexec/sudo"}
 	seen := map[string]bool{}
@@ -579,7 +582,7 @@ func unpackPinnedKernel(ctx context.Context, out string) error {
 	if len(manifest.Inputs) != 2 {
 		return errors.New("invalid bundled kernel provenance")
 	}
-	for _, name := range []string{"linux-7.2.11.tar.xz", "kernel-6.18.config"} {
+	for _, name := range []string{"linux-7.3.6.tar.xz", "kernel-6.18.config"} {
 		if manifest.Inputs[name] != pins[name] {
 			return errors.New("bundled kernel does not match source pins")
 		}
@@ -653,7 +656,7 @@ func assembleLocalImage(ctx context.Context, out, cache string, init guestbinary
 			return err
 		}
 	}
-	delete(pins, "linux-7.2.11.tar.xz")
+	delete(pins, "linux-7.3.6.tar.xz")
 	delete(pins, "kernel-6.18.config")
 	names := make([]string, 0, len(pins))
 	for name := range pins {
@@ -709,6 +712,10 @@ func assembleLocalImage(ctx context.Context, out, cache string, init guestbinary
 		remap := func(name string) string {
 			switch archive {
 			case "nerdctl.tgz":
+				// The archive's buildg carries a separate, older Go TLS verifier.
+				if name == "bin/buildg" {
+					return ""
+				}
 				if strings.HasPrefix(name, "bin/") && path.Dir(name) == "bin" {
 					return "usr/local/bin/" + path.Base(name)
 				}

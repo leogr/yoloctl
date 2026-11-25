@@ -1,6 +1,6 @@
 # CLI selection, runtime views, and output
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; completion registration re-read at `63b8a5be7896a88f5ecddf6159e2911fbc512fa1` and accompanying changes; space help initialization verified at `64117765f5206b36cab025c10250229f3eb59b78` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; completion registration re-read at `63b8a5be7896a88f5ecddf6159e2911fbc512fa1` and accompanying changes; space help initialization verified at `64117765f5206b36cab025c10250229f3eb59b78` and accompanying changes; re-read cited sources when changing behavior. nerdctl identifier rules re-read at `fcd4a112` and accompanying changes.
 
 [FACT] Flag/context space selection is centralized: explicit flag, nonempty
 `YOLOCTL_SPACE`, global context pin, then `default`; explicit positional targets
@@ -14,7 +14,7 @@ existing declaration or runtime rather than rewriting it. [1](#source-1)
 [FACT] Box names match `^[a-zA-Z0-9][a-zA-Z0-9._-]{1,62}$`, retaining
 reserved-name exclusions and the 63-character cap. Other entity kinds retain
 their one-character minimum. New spaces have a separate 16-character cap;
-[legacy space names and Lima placement](lima-storage.md) retain compatibility. This matches nerdctl 2.3.5's minimum/characters;
+[legacy space names and Lima placement](lima-storage.md) retain compatibility. This matches nerdctl 2.4.2's minimum/characters;
 its validator has no maximum. Create/copy's shared Args validate names before
 controller selection; native RunE and manifest validation remain. One-character
 box declarations now fail validation without renaming or deletion.
@@ -138,7 +138,7 @@ adding a new command. [3](#source-3) [11](#source-11)
 25. <a id="source-25"></a> [Name validator](../../internal/layout/layout.go#L55-L115) — `ValidateName`, patterns and reserved names.
 26. <a id="source-26"></a> [Copy validation](../../cmd/yoloctl/agentbox_copy.go#L69-L88) — shared Args and native RunE validate destination/source.
 27. <a id="source-27"></a> [Manifest validation](../../internal/agentbox/agentbox.go#L519-L520) — `Config.Validate` uses the shared box rule.
-28. <a id="source-28"></a> [nerdctl v2.3.5 validator](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/identifiers/validate.go#L25-L45) — `AllowedIdentifierPattern`, `ValidateDockerCompat`.
+28. <a id="source-28"></a> [nerdctl v2.4.2 validator](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/identifiers/validate.go#L25-L45) — `AllowedIdentifierPattern`, `ValidateDockerCompat`.
 29. <a id="source-29"></a> [Completion audit regressions](../../cmd/yoloctl/completion_audit_test.go#L37) — host `__complete` for persistent `--space` and backup/observe positionals; tree-wide entity flag and positional wiring.
 
 30. <a id="source-30"></a> [Space help initialization](../../cmd/yoloctl/main.go#L131) — `describeSpaceFlagHelp` and the pinned Cobra flag behavior.

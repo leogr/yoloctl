@@ -139,9 +139,10 @@ observations; read-only `--check` does not run this preflight or download Go.
 
 The script builds once into the fixture, retaining matching companion hashes
 and bundle ID. It creates a synthetic-account space, asserts the effective
-architecture-specific nerdctl-full 2.3.5 archive and guest nerdctl 2.3.5,
-containerd 2.3.3, runc 1.5.1 and buildctl/buildkitd 0.31.2, and checks live
-services/controller. It runs `controller-operator.sh` with preserve-space
+architecture-specific nerdctl-full 2.4.2 archive and guest nerdctl 2.4.2,
+containerd 2.4.2, runc 1.5.2 and buildctl/buildkitd 0.34.1. It checks that
+`buildg` is absent and that the services and controller are active. It runs
+`controller-operator.sh` with preserve-space
 ownership, rechecks the pins/versions and native disk identity after that
 script's VM recreation, then checks JSON boolean `HostConfig.Privileged: false`,
 verified confined mode, operator stop/start/restart without replacement, and a

@@ -39,7 +39,7 @@ installation is retired. [22](#source-22)
 [23](#source-23) [26](#source-26) Script tests simulate package/network commands
 and failures, not real VM boots or performance. [24](#source-24) [25](#source-25)
 
-[FACT] Lima also selects SHA256-pinned nerdctl-full 2.3.5 for both guest
+[FACT] Lima also selects SHA256-pinned nerdctl-full 2.4.2 for both guest
 architectures. The stack digest records empty-archive drift, overrides and
 mixed-stack privilege-evidence limits. [27](#source-27)
 
@@ -119,7 +119,7 @@ rejected. This does not delete native state or change credential import.
 22. <a id="source-22"></a> [assets/lima/yoloctl.yaml.tmpl](../../assets/lima/yoloctl.yaml.tmpl#L6) — image pins and system provisioning.
 23. <a id="source-23"></a> [assets/embed.go](../../assets/embed.go#L32-L35) — `SandboxVersion` v0.1.10; executable/Rego bytes come from the compiled qualification and embedded artifacts, not a VM-side download.
 24. <a id="source-24"></a> [internal/lima/template_test.go](../../internal/lima/template_test.go#L67) — `TestTemplatePinsMinimalImagesForBothGuestArchitectures`.
-25. <a id="source-25"></a> [internal/lima/provision_test.go](../../internal/lima/provision_test.go#L59) — `TestVMRuntimePackageProvisioning`, `TestCACertificatesProvisioningUpgrade` at L129 and `TestTemplateDoesNotProvisionRetiredOpenShell`, package reuse, CA upgrade, corruption and retry coverage.
+25. <a id="source-25"></a> [internal/lima/provision_test.go](../../internal/lima/provision_test.go#L55) — `TestVMRuntimePackageProvisioning`, `TestCACertificatesProvisioningUpgrade` at L125 and `TestTemplateDoesNotProvisionRetiredOpenShell`, package reuse, CA upgrade, corruption and retry coverage.
 26. <a id="source-26"></a> [Canonical release checksums](https://cloud-images.ubuntu.com/minimal/releases/noble/release-20261001/SHA256SUMS) — pinned amd64/arm64 Minimal images.
 27. <a id="source-27"></a> [Lima stack](lima-stack.md) — archive selection and privilege evidence.
 28. <a id="source-28"></a> [internal/strictyaml/marshal.go](../../internal/strictyaml/marshal.go#L1) — `Marshal`; marshal_test.go and agentbox `TestSaveLoadsBackMultilineStrings`.

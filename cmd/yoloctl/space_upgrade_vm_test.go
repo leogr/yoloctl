@@ -278,7 +278,7 @@ func TestSpaceUpgradeAsksAboutTheVMBeforeTheControllerUpdate(t *testing.T) {
 			// The real template (its OpenShell provisioning passes the deploy
 			// check), with one container-stack pin changed.
 			template := string(vmhost.TemplateWithAccountDisk(nil, "", false))
-			pin := "sha256:b697295c623639734aaab737523c808fd3cc8d3046039fd94fff1744e4c317aa"
+			pin := "sha256:1f12c1a5840744fdf7029483c55a69813d44aa2ec1ef879d52d81ff6a3049ecd"
 			if !strings.Contains(template, pin) {
 				t.Fatal("template pin not found; update this fixture")
 			}

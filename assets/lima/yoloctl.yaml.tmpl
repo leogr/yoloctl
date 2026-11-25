@@ -32,12 +32,12 @@ containerd:
   # Select by guest architecture, including an amd64 CLI under Rosetta.
   # Keep the full stack aligned with Firecracker; no moving fallback.
   archives:
-  - location: https://github.com/containerd/nerdctl/releases/download/v2.3.5/nerdctl-full-2.3.5-linux-amd64.tar.gz
+  - location: https://github.com/containerd/nerdctl/releases/download/v2.4.2/nerdctl-full-2.4.2-linux-amd64.tar.gz
     arch: x86_64
-    digest: sha256:b697295c623639734aaab737523c808fd3cc8d3046039fd94fff1744e4c317aa
-  - location: https://github.com/containerd/nerdctl/releases/download/v2.3.5/nerdctl-full-2.3.5-linux-arm64.tar.gz
+    digest: sha256:1f12c1a5840744fdf7029483c55a69813d44aa2ec1ef879d52d81ff6a3049ecd
+  - location: https://github.com/containerd/nerdctl/releases/download/v2.4.2/nerdctl-full-2.4.2-linux-arm64.tar.gz
     arch: aarch64
-    digest: sha256:6e4b687f1d138e750a3c8372abc0f81d3d7490b6359c48c0562fc7dfe98859b2
+    digest: sha256:fe0ef0e9840ee8932640e6058f84b7fa98050f9726e44af44883a5b804ae830e
 
 provision:
 
@@ -133,6 +133,65 @@ provision:
     test -x /usr/sbin/nft
     /usr/sbin/nft --version
 
+# Lima installs the selected archive before system provisioning. Omit the
+# older TLS verifier in buildg only for the qualified archive.
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eu -o pipefail
+    status=/run/yoloctl-container-stack
+    rm -f -- "$status"
+    bin=$(realpath -ms -- "${LIMA_CIDATA_GUEST_INSTALL_PREFIX:-/usr/local}/bin")
+    debugger="$bin/buildg"
+    if [[ ! -e "$debugger" && ! -L "$debugger" ]]; then
+      printf '%s\n' "$debugger" > "$status"
+      exit 0
+    fi
+    archive_checksum=
+    case $(uname -m) in
+      x86_64)
+        archive_checksum=1f12c1a5840744fdf7029483c55a69813d44aa2ec1ef879d52d81ff6a3049ecd
+        debugger_checksum=81d5e8ba34d5c923196d69834dbf142affbb6b2ce5ec2ff1d4c96dc65672cc18
+        ;;
+      aarch64)
+        archive_checksum=fe0ef0e9840ee8932640e6058f84b7fa98050f9726e44af44883a5b804ae830e
+        debugger_checksum=0bd5ed100fda179043afaa79e77a41931a9c9b95b9333e8ea5fd8844e5e165d0
+        ;;
+    esac
+    archive=
+    # The cidata member name is the same for the default and an override.
+    if [[ -n "${LIMA_CIDATA_MNT:-}" && -n "${LIMA_CIDATA_CONTAINERD_ARCHIVE:-}" ]]; then
+      archive="$LIMA_CIDATA_MNT/$LIMA_CIDATA_CONTAINERD_ARCHIVE"
+    fi
+    if [[ ! -f "$archive" ]] || ! digest=$(sha256sum < "$archive"); then
+      echo 'yoloctl: cannot identify the selected Lima container archive' >&2
+      exit 1
+    fi
+    if [[ "$digest" != "$archive_checksum  -" ]]; then
+      echo 'yoloctl: Lima container stack is outside the qualified archive pins' >&2
+      printf 'unqualified\n' > "$status"
+      exit 0
+    fi
+    if [[ $(realpath -e -- "$bin") != "$bin" || -L "$debugger" || ! -f "$debugger" ]]; then
+      echo 'yoloctl: refusing to remove buildg from an unexpected path' >&2
+      exit 1
+    fi
+    dir=$bin
+    while [[ "$dir" != / ]]; do
+      read -r owner mode < <(stat -c '%u %a' -- "$dir")
+      if [[ "$owner" != 0 ]] || (( 8#$mode & 022 )); then
+        echo "yoloctl: refusing to remove buildg from writable or non-root directory $dir" >&2
+        exit 1
+      fi
+      dir=$(dirname -- "$dir")
+    done
+    if [[ $(stat -c '%u' -- "$debugger") != 0 || $(sha256sum < "$debugger") != "$debugger_checksum  -" ]]; then
+      echo 'yoloctl: refusing to remove a buildg executable outside the pinned archive' >&2
+      exit 1
+    fi
+    rm -- "$debugger"
+    printf '%s\n' "$debugger" > "$status"
+
 probes:
 - mode: readiness
   description: "native OpenShell nftables is installed"
@@ -145,7 +204,7 @@ probes:
     nftables provisioning failed. Check the Lima cloud-init provision log.
 
 - mode: readiness
-  description: "containerd is running"
+  description: "containerd is running and container archive provisioning passed"
   script: |
     #!/bin/bash
     set -eux -o pipefail
@@ -153,8 +212,14 @@ probes:
       echo >&2 "containerd is not running"
       exit 1
     fi
+    result=$(sudo cat /run/yoloctl-container-stack)
+    case "$result" in
+      unqualified) ;;
+      /*/buildg) test ! -e "$result" && test ! -L "$result" ;;
+      *) exit 1 ;;
+    esac
   hint: |
-    containerd is not running. Check: systemctl status containerd
+    Check the Lima cloud-init provision log and systemctl status containerd.
 
 # Auto-forward all guest localhost ports to host.
 portForwards:

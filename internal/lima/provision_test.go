@@ -1,6 +1,7 @@
 package lima
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"os/exec"
@@ -185,5 +186,94 @@ func TestTemplateDoesNotProvisionRetiredOpenShell(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "containerd") {
 		t.Fatal("unrelated VM provisioning was lost")
+	}
+}
+
+func TestContainerStackRespectsLimaArchiveOverride(t *testing.T) {
+	provision := provisionScript(t, "LIMA_CIDATA_CONTAINERD_ARCHIVE")
+	var tmpl struct {
+		Probes []struct{ Mode, Script string }
+	}
+	if err := yaml.Unmarshal(TemplateWithAccountDisk(nil, "", false), &tmpl); err != nil {
+		t.Fatal(err)
+	}
+	const marker = "/run/yoloctl-container-stack"
+	var readiness string
+	for _, probe := range tmpl.Probes {
+		if probe.Mode == "readiness" && strings.Contains(probe.Script, marker) {
+			readiness = probe.Script
+			break
+		}
+	}
+	if readiness == "" {
+		t.Fatal("no readiness probe for the container archive")
+	}
+
+	const qualifiedArchive = "pinned archive bytes"
+	const qualifiedDebugger = "archive buildg bytes"
+	pins := strings.NewReplacer(
+		"1f12c1a5840744fdf7029483c55a69813d44aa2ec1ef879d52d81ff6a3049ecd", fmt.Sprintf("%x", sha256.Sum256([]byte(qualifiedArchive))),
+		"81d5e8ba34d5c923196d69834dbf142affbb6b2ce5ec2ff1d4c96dc65672cc18", fmt.Sprintf("%x", sha256.Sum256([]byte(qualifiedDebugger))),
+	)
+	provision = pins.Replace(provision)
+	for _, tc := range []struct {
+		name, archive, debugger string
+		ready, remove           bool
+	}{
+		{"pinned", qualifiedArchive, qualifiedDebugger, true, true},
+		{"explicit override", "other archive bytes", "other buildg bytes", true, false},
+		{"pinned with modified buildg", qualifiedArchive, "modified buildg bytes", false, false},
+		{"missing selected archive", "", "unidentified buildg bytes", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			bin := filepath.Join(dir, "bin")
+			if err := os.Mkdir(bin, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			status := filepath.Join(dir, "stack-status")
+			debugger := filepath.Join(bin, "buildg")
+			provisionWrite(t, status, "unqualified\n", 0o644)
+			if tc.archive != "" {
+				provisionWrite(t, filepath.Join(dir, "nerdctl-full.tgz"), tc.archive, 0o600)
+			}
+			provisionWrite(t, debugger, tc.debugger, 0o755)
+			provisionWrite(t, filepath.Join(bin, "uname"), "#!/bin/sh\necho x86_64\n", 0o755)
+			provisionWrite(t, filepath.Join(bin, "stat"), `#!/bin/sh
+case "$2" in
+  '%u %a') echo '0 755' ;;
+  '%u') echo 0 ;;
+  *) exit 2 ;;
+esac
+`, 0o755)
+			provisionWrite(t, filepath.Join(bin, "sudo"), "#!/bin/sh\nexec \"$@\"\n", 0o755)
+			provisionWrite(t, filepath.Join(bin, "nerdctl"), "#!/bin/sh\ntest \"$1\" = info\n", 0o755)
+			t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+			t.Setenv("LIMA_CIDATA_MNT", dir)
+			t.Setenv("LIMA_CIDATA_CONTAINERD_ARCHIVE", "nerdctl-full.tgz")
+			t.Setenv("LIMA_CIDATA_GUEST_INSTALL_PREFIX", dir)
+
+			runProvision(t, strings.ReplaceAll(provision, marker, status), tc.ready)
+			probe := strings.ReplaceAll(readiness, marker, status)
+			runProvision(t, probe, tc.ready)
+			if tc.ready && !tc.remove {
+				if got, err := os.ReadFile(status); string(got) != "unqualified\n" || err != nil {
+					t.Fatalf("expected override status to be unqualified, got %q, %v", got, err)
+				}
+			}
+			if tc.remove {
+				if _, err := os.Lstat(debugger); !os.IsNotExist(err) {
+					t.Fatalf("expected pinned buildg to be absent, got %v", err)
+				}
+				// An ordinary restart leaves no debugger to classify.
+				provisionWrite(t, filepath.Join(bin, "sha256sum"), "#!/bin/sh\nexit 2\n", 0o755)
+				runProvision(t, strings.ReplaceAll(provision, marker, status), true)
+				runProvision(t, probe, true)
+				provisionWrite(t, debugger, tc.debugger, 0o755)
+				runProvision(t, probe, false)
+			} else if got, err := os.ReadFile(debugger); string(got) != tc.debugger || err != nil {
+				t.Fatalf("buildg status changed: %q, %v", got, err)
+			}
+		})
 	}
 }

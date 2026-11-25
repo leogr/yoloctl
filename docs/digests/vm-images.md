@@ -2,6 +2,9 @@
 
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; OpenShell retirement `1d265df3` and accompanying changes; grow capability `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; audit kernel `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes; init build ID `6fa0a8ced0566ecd2f18066a0fe3a442946b632b` and accompanying changes; re-read cited sources when changing behavior.
 
+Guest kernel and container stack verified on `fcd4a112bc26c8316d9ecf9c0e216a5fee9c0f22`
+and accompanying changes.
+
 [FACT] Firecracker create/import and explicit image updates resolve immutable
 media under config-root `vm-images/firecracker`. Automatic selection hashes the
 recipe version, guest protocol, linked init SHA256, kernel metadata/config,
@@ -82,7 +85,7 @@ are not VM crash testing. Packaging supports explicit four-member tar.gz bundles
 there is no unified OCI resolver/publisher. [11](#source-11) [12](#source-12)
 [13](#source-13) [14](#source-14) [17](#source-17)
 
-[FACT] The bundled kernel is upstream Linux 7.2.11, checksum-pinned with its
+[FACT] The bundled kernel is upstream Linux 7.3.6, checksum-pinned with its
 complete configuration and compiler provenance. The maintainer recipe adapts
 Firecracker's 6.18 configuration with `olddefconfig`, enables pressure telemetry,
 checks confinement/resource requirements and fixes build metadata. The audit
@@ -94,10 +97,17 @@ do not prove a live modern-eBPF load. It requires
 built-in `VIRTUALIZATION`, `KVM`, `KVM_INTEL` and `KVM_AMD`, so nested KVM needs
 no guest module tree; `KVM_INTEL` selects `X86_FRED`. Qualification
 retains the selected kernel across image replacement/import and probes Landlock,
-cgroups and pressure telemetry. Recipe checks alone do not prove live compatibility.
-leogr reported nested Firecracker booting on this kernel on an AMD host; inner
-teardown and Intel hosts are unverified.
+cgroups and pressure telemetry. The reported AMD nested boot used the previous
+7.2.11 kernel. Build and recipe checks alone do not establish runtime results
+on 7.3.6.
 [18](#source-18) [19](#source-19) [20](#source-20) [21](#source-21) [22](#source-22) [23](#source-23)
+
+[FACT] The Firecracker userspace selects the official amd64 nerdctl-full
+2.4.2 archive (containerd 2.4.2). Assembly omits its `buildg` debugger. The
+kernel provenance and archive pins change the default recipe identity, so
+older default media is not selected for new preparations. Existing spaces
+adopt the new media through explicit image replacement.
+[2](#source-2) [33](#source-33) [34](#source-34)
 
 [FACT] The OpenShell upgrade removes the `openshell.tgz` input and the retired
 `/opt/openshell` paths from newly assembled Firecracker images only and bumps
@@ -139,7 +149,7 @@ stdout. [32](#source-32)
 2. <a id="source-2"></a> [Recipe identity](../../internal/firecracker/recipe_linux.go#L21) — `defaultRecipe`, inputs/version.
 3. <a id="source-3"></a> [Init verification](../../internal/guestbinary/binary.go#L24) — `ResolveInit`.
 4. <a id="source-4"></a> [Preparation](../../internal/firecracker/prepare_linux.go#L21) — `imageLock`, `prepareLocalImage`.
-5. <a id="source-5"></a> [Native assembly](../../internal/firecracker/assemble_linux.go#L607) — `assembleLocalImage`: virtual tree, ELF checks and ext4.
+5. <a id="source-5"></a> [Native assembly](../../internal/firecracker/assemble_linux.go#L640) — `assembleLocalImage`: virtual tree, ELF checks and ext4.
 6. <a id="source-6"></a> [Media verification](../../internal/firecracker/config.go#L121) — `VerifyImage`, `unchangedImage`.
 7. <a id="source-7"></a> [Grant checks](../../cmd/yoloctl/space_lifecycle.go#L21) — `rejectManagedHostPath`, `rejectSpaceHostPath`.
 8. <a id="source-8"></a> [Image transaction](../../cmd/yoloctl/space_image_update.go#L19) — `recreateSpaceImage`, `replaceSpaceImage`.
@@ -157,7 +167,7 @@ stdout. [32](#source-32)
 20. <a id="source-20"></a> [Per-phase kernel check](../../scripts/smoke/common.sh#L196-L215) — `smoke_ensure_space`.
 21. <a id="source-21"></a> [Bundled recipe](../../assets/vm/firecracker/inputs.py#L24) — `REQUIRED`, `KERNEL_EXTRAS`, `kernel`, `publish_kernel`; exact qualified tool packages in kernel-tools.json.
 22. <a id="source-22"></a> [Bundled provenance](../../assets/vm/firecracker/kernel.json#L1) — source, configuration and compiler identities.
-23. <a id="source-23"></a> [Effective configuration](../../assets/vm/firecracker/kernel.config#L714) — built-in KVM/Intel/AMD; `X86_FRED` at L368.
+23. <a id="source-23"></a> [Effective configuration](../../assets/vm/firecracker/kernel.config#L718-L725) — built-in KVM/Intel/AMD; `X86_FRED` at L371.
 24. <a id="source-24"></a> [CA trust stores](trust-stores.md) — package pin and store regeneration.
 25. <a id="source-25"></a> [Grow capability](../../internal/firecracker/config.go#L28-L43) — `Image.DataDiskGrow`, `DataDiskGrowVersion`; `verifyRuntime` in assemble_linux.go; `imageRecipeVersion` in recipe_linux.go.
 26. <a id="source-26"></a> [Retired inputs](../../internal/firecracker/recipe_linux.go#L21) — `imageRecipeVersion` 4; retired paths in assemble_linux.go; `assets/vm/firecracker/pins.json` without `openshell.tgz`; Lima template without the download/Rego sections (retirement tree `3cc5e841`).
@@ -167,3 +177,5 @@ stdout. [32](#source-32)
 30. <a id="source-30"></a> [Lima hostname provisioning](../../assets/lima/yoloctl.yaml.tmpl#L49-L74) — `add_local_hostname`.
 31. <a id="source-31"></a> [Retained Lima configuration](../../internal/lima/lima.go#L142-L173) — `SetInstanceMounts` preserves provisioning.
 32. <a id="source-32"></a> [OpenShell check context and diagnostics](../../cmd/yoloctl/space_openshell_image.go#L49-L135) — both guest invocations, context errors and bounded stderr.
+33. <a id="source-33"></a> [VM pins](../../assets/vm/firecracker/pins.json#L10-L13) — `nerdctl.tgz` URL and digest.
+34. <a id="source-34"></a> [Assembly](../../internal/firecracker/assemble_linux.go#L702) — remaps the archive without `bin/buildg`.

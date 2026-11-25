@@ -119,7 +119,7 @@ show only recovery guidance. [9](#source-9)
    [bounded probe](../../cmd/yoloctl/version.go#L88-L107).
 4. <a id="source-4"></a> [Smoke roots](../../scripts/smoke/common.sh#L146-L194), `smoke_init`;
    [sentinel regression](../../scripts/test_vm_smoke.py#L101-L130);
-   [Lima gate](../../scripts/smoke/lima_stack.py#L380), `identity`, `setup`, `check`;
+   [Lima gate](../../scripts/smoke/lima_stack.py#L390), `identity`, `setup`, `check`;
    [gate regressions](../../scripts/test_lima_stack.py#L1).
 5. <a id="source-5"></a> [Manifest](../../internal/releasebundle/manifest.go#L1-L156), `Validate`, `Verify`, `VerifyLinked`;
    [packager](../../scripts/dist.go#L1-L146), `run`;

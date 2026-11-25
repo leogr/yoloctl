@@ -5,9 +5,9 @@
       "url": "https://raw.githubusercontent.com/firecracker-microvm/firecracker/v1.17.0/resources/guest_configs/microvm-kernel-ci-x86_64-6.18.config",
       "sha256": "ba22401a0c7292a4c024ebcd10a562d4a1f1bfd2faed671406d3b159c0cf5215"
     },
-    "linux-7.2.11.tar.xz": {
-      "url": "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.2.11.tar.xz",
-      "sha256": "fd0fc479f983a8c05313f13e9c36330fe6651cf725396748c40d5cd93fa1e6a4"
+    "linux-7.3.6.tar.xz": {
+      "url": "https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.3.6.tar.xz",
+      "sha256": "8183d475a76a0faffa92d6cd500af421f589dfd0300a0f1060bb875e11d45723"
     }
   },
   "enabled": [
@@ -97,25 +97,25 @@
     "LOCALVERSION_AUTO",
     "DEBUG_INFO_NONE"
   ],
-  "kernel_sha256": "6dae9bea592712fbec43e92b0c6bae8ff86c52af308cd65ab707e1175ed14787",
-  "config_sha256": "a81416752e32808e5720f4ab2a7f86e2b4cb4d4d6cd6dd555abd0a1824144b5c",
+  "kernel_sha256": "3b6960f134c2d9172d73ce735ac50935b2918e104544d5847c7ea630d1d460c1",
+  "config_sha256": "585010977b79836e244a2a56e38ce83daf75908e24e46c69bf61936115020f06",
   "compiler": "x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
   "build_tools": {
     "cc": {
       "version": "x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
-      "sha256": "c7c4fabc77f03e165c2f3ae339b181ef974375f761a20a21f94a1b7e0101bd1d"
+      "sha256": "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26"
     },
     "pahole": {
       "version": "v1.25",
-      "sha256": "6ad2e798fe3b6147d82f1dff13957c5998d02910b92b8fc3b3a4d9bd3653b026"
+      "sha256": "5c0192f277a7e45db8847072ca048c03412cfc8450fbc2b1a86fcc3b54967042"
     },
     "ld": {
       "version": "GNU ld (GNU Binutils for Ubuntu) 2.42",
-      "sha256": "a3ef754c93653b732af112fd93cd5912a1c5c7de10004fea140b82e6aa75787c"
+      "sha256": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b"
     },
     "objcopy": {
       "version": "GNU objcopy (GNU Binutils for Ubuntu) 2.42",
-      "sha256": "58d45761ca76e6c59ad32f8582bd9273a990dd81ab78f44e4d3643858c1c0366"
+      "sha256": "9276e918e3c26d3aa7ef9dd2232cd8ac692f03d3c1f270bfa5144a2b5492b713"
     }
   },
   "pahole_flags": "--btf_gen_floats -j1 --skip_encoding_btf_inconsistent_proto --btf_gen_optimized --lang_exclude=rust"

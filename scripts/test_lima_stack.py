@@ -55,7 +55,7 @@ elif tool=='make':
 elif tool=='limactl':
  if args==['--version']: print('limactl version 2.2.1')
  elif args[:3]==['nested','space','create']:
-  url='https://github.com/containerd/nerdctl/releases/download/v2.3.5/nerdctl-full-2.3.5-linux-arm64.tar.gz'
+  url='https://github.com/containerd/nerdctl/releases/download/v2.4.2/nerdctl-full-2.4.2-linux-arm64.tar.gz'
   cache=p(os.environ['HOME'])/'Library/Caches/lima/download/by-url-sha256'/hashlib.sha256(url.encode()).hexdigest()
   cache.mkdir(parents=True,exist_ok=True); (cache/'data').write_bytes(b'fake archive')
  elif args[:1]==['nested']: pass
@@ -64,8 +64,8 @@ elif tool=='limactl':
  else:
   print(json.dumps({'name':'yolo-'+space,'status':'Stopped' if mode=='stopped' else 'Running','arch':'aarch64',
    'containerd':{'system':True,'user':False,'archives':[
-    {'arch':'x86_64','location':'https://github.com/containerd/nerdctl/releases/download/v2.3.5/nerdctl-full-2.3.5-linux-amd64.tar.gz','digest':'sha256:b697295c623639734aaab737523c808fd3cc8d3046039fd94fff1744e4c317aa'},
-    {'arch':'aarch64','location':'https://github.com/containerd/nerdctl/releases/download/v2.3.5/nerdctl-full-2.3.5-linux-arm64.tar.gz','digest':'sha256:6e4b687f1d138e750a3c8372abc0f81d3d7490b6359c48c0562fc7dfe98859b2'}]},
+    {'arch':'x86_64','location':'https://github.com/containerd/nerdctl/releases/download/v2.4.2/nerdctl-full-2.4.2-linux-amd64.tar.gz','digest':'sha256:1f12c1a5840744fdf7029483c55a69813d44aa2ec1ef879d52d81ff6a3049ecd'},
+    {'arch':'aarch64','location':'https://github.com/containerd/nerdctl/releases/download/v2.4.2/nerdctl-full-2.4.2-linux-arm64.tar.gz','digest':'sha256:fe0ef0e9840ee8932640e6058f84b7fa98050f9726e44af44883a5b804ae830e'}]},
    'mounts':[{'location':os.environ.get('STACK_MOUNT',str(root/'workdir'))}],'disks':[]}))
 elif tool=='yoloctl':
  subprocess.run(['limactl','nested',*args],stdout=subprocess.DEVNULL,check=True)
@@ -102,10 +102,14 @@ elif tool=='yoloctl':
    if mode=='true': v['privileged']=True
    print(json.dumps(v))
   elif '--version' in guest:
-   versions={'nerdctl':'2.3.5','containerd':'2.3.3','runc':'1.5.1','buildctl':'0.31.2','buildkitd':'0.31.2'}
+   versions={'nerdctl':'2.4.2','containerd':'2.4.2','runc':'1.5.2','buildctl':'0.34.1','buildkitd':'0.34.1'}
    value=versions[guest[0]]
    if mode=='post-recreate-version' and (root/'recreated').exists(): value='0.0.1'
    print(guest[0]+' version v'+value)
+  elif guest[0]=='sh' and 'excluded buildg' in guest[-1]:
+   if mode=='buildg-installed':
+    print('excluded buildg is installed',file=sys.stderr)
+    sys.exit(1)
   else: print('active')
  elif args[:3]==['box','exec','smoke-operator']:
   if '--capability' in args: (root/'pty-granted').touch()
@@ -175,11 +179,19 @@ if [[ "${STACK_CASE:-}" == operator-fail ]]; then exit 31; fi
     def calls(self):
         return [json.loads(x) for x in self.audit.read_text().splitlines()]
 
+    def test_rejects_excluded_buildg(self):
+        with patch.dict(os.environ, {'STACK_CASE': 'buildg-installed'}):
+            status, report = self.run_gate()
+        self.assertNotEqual(status, 0)
+        self.assertEqual(report['phases'][-2]['phase'], 'create')
+        self.assertEqual(report['phases'][-2]['result'], 'FAIL')
+
     def test_default_order_owned_environment_and_one_bundle(self):
         status, report = self.run_gate()
         self.assertEqual(status, 0, report)
         self.assertEqual([p['phase'] for p in report['phases']], ['setup','toolchain','build','create','operator','lifecycle','images','cleanup'])
         self.assertEqual(report['result'], 'PASS')
+        self.assertTrue(report['buildg_absent'])
         self.assertFalse(Path(report['fixture']).exists())
         calls = self.calls()
         self.assertEqual(sum(c['tool']=='make' for c in calls), 1)

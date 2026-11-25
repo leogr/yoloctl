@@ -107,6 +107,27 @@ func TestNativeOperatorProjectionAcceptsExplicitBindAndOriginalUppercaseIncarnat
 	}
 }
 
+func TestNativeOperatorProjectionAcceptsRecursiveReadOnlyBind(t *testing.T) {
+	entry := operatorProjectionFixture()
+	mount := entry["Spec"].(map[string]any)["mounts"].([]any)[0].(map[string]any)
+	// Linux nerdctl 2.4.2 stores these options for -v src:dst:ro.
+	want := []string{"rro", "rprivate", "rbind"}
+	mount["options"] = want
+	client, log := nativeMountCommandFixture(t, map[string]any{"inspects": []string{operatorProjectionJSON(t, entry)}})
+	observation, err := client.NativeOperatorProjection(t.Context(), operatorProjectionCID, "selected")
+	if err != nil {
+		t.Fatal("recursive read-only projection refused", err)
+	}
+	selection, err := observation.Selection()
+	if err != nil || !selection.Enabled || selection.Mount.Type != "none" || !reflect.DeepEqual(selection.Mount.Options, want) {
+		t.Fatalf("recursive read-only projection = %+v, %v", selection, err)
+	}
+	wantCalls := [][]string{{"inspect", "--mode", "native", operatorProjectionCID}, {"inspect", "--mode", "native", operatorProjectionCID}}
+	if got := operatorProjectionCalls(t, log); !reflect.DeepEqual(got, wantCalls) {
+		t.Fatal("projection used name/filtered/summary query or retry", got)
+	}
+}
+
 func TestNativeOperatorProjectionDisabledIsCapturedCIDOnlyNotEmptyRegistrations(t *testing.T) {
 	for _, label := range []string{"missing", "null", "empty-map", "empty-value"} {
 		t.Run(label, func(t *testing.T) {
@@ -141,7 +162,11 @@ func TestNativeOperatorProjectionDisabledIsCapturedCIDOnlyNotEmptyRegistrations(
 }
 
 func TestNativeOperatorProjectionRejectsConflictingOrIncompleteRecordedBind(t *testing.T) {
-	for _, change := range []string{"no-label", "wrong-label", "no-bind", "wrong-source", "source-alias", "wrong-type", "rw", "ro-rw", "missing-ro", "missing-bind-option", "duplicate-ro", "duplicate-bind-option", "duplicate-target", "target-alias", "child-target"} {
+	for _, change := range []string{
+		"no-label", "wrong-label", "no-bind", "wrong-source", "source-alias", "wrong-type",
+		"rw", "ro-rw", "rro-rw", "ro-rro", "missing-ro", "missing-bind-option",
+		"duplicate-ro", "duplicate-bind-option", "duplicate-target", "target-alias", "child-target",
+	} {
 		t.Run(change, func(t *testing.T) {
 			entry := operatorProjectionFixture()
 			spec := entry["Spec"].(map[string]any)
@@ -163,6 +188,10 @@ func TestNativeOperatorProjectionRejectsConflictingOrIncompleteRecordedBind(t *t
 				mount["options"] = []string{"rbind", "rw"}
 			case "ro-rw":
 				mount["options"] = []string{"rbind", "ro", "rw"}
+			case "rro-rw":
+				mount["options"] = []string{"rbind", "rro", "rw"}
+			case "ro-rro":
+				mount["options"] = []string{"rbind", "ro", "rro"}
 			case "missing-ro":
 				mount["options"] = []string{"rbind"}
 			case "missing-bind-option":

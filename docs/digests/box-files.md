@@ -2,6 +2,7 @@
 
 Verification: `ee88de4d528a26a107e3f38384423565b8d773fe` and accompanying changes; re-read cited symbols when changing behavior.
 Linux publication diagnostic verified on `f357061bf0f425f6d0a007d6fb31f575f038c827` and accompanying changes.
+nerdctl export behavior re-read at `fcd4a112` and accompanying changes.
 
 [FACT] Host-only `box cp BOX:PATH DEST|- [--space SPACE] [--overwrite]`
 exports a retained running or stopped container without starting, stopping,
@@ -25,8 +26,8 @@ a replacement by name. No lifecycle mutation lock spans the stream. [1](#source-
 [FACT] The VM runs rootful `nerdctl cp -- CID:PATH -`, with argv preserved,
 stdout streamed unchanged and actual producer/transport failure returned. Pinned
 nerdctl resolves relative source paths from container root, follows selected
-container-side links/mount mappings, and can mount a stopped snapshot. An
-explicit bound path can select its existing VM source; recursively exporting a
+container-side links/mount mappings, and can mount a stopped snapshot. It passes the tar source directory with
+`-C`. An explicit bound path can select its existing VM source; recursively exporting a
 snapshot ancestor does not collect every nested bind. No credential, account
 or infrastructure path denylist is applied. Running files are best-effort live
 reads, not a consistent snapshot. [4](#source-4) [5](#source-5) [11](#source-11)
@@ -70,12 +71,12 @@ retry occurs. [1](#source-1) [6](#source-6)
 2. <a id="source-2"></a> [Exact container selection](../../cmd/yoloctl/agentbox_cp_worker.go#L19-L90) — `runControllerBoxFiles`, `checkBoxFileContainer`, `exportRetainedBox`.
 3. <a id="source-3"></a> [Retained native ownership](../../internal/agentbox/file_export_linux.go#L20-L119) — `VerifyFileExportRuntime`, `verifyFileExportRecords`, `validateFileExportRecord`; reuses `openshell_native_linux.go` `readRuntimeMetadata`.
 4. <a id="source-4"></a> [Producer](../../internal/container/copy.go#L12-L26) — `CopyArchive`.
-5. <a id="source-5"></a> [nerdctl v2.3.5 stopped snapshot and tar arguments](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/containerutil/cp_linux.go) — `CopyFiles`, container-to-stdout tar branches.
+5. <a id="source-5"></a> [nerdctl v2.4.2 stopped snapshot and tar arguments](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/containerutil/cp_linux.go#L254-L300) — container-to-stdout tar and its source directory.
 6. <a id="source-6"></a> [Archive validation and publication](../../internal/boxexport/export.go#L43-L467) — `Copy`, `receive`, `publishEntry`, `checkLink`.
 7. <a id="source-7"></a> [Host directory authority](../../internal/boxexport/fs_unix.go#L32-L218) — `openHostDirectory`, `newStage`, `moveEntry`, `cleanupStage`; platform `renameExclusive` uses Linux `RENAME_NOREPLACE` / Darwin `RENAME_EXCL`.
 8. <a id="source-8"></a> [Host-only registry](../../cmd/yoloctl/controller_internal.go#L40-L125) — `controllerOperations`;
    `executeControllerWorker` [dispatches the typed read](../../cmd/yoloctl/controller_internal.go#L749-L750).
 9. <a id="source-9"></a> [Server authorization](../../internal/controller/protocol.go#L231-L266) — `Authorize`, `BoxAllowed`.
 10. <a id="source-10"></a> [Export-only record decoder](../../internal/openshell/export_record_linux.go#L10-L49) — `DecodeExportRecord`.
-11. <a id="source-11"></a> [nerdctl v2.3.5 source resolution](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/containerutil/cp_resolve_linux.go) — relative-root, source-link and mount mapping.
+11. <a id="source-11"></a> [nerdctl v2.4.2 source resolution](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/containerutil/cp_resolve_linux.go) — relative-root, source-link and mount mapping.
 12. <a id="source-12"></a> [Linux exclusive move](../../internal/boxexport/rename_linux.go#L9-L15) — `renameExclusive` diagnoses `EINVAL` while preserving the errno.

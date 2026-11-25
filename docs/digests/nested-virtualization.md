@@ -33,4 +33,4 @@ includes built-in KVM support for Intel and AMD. [3](#source-3) [4](#source-4)
 1. <a id="source-1"></a> [Nested resolution](../../internal/vmapi/nested_virtualization.go#L1) — `ResolveNestedVirtualization`, `NestedHostFacts.Eligible`.
 2. <a id="source-2"></a> [Lima resource update](../../internal/lima/resources.go#L1) — `SetInstanceResources`, `setResourcesInYAML` guarded explicit boolean update.
 3. <a id="source-3"></a> [Host boot and display](../../cmd/yoloctl/space_nested_virtualization.go#L19-L86) — `applySpaceBootResources`, `fillNestedSpaceShow` and `nestedBootNotice`.
-4. <a id="source-4"></a> [Bundled guest KVM config](../../assets/vm/firecracker/kernel.config#L713-L720) — built-in virtualization, KVM, KVM_INTEL and KVM_AMD.
+4. <a id="source-4"></a> [Bundled guest KVM config](../../assets/vm/firecracker/kernel.config#L718-L725) — built-in virtualization, KVM, KVM_INTEL and KVM_AMD.

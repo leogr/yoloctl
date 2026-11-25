@@ -107,7 +107,10 @@ def build(args):
             link.unlink(missing_ok=True)
             link.symlink_to(family + "-nft" + suffix)
     with tarfile.open(source / "nerdctl.tgz", "r:gz") as archive:
-        members = [member.name for member in archive.getmembers() if member.isfile() and (member.name.startswith("bin/") or member.name.startswith("libexec/cni/"))]
+        # Omit the debugger, which carries a separate, older Go TLS verifier.
+        members = [member.name for member in archive.getmembers()
+                   if member.isfile() and member.name != "bin/buildg"
+                   and (member.name.startswith("bin/") or member.name.startswith("libexec/cni/"))]
     for name in members:
         dest = stage / ("opt/cni/bin" if name.startswith("libexec/cni/") else "usr/local/bin") / Path(name).name
         inputs.tar_file(source / "nerdctl.tgz", name, dest)

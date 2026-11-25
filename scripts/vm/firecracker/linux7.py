@@ -14,12 +14,12 @@ import shutil
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-VERSION = "7.2.11"
+VERSION = "7.3.6"
 SOURCE = f"linux-{VERSION}.tar.xz"
-# https://cdn.kernel.org/pub/linux/kernel/v7.x/sha256sums.asc (2026-10-16)
+# https://cdn.kernel.org/pub/linux/kernel/v7.x/sha256sums.asc (2026-11-24)
 SOURCE_PIN = {
     "url": f"https://cdn.kernel.org/pub/linux/kernel/v7.x/{SOURCE}",
-    "sha256": "fd0fc479f983a8c05313f13e9c36330fe6651cf725396748c40d5cd93fa1e6a4",
+    "sha256": "8183d475a76a0faffa92d6cd500af421f589dfd0300a0f1060bb875e11d45723",
 }
 CONFIG = "kernel-6.18.config"
 REQUIRED = [

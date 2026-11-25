@@ -19,10 +19,10 @@ import time
 
 REPO = Path(__file__).resolve().parents[2]
 TEMP_ROOT = Path('/private/tmp')
-VERSIONS = {'nerdctl': '2.3.5', 'containerd': '2.3.3', 'runc': '1.5.1',
-            'buildctl': '0.31.2', 'buildkitd': '0.31.2'}
-PINS = {'x86_64': ('amd64', 'b697295c623639734aaab737523c808fd3cc8d3046039fd94fff1744e4c317aa'),
-        'aarch64': ('arm64', '6e4b687f1d138e750a3c8372abc0f81d3d7490b6359c48c0562fc7dfe98859b2')}
+VERSIONS = {'nerdctl': '2.4.2', 'containerd': '2.4.2', 'runc': '1.5.2',
+            'buildctl': '0.34.1', 'buildkitd': '0.34.1'}
+PINS = {'x86_64': ('amd64', '1f12c1a5840744fdf7029483c55a69813d44aa2ec1ef879d52d81ff6a3049ecd'),
+        'aarch64': ('arm64', 'fe0ef0e9840ee8932640e6058f84b7fa98050f9726e44af44883a5b804ae830e')}
 # Project only non-secret fields, never guest environment/account contents.
 LIMA_VIEW = ('{{""}}{"name":{{json .Name}},"status":{{json .Status}},"arch":{{json .Arch}},'
              '"containerd":{{json .Config.Containerd}},"mounts":{{json .Config.Mounts}},'
@@ -358,7 +358,7 @@ class Runner:
             arch, sha = PINS[info['arch']]
             archives = info['containerd']['archives']
             selected = next((a for a in archives if a.get('arch') in (None, info['arch'])), {})
-            expected = {'arch': info['arch'], 'location': 'https://github.com/containerd/nerdctl/releases/download/v2.3.5/nerdctl-full-2.3.5-linux-' + arch + '.tar.gz', 'digest': 'sha256:' + sha}
+            expected = {'arch': info['arch'], 'location': 'https://github.com/containerd/nerdctl/releases/download/v2.4.2/nerdctl-full-2.4.2-linux-' + arch + '.tar.gz', 'digest': 'sha256:' + sha}
             require(info['containerd']['system'] is True and info['containerd'].get('user', False) is False
                     and all(selected.get(k) == v for k, v in expected.items()), 'effective stack pin differs')
             if self.root:
@@ -371,6 +371,12 @@ class Runner:
             found[tool] = matches[0]
             if pinned:
                 require(found[tool] == want, 'unexpected ' + tool + ' version: ' + raw)
+        if pinned:
+            self.guest('sh', '-ec',
+                       'bin=$(dirname -- "$(command -v nerdctl)"); '
+                       'if [ -e "$bin/buildg" ] || [ -L "$bin/buildg" ] || command -v buildg >/dev/null; '
+                       'then echo "excluded buildg is installed" >&2; exit 1; fi')
+            self.report['buildg_absent'] = True
         self.guest('systemctl', 'is-active', 'containerd.service', 'buildkit.service', 'yoloctl-controller.service')
         show = json.loads(self.cli('space', 'show', self.space, '--json')[1])
         require(show['declarations_available'] is True, 'controller unavailable')

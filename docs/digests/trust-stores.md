@@ -2,6 +2,9 @@
 
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; box workload CA environment `3663dda77ee78107e9b281438feaaf900f8d50c0` and accompanying changes; re-read cited sources when changing behavior.
 
+Guest container stack verified on `fcd4a112bc26c8316d9ecf9c0e216a5fee9c0f22`
+and accompanying changes.
+
 [FACT] Firecracker assembly pins Ubuntu's `ca-certificates`
 20260816ubuntu0.24.04.1 by SHA-256. That release distrusts emSign ECC Root CA -
 G3 (LP: #2171507). Assembly runs no package scripts. It first drops the base
@@ -10,7 +13,7 @@ and unmanaged store entries. After extraction it regenerates
 `/etc/ca-certificates.conf`, one `.pem` link and bundle entry per packaged
 certificate, and OpenSSL subject-hash links, as a fresh installation would.
 A store that still holds emSign ECC Root CA - G3 or AAA Certificate Services
-is refused. The current image recipe version is 3; automatic image selection
+is refused. The current image recipe version is 4; automatic image selection
 includes it in the cache identity.
 [1](#source-1) [2](#source-2) [3](#source-3) [4](#source-4) [5](#source-5)
 
@@ -29,14 +32,14 @@ instances keep their stored provisioning; `space recreate` builds the instance
 from the current template. Script tests use fake package tools.
 [10](#source-10) [11](#source-11) [12](#source-12) [26](#source-26)
 
-[FACT] Firecracker guests run containerd, nerdctl and BuildKit from
-nerdctl-full 2.3.5, whose Dockerfile selects Go 1.26; their containerd and
-BuildKit configurations name no registry CA. Lima installs its own containerd
-(`containerd.system`); Lima v2.2.1 defaults to nerdctl-full 2.4.1. Both nerdctl
-releases predate the Go 1.26.10/1.27.3 verifier fix. Go 1.26.5 trusts the first
-readable system bundle plus every `/etc/ssl/certs` entry except links within
-that directory. New VM images carry no OpenShell archive any more (Firecracker recipe
-version 4); the native OpenShell runtime (v0.1.10) is embedded in yoloctl instead of
+[FACT] New Firecracker and Lima guests select official nerdctl-full 2.4.2.
+The nerdctl, containerd, ctr and BuildKit binaries in both selected archives
+report Go 1.26.10. The `buildg` debugger carries its own older Go 1.23.8 TLS
+verifier and is omitted when using those pins. The containerd and BuildKit
+configurations name no registry CA. Go's root loader uses the first readable
+system bundle and also scans `/etc/ssl/certs`, skipping links within that
+directory. New VM images carry no OpenShell archive (Firecracker recipe
+version 4); the native OpenShell v0.1.10 runtime is embedded in yoloctl instead of
 fetched, and only two historical v0.0.72 binary hashes remain in a read-only
 compatibility guard. These tests use no
 live registry.
@@ -70,22 +73,22 @@ boxes change only through an explicit rebuild/recreate.
 1. <a id="source-1"></a> [Ubuntu changes](https://launchpad.net/ubuntu/+archive/primary/+files/ca-certificates_20260816ubuntu0.24.04.1_source.changes) — noble-security upload, G3 blacklist and Mozilla 2.90.
 2. <a id="source-2"></a> [Runtime pins](../../assets/vm/firecracker/runtime-pins.json#L2-L5) — `ca-certificates.deb` URL and SHA-256.
 3. <a id="source-3"></a> [Trust store](../../internal/firecracker/truststore_linux.go#L54) — `distrustedRoots`, `dropManagedCertificates` at L65, `rebuildTrustStore` at L91, `opensslSubjectHash` at L225.
-4. <a id="source-4"></a> [Assembly order](../../internal/firecracker/assemble_linux.go#L650-L662) — drop before package extraction, regenerate after.
+4. <a id="source-4"></a> [Assembly order](../../internal/firecracker/assemble_linux.go#L681-L693) — drop before package extraction, regenerate after.
 5. <a id="source-5"></a> [Recipe identity](../../internal/firecracker/recipe_linux.go#L19) — `imageRecipeVersion`, `defaultRecipe` and `recipeIdentity` include the version in the hashed cache identity.
 6. <a id="source-6"></a> [Hash and store tests](../../internal/firecracker/truststore_linux_test.go#L29) — `TestOpenSSLSubjectHash`, `TestTrustStoreRegeneration` at L121, `TestTrustStoreRefusals` at L211, `TestRecipePinsPatchedCACertificates` at L263.
-7. <a id="source-7"></a> [Reference builder](../../assets/vm/firecracker/build.py#L198) — `drop_managed_certificates`, `rebuild_trust_store` at L235.
+7. <a id="source-7"></a> [Reference builder](../../assets/vm/firecracker/build.py#L215) — `drop_managed_certificates`, `rebuild_trust_store` at L252.
 8. <a id="source-8"></a> [Reference builder tests](../../scripts/vm/firecracker/test_build.py#L42) — `TrustStoreTests`.
-9. <a id="source-9"></a> [Real-input check](../../internal/firecracker/assemble_linux_test.go#L127) — `verifyImageTrustStore` from `TestPortableImageAssembly`.
+9. <a id="source-9"></a> [Real-input check](../../internal/firecracker/assemble_linux_test.go#L125) — `verifyImageContents` from `TestPortableImageAssembly`.
 10. <a id="source-10"></a> [Lima provisioning](../../assets/lima/yoloctl.yaml.tmpl#L93-L120) — minimum CA release, upgrade and failure.
-11. <a id="source-11"></a> [Provisioning tests](../../internal/lima/provision_test.go#L129) — `TestCACertificatesProvisioningUpgrade`.
+11. <a id="source-11"></a> [Provisioning tests](../../internal/lima/provision_test.go#L125) — `TestCACertificatesProvisioningUpgrade`.
 12. <a id="source-12"></a> [Lima templates](../../cmd/yoloctl/space.go#L592) — create-time template; a missing instance is created at L681.
-13. <a id="source-13"></a> [nerdctl v2.3.5 Dockerfile](https://github.com/containerd/nerdctl/blob/v2.3.5/Dockerfile#L20-L46) — containerd v2.3.3, BuildKit v0.31.2, Go 1.26.
-14. <a id="source-14"></a> [Guest containerd configuration](../../internal/firecracker/assemble_linux.go#L733).
+13. <a id="source-13"></a> [nerdctl v2.4.2 release](https://github.com/containerd/nerdctl/releases/tag/v2.4.2) — archive inventory and included tool versions; `go version -m` on the pinned binary members.
+14. <a id="source-14"></a> [Guest containerd configuration](../../internal/firecracker/assemble_linux.go#L763).
 15. <a id="source-15"></a> [Guest BuildKit configuration](../../internal/vmguest/buildkit_linux.go#L22).
 16. <a id="source-16"></a> [Lima containerd selection](../../assets/lima/yoloctl.yaml.tmpl#L29-L31).
-17. <a id="source-17"></a> [Lima v2.2.1 default archive](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/limayaml/containerd.yaml#L1-L7) — nerdctl-full 2.4.1, released 2026-10-02; v2.3.5 was released 2026-07-20.
+17. <a id="source-17"></a> [Lima container stack](lima-stack.md) — archive pins and debugger exclusion.
 18. <a id="source-18"></a> [Go security release](https://groups.google.com/g/golang-announce/c/66pojueaQek) — Go 1.26.10/1.27.3, released 2026-10-19.
-19. <a id="source-19"></a> [Go 1.26.5 system roots](https://github.com/golang/go/blob/go1.26.5/src/crypto/x509/root_unix.go#L32-L104) — first bundle file, unique directory entries; paths are in `root_linux.go`.
+19. <a id="source-19"></a> [Go 1.26.10 system roots](https://github.com/golang/go/blob/go1.26.10/src/crypto/x509/root_unix.go#L32-L104) — first bundle file, unique directory entries; paths are in `root_linux.go`.
 20. <a id="source-20"></a> [Historical OpenShell hashes](../../internal/container/container.go#L1) — the two retained v0.0.72 binary hashes in `legacy_openshell.go` L20–L21 (retirement delta); `assets/vm/firecracker/pins.json` no longer lists `openshell.tgz` (retirement tree `3cc5e841`).
 21. <a id="source-21"></a> [Base Dockerfile](../../assets/containers/agentbox/Dockerfile#L27-L31) — index refresh and `ca-certificates`.
 22. <a id="source-22"></a> [Composed identity](../../internal/agentboximage/composed.go#L69) — hash inputs; an existing tag is reused at L109.

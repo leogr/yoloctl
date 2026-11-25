@@ -117,13 +117,12 @@ func TestPortableImageAssembly(t *testing.T) {
 	if _, _, err = VerifyImage(output); err != nil {
 		t.Fatal(err)
 	}
-	verifyImageTrustStore(t, filepath.Join(output, "rootfs.ext4"))
+	verifyImageContents(t, filepath.Join(output, "rootfs.ext4"))
 }
 
-// verifyImageTrustStore reads the assembled root filesystem: every configured
-// root has one link, one hash link and one bundle entry, and no retired root
-// remains in the bundle.
-func verifyImageTrustStore(t *testing.T, rootfs string) {
+// verifyImageContents checks installed container tools and the rebuilt trust
+// store in the assembled root filesystem.
+func verifyImageContents(t *testing.T, rootfs string) {
 	t.Helper()
 	f, err := os.Open(rootfs)
 	if err != nil {
@@ -137,6 +136,20 @@ func verifyImageTrustStore(t *testing.T, rootfs string) {
 	fsys, err := ext4.Read(backendfile.New(f, true), st.Size(), 0, 512)
 	if err != nil {
 		t.Fatal(err)
+	}
+	binaries, err := fsys.ReadDir("usr/local/bin")
+	if err != nil {
+		t.Fatalf("list installed container tools: %v", err)
+	}
+	required := map[string]bool{"nerdctl": true, "containerd": true, "buildctl": true, "buildkitd": true, "runc": true}
+	for _, binary := range binaries {
+		if binary.Name() == "buildg" {
+			t.Fatal("assembled image contains excluded buildg executable")
+		}
+		delete(required, binary.Name())
+	}
+	if len(required) != 0 {
+		t.Fatalf("assembled image is missing required container tools: %v", required)
 	}
 	conf, err := fsys.ReadFile(certsConf)
 	if err != nil {

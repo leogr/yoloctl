@@ -1,6 +1,6 @@
 # VM disks in space view and `space storage`
 
-Verification: `c96dca31f1075b7912859faab06c9a53b3c14b78` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `c96dca31f1075b7912859faab06c9a53b3c14b78` and accompanying changes; re-read cited sources when changing behavior. nerdctl list source re-read at `fcd4a112` and accompanying changes.
 
 [FACT] Each telemetry sample reads `statfs` of the data disk mount (`disk`) and
 of the VM root `/` (`system_disk`): total and `Bavail` bytes. Failed reads leave the field absent. On Firecracker `/` is an overlay
@@ -93,5 +93,5 @@ hover and popups with fixtures. No live VM measurement is established by them.
 19. <a id="source-19"></a> [space_storage_test.go](../../cmd/yoloctl/space_storage_test.go#L1) — partition, unavailable parts, operator refusal, `diskUsage`.
 20. <a id="source-20"></a> [disks_test.go](../../internal/tui/spaceview/disks_test.go#L1) — band, thresholds, toasts, hover and popups.
 21. <a id="source-21"></a> [workdir.go](../../internal/agentbox/workdir.go#L131-L135) — `NewEphemeralWorkdir`; `AgentboxDirHost` in `internal/sandbox/sandbox.go` at L84-L86.
-22. <a id="source-22"></a> [nerdctl v2.3.5 container list](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/cmd/container/list.go) — `ListItem.ID` truncated to 12 characters unless `--no-trunc`.
+22. <a id="source-22"></a> [nerdctl v2.4.2 container list](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/cmd/container/list.go) — `ListItem.ID` truncated to 12 characters unless `--no-trunc`.
 23. <a id="source-23"></a> [space_storage_budget_test.go](../../cmd/yoloctl/space_storage_budget_test.go#L1) — starvation, slow key, shared key and actual view-delivery controls.

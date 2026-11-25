@@ -2,19 +2,37 @@
 
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Native bind startup re-read at `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes.
 
+Container stack pins and provisioning verified on `fcd4a112bc26c8316d9ecf9c0e216a5fee9c0f22`
+and accompanying changes.
+
 [FACT] New/recreated Lima VMs use system containerd, disable user containerd,
-and select nerdctl-full 2.3.5 by **guest** architecture. No Go build-architecture,
+and select nerdctl-full 2.4.2 by **guest** architecture. No Go build-architecture,
 VM backend or mount-transport override is added. The decoded regression covers
 fresh/preserved data-disk rendering and equality with Firecracker's amd64 pin.
 [1](#source-1) [2](#source-2)
 
 | Lima architecture | Full archive | SHA256 |
 |---|---|---|
-| x86_64 | nerdctl-full-2.3.5-linux-amd64.tar.gz | b697295c623639734aaab737523c808fd3cc8d3046039fd94fff1744e4c317aa |
-| aarch64 | nerdctl-full-2.3.5-linux-arm64.tar.gz | 6e4b687f1d138e750a3c8372abc0f81d3d7490b6359c48c0562fc7dfe98859b2 |
+| x86_64 | nerdctl-full-2.4.2-linux-amd64.tar.gz | 1f12c1a5840744fdf7029483c55a69813d44aa2ec1ef879d52d81ff6a3049ecd |
+| aarch64 | nerdctl-full-2.4.2-linux-arm64.tar.gz | fe0ef0e9840ee8932640e6058f84b7fa98050f9726e44af44883a5b804ae830e |
 
-[FACT] The full release bundles containerd 2.3.3, runc 1.5.1, CNI 1.9.1 and
-BuildKit 0.31.2. These pins use release URLs and SHA256 digests. [3](#source-3)
+[FACT] The full release bundles containerd 2.4.2, runc 1.5.2, CNI 1.9.1 and
+BuildKit 0.34.1. When `buildg` is present after Lima installs the selected
+archive, provisioning checks the archive's cidata digest. For a qualified pin,
+it removes the checksummed debugger and refuses an unexpected leaf. This leaves
+`nerdctl builder debug` unavailable on the pinned stack. A selected archive
+whose digest differs keeps its files and is logged as unqualified. If the
+archive cannot be identified, provisioning leaves the debugger and fails
+readiness. An absent debugger requires only the absence check. Readiness also
+requires a working engine.
+[3](#source-3) [24](#source-24) [25](#source-25) [26](#source-26)
+
+[FACT] On Lima and Firecracker, nerdctl 2.4.2 makes a read-only box bind
+recursively read-only when the guest kernel and OCI runtime support it. This
+also makes mounts below the source read-only inside the box. The native
+operator projection accepts one `ro` or `rro` option with the bind flag and
+continues to refuse `rw`.
+[27](#source-27) [28](#source-28) [29](#source-29)
 
 [FACT] Lima v2.2.1 combines archives in override → instance → default order,
 substituting its built-in list only when empty. Its boot installer compares
@@ -44,7 +62,7 @@ Explicit native export requires stopped consumers or `--stop` and omits
 disposable container state. Upgrading the space hosting a team stops its
 workloads too. [9](#source-9) [19](#source-19)
 
-[FACT] nerdctl 2.3.5 derives its privilege boolean from a label older creators
+[FACT] nerdctl 2.4.2 derives its privilege boolean from a label older creators
 did not record, allowing false for old privileged containers. The boolean alone
 is insufficient: yoloctl requires agreeing launch, label and bind evidence;
 missing/conflicting evidence stays UNKNOWN. The mixed-stack regression is
@@ -98,7 +116,7 @@ Disk/owner/target errors fail startup; systemd retries are unchanged. [23](#sour
 
 1. <a id="source-1"></a> [Template](../../assets/lima/yoloctl.yaml.tmpl#L31) — system modes, architecture archives.
 2. <a id="source-2"></a> [Decoded renders](../../internal/lima/template_test.go#L14) — `TestTemplatePinsFullContainerStackForBothGuestArchitectures`.
-3. <a id="source-3"></a> [nerdctl v2.3.5](https://github.com/containerd/nerdctl/releases/tag/v2.3.5) — bundle versions/checksums.
+3. <a id="source-3"></a> [nerdctl v2.4.2](https://github.com/containerd/nerdctl/releases/tag/v2.4.2) — bundle versions/checksums.
 4. <a id="source-4"></a> [Lima v2.2.1 defaults](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/limayaml/defaults.go#L572) — precedence/fallback.
 5. <a id="source-5"></a> [Lima v2.2.1 installer](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/cidata/cidata.TEMPLATE.d/boot.Linux/40-install-containerd.sh#L18) — mtime comparison.
 6. <a id="source-6"></a> [Reuse](../../internal/lima/lima.go#L55) — `Ensure`, mount updates.
@@ -109,15 +127,21 @@ Disk/owner/target errors fail startup; systemd retries are unchanged. [23](#sour
 11. <a id="source-11"></a> [Adapter](../../internal/vm/lima.go#L21) — current template.
 12. <a id="source-12"></a> [Preservation regression](../../cmd/yoloctl/space_recreate_test.go#L94) — `TestSpaceRecreatePreservesAccountDiskAndManifests`.
 13. <a id="source-13"></a> [nerdctl v2.2.2 creation](https://github.com/containerd/nerdctl/blob/v2.2.2/pkg/cmd/container/create.go) — no privileged-label write.
-14. <a id="source-14"></a> [nerdctl v2.3.5 inspection](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/inspecttypes/dockercompat/dockercompat.go#L665) — label-derived boolean.
+14. <a id="source-14"></a> [nerdctl v2.4.2 inspection](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/inspecttypes/dockercompat/dockercompat.go#L690) — label-derived boolean.
 15. <a id="source-15"></a> [Classifier](../../internal/agentbox/privileged.go#L87) — `ClassifyRuntime` agreement.
 16. <a id="source-16"></a> [Agreement regression](../../internal/agentbox/privileged_test.go#L279) — `TestClassifyRuntimeRequiresAgreeingEvidence`.
 17. <a id="source-17"></a> [Parsing regression](../../internal/container/runtime_state_test.go#L9) — `TestInspectDoesNotInferUnreportedPrivilege`.
-18. <a id="source-18"></a> [Host runner](../../scripts/smoke/lima_stack.py#L1) — owned fixture, cache wrapper, deadlines, cleanup and observation; `group_alive`/`settle_command` L183-L222 and `cleanup` L581-L602 retain verified cancellation before destruction.
+18. <a id="source-18"></a> [Host runner](../../scripts/smoke/lima_stack.py#L1) — owned fixture, cache wrapper, deadlines, cleanup and observation; `group_alive`/`settle_command` L183-L222 and `cleanup` at L594 retain verified cancellation before destruction.
 19. <a id="source-19"></a> [Archives](space-archives.md) — explicit export boundary.
-20. <a id="source-20"></a> [Runner tests](../../scripts/test_lima_stack.py#L1) — hermetic routing/failure checks; `CommandGroupTests` at L518 covers denied null signals, live/zombie groups, invalid inventories and preserved timeout settlement.
+20. <a id="source-20"></a> [Runner tests](../../scripts/test_lima_stack.py#L1) — hermetic routing/failure checks; `CommandGroupTests` at L581 covers denied null signals, live/zombie groups, invalid inventories and preserved timeout settlement.
 21. <a id="source-21"></a> [Go toolchains](https://go.dev/doc/toolchain#download) — exact toolchain names, module selection, private module-cache downloads and checksum verification.
 
 22. <a id="source-22"></a> [Boot resource application](../../cmd/yoloctl/space_nested_virtualization.go#L1) — `applySpaceBootResources`, verified with accompanying changes on fc48bca3.
 
 23. <a id="source-23"></a> [Controller startup](../../cmd/yoloctl/controller_internal.go#L286) — `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle`; internal/controller/service.go:`ServiceUnit`.
+24. <a id="source-24"></a> [Lima boot order](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/cidata/cidata.TEMPLATE.d/boot.sh#L64-L180) — distribution boot files run before system provisioning.
+25. <a id="source-25"></a> [Archive qualification](../../assets/lima/yoloctl.yaml.tmpl#L136) — selected archive digest, verified removal and per-boot readiness result.
+26. <a id="source-26"></a> [Lima cidata](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/cidata/cidata.go#L126) — `templateArgs` gives the selected archive a generic name.
+27. <a id="source-27"></a> [nerdctl mount options](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/mountutil/mountutil_linux.go#L120-L140) — `readOnlyMountOptions` selects recursive read-only or falls back to plain read-only.
+28. <a id="source-28"></a> [nerdctl recursive read-only support](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/ociruntimeutil/rro_linux.go#L48-L70) — kernel and OCI runtime checks.
+29. <a id="source-29"></a> [Native operator projection](../../internal/container/operator_projection.go#L138) — `parseNativeOperatorProjection` checks read-only and bind options on the recorded OCI mount.

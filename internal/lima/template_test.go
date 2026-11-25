@@ -44,8 +44,8 @@ func TestTemplatePinsFullContainerStackForBothGuestArchitectures(t *testing.T) {
 			t.Fatalf("format=%t: expected system containerd with two full archives: %+v", format, tmpl.Containerd)
 		}
 		arches := map[string]struct{ arch, sha string }{
-			"x86_64":  {"amd64", "b697295c623639734aaab737523c808fd3cc8d3046039fd94fff1744e4c317aa"},
-			"aarch64": {"arm64", "6e4b687f1d138e750a3c8372abc0f81d3d7490b6359c48c0562fc7dfe98859b2"},
+			"x86_64":  {"amd64", "1f12c1a5840744fdf7029483c55a69813d44aa2ec1ef879d52d81ff6a3049ecd"},
+			"aarch64": {"arm64", "fe0ef0e9840ee8932640e6058f84b7fa98050f9726e44af44883a5b804ae830e"},
 		}
 		for _, archive := range tmpl.Containerd.Archives {
 			want, ok := arches[archive.Arch]
@@ -53,7 +53,7 @@ func TestTemplatePinsFullContainerStackForBothGuestArchitectures(t *testing.T) {
 				t.Fatalf("unexpected or duplicate guest architecture %q", archive.Arch)
 			}
 			delete(arches, archive.Arch)
-			url := "https://github.com/containerd/nerdctl/releases/download/v2.3.5/nerdctl-full-2.3.5-linux-" + want.arch + ".tar.gz"
+			url := "https://github.com/containerd/nerdctl/releases/download/v2.4.2/nerdctl-full-2.4.2-linux-" + want.arch + ".tar.gz"
 			if archive.Location != url || archive.Digest != "sha256:"+want.sha {
 				t.Fatalf("unexpected full stack pin: %+v", archive)
 			}

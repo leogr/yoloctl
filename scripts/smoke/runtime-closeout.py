@@ -100,14 +100,14 @@ def main():
             run('space', 'create', space, '--backend', 'firecracker', '--account', 'trial',
                 '--memory', '4GiB', '--workdir', str(root / 'workdir'), timeout=600)
         release = run(*ssh('uname', '-r'), capture=True).strip()
-        if release != '7.2.11':
+        if release != '7.3.6':
             raise RuntimeError(f'unexpected kernel: {release}')
         run(*ssh('python3', '-c',
                  'from pathlib import Path; '
                  'controllers=Path("/sys/fs/cgroup/cgroup.controllers").read_text().split(); '
                  'assert {"memory","cpu","pids"} <= set(controllers), controllers; '
                  'assert "some avg10=" in Path("/proc/pressure/memory").read_text()'))
-        print('PASS: bundled Linux 7.2.11, cgroup memory and pressure telemetry', flush=True)
+        print('PASS: bundled Linux 7.3.6, cgroup memory and pressure telemetry', flush=True)
         with socket.socket() as reservation:
             reservation.bind(('127.0.0.1', 0))
             port = reservation.getsockname()[1]

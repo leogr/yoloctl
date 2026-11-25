@@ -83,8 +83,8 @@ func imageGCFixture() *gcFixture {
 		f.details[ref] = d
 	}
 	f.boxes = []container.Container{{Name: "stopped-external"}}
-	// nerdctl 2.3.5 reports the mutable image name in both fields. Its actual
-	// rootfs, not the moved tag, supplies the immutable retention identity.
+	// A legacy inspect row without a recorded digest uses the mutable name
+	// in both fields. The snapshot parent supplies its retention identity.
 	f.containers["stopped-external"] = &container.Details{Image: "local/moved:latest", ImageID: "local/moved:latest"}
 	f.parents["stopped-external"] = f.images[1].ID
 	return f
