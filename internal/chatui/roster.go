@@ -229,15 +229,13 @@ func (m *Model) participantRows(members []Member, width, height int, bg spacevie
 }
 
 // scrollRoster moves the participants panel by n cards (negative: up)
-// when the last frame showed it scrolled; the next frame clamps it. It
-// reports whether it moved.
-func (m *Model) scrollRoster(n int) bool {
+// when the last frame showed it scrolled; the next frame clamps it.
+func (m *Model) scrollRoster(n int) {
 	if !m.rosterShown() || m.layout.rosterPage == 0 {
-		return false
+		return
 	}
 	m.rosterScroll = max(m.rosterScroll+n, 0)
 	m.hover = hoverKey{} // the cards moved under the pointer
-	return true
 }
 
 // rosterShown reports whether the participants panel is on screen: the side

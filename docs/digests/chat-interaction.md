@@ -96,7 +96,7 @@ the jump, padding and TUI guards. [5](#source-5) [4](#source-4)
 9. <a id="source-9"></a> [UI regressions](../../internal/chatui/ui_package_test.go#L71) — actions, jump, padding, lookups.
 10. <a id="source-10"></a> [Lookup regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L173) — bound and recheck.
 11. <a id="source-11"></a> [First-row regression](../../internal/chatui/first_row_test.go#L82) — `TestChatFirstRowIsBlackInEveryState`; `topBar`, `View`, `linkPromptView` (link_prompt.go L43) and spaceview `FirstRow` (theme.go L79-L93).
-12. <a id="source-12"></a> [Copy button](../../internal/chatui/model.go#L1100) — `copyCode`, `activate` (`actCopyCode`) in mouse.go, the `hoverHint` case in hover.go; `codeblock_test.go`.
+12. <a id="source-12"></a> [Copy button](../../internal/chatui/model.go#L1101) — `copyCode`, `activate` (`actCopyCode`) in mouse.go, the `hoverHint` case in hover.go; `codeblock_test.go`.
 13. <a id="source-13"></a> [Drag pick](../../internal/chatui/selection_focus_test.go#L1-L168) — `mouseDown` sets `dragState.pick`, `mouseMove` picks at the first motion (mouse.go); six regressions.
 
 14. <a id="source-14"></a> [Human channel selection](../../internal/chatui/channels.go#L228) — `selectChannel` and `cycle`; user routes in model.go, mouse.go and overlay.go; `channel_select_test.go` exercises commands and membership results.

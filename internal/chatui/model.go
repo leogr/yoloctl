@@ -993,8 +993,8 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.focus = focusComposer
 	}
 	if m.suggest != nil {
-		if cmd, handled := m.suggestKey(key); handled {
-			return cmd
+		if m.suggestKey(key) {
+			return nil
 		}
 	}
 	switch key {
@@ -1089,9 +1089,10 @@ func (m *Model) escape() tea.Cmd {
 	return nil
 }
 
-// suggestKey routes keys while the suggestion popup is open. Enter accepts
-// only an open popup; Alt/Shift+Enter still insert a newline.
-func (m *Model) suggestKey(key string) (tea.Cmd, bool) {
+// suggestKey routes keys while the suggestion popup is open and reports
+// whether it handled the key. Enter accepts only an open popup;
+// Alt/Shift+Enter still insert a newline.
+func (m *Model) suggestKey(key string) bool {
 	s := m.suggest
 	switch key {
 	case "up":
@@ -1105,15 +1106,15 @@ func (m *Model) suggestKey(key string) (tea.Cmd, bool) {
 		// already complete command or nick still runs or sends.
 		if strings.EqualFold(strings.TrimSpace(s.items[s.index].insert), s.word) {
 			m.suggest = nil
-			return nil, false
+			return false
 		}
 		m.acceptSuggestion(s.index, true)
 	case "esc":
 		m.dismissed, m.suggest = s.word, nil
 	default:
-		return nil, false
+		return false
 	}
-	return nil, true
+	return true
 }
 
 // messageFocusKey handles keys while a message is selected for actions.

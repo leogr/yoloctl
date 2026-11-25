@@ -47,8 +47,8 @@ They use fake callbacks, not a live room. [7](#source-7)
 ## Sources
 
 1. <a id="source-1"></a> [Thread filter](../../internal/chatui/filter.go#L13-L303) — `messageFilter.thread`, `matches`, `shown`, `parents`, `rootOf`, `threadTop`, `threadMayStartEarlier`.
-2. <a id="source-2"></a> [Action and command](../../internal/chatui/model.go#L1034-L1374) — `messageActions`, `runAction` (`thread`), `messageName`, `slashCommand` (`/thread`).
-3. <a id="source-3"></a> [Arrivals](../../internal/chatui/model.go#L1431-L1499) — `incoming` counts `hiddenNew` through `arrivalShown`.
+2. <a id="source-2"></a> [Action and command](../../internal/chatui/model.go#L1034-L1375) — `messageActions`, `runAction` (`thread`), `messageName`, `slashCommand` (`/thread`).
+3. <a id="source-3"></a> [Arrivals](../../internal/chatui/model.go#L1432-L1500) — `incoming` counts `hiddenNew` through `arrivalShown`.
 4. <a id="source-4"></a> [Setting and surfaces](../../internal/chatui/filter.go#L392-L767) — `setThread`, `applyFilter`, `threadName`, `filterScopeRows`, `filterChip`, `filterChoices`, `toggleFilterChoice`, `applyFilterChoices`, `filterPickerRows`; `hoverHint` in hover.go.
 5. <a id="source-5"></a> [Help and picker state](../../internal/chatui/overlay.go#L40-L129) — `overlayState.stagedThread`, `helpSections`; `overlayActivate` applies the picker.
 6. <a id="source-6"></a> [Suggestions](../../internal/chatui/suggest.go#L31-L43) — `commands`.

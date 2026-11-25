@@ -106,7 +106,7 @@ both aliases and not counting a mention of the human's other alias. [13](#source
 7. <a id="source-7"></a> [Transcript marks](../../internal/chatui/transcript.go#L132-L364) — `body` keyed by `selfNames`, `transcript`; unread mentions in model.go `incoming`.
 8. <a id="source-8"></a> [Divider](../../internal/chatui/view.go#L406-L501) — `composerDivider`, `withChip`.
 9. <a id="source-9"></a> [Channel state](../../internal/chatui/channels.go#L68-L70) — `channelView.filter`.
-10. <a id="source-10"></a> [Model paths](../../internal/chatui/model.go#L685-L1824) — `historyPage`, `slashCommand`, `incoming`, `selectedMessage`, `selectMessage`.
+10. <a id="source-10"></a> [Model paths](../../internal/chatui/model.go#L685-L1825) — `historyPage`, `slashCommand`, `incoming`, `selectedMessage`, `selectMessage`.
 11. <a id="source-11"></a> [Notices](../../internal/chatui/presence.go#L210-L224) — `presenceRows` keeps transport notices.
 12. <a id="source-12"></a> [Selection](../../internal/chatui/selection.go#L69-L124) — `selectedText` skips hidden messages.
 13. <a id="source-13"></a> [Filter regressions](../../internal/chatui/filter_test.go#L87-L844) — twenty-three focused tests, `TestForMeShowsRepliesUnderMyMessages` through `TestFilterWordingNamesReplies` for replies; `TestOverlayControlsReceiveClicksAndHover` and `TestChatHeaderSharesDashboardStyle` keep card and band behavior.

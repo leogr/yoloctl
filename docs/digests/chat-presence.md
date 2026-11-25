@@ -106,7 +106,7 @@ exercised. [15](#source-15) [16](#source-16) [17](#source-17)
 11. <a id="source-11"></a> [activity.go](../../internal/spacetelemetry/activity.go#L1-L239) — `ActivityCurrent`, `ActivityTracker`; classification rules in the box-activity digest.
 12. <a id="source-12"></a> [theme.go](../../internal/tui/spaceview/theme.go#L95-L156) — `PulseCycle`, `PulseFrame`, `ActiveTone`, `lift`, `Color.rgb`; `Warn` at L20; `slowTick` in model.go L90.
 13. <a id="source-13"></a> [layout.go](../../internal/tui/spaceview/layout.go#L1105-L1113) — `statePill` active dot; LIVE mark at L213-L217.
-14. <a id="source-14"></a> [roster.go](../../internal/chatui/roster.go#L269-L334) — `memberCard` (its detail text from `roleLine` in marquee.go L66), `presenceDot`, `presenceLabel`.
+14. <a id="source-14"></a> [roster.go](../../internal/chatui/roster.go#L267-L332) — `memberCard` (its detail text from `roleLine` in marquee.go L66), `presenceDot`, `presenceLabel`.
 15. <a id="source-15"></a> [space_telemetry_chat_test.go](../../cmd/yoloctl/space_telemetry_chat_test.go#L1-L362) — mapping, sharing, validation, ownership and stream.
 16. <a id="source-16"></a> [presence_test.go](../../internal/spacetelemetry/presence_test.go#L1-L48) — rule and freshness gate.
 17. <a id="source-17"></a> [presence_panel_test.go](../../internal/chatui/presence_panel_test.go#L1-L347) — explicit availability, AWAY/back, participant details, activity and shared waveform.

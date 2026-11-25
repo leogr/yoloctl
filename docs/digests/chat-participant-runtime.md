@@ -85,7 +85,7 @@ Codex boxes report through their hook reporter ([Codex reporter](codex-observati
 ## Sources
 
 1. <a id="source-1"></a> [Runtime display](../../internal/chatui/runtime.go#L13-L251) — `AgentRuntime`, `RuntimeValue`, `SourceHook`/`SourceStatusLine`/`SourceQuery`, `RuntimeContext`, `modelNames`, `agents`, `runtimeStale`, `runtimeSummary`, `reportedBy`, `tokens`, `RuntimeContext.text`, `runtimeRows`; card rows in overlay.go `cardRows` L726; Help row in overlay.go L121.
-2. <a id="source-2"></a> [Participant detail line](../../internal/chatui/roster.go#L269-L301) — `memberCard`; the line from `roleLine` in marquee.go L66; `agentBox` in runtime.go; model-first truncation and scrolled cards in presence_panel_test.go `TestParticipantAwayDetails` L160.
+2. <a id="source-2"></a> [Participant detail line](../../internal/chatui/roster.go#L267-L299) — `memberCard`; the line from `roleLine` in marquee.go L66; `agentBox` in runtime.go; model-first truncation and scrolled cards in presence_panel_test.go `TestParticipantAwayDetails` L160.
 3. <a id="source-3"></a> [Participant runtime](../../cmd/yoloctl/chat_participant_runtime.go#L11-L135) — `chatParticipantRuntime`, `participantRuntime`, `participantConversation`, `observedRuntime`.
 4. <a id="source-4"></a> [Serial reads](../../cmd/yoloctl/chat_view.go#L399-L500) — `refreshAgents`, `agentsLoop`, `loadAgents`, `adoptCatalogFor`.
 5. <a id="source-5"></a> [Host regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L73-L163) — box IDs, observed values with sources and context, launch arguments ignored, superseded and failed reads, and the `Unread` marker in `TestObservedRuntimeIsCurrentLaunchOnly`.

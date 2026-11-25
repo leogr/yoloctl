@@ -117,7 +117,7 @@ view confirmation. [2](#source-2) [7](#source-7) [8](#source-8)
 
 1. <a id="source-1"></a> [Channel views](../../internal/chatui/channels.go#L41) — `channelView`, `within`, `switchTo`, `selectChannel`, `cycle`, `refreshForUnknown`, `catalog`, `membershipChanged`, `showJoined`, `control`, `controlDone`, `unjoined`, `channelCommand`, `trimAggregate`.
 2. <a id="source-2"></a> [Channel regressions](../../internal/chatui/channels_test.go#L26-L273) — drafts, sends, membership, commands, catalog, trimming, identities.
-3. <a id="source-3"></a> [Submit and routing](../../internal/chatui/model.go#L393-L1374) — `Update`, `submit`, `slashCommand`.
+3. <a id="source-3"></a> [Submit and routing](../../internal/chatui/model.go#L393-L1375) — `Update`, `submit`, `slashCommand`.
 4. <a id="source-4"></a> [Channel rail](../../internal/chatui/roster.go#L63) — `channelRail`.
 5. <a id="source-5"></a> [Channel picker](../../internal/chatui/overlay.go#L723) — `channelPickerRows`.
 6. <a id="source-6"></a> [Host channel view](../../cmd/yoloctl/chat_view.go#L215-L708) — link lifetime, `adoptCatalogFor`, `refreshCatalogRead`, `refreshLoop` and `control`.

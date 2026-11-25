@@ -79,7 +79,7 @@ refusal on older servers. None of these proves a VM or live room.
 11. <a id="source-11"></a> [Driver](../../internal/chatstream/channels_client.go#L14-L239) — `deleted`, `origin`, `send`; history refusal in channel_history.go.
 12. <a id="source-12"></a> [Controls](../../internal/chatstream/channel_events.go#L30-L310) — deleted refusals; `membershipEvent` finishes a pending action uncertain on a self-KICK.
 13. <a id="source-13"></a> [View](../../internal/chatui/channels.go#L60-L543) — `deleted`, `canSend`, `membershipChanged`, `control`.
-14. <a id="source-14"></a> [Composer](../../internal/chatui/model.go#L1268-L1316) — read-only send; paging in `historyPage` at L567.
+14. <a id="source-14"></a> [Composer](../../internal/chatui/model.go#L1269-L1317) — read-only send; paging in `historyPage` at L567.
 15. <a id="source-15"></a> [Controller regressions](../../cmd/yoloctl/chat_channel_delete_test.go#L1-L286) — request/CLI, feature gate, one reload, lost acknowledgment, create gate, relay, view catalog identity.
 16. <a id="source-16"></a> [Native regressions](../../internal/managedchat/channel_delete_test.go#L1-L197) — mutation, ledger bounds, rendering and import.
 17. <a id="source-17"></a> [Driver regressions](../../internal/chatstream/channel_delete_test.go#L1-L281) — explicit removal, refusals before Write, pending outcomes, header records, KICK before/after the catalog.
