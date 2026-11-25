@@ -83,7 +83,7 @@ degradation order and wide titles.
 
 1. <a id="source-1"></a> [Layout geometry](../../internal/tui/panes/layout.go#L195-L530) — `CanSplit`, `Split`, `Resize`, `place`; `Pane.Rect`/`Bar` at L56-L62.
 2. <a id="source-2"></a> [Bar layout](../../internal/tui/panes/layout.go#L672-L795) — `BarPart`, `barButtons`, `barSegs`, `BarAt`.
-3. <a id="source-3"></a> [Composer](../../internal/tui/panes/compose.go#L11-L320) — `barColors`, `Compose`, `drawBorders`, `drawBar`.
+3. <a id="source-3"></a> [Composer](../../internal/tui/panes/compose.go#L11-L321) — `barColors`, `Compose`, `drawBorders`, `drawBar`.
 4. <a id="source-4"></a> [Layout tests](../../internal/tui/panes/layout_test.go#L221-L365) — `TestCanSplitCountsBars`, `TestBarAndBorderHitTesting`, `TestPreviewClampsAndCommitsOnce`, `TestPreviewKeepsEveryPaneAtSkewedRatios`.
 5. <a id="source-5"></a> [Composer tests](../../internal/tui/panes/compose_test.go#L74-L386) — goldens in panes/testdata.
 6. <a id="source-6"></a> [Strip](../../internal/tui/tui.go#L2360-L2534) — `tabCloseW`, `tabSegments`, `tabStrip`, `tabCloseAt`.

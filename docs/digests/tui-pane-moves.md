@@ -81,6 +81,6 @@ join and dock drags.
 8. <a id="source-8"></a> [Tab moves](../../internal/tui/tabs/tabs.go#L27-L238) — `Join`, `CanJoin`, `Break`, `ClosePane`, `Tab.Title`; `tabExitMsg` in tui.go.
 9. <a id="source-9"></a> [Join picker](../../internal/tui/tab_picker.go#L46-L245) — `openJoinPicker`, `checkPicker`, `pickerOverlay`, `pickTab`; `joinTab`, `canJoin`, `breakPane` in placeholder.go (L105-L175); `popup.Dimmed`.
 10. <a id="source-10"></a> [Dock gesture](../../internal/tui/chrome_gestures.go#L106-L234) — `chromeMotion`, `dockTarget`, `dockMotion`, `dockRelease`, `endDock`; the reversed label in `tabStrip`.
-11. <a id="source-11"></a> [Drop drawing](../../internal/tui/panes/compose.go#L43-L157) — `drawDrop`, the orange target border in `Compose`.
+11. <a id="source-11"></a> [Drop drawing](../../internal/tui/panes/compose.go#L43-L158) — `drawDrop`, the orange target border in `Compose`.
 12. <a id="source-12"></a> [Layout tests](../../internal/tui/panes/move_test.go#L1-L209) — graft, replace, drop and bar tests; goldens `drop-tint`, `drop-hatch`.
 13. <a id="source-13"></a> [Model tests](../../internal/tui/pane_moves_test.go#L1-L479) — moves, picker, break, audit, dock; `TestEmptyPaneTransitions` in pane_input_test.go; `TestPanesAcceptanceDriver`.

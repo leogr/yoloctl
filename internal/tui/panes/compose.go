@@ -70,7 +70,8 @@ func Compose(l *Layout, rows map[*Pane][]string) []string {
 		}
 		return p.rect, p.bar
 	}
-	for _, p := range l.Visible() {
+	visible := l.Visible()
+	for _, p := range visible {
 		r, _ := rect(p)
 		for y := r.Y; y < r.Y+r.H && y < h; y++ {
 			for x := r.X; x < r.X+r.W && x < w; x++ {
@@ -109,13 +110,13 @@ func Compose(l *Layout, rows map[*Pane][]string) []string {
 			hot = func(x, y int) bool { return target.contains(x, y) || drag != nil && drag(x, y) }
 		}
 		focus, focusBar := rect(l.focus)
-		var bars []Rect
-		for _, p := range l.Visible() {
+		bars := make([]Rect, 0, len(visible))
+		for _, p := range visible {
 			_, bar := rect(p)
 			bars = append(bars, bar)
 		}
 		drawBorders(grid, owned, focus, focusBar, bars, hot)
-		for _, p := range l.Visible() {
+		for _, p := range visible {
 			_, bar := rect(p)
 			drawBar(grid, l, p, bar)
 		}
