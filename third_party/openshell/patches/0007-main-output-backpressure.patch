@@ -1,17 +1,17 @@
 diff --git a/Cargo.lock b/Cargo.lock
-index 9c8d097..22bfb37 100644
+index f76c9c406f7927a725f1b7f7f948ad94f98fd206..0b496b4bde7ac271d66db6e8a2d4a18380993eeb 100644
 --- a/Cargo.lock
 +++ b/Cargo.lock
-@@ -5259,6 +5259,7 @@ dependencies = [
-  "openshell-core",
+@@ -5934,6 +5934,7 @@ dependencies = [
   "openshell-isolation-interface",
   "openshell-ocsf",
+  "openshell-ocsf-validate",
 + "openshell-sandbox",
   "openshell-sandbox-backend",
   "rand 0.10.2",
   "russh",
 diff --git a/crates/openshell-isolation-interface/src/contract.rs b/crates/openshell-isolation-interface/src/contract.rs
-index b16dfdd..8e14577 100644
+index e814bd9c1263c97d648bf78a83491cbc6968dcdf..5783180a1c6e142d50e4281b62311f39e3f8ab68 100644
 --- a/crates/openshell-isolation-interface/src/contract.rs
 +++ b/crates/openshell-isolation-interface/src/contract.rs
 @@ -7,6 +7,9 @@
@@ -25,10 +25,10 @@ index b16dfdd..8e14577 100644
  use std::fmt;
  use std::net::{IpAddr, SocketAddr};
 diff --git a/crates/openshell-sandbox/Cargo.toml b/crates/openshell-sandbox/Cargo.toml
-index 88f3380..1349d82 100644
+index 0ccc79af88719f4d3911e21ae8e77159869f56f6..07d7dfeb68cb0eecce084d67f5e523d9eb4d88fb 100644
 --- a/crates/openshell-sandbox/Cargo.toml
 +++ b/crates/openshell-sandbox/Cargo.toml
-@@ -80,6 +80,7 @@ socket2 = { workspace = true, features = ["all"] }
+@@ -78,6 +78,7 @@ socket2 = { workspace = true, features = ["all"] }
  tempfile = "3"
  
  [dev-dependencies]
@@ -37,10 +37,10 @@ index 88f3380..1349d82 100644
  openshell-ocsf = { path = "../openshell-ocsf", features = ["test-support"] }
  rcgen = { workspace = true }
 diff --git a/crates/openshell-sandbox/src/boundary_server.rs b/crates/openshell-sandbox/src/boundary_server.rs
-index 1d923c1..255ed41 100644
+index b1304cd9dc19aca377552a6bcb53bd495d17283e..7d23877ecd496c67b9ef5f58f61e2fa3564e08e6 100644
 --- a/crates/openshell-sandbox/src/boundary_server.rs
 +++ b/crates/openshell-sandbox/src/boundary_server.rs
-@@ -3328,11 +3328,17 @@ mod linux {
+@@ -3387,11 +3387,17 @@ mod linux {
                  let _ = process.boundary_runtime.begin_termination();
              }
              if Self::wait_for_process_tree_exit(process, ENFORCEMENT_LOSS_TERMINATION_GRACE).await {
@@ -58,7 +58,7 @@ index 1d923c1..255ed41 100644
                  Ok(())
              } else {
                  Err("owned workload processes remain after forced termination".to_string())
-@@ -3360,8 +3366,11 @@ mod linux {
+@@ -3419,8 +3425,11 @@ mod linux {
                  }
              };
              if let Some(process) = process {
@@ -70,7 +70,7 @@ index 1d923c1..255ed41 100644
          }
  
          fn dispatch(&self, envelope: RequestEnvelope) -> Response {
-@@ -4337,6 +4346,7 @@ mod linux {
+@@ -4396,6 +4405,7 @@ mod linux {
          boundary_runtime: Arc<BoundaryRuntimeState>,
          provider_credentials: ProviderCredentialState,
          provider_environment_generation: Mutex<u64>,
@@ -78,7 +78,7 @@ index 1d923c1..255ed41 100644
      }
  
      struct ManagedProcessLaunch {
-@@ -4434,15 +4444,22 @@ mod linux {
+@@ -4495,15 +4505,22 @@ mod linux {
              let main_session = spawned.main_session();
              let exit = Arc::new((Mutex::new(None), Condvar::new()));
              let reaper_exit = exit.clone();
@@ -108,7 +108,7 @@ index 1d923c1..255ed41 100644
              });
              Ok(Self {
                  process_id,
-@@ -4455,9 +4472,19 @@ mod linux {
+@@ -4516,9 +4533,19 @@ mod linux {
                  boundary_runtime,
                  provider_credentials,
                  provider_environment_generation: Mutex::new(0),
@@ -128,7 +128,7 @@ index 1d923c1..255ed41 100644
          fn process_id(&self) -> String {
              self.process_id.clone()
          }
-@@ -4513,6 +4540,7 @@ mod linux {
+@@ -4574,6 +4601,7 @@ mod linux {
  
      impl Drop for ManagedProcess {
          fn drop(&mut self) {
@@ -137,10 +137,10 @@ index 1d923c1..255ed41 100644
          }
      }
 diff --git a/crates/openshell-sandbox/src/delegated.rs b/crates/openshell-sandbox/src/delegated.rs
-index 94cd3d2..28de650 100644
+index 69974b983fbd4b7861bfec870cbfaaa629ce683e..813f8fc276a687472a89b6a103f3019e09ae80bc 100644
 --- a/crates/openshell-sandbox/src/delegated.rs
 +++ b/crates/openshell-sandbox/src/delegated.rs
-@@ -208,10 +208,18 @@ impl SpawnedAgent {
+@@ -218,10 +218,18 @@ impl SpawnedAgent {
          };
          self.boundary_runtime
              .unregister_process_group(self.handle.pid(), &self.terminal);
@@ -162,7 +162,7 @@ index 94cd3d2..28de650 100644
  
  /// Lock-free process-group signal handle used while another task owns `wait`.
 diff --git a/crates/openshell-sandbox/src/main_session.rs b/crates/openshell-sandbox/src/main_session.rs
-index 334cfc2..5dbdf6a 100644
+index 3ec74ba5c78776ebaf4a597730c54e6dfc9c7408..d31ae8135fb5a23462f979a0d9d47b58321222ef 100644
 --- a/crates/openshell-sandbox/src/main_session.rs
 +++ b/crates/openshell-sandbox/src/main_session.rs
 @@ -7,19 +7,21 @@ use crate::native_api::{BoundaryProcess, BoundaryTerminal, ProcessAttachment};
@@ -1136,7 +1136,7 @@ index 334cfc2..5dbdf6a 100644
 +    }
  }
 diff --git a/crates/openshell-supervisor-process/Cargo.toml b/crates/openshell-supervisor-process/Cargo.toml
-index 2283370..0d14cef 100644
+index 5e6af570f98d5cfac7e3c46733ff388fb943c1b7..c07a59fdba03cff1cdf3b47fdeb9e81cbd2e7ec9 100644
 --- a/crates/openshell-supervisor-process/Cargo.toml
 +++ b/crates/openshell-supervisor-process/Cargo.toml
 @@ -38,6 +38,7 @@ libc = "0.2"
@@ -1148,7 +1148,7 @@ index 2283370..0d14cef 100644
  
  openshell-ocsf = { path = "../openshell-ocsf", features = ["test-support"] }
 diff --git a/crates/openshell-supervisor-process/src/delegated.rs b/crates/openshell-supervisor-process/src/delegated.rs
-index 32e3fd4..8e8b572 100644
+index 8e39761034866b6675d4d1e6387e05abd204d1f1..53cdfd6f26559940802f1b2f9651250baa228d8c 100644
 --- a/crates/openshell-supervisor-process/src/delegated.rs
 +++ b/crates/openshell-supervisor-process/src/delegated.rs
 @@ -45,13 +45,19 @@ impl BoundaryAccess {
@@ -1176,7 +1176,7 @@ index 32e3fd4..8e8b572 100644
      }
  
      /// Release terminal delivery after the gateway acknowledges the exit, then
-@@ -389,7 +395,11 @@ mod tests {
+@@ -398,7 +404,11 @@ mod tests {
              .main_session
              .as_ref()
              .expect("main attachment retained");
@@ -1189,7 +1189,7 @@ index 32e3fd4..8e8b572 100644
          main.begin_terminal_attachment()
              .expect("fast-exit attachment survives without SSH");
          main.end_terminal_attachment();
-@@ -438,11 +448,77 @@ mod tests {
+@@ -450,11 +460,77 @@ mod tests {
              main_session: Some(main_session.clone()),
          };
  
@@ -1269,7 +1269,7 @@ index 32e3fd4..8e8b572 100644
 +    }
  }
 diff --git a/crates/openshell-supervisor-process/src/main_session.rs b/crates/openshell-supervisor-process/src/main_session.rs
-index 5bf4879..ea728c2 100644
+index 5bf4879f0405542b17200f7c93615c3963309dbb..ea728c24c56bc780c3f9998a7ffd81f3543cb35c 100644
 --- a/crates/openshell-supervisor-process/src/main_session.rs
 +++ b/crates/openshell-supervisor-process/src/main_session.rs
 @@ -7,7 +7,7 @@
@@ -2055,10 +2055,10 @@ index 5bf4879..ea728c2 100644
 +    }
  }
 diff --git a/crates/openshell-supervisor-process/src/ssh.rs b/crates/openshell-supervisor-process/src/ssh.rs
-index 324e88b..e91cc5b 100644
+index b4d8cc2f60d53f3d8b158b4e32ca3887e14342ab..b69607d8f4646cab1b5fa03e210054481a2c7653 100644
 --- a/crates/openshell-supervisor-process/src/ssh.rs
 +++ b/crates/openshell-supervisor-process/src/ssh.rs
-@@ -409,6 +409,7 @@ struct ChannelState {
+@@ -425,6 +425,7 @@ struct ChannelState {
      pty_request: Option<PtyRequest>,
      no_login_shell: bool,
      main_input_owner: Option<u64>,
@@ -2066,7 +2066,7 @@ index 324e88b..e91cc5b 100644
      main_attached: bool,
      main_read_only: bool,
      /// `OPENSHELL_MAIN_RAW_INPUT=1`: every input byte reaches the main
-@@ -829,12 +830,14 @@ impl russh::server::Handler for SshHandler {
+@@ -865,12 +866,14 @@ impl russh::server::Handler for SshHandler {
                  .channels
                  .get_mut(&channel)
                  .expect("main channel existence checked above");
@@ -2082,7 +2082,7 @@ index 324e88b..e91cc5b 100644
                      Ok((owner, input)) => {
                          state.main_input_owner = Some(owner);
                          Some(input)
-@@ -863,7 +866,7 @@ impl russh::server::Handler for SshHandler {
+@@ -899,7 +902,7 @@ impl russh::server::Handler for SshHandler {
              } else if let Some(input) = raw_input_sender {
                  (Some(InputSender::Main(input)), None)
              } else {
@@ -2091,7 +2091,7 @@ index 324e88b..e91cc5b 100644
                      Ok((owner, input)) => {
                          state.main_input_owner = Some(owner);
                          (Some(InputSender::Main(input)), None)
-@@ -874,7 +877,6 @@ impl russh::server::Handler for SshHandler {
+@@ -910,7 +913,6 @@ impl russh::server::Handler for SshHandler {
              state.main_input_pending = warning.is_some();
              state.input_sender = input;
              state.main_detach_prefix_pending = false;
@@ -2099,7 +2099,7 @@ index 324e88b..e91cc5b 100644
              let terminal_delivery = main_session.clone();
              let handle = session.handle();
              session.channel_success(channel)?;
-@@ -900,17 +902,26 @@ impl russh::server::Handler for SshHandler {
+@@ -936,17 +938,26 @@ impl russh::server::Handler for SshHandler {
                              let _ = send_main_output(&handle, channel, event).await;
                          }
                          Err(error) => {
@@ -2127,7 +2127,7 @@ index 324e88b..e91cc5b 100644
                              let _ = handle.close(channel).await;
                              break;
                          }
-@@ -1045,7 +1056,8 @@ impl russh::server::Handler for SshHandler {
+@@ -1082,7 +1093,8 @@ impl russh::server::Handler for SshHandler {
              && !forward.is_empty()
              && let Some(main_session) = self.main_session.as_ref()
              && !main_session.finished()
@@ -2137,7 +2137,7 @@ index 324e88b..e91cc5b 100644
          {
              state.main_input_owner = Some(owner);
              state.input_sender = Some(InputSender::Main(input));
-@@ -2606,6 +2618,49 @@ mod tests {
+@@ -2839,6 +2851,49 @@ mod tests {
          .expect("delivery completes once the connection ends");
      }
  
@@ -2188,22 +2188,22 @@ index 324e88b..e91cc5b 100644
      async fn main_attachment_accepts_declared_session_after_process_exit() {
          let main_session = MainSession::inert();
 diff --git a/crates/openshell-supervisor/src/lib.rs b/crates/openshell-supervisor/src/lib.rs
-index 64f5d7e..39d7545 100644
+index f4833d24083166d34e6f057dd198b7603144f3d5..477687bb135d4e1910a3e62f605cfe2ed90a8027 100644
 --- a/crates/openshell-supervisor/src/lib.rs
 +++ b/crates/openshell-supervisor/src/lib.rs
-@@ -1786,13 +1786,20 @@ pub async fn run_sandbox_instance(
+@@ -1910,12 +1910,22 @@ pub async fn run_sandbox_instance(
          if !retain_access {
              instance_readiness.release();
          }
--        boundary_access
--            .publish_main_exit(exit_code, await_main_process_attachment)
--            .await;
-         // `shutdown_requested` has already completed when shutdown won the
--        // lifecycle select above and must not be polled again.
+-        let publish = boundary_access.publish_main_exit(exit_code, await_main_process_attachment);
+-        if let Some(deadline) = shutdown_deadline {
+-            let _ = tokio::time::timeout_at(deadline, publish).await;
+-        } else {
+-            publish.await;
++        // `shutdown_requested` has already completed when shutdown won the
 +        // lifecycle select above and must not be polled again. Otherwise it
 +        // also cancels the progress-extended tail wait before any marker.
-         let mut completion_cancelled = !retain_access;
--        if retain_access && let Some(marker) = main_exit_marker.as_deref() {
++        let mut completion_cancelled = !retain_access;
 +        if !completion_cancelled {
 +            completion_cancelled = boundary_access
 +                .publish_main_exit(
@@ -2212,7 +2212,21 @@ index 64f5d7e..39d7545 100644
 +                    shutdown_requested.as_mut(),
 +                )
 +                .await;
-+        }
+         }
++        // yoloctl: a stop skips the main-exit report as before (the patch-7
++        // tail wait is cancelled by the stop); the relay flush below stays
++        // bounded by the shutdown deadline, as upstream.
+         let flush_timeout = shutdown_deadline.map_or(otlp_relay::FLUSH_TIMEOUT, |deadline| {
+             deadline
+                 .saturating_duration_since(tokio::time::Instant::now())
+@@ -1932,10 +1942,7 @@ pub async fn run_sandbox_instance(
+         } else if let Some(relay) = otlp_relay.take() {
+             relay.shutdown(flush_timeout).await;
+         }
+-        // `shutdown_requested` has already completed when shutdown won the
+-        // lifecycle select above and must not be polled again.
+-        let mut completion_cancelled = !retain_access;
+-        if retain_access && let Some(marker) = main_exit_marker.as_deref() {
 +        if !completion_cancelled && let Some(marker) = main_exit_marker.as_deref() {
              persist_main_exit_marker(marker, exit_code)
                  .into_diagnostic()

@@ -9,7 +9,7 @@
     "amd64": "sol2-build/AMD64-VERIFIED-r1.json",
     "arm64": "devops-arm64-cross-r1/VERIFIED.json"
   },
-  "rego": "third_party/openshell/sandbox-policy-0.1.6.rego",
+  "rego": "third_party/openshell/sandbox-policy-0.1.10.rego",
   "platforms": {
     "amd64": {
       "boundary": {

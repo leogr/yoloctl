@@ -1,19 +1,21 @@
 yoloctl local patch 0003: restore the workload calls OpenShell v0.0.72 allowed.
 
-OpenShell 0.1.6's child hardening filter (openshell-sandbox
-src/linux/child_seccomp.rs, prepare) newly denies these calls, which the
-v0.0.72 workload filter (openshell-supervisor-process
-src/sandbox/linux/seccomp.rs) never denied. That broke GNU make
-(posix_spawn with POSIX_SPAWN_RESETIDS calls setgid/setuid(own id)), nice,
-ionice, killpg and process-group test suites inside every box. Restored, as
-in v0.0.72:
+OpenShell's child hardening filter (openshell-sandbox
+src/linux/child_seccomp.rs, prepare) denies these calls, which the v0.0.72
+workload filter (openshell-supervisor-process src/sandbox/linux/seccomp.rs)
+never denied. That broke GNU make (posix_spawn with POSIX_SPAWN_RESETIDS
+calls setgid/setuid(own id)), nice, ionice, killpg and process-group test
+suites inside every box. Restored, as in v0.0.72:
 
 - unconditionally allowed again: capset, setuid, setgid, setreuid, setregid,
-  setresuid, setresgid, setfsuid, setfsgid, setgroups, setpriority,
-  ioprio_set
-- allowed again on any process except the trusted sandbox itself:
-  prlimit64, sched_setaffinity, sched_setattr, sched_setparam,
-  sched_setscheduler
+  setresuid, setresgid, setfsuid, setfsgid, setgroups, ioprio_set
+- prlimit64, sched_setaffinity, sched_setattr, sched_setparam,
+  sched_setscheduler and setpriority: since v0.1.10 (#5212) upstream runs a
+  caller-only call (pid 0) natively and sends a named target to the broker
+  (src/linux/process_sched.rs), which allows only the caller's own thread
+  group. yoloctl's broker rule allows any target except the trusted
+  sandbox's thread group, and setpriority also with PRIO_PGRP and PRIO_USER.
+  The child filter still denies the sandbox leader as defense in depth
 - allowed again with PID zero or a negative PID (process groups, killpg),
   except a signal to the sandbox's own process group (-sandbox TGID):
   kill, rt_sigqueueinfo
@@ -23,14 +25,14 @@ The sandbox-targeted denies stay because the sandbox's own startup probe
 requires them; they also protect the trusted sandbox from the workload.
 The workload has no capabilities and runs with no_new_privs, so the kernel
 still refuses any real identity or capability gain. Every deny v0.0.72 also
-had is kept, and the other 0.1.6 denies (signals to the sandbox's own TGID,
+had is kept, and the other denies (signals to the sandbox's own TGID,
 F_SETOWN, sethostname, ...) are unchanged.
 
 diff --git a/crates/openshell-sandbox/src/linux/child_seccomp.rs b/crates/openshell-sandbox/src/linux/child_seccomp.rs
-index 6fc9f67..0ef8846 100644
+index 1d37444125ca335916e8a1f21e186ca95d4364f2..b0d8976944dd0fc5a32e296265113d1c60769cd6 100644
 --- a/crates/openshell-sandbox/src/linux/child_seccomp.rs
 +++ b/crates/openshell-sandbox/src/linux/child_seccomp.rs
-@@ -175,20 +175,12 @@ pub fn prepare(sandbox_tgid: u32) -> io::Result<ChildHardeningProgram> {
+@@ -211,19 +211,12 @@ fn build(sandbox_tgid: u32, mediation: Mediation) -> io::Result<ChildHardeningPr
          libc::SYS_io_uring_setup,
          libc::SYS_io_uring_enter,
          libc::SYS_io_uring_register,
@@ -50,14 +52,13 @@ index 6fc9f67..0ef8846 100644
 +        // or capability gain; denying no-op calls broke GNU make, nice, etc.
          libc::SYS_sethostname,
          libc::SYS_setdomainname,
--        libc::SYS_setpriority,
 -        libc::SYS_ioprio_set,
      ] {
          append_unconditional_deny(&mut instructions, syscall)?;
      }
-@@ -210,18 +202,19 @@ pub fn prepare(sandbox_tgid: u32) -> io::Result<ChildHardeningProgram> {
-     ] {
-         append_argument_equal_deny(&mut instructions, syscall, argument, sandbox_tgid)?;
+@@ -270,17 +263,15 @@ fn build(sandbox_tgid: u32, mediation: Mediation) -> io::Result<ChildHardeningPr
+             }
+         }
      }
 +    // yoloctl: kill/rt_sigqueueinfo with PID zero or a negative PID (process
 +    // groups, killpg) stay allowed as in v0.0.72; tools and test suites use
@@ -78,45 +79,9 @@ index 6fc9f67..0ef8846 100644
 -    append_argument_masked_deny(&mut instructions, libc::SYS_kill, 0, 1 << 31)?;
 -    append_argument_masked_deny(&mut instructions, libc::SYS_rt_sigqueueinfo, 0, 1 << 31)?;
  
-+    // yoloctl: prlimit64 and sched_set* on another process stay allowed as
-+    // in v0.0.72; ordinary Unix permission checks still apply. Only the
-+    // trusted sandbox itself stays protected (and probed at startup).
-     for syscall in [
-         libc::SYS_prlimit64,
-         libc::SYS_sched_setaffinity,
-@@ -229,7 +222,7 @@ pub fn prepare(sandbox_tgid: u32) -> io::Result<ChildHardeningProgram> {
-         libc::SYS_sched_setparam,
-         libc::SYS_sched_setscheduler,
-     ] {
--        append_argument_nonzero_deny(&mut instructions, syscall, 0)?;
-+        append_argument_equal_deny(&mut instructions, syscall, 0, sandbox_tgid)?;
-     }
- 
      // The ordinary workload filter is installed after this program and owns
-@@ -297,22 +290,6 @@ fn append_argument_equal_deny(
-     Ok(())
- }
- 
--fn append_argument_nonzero_deny(
--    instructions: &mut Vec<libc::sock_filter>,
--    syscall: i64,
--    argument: u32,
--) -> io::Result<()> {
--    let syscall = syscall_number(syscall)?;
--    instructions.extend([
--        stmt(BPF_LD_W_ABS, SECCOMP_DATA_NR_OFFSET),
--        jump(BPF_JMP_JEQ_K, syscall, 0, 3),
--        stmt(BPF_LD_W_ABS, argument_word_offset(argument)),
--        jump(BPF_JMP_JEQ_K, 0, 1, 0),
--        errno(libc::EPERM),
--    ]);
--    Ok(())
--}
--
- fn append_argument_masked_deny(
-     instructions: &mut Vec<libc::sock_filter>,
-     syscall: i64,
-@@ -476,17 +453,8 @@ mod tests {
+     // the final ban on further seccomp installation. Blocking it here would
+@@ -526,17 +517,8 @@ mod tests {
              {
                  unsafe { libc::_exit(4) };
              }
@@ -136,9 +101,9 @@ index 6fc9f67..0ef8846 100644
              if unsafe { libc::syscall(libc::SYS_prlimit64, sandbox_tgid, libc::RLIMIT_CORE, 0, 0) }
                  != -1
                  || io::Error::last_os_error().raw_os_error() != Some(libc::EPERM)
-@@ -505,6 +473,11 @@ mod tests {
+@@ -569,6 +551,11 @@ mod tests {
              {
-                 unsafe { libc::_exit(11) };
+                 unsafe { libc::_exit(12) };
              }
 +            if unsafe { libc::kill(-sandbox_tgid, 0) } != -1
 +                || io::Error::last_os_error().raw_os_error() != Some(libc::EPERM)
@@ -148,7 +113,7 @@ index 6fc9f67..0ef8846 100644
              if unsafe { libc::fcntl(libc::STDIN_FILENO, libc::F_SETOWN, sandbox_tgid) } != -1
                  || io::Error::last_os_error().raw_os_error() != Some(libc::EPERM)
              {
-@@ -532,6 +505,92 @@ mod tests {
+@@ -596,6 +583,92 @@ mod tests {
          assert_eq!(libc::WEXITSTATUS(status), 0);
      }
  
@@ -239,5 +204,251 @@ index 6fc9f67..0ef8846 100644
 +    }
 +
      #[test]
-     fn filter_preserves_thread_and_process_creation() {
-         if std::env::var_os("OPENSHELL_CHILD_SECCOMP_CREATION_PROBE").is_some() {
+     fn filter_allows_own_group_scheduling_and_limit_calls() {
+         // SAFETY: the child uses only raw syscalls after fork and exits with
+diff --git a/crates/openshell-sandbox/src/linux/process_sched.rs b/crates/openshell-sandbox/src/linux/process_sched.rs
+index f6fdc5aba4c4f31afea4a39c6bbc14a3eaa861fa..db622ee085667787863bbe493db9a9e13a3b117a 100644
+--- a/crates/openshell-sandbox/src/linux/process_sched.rs
++++ b/crates/openshell-sandbox/src/linux/process_sched.rs
+@@ -8,7 +8,8 @@
+ //! deny for these syscalls would bypass the broker instead of narrowing the
+ //! target. A call that names a target is therefore notified and decided here:
+ //! the kernel performs the operation when it names the caller's own thread
+-//! group and it is denied with EPERM otherwise. Continuing matches native
++//! group and it is denied with EPERM otherwise (yoloctl widens this to any
++//! target except the trusted sandbox; see [`mediate_process_sched`]). Continuing matches native
+ //! semantics, where one workload thread may legitimately reconfigure its own
+ //! affinity, parameters, scheduler, nice value, or limits, and may do the same
+ //! for a sibling thread or process in its group.
+@@ -130,7 +131,8 @@ pub(crate) fn is_mediated(syscall: i64) -> bool {
+ /// listener filter runs those calls natively, so they are not expected here;
+ /// one that arrives anyway is allowed without reading a thread group, since
+ /// the comparison is vacuous. A named target is resolved through procfs and
+-/// must share the caller's thread group.
++/// must share the caller's thread group or, with yoloctl, be outside the
++/// trusted sandbox's.
+ ///
+ /// `setpriority` accepts only `PRIO_PROCESS`. `PRIO_USER` with `who = 0` would
+ /// touch every process of the shared workload UID, and `PRIO_PGRP` with
+@@ -148,9 +150,15 @@ pub(crate) fn is_mediated(syscall: i64) -> bool {
+ ///
+ /// A syscall outside the mediated set cannot be decided here, so it fails
+ /// closed with ENOSYS as an unhandled notification.
++///
++/// yoloctl: as in OpenShell v0.0.72, a named target may be any process except
++/// the trusted sandbox (`sandbox_tgid`), and `setpriority` also accepts
++/// `PRIO_PGRP` and `PRIO_USER`. Ordinary Unix permission checks still apply;
++/// tools such as `renice` and `ionice -p` act on other workload processes.
+ pub fn mediate_process_sched(
+     listener: &NotificationListener,
+     notification: Notification,
++    sandbox_tgid: u32,
+ ) -> io::Result<()> {
+     listener.validate_id(notification.id)?;
+     let syscall = i64::from(notification.syscall);
+@@ -159,9 +167,7 @@ pub fn mediate_process_sched(
+     if syscall == libc::SYS_setpriority {
+         match scalar_int(notification.args[0]).cast_unsigned() {
+             PRIO_PROCESS => {}
+-            PRIO_PGRP | PRIO_USER => {
+-                return Err(io::Error::from_raw_os_error(libc::EPERM));
+-            }
++            PRIO_PGRP | PRIO_USER => return listener.respond_continue(notification.id),
+             _ => return Err(io::Error::from_raw_os_error(libc::EINVAL)),
+         }
+     }
+@@ -174,7 +180,10 @@ pub fn mediate_process_sched(
+         return Err(io::Error::from_raw_os_error(negative_target_errno(syscall)));
+     }
+     let caller_group = resolve_caller_group(notification.tid)?;
+-    if resolve_target_group(target.cast_unsigned())? != caller_group {
++    let target_group = resolve_target_group(target.cast_unsigned())?;
++    // yoloctl: any target outside the trusted sandbox; the caller's own group
++    // is always allowed, as upstream.
++    if target_group != caller_group && target_group == sandbox_tgid {
+         return Err(io::Error::from_raw_os_error(libc::EPERM));
+     }
+     // Continuing an inspected numeric target has the reuse window documented
+@@ -218,12 +227,69 @@ fn resolve_target_group(tid: u32) -> io::Result<u32> {
+ }
+ 
+ #[cfg(test)]
++#[allow(unsafe_code)] // yoloctl: the broker test issues raw syscalls.
+ mod tests {
+     use super::*;
+ 
+     /// No task can hold this TID: it is above the kernel's `PID_MAX_LIMIT`.
+     const ABSENT_TID: u32 = u32::MAX;
+ 
++    /// yoloctl: run one notified scheduling call from a filtered worker thread
++    /// and mediate it with `sandbox_tgid`; return (mediator errno, result).
++    fn notified(syscall: i64, args: [libc::c_long; 3], sandbox_tgid: u32) -> (Option<i32>, i64) {
++        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
++        let worker = std::thread::spawn(move || {
++            let listener = crate::linux::seccomp_notify::install_workload_listener().unwrap();
++            sender.send(listener).unwrap();
++            // SAFETY: scalar arguments only.
++            unsafe { libc::syscall(syscall, args[0], args[1], args[2]) }
++        });
++        let listener = receiver
++            .recv_timeout(std::time::Duration::from_secs(5))
++            .unwrap();
++        let notification = listener.receive().unwrap();
++        let errno = match mediate_process_sched(&listener, notification, sandbox_tgid) {
++            Ok(()) => None,
++            Err(error) => {
++                let errno = error.raw_os_error().unwrap_or(libc::EIO);
++                listener.respond_errno(notification.id, errno).unwrap();
++                Some(errno)
++            }
++        };
++        (errno, worker.join().unwrap())
++    }
++
++    fn own_group_sleeper() -> std::process::Child {
++        use std::os::unix::process::CommandExt;
++        std::process::Command::new("sleep")
++            .arg("30")
++            .process_group(0)
++            .spawn()
++            .unwrap()
++    }
++
++    /// yoloctl: another workload process may be reniced (v0.0.72 parity);
++    /// the trusted sandbox's thread group stays denied.
++    #[test]
++    fn named_target_is_allowed_unless_it_is_the_sandbox() {
++        let mut child = own_group_sleeper();
++        let pid = libc::c_long::from(i32::try_from(child.id()).unwrap());
++        // SAFETY: scalar arguments only; setting the current value needs no privilege.
++        let nice = libc::c_long::from(unsafe {
++            libc::getpriority(libc::PRIO_PROCESS, child.id())
++        });
++        let prio_process = libc::c_long::from(PRIO_PROCESS.cast_signed());
++        let prio_pgrp = libc::c_long::from(PRIO_PGRP.cast_signed());
++        let other = notified(libc::SYS_setpriority, [prio_process, pid, nice], std::process::id());
++        let group = notified(libc::SYS_setpriority, [prio_pgrp, pid, nice], std::process::id());
++        let sandbox = notified(libc::SYS_setpriority, [prio_process, pid, nice], child.id());
++        child.kill().unwrap();
++        let _ = child.wait();
++        assert_eq!(other, (None, 0), "another workload process");
++        assert_eq!(group, (None, 0), "PRIO_PGRP on another workload group");
++        assert_eq!(sandbox, (Some(libc::EPERM), -1), "the sandbox's thread group");
++    }
++
+     #[test]
+     fn caller_lookup_fails_closed_while_target_lookup_keeps_esrch() {
+         assert_eq!(
+diff --git a/crates/openshell-sandbox/src/network_broker.rs b/crates/openshell-sandbox/src/network_broker.rs
+index abbe63df8e087e46b07556a5e7a221ebace5daf3..b905ae8f0c8706b19fd23da2a6e6225e5896ad6d 100644
+--- a/crates/openshell-sandbox/src/network_broker.rs
++++ b/crates/openshell-sandbox/src/network_broker.rs
+@@ -720,7 +720,11 @@ fn dispatch_notification(
+         );
+     }
+     if crate::linux::process_sched::is_mediated(syscall) {
+-        return crate::linux::process_sched::mediate_process_sched(&listener, notification);
++        return crate::linux::process_sched::mediate_process_sched(
++            &listener,
++            notification,
++            std::process::id(),
++        );
+     }
+     if syscall == libc::SYS_socket {
+         return create_socket(
+@@ -4219,8 +4223,11 @@ mod tests {
+         );
+     }
+ 
++    /// yoloctl: another workload process is a permitted target (v0.0.72
++    /// parity); only the trusted sandbox's thread group is refused, which
++    /// `process_sched` tests directly.
+     #[test]
+-    fn scheduling_and_limit_calls_deny_another_thread_group() {
++    fn scheduling_and_limit_calls_reach_another_workload_process() {
+         let mut target = std::process::Command::new("sleep")
+             .arg("30")
+             .spawn()
+@@ -4245,12 +4252,13 @@ mod tests {
+         });
+         let _ = target.kill();
+         let _ = target.wait();
+-        assert_eq!(affinity, Some(libc::EPERM));
+-        assert_eq!(limits, Some(libc::EPERM));
++        assert_eq!(affinity, None);
++        assert_eq!(limits, None);
+     }
+ 
+     /// The broker resolves every `sched_set*` target against the caller's
+-    /// thread group, not only affinity.
++    /// thread group, not only affinity. yoloctl: a foreign workload process is
++    /// permitted too, so every call here is continued.
+     ///
+     /// Both halves run on one notification stream: the caller's own settings
+     /// are re-applied to its own TID, which is notified unlike `pid 0`, and to
+@@ -4325,46 +4333,44 @@ mod tests {
+         });
+         let _ = target.kill();
+         let _ = target.wait();
+-        assert_eq!(
+-            results,
+-            (
+-                None,
+-                None,
+-                None,
+-                Some(libc::EPERM),
+-                Some(libc::EPERM),
+-                Some(libc::EPERM)
+-            )
+-        );
++        assert_eq!(results, (None, None, None, None, None, None));
+     }
+ 
++    /// yoloctl: `setpriority` reaches another workload process and a process
++    /// group (v0.0.72 parity). `PRIO_USER` would renice every process of the
++    /// shared UID, so it is not exercised here.
+     #[test]
+-    fn setpriority_denies_other_groups_and_group_selectors() {
++    fn setpriority_reaches_other_processes_and_groups() {
++        use std::os::unix::process::CommandExt;
+         let mut target = std::process::Command::new("sleep")
+             .arg("30")
++            .process_group(0)
+             .spawn()
+             .expect("spawn target");
+         let target_tgid = libc::id_t::try_from(target.id()).expect("target PID fits id_t");
+-        let (process, group, user) = mediated(move || {
+-            // SAFETY: scalar arguments only; the broker decides before the
+-            // kernel resolves any of the targets.
++        let (process, group) = mediated(move || {
++            // SAFETY: scalar arguments only; each call re-applies the target's
++            // current nice value, so a continued call changes nothing.
+             unsafe {
++                let nice = read_priority(target_tgid).expect("read target nice value");
+                 (
+                     errno(libc::c_long::from(libc::setpriority(
+                         libc::PRIO_PROCESS,
+                         target_tgid,
+-                        0,
++                        nice,
++                    ))),
++                    errno(libc::c_long::from(libc::setpriority(
++                        libc::PRIO_PGRP,
++                        target_tgid,
++                        nice,
+                     ))),
+-                    errno(libc::c_long::from(libc::setpriority(libc::PRIO_PGRP, 0, 0))),
+-                    errno(libc::c_long::from(libc::setpriority(libc::PRIO_USER, 0, 0))),
+                 )
+             }
+         });
+         let _ = target.kill();
+         let _ = target.wait();
+-        assert_eq!(process, Some(libc::EPERM));
+-        assert_eq!(group, Some(libc::EPERM));
+-        assert_eq!(user, Some(libc::EPERM));
++        assert_eq!(process, None);
++        assert_eq!(group, None);
+     }
+ 
+     /// Invalid `setpriority` arguments keep the errno the kernel returns.

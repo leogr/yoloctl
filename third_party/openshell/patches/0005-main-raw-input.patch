@@ -19,10 +19,10 @@ channel before any await, so dropping the connection's handler mid-request
 releases it. Without the switch the behaviour is upstream's, unchanged.
 
 diff --git a/crates/openshell-supervisor-process/src/ssh.rs b/crates/openshell-supervisor-process/src/ssh.rs
-index 8b7361d7..4e3cfd26 100644
+index a11eddbd217f72b2a76ac0f1561087c1df5b2467..ffb23fb6335f3539692960cc765afa0ecbb87368 100644
 --- a/crates/openshell-supervisor-process/src/ssh.rs
 +++ b/crates/openshell-supervisor-process/src/ssh.rs
-@@ -47,6 +47,28 @@ mod peer_stream;
+@@ -54,6 +54,28 @@ mod peer_stream;
  #[path = "ssh/reconnect_tests.rs"]
  mod reconnect_tests;
  
@@ -51,7 +51,7 @@ index 8b7361d7..4e3cfd26 100644
  fn filter_main_detach_sequence(prefix_pending: &mut bool, data: &[u8]) -> (Vec<u8>, bool) {
      let mut forward = Vec::with_capacity(data.len() + usize::from(*prefix_pending));
      for &byte in data {
-@@ -389,6 +411,10 @@ struct ChannelState {
+@@ -405,6 +427,10 @@ struct ChannelState {
      main_input_owner: Option<u64>,
      main_attached: bool,
      main_read_only: bool,
@@ -62,7 +62,7 @@ index 8b7361d7..4e3cfd26 100644
      /// A writable attachment denied stdin may retry on later input. Explicit
      /// viewers and channels that sent EOF must never acquire a new lease.
      main_input_pending: bool,
-@@ -757,6 +783,17 @@ impl russh::server::Handler for SshHandler {
+@@ -793,6 +819,17 @@ impl russh::server::Handler for SshHandler {
              } else {
                  "\n"
              };
@@ -80,7 +80,7 @@ index 8b7361d7..4e3cfd26 100644
              let main_session = self
                  .main_session
                  .clone()
-@@ -768,6 +805,9 @@ impl russh::server::Handler for SshHandler {
+@@ -804,6 +841,9 @@ impl russh::server::Handler for SshHandler {
              let main_session = match main_session {
                  Ok(main_session) => main_session,
                  Err(error) => {
@@ -90,7 +90,7 @@ index 8b7361d7..4e3cfd26 100644
                      // The subsystem is supported, but its terminal is unavailable.
                      // A bare request failure hides this reason in OpenSSH clients.
                      session.channel_success(channel)?;
-@@ -789,6 +829,24 @@ impl russh::server::Handler for SshHandler {
+@@ -825,6 +865,24 @@ impl russh::server::Handler for SshHandler {
                  .channels
                  .get_mut(&channel)
                  .expect("main channel existence checked above");
@@ -115,7 +115,7 @@ index 8b7361d7..4e3cfd26 100644
              state.main_attached = true;
              if let Some(pty) = state.pty_request.take() {
                  main_session
-@@ -802,6 +860,8 @@ impl russh::server::Handler for SshHandler {
+@@ -838,6 +896,8 @@ impl russh::server::Handler for SshHandler {
              }
              let (input, warning) = if state.main_read_only {
                  (None, None)
@@ -124,7 +124,7 @@ index 8b7361d7..4e3cfd26 100644
              } else {
                  match main_session.acquire_input() {
                      Ok((owner, input)) => {
-@@ -918,6 +978,12 @@ impl russh::server::Handler for SshHandler {
+@@ -955,6 +1015,12 @@ impl russh::server::Handler for SshHandler {
          {
              state.main_read_only = true;
          }
@@ -137,7 +137,7 @@ index 8b7361d7..4e3cfd26 100644
          session.channel_success(channel)?;
          Ok(())
      }
-@@ -958,7 +1024,7 @@ impl russh::server::Handler for SshHandler {
+@@ -995,7 +1061,7 @@ impl russh::server::Handler for SshHandler {
              return Ok(());
          }
          let denied_prefix = state.main_input_pending && state.main_detach_prefix_pending;
@@ -146,7 +146,7 @@ index 8b7361d7..4e3cfd26 100644
              filter_main_detach_sequence(&mut state.main_detach_prefix_pending, data)
          } else {
              (data.to_vec(), false)
-@@ -1718,6 +1784,23 @@ mod tests {
+@@ -1829,6 +1895,23 @@ mod tests {
          main_session: Option<Arc<MainSession>>,
          boundary_exec: Arc<openshell_sandbox_backend::BoundaryExec>,
          client_config: russh::client::Config,
@@ -170,8 +170,8 @@ index 8b7361d7..4e3cfd26 100644
      ) -> russh::client::Handle<AcceptAnyServerKey> {
          let host_key = {
              let mut rng = rand::rng();
-@@ -1735,7 +1818,7 @@ mod tests {
-             main_session,
+@@ -1849,7 +1932,7 @@ mod tests {
+             ))),
          );
          let (server_stream, client_stream) = tokio::io::duplex(64 * 1024);
 -        tokio::spawn(async move {
@@ -179,7 +179,7 @@ index 8b7361d7..4e3cfd26 100644
              if let Ok(session) =
                  russh::server::run_stream(Arc::new(server_config), server_stream, handler).await
              {
-@@ -2080,6 +2163,298 @@ mod tests {
+@@ -2313,6 +2396,298 @@ mod tests {
          main_session.release_input(owner);
      }
  

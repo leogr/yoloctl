@@ -133,7 +133,11 @@ func TestQualificationRejectsDuplicateJSONKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicate := []byte(strings.Replace(string(raw), `"version":"0.1.6"`, `"version":"0.1.6","version":"0.1.6"`, 1))
+	version := `"version":"` + qualifiedVersion + `"`
+	duplicate := []byte(strings.Replace(string(raw), version, version+","+version, 1))
+	if string(duplicate) == string(raw) {
+		t.Fatal("fixture lacks the version field")
+	}
 	if _, err := LoadQualifiedRelease(duplicate, sha256Hex(duplicate)); err == nil {
 		t.Fatal("duplicate manifest keys accepted under last-value-wins decoding")
 	}
@@ -251,7 +255,7 @@ func TestQualifiedPatchStackAcceptsOptionalSixthPatch(t *testing.T) {
 	}
 }
 
-func TestQualifiedPatchStackAcceptsOptionalSeventhToNinthPatches(t *testing.T) {
+func TestQualifiedPatchStackAcceptsOptionalSeventhAndEighthPatches(t *testing.T) {
 	p := releaseFixture(t).Pins
 	fork := p.ForkTree
 	p.Patches[1].Tree = strings.Repeat("d", 40)
@@ -296,26 +300,14 @@ func TestQualifiedPatchStackAcceptsOptionalSeventhToNinthPatches(t *testing.T) {
 	if qualifiedPatchStack(nine) {
 		t.Fatal("unexpected ninth patch accepted")
 	}
+	// 0.1.6's ninth patch (#5650 backport) is part of v0.1.10: refused for new
+	// boxes; existing 0.1.6 boxes keep it under their recorded source.
 	nine.Patches[8].Name = qualifiedPatch9Name
-	if !qualifiedPatchStack(nine) {
-		t.Fatal("nine-patch release refused")
-	}
-	nine.Patches[8].ParentTree = strings.Repeat("c", 40)
 	if qualifiedPatchStack(nine) {
-		t.Fatal("ninth patch accepted off the chain")
-	}
-	ten := nine
-	ten.Patches = append(append([]SourcePatch(nil), nine.Patches...), SourcePatch{"extra.patch", sha256Hex([]byte("10")), strings.Repeat("9", 40), strings.Repeat("a", 40)})
-	ten.Patches[8].ParentTree = strings.Repeat("f", 40)
-	ten.ForkTree = strings.Repeat("a", 40)
-	if qualifiedPatchStack(ten) {
-		t.Fatal("unexpected tenth patch accepted")
+		t.Fatal("0.1.6's ninth patch accepted for the current source")
 	}
 }
 
-// An existing box's recorded manifest may name an earlier source: it loads
-// under that source's own complete rules for existing-box reads, and never
-// for a new box. Fields of two sources cannot be mixed.
 func TestRecordedReleaseAcceptsAnEarlierSourceOnlyForExistingBoxes(t *testing.T) {
 	earlier := sourceRelease{
 		version: "0.0.9-fixture", upstreamCommit: strings.Repeat("d", 40), upstreamTree: strings.Repeat("e", 40),
@@ -382,5 +374,55 @@ func TestRecordedReleaseAcceptsAnEarlierSourceOnlyForExistingBoxes(t *testing.T)
 	}
 	if _, err := LoadRecordedRelease(raw, sha256Hex(raw)); err != nil {
 		t.Fatalf("current release refused for an existing box: %v", err)
+	}
+}
+
+// A box created by v0.4.x recorded this real nine-patch 0.1.6 manifest (a
+// `make build` qualification); boxes from v0.1.0–v0.3.0 recorded four 0.1.6
+// patches (pins at tag v0.3.0). Both stay readable for existing boxes and are
+// refused for new ones.
+func TestRecordedOpenShell016ManifestsStayReadableForExistingBoxes(t *testing.T) {
+	raw, err := os.ReadFile("testdata/recorded-0.1.6-manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := LoadRecordedRelease(raw, sha256Hex(raw))
+	if err != nil {
+		t.Fatalf("nine-patch 0.1.6 manifest refused for an existing box: %v", err)
+	}
+	if r.document.Pins.Version != "0.1.6" || len(r.document.Pins.Patches) != 9 {
+		t.Fatalf("unexpected recorded fixture %s/%d", r.document.Pins.Version, len(r.document.Pins.Patches))
+	}
+	if _, err := LoadQualifiedRelease(raw, sha256Hex(raw)); err == nil {
+		t.Fatal("0.1.6 manifest accepted for a new box")
+	}
+
+	old := recordedReleases[0]
+	d := releaseFixture(t)
+	p := &d.Pins
+	p.Version, p.UpstreamCommit, p.UpstreamTree = old.version, old.upstreamCommit, old.upstreamTree
+	p.ProtocolFixtureVersion = old.protocolFixtureVersion
+	// Patch hashes and result trees as pinned at tag v0.3.0.
+	p.Patches = []SourcePatch{
+		{"unmediated-network.patch", old.patch1SHA256, old.upstreamTree, old.patch1Tree},
+		{"workspace-read-only.patch", "77019fe849082581402dc21b366e22afe633973a40aa16d5eba1d66ef8a23b0e", old.patch1Tree, "9112ab178200f6751290ac2c2a20150e31c8708b"},
+		{qualifiedPatch3Name, "d927c47d8ed8f6ca95e147a65614acc064d9dea1d1067495838da4c2049eec69", "9112ab178200f6751290ac2c2a20150e31c8708b", "c5f248c7970e0ea23736f242b70668a135af3785"},
+		{qualifiedPatch4Name, "2c6c4d4005cf4dec51f02769bf6319f26b736c36b224c6b9007f372d5566ed55", "c5f248c7970e0ea23736f242b70668a135af3785", "a95cfcec31a2627091f4141253c89ef0f88fedae"},
+	}
+	p.ForkTree = "a95cfcec31a2627091f4141253c89ef0f88fedae"
+	subject, err := json.Marshal(d.Pins)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Qualification.SubjectSHA256 = sha256Hex(subject)
+	four, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadRecordedRelease(four, sha256Hex(four)); err != nil {
+		t.Fatalf("four-patch 0.1.6 manifest refused for an existing box: %v", err)
+	}
+	if _, err := LoadQualifiedRelease(four, sha256Hex(four)); err == nil {
+		t.Fatal("four-patch 0.1.6 manifest accepted for a new box")
 	}
 }

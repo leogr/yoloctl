@@ -17,10 +17,10 @@ accounting are unchanged; there is no new flag and no timer. A reader that
 ends on this file needs its own bound.
 
 diff --git a/crates/openshell-supervisor-process/src/ssh.rs b/crates/openshell-supervisor-process/src/ssh.rs
-index 4e3cfd26..324e88b6 100644
+index ffb23fb6335f3539692960cc765afa0ecbb87368..b4d8cc2f60d53f3d8b158b4e32ca3887e14342ab 100644
 --- a/crates/openshell-supervisor-process/src/ssh.rs
 +++ b/crates/openshell-supervisor-process/src/ssh.rs
-@@ -2497,6 +2497,115 @@ mod tests {
+@@ -2730,6 +2730,115 @@ mod tests {
          channel.close().await.unwrap();
      }
  
@@ -137,10 +137,10 @@ index 4e3cfd26..324e88b6 100644
      async fn main_attachment_accepts_declared_session_after_process_exit() {
          let main_session = MainSession::inert();
 diff --git a/crates/openshell-supervisor/src/lib.rs b/crates/openshell-supervisor/src/lib.rs
-index 03f58524..64f5d7e1 100644
+index 4bb0970536c49eed7b9ef2e817b893465e6fad3f..f4833d24083166d34e6f057dd198b7603144f3d5 100644
 --- a/crates/openshell-supervisor/src/lib.rs
 +++ b/crates/openshell-supervisor/src/lib.rs
-@@ -1811,8 +1811,12 @@ pub async fn run_sandbox_instance(
+@@ -1954,8 +1954,12 @@ pub async fn run_sandbox_instance(
          }
          if !completion_cancelled {
              let drain = boundary_access.drain_main_terminal_delivery();
@@ -155,7 +155,7 @@ index 03f58524..64f5d7e1 100644
          }
          if !completion_cancelled
              && let (Some(gateway), Some(id)) = (gateway.as_ref(), sandbox_id.as_deref())
-@@ -1880,6 +1884,42 @@ fn persist_main_exit_marker(path: &std::path::Path, exit_code: i32) -> std::io::
+@@ -2080,6 +2084,42 @@ fn persist_main_exit_marker(path: &std::path::Path, exit_code: i32) -> std::io::
      write_private_file_atomically(path, format!("exit_code={exit_code}\n").as_bytes())
  }
  
@@ -198,7 +198,7 @@ index 03f58524..64f5d7e1 100644
  /// Replace `path` with `contents` via an owner-only (0600) temporary file in
  /// the same directory, fsync, rename, and directory fsync.
  fn write_private_file_atomically(path: &std::path::Path, contents: &[u8]) -> std::io::Result<()> {
-@@ -4876,6 +4916,102 @@ mod tests {
+@@ -5134,6 +5174,102 @@ mod tests {
          );
      }
  

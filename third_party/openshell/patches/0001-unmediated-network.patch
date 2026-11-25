@@ -20,19 +20,19 @@ upstream ships it.
 
 Signed-off-by: Leonardo Grasso <me@leonardograsso.com>
 ---
- .../openshell-sandbox/src/boundary_server.rs  |  14 ++-
- crates/openshell-sandbox/src/lib.rs           |  17 ++-
- .../src/linux/process_signal.rs               |   3 +-
- .../src/linux/seccomp_notify.rs               | 105 ++++++++++++++----
- .../src/linux/workload_launcher.rs            |  10 +-
- crates/openshell-sandbox/src/main.rs          |  40 +++++--
- 6 files changed, 156 insertions(+), 33 deletions(-)
+ crates/openshell-sandbox/src/boundary_server.rs    |  14 ++-
+ crates/openshell-sandbox/src/lib.rs                |  17 ++-
+ .../openshell-sandbox/src/linux/process_signal.rs  |   3 +-
+ .../openshell-sandbox/src/linux/seccomp_notify.rs  | 122 +++++++++++++++++----
+ .../src/linux/workload_launcher.rs                 |  10 +-
+ crates/openshell-sandbox/src/main.rs               |  40 +++++--
+ 6 files changed, 170 insertions(+), 36 deletions(-)
 
 diff --git a/crates/openshell-sandbox/src/boundary_server.rs b/crates/openshell-sandbox/src/boundary_server.rs
-index 2557d40f..6202dc30 100644
+index 038708c6549aa508093c55330c687e74a2e08962..0b3c70b702a026bae177476bd9b15032bbfbb2d6 100644
 --- a/crates/openshell-sandbox/src/boundary_server.rs
 +++ b/crates/openshell-sandbox/src/boundary_server.rs
-@@ -236,6 +236,7 @@ mod linux {
+@@ -245,6 +245,7 @@ mod linux {
      pub fn run_boundary(
          config_path: &Path,
          qualification: crate::RuntimeQualification,
@@ -40,7 +40,7 @@ index 2557d40f..6202dc30 100644
      ) -> Result<(), String> {
          install_boundary_signal_handlers()?;
          make_boundary_nondumpable()?;
-@@ -266,7 +267,14 @@ mod linux {
+@@ -275,7 +276,14 @@ mod linux {
          }
          crate::managed_children::start_orphan_reaper()
              .map_err(|error| format!("start sandbox orphan reaper: {error}"))?;
@@ -56,7 +56,7 @@ index 2557d40f..6202dc30 100644
              .map_err(|error| format!("start sandbox workload launcher: {error}"))?;
          let protected_control_port = match &config.listener {
              BoundaryListenerConfig::TlsTcp { address, .. } => Some(address.port()),
-@@ -10037,14 +10045,16 @@ mod linux {
+@@ -10953,14 +10961,16 @@ mod linux {
  pub fn run_boundary(
      config_path: &Path,
      qualification: crate::RuntimeQualification,
@@ -75,10 +75,10 @@ index 2557d40f..6202dc30 100644
      Err("boundary mode is supported only on Linux".to_string())
  }
 diff --git a/crates/openshell-sandbox/src/lib.rs b/crates/openshell-sandbox/src/lib.rs
-index 3a7fd8be..095d6013 100644
+index 3c280cc977d5d54e6eac6b03de5fb0349b693a71..1b80b67d73ac3ce71a815c0367888ea9671e2aac 100644
 --- a/crates/openshell-sandbox/src/lib.rs
 +++ b/crates/openshell-sandbox/src/lib.rs
-@@ -73,7 +73,22 @@ pub fn run(
+@@ -80,7 +80,22 @@ pub fn run(
      config_path: &std::path::Path,
      qualification: RuntimeQualification,
  ) -> miette::Result<()> {
@@ -103,10 +103,10 @@ index 3a7fd8be..095d6013 100644
  }
  
 diff --git a/crates/openshell-sandbox/src/linux/process_signal.rs b/crates/openshell-sandbox/src/linux/process_signal.rs
-index f2addd54..464b0674 100644
+index c77a79758422a5e36875f3449dd43910dd9b8672..22fedb249178f1ab3c8a7fcaf5d0f235f3966c02 100644
 --- a/crates/openshell-sandbox/src/linux/process_signal.rs
 +++ b/crates/openshell-sandbox/src/linux/process_signal.rs
-@@ -193,7 +193,8 @@ mod tests {
+@@ -294,7 +294,8 @@ mod tests {
      fn filtered_worker_cannot_signal_the_sandbox_through_a_tid() {
          let (sender, receiver) = std::sync::mpsc::sync_channel(1);
          let worker = std::thread::spawn(move || {
@@ -117,10 +117,10 @@ index f2addd54..464b0674 100644
              // SAFETY: gettid has no arguments; signal zero checks permission
              // without delivering a signal to the disposable test thread.
 diff --git a/crates/openshell-sandbox/src/linux/seccomp_notify.rs b/crates/openshell-sandbox/src/linux/seccomp_notify.rs
-index bc98813b..9dd65a57 100644
+index b45dbccd93472f0dab622af1e42049157f97ac77..4aea80201bed43533c34ba427f9db76b31a5337e 100644
 --- a/crates/openshell-sandbox/src/linux/seccomp_notify.rs
 +++ b/crates/openshell-sandbox/src/linux/seccomp_notify.rs
-@@ -322,25 +322,44 @@ pub fn install_listener(syscalls: &[i64]) -> io::Result<NotificationListener> {
+@@ -342,29 +342,54 @@ pub fn install_listener(syscalls: &[i64]) -> io::Result<NotificationListener> {
      install_notification_filter(syscalls)
  }
  
@@ -142,23 +142,20 @@ index bc98813b..9dd65a57 100644
 +/// thread.
  ///
 -/// The filter mediates every syscall that can create, select, or materially
--/// reconfigure an INET endpoint. Connected `send()`/null-destination
+-/// reconfigure an INET endpoint, and every scheduling, priority, and
+-/// resource-limit call whose target must be checked against the caller's
+-/// thread group. The same calls with a caller-only target (`pid == 0`, and
+-/// `PRIO_PROCESS` for `setpriority`) run natively. Connected
+-/// `send()`/null-destination
 -/// `sendto()` retains the audited cBPF fast path. `accept`/`accept4` run
 -/// natively: the broker binds every INET socket to loopback before injecting
 -/// it, and accepted sockets inherit their listener's binding.
--pub fn install_workload_listener() -> io::Result<NotificationListener> {
--    #[allow(unused_mut)] // SYS_open is unavailable on some architectures.
--    let mut syscalls = vec![
--        libc::SYS_socket,
--        libc::SYS_connect,
--        libc::SYS_bind,
--        libc::SYS_listen,
--        libc::SYS_sendto,
--        libc::SYS_sendmsg,
--        libc::SYS_sendmmsg,
--        libc::SYS_setsockopt,
 +/// With network mediation on, the filter mediates every syscall that can
-+/// create, select, or materially reconfigure an INET endpoint. Connected
++/// create, select, or materially reconfigure an INET endpoint. It always
++/// mediates every scheduling, priority, and resource-limit call whose target
++/// must be checked against the caller's thread group; the same calls with a
++/// caller-only target (`pid == 0`, and `PRIO_PROCESS` for `setpriority`) run
++/// natively. Connected
 +/// `send()`/null-destination `sendto()` retains the audited cBPF fast path.
 +/// `accept`/`accept4` run natively: the broker binds every INET socket to
 +/// loopback before injecting it, and accepted sockets inherit their
@@ -173,6 +170,22 @@ index bc98813b..9dd65a57 100644
 +    install_listener(&workload_listener_syscalls(mediate_network))
 +}
 +
++/// [`install_workload_listener_with`] with network mediation on, upstream's
++/// default.
+ pub fn install_workload_listener() -> io::Result<NotificationListener> {
+-    #[allow(unused_mut)] // SYS_open is unavailable on some architectures.
+-    let mut syscalls = vec![
+-        libc::SYS_socket,
+-        libc::SYS_connect,
+-        libc::SYS_bind,
+-        libc::SYS_listen,
+-        libc::SYS_sendto,
+-        libc::SYS_sendmsg,
+-        libc::SYS_sendmmsg,
+-        libc::SYS_setsockopt,
++    install_workload_listener_with(true)
++}
++
 +/// The syscalls the workload listener forwards.
 +pub(crate) fn workload_listener_syscalls(mediate_network: bool) -> Vec<i64> {
 +    let mut syscalls = Vec::with_capacity(16);
@@ -183,12 +196,17 @@ index bc98813b..9dd65a57 100644
          libc::SYS_kill,
          libc::SYS_tkill,
          libc::SYS_tgkill,
-@@ -348,10 +367,10 @@ pub fn install_workload_listener() -> io::Result<NotificationListener> {
+@@ -372,7 +397,7 @@ pub fn install_workload_listener() -> io::Result<NotificationListener> {
          libc::SYS_rt_sigqueueinfo,
          libc::SYS_openat,
          libc::SYS_openat2,
 -    ];
 +    ]);
+     syscalls.extend(
+         crate::linux::process_sched::MEDIATED_PROCESS_SCHED_SYSCALLS
+             .iter()
+@@ -380,7 +405,7 @@ pub fn install_workload_listener() -> io::Result<NotificationListener> {
+     );
      #[cfg(target_arch = "x86_64")]
      syscalls.push(libc::SYS_open);
 -    install_listener(&syscalls)
@@ -196,7 +214,7 @@ index bc98813b..9dd65a57 100644
  }
  
  /// Run a no-capability conformance probe.
-@@ -855,6 +874,52 @@ mod tests {
+@@ -924,6 +949,57 @@ mod tests {
  
      use super::*;
  
@@ -221,12 +239,17 @@ index bc98813b..9dd65a57 100644
 +            libc::SYS_openat,
 +            libc::SYS_openat2,
 +        ];
++        upstream.extend(
++            crate::linux::process_sched::MEDIATED_PROCESS_SCHED_SYSCALLS
++                .iter()
++                .map(|mediated| mediated.number),
++        );
 +        #[cfg(target_arch = "x86_64")]
 +        upstream.push(libc::SYS_open);
 +        assert_eq!(workload_listener_syscalls(true), upstream);
 +
-+        // Unmediated drops exactly the eight network syscalls; signal and
-+        // openat mediation stay.
++        // Unmediated drops exactly the eight network syscalls; signal, openat
++        // and scheduling mediation stay.
 +        let unmediated = workload_listener_syscalls(false);
 +        let expected: Vec<i64> = upstream
 +            .into_iter()
@@ -250,7 +273,7 @@ index bc98813b..9dd65a57 100644
      const REJECTED_INSTALL_PROBE_CHILD: &str = "OPENSHELL_REJECTED_INSTALL_PROBE_CHILD";
  
 diff --git a/crates/openshell-sandbox/src/linux/workload_launcher.rs b/crates/openshell-sandbox/src/linux/workload_launcher.rs
-index 51b3af62..e17550d9 100644
+index 51b3af629e9f85e6915591be2400991a2b6c8dee..e17550d9770986efd990275df42e8d5c3bdb08c9 100644
 --- a/crates/openshell-sandbox/src/linux/workload_launcher.rs
 +++ b/crates/openshell-sandbox/src/linux/workload_launcher.rs
 @@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
@@ -285,10 +308,10 @@ index 51b3af62..e17550d9 100644
                      if ready_tx.send(Ok(listener)).is_err() {
                          thread_alive.store(false, Ordering::Release);
 diff --git a/crates/openshell-sandbox/src/main.rs b/crates/openshell-sandbox/src/main.rs
-index 86ef2bb4..8d752c55 100644
+index 8978659ba796c0e31ca8ee69376a07f329330b57..ac044c9035b74e53423bff299d797ed9fa0297a4 100644
 --- a/crates/openshell-sandbox/src/main.rs
 +++ b/crates/openshell-sandbox/src/main.rs
-@@ -57,8 +57,17 @@ struct BoundaryArgs {
+@@ -62,8 +62,17 @@ struct BoundaryArgs {
      /// Log level (trace, debug, info, warn, error).
      #[arg(long, default_value = "warn", env = openshell_core::sandbox_env::LOG_LEVEL)]
      log_level: String,
@@ -306,7 +329,7 @@ index 86ef2bb4..8d752c55 100644
  /// Run the active Phase 0 probe inside the exact workload runtime profile.
  #[cfg(target_os = "linux")]
  #[allow(unsafe_code)]
-@@ -1405,14 +1414,16 @@ fn launch_capability_probe(_args: &[String]) -> Result<()> {
+@@ -1438,14 +1447,16 @@ fn launch_capability_probe(_args: &[String]) -> Result<()> {
  fn launch_capability_free(args: &[String]) -> Result<()> {
      use miette::{Context as _, IntoDiagnostic as _};
  
@@ -325,7 +348,7 @@ index 86ef2bb4..8d752c55 100644
          ));
      }
      let uid = uid.parse::<u32>().into_diagnostic().wrap_err("parse UID")?;
-@@ -1439,7 +1450,7 @@ fn launch_capability_free(args: &[String]) -> Result<()> {
+@@ -1472,7 +1483,7 @@ fn launch_capability_free(args: &[String]) -> Result<()> {
      enter_capability_free_identity(uid, gid)?;
      let log_level = std::env::var(openshell_core::sandbox_env::LOG_LEVEL)
          .unwrap_or_else(|_| "warn".to_string());
@@ -334,7 +357,7 @@ index 86ef2bb4..8d752c55 100644
  }
  
  #[cfg(not(target_os = "linux"))]
-@@ -1758,7 +1769,7 @@ fn seed_kubernetes_workspace() -> Result<()> {
+@@ -1791,7 +1802,7 @@ fn seed_kubernetes_workspace() -> Result<()> {
  }
  
  #[cfg(target_os = "linux")]
@@ -343,7 +366,7 @@ index 86ef2bb4..8d752c55 100644
      let console_filter =
          EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
      let _ = tracing_subscriber::registry()
-@@ -1771,11 +1782,11 @@ fn run_boundary(bootstrap: &Path, log_level: &str) -> Result<()> {
+@@ -1804,11 +1815,11 @@ fn run_boundary(bootstrap: &Path, log_level: &str) -> Result<()> {
          )
          .try_init();
      let (qualification, _) = qualify_runtime()?;
@@ -357,7 +380,7 @@ index 86ef2bb4..8d752c55 100644
      Err(miette::miette!("openshell-sandbox requires Linux"))
  }
  
-@@ -1820,7 +1831,7 @@ fn main() -> Result<()> {
+@@ -1853,7 +1864,7 @@ fn main() -> Result<()> {
      }
  
      let args = BoundaryArgs::parse();
@@ -366,9 +389,9 @@ index 86ef2bb4..8d752c55 100644
  }
  
  #[cfg(all(test, target_os = "linux"))]
-@@ -1828,6 +1839,21 @@ mod tests {
-     use super::*;
-     use std::os::unix::fs::PermissionsExt;
+@@ -1933,6 +1944,21 @@ mod tests {
+         );
+     }
  
 +    #[test]
 +    fn unmediated_network_is_an_explicit_boundary_flag() {
@@ -388,6 +411,3 @@ index 86ef2bb4..8d752c55 100644
      #[test]
      fn kubernetes_bootstrap_stages_private_memory_bundle() {
          if nix::unistd::geteuid().is_root() || nix::unistd::getegid().as_raw() == 0 {
--- 
-2.43.0
-

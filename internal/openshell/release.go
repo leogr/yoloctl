@@ -13,11 +13,11 @@ import (
 )
 
 const (
-	qualifiedVersion        = "0.1.6"
-	qualifiedUpstreamCommit = "ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47"
-	qualifiedUpstreamTree   = "c9c1f358cd6f68445c88b65a5e4983a5213e6bab"
-	qualifiedPatch1Tree     = "c7c8c2847caee9c477f23fc76242298f1ac2eff5"
-	qualifiedPatch1SHA256   = "3a1b73769d14d5d17af7d1a867db530870fbbcaf5f2b75e9a8328442d0c8e034"
+	qualifiedVersion        = "0.1.10"
+	qualifiedUpstreamCommit = "152c59d3178039e3fbb4a5595f9fff7216a6be92"
+	qualifiedUpstreamTree   = "7b67b7ce2816789aff4d334e1c4a9a0d7a7c1c9a"
+	qualifiedPatch1Tree     = "46bcd43d1ee03890d995f6605b5986d07818730c"
+	qualifiedPatch1SHA256   = "3c5a5700f4ec525b53c7584d5c78d01df3196595707a614609cb3c69f4cee1fa"
 	// Optional third patch restoring the workload calls v0.0.72 allowed, and
 	// optional fourth restoring process-group signals.
 	qualifiedPatch3Name    = "v0072-syscall-parity.patch"
@@ -27,7 +27,7 @@ const (
 	qualifiedPatch7Name    = "main-output-backpressure.patch"
 	qualifiedPatch8Name    = "cargo-ca-bundle.patch"
 	qualifiedPatch9Name    = "dns-mapping-refresh.patch"
-	protocolFixtureVersion = "workspace-read-only-v1"
+	protocolFixtureVersion = "workspace-read-only-v2"
 )
 
 type SourcePatch struct {
@@ -144,7 +144,6 @@ var currentRelease = sourceRelease{
 		"unmediated-network.patch", "workspace-read-only.patch",
 		qualifiedPatch3Name, qualifiedPatch4Name, qualifiedPatch5Name,
 		qualifiedPatch6Name, qualifiedPatch7Name, qualifiedPatch8Name,
-		qualifiedPatch9Name,
 	},
 	bootstrapSchema: BootstrapSchema, protocolFixtureVersion: protocolFixtureVersion,
 }
@@ -153,7 +152,19 @@ var currentRelease = sourceRelease{
 // A box keeps the runtime it was created with until it is recreated, so the
 // build reads it, and stops, starts and restarts it, under that box's own
 // source rules. They are never offered to a new box or helper install.
-var recordedReleases = []sourceRelease{}
+var recordedReleases = []sourceRelease{{
+	// OpenShell 0.1.6 (upstream ac7f615c): releases v0.1.0–v0.3.0 recorded
+	// four patches, v0.4.x nine. Patch 9 is upstream's #5650, part of v0.1.10.
+	version: "0.1.6", upstreamCommit: "ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47", upstreamTree: "c9c1f358cd6f68445c88b65a5e4983a5213e6bab",
+	patch1Tree: "c7c8c2847caee9c477f23fc76242298f1ac2eff5", patch1SHA256: "3a1b73769d14d5d17af7d1a867db530870fbbcaf5f2b75e9a8328442d0c8e034",
+	patchNames: []string{
+		"unmediated-network.patch", "workspace-read-only.patch",
+		qualifiedPatch3Name, qualifiedPatch4Name, qualifiedPatch5Name,
+		qualifiedPatch6Name, qualifiedPatch7Name, qualifiedPatch8Name,
+		qualifiedPatch9Name,
+	},
+	bootstrapSchema: 2, protocolFixtureVersion: "workspace-read-only-v1",
+}}
 
 func (r sourceRelease) matches(p ReleasePins) bool {
 	return p.Version == r.version && p.UpstreamCommit == r.upstreamCommit && p.UpstreamTree == r.upstreamTree &&

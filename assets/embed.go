@@ -32,4 +32,4 @@ var AgentboxContexts embed.FS
 // SandboxVersion identifies the native runtime target. Executable/Rego bytes
 // and their hashes come from the compiled qualification and embedded artifacts,
 // not a VM-side upstream download or the retired /opt/openshell installation.
-const SandboxVersion = "v0.1.6"
+const SandboxVersion = "v0.1.10"

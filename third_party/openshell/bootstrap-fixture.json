@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "protocol_fixture_version": "workspace-read-only-v1",
+  "protocol_fixture_version": "workspace-read-only-v2",
   "workspace_read_only_flag": "--workspace-read-only",
   "workspace_read_only_field": "workspace_read_only",
   "workspace_read_only_default": false,

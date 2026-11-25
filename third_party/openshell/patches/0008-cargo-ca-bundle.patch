@@ -1,8 +1,25 @@
 diff --git a/crates/openshell-sandbox/src/child_env.rs b/crates/openshell-sandbox/src/child_env.rs
-index 50549a7439c267181111fe1f920989cee5f3363b..fcd10241ac239db87faf4b437b44b9a516e638ad 100644
+index 5d9c90a20f8be6bde9d00e37e5342747bdfe9e31..cfd460fc867af19572904608a76c388bf7f76ab0 100644
 --- a/crates/openshell-sandbox/src/child_env.rs
 +++ b/crates/openshell-sandbox/src/child_env.rs
-@@ -6,7 +6,7 @@ use std::path::Path;
+@@ -18,13 +18,15 @@ pub enum TlsEnvironmentMode {
+     FillMissing,
+ }
+ 
+-const TLS_ENVIRONMENT_VARIABLES: [&str; 6] = [
++const TLS_ENVIRONMENT_VARIABLES: [&str; 7] = [
+     "NODE_EXTRA_CA_CERTS",
+     "DENO_CERT",
+     "SSL_CERT_FILE",
+     "REQUESTS_CA_BUNDLE",
+     "CURL_CA_BUNDLE",
+     "GIT_SSL_CAINFO",
++    // yoloctl: cargo reads its own variable for the CA bundle.
++    "CARGO_HTTP_CAINFO",
+ ];
+ 
+ #[must_use]
+@@ -167,7 +169,7 @@ impl EnvTarget for tokio::process::Command {
  pub fn tls_env_vars(
      ca_cert_path: &Path,
      combined_bundle_path: &Path,
@@ -11,7 +28,7 @@ index 50549a7439c267181111fe1f920989cee5f3363b..fcd10241ac239db87faf4b437b44b9a5
      let ca_cert_path = ca_cert_path.display().to_string();
      let combined_bundle_path = combined_bundle_path.display().to_string();
      [
-@@ -17,7 +17,8 @@ pub fn tls_env_vars(
+@@ -178,7 +180,8 @@ pub fn tls_env_vars(
          ("CURL_CA_BUNDLE", combined_bundle_path.clone()),
          // Ubuntu Noble's git links against libcurl-gnutls, which ignores SSL_CERT_FILE.
          // git reads GIT_SSL_CAINFO (or http.sslCAInfo) to locate the CA bundle.
@@ -21,12 +38,13 @@ index 50549a7439c267181111fe1f920989cee5f3363b..fcd10241ac239db87faf4b437b44b9a5
      ]
  }
  
-@@ -49,5 +50,8 @@ mod tests {
+@@ -210,6 +213,9 @@ mod tests {
          assert!(stdout.contains("REQUESTS_CA_BUNDLE=/etc/openshell-tls/ca-bundle.pem"));
          assert!(stdout.contains("CURL_CA_BUNDLE=/etc/openshell-tls/ca-bundle.pem"));
          assert!(stdout.contains("GIT_SSL_CAINFO=/etc/openshell-tls/ca-bundle.pem"));
 +        assert!(stdout
 +            .lines()
 +            .any(|line| line == "CARGO_HTTP_CAINFO=/etc/openshell-tls/ca-bundle.pem"));
-     }
- }
+ 
+         let keys = tls_env_vars(ca_cert_path, combined_bundle_path).map(|(key, _)| key);
+         assert!(

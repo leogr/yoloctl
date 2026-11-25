@@ -1,6 +1,6 @@
 yoloctl local patch 0004: restore process-group signals as in OpenShell v0.0.72.
 
-OpenShell 0.1.6 routes every kill and rt_sigqueueinfo through the sandbox's
+OpenShell (0.1.6 and later) routes every kill and rt_sigqueueinfo through the sandbox's
 seccomp-notify broker (openshell-sandbox src/linux/process_signal.rs,
 mediate_process_signal), which delivers only to one positive PID and rejects
 every target <= 0 with EPERM. v0.0.72 never mediated signals, so killpg,
@@ -17,10 +17,10 @@ filter keeps denying kill(-sandbox TGID) first (patch 0003).
 Also tidies two test-only lints in patch 0003's test (no behaviour change).
 
 diff --git a/crates/openshell-sandbox/src/linux/child_seccomp.rs b/crates/openshell-sandbox/src/linux/child_seccomp.rs
-index 0ef8846..1139a5a 100644
+index b0d8976944dd0fc5a32e296265113d1c60769cd6..40e89af1d707b833026d6721aff57635a451b2ae 100644
 --- a/crates/openshell-sandbox/src/linux/child_seccomp.rs
 +++ b/crates/openshell-sandbox/src/linux/child_seccomp.rs
-@@ -509,6 +509,7 @@ mod tests {
+@@ -587,6 +587,7 @@ mod tests {
      // the child filter (GNU make's posix_spawn RESETIDS, nice, ulimit).
      #[test]
      fn filter_allows_v0_0_72_identity_priority_and_limit_calls() {
@@ -28,7 +28,7 @@ index 0ef8846..1139a5a 100644
          // SAFETY: the child uses only raw syscalls after fork and exits with
          // `_exit`, so it does not run copied Rust cleanup state.
          let child = unsafe { libc::fork() };
-@@ -537,7 +538,10 @@ mod tests {
+@@ -615,7 +616,10 @@ mod tests {
              if unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, priority) } != 0 {
                  unsafe { libc::_exit(5) };
              }
@@ -40,7 +40,7 @@ index 0ef8846..1139a5a 100644
              let me = unsafe { libc::getpid() };
              let read = unsafe {
                  libc::syscall(
-@@ -561,13 +565,12 @@ mod tests {
+@@ -639,13 +643,12 @@ mod tests {
                  unsafe { libc::_exit(6) };
              }
              let mut set = unsafe { std::mem::zeroed::<libc::cpu_set_t>() };
@@ -56,10 +56,10 @@ index 0ef8846..1139a5a 100644
              let restored =
                  unsafe { libc::syscall(libc::SYS_ioprio_set, IOPRIO_WHO_PROCESS, 0, ioprio) };
 diff --git a/crates/openshell-sandbox/src/linux/process_signal.rs b/crates/openshell-sandbox/src/linux/process_signal.rs
-index 464b067..2607be6 100644
+index 22fedb249178f1ab3c8a7fcaf5d0f235f3966c02..b464ed3b175519792d51bb715ec112f32c33dd12 100644
 --- a/crates/openshell-sandbox/src/linux/process_signal.rs
 +++ b/crates/openshell-sandbox/src/linux/process_signal.rs
-@@ -33,6 +33,22 @@ pub fn mediate_process_signal(
+@@ -45,6 +45,22 @@ pub fn mediate_process_signal(
      listener.validate_id(notification.id)?;
      let target = scalar_int(notification.args[0]);
      let signal = scalar_int(notification.args[1]);
@@ -82,7 +82,7 @@ index 464b067..2607be6 100644
      if target <= 0 || !(0..=64).contains(&signal) {
          return Err(io::Error::from_raw_os_error(if target <= 0 {
              libc::EPERM
-@@ -85,6 +101,53 @@ pub fn mediate_process_signal(
+@@ -110,6 +126,53 @@ pub fn mediate_process_signal(
      listener.respond_value(notification.id, 0)
  }
  
@@ -136,10 +136,11 @@ index 464b067..2607be6 100644
  /// Continue a thread-directed signal (`tkill`, `tgkill`,
  /// `rt_tgsigqueueinfo`) aimed at an untrusted workload thread.
  ///
-@@ -220,6 +283,87 @@ mod tests {
-         assert_eq!(worker.join().unwrap(), (-1, Some(libc::EPERM)));
+@@ -1056,4 +1119,86 @@ mod tests {
+         assert_eq!(scalar_int(u64::MAX), -1);
+         assert_eq!(scalar_int(1 << 32 | 0x7b), 123);
      }
- 
++
 +    /// yoloctl: run one notified `kill` from a filtered worker thread and
 +    /// return (mediator errno, worker result, worker errno).
 +    fn notified_kill(
@@ -221,6 +222,4 @@ index 464b067..2607be6 100644
 +        }
 +    }
 +
-     #[test]
-     fn retained_child_can_be_signaled_without_numeric_pid_delivery() {
-         let mut child = std::process::Command::new("sleep")
+ }

@@ -1,81 +1,76 @@
 {
   "schema": 1,
-  "version": "0.1.6",
+  "version": "0.1.10",
   "rust": "1.95.0",
   "targets": {
     "amd64": "x86_64-unknown-linux-musl",
     "arm64": "aarch64-unknown-linux-musl"
   },
   "upstream": {
-    "repository": "https://github.com/NVIDIA/OpenShell",
-    "commit": "ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47",
-    "tree": "c9c1f358cd6f68445c88b65a5e4983a5213e6bab"
+    "repository": "https://github.com/ai-openshell/openshell",
+    "commit": "152c59d3178039e3fbb4a5595f9fff7216a6be92",
+    "tree": "7b67b7ce2816789aff4d334e1c4a9a0d7a7c1c9a"
   },
   "patches": [
     {
       "file": "patches/0001-unmediated-network.patch",
-      "sha256": "3a1b73769d14d5d17af7d1a867db530870fbbcaf5f2b75e9a8328442d0c8e034",
-      "result_tree": "c7c8c2847caee9c477f23fc76242298f1ac2eff5"
+      "sha256": "3c5a5700f4ec525b53c7584d5c78d01df3196595707a614609cb3c69f4cee1fa",
+      "result_tree": "46bcd43d1ee03890d995f6605b5986d07818730c"
     },
     {
       "file": "patches/0002-workspace-read-only.patch",
-      "sha256": "77019fe849082581402dc21b366e22afe633973a40aa16d5eba1d66ef8a23b0e",
-      "result_tree": "9112ab178200f6751290ac2c2a20150e31c8708b"
+      "sha256": "9a8986ba09f0b5d7cd9e977c26ab72d90e2e85bcca2560d99bdf5398c2802858",
+      "result_tree": "c19e801818b6008b3c09d7483c006a24d3c0596e"
     },
     {
       "file": "patches/0003-v0072-syscall-parity.patch",
-      "sha256": "d927c47d8ed8f6ca95e147a65614acc064d9dea1d1067495838da4c2049eec69",
-      "result_tree": "c5f248c7970e0ea23736f242b70668a135af3785"
+      "sha256": "06c8c722dcb05a01573987244e23a9ea2c95f564c4c7867499f45195485710d6",
+      "result_tree": "05f29cdee4d0644258ca29c7a664ffc8c27963e4"
     },
     {
       "file": "patches/0004-v0072-process-group-signals.patch",
-      "sha256": "2c6c4d4005cf4dec51f02769bf6319f26b736c36b224c6b9007f372d5566ed55",
-      "result_tree": "a95cfcec31a2627091f4141253c89ef0f88fedae"
+      "sha256": "545a760926dd20dd5f4baad88d5ca314945a659a515c6fdaa20ebfd4c488eb2c",
+      "result_tree": "ccc654490d2be55c9076dd3d2aa808a9fee45700"
     },
     {
       "file": "patches/0005-main-raw-input.patch",
-      "sha256": "1ba679a6fa8bd4dc39e9921215ba27afb61db88385e0d1b17b0baac0541de42c",
-      "result_tree": "967174fb268870191ce550bfb96a48aff96fa5fd"
+      "sha256": "aeedf24cea76630576efb3ab0c62c52f28576b525111ac2a10fa455f50d19f25",
+      "result_tree": "293c216160c664e4419ff11a0487c7ac641a1907"
     },
     {
       "file": "patches/0006-main-attachments-ended.patch",
-      "sha256": "cbf89212158a5e15c87300b17173b2772dd6d9b2236137633d3717c338aa3e30",
-      "result_tree": "d9d295cf04bfbd506f2d5fb87bf34b21a5bdcead"
+      "sha256": "6adbb543bda10baf5d617162a03a67b9046e087511c8028ac19df274cb4b1934",
+      "result_tree": "d974ffa9c31551ca93ceee99ce9e61df50bbd6e5"
     },
     {
       "file": "patches/0007-main-output-backpressure.patch",
-      "sha256": "e3dc856c08ef3a80b68a0f02b44da31620a53248b364f1fb1ec03ab69d4dccfd",
-      "result_tree": "d3ab006afa7d81624c734dcd6ec541073bb985cb"
+      "sha256": "b4e584e06f4090c825435759d4fce8953b6aaee86c4505a678a8057612bc2655",
+      "result_tree": "4187e93044db91c260487bc74e256e98f82f1429"
     },
     {
       "file": "patches/0008-cargo-ca-bundle.patch",
-      "sha256": "a11eca2e191bb84f02eca6d17db6e40fff42b1d50af0359644e6473a49fbecab",
-      "result_tree": "0a5b3e37360cf4a065384ce60b98126e75731c94"
-    },
-    {
-      "file": "patches/0009-dns-mapping-refresh.patch",
-      "sha256": "33317cf192f87ba40aa3dfd003f0b09553385c859287682a3b19c58ee57887e3",
-      "result_tree": "b9311474ebd91fb6eb6edacc9c9ca9f877bf96d4"
+      "sha256": "cd012810762ba98a21316195dea9820a7be410b13d075609eaeb94dd0d390035",
+      "result_tree": "e3704049c286549542c5ff3ecff7c3dc90aa421d"
     }
   ],
-  "source_dir": "OpenShell-patch2-signed",
+  "source_dir": "openshell-0.1.10-patched",
   "stamp": {
     "from": "version = \"0.0.0\"\n",
-    "to": "version = \"0.1.6\"\n",
+    "to": "version = \"0.1.10\"\n",
     "before": {
-      "Cargo.toml": "e1cb51aaac075e9f4f2d61fbb98385dc0e82b60647ea662b968a5184e568d1f8",
-      "Cargo.lock": "f8a97a6f1aa7fd483ddb37f33ca485d87f918e6fc942b2c1fdaf3aa64ef24d6f"
+      "Cargo.toml": "701422c21089889b2f5208d128b5103911c382bfeb2962fc1fe50c8496386a04",
+      "Cargo.lock": "d08ab857d6921297926174b037e2e6972cca3bf9d94276b6afdb8bbc3ae76107"
     },
     "after": {
-      "Cargo.toml": "04a46bda0fea476ab4b4d00eb9b452a2f8eecb45c19b6c2283e3610a9d8cea63",
-      "Cargo.lock": "bfd5dbcdb6f8d184d2432d25c4008c88397bf5a42b0a1c15427cd88c41afe91e"
+      "Cargo.toml": "2717cba1a0c35e1605bcac82148e27aaead643b0e1aafb30163156eb10aee9b4",
+      "Cargo.lock": "3417f2d6850f2bb86ea28ad21d254e19a83e40d3f167da2f6686207ebb72a6b7"
     }
   },
-  "source_date_epoch": 1793363018,
+  "source_date_epoch": 1795482975,
   "rego": {
     "path": "crates/openshell-supervisor-network/data/sandbox-policy.rego",
-    "file": "sandbox-policy-0.1.6.rego",
-    "sha256": "f60349dcfe8f42ff6c6957fd860cbfc1aef536c6f22740025c6771745f637c38"
+    "file": "sandbox-policy-0.1.10.rego",
+    "sha256": "210891ac81ee20e66e02f8149c760349cf4042ff3ac6713d3456b3223b2ee481"
   },
   "outputs_note": "Reviewed release hashes (manual 2026-11 release lanes); the local build records whether it equals them and does not require it.",
   "outputs": {
