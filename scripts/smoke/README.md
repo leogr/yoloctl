@@ -436,9 +436,12 @@ The phases are:
   sessions through `box attach` on a running container without a session and
   on a stopped box, then SIGTERMs/SIGKILLs the client once the attach's pending
   receipt shows authorized, unfinished setup, and closes a real output
-  consumer at the setup-time session-exit notice and at the lock-wait notice
-  (another box's `box recreate` prompt, fed from a FIFO and then declined,
-  holds the space lock until the client has gone).
+  consumer on an attach that starts a session and on an attach waiting for
+  the space lock. The first closed pipe must produce SIGPIPE during owned
+  setup or after handoff. In the latter case the one started session must
+  still accept a finite reattach. For the lock-wait case, another box's
+  `box recreate` prompt, fed from a FIFO and then declined, holds the space
+  lock until the client has gone.
   One SIGTERM must end the client with the detached status 75 and its notice;
   every client wait is bounded. After each case another box mutation must
   succeed without acknowledgment, no receipt may be uncertain, at most one

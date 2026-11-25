@@ -6,10 +6,10 @@
 # its output consumer exits (the client dies of SIGPIPE). The receipt trace from
 # `space operation` proves where each interruption landed: a kill is sent only
 # once the attach's pending receipt shows authorized setup (`effect_phase:
-# started`, setup not complete); a closed pipe breaks on the session-exit
-# notice that setup prints after authorization, or on the lock-wait notice
-# before it, while a declined `box recreate` prompt fed from a FIFO holds the
-# space lock for exactly as long as the driver decides. One SIGTERM there must
+# started`, setup not complete). An unblocked attach's pipe can break during
+# owned setup or after handoff. In the lock-wait case, a declined `box recreate`
+# prompt fed from a FIFO holds the space lock until the attach's pipe breaks
+# on the lock-wait notice. One SIGTERM during owned setup must
 # end the real CLI client with the detached status (75); every client wait is
 # bounded. After each case another box
 # mutation must succeed without any acknowledgment, no receipt may be
@@ -135,8 +135,8 @@ session_state() {
 		python3 -c 'import json,sys; print(json.load(sys.stdin)["session"]["state"])'
 }
 
-# receipt_field IDS_FILE FIELD... prints fields of the single new box.attach
-# receipt not listed in IDS_FILE, or nothing while it does not exist yet.
+# new_attach_receipt IDS_FILE prints status fields and recovery evidence from
+# the single new box.attach receipt, or nothing while it does not exist yet.
 new_attach_receipt() {
 	receipts | python3 -c '
 import json, sys
@@ -146,8 +146,9 @@ if len(new) > 1:
     sys.exit("more than one new attach receipt")
 if new:
     r = new[0]
+    recovery = r.get("recovery") or {}
     print(r["id"], r["state"], r.get("effect_phase", "-"), str(r.get("setup_complete", False)).lower(),
-          str(r.get("client_detached", False)).lower())
+          str(r.get("client_detached", False)).lower(), recovery.get("disposition", "-") + "/" + recovery.get("proof", "-"))
 ' "$1"
 }
 
@@ -206,7 +207,7 @@ prepare_stopped() {
 # run_case NAME TRIGGER PREPARE
 run_case() {
 	local name="$1" trigger="$2" prepare="$3"
-	local ids="${OUT}/${name}.ids" before after status=0 phase=- line id state effect setup detached
+	local ids="${OUT}/${name}.ids" before after status=0 phase=- line id state effect setup detached recovery
 	smoke_info "case ${name}: ${trigger} during an attach that starts a session (${prepare})"
 	"$prepare"
 	receipts | python3 -c 'import json,sys; print("\n".join(r["id"] for r in json.load(sys.stdin) or []))' >"$ids"
@@ -219,7 +220,7 @@ run_case() {
 		# Interrupt only once the receipt proves authorized, unfinished setup.
 		for _ in {1..600}; do
 			line="$(new_attach_receipt "$ids")"
-			read -r id state effect setup detached <<<"${line:-- - - - -}"
+			read -r id state effect setup detached recovery <<<"${line:-- - - - - -}"
 			# A baseline attach has no effect phase; pending setup is its window.
 			if [[ "$state" == pending && "$setup" == false && ("$effect" == started || "$EXPECT" == fence && "$effect" == -) ]]; then
 				phase=owned-setup
@@ -236,7 +237,7 @@ run_case() {
 		CLIENT_PID=""
 		;;
 	closed-pipe | closed-pipe-waiting)
-		local holder="" fifo="${OUT}/${name}.holder.in" other_id=""
+		local holder="" fifo="${OUT}/${name}.holder.in" other_id="" holder_status=0
 		if [[ "$trigger" == closed-pipe-waiting ]]; then
 			# Another operation holds the space lock for as long as the driver
 			# decides: `box recreate` without --force asks for confirmation
@@ -273,6 +274,9 @@ run_case() {
 		set -o pipefail
 		status="$(cat "${OUT}/${name}.status")"
 		[[ "$status" != 137 ]] || smoke_fail "${name}: the closed-pipe client never wrote and hit the guard timeout"
+		if [[ "$trigger" == closed-pipe && "$EXPECT" == no-fence ]]; then
+			[[ "$status" == 141 ]] || smoke_fail "${name}: closed-pipe client exit ${status}, want SIGPIPE (141)"
+		fi
 		if [[ -n "$holder" ]]; then
 			# The holder must have outlived the client, or the case proves nothing.
 			kill -0 "$holder" 2>/dev/null || smoke_fail "${name}: the lock holder released early"
@@ -280,10 +284,13 @@ run_case() {
 				smoke_fail "${name}: the lock holder released early (no pending box.recreate receipt)"
 			echo n >&9
 			exec 9>&-
-			wait_client "$holder" || smoke_fail "${name}: the lock-holding recreate failed (see ${OUT}/${name}.holder.log)"
+			wait_client "$holder" || holder_status=$?
 			HOLDER_PID=""
 			rm -f -- "$fifo"
-			grep -q aborted "${OUT}/${name}.holder.log" || smoke_fail "${name}: the lock holder did not decline"
+			[[ "$holder_status" == 1 ]] ||
+				smoke_fail "${name}: the lock-holding recreate exited ${holder_status}, want 1 (see ${OUT}/${name}.holder.log)"
+			grep -Fq 'recreate not confirmed; nothing changed' "${OUT}/${name}.holder.log" ||
+				smoke_fail "${name}: the lock holder did not decline (see ${OUT}/${name}.holder.log)"
 			[[ "$(other_container)" == "$other_id" ]] || smoke_fail "${name}: the declined recreate replaced ${OTHER}'s container"
 		fi
 		;;
@@ -291,7 +298,7 @@ run_case() {
 	# The interrupted request settles on its own; nothing is retried.
 	for _ in {1..600}; do
 		line="$(new_attach_receipt "$ids")"
-		read -r id state effect setup detached <<<"${line:-- - - - -}"
+		read -r id state effect setup detached recovery <<<"${line:-- - - - - -}"
 		[[ "$state" == - || "$state" == pending ]] || break
 		sleep 0.2
 	done
@@ -320,7 +327,11 @@ run_case() {
 			mutate_other || smoke_fail "${name}: baseline refused a mutation without an uncertain receipt"
 		fi
 	else
-		[[ "$state" == complete || "$state" == setup-complete ]] || smoke_fail "${name}: receipt ${id} is ${state}"
+		# The controller can close an interrupted waiting attach with proof that it never ran.
+		[[ "$state" == complete || "$state" == setup-complete ||
+			( "$trigger" == closed-pipe-waiting && "$phase" == waiting && "$state" == recovered &&
+			"$recovery" == not-applied/effect-gate-waiting ) ]] ||
+			smoke_fail "${name}: receipt ${id} is ${state} (effect=${effect}, recovery=${recovery})"
 		[[ "$(uncertain_count)" == 0 ]] || smoke_fail "${name}: an uncertain receipt fences the space"
 		mutate_other || smoke_fail "${name}: another box mutation was refused without acknowledgment (see ${OUT}/mutation-${PROBE}.log)"
 	fi
@@ -350,6 +361,10 @@ run_case() {
 		grep -q session-ready "${OUT}/${name}.reattach.json" ||
 			smoke_fail "${name}: the reattached screen lacks the session's session-ready line"
 		reattach=joined
+	fi
+	if [[ "$trigger" == closed-pipe && "$phase" == after-handoff && "$EXPECT" == no-fence ]]; then
+		[[ "$effect" == started && "$setup" == true && "$started" == 1 && "$reattach" == joined ]] ||
+			smoke_fail "${name}: closed pipe after handoff did not leave one joinable session (effect=${effect} setup=${setup} started=${started} reattach=${reattach})"
 	fi
 	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$trigger" "$status" "$phase" "$state" "$detached" \
 		"$started" "$mutation" "$reattach" >>"$SUMMARY"
@@ -403,7 +418,7 @@ run_attached_case() {
 	# Signal only after handoff: setup is complete and the attachment printed.
 	for _ in {1..300}; do
 		line="$(new_attach_receipt "$ids")"
-		read -r id state effect setup detached <<<"${line:-- - - - -}"
+		read -r id state effect setup detached _ <<<"${line:-- - - - - -}"
 		[[ "$setup" == true && -s "$out" ]] && break
 		kill -0 "$CLIENT_PID" 2>/dev/null || smoke_fail "${name}: the client ended before its attachment started (see ${OUT}/${name}.err)"
 		sleep 0.2
@@ -428,7 +443,7 @@ run_attached_case() {
 	# The attachment's receipt settles on its own; nothing stays pending.
 	for _ in {1..300}; do
 		line="$(new_attach_receipt "$ids")"
-		read -r id state effect setup detached <<<"${line:-- - - - -}"
+		read -r id state effect setup detached _ <<<"${line:-- - - - - -}"
 		[[ "$state" == pending ]] || break
 		sleep 0.2
 	done
@@ -463,14 +478,16 @@ fi
 python3 - "$SUMMARY" "$EXPECT" <<'PY'
 import csv, sys
 rows = list(csv.DictReader(open(sys.argv[1]), delimiter="\t"))
-want = {"SIGTERM": "owned-setup", "SIGKILL": "owned-setup", "closed-pipe": "owned-setup", "closed-pipe-waiting": "waiting"}
+want = {"SIGTERM": ("owned-setup",), "SIGKILL": ("owned-setup",),
+        "closed-pipe": ("owned-setup", "after-handoff"), "closed-pipe-waiting": ("waiting",)}
 if sys.argv[2] == "fence":
     if not any(row["receipt_state"] == "uncertain" for row in rows):
         sys.exit("baseline: no interrupted attach fenced the space")
     sys.exit(0)
 for row in rows:
-    if row["phase_at_interrupt"] != want[row["trigger"]]:
-        sys.exit(f"{row['case']}: the interruption landed {row['phase_at_interrupt']}, not {want[row['trigger']]}; rerun the gate")
+    phases = want[row["trigger"]]
+    if row["phase_at_interrupt"] not in phases:
+        sys.exit(f"{row['case']}: the interruption landed {row['phase_at_interrupt']}, not {' or '.join(phases)}; rerun the gate")
 PY
 [[ "$EXPECT" == fence || "$(uncertain_count)" == 0 ]] || smoke_fail "uncertain receipts remain"
 SMOKE_PASSED=1
