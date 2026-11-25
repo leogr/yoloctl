@@ -9,7 +9,11 @@ IMPORT_VM_ARGS=(--backend "$IMPORT_BACKEND")
 if [[ "$IMPORT_BACKEND" == firecracker && -n "${SMOKE_VM_IMAGE:-}" ]]; then
     IMPORT_VM_ARGS+=(--vm-image "$SMOKE_VM_IMAGE")
 fi
-RESTORED="${SMOKE_SPACE}-restored"
+# New space names have 1–16 characters (layout.ValidateName): restore into a
+# short name that differs from the source space, also case-insensitively (a
+# case-insensitive macOS volume would address both as one bundle).
+RESTORED="${SMOKE_SPACE:0:14}-r"
+case "${SMOKE_SPACE:14}" in -[rR]) RESTORED="${SMOKE_SPACE:0:14}-s" ;; esac
 ARCHIVE="${SMOKE_ROOT}/space-backup.tar.gz"
 ACCOUNT=archive-fixture
 BOX=archive-declaration

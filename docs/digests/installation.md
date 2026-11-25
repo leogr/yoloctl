@@ -118,7 +118,7 @@ show only recovery guidance. [9](#source-9)
    [routing](../../cmd/yoloctl/main.go#L256-L263), `readOnlyStartup`;
    [bounded probe](../../cmd/yoloctl/version.go#L88-L107).
 4. <a id="source-4"></a> [Smoke roots](../../scripts/smoke/common.sh#L146-L194), `smoke_init`;
-   [sentinel regression](../../scripts/test_vm_smoke.py#L100-L129);
+   [sentinel regression](../../scripts/test_vm_smoke.py#L101-L130);
    [Lima gate](../../scripts/smoke/lima_stack.py#L380), `identity`, `setup`, `check`;
    [gate regressions](../../scripts/test_lima_stack.py#L1).
 5. <a id="source-5"></a> [Manifest](../../internal/releasebundle/manifest.go#L1-L156), `Validate`, `Verify`, `VerifyLinked`;

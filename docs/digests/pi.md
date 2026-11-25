@@ -97,4 +97,4 @@ Unauthorized curl still requires an attributed denial. [7](#source-7)
 20. <a id="source-20"></a> [Pi v1.0.3 OAuth](https://github.com/earendil-works/pi/tree/v1.0.3/packages/ai/src/auth/oauth) — provider exchange/refresh endpoints.
 21. <a id="source-21"></a> [Pi v1.0.3 credential precedence](https://github.com/earendil-works/pi/blob/v1.0.3/packages/coding-agent/docs/models.md#L25).
 22. <a id="source-22"></a> [HTTPS checks](../../scripts/smoke/common.sh#L45) — `smoke_check_https_status`, `smoke_require_allowed_egress`.
-23. <a id="source-23"></a> [Probe regressions](../../scripts/test_vm_smoke.py#L121) — status handling and attributed allowances.
+23. <a id="source-23"></a> [Probe regressions](../../scripts/test_vm_smoke.py#L122) — status handling and attributed allowances.

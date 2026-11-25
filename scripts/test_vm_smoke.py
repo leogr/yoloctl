@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import socket
 import subprocess
@@ -507,9 +508,12 @@ if os.environ.get('FAIL_PHASE') == root.name:
         self.assertEqual(result.returncode, 0, result.stderr)
         records = [json.loads(line) for line in Path(self.env["AUDIT"]).read_text().splitlines()]
         for r in records:
-            for suffix in ["", "-b", "-restored"]:
+            space = r["SMOKE_SPACE"]
+            # space-archive.sh's restored name: 14 characters plus "-r" or "-s".
+            restored = space[:14] + ("-s" if space[14:].casefold() == "-r" else "-r")
+            for name in [space, space + "-b", restored]:
                 path = (Path(r["SMOKE_ROOT"]) / "home/lima" /
-                        ("yolo-" + r["SMOKE_SPACE"] + suffix) / "ssh.sock.1234567890123456")
+                        ("yolo-" + name) / "ssh.sock.1234567890123456")
                 # Includes Lima's reserved temporary suffix. Darwin's limit is
                 # stricter than Linux's 108 bytes; both must fit, including NUL.
                 self.assertLess(len(os.fsencode(path)), 104, str(path))
@@ -613,6 +617,26 @@ smoke_ensure_space() { return 19; }
         self.assertEqual(result.returncode, 19, result.stderr)
         self.assertIn("retained", result.stderr)
         self.assertFalse(Path(self.env["AUDIT"]).exists())
+
+    def test_archive_restores_into_a_valid_new_space_name(self):
+        # New space names have 1-16 characters (internal/layout spaceNamePattern);
+        # inside live-vm.sh the old "<space>-restored" was 22 and was refused.
+        shutil.copy(SCRIPTS / "space-archive.sh", self.scripts)
+        (self.scripts / "common.sh").write_text('''
+smoke_init() { SMOKE_BACKEND=lima; SMOKE_ROOT=/unused; }
+smoke_require_backend() { :; }
+smoke_ensure_space() { printf '%s' "$RESTORED" >"$AUDIT"; return 19; }
+''')
+        self.env["SMOKE_KEEP_ON_FAILURE"] = "1"
+        self.env["AUDIT"] = str(self.root / "restored")
+        new_space = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,15}")
+        for space in ["smoke-live-vm", "a", "abcdefghijklmnop", "abcdefghijklmn-r", "abcdefghijklmn-R", "x.y_z"]:
+            self.env["SMOKE_SPACE"] = space
+            result = self.run_script("space-archive.sh")
+            self.assertEqual(result.returncode, 19, result.stderr)
+            restored = Path(self.env["AUDIT"]).read_text()
+            self.assertIsNotNone(new_space.fullmatch(restored), (space, restored))
+            self.assertNotEqual(restored.casefold(), space.casefold())
 
 
 if __name__ == "__main__":
