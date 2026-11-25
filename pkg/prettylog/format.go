@@ -343,7 +343,7 @@ func (l *Logger) render(r slog.Record, st Structure, depth int) line {
 		if subject != "" {
 			msg = firstLineAppend(msg, " "+subject)
 		}
-		return l.renderPlain(r, st, ts, indent, actor, msg, fields, took, errLines)
+		return l.renderPlain(st, ts, indent, actor, msg, fields, took, errLines)
 	}
 	glyphColor, textColor, bold := l.role(st.Kind)
 	g := l.o.Glyphs.For(st.Kind)
@@ -386,7 +386,7 @@ func (l *Logger) render(r slog.Record, st Structure, depth int) line {
 	return line{text: prettyText(head, b.String(), col, width), col: col}
 }
 
-func (l *Logger) renderPlain(r slog.Record, st Structure, ts, indent, actor, msg, fields, took string, errLines []string) line {
+func (l *Logger) renderPlain(st Structure, ts, indent, actor, msg, fields, took string, errLines []string) line {
 	prefix := PlainPrefix(st.Kind)
 	if st.Kind == KindSkipped || (st.Step != "" && st.Kind == KindOK) {
 		prefix = ""
