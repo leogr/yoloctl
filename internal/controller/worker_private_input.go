@@ -23,10 +23,6 @@ func CanonicalWorkerInput(work WorkerInput) ([]byte, string, error) {
 	sum := sha256.Sum256(raw)
 	return raw, hex.EncodeToString(sum[:]), nil
 }
-func WorkerInputDigest(work WorkerInput) (string, error) {
-	_, digest, err := CanonicalWorkerInput(work)
-	return digest, err
-}
 
 // DecodeWorkerInput accepts exactly the actual producer's canonical typed JSON,
 // with at most its ONE terminal newline. Copy-on-success prevents duplicate,

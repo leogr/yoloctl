@@ -167,7 +167,7 @@ this test seam does not change server authorization. [19](#source-19)
 
 28. <a id="source-28"></a> [Early worker intake](../../cmd/yoloctl/controller_worker_intake.go#L106) — pre-runtime capture; runtime/auth/effect checks still apply.
 29. <a id="source-29"></a> [Mandatory ownership](../../internal/controller/worker_private_input_linux.go#L120) — raw full-pair eligibility and unknown handles untouched.
-30. <a id="source-30"></a> [Canonical payload](../../internal/controller/worker_private_input.go#L37) — exact closed typed worker decoding.
+30. <a id="source-30"></a> [Canonical payload](../../internal/controller/worker_private_input.go#L33) — exact closed typed worker decoding.
 
 31. <a id="source-31"></a> [Storage verification transport](../../internal/accountstate/verify.go#L44) — verify-only bounded output/pipe settlement and closed UUID response; other account actions keep their existing path.
 
