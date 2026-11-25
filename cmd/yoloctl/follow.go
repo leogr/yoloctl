@@ -122,10 +122,9 @@ Fragments open the file only. A failed read marks the last display stale.
 			return err
 		}
 		defer runtime.KeepAlive(view)
-		requests, err := termio.InheritedTabRequests()
-		if err != nil {
-			return err
-		}
+		// Inside the TUI a followed file's links ask for follow tabs on the
+		// channel main claimed at start, as chat and space view do.
+		requests := tabRequests(cmd.Context())
 		if requests != nil {
 			defer func() { _ = requests.Close() }()
 		}

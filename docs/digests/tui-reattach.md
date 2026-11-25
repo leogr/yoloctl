@@ -1,6 +1,6 @@
 # TUI re-attach and view reopen
 
-Verification: `5ab92ee7f49123d5581438727083e6934618565f` and accompanying changes. Ended close buttons checked against `ca5bf102bdbb658d2f41b8ead982c005ed2b2218` and accompanying changes.
+Verification: `5ab92ee7f49123d5581438727083e6934618565f` and accompanying changes; follow's context channel on `9adb7f8cca6334f45fd0291c4058eb27df226787` and accompanying changes. Ended close buttons checked against `ca5bf102bdbb658d2f41b8ead982c005ed2b2218` and accompanying changes.
 
 [FACT] Ended panes offer explicit actions:
 - `attach`/`box attach`: `[ Re-attach ]`, regardless of exit status.
@@ -41,7 +41,8 @@ uncertainty remain visible; no lifecycle operation is replayed. [7](#source-7)
 [FACT] Typed `resume-target` uses the same-binary private request framing,
 separate from open-tab actions. Startup claims the descriptor into command
 context, marks it close-on-exec and clears its environment variable before
-helpers run. Session retains its first valid class-matching target through
+helpers run; chat, space view and follow read it from that context. Session
+retains its first valid class-matching target through
 completion. Only metadata readers join Done; ordinary callbacks stay asynchronous
 to avoid pane-close/UI-loop deadlock. Metadata launches nothing; replacements
 have separate Sessions. PTY output is not metadata. [8](#source-8) [9](#source-9)
@@ -74,7 +75,7 @@ The end banner says `Press Enter to close` and appends any `EndHint`
 6. <a id="source-6"></a> [End banner](../../internal/tui/term/session.go#L453) — `writeExitBanner`, `ExitCloseHint`; `TestExitBannerEndHint` in term_test.go; `attachedSetupOutput` in attach.go.
 
 7. <a id="source-7"></a> [Host publication](../../cmd/yoloctl/resume_target.go#L35) — `publishControllerResumeTarget`, `publishResumeTarget`; `callControllerTerminal` in controller_client.go publishes before dispatch; `TestHostLifecycleResumeTargetThroughClientRoot` in resume_target_test.go.
-8. <a id="source-8"></a> [Typed framing](../../internal/termio/tabrequest.go#L15) — `TabRequest`, `ValidateResumeTarget`, `ReadTabRequests`; `claimTabRequests` in cmd/yoloctl/resume_target.go and startup in main.go; chat_view.go/space_view.go consume that context channel.
+8. <a id="source-8"></a> [Typed framing](../../internal/termio/tabrequest.go#L15) — `TabRequest`, `ValidateResumeTarget`, `ReadTabRequests`; `claimTabRequests` in cmd/yoloctl/resume_target.go and startup in main.go; chat_view.go, space_view.go and follow.go consume that context channel; `TestFollowOpensFileLinksThroughTheClaimedChannel` in follow_test.go.
 9. <a id="source-9"></a> [Retained target](../../internal/tui/term/session.go#L128) — `Start`, `pump`, `ResumeTarget`; `resumeTargetKind` and `reattachArgsForPane` in internal/tui/resume_target.go; resume_target_test.go in term and tui, and reattach_completion_test.go.
 
 10. <a id="source-10"></a> [View classification and target pinning](../../internal/tui/reopen_args.go#L1) — `parseReopenView`, `plainInteractiveShell`, `pinReopenArgs`; `reopenSpace` in reopen_space.go preserves trusted native scope and the per-TUI pin; `startPane` passes and records pinned argv. Regressions in reopen_args_test.go, reopen_space_test.go and reopen_launch_test.go.

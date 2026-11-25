@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -14,8 +16,10 @@ import (
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/config"
+	"github.com/leogr/yoloctl/internal/filelink"
 	"github.com/leogr/yoloctl/internal/followview"
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/termio"
 	"github.com/spf13/cobra"
 )
 
@@ -460,5 +464,71 @@ func TestHostAbsoluteFollowSurvivesUnavailableLaunchDirectory(t *testing.T) {
 	}
 	if lookups != 1 || selected.Path != path || selected.Workdir != "" {
 		t.Fatalf("host absolute fallback differs: %+v, lookups %d", selected, lookups)
+	}
+}
+
+// A follow pane opens its file links through the tab channel the CLI claimed
+// at start: its registration and the typed request reach that channel. Without
+// the channel the link is refused, as outside the TUI.
+func TestFollowOpensFileLinksThroughTheClaimedChannel(t *testing.T) {
+	followSeams(t)
+	dir := t.TempDir()
+	// The launch workdir is the navigation root when it contains the file;
+	// pin it so the expected root does not depend on where go test runs.
+	followGetwd = func() (string, error) { return dir, nil }
+	source, target := filepath.Join(dir, "a.md"), filepath.Join(dir, "b.md")
+	for _, path := range []string{source, target} {
+		if err := os.WriteFile(path, []byte("[open b-doc](b.md)\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var result followview.ActionResultMsg
+	followRun = func(_ context.Context, opts followview.Options) error {
+		link, err := opts.Navigation.Context.Resolve("b.md")
+		if err != nil {
+			return err
+		}
+		result = opts.OpenFile(link)().(followview.ActionResultMsg)
+		return nil
+	}
+	run := func(ctx context.Context) error {
+		cmd := newFollowCmd()
+		cmd.SetArgs([]string{"--host", source})
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		return cmd.ExecuteContext(ctx)
+	}
+
+	parent, child, err := termio.TabRequestPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = parent.Close(); _ = child.Close() }()
+	if err := run(context.WithValue(t.Context(), tabRequestsKey{}, child)); err != nil || result.Err != nil {
+		t.Fatalf("follow with the claimed channel: %v, open: %v", err, result.Err)
+	}
+	lines := bufio.NewReader(parent)
+	var got []termio.TabRequest
+	for range 2 {
+		line, err := lines.ReadBytes('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		var r termio.TabRequest
+		if err := json.Unmarshal(line, &r); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, r)
+	}
+	if got[0].Op != "follow-context" || got[0].FollowMode != "host" || got[0].FollowPath != source {
+		t.Fatalf("registration: %+v", got[0])
+	}
+	if got[1] != termio.FollowRequest(filelink.Target{Mode: "host", Path: target, Root: dir}) {
+		t.Fatalf("request: %+v", got[1])
+	}
+
+	result = followview.ActionResultMsg{}
+	if err := run(t.Context()); err != nil || result.Err == nil || result.Err.Error() != "open local files from the yoloctl TUI" {
+		t.Fatalf("follow outside the TUI: %v, open: %v", err, result.Err)
 	}
 }
