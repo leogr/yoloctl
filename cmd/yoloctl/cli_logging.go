@@ -179,8 +179,8 @@ func cliOperation(cmd *cobra.Command, title, success, space string, run func() e
 	return run()
 }
 
-func cliRunStep(ctx context.Context, title string, run func(context.Context) error, attrs ...slog.Attr) error {
-	step := cliStep(ctx, title, attrs...)
+func cliRunStep(ctx context.Context, title string, run func(context.Context) error) error {
+	step := cliStep(ctx, title)
 	ctx = lima.WithProgress(context.WithValue(ctx, cliStepContextKey{}, step), step.Detail())
 	err := run(ctx)
 	cliEndStep(step, err)

@@ -122,7 +122,7 @@ func warmBoxBeforeEffects(ctx context.Context, c *container.Client, cfg *agentbo
 			return err
 		}
 	}
-	if err := state.requireNpmProbe(ctx, cfg.Agent); err != nil {
+	if err := state.requireNpmProbe(cfg.Agent); err != nil {
 		return err
 	}
 	if err := func() error {

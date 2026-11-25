@@ -29,7 +29,7 @@ func npmProbeKey(p *agentprofile.Profile, snapshot string) string {
 	sum := sha256.Sum256(append(append(raw, 0), []byte(snapshot)...))
 	return hex.EncodeToString(sum[:])
 }
-func (s *imageWarmState) requireNpmProbe(ctx context.Context, agent string) error {
+func (s *imageWarmState) requireNpmProbe(agent string) error {
 	if !s.probeEnabled || !hasRealAgent(agent) {
 		return nil
 	}

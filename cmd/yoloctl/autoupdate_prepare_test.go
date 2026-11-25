@@ -21,13 +21,13 @@ func TestNpmProbeBindsProfileSnapshotAndReusesFailure(t *testing.T) {
 	state := &imageWarmState{probeEnabled: true, snapshot: "one"}
 	ctx := context.WithValue(t.Context(), warmKey{}, state)
 	var needed *npmProbeNeeded
-	if err := state.requireNpmProbe(ctx, "codex"); !errors.As(err, &needed) {
+	if err := state.requireNpmProbe("codex"); !errors.As(err, &needed) {
 		t.Fatal(err)
 	}
 	if err := state.prepareNpmProbe(ctx, needed); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.requireNpmProbe(ctx, "codex"); err != nil || calls != 1 {
+	if err := state.requireNpmProbe("codex"); err != nil || calls != 1 {
 		t.Fatal(calls, err)
 	}
 	profile, err := agentprofile.Lookup("codex")
@@ -51,7 +51,7 @@ func TestNpmProbeBindsProfileSnapshotAndReusesFailure(t *testing.T) {
 		agent   string
 	}{{false, "codex"}, {true, "none"}, {true, ""}, {true, "agy"}} {
 		state.probeEnabled = tc.enabled
-		if err := state.requireNpmProbe(ctx, tc.agent); err != nil {
+		if err := state.requireNpmProbe(tc.agent); err != nil {
 			t.Fatal("unnecessary npm probe", tc, err)
 		}
 	}
@@ -60,7 +60,7 @@ func TestCancelledNpmProbeCannotPopulateOrConsumeResult(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	state := &imageWarmState{probeEnabled: true, snapshot: "snapshot"}
 	var needed *npmProbeNeeded
-	if err := state.requireNpmProbe(t.Context(), "codex"); !errors.As(err, &needed) {
+	if err := state.requireNpmProbe("codex"); !errors.As(err, &needed) {
 		t.Fatal(err)
 	}
 	old := probeNpmLatest
