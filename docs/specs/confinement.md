@@ -6,11 +6,12 @@ inner policy. Package maintenance deliberately uses that path. Agent execution
 and long-lived auxiliary workloads must preserve the sandbox boundary.
 [1](#source-1) [19](#source-19)
 
-[FACT] The native OpenShell 0.1.6 integration refuses final images with
+[FACT] The native OpenShell integration (v0.1.10; existing boxes keep their
+recorded 0.1.6 until recreated) refuses final images with
 an inherited `ENTRYPOINT`; rebuild the base without it or move setup into a
 feature/`RUN` step. It also removes private secret-provided proxy environment
 settings, even for unconfined boxes. These accepted limits are documented
-together; new ordinary boxes in a native space select 0.1.6, and the legacy
+together; new ordinary boxes in a native space select v0.1.10, and the legacy
 0.0.72 pins, Rego embed and `/opt/openshell` provisioning are retired.
 [15](#source-15)
 

@@ -1,6 +1,6 @@
 # Audit rule paths and container recognition
 
-Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes.
+Verification: `bed24c41066911ae40a5f9c835122716c00f9263` and accompanying changes; upstream citations re-read at OpenShell v0.1.10 `152c59d3178039e3fbb4a5595f9fff7216a6be92` (main `f357061bf0f425f6d0a007d6fb31f575f038c827` and accompanying changes).
 
 [FACT] Filesystem rules distinguish changed paths from symbolic-link payloads.
 In libs0.26.1, symlink/symlinkat `fs.path.source` is the new link location;
@@ -108,12 +108,12 @@ do not prove live selection or noise rates.
 15. <a id="source-15"></a> [libs 0.26.1 event extraction](https://github.com/falcosecurity/libs/blob/0.26.1/userspace/libsinsp/sinsp_filtercheck_event.cpp#L1070) — `TYPE_ARGS`/`TYPE_ARGSTR`.
 16. <a id="source-16"></a> [libs 0.26.1 UID formatting](https://github.com/falcosecurity/libs/blob/0.26.1/userspace/libsinsp/event.cpp#L1164) — `PT_UID`.
 
-17. <a id="source-17"></a> [Unmediated mode](../../third_party/openshell/patches/0001-unmediated-network.patch#L167) — file-open notifications retained.
-18. <a id="source-18"></a> [Pinned broker](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/network_broker.rs#L586) — dispatch; thread L292.
-19. <a id="source-19"></a> [Pinned file handler](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/provider_files.rs#L65).
-20. <a id="source-20"></a> [Pinned task-memory read](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/task_memory.rs#L48) — readv.
+17. <a id="source-17"></a> [Unmediated mode](../../third_party/openshell/patches/0001-unmediated-network.patch#L164) — file-open notifications retained.
+18. <a id="source-18"></a> [Upstream broker](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/network_broker.rs#L689) — dispatch; thread L296.
+19. <a id="source-19"></a> [Upstream file handler](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/provider_files.rs#L65).
+20. <a id="source-20"></a> [Upstream task-memory read](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/linux/task_memory.rs#L48) — readv.
 
-21. <a id="source-21"></a> [Pinned startup qualification](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/main.rs#L112) — `qualify_runtime`, socket reads L656/854, `probe_child_self_protection` L1177–1212; `run_boundary` L1761; both modes retained.
+21. <a id="source-21"></a> [Upstream startup qualification](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/main.rs#L117) — `qualify_runtime`, socket reads L664/882, `probe_child_self_protection` L1209–1244; `run_boundary` L1794; both modes retained.
 
 22. <a id="source-22"></a> [Packaged runc](https://github.com/containerd/nerdctl/blob/v2.3.5/Dockerfile#L19) — runc1.5.1 pin.
 23. <a id="source-23"></a> [runc init](https://github.com/opencontainers/runc/blob/8f2685a471d3347a686ad3909783d8aafc6bb208/libcontainer/nsenter/nsexec.c#L855) — stage names, namespace setup.

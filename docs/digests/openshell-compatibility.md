@@ -1,17 +1,25 @@
-# OpenShell 0.1.6 image and environment compatibility
+# OpenShell image and environment compatibility
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; upstream `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47` plus `third_party/openshell/patches/`; runtime selection `1d265df` and accompanying changes; mediated signal delivery at `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes; its measurement and `signalOnce` at `658ead276` and accompanying changes; main-output backpressure at `fa7a6fe46880fd7232f8ed7eda0e81ccc934d389` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; v0.1.10 runtime and recorded releases at `f357061bf0f425f6d0a007d6fb31f575f038c827` and accompanying changes, upstream v0.1.10 `152c59d3178039e3fbb4a5595f9fff7216a6be92` plus `third_party/openshell/patches/`; runtime selection `1d265df` and accompanying changes; mediated signal delivery at `702c6ac7087f9c18a86edb0427fd4349cd82e788` and accompanying changes; its measurement and `signalOnce` at `658ead276` and accompanying changes; main-output backpressure at `fa7a6fe46880fd7232f8ed7eda0e81ccc934d389` and accompanying changes.
 
-[FACT] On the upgrade integration tree a native space selects the embedded
-0.1.6 runtime for every new ordinary (non-privileged) box and for an explicit
-`box recreate` of such a box; `restart` keeps a native box's runtime and
+[FACT] A native space selects the embedded OpenShell v0.1.10 runtime
+(`github.com/ai-openshell/openshell`, with eight yoloctl patches) for every new
+ordinary (non-privileged) box and for an explicit `box recreate` of such a box; `restart` keeps a native box's runtime and
 refuses a pre-native one. The
 ordinary creation path validates an operator grant and, when enabled, creates
 the box with a controller-served native registration (see the safety model below).
 The active 0.0.72 pins, the legacy Rego embed and the Lima/Firecracker
-provisioning of `/opt/openshell` are retired in the same build; the reported
-target version becomes v0.1.6. These are constraints of the trial integration,
-not a qualified release. [1](#source-1) [2](#source-2) [17](#source-17) [18](#source-18) [19](#source-19)
+provisioning of `/opt/openshell` were retired with the move to 0.1.6.
+[1](#source-1) [2](#source-2) [17](#source-17) [18](#source-18) [19](#source-19)
+
+[FACT] A box keeps the runtime it recorded until it is recreated. New creates
+and helper installs accept only the current v0.1.10 source; reads of an
+existing box (runtime inspection, `space upgrade`'s helper check, historical
+origins) also accept the recorded OpenShell 0.1.6 source under its own rules:
+two to nine patches (v0.1.0–v0.3.0 recorded four, v0.4.x nine), bootstrap
+schema 2 and protocol fixture `workspace-read-only-v1`. Such a box is stopped,
+started and restarted with its own helper, runtime and rules file, and
+`space upgrade` offers its recreate. [37](#source-37)
 
 [FACT] Existing old-runtime containers are never started or restarted again:
 recreation is their only route to a new run, with no automatic conversion and
@@ -84,25 +92,31 @@ still require helper bytes matching this binary's sources. Independent helper/PI
 authorization remains. Image metadata alone grants no activation authority.
 [2](#source-2) [3](#source-3) [8](#source-8) [9](#source-9)
 
-[FACT] OpenShell 0.1.6's child hardening filter denied workload calls that
+[FACT] OpenShell's child hardening filter (0.1.6 and v0.1.10) denies workload calls that
 v0.0.72 allowed, so GNU make (posix_spawn with `POSIX_SPAWN_RESETIDS`), `nice`,
 `ionice` and `killpg` failed with EPERM in every box. yoloctl patch 3
 (`0003-v0072-syscall-parity.patch`) restores them as in v0.0.72: `capset`,
 `setuid`, `setgid`, `setreuid`, `setregid`, `setresuid`, `setresgid`,
-`setfsuid`, `setfsgid`, `setgroups`, `setpriority`, `ioprio_set`,
-`prlimit64`/`sched_set*` on any process except the sandbox, and
+`setfsuid`, `setfsgid`, `setgroups`, `ioprio_set`; `prlimit64`,
+`sched_set*` and `setpriority` on any process except the sandbox; and
 `kill`/`rt_sigqueueinfo` with PID zero or a negative PID (process groups,
 `killpg`) except the sandbox's own group. Those sandbox-targeted denies stay:
 the sandbox startup probe requires them. Patch 4 (`0004-v0072-process-group-signals.patch`)
 restores process-group `kill` in the signal broker (`mediate_process_signal`):
 PID zero (the caller's group) or `-PGID` is delivered unless it is the
 sandbox's own group; broadcast `kill(-1)` and queued group signals stay
-denied, as upstream decided. The workload has no capabilities
+denied, as upstream decided. Since v0.1.10 (#5212) upstream sends a
+scheduling, priority or limit call that names a target to the broker
+(`mediate_process_sched`), which allows only the caller's own thread group;
+patch 3 widens that rule to any target outside the trusted sandbox's thread
+group (and `setpriority` also with `PRIO_PGRP` and `PRIO_USER`), so `renice`
+and `ionice -p` act on other workload processes as before, while the broker
+also protects sandbox worker threads, not only the leader. The workload has no capabilities
 and runs with no_new_privs, so the kernel still refuses any real identity or
 capability gain; every deny v0.0.72 also had is kept. Releases may carry these
 optional third and fourth patches; two- and three-patch releases stay valid
 (`qualifiedPatchStack`).
-[27](#source-27)
+[27](#source-27) [38](#source-38)
 
 [FACT] Patch 5 (`0005-main-raw-input.patch`) adds a per-attachment switch to the
 `openshell-main` subsystem: the SSH env request `OPENSHELL_MAIN_RAW_INPUT=1`
@@ -119,7 +133,7 @@ as an optional fifth patch. [34](#source-34)
 marker where it is and, once upstream's terminal-delivery wait completes, writes
 `main-attachments-ended` (owner-only, atomic, content `ended` and a newline) in
 the marker's directory. That wait ends when every `openshell-main` attachment
-present at the exit has ended, which in russh 0.64 is its SSH connection ending:
+present at the exit has ended, which in russh 0.64 and 0.65 is its SSH connection ending:
 the server closes the channel after the exit status, so a client's channel
 close alone does not end the attachment. With no attachment the file follows at
 once; a shutdown during the wait writes nothing. The file does not tell
@@ -145,13 +159,18 @@ completion marker. On idle expiry old output may be skipped: the owner gets a di
 retained Exit, while other lagging viewers still close. Output cannot follow or
 evict Exit. PID 1's separate 4-second post-marker bound and patch 6 are unchanged;
 slow readers can still lose output. This is source/unit evidence, requiring final
-holder/VM qualification. [36](#source-36)
+holder/VM qualification. When a stop wins, the main-exit report is skipped
+and the tail wait is cancelled, as before; v0.1.10's own exit report on stop
+is not taken, while its relay flush, bounded by the 8-second shutdown
+deadline, is kept (the relay is inactive in yoloctl). [36](#source-36)
 
 [FACT] Inside a box, a `kill` or `rt_sigqueueinfo` aimed at a positive PID is
 seccomp-notified to the sandbox broker, which checks that the notification is
-still live (`validate_id`), delivers the signal itself through
+still live (`validate_id`), delivers the signal to another process itself through
 `pidfd_send_signal` on a retained pidfd and only then answers the
-notification; patch 4's group path (`mediate_group_signal`: `kill(-group)`,
+notification; since v0.1.10 (#5212) a signal to the caller's own thread group
+is instead continued, so the kernel performs it with the workload's own
+`si_pid`; patch 4's group path (`mediate_group_signal`: `kill(-group)`,
 then the answer) keeps that order. Thread-directed signals (`tkill`,
 `tgkill`, `rt_tgsigqueueinfo`) are not delivered by the broker: after its
 checks it continues them and the kernel performs the call, and the last two
@@ -171,19 +190,20 @@ so a duplicate can race the attach's detach reply. Measured in a box: a
 single `kill` reached a Go or Python child twice (occasionally three times) in
 about 1% of trials, and `sigtimedwait` reported every copy with the broker
 (`openshell-sandbox`) as `si_pid`; a thread-directed `tgkill` to the child's
-main thread arrived once in 8,000 trials. `commandSignalContext` sends no
+main thread arrived once in 8,000 trials (measured on 0.1.6; the cross-process
+path is unchanged in v0.1.10). `commandSignalContext` sends no
 signal itself, and no yoloctl patch changes the listener flags or adds repeat
 detection: the limit is documented, not fixed. The signal regressions send
 their one test signal with `signalOnce` (`tgkill` on Linux). [28](#source-28) [29](#source-29) [30](#source-30) [31](#source-31)
 [32](#source-32) [33](#source-33)
 
-[FACT] OpenShell 0.1.6 removes secret-provided `HTTP_PROXY`, `HTTPS_PROXY`,
+[FACT] OpenShell (0.1.6 and v0.1.10) removes secret-provided `HTTP_PROXY`, `HTTPS_PROXY`,
 `ALL_PROXY` and `NO_PROXY` settings, including their lowercase forms, from the
 private workload environment even in unconfined boxes. Custom-profile secret
 injection does not preserve these variables. An application relying on them
 may fail or fall back to other configuration; removing them does not establish
 a direct connection. Commands/tools can still configure their own proxy.
-Upstream 0.1.6 strips these entries after private environment application,
+Upstream strips these entries after private environment application,
 filters delegated environment, and strips again before explicit exec settings.
 [10](#source-10) [11](#source-11) [12](#source-12) [13](#source-13)
 
@@ -235,10 +255,10 @@ operator-box case was not rerun separately. [26](#source-26)
 7. <a id="source-7"></a> [internal/agentbox/openshell_image_test.go](../../internal/agentbox/openshell_image_test.go#L1-L227) — real prepared-digest input, refusal, transaction ordering and retained strict evidence regressions.
 8. <a id="source-8"></a> [internal/agentbox/openshell_container_plan_linux.go](../../internal/agentbox/openshell_container_plan_linux.go#L139-L203) — post-create identity refusal and launch/bind warning (plain create errors: `openshell_create_transaction.go`).
 9. <a id="source-9"></a> [internal/openshell/activation_peer_linux.go](../../internal/openshell/activation_peer_linux.go#L60-L151) — independent actual-process authorization.
-10. <a id="source-10"></a> [Upstream process.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/process.rs#L125-L167) — proxy environment names and removal.
-11. <a id="source-11"></a> [Upstream delegated.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/delegated.rs#L73-L74) — private delegated environment filtering.
-12. <a id="source-12"></a> [Upstream boundary_exec.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/boundary_exec.rs#L169-L189) — private environment, proxy removal and explicit exec settings.
-13. <a id="source-13"></a> [Upstream process.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/process.rs#L510-L535) — canonical process environment followed by proxy removal.
+10. <a id="source-10"></a> [Upstream process.rs](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/process.rs#L133-L175) — proxy environment names and removal.
+11. <a id="source-11"></a> [Upstream delegated.rs](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/delegated.rs#L74-L75) — private delegated environment filtering.
+12. <a id="source-12"></a> [Upstream boundary_exec.rs](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/boundary_exec.rs#L176-L206) — private environment, proxy removal and explicit exec settings.
+13. <a id="source-13"></a> [Upstream process.rs](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/process.rs#L289-L334) — canonical process environment followed by proxy removal (`compose_canonical_process_environment`).
 14. <a id="source-14"></a> [nerdctl 2.3.5 dockercompat.Config](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/inspecttypes/dockercompat/dockercompat.go#L193-L216) — image configuration and omitted empty entrypoint field.
 15. <a id="source-15"></a> [cmd/yoloctl/controller_images.go](../../cmd/yoloctl/controller_images.go#L272-L291) — `imageWarmState.consume` returns the retained OCI target digest.
 16. <a id="source-16"></a> [nerdctl 2.3.5 ImageFromNative](https://github.com/containerd/nerdctl/blob/v2.3.5/pkg/inspecttypes/dockercompat/dockercompat.go#L650-L692) — target aliases, distinct platform configuration ID and bound image configuration.
@@ -253,12 +273,14 @@ operator-box case was not rerun separately. [26](#source-26)
 25. <a id="source-25"></a> [scripts](../../scripts/guest-hashes.go#L1) — `scripts/openshell-embed-key.py` (`closure_files`, `helper_hash`) and the Makefile `native-embed` rule.
 26. <a id="source-26"></a> [internal/agentbox/openshell_withdraw.go](../../internal/agentbox/openshell_withdraw.go#L1) — `WithdrawNativeForwards` lost-reply rule, leftover warning, `vmservice.Collect`; `port.UnforwardAgentbox` in internal/port/port.go.
 27. <a id="source-27"></a> [third_party/openshell/patches/0003-v0072-syscall-parity.patch](../../third_party/openshell/patches/0003-v0072-syscall-parity.patch#L1) — restored calls (header) against upstream `crates/openshell-sandbox/src/linux/child_seccomp.rs` `prepare` and v0.0.72 `crates/openshell-supervisor-process/src/sandbox/linux/seccomp.rs`; `qualifiedPatchStack` in `internal/openshell/release.go`.
-28. <a id="source-28"></a> [Upstream seccomp_notify.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/seccomp_notify.rs#L170-L176) — `NotificationListener`: installed without `WAIT_KILLABLE_RECV`, interrupted syscalls restart; `install_workload_listener` notified syscalls L333-L356; `install_notification_filter` flags `NEW_LISTENER` only, L636-L650; `build_filter` notifies `tgkill`/`rt_tgsigqueueinfo` only for `SIGCONT`, L665-L745.
-29. <a id="source-29"></a> [Upstream process_signal.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/process_signal.rs#L20-L85) — `mediate_process_signal`: `validate_id`, `pidfd_send_signal`, then `respond_value`; `mediate_thread_signal` L88-L129 ends in `respond_continue`; the group path `mediate_group_signal` (`kill(-group)`, then `respond_value`) is added by `third_party/openshell/patches/0004-v0072-process-group-signals.patch`.
-30. <a id="source-30"></a> [Upstream child_seccomp.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/linux/child_seccomp.rs#L150-L201) — `pidfd_send_signal` denied to the workload, `pidfd_open` answered with `ENOSYS`.
+28. <a id="source-28"></a> [Upstream seccomp_notify.rs](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/linux/seccomp_notify.rs#L186-L192) — `NotificationListener`: installed without `WAIT_KILLABLE_RECV`, interrupted syscalls restart; `install_workload_listener` notified syscalls L357-L384; `install_notification_filter` flags `NEW_LISTENER` only, L665-L692; `build_filter` notifies `tgkill`/`rt_tgsigqueueinfo` only for `SIGCONT`, L694-L775.
+29. <a id="source-29"></a> [Upstream process_signal.rs](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/linux/process_signal.rs#L39-L111) — `mediate_process_signal`: `validate_id`, own-group `respond_continue` (#5212), otherwise `pidfd_send_signal`, then `respond_value`; `mediate_thread_signal` L123-L154 ends in `respond_continue`; the group path `mediate_group_signal` (`kill(-group)`, then `respond_value`) is added by `third_party/openshell/patches/0004-v0072-process-group-signals.patch`.
+30. <a id="source-30"></a> [Upstream child_seccomp.rs](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/linux/child_seccomp.rs#L186-L237) — `pidfd_send_signal` denied to the workload, `pidfd_open` answered with `ENOSYS`.
 31. <a id="source-31"></a> [Go 1.27.3 os/exec_unix.go](https://github.com/golang/go/blob/go1.27.3/src/os/exec_unix.go#L77-L91) — `(*Process).signal`: pidfd when `checkPidfd` passes (`os/pidfd_linux.go` L154-L197), otherwise `kill`; `runtime/os_linux.go` L480 sets `SA_RESTART` on every handler.
 32. <a id="source-32"></a> [Linux v6.12 seccomp_filter.rst](https://github.com/torvalds/linux/blob/v6.12/Documentation/userspace-api/seccomp_filter.rst#L276-L282) — `SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV` semantics.
 33. <a id="source-33"></a> [cmd/yoloctl/signals.go](../../cmd/yoloctl/signals.go#L17-L50) — `commandSignalContext`: first signal forwarded, a second cancels; `signalOnce` in `signal_once_linux_test.go` (`tgkill`), used by `attach_signal_test.go`, `signals_test.go` and `signals_tui_test.go`.
 34. <a id="source-34"></a> [Patch 5](../../third_party/openshell/patches/0005-main-raw-input.patch#L1-L480) — `filter_main_detach_sequence` bypass, `main_raw_input`, `refuse_raw_main` and its five tests; `internal/openshell/release.go` `qualifiedPatch5Name`, `qualifiedPatchStack`; release_test.go `TestQualifiedPatchStackAcceptsOptionalFifthPatch`.
 35. <a id="source-35"></a> [Patch 6](../../third_party/openshell/patches/0006-main-attachments-ended.patch#L1-L303) — `drain_then_mark_attachments_ended`, `persist_main_attachments_ended` and four tests in `openshell-supervisor/src/lib.rs`; ssh.rs `main_delivery_completes_*` pin the connection-end semantics; `internal/openshell/release.go` `qualifiedPatch6Name`; release_test.go `TestQualifiedPatchStackAcceptsOptionalSixthPatch`.
 36. <a id="source-36"></a> [Patch 7](../../third_party/openshell/patches/0007-main-output-backpressure.patch#L1) — `MainTailCapture`, `observe_main_exit`, owned boundary `output_reaper`, `finish_remote_with_timeout`, `publish_main`, `publish_paced`, `acquire_input_for_output`, finite capture/cursor-idle/SSH skip-status controls; `internal/openshell/release.go` `qualifiedPatch7Name`, `qualifiedPatchStack`; release_test.go `TestQualifiedPatchStackAcceptsOptionalSeventhAndEighthPatches`.
+37. <a id="source-37"></a> [internal/openshell/release.go](../../internal/openshell/release.go#L1) — `currentRelease`, `recordedReleases` (0.1.6), `LoadRecordedRelease`; callers `validateOpenShellRuntime` (internal/agentbox/openshell_native_linux.go) and `validateNativeHistoricalManifest`; `TestRecordedOpenShell016ManifestsStayReadableForExistingBoxes`.
+38. <a id="source-38"></a> [Upstream process_sched.rs](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/linux/process_sched.rs#L1) — `mediate_process_sched` and `MEDIATED_PROCESS_SCHED_SYSCALLS`; patch 3 adds the sandbox-group rule and `named_target_is_allowed_unless_it_is_the_sandbox`.

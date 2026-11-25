@@ -1,7 +1,7 @@
 # Native OpenShell shutdown and main-exit observation
 
 Verification: `6e71f7dff5b841a32da02737b50dc206058ff225` and accompanying changes,
-with upstream OpenShell `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47`.
+with upstream OpenShell `ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47`; upstream citations re-read at v0.1.10 `152c59d3178039e3fbb4a5595f9fff7216a6be92` (main `f357061bf0f425f6d0a007d6fb31f575f038c827` and accompanying changes).
 Shutdown ordering at `f357061bf0f425f6d0a007d6fb31f575f038c827` and accompanying changes.
 
 [FACT] On a requested stop of a ready native box with both children alive,
@@ -58,7 +58,7 @@ or status to a client. [6](#source-6) [7](#source-7) [8](#source-8) [9](#source-
 3. <a id="source-3"></a> [runtime_main_exit_linux_test.go](../../internal/openshell/runtime_main_exit_linux_test.go#L1-L302) — format/type/owner, unavailable, exact-run and monitor controls.
 4. <a id="source-4"></a> [runtime_status_linux.go](../../internal/openshell/runtime_status_linux.go#L1-L137) — `RuntimeStatus`, `DecodeRuntimeStatus`, phase/code validation.
 5. <a id="source-5"></a> [runtime_manifest_linux.go](../../internal/openshell/runtime_manifest_linux.go#L1-L109) — `ProjectedRuntimeMain`, `projectedRuntimeResult`.
-6. <a id="source-6"></a> [pinned supervisor lib.rs](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-supervisor/src/lib.rs) — `persist_main_exit_marker`, `write_private_file_atomically`, main-exit atomic publication; the local attachment-ended extension is integrated separately.
+6. <a id="source-6"></a> [upstream supervisor lib.rs](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-supervisor/src/lib.rs#L2070-L2118) — `persist_main_exit_marker`, `write_private_file_atomically`, main-exit atomic publication; the local attachment-ended extension is integrated separately.
 7. <a id="source-7"></a> [reservation_cleanup_linux.go](../../internal/openshell/reservation_cleanup_linux.go#L296-L460) — `runtimeReservationMember`, inventory ownership/mode checks; producer-name allowlist and inactive inventory.
 8. <a id="source-8"></a> [cleanup fixture](../../internal/openshell/reservation_runtime_cleanup_linux_test.go#L48-L80) — regular marker and temporary members survive strict inventory and are removed only in acknowledged cleanup.
 

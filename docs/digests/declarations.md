@@ -117,7 +117,7 @@ rejected. This does not delete native state or change credential import.
 20. <a id="source-20"></a> [internal/vm/vm.go](../../internal/vm/vm.go#L1) — `Driver`, `ForSpace`
 21. <a id="source-21"></a> [bootstrap](../../internal/spaceconfig/bootstrap.go#L58) — `VMSettings`, `Validate`.
 22. <a id="source-22"></a> [assets/lima/yoloctl.yaml.tmpl](../../assets/lima/yoloctl.yaml.tmpl#L6) — image pins and system provisioning.
-23. <a id="source-23"></a> [assets/embed.go](../../assets/embed.go#L32-L35) — `SandboxVersion` v0.1.6; executable/Rego bytes come from the compiled qualification and embedded artifacts, not a VM-side download.
+23. <a id="source-23"></a> [assets/embed.go](../../assets/embed.go#L32-L35) — `SandboxVersion` v0.1.10; executable/Rego bytes come from the compiled qualification and embedded artifacts, not a VM-side download.
 24. <a id="source-24"></a> [internal/lima/template_test.go](../../internal/lima/template_test.go#L67) — `TestTemplatePinsMinimalImagesForBothGuestArchitectures`.
 25. <a id="source-25"></a> [internal/lima/provision_test.go](../../internal/lima/provision_test.go#L59) — `TestVMRuntimePackageProvisioning`, `TestCACertificatesProvisioningUpgrade` at L129 and `TestTemplateDoesNotProvisionRetiredOpenShell`, package reuse, CA upgrade, corruption and retry coverage.
 26. <a id="source-26"></a> [Canonical release checksums](https://cloud-images.ubuntu.com/minimal/releases/noble/release-20261001/SHA256SUMS) — pinned amd64/arm64 Minimal images.

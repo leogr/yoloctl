@@ -36,7 +36,7 @@ BuildKit configurations name no registry CA. Lima installs its own containerd
 releases predate the Go 1.26.10/1.27.3 verifier fix. Go 1.26.5 trusts the first
 readable system bundle plus every `/etc/ssl/certs` entry except links within
 that directory. New VM images carry no OpenShell archive any more (Firecracker recipe
-version 4); the native 0.1.6 runtime is embedded in yoloctl instead of
+version 4); the native OpenShell runtime (v0.1.10) is embedded in yoloctl instead of
 fetched, and only two historical v0.0.72 binary hashes remain in a read-only
 compatibility guard. These tests use no
 live registry.
@@ -98,6 +98,6 @@ boxes change only through an explicit rebuild/recreate.
 29. <a id="source-29"></a> [Pinned distrust controls](https://github.com/leogr/airc/blob/b76ba355863cc3eb51900a313d7647d9190eedfa/tests/tls_verifier.rs#L11-L135) — fixed time, supplied anchors, unrelated trust and root removal.
 30. <a id="source-30"></a> [AIRC installer](../../internal/features/airc.go#L36-L82) — selected manifest, verified archive and locked build.
 31. <a id="source-31"></a> [Composed identity](../../internal/agentboximage/composed.go#L48-L76) — feature Dockerfile hashing and create/recreate selection.
-32. <a id="source-32"></a> [OpenShell CA environment patch](../../third_party/openshell/patches/0008-cargo-ca-bundle.patch#L5-L30) — `tls_env_vars` and the child environment regression.
-33. <a id="source-33"></a> [OpenShell process environment](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/process.rs#L529-L536) — `tls_env_vars` at L533 and L693.
-34. <a id="source-34"></a> [OpenShell boundary exec](https://github.com/NVIDIA/OpenShell/blob/ac7f615cd12d5cc49cb16eb1f5f10ffeb1e90f47/crates/openshell-sandbox/src/boundary_exec.rs#L174-L178) — `tls_env_vars` applied to exec commands.
+32. <a id="source-32"></a> [OpenShell CA environment patch](../../third_party/openshell/patches/0008-cargo-ca-bundle.patch#L5-L50) — `CARGO_HTTP_CAINFO` in `TLS_ENVIRONMENT_VARIABLES` and `tls_env_vars`, and the child environment regression.
+33. <a id="source-33"></a> [OpenShell process environment](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/process.rs#L289-L334) — `compose_canonical_process_environment`: `tls_env_vars_for_mode` at L320 (override or fill-missing).
+34. <a id="source-34"></a> [OpenShell boundary exec](https://github.com/ai-openshell/openshell/blob/152c59d3178039e3fbb4a5595f9fff7216a6be92/crates/openshell-sandbox/src/boundary_exec.rs#L181-L185) — `tls_env_vars` applied to exec commands.
