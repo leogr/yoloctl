@@ -97,7 +97,7 @@ composed image. [23](#source-23) [24](#source-24)
 10. <a id="source-10"></a> [Apt installers](../../internal/features/apt.go#L3-L14) — shared locked metadata/archive mounts and strict refresh/install recipe; callers in codex.go, pi.go, opencode.go and features.go; conditional Python fallback in agent_observe.go.
 11. <a id="source-11"></a> [Apt regressions](../../internal/features/apt_test.go#L11-L69) — builtin cache coverage and unavailable-index failure before installation.
 12. <a id="source-12"></a> [scripts/smoke/image-ensure.sh](../../scripts/smoke/image-ensure.sh#L30) — ownership-layer measurement, forced rebuild/cache checks and maintenance.
-13. <a id="source-13"></a> [Image smoke probe](../../scripts/smoke/common.sh#L78-L101) — `smoke_check_image_identity`; no account/project mounts or agent workload.
+13. <a id="source-13"></a> [Image smoke probe](../../scripts/smoke/common.sh#L105-L128) — `smoke_check_image_identity`; no account/project mounts or agent workload.
 14. <a id="source-14"></a> [Cache probe regression](../../scripts/test_image_cache_probe.py#L1-L97) — exact smoke shell probe, real isolated APT update with default cleanup, unchanged indexes and reset-cache rejection.
 15. <a id="source-15"></a> [Antigravity adapter](agy.md) — native installation, auth and runtime contracts.
 16. <a id="source-16"></a> [Pi adapter](pi.md) — install, state, provider and runtime contracts.

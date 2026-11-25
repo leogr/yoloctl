@@ -58,6 +58,45 @@ class VMSmokeTests(unittest.TestCase):
             env=self.env, capture_output=True, text=True, timeout=10,
         )
 
+    def test_terminal_text_matches_across_the_logger_wrap(self):
+        # box-attach.sh step 6 at the pty's 100 columns (devOpUs lane1-fail-5):
+        # the logger broke the box name at its hyphen and indented the rest.
+        wrapped = (b"\x1b[?1016l\xe2\x80\xa2 space\xe2\x96\xb8session       detached \xe2\x80\x94 the session "
+                   b"keeps running; reattach: yoloctl box attach smoke-\r\r\n"
+                   b"                      attach-1 --space smoke-live-vm\r\r\n"
+                   b"\xe2\x9c\x93 space\xe2\x96\xb8controller    box start completed\r\r\n")
+        hint = "reattach: yoloctl box attach smoke-attach-1 --space smoke-live-vm"
+        indent = b"\r\r\n" + b" " * 22
+        cases = {
+            "wrapped": (wrapped, hint, 0),
+            "one line with styling": (b"\x1b[2mreattach:\x1b[0m yoloctl box attach smoke-attach-1 --space "
+                                      b"smoke-live-vm\r\n", hint, 0),
+            # The other places ansi.Wrap breaks this hint at other widths.
+            "wrap between words": (b"reattach: yoloctl box" + indent + b"attach smoke-attach-1 --space smoke-live-vm",
+                                   hint, 0),
+            "wrap keeping the space": (b"reattach: yoloctl box attach " + indent + b"smoke-attach-1 --space "
+                                       b"smoke-live-vm", hint, 0),
+            "wrap after --": (b"reattach: yoloctl box attach smoke-attach-1 --" + indent + b"space smoke-live-vm",
+                              hint, 0),
+            "hint missing": (wrapped.replace(b"reattach: yoloctl box attach smoke-\r\r\n"
+                                             b"                      attach-1 --space smoke-live-vm", b""), hint, 1),
+            "other space": (wrapped, hint.replace("smoke-live-vm", "smoke-other"), 1),
+            "other box": (wrapped, hint.replace("smoke-attach-1", "smoke-attach-2"), 1),
+            "words between": (b"reattach: yoloctl box attach smoke-attach-1 now --space smoke-live-vm", hint, 1),
+            # A command the user cannot run is still refused on one line.
+            "missing separator": (b"reattach: yoloctl boxattach smoke-attach-1 --space smoke-live-vm", hint, 1),
+            "joined option": (b"reattach: yoloctl box attach smoke-attach-1 --spacesmoke-live-vm", hint, 1),
+            "split name": (b"reattach: yoloctl box attach smoke- attach-1 --space smoke-live-vm", hint, 1),
+        }
+        for name, (capture, text, want) in cases.items():
+            path = self.root / ("capture " + name)
+            path.write_bytes(capture)
+            result = self.run_common("smoke_terminal_has", str(path), text)
+            self.assertEqual(result.returncode, want, (name, result.stderr))
+        # The step uses it, so a wrapped hint no longer fails a healthy detach.
+        step = (SCRIPTS / "box-attach.sh").read_text()
+        self.assertIn('smoke_terminal_has "${OUT}/detach.txt" "reattach: yoloctl box attach', step)
+
     def test_hostile_home_is_replaced(self):
         sentinel = self.root / "sentinel"
         sentinel.mkdir()

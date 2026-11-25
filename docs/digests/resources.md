@@ -92,7 +92,7 @@ Firecracker/Lima resizing or restart behavior. [16](#source-16) [17](#source-17)
 6. <a id="source-6"></a> [internal/resources/host_linux.go](../../internal/resources/host_linux.go#L10) — Linux memory measurement.
 7. <a id="source-7"></a> [internal/resources/host_darwin.go](../../internal/resources/host_darwin.go#L13) — macOS memory measurement.
 8. <a id="source-8"></a> [Apple vm_stat at 2085a5d15f370b5580365275555afd313e845550](https://github.com/apple-opensource/system_cmds/blob/2085a5d15f370b5580365275555afd313e845550/vm_stat.tproj/vm_stat.c#L125) — printed page categories.
-9. <a id="source-9"></a> [scripts/smoke/common.sh](../../scripts/smoke/common.sh#L201-L203) — smoke_create_space explicit memory/CPU budget.
+9. <a id="source-9"></a> [scripts/smoke/common.sh](../../scripts/smoke/common.sh#L228-L230) — smoke_create_space explicit memory/CPU budget.
 10. <a id="source-10"></a> [internal/resources/memory_test.go](../../internal/resources/memory_test.go#L8) — policy, decoder and explicit-unit tests.
 11. <a id="source-11"></a> [cmd/yoloctl/space_resources.go](../../cmd/yoloctl/space_resources.go#L43) — `newSpaceSetCmd`, `newSpaceEditCmd`, stopped guard, snapshots, editor and desired-first publication.
 12. <a id="source-12"></a> [cmd/yoloctl/controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L151) — `startControllerSpaceImpl` synchronizes saved resources before an existing stopped VM starts.

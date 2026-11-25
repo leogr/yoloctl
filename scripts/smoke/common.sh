@@ -14,6 +14,33 @@ smoke_fail() {
 	exit 1
 }
 
+# smoke_terminal_has FILE TEXT succeeds when TEXT appears in the terminal
+# capture FILE, also where the CLI logger wrapped it at the pty's width. The
+# wrap ends a line at a space (dropping or keeping it), after a hyphen, or
+# inside a word too long for the line, and continues at the detail column. So
+# terminal controls are removed, and only that line break with its
+# indentation may stand for a space or sit between two characters; spaces on
+# one line must match exactly.
+smoke_terminal_has() {
+	python3 - "$1" "$2" <<'PY'
+import re
+import sys
+
+raw = open(sys.argv[1], "rb").read().decode("utf-8", "replace")
+controls = r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[()][ -~]|[@-Z\\-_])"
+wrap = r"\r*\n *"
+pattern = ""
+for i, ch in enumerate(sys.argv[2]):
+    if ch == " ":
+        pattern += "(?: ?" + wrap + "| )"
+        continue
+    if i and sys.argv[2][i - 1] != " ":
+        pattern += "(?:" + wrap + ")?"
+    pattern += re.escape(ch)
+sys.exit(0 if re.search(pattern, re.sub(controls, "", raw)) else 1)
+PY
+}
+
 # Unauthenticated provider roots can return redirects, challenges, rate limits
 # or 421. This checks reachability, not API health/authentication. Also require
 # the sandbox's attributed ALLOWED event; a proxy's HTTP error is not proof of

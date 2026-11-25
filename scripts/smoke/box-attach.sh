@@ -158,7 +158,7 @@ wait "$harness_pid" || rc=$?
 DETACH_HARNESS_PID=""
 DETACH_YOLOCTL_PID=""
 [[ "$rc" == "0" ]] || smoke_fail "detach: expected exit 0, got $rc"
-grep -q "reattach: yoloctl box attach ${BOX1} --space ${SMOKE_SPACE}" "${OUT}/detach.txt" \
+smoke_terminal_has "${OUT}/detach.txt" "reattach: yoloctl box attach ${BOX1} --space ${SMOKE_SPACE}" \
 	|| smoke_fail "detach: missing the space-qualified reattach hint"
 # Capture first: grep -q on a pipe can make the CLI exit with SIGPIPE after
 # matching the session line, which pipefail would misreport as session loss.
