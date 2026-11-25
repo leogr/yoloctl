@@ -210,6 +210,24 @@ def compile_all(pins, env, source, work, out, log):
     return binaries
 
 
+def source_commit_body(pins):
+    """The Git commit object naming the built source: the final patched tree on the pinned upstream commit.
+
+    Fixed identity, date (source_date_epoch) and message, so its hash is deterministic and is the
+    manifest's fork_commit: a commit whose tree is the fork tree, not an earlier signed fork commit.
+    """
+    when = '%d +0000' % pins['source_date_epoch']
+    who = 'yoloctl OpenShell build <openshell-build@yoloctl.invalid> ' + when
+    return ('tree %s\nparent %s\nauthor %s\ncommitter %s\n\nOpenShell %s with %d yoloctl patches\n'
+            % (pins['patches'][-1]['result_tree'], pins['upstream']['commit'], who, who,
+               pins['version'], len(pins['patches']))).encode()
+
+
+def source_commit(pins):
+    body = source_commit_body(pins)
+    return hashlib.sha1(b'commit %d\0' % len(body) + body).hexdigest()
+
+
 def write_qualify_inputs(pins, pins_dir, key, out, binaries, versions):
     """Evidence for `make native-qualify` from this build alone: what this run verified, nothing more.
 
@@ -225,7 +243,9 @@ def write_qualify_inputs(pins, pins_dir, key, out, binaries, versions):
                 'verified every resulting Git tree and the stamped Cargo files',
         'cache_key': key, 'upstream': pins['upstream'],
         'patches': [{'name': Path(p['file']).name, 'sha256': p['sha256'], 'tree': p['result_tree']} for p in pins['patches']],
-        'stamp_after': pins['stamp']['after'], 'claims_not_made': ['signature', 'upstream CI', 'two-build reproduction']})
+        'stamp_after': pins['stamp']['after'], 'source_commit': source_commit(pins),
+        'source_commit_object': source_commit_body(pins).decode(),
+        'claims_not_made': ['signature', 'upstream CI', 'two-build reproduction']})
     inputs = json.loads((pins_dir / 'release-inputs.json').read_text())
     for arch in ARCHES:
         outputs = {}
@@ -243,7 +263,7 @@ def write_qualify_inputs(pins, pins_dir, key, out, binaries, versions):
     inputs.update(revision='local-' + key, patch2_record='source-proof.json', source_proof='source-proof.json',
                   build_proofs={arch: 'build-%s.json' % arch for arch in ARCHES},
                   patch2_sha256=patches[1]['sha256'], patch2_tree=patches[1]['result_tree'],
-                  fork_tree=patches[-1]['result_tree'],
+                  fork_commit=source_commit(pins), fork_tree=patches[-1]['result_tree'],
                   extra_patches=[{'name': re.sub(r'^\d+-', '', Path(p['file']).name), 'sha256': p['sha256'],
                                   'tree': p['result_tree']} for p in patches[2:]])
     dump('release-inputs.json', inputs)

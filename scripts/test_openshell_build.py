@@ -2,6 +2,7 @@ import importlib.util
 import json
 import os
 import shutil
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -83,6 +84,38 @@ class OpenShellBuildTest(unittest.TestCase):
         self.assertEqual(boundary['archive'], 'openshell-sandbox-arm64.tar.gz')
         self.assertEqual(boundary['archive_sha256'], ob.sha256_file(out / 'openshell-sandbox-arm64.tar.gz'))
         self.assertEqual(boundary['binary_sha256'], binaries['arm64']['openshell-sandbox'])
+
+    def test_fork_commit_names_the_built_tree_on_the_pinned_upstream(self):
+        out, binaries = self.entry()
+        ob.write_qualify_inputs(self.pins, self.pins_dir, 'k', out, binaries, {})
+        inputs = json.loads((out / 'release-inputs.json').read_text())
+        body = ob.source_commit_body(self.pins)
+        hashed = subprocess.run(['git', 'hash-object', '-t', 'commit', '--stdin'], input=body,
+                                capture_output=True, check=True).stdout.decode().strip()
+        self.assertEqual(inputs['fork_commit'], hashed)
+        lines = body.decode().splitlines()
+        self.assertEqual(lines[0], 'tree ' + inputs['fork_tree'])
+        self.assertEqual(lines[1], 'parent ' + self.pins['upstream']['commit'])
+        proof = json.loads((out / inputs['source_proof']).read_text())
+        self.assertEqual(proof['source_commit'], inputs['fork_commit'])
+
+    def test_qualify_refuses_inputs_of_another_source(self):
+        # The first-build inputs (OpenShell 0.1.6, two patches) must not be
+        # qualified as the current source; neither must the committed template.
+        historical = {
+            'revision': 'first-build-1', 'fork_commit': 'e8605009bed50a05136efe106a0c1e2f283ee771',
+            'fork_tree': '9112ab178200f6751290ac2c2a20150e31c8708b',
+            'patch2_sha256': '77019fe849082581402dc21b366e22afe633973a40aa16d5eba1d66ef8a23b0e',
+            'patch2_record': 'record', 'source_proof': 'proof', 'build_proofs': {'amd64': 'a', 'arm64': 'b'},
+            'rego': 'third_party/openshell/sandbox-policy-0.1.6.rego', 'platforms': {}}
+        path = self.tmp / 'historical-inputs.json'
+        path.write_text(json.dumps(historical))
+        for inputs in (path, HERE.parent / 'third_party' / 'openshell' / 'release-inputs.json'):
+            run = subprocess.run(['go', 'run', '-buildvcs=false', './scripts/native-artifacts.go', 'qualify',
+                                  str(inputs), str(self.tmp), str(self.tmp)], cwd=HERE.parent,
+                                 env=dict(os.environ, GOFLAGS=''), capture_output=True, text=True)
+            self.assertNotEqual(run.returncode, 0, inputs)
+            self.assertIn('inputs describe another OpenShell source than third_party/openshell/pins.json', run.stderr)
 
     def test_missing_host_tool_names_the_setup(self):
         which = ob.shutil.which

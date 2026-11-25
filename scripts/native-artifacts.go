@@ -264,6 +264,64 @@ func evidence(path string) (string, error) {
 	return sum(raw), nil
 }
 
+// bindToSourcePins refuses inputs that describe another source than the one
+// this checkout builds: the upstream in third_party/openshell/pins.json must be
+// the source constants' upstream, and the inputs must name exactly its ordered
+// patch chain (hashes and result trees), its final tree and its Rego file.
+// Otherwise the version and upstream identity taken from the constants could
+// be paired with archives built from different sources.
+func bindToSourcePins(in qualifyInputs, fixed map[string]string) error {
+	raw, err := os.ReadFile("third_party/openshell/pins.json")
+	if err != nil {
+		return err
+	}
+	var pins struct {
+		Upstream struct {
+			Commit string `json:"commit"`
+			Tree   string `json:"tree"`
+		} `json:"upstream"`
+		Patches []struct {
+			File       string `json:"file"`
+			SHA256     string `json:"sha256"`
+			ResultTree string `json:"result_tree"`
+		} `json:"patches"`
+		Rego struct {
+			File string `json:"file"`
+		} `json:"rego"`
+	}
+	if err := json.Unmarshal(raw, &pins); err != nil {
+		return fmt.Errorf("third_party/openshell/pins.json: %w", err)
+	}
+	differs := func(what string) error {
+		return fmt.Errorf("inputs describe another OpenShell source than third_party/openshell/pins.json (%s); qualify the local build with make build", what)
+	}
+	if pins.Upstream.Commit != fixed["qualifiedUpstreamCommit"] || pins.Upstream.Tree != fixed["qualifiedUpstreamTree"] {
+		return fmt.Errorf("third_party/openshell/pins.json and internal/openshell/release.go name different upstream sources")
+	}
+	if len(pins.Patches) < 2 || pins.Patches[0].SHA256 != fixed["qualifiedPatch1SHA256"] || pins.Patches[0].ResultTree != fixed["qualifiedPatch1Tree"] {
+		return fmt.Errorf("third_party/openshell/pins.json and internal/openshell/release.go name different first patches")
+	}
+	if len(in.ExtraPatches) != len(pins.Patches)-2 {
+		return differs("patch count")
+	}
+	if in.Patch2SHA256 != pins.Patches[1].SHA256 || (len(in.ExtraPatches) > 0 && in.Patch2Tree != pins.Patches[1].ResultTree) {
+		return differs("second patch")
+	}
+	for i, p := range in.ExtraPatches {
+		want := pins.Patches[i+2]
+		if p.SHA256 != want.SHA256 || p.Tree != want.ResultTree || !strings.HasSuffix(want.File, "-"+p.Name) {
+			return differs("patch " + p.Name)
+		}
+	}
+	if in.ForkTree != pins.Patches[len(pins.Patches)-1].ResultTree {
+		return differs("final tree")
+	}
+	if filepath.Clean(in.Rego) != "third_party/openshell/"+pins.Rego.File {
+		return differs("Rego file")
+	}
+	return nil
+}
+
 // sourceConstant reads a fixed qualification constant from the Go source, so
 // the manifest carries the values the loader itself validates against.
 func sourceConstant(name string) (string, error) {
@@ -295,6 +353,9 @@ func qualify(inputsPath, archiveDir, evidenceRoot string) error {
 		if fixed[name], err = sourceConstant(name); err != nil {
 			return err
 		}
+	}
+	if err := bindToSourcePins(in, fixed); err != nil {
+		return fmt.Errorf("%s: %w", inputsPath, err)
 	}
 	if clean := filepath.Clean(in.Rego); filepath.IsAbs(clean) || !strings.HasPrefix(clean, "third_party/openshell/") {
 		return fmt.Errorf("rego %q must be a checked-in file under third_party/openshell/", in.Rego)
