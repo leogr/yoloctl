@@ -92,6 +92,17 @@ func (r QualifiedRelease) Identity() string { return r.manifestSHA256 }
 // binary's independently selected hash, then its qualification subject. Check
 // mode and runtime never fill missing fields or bless a modified subject.
 func LoadQualifiedRelease(raw []byte, reviewedSHA256 string) (QualifiedRelease, error) {
+	return loadRelease(raw, reviewedSHA256, []sourceRelease{currentRelease})
+}
+
+// LoadRecordedRelease is LoadQualifiedRelease for the manifest an existing box
+// recorded: it also accepts the earlier sources in recordedReleases, each
+// under its own complete rules. New boxes and helper installs never use it.
+func LoadRecordedRelease(raw []byte, reviewedSHA256 string) (QualifiedRelease, error) {
+	return loadRelease(raw, reviewedSHA256, append([]sourceRelease{currentRelease}, recordedReleases...))
+}
+
+func loadRelease(raw []byte, reviewedSHA256 string, sources []sourceRelease) (QualifiedRelease, error) {
 	if len(raw) > 1<<20 || !lowerHex(reviewedSHA256, 32) || sha256Hex(raw) != reviewedSHA256 {
 		return QualifiedRelease{}, errors.New("OpenShell manifest differs from the reviewed qualification")
 	}
@@ -107,33 +118,60 @@ func LoadQualifiedRelease(raw []byte, reviewedSHA256 string) (QualifiedRelease, 
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return QualifiedRelease{}, errors.New("trailing OpenShell manifest data")
 	}
-	if err := validateQualification(document); err != nil {
+	if err := validateQualification(document, sources); err != nil {
 		return QualifiedRelease{}, err
 	}
 	return QualifiedRelease{document: document, manifestSHA256: reviewedSHA256, manifest: bytes.Clone(raw)}, nil
 }
 
-// Manifest returns the exact reviewed bytes for a read-only runtime projection.
-// Callers cannot mutate the retained qualification or reconstruct another JSON
-// encoding that merely describes the same pins.
-// qualifiedPatchStack accepts the first two patches and a contiguous prefix
-// of the later patches. Each patch follows the previous tree and the last
-// ends at the fork tree. Older boxes keep loading their recorded qualification.
-func qualifiedPatchStack(p ReleasePins) bool {
-	names := []string{
+// sourceRelease is one OpenShell source this build can read: its version, the
+// pinned upstream, the fixed first patch, the ordered patch names (the first
+// two always present, then any contiguous prefix of the rest), and the
+// bootstrap schema and protocol fixture its launches used.
+type sourceRelease struct {
+	version, upstreamCommit, upstreamTree string
+	patch1Tree, patch1SHA256              string
+	patchNames                            []string
+	bootstrapSchema                       int
+	protocolFixtureVersion                string
+}
+
+// currentRelease is the only source new boxes and helper installs accept.
+var currentRelease = sourceRelease{
+	version: qualifiedVersion, upstreamCommit: qualifiedUpstreamCommit, upstreamTree: qualifiedUpstreamTree,
+	patch1Tree: qualifiedPatch1Tree, patch1SHA256: qualifiedPatch1SHA256,
+	patchNames: []string{
 		"unmediated-network.patch", "workspace-read-only.patch",
 		qualifiedPatch3Name, qualifiedPatch4Name, qualifiedPatch5Name,
 		qualifiedPatch6Name, qualifiedPatch7Name, qualifiedPatch8Name,
 		qualifiedPatch9Name,
-	}
-	if len(p.Patches) < 2 || len(p.Patches) > len(names) {
+	},
+	bootstrapSchema: BootstrapSchema, protocolFixtureVersion: protocolFixtureVersion,
+}
+
+// recordedReleases are earlier sources that existing boxes may have recorded.
+// A box keeps the runtime it was created with until it is recreated, so the
+// build reads it, and stops, starts and restarts it, under that box's own
+// source rules. They are never offered to a new box or helper install.
+var recordedReleases = []sourceRelease{}
+
+func (r sourceRelease) matches(p ReleasePins) bool {
+	return p.Version == r.version && p.UpstreamCommit == r.upstreamCommit && p.UpstreamTree == r.upstreamTree &&
+		p.BootstrapSchema == r.bootstrapSchema && p.ProtocolFixtureVersion == r.protocolFixtureVersion
+}
+
+// patchStack accepts the first two patches and a contiguous prefix of the
+// later patches. Each patch follows the previous tree and the last ends at the
+// fork tree.
+func (r sourceRelease) patchStack(p ReleasePins) bool {
+	if len(p.Patches) < 2 || len(p.Patches) > len(r.patchNames) {
 		return false
 	}
-	if p.Patches[0].SHA256 != qualifiedPatch1SHA256 || p.Patches[0].ParentTree != p.UpstreamTree || p.Patches[0].Tree != qualifiedPatch1Tree {
+	if p.Patches[0].SHA256 != r.patch1SHA256 || p.Patches[0].ParentTree != p.UpstreamTree || p.Patches[0].Tree != r.patch1Tree {
 		return false
 	}
 	for i, patch := range p.Patches {
-		if patch.Name != names[i] || !lowerHex(patch.SHA256, 32) || !lowerHex(patch.Tree, 20) {
+		if patch.Name != r.patchNames[i] || !lowerHex(patch.SHA256, 32) || !lowerHex(patch.Tree, 20) {
 			return false
 		}
 		if i > 0 && patch.ParentTree != p.Patches[i-1].Tree {
@@ -143,6 +181,13 @@ func qualifiedPatchStack(p ReleasePins) bool {
 	return p.Patches[len(p.Patches)-1].Tree == p.ForkTree
 }
 
+// qualifiedPatchStack is the current source's patch rule.
+func qualifiedPatchStack(p ReleasePins) bool { return currentRelease.patchStack(p) }
+
+// Manifest returns the exact reviewed bytes for a read-only runtime projection.
+// Callers cannot mutate the retained qualification or reconstruct another JSON
+// encoding that merely describes the same pins.
+
 func (r QualifiedRelease) Manifest() []byte { return bytes.Clone(r.manifest) }
 
 func sha256Hex(raw []byte) string {
@@ -150,7 +195,7 @@ func sha256Hex(raw []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func validateQualification(document releaseDocument) error {
+func validateQualification(document releaseDocument, sources []sourceRelease) error {
 	p, q := document.Pins, document.Qualification
 	subject, err := json.Marshal(p)
 	if err != nil {
@@ -165,12 +210,18 @@ func validateQualification(document releaseDocument) error {
 	if !lowerHex(q.SourceProofSHA256, 32) || len(q.BuildProofSHA256) != 2 || len(p.Platforms) != 2 {
 		return errors.New("OpenShell source/platform qualification is incomplete")
 	}
-	if p.Version != qualifiedVersion || p.UpstreamCommit != qualifiedUpstreamCommit || p.UpstreamTree != qualifiedUpstreamTree ||
-		!lowerHex(p.ForkCommit, 20) || !lowerHex(p.ForkTree, 20) || p.BootstrapSchema != BootstrapSchema ||
-		p.ProtocolFixtureVersion != protocolFixtureVersion || !lowerHex(p.ProtocolFixtureSHA256, 32) || !lowerHex(p.RegoSHA256, 32) {
+	var source *sourceRelease
+	for i := range sources {
+		if sources[i].matches(p) {
+			source = &sources[i]
+			break
+		}
+	}
+	if source == nil || !lowerHex(p.ForkCommit, 20) || !lowerHex(p.ForkTree, 20) ||
+		!lowerHex(p.ProtocolFixtureSHA256, 32) || !lowerHex(p.RegoSHA256, 32) {
 		return errors.New("unqualified OpenShell source, bootstrap or protocol fixture version")
 	}
-	if !qualifiedPatchStack(p) {
+	if !source.patchStack(p) {
 		return errors.New("unqualified or reordered OpenShell patch stack")
 	}
 	if err := p.Helper.validate(); err != nil {

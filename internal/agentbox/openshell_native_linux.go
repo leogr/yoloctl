@@ -165,7 +165,8 @@ func validateOpenShellRuntime(current spaceenv.Context, name string, details *co
 	if details.Name != name || details.Labels[LabelSpace] != current.Space || details.Labels[LabelAgentbox] != name || details.Labels[openshell.LabelControlRoot] != control {
 		return OpenShellRuntime{}, errors.New("runtime container/control identity differs from native space/box")
 	}
-	release, err := openshell.LoadQualifiedRelease(manifest, launch.Qualification)
+	// The box's own recorded release, which may be an earlier source.
+	release, err := openshell.LoadRecordedRelease(manifest, launch.Qualification)
 	if err != nil {
 		return OpenShellRuntime{}, err
 	}

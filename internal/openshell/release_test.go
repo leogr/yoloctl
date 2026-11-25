@@ -312,3 +312,75 @@ func TestQualifiedPatchStackAcceptsOptionalSeventhToNinthPatches(t *testing.T) {
 		t.Fatal("unexpected tenth patch accepted")
 	}
 }
+
+// An existing box's recorded manifest may name an earlier source: it loads
+// under that source's own complete rules for existing-box reads, and never
+// for a new box. Fields of two sources cannot be mixed.
+func TestRecordedReleaseAcceptsAnEarlierSourceOnlyForExistingBoxes(t *testing.T) {
+	earlier := sourceRelease{
+		version: "0.0.9-fixture", upstreamCommit: strings.Repeat("d", 40), upstreamTree: strings.Repeat("e", 40),
+		patch1Tree: strings.Repeat("f", 40), patch1SHA256: sha256Hex([]byte("earlier-patch1")),
+		patchNames:      []string{"unmediated-network.patch", "workspace-read-only.patch", qualifiedPatch3Name},
+		bootstrapSchema: BootstrapSchema, protocolFixtureVersion: "earlier-fixture",
+	}
+	saved := recordedReleases
+	recordedReleases = []sourceRelease{earlier}
+	t.Cleanup(func() { recordedReleases = saved })
+
+	manifest := func(mutate func(*ReleasePins)) []byte {
+		d := releaseFixture(t)
+		p := &d.Pins
+		p.Version, p.UpstreamCommit, p.UpstreamTree = earlier.version, earlier.upstreamCommit, earlier.upstreamTree
+		p.ProtocolFixtureVersion = earlier.protocolFixtureVersion
+		p.Patches = []SourcePatch{
+			{"unmediated-network.patch", earlier.patch1SHA256, earlier.upstreamTree, earlier.patch1Tree},
+			{"workspace-read-only.patch", sha256Hex([]byte("earlier-patch2")), earlier.patch1Tree, strings.Repeat("1", 40)},
+			{qualifiedPatch3Name, sha256Hex([]byte("earlier-patch3")), strings.Repeat("1", 40), p.ForkTree},
+		}
+		if mutate != nil {
+			mutate(p)
+		}
+		subject, err := json.Marshal(d.Pins)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.Qualification.SubjectSHA256 = sha256Hex(subject)
+		raw, err := json.Marshal(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	raw := manifest(nil)
+	if _, err := LoadRecordedRelease(raw, sha256Hex(raw)); err != nil {
+		t.Fatalf("existing box's earlier source refused: %v", err)
+	}
+	if _, err := LoadQualifiedRelease(raw, sha256Hex(raw)); err == nil {
+		t.Fatal("earlier source accepted for a new box")
+	}
+	for name, mutate := range map[string]func(*ReleasePins){
+		"current upstream commit": func(p *ReleasePins) { p.UpstreamCommit = qualifiedUpstreamCommit },
+		"current fixture version": func(p *ReleasePins) { p.ProtocolFixtureVersion = protocolFixtureVersion },
+		"current first patch": func(p *ReleasePins) {
+			p.Patches[0] = SourcePatch{"unmediated-network.patch", qualifiedPatch1SHA256, p.UpstreamTree, qualifiedPatch1Tree}
+			p.Patches[1].ParentTree = qualifiedPatch1Tree
+		},
+		"patch beyond its stack": func(p *ReleasePins) {
+			p.Patches[2].Tree = strings.Repeat("2", 40)
+			p.Patches = append(p.Patches, SourcePatch{qualifiedPatch4Name, sha256Hex([]byte("p4")), strings.Repeat("2", 40), p.ForkTree})
+		},
+	} {
+		raw := manifest(mutate)
+		if _, err := LoadRecordedRelease(raw, sha256Hex(raw)); err == nil {
+			t.Fatalf("%s: mixed source accepted", name)
+		}
+	}
+	current := releaseFixture(t)
+	raw, err := json.Marshal(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadRecordedRelease(raw, sha256Hex(raw)); err != nil {
+		t.Fatalf("current release refused for an existing box: %v", err)
+	}
+}

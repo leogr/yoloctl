@@ -229,7 +229,7 @@ func validateNativeHistoricalManifest(raw []byte, origin containerOrigin) (Quali
 	if err := checkNativeHistoricalFields(raw, reflect.TypeFor[releaseDocument](), 0); err != nil {
 		return QualifiedRelease{}, err
 	}
-	release, err := LoadQualifiedRelease(raw, origin.Qualification)
+	release, err := LoadRecordedRelease(raw, origin.Qualification)
 	if err != nil {
 		return QualifiedRelease{}, err
 	}
