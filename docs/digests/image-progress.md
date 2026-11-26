@@ -93,7 +93,7 @@ Lima behavior. [5](#source-5) [9](#source-9)
 5. <a id="source-5"></a> [Progress regressions](../../internal/controller/image_progress_test.go#L1) — scheduler/fanout/steps and wire fixtures.
 6. <a id="source-6"></a> [Preparation regressions](../../cmd/yoloctl/controller_images_test.go#L1) — initial resolution notice and manual/base preparation.
 7. <a id="source-7"></a> [Native backend](../../internal/controller/image_backend.go#L211) — `Build`, `classifyImageSolveError`.
-8. <a id="source-8"></a> [Jobs](../../internal/controller/image_jobs.go#L213) — `acquireWithProgress`, `run` (job steps at L268 and L581), `endSteps`, unchanged `leave` and `abandonLocked`.
+8. <a id="source-8"></a> [Jobs](../../internal/controller/image_jobs.go#L217) — `acquireWithProgress`, `run` (job steps at L268 and L581), `endSteps`, unchanged `leave` and `abandonLocked`.
 9. <a id="source-9"></a> [View regression](../../cmd/yoloctl/controller_view_prepare_test.go#L1) — inherited view and queued input across preparation.
 10. <a id="source-10"></a> [Interactive client](../../cmd/yoloctl/controller_client.go#L343-L476) — `callControllerTerminal`, raw mode, stderr adapter, Logger routing and unmodified view/stdout routing.
 11. <a id="source-11"></a> [Raw terminal diagnostics](../../cmd/yoloctl/controller_stderr.go#L8-L64) — `rawTerminalStderr.Write`, newline and partial-write handling.

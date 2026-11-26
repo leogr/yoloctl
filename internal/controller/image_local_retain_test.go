@@ -28,7 +28,8 @@ const localRetainSource = "docker.io/library/cached:latest"
 
 // These finite services use containerd's supported in-process client adapter,
 // with real digest-checked OCI content in BuildKit's memory content store.
-// The image/lease services reject unexpected namespaces and unbounded calls.
+// The image/lease services reject unexpected namespaces. Reads follow their
+// caller's context: none adds its own fixed bound.
 type localRetainImages struct {
 	images.Store
 	values      map[string]images.Image
@@ -48,9 +49,6 @@ func localRetainCall(ctx context.Context) error {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil || ns != "default" {
 		return errors.New("local retain adapter left the system containerd namespace")
-	}
-	if _, bounded := ctx.Deadline(); !bounded {
-		return errors.New("local retain adapter made an unbounded service call")
 	}
 	return nil
 }

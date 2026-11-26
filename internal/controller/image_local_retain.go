@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/core/images"
@@ -16,7 +15,6 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-const localImageTimeout = 30 * time.Second
 const localImageMetadataLimit = 16 << 20
 const localImageGraphLimit = 16 << 10
 
@@ -31,8 +29,7 @@ func (b *NativeImageBackend) ResolveLocal(ctx context.Context, ref string) (imag
 	if err != nil {
 		return imagejob.LocalTarget{}, "", err
 	}
-	ctx, cancel := context.WithTimeout(imageContext(ctx), localImageTimeout)
-	defer cancel()
+	ctx = imageContext(ctx)
 	image, err := b.Containerd.ImageService().Get(ctx, name)
 	if err != nil {
 		return imagejob.LocalTarget{}, "", err
@@ -79,8 +76,7 @@ func (b *NativeImageBackend) localRetain(ctx context.Context, r ImageRecipe, p I
 	if err != nil || !owned || id != p.JobID || p.PrivateVersion != 1 || p.PreparedRef != "yoloctl/prepared/"+p.JobID || p.SolveRef != p.JobID {
 		return PinnedImage{}, errors.New("local image retention requires its original private job identity")
 	}
-	ctx, cancel := context.WithTimeout(imageContext(ctx), localImageTimeout)
-	defer cancel()
+	ctx = imageContext(ctx)
 	readSource := func() (images.Image, error) {
 		if err := ctx.Err(); err != nil {
 			return images.Image{}, err

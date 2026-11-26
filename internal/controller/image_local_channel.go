@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/containerd/errdefs"
 	"github.com/leogr/yoloctl/internal/imagejob"
@@ -24,19 +23,19 @@ func resolveLocalImageCheckpoint(ctx context.Context, backend any, request Image
 	if !ok {
 		return ImageReply{}, errors.New("controller backend does not support qualified local image retention")
 	}
-	read, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	target, platform, err := resolver.ResolveLocal(read, request.Reference)
+	// The read follows the checkpoint's worker context: the client's
+	// cancellation and the controller's drain end it, a slow store does not.
+	target, platform, err := resolver.ResolveLocal(ctx, request.Reference)
 	if err != nil {
-		if read.Err() != nil {
-			return ImageReply{}, errors.Join(err, read.Err())
+		if ctx.Err() != nil {
+			return ImageReply{}, errors.Join(err, ctx.Err())
 		}
 		if errdefs.IsNotFound(err) {
 			return ImageReply{LocalMissing: true}, nil
 		}
 		return ImageReply{}, err
 	}
-	if err := read.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return ImageReply{}, err
 	}
 	if _, err := imagejob.NewLocalRetain(request.Reference, platform, target); err != nil {

@@ -17,6 +17,10 @@ import (
 	digest "github.com/opencontainers/go-digest"
 )
 
+// imageValidateFailSafe bounds the job's detached post-build validation, the
+// one read no caller can end. Foreground validation follows its caller.
+var imageValidateFailSafe = 2 * time.Minute
+
 // ImagePhase is the image job's own durable transaction, independent of every
 // request's later apply. The stable input excludes force nonces and job IDs.
 // PrivateVersion qualifies the one-time private-export/non-consumption contract.
@@ -551,7 +555,10 @@ func (m *ImageJobs) run(j *imageJob) {
 			target := imageProgressTarget{step: j.step, log: j.log.Logger().Slog().With(prettylog.Actor(imageActor), prettylog.Executor(executor))}
 			result, err = m.backend.Build(context.WithValue(j.ctx, imageBuildStepKey{}, target), j.recipe, phase)
 			if err == nil {
-				err = m.backend.Validate(context.WithoutCancel(j.ctx), result)
+				// No caller can end this detached check: one fail-safe bounds it.
+				validate, cancel := context.WithTimeout(context.WithoutCancel(j.ctx), imageValidateFailSafe)
+				err = m.backend.Validate(validate, result)
+				cancel()
 			}
 		}
 	}

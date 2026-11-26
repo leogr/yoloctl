@@ -25,9 +25,8 @@ func TestLocalImageCheckpointDistinguishesAbsenceFromFailedRead(t *testing.T) {
 		calls := 0
 		backend := localResolverFixture{read: func(ctx context.Context, ref string) (imagejob.LocalTarget, string, error) {
 			calls++
-			deadline, bounded := ctx.Deadline()
-			if !bounded || time.Until(deadline) > 10*time.Second || ref != "custom/image:one" {
-				t.Fatal("local read lost its bound/source")
+			if _, bounded := ctx.Deadline(); bounded || ref != "custom/image:one" {
+				t.Fatal("local read gained a fixed bound or lost its source")
 			}
 			return imagejob.LocalTarget{}, "", cause
 		}}
@@ -63,5 +62,44 @@ func TestLocalImageCheckpointKeepsExactDescriptorAndRejectsRemoteFallback(t *tes
 	}
 	if _, err := resolveLocalImageCheckpoint(t.Context(), struct{}{}, ImageRequest{}); err == nil {
 		t.Fatal("unsupported backend fell back to registry resolution")
+	}
+}
+
+// The checkpoint's read follows the worker context: the caller's deadline
+// reaches it unchanged and the caller's cancellation ends it.
+func TestLocalImageCheckpointFollowsCallerContext(t *testing.T) {
+	caller, cancel := context.WithTimeout(t.Context(), time.Hour)
+	defer cancel()
+	want, _ := caller.Deadline()
+	backend := localResolverFixture{read: func(ctx context.Context, ref string) (imagejob.LocalTarget, string, error) {
+		if got, bounded := ctx.Deadline(); !bounded || !got.Equal(want) {
+			t.Fatal("local read does not carry exactly the caller's deadline", got, want)
+		}
+		return imagejob.LocalTarget{}, "", errdefs.ErrNotFound
+	}}
+	if reply, err := resolveLocalImageCheckpoint(caller, backend, ImageRequest{Action: "resolve-local", Reference: "custom/image:one"}); err != nil || !reply.LocalMissing {
+		t.Fatal("absence under a caller deadline was not preserved", reply, err)
+	}
+	stopped, stop := context.WithCancel(t.Context())
+	started := make(chan struct{})
+	blocked := localResolverFixture{read: func(ctx context.Context, ref string) (imagejob.LocalTarget, string, error) {
+		close(started)
+		<-ctx.Done()
+		return imagejob.LocalTarget{}, "", ctx.Err()
+	}}
+	result := make(chan error, 1)
+	go func() {
+		_, err := resolveLocalImageCheckpoint(stopped, blocked, ImageRequest{Action: "resolve-local", Reference: "custom/image:one"})
+		result <- err
+	}()
+	<-started
+	stop()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal("caller cancellation did not end the local read", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("cancelled local read did not return")
 	}
 }

@@ -115,7 +115,7 @@ not retry. Lost application replies retain the normal fence contract.
 
 ## Sources
 
-1. <a id="source-1"></a> [Image jobs](../../internal/controller/image_jobs.go#L134) — `ImageJobs`, `NewImageJobs`, `Acquire`, `acquireWithProgress`, `leave`, `run`. Registration and reservation checks verified at `4624036d2ea68a359c1e308a4f6b2651921ffba5` and accompanying changes.
+1. <a id="source-1"></a> [Image jobs](../../internal/controller/image_jobs.go#L138) — `ImageJobs`, `NewImageJobs`, `Acquire`, `acquireWithProgress`, `leave`, `run`. Registration and reservation checks verified at `4624036d2ea68a359c1e308a4f6b2651921ffba5` and accompanying changes.
 2. <a id="source-2"></a> [server.go](../../internal/controller/server.go#L1) — private image callback and finalization.
 3. <a id="source-3"></a> [controller_images.go](../../cmd/yoloctl/controller_images.go#L1) — prepare driver and consumption.
 4. <a id="source-4"></a> [space_operation.go](../../cmd/yoloctl/space_operation.go#L1) — deferred apply gate.

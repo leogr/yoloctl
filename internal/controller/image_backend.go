@@ -353,12 +353,11 @@ func (b *NativeImageBackend) walkPin(ctx context.Context, l leases.Lease, d ocis
 	return b.walkPinForPlatform(ctx, l, d, add, platforms.Default())
 }
 func (b *NativeImageBackend) Validate(ctx context.Context, p PinnedImage) (err error) {
-	// Validation is read-only and always bounded here, including the job's
-	// detached post-build check and consumers without an outer deadline.
-	ctx, cancel := context.WithTimeout(imageContext(ctx), localImageTimeout)
+	// Validation is read-only and follows its caller. The job's detached
+	// post-build check has no caller and is bounded at its call site.
+	ctx = imageContext(ctx)
 	defer func() {
 		err = errors.Join(err, ctx.Err())
-		cancel()
 	}()
 	if err := ctx.Err(); err != nil {
 		return err
