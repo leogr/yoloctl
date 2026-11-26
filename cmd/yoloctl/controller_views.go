@@ -166,7 +166,7 @@ func controllerSpaceShow(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	boot, err := spaceconfig.LoadBootstrap(space)
+	boot, err := loadRequiredSpaceBootstrap(space)
 	if err != nil {
 		return err
 	}

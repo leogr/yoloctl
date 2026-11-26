@@ -11,6 +11,12 @@ confirmation. `box create NAME` chooses
 the space before resolving account defaults. `box run` and root `run`/`ps` are
 unavailable; use named `box create`, `box attach` and `box list`. [1](#source-1) [2](#source-2) [24](#source-24)
 
+[FACT] A host command that requires an absent named space reports
+`space "NAME" does not exist` and exits with status 1. VM SSH and boot logs
+can still inspect a retained legacy Lima VM. Retained Firecracker metadata
+without a bootstrap requires recovery. `space logs --host NAME` can still
+read historical records for that name. [1](#source-1)
+
 [FACT] Host-only `box cp BOX:PATH DEST|-` recovers retained container files
 from running or stopped boxes through a running matching controller, without
 starting the box. `box copy` still copies settings only. Filesystem destinations

@@ -84,6 +84,9 @@ func runSpaceView(cmd *cobra.Command, args []string, interval time.Duration, mot
 	if !term.IsTerminal(int(os.Stdout.Fd())) || !stdinIsTerminal(cmd.InOrStdin()) {
 		return asUserError(errors.New("space view needs an interactive terminal; use space show or box list for scripts"))
 	}
+	if _, err := loadRequiredSpaceBootstrap(space); err != nil {
+		return err
+	}
 	prefs, err := config.LoadTUI()
 	if err != nil {
 		return err

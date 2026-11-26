@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -266,7 +267,7 @@ func TestSpaceSetResourcesSaveFailureDoesNotChangeBackend(t *testing.T) {
 }
 
 func TestSpaceEditResourcesRechecksAfterUnlockedEditor(t *testing.T) {
-	for _, scenario := range []string{"valid-auto", "unknown-field", "missing-cpu", "trailing-document", "replaced-bootstrap", "concurrent-start"} {
+	for _, scenario := range []string{"valid-auto", "unknown-field", "missing-cpu", "trailing-document", "replaced-bootstrap", "modified-bootstrap", "concurrent-start"} {
 		t.Run(scenario, func(t *testing.T) {
 			_, applied := resourceSpaceFixture(t)
 			cmd := &cobra.Command{}
@@ -294,13 +295,17 @@ func TestSpaceEditResourcesRechecksAfterUnlockedEditor(t *testing.T) {
 					raw = "memory: auto\n"
 				case "trailing-document":
 					raw += "---\ncpus: 8\nmemory: 16GiB\n"
-				case "replaced-bootstrap":
+				case "replaced-bootstrap", "modified-bootstrap":
 					before, err := readSpaceResourceSnapshot("dev")
 					if err != nil {
 						t.Fatal(err)
 					}
 					dir, _ := layout.SpaceBundleDir("dev")
-					if err := safepath.WriteFile(dir, "space.yaml", before.data, 0600); err != nil {
+					if scenario == "modified-bootstrap" {
+						if err := os.WriteFile(filepath.Join(dir, "space.yaml"), append(before.data, '\n'), 0600); err != nil {
+							t.Fatal(err)
+						}
+					} else if err := safepath.WriteFile(dir, "space.yaml", before.data, 0600); err != nil {
 						t.Fatal(err)
 					}
 				case "concurrent-start":
@@ -316,6 +321,9 @@ func TestSpaceEditResourcesRechecksAfterUnlockedEditor(t *testing.T) {
 				}
 			} else if err == nil || !strings.Contains(err.Error(), "edits kept at") || len(*applied) != 0 {
 				t.Fatalf("invalid edit: %v, %v", err, *applied)
+			}
+			if (scenario == "replaced-bootstrap" || scenario == "modified-bootstrap") && !strings.Contains(err.Error(), "space changed while editing") {
+				t.Fatalf("locked reread accepted a concurrent bootstrap change: %v", err)
 			}
 		})
 	}

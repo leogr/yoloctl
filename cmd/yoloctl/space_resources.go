@@ -157,7 +157,7 @@ func readSpaceResourceSnapshot(name string) (spaceResourceSnapshot, error) {
 	}
 	s.data, s.info, err = safepath.ReadFileInfo(dir, "space.yaml", 1<<20)
 	if err != nil {
-		return s, err
+		return s, classifySpaceBootstrapError(name, err)
 	}
 	s.boot, err = spaceconfig.ParseBootstrap(s.data)
 	if err == nil && s.boot.Name != name {

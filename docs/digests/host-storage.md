@@ -75,7 +75,7 @@ not establish that host exhaustion can never race the monitor.
 4. <a id="source-4"></a> [Helper lifetime](../../internal/firecracker/helper_linux.go#L187) — `Helper`, pinned backing disks and monitor lifetime.
 5. <a id="source-5"></a> [Process identity](../../internal/firecracker/process_linux.go#L86) — `process.signal`, pidfd/start-time verification.
 6. <a id="source-6"></a> [Host controller lifecycle](../../cmd/yoloctl/controller_deploy.go#L83) — controller admission/start/stop guards.
-7. <a id="source-7"></a> [Space views](../../cmd/yoloctl/space.go#L1255) — human/JSON pause reason.
+7. <a id="source-7"></a> [Space views](../../cmd/yoloctl/space.go#L1258) — human/JSON pause reason.
 8. <a id="source-8"></a> [Guard tests](../../internal/firecracker/host_storage_linux_test.go#L26) — capacity, state transitions, socket and real child process.
 9. <a id="source-9"></a> [Unavailable declarations view](../../cmd/yoloctl/space_storage_test.go#L11) — pause diagnostics without native data.
 10. <a id="source-10"></a> [Storage runtime smoke](../../scripts/smoke/storage-gc.sh#L18) — isolated helper-status check and existing GC/data checks.

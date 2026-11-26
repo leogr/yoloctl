@@ -100,7 +100,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 			if action == "start" || upgrade {
 				// Compatibility may offer recreation before taking the lifecycle
 				// lock. Refuse an unbootable target before that offer as well.
-				boot, err := spaceconfig.LoadBootstrap(space)
+				boot, err := loadRequiredSpaceBootstrap(space)
 				if err != nil {
 					return err
 				}
@@ -136,7 +136,7 @@ func hostControllerLifecycle(action string) func(*cobra.Command, []string) error
 			if action == "create" {
 				return createControllerSpace(cmd, space)
 			}
-			boot, err := spaceconfig.LoadBootstrap(space)
+			boot, err := loadRequiredSpaceBootstrap(space)
 			if err != nil {
 				return err
 			}

@@ -104,7 +104,7 @@ rejected. This does not delete native state or change credential import.
 7. <a id="source-7"></a> [cmd/yoloctl/context.go](../../cmd/yoloctl/context.go#L14) — shared space selection.
 8. <a id="source-8"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L39) — host/operator target and path selection, copy snapshots.
 9. <a id="source-9"></a> [internal/agentbox/workdir.go](../../internal/agentbox/workdir.go#L26) — workdir identity and canonicalization.
-10. <a id="source-10"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L725) — grant classification and live bind checks.
+10. <a id="source-10"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L728) — grant classification and live bind checks.
 11. <a id="source-11"></a> [cmd/yoloctl/space_lifecycle.go](../../cmd/yoloctl/space_lifecycle.go#L20) — protected root rejection.
 12. <a id="source-12"></a> [cmd/yoloctl/agentbox_copy.go](../../cmd/yoloctl/agentbox_copy.go#L24) — copy merge and destination validation.
 13. <a id="source-13"></a> [internal/agentprofile/profile.go](../../internal/agentprofile/profile.go#L53) — adapter schema and lookup.

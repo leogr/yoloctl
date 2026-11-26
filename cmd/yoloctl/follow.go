@@ -149,7 +149,8 @@ Fragments open the file only. A failed read marks the last display stale.
 				return cmd.Context().Err()
 			}
 			if err != nil {
-				if followRelativePath(args[0]) {
+				var absent absentSpaceError
+				if followRelativePath(args[0]) || errors.As(err, &absent) {
 					return err
 				}
 				// Absolute/home targets do not need settings to resolve; retain
@@ -272,7 +273,7 @@ func absoluteFollowPath(value, base string) (string, error) {
 	return expandUserPath(value)
 }
 func currentFollowGrants(ctx context.Context, space string) ([]string, error) {
-	boot, err := spaceconfig.LoadBootstrap(space)
+	boot, err := loadRequiredSpaceBootstrap(space)
 	if err != nil {
 		return nil, err
 	}

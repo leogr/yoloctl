@@ -86,7 +86,7 @@ func callHostController(ctx context.Context, boot *spaceconfig.Bootstrap, req co
 var controllerSpaceLookup = findSpaceInstance
 
 func checkControllerSpace(ctx context.Context, space string) (*spaceconfig.Bootstrap, error) {
-	boot, err := spaceconfig.LoadBootstrap(space)
+	boot, err := loadRequiredSpaceBootstrap(space)
 	if err != nil {
 		return nil, err
 	}

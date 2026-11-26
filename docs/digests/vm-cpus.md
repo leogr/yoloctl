@@ -44,4 +44,4 @@ count or a host's cgroup layout. [3](#source-3) [5](#source-5) [8](#source-8)
 6. <a id="source-6"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L320-L336) — `createControllerSpace` selects and validates before image/disk effects.
 7. <a id="source-7"></a> [internal/resources/cpu_darwin.go](../../internal/resources/cpu_darwin.go#L14) — macOS `hw.logicalcpu`.
 8. <a id="source-8"></a> [cmd/yoloctl/space_archive_test.go](../../cmd/yoloctl/space_archive_test.go#L54) — import keeps archived CPUs without measuring.
-9. <a id="source-9"></a> [cmd/yoloctl/space_resources_test.go](../../cmd/yoloctl/space_resources_test.go#L99) — `space set --cpus auto` is refused with other invalid values.
+9. <a id="source-9"></a> [cmd/yoloctl/space_resources_test.go](../../cmd/yoloctl/space_resources_test.go#L100) — `space set --cpus auto` is refused with other invalid values.

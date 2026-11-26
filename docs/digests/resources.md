@@ -99,7 +99,7 @@ Firecracker/Lima resizing or restart behavior. [16](#source-16) [17](#source-17)
 13. <a id="source-13"></a> [internal/vmapi/resources.go](../../internal/vmapi/resources.go#L23) — `ValidateResources` adapter bounds and stopped-state error.
 14. <a id="source-14"></a> [internal/firecracker/driver_linux.go](../../internal/firecracker/driver_linux.go#L175) — `SetResources` stopped/identity checks and narrow configuration update.
 15. <a id="source-15"></a> [internal/lima/resources.go](../../internal/lima/resources.go#L21) — `SetInstanceResources`, stopped/process checks and resolved-YAML resource updates.
-16. <a id="source-16"></a> [cmd/yoloctl/space_resources_test.go](../../cmd/yoloctl/space_resources_test.go#L73) — preservation, refusal, pending apply and editor/host-only regressions.
+16. <a id="source-16"></a> [cmd/yoloctl/space_resources_test.go](../../cmd/yoloctl/space_resources_test.go#L74) — preservation, refusal, pending apply and editor/host-only regressions.
 17. <a id="source-17"></a> [Firecracker regressions](../../internal/firecracker/resources_linux_test.go#L57) — narrow writes, stopped-state proof and temporary configurations.
 18. <a id="source-18"></a> [Lima regressions](../../internal/lima/resources_test.go#L46) — narrow writes, stopped-state proof and temporary configurations.
 19. <a id="source-19"></a> [Automatic VM CPUs](vm-cpus.md) — creation-time CPU selection digest.

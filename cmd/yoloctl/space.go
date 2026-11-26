@@ -109,6 +109,9 @@ instead. For other guest services, use 'space ssh --root'.
 			if err != nil {
 				return err
 			}
+			if err := requireSpaceRuntimeTarget(name); err != nil {
+				return err
+			}
 			if unit != "" {
 				return tailUnitLog(cmd.Context(), name, unit, lines, follow, cmd.OutOrStdout(), cmd.ErrOrStderr())
 			}

@@ -81,7 +81,7 @@ boxes change only through an explicit rebuild/recreate.
 9. <a id="source-9"></a> [Real-input check](../../internal/firecracker/assemble_linux_test.go#L125) — `verifyImageContents` from `TestPortableImageAssembly`.
 10. <a id="source-10"></a> [Lima provisioning](../../assets/lima/yoloctl.yaml.tmpl#L93-L120) — minimum CA release, upgrade and failure.
 11. <a id="source-11"></a> [Provisioning tests](../../internal/lima/provision_test.go#L125) — `TestCACertificatesProvisioningUpgrade`.
-12. <a id="source-12"></a> [Lima templates](../../cmd/yoloctl/space.go#L592) — create-time template; a missing instance is created at L681.
+12. <a id="source-12"></a> [Lima templates](../../cmd/yoloctl/space.go#L595) — create-time template; a missing instance is created at L684.
 13. <a id="source-13"></a> [nerdctl v2.4.2 release](https://github.com/containerd/nerdctl/releases/tag/v2.4.2) — archive inventory and included tool versions; `go version -m` on the pinned binary members.
 14. <a id="source-14"></a> [Guest containerd configuration](../../internal/firecracker/assemble_linux.go#L763).
 15. <a id="source-15"></a> [Guest BuildKit configuration](../../internal/vmguest/buildkit_linux.go#L22).

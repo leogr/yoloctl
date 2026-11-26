@@ -22,7 +22,7 @@ func controllerMountList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	boot, err := spaceconfig.LoadBootstrap(name)
+	boot, err := loadRequiredSpaceBootstrap(name)
 	if err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func controllerSpaceShell(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		defer release()
-		boot, err := spaceconfig.LoadBootstrap(space)
+		boot, err := loadRequiredSpaceBootstrap(space)
 		if err != nil {
 			return err
 		}
@@ -159,6 +159,9 @@ func controllerSpaceShell(cmd *cobra.Command, args []string) error {
 		}
 		release()
 	} else {
+		if err := requireSpaceRuntimeTarget(space); err != nil {
+			return err
+		}
 		inst, found, err := findSpaceInstance(cmd.Context(), space)
 		if err != nil {
 			return err

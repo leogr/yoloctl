@@ -80,7 +80,7 @@ func exportSpace(cmd *cobra.Command, args []string) (result error) {
 		return err
 	}
 	defer release()
-	boot, err := spaceconfig.LoadBootstrap(name)
+	boot, err := loadRequiredSpaceBootstrap(name)
 	if err != nil {
 		return err
 	}

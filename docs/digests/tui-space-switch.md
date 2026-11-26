@@ -93,7 +93,7 @@ proof.
 8. <a id="source-8"></a> [Private requests](../../internal/tui/tab_requests.go#L15) — captured generation; `Update` validates generation and source membership.
 9. <a id="source-9"></a> [UI regressions](../../internal/tui/space_switch_test.go#L22) — `TestSpace*`.
 10. <a id="source-10"></a> [CLI regressions](../../cmd/yoloctl/space_pin_test.go#L17) — host/native/operator selection.
-11. <a id="source-11"></a> [Space use](../../cmd/yoloctl/space.go#L1468) — global write and resolved-source display.
+11. <a id="source-11"></a> [Space use](../../cmd/yoloctl/space.go#L1471) — global write and resolved-source display.
 12. <a id="source-12"></a> [Standalone attachment](../../internal/tui/attach.go#L21) — `RunAttached`.
 13. <a id="source-13"></a> [Pane menu](../../internal/tui/pane_menu.go#L46) — `menuRows`, `bindingWhy`.
 14. <a id="source-14"></a> [Normal teardown](../../internal/tui/chrome_gestures.go#L295) — `detachTab`.

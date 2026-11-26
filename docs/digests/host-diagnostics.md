@@ -78,7 +78,7 @@ exact debug bytes. These are not native macOS/Lima/TUI qualification.
 4. <a id="source-4"></a> [Inventory](../../internal/lima/list.go#L28-L158) — `Client.List`, `homeHasInstances`.
 5. <a id="source-5"></a> [Lima regressions](../../internal/lima/diagnostics_test.go#L63) — warning, skip, operation, error, daemon, planted-log, rotation, ENOENT-retry and logs-directory mode tests.
 6. <a id="source-6"></a> [Interactive helpers](../../cmd/yoloctl/chat_stream_stderr.go#L26-L107) — `callChatStream`, `callChatViewControllerInto`, `stderrTail.finishSpace`; its callers are `chat_open.go:38` and `chat_view.go:86,416,662`.
-7. <a id="source-7"></a> [Telemetry](../../cmd/yoloctl/space_view.go#L147-L191) — `streamSpaceView`.
+7. <a id="source-7"></a> [Telemetry](../../cmd/yoloctl/space_view.go#L150-L194) — `streamSpaceView`.
 8. <a id="source-8"></a> [Chat regressions](../../cmd/yoloctl/chat_view_diagnostics_test.go#L17-L57) — interactive methods, success/error diagnostics and terminal sinks.
 9. <a id="source-9"></a> [Disk inspection](../../internal/lima/disk.go#L21-L40) — `AccountDisk`.
 10. <a id="source-10"></a> [Explicit streaming](../../internal/lima/stderr.go#L68-L157) — caller-owned application stderr.

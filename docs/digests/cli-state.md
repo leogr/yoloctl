@@ -11,6 +11,15 @@ child commands and completion; [switching its space](tui-space-switch.md) is loc
 existing declaration or runtime rather than rewriting it. [1](#source-1)
 [2](#source-2)
 
+[FACT] Host commands that need a named space report `space "NAME" does not
+exist` with exit status 1 when its local bundle is absent. A retained bundle
+with a missing declaration gets a recovery error. VM SSH and boot logs check
+local runtime metadata as well. Without a bootstrap they keep legacy Lima
+inspection and require recovery when Firecracker metadata remains. Host log
+filters can still select historical records for a destroyed space.
+[7](#source-7) [32](#source-32)
+[33](#source-33) [34](#source-34)
+
 [FACT] Box names match `^[a-zA-Z0-9][a-zA-Z0-9._-]{1,62}$`, retaining
 reserved-name exclusions and the 63-character cap. Other entity kinds retain
 their one-character minimum. New spaces have a separate 16-character cap;
@@ -120,10 +129,10 @@ adding a new command. [3](#source-3) [11](#source-11)
 1. <a id="source-1"></a> [cmd/yoloctl/context.go](../../cmd/yoloctl/context.go#L14) — selection helpers.
 2. <a id="source-2"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L31) — box command tree, create defaults and `ensureAgentboxAbsent`; `newAgentboxCreateCmd` at L849, Args/RunE validation at L886–898.
 3. <a id="source-3"></a> [internal/boxstate/boxstate.go](../../internal/boxstate/boxstate.go#L21-L314) — `Depth` through `ResolveSpace`.
-4. <a id="source-4"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L1328) — space JSON and unavailable declarations.
-5. <a id="source-5"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L1521) — runtime list JSON.
+4. <a id="source-4"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L1331) — space JSON and unavailable declarations.
+5. <a id="source-5"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L1524) — runtime list JSON.
 6. <a id="source-6"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2639) — box state JSON.
-7. <a id="source-7"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L89) — remote/user/runtime exit classification.
+7. <a id="source-7"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L154) — remote/user/runtime exit classification.
 8. <a id="source-8"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L114) — shared root definitions and TUI.
 9. <a id="source-9"></a> [internal/tui/yoloctlcli/complete.go](../../internal/tui/yoloctlcli/complete.go#L1-L100) — `Complete` and completion result parsing.
 10. <a id="source-10"></a> [internal/tui/palette/palette.go](../../internal/tui/palette/palette.go#L95-L129) — `Submit` through `CompletionInput`.
@@ -149,3 +158,6 @@ adding a new command. [3](#source-3) [11](#source-11)
 
 30. <a id="source-30"></a> [Space help initialization](../../cmd/yoloctl/main.go#L132) — `describeSpaceFlagHelp` and the pinned Cobra flag behavior.
 31. <a id="source-31"></a> [Help parity](../../cmd/yoloctl/main_test.go#L36) — client and worker help output, flag state and explicit `--help` execution.
+32. <a id="source-32"></a> [Named-space lookup](../../cmd/yoloctl/space_lookup.go#L13-L98) — user error, retained bundle recovery and VM metadata checks.
+33. <a id="source-33"></a> [Host log selection](../../cmd/yoloctl/space.go#L94-L119) — historical filter and VM target selection.
+34. <a id="source-34"></a> [Missing-space CLI regressions](../../cmd/yoloctl/space_lookup_test.go#L66) — destroy, stale pin and environment selection.

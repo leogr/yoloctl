@@ -73,7 +73,7 @@ func ensureCommandVMCompatibility(cmd *cobra.Command, space string) error {
 // prepareCommandVMCompatibility reports whether the approved repair already
 // deployed this build, so upgrade can continue without selecting it again.
 func prepareCommandVMCompatibility(cmd *cobra.Command, space string) (bool, error) {
-	boot, err := spaceconfig.LoadBootstrap(space)
+	boot, err := loadRequiredSpaceBootstrap(space)
 	if err != nil {
 		return false, err
 	}
@@ -84,7 +84,7 @@ func prepareCommandVMCompatibility(cmd *cobra.Command, space string) (bool, erro
 	if err = offerSpaceVMRecreate(cmd, boot, err); err != nil {
 		return false, err
 	}
-	current, err := spaceconfig.LoadBootstrap(space)
+	current, err := loadRequiredSpaceBootstrap(space)
 	if err != nil {
 		return false, err
 	}

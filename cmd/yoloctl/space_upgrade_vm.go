@@ -79,7 +79,7 @@ var spaceUpgradeVMInteractive = func(cmd *cobra.Command) bool {
 // leaves the recreate outstanding. Recreation is never automatic.
 func offerSpaceUpgradeVMRecreate(cmd *cobra.Command, space string) (bool, spaceUpgradeVMResult, error) {
 	var result spaceUpgradeVMResult
-	boot, err := spaceconfig.LoadBootstrap(space)
+	boot, err := loadRequiredSpaceBootstrap(space)
 	if err != nil {
 		return false, result, err
 	}
