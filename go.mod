@@ -21,7 +21,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/diskfs/go-diskfs v1.9.4
 	github.com/distribution/reference v0.6.0
-	github.com/klauspost/compress v1.18.6
+	github.com/klauspost/compress v1.20.2
 	github.com/lima-vm/go-qcow2reader v0.7.1
 	github.com/mattn/go-runewidth v0.0.30
 	github.com/mdlayher/vsock v1.2.1
