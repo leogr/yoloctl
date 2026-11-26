@@ -23,6 +23,7 @@ import (
 )
 
 func TestAgentStatusAllSpacesKeepsInstalledAndResponsiveLatest(t *testing.T) {
+	stubOperatorClient(t, nil)
 	for _, test := range []string{"silent registry", "silent controller", "cancel", "offline"} {
 		t.Run(test, func(t *testing.T) {
 			first := imageUpdateFixture(t)
