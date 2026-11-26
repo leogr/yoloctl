@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -40,27 +43,36 @@ func TestWorkerDescendantHoldingStdoutEndsAtExit(t *testing.T) {
 	var out bytes.Buffer
 	started := time.Now()
 	code, err := RunWorker(ctx, Principal{}, Request{Method: "test.inherit-stdout"}, workerStreams(&out, nil))
-	if code != 7 || err != nil || out.String() != "parent done" || time.Since(started) > 2500*time.Millisecond {
+	if code != 7 || err != nil || !strings.HasSuffix(out.String(), "parent done") || time.Since(started) > 2500*time.Millisecond {
 		t.Fatalf("code=%d err=%v out=%q after %s", code, err, out.String(), time.Since(started))
 	}
 }
 
-// A process outside the worker's group still holding stdout keeps the output
-// join until the fail-safe; the command is then reported interrupted.
+// A process outside the worker's group still holding stdout (or the PTY) keeps
+// the output join only until the fail-safe: the worker returns while that
+// holder is still alive, and the command is reported interrupted.
 func TestWorkerOutputHeldOutsideTheGroupEndsAtFailSafe(t *testing.T) {
 	withFailSafe(t, 300*time.Millisecond)
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-	defer cancel()
 	for _, terminal := range []bool{false, true} {
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		var out bytes.Buffer
+		started := time.Now()
 		code, err := RunWorker(ctx, Principal{}, Request{Method: "test.escape-stdout", Terminal: terminal, Cols: 80, Rows: 24, Term: "xterm"}, workerStreams(&out, nil))
+		elapsed := time.Since(started)
+		cancel()
+		var pid int
+		if _, scanErr := fmt.Sscanf(out.String(), "holder=%d", &pid); scanErr != nil || pid <= 0 {
+			t.Fatalf("terminal=%v: no holder pid in %q", terminal, out.String())
+		}
+		alive := syscall.Kill(pid, 0) == nil
+		_ = syscall.Kill(pid, syscall.SIGKILL)
 		want := "worker exited with its output still open"
 		if terminal {
 			want = "worker exited with an inherited terminal still open"
 		}
 		var interrupted *WorkerInterrupted
-		if !errors.As(err, &interrupted) || !strings.Contains(err.Error(), want) || code != 2 || !strings.Contains(out.String(), "parent done") {
-			t.Fatalf("terminal=%v: code=%d err=%v out=%q", terminal, code, err, out.String())
+		if !alive || elapsed > 5*time.Second || !errors.As(err, &interrupted) || !strings.Contains(err.Error(), want) || code != 2 {
+			t.Fatalf("terminal=%v: holder alive=%v after %s: code=%d err=%v", terminal, alive, elapsed, code, err)
 		}
 	}
 }
@@ -204,5 +216,56 @@ func TestServerOpeningExchangeServesALateHello(t *testing.T) {
 	}
 	if f, err := wire.Read(); err != nil || f.Type != "hello" {
 		t.Fatal(f, err)
+	}
+}
+
+// Case 2 of the G3 source review: a client that stops reading while a finished
+// worker's output is delivered is detached and its connection cancelled; the
+// recorded result stays the worker's own exit, successful or not.
+func TestNonreadingClientAfterExitKeepsTheRecordedResult(t *testing.T) {
+	withFailSafe(t, 300*time.Millisecond)
+	for _, code := range []int{0, 9} {
+		s := &Server{Hello: hello(), Receipts: Receipts{t.TempDir()},
+			Operations: map[string]Operation{"test.bulk-exit": {BoxAllowed: true, Mutates: true}},
+			Execute:    RunWorker,
+		}
+		req := request("test.bulk-exit")
+		req.Args = []string{strconv.Itoa(code)}
+		client, server := net.Pipe()
+		done := make(chan struct{})
+		go func() { defer close(done); s.ServeConn(t.Context(), server, Principal{}) }()
+		wire := NewWire(client, client)
+		h := hello()
+		if err := wire.Write(Frame{Type: "hello", Hello: &h}); err != nil {
+			t.Fatal(err)
+		}
+		if f, err := wire.Read(); err != nil || f.Type != "hello" {
+			t.Fatal(f, err)
+		}
+		if err := wire.Write(Frame{Type: "request", Request: &req}); err != nil {
+			t.Fatal(err)
+		}
+		for {
+			f, err := wire.Read()
+			if err != nil {
+				t.Fatal("before the first output frame:", err)
+			}
+			if f.Type == "exit" {
+				t.Fatal("exit before the stall", f)
+			}
+			if f.Type == "stdout" {
+				break // the client stops reading here
+			}
+		}
+		select {
+		case <-done:
+		case <-time.After(20 * time.Second):
+			t.Fatalf("exit %d: a nonreading client held the finished command", code)
+		}
+		_ = client.Close()
+		r, err := s.Receipts.Read(req.ID)
+		if err != nil || r.State != "complete" || r.Status != code {
+			t.Fatalf("exit %d: receipt %+v, %v", code, r, err)
+		}
 	}
 }

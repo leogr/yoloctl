@@ -53,6 +53,9 @@ type Streams struct {
 	// time clears it. A worker sets it when it exits, so a client that stopped
 	// reading cannot hold a finished command. Nil means no bound.
 	DrainDeadline func(time.Time)
+	// Exited runs once the worker process has exited, before its output is
+	// joined. Nil means nothing is told.
+	Exited func()
 }
 
 type Handler func(context.Context, Principal, Request, Streams) (int, error)
@@ -862,6 +865,10 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		}
 	}
 	phase := s.reserveNativePhase(principal, req, receipt, operation)
+	// Only a cancellation that preceded the worker's exit interrupts its known
+	// result. A client that leaves while the finished output is still being
+	// delivered cancels the connection afterwards and changes nothing.
+	workerExited, cancelledBeforeExit := false, false
 	status, runErr := s.Execute(execCtx, principal, req, Streams{
 		NativePhase: phase, WorkerHandoff: workerHandoff,
 		In: input, Out: clientSink{frameWriter{wire, "stdout"}, output}, Err: clientSink{frameWriter{wire, "stderr"}, output},
@@ -870,6 +877,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		BeginEffects: beginEffects, RecordEvidence: evidence, Image: imageCall, Advisory: advisoryCall, NativeNonce: nativeNonceCall, OperatorRetire: operatorRetire,
 		PIDAnchor: pidAnchor, PIDAnchorCheck: pidAnchorCheck,
 		DrainDeadline: func(t time.Time) { _ = conn.SetWriteDeadline(t) },
+		Exited:        func() { workerExited, cancelledBeforeExit = true, execCtx.Err() != nil },
 	})
 	nativeNonces.close() // actual Execute/RunWorker has ended: no retained allocation grant
 	imageProgressOutput.finish()
@@ -913,7 +921,11 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			// A contradicted checkpoint proves nothing.
 			receipt.Completion = nil
 		}
-		if execCtx.Err() != nil || errors.As(runErr, &interrupted) || errors.As(runErr, &uncertain) {
+		cancelled := execCtx.Err() != nil
+		if workerExited {
+			cancelled = cancelledBeforeExit
+		}
+		if cancelled || errors.As(runErr, &interrupted) || errors.As(runErr, &uncertain) {
 			receipt.interrupt()
 		}
 

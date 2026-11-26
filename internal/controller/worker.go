@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -15,6 +16,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/termio"
+	"golang.org/x/sys/unix"
 )
 
 // WorkerInput is transported over a private inherited descriptor. Sensitive
@@ -192,6 +194,19 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 	if err != nil {
 		return 2, err
 	}
+	// The PTY master is read and written through a pollable duplicate, so an
+	// expired output join can wake a read that a process outside the worker's
+	// group keeps waiting.
+	var master *os.File
+	if terminal != nil {
+		if master, err = pollableDup(terminal); err != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+			_ = terminal.Close()
+			return 2, err
+		}
+		defer func() { _ = master.Close() }()
+	}
 	// Optional publication retains the actual child and sole original Wait.
 	if prepared != nil {
 		_ = prepared.PublishStarted(cmd.Process)
@@ -275,25 +290,27 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 		}
 	}()
 	var outputs sync.WaitGroup
-	// writing counts copies blocked in a write to the client, so an expired
-	// output join can tell a client that stopped reading from a source that a
-	// process outside the worker's group still holds open.
-	var writing atomic.Int32
-	copyOut := func(dst io.Writer, src io.Reader) {
-		defer outputs.Done()
+	// After an expired output join each source decides by its own state
+	// whether a process outside the worker's group still holds it open.
+	var expired, heldOpen atomic.Bool
+	var sources []*os.File
+	copyOut := func(dst io.Writer, src *os.File) {
+		sources = append(sources, src)
+		outputs.Add(1)
 		if dst == nil {
 			dst = io.Discard
 		}
-		_, _ = io.Copy(trackedWriter{dst, &writing}, src)
+		go func() {
+			defer outputs.Done()
+			_, _ = io.Copy(dst, drainSource{src, &expired, &heldOpen})
+		}()
 	}
 	if terminal != nil {
-		outputs.Add(1)
-		go copyOut(streams.Out, terminal)
-		go func() { _, _ = io.Copy(terminal, streams.In) }()
+		copyOut(streams.Out, master)
+		go func() { _, _ = io.Copy(master, streams.In) }()
 	} else {
-		outputs.Add(2)
-		go copyOut(streams.Out, stdoutRead)
-		go copyOut(streams.Err, stderrRead)
+		copyOut(streams.Out, stdoutRead)
+		copyOut(streams.Err, stderrRead)
 	}
 	go func() {
 		defer close(controlsDone)
@@ -322,18 +339,20 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 	err = cmd.Wait()
 	exited := time.Now()
 	observation.Exited()
+	if streams.Exited != nil {
+		streams.Exited()
+	}
 	cancelWorker()
 	// From the worker's exit on, a client that stopped reading must not hold
 	// the finished command: every client write is bounded by the fail-safe.
-	// The deadline stays through the log join and is cleared on return; the
-	// caller bounds its own exit frame.
+	// The deadline stays after return, through the caller's own joins; the
+	// caller bounds its exit frame itself.
 	drainUntil := func(t time.Time) {
 		if streams.DrainDeadline != nil {
 			streams.DrainDeadline(t)
 		}
 	}
 	drainUntil(exited.Add(controllerFailSafe))
-	defer drainUntil(time.Time{})
 	// Terminate transient children before joining their inherited checkpoint
 	// descriptors. A killed worker cannot leave a child keeping this read open.
 	signalGroup(syscall.SIGKILL)
@@ -370,18 +389,16 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 	case <-outputWait.C:
 		// A copy blocked on a client that stopped reading is released by the
 		// expired write; that client is then detached like after any failed
-		// write. A copy still waiting on its source means a process outside
-		// the worker's group holds the output open.
-		heldOpen := writing.Load() == 0
+		// write, and the copy reads the rest of its source. A read waiting on
+		// a source is woken: a source with nothing to read and no end is held
+		// open by a process outside the worker's group.
 		drainUntil(time.Now())
-		if terminal != nil {
-			_ = terminal.Close()
-		} else {
-			_ = stdoutRead.Close()
-			_ = stderrRead.Close()
+		expired.Store(true)
+		for _, src := range sources {
+			_ = src.SetReadDeadline(time.Now())
 		}
 		<-drained
-		if err == nil && heldOpen {
+		if err == nil && heldOpen.Load() {
 			if terminal != nil {
 				err = errors.New("worker exited with an inherited terminal still open")
 			} else {
@@ -423,15 +440,72 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 	return 0, nil
 }
 
-// trackedWriter counts its writes in flight, so the output join can see
-// whether a copy is blocked on its client or on its source.
-type trackedWriter struct {
-	w       io.Writer
-	writing *atomic.Int32
+// errOutputHeld ends a copy whose source a process outside the worker's group
+// still holds open after the output join expired.
+var errOutputHeld = errors.New("worker output held open")
+
+// drainSource reads a worker output source. Once the output join expired it
+// reads only what is ready (data or the end), so it never waits again.
+type drainSource struct {
+	f       *os.File
+	expired *atomic.Bool
+	held    *atomic.Bool
 }
 
-func (t trackedWriter) Write(p []byte) (int, error) {
-	t.writing.Add(1)
-	defer t.writing.Add(-1)
-	return t.w.Write(p)
+func (s drainSource) Read(p []byte) (int, error) {
+	for {
+		if s.expired.Load() {
+			if !readable(s.f) {
+				s.held.Store(true)
+				return 0, errOutputHeld
+			}
+			_ = s.f.SetReadDeadline(time.Time{})
+		}
+		n, err := s.f.Read(p)
+		if n == 0 && errors.Is(err, os.ErrDeadlineExceeded) {
+			continue // woken at expiry: the source's own state decides above
+		}
+		return n, err
+	}
+}
+
+// readable reports, without waiting, whether f has data or reached its end.
+func readable(f *os.File) bool {
+	raw, err := f.SyscallConn()
+	if err != nil {
+		return false
+	}
+	ready := false
+	_ = raw.Control(func(fd uintptr) {
+		for {
+			fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
+			n, err := unix.Poll(fds, 0)
+			if errors.Is(err, unix.EINTR) {
+				continue
+			}
+			ready = err == nil && n > 0 && fds[0].Revents&(unix.POLLIN|unix.POLLHUP|unix.POLLERR) != 0
+			return
+		}
+	})
+	return ready
+}
+
+// pollableDup returns a non-blocking duplicate of f that the runtime poller
+// serves, so reads on it honor deadlines. The original keeps its ioctls.
+func pollableDup(f *os.File) (*os.File, error) {
+	fd, err := syscall.Dup(int(f.Fd()))
+	if err != nil {
+		return nil, err
+	}
+	syscall.CloseOnExec(fd)
+	if err := syscall.SetNonblock(fd, true); err != nil {
+		_ = syscall.Close(fd)
+		return nil, err
+	}
+	dup := os.NewFile(uintptr(fd), f.Name())
+	if err := dup.SetReadDeadline(time.Time{}); err != nil {
+		_ = dup.Close()
+		return nil, fmt.Errorf("worker terminal is not pollable: %w", err)
+	}
+	return dup, nil
 }

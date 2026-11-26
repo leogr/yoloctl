@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -377,6 +378,12 @@ func TestMain(m *testing.M) {
 			finishExit(94)
 		case "test.log":
 			logWorker(work, finishExit)
+		case "test.bulk-exit":
+			// Two output frames that fit the pipe: the worker exits while the
+			// second frame still waits for its client.
+			_, _ = os.Stdout.Write(bytes.Repeat([]byte("b"), 40<<10))
+			code, _ := strconv.Atoi(work.Request.Args[0])
+			finishExit(code)
 		case "test.small":
 			// Fits the pipe and PTY buffers: the worker exits at once and only
 			// its output remains to be delivered.
@@ -390,7 +397,11 @@ func TestMain(m *testing.M) {
 			for fd := 3; fd < 64; fd++ {
 				syscall.CloseOnExec(fd)
 			}
-			child := exec.Command("/bin/sleep", "3")
+			holdFor := "3"
+			if work.Request.Method == "test.escape-stdout" {
+				holdFor = "30" // kept alive until the test has seen the worker return
+			}
+			child := exec.Command("/bin/sleep", holdFor)
 			if work.Request.Method != "test.escape-checkpoint" {
 				child.Stdout = os.Stdout
 			} else {
@@ -402,7 +413,7 @@ func TestMain(m *testing.M) {
 			if err := child.Start(); err != nil {
 				finishExit(91)
 			}
-			_, _ = os.Stdout.Write([]byte("parent done"))
+			_, _ = fmt.Fprintf(os.Stdout, "holder=%d parent done", child.Process.Pid)
 			if work.Request.Method == "test.escape-stdout" {
 				finishExit(0) // only a successful worker is reported interrupted
 			}
