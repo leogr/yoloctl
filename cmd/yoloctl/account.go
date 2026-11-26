@@ -21,6 +21,7 @@ import (
 	"github.com/leogr/yoloctl/internal/manifestio"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,8 +32,9 @@ const fromEnvUseName = "$NAME"
 
 // readCredentialValue reads a secret value for `account secret set` from
 // --from-env (an environment variable) or, by default, from stdin's first line
-// so the value never appears in the process list. An empty value is rejected.
-// The value is never echoed or logged.
+// so the value never appears in the process list. On a terminal it prompts
+// and reads with echo off. An empty value is rejected. The value is never
+// echoed or logged.
 func readCredentialValue(cmd *cobra.Command, fromEnv, name string) (string, error) {
 	if secret, ok := cmd.Context().Value(controllerSecretKey{}).(controllerSecret); ok {
 		return secret.Value, nil
@@ -48,8 +50,14 @@ func readCredentialValue(cmd *cobra.Command, fromEnv, name string) (string, erro
 		}
 		return value, nil
 	}
-	r := bufio.NewReader(io.LimitReader(cmd.InOrStdin(), (1<<20)+1))
-	line, err := r.ReadString('\n')
+	var line string
+	var err error
+	if f, ok := cmd.InOrStdin().(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		// On a terminal, prompt and read with echo off; the value is never shown.
+		line, err = readHiddenLine(cmd.Context(), f, fmt.Sprintf("Enter the value for %s (input hidden): ", name), cmd.ErrOrStderr(), (1<<20)+1)
+	} else {
+		line, err = bufio.NewReader(io.LimitReader(cmd.InOrStdin(), (1<<20)+1)).ReadString('\n')
+	}
 	if err != nil && !errors.Is(err, io.EOF) {
 		return "", err
 	}
@@ -677,9 +685,9 @@ func newAccountSecretSetCmd() *cobra.Command {
 This updates the controller-owned declaration and requires a running space.
 
 By default the value is read from stdin so it never appears in the process
-list. Pass --from-env (no value) to read from the environment variable named
-KEY, or --from-env=VAR to read from a differently-named variable. The value is
-never echoed or logged.
+list; on a terminal it prompts and hides the input. Pass --from-env (no value)
+to read from the environment variable named KEY, or --from-env=VAR to read from
+a differently-named variable. The value is never echoed or logged.
 
   printf '%s' "$TOKEN" | yoloctl account secret set default ANTHROPIC_API_KEY
   yoloctl account secret set personal OPENAI_API_KEY --from-env`,

@@ -36,10 +36,12 @@ operation copies once; it does not synchronize later host edits or own the
 agent's subsequent credential updates. [2](#source-2) [5](#source-5) [9](#source-9)
 
 [FACT] Secret set captures stdin or `--from-env` in the caller, then sends a
-private request payload. It never reads the controller root environment for a
-host variable. Secret edit files are private and local; optimistic revision
+private request payload. On a terminal it turns echo off, then prompts on
+stderr and reads one line; Ctrl+C ends the read with the terminal restored and
+sends nothing. It never reads the controller root environment for a host
+variable. Secret edit files are private and local; optimistic revision
 checks protect their save. Both operations require the controller.
-[9](#source-9) [10](#source-10)
+[9](#source-9) [10](#source-10) [17](#source-17)
 
 [FACT] Active-consumer checks inspect running containers using authoritative
 runtime inventory. They match either the desired account or actual account
@@ -92,7 +94,7 @@ cancellation ends either request. [5](#source-5) [7](#source-7)
 4. <a id="source-4"></a> [cmd/yoloctl/launchenv.go](../../cmd/yoloctl/launchenv.go#L26-L42) — `applyLaunchEnv`.
 5. <a id="source-5"></a> [cmd/yoloctl/account_auth.go](../../cmd/yoloctl/account_auth.go#L131-L437) — `resolveAccountAuthTarget`, `defaultHostAuthPaths`, `newAccountAuthImportCmd`, `importSecretIntoAccount`, `accountAuthStatus`.
 6. <a id="source-6"></a> [cmd/yoloctl/space_lifecycle.go](../../cmd/yoloctl/space_lifecycle.go#L80) — authoritative consumer matching.
-7. <a id="source-7"></a> [cmd/yoloctl/account.go](../../cmd/yoloctl/account.go#L212) — show, edit, deletion, secret commands.
+7. <a id="source-7"></a> [cmd/yoloctl/account.go](../../cmd/yoloctl/account.go#L220) — show, edit, deletion, secret commands.
 8. <a id="source-8"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L214) — account-reference drift.
 9. <a id="source-9"></a> [cmd/yoloctl/controller_documents.go](../../cmd/yoloctl/controller_documents.go#L231) — native import and profile digest validation.
 10. <a id="source-10"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L181) — caller secret capture and local editor.
@@ -107,3 +109,4 @@ cancellation ends either request. [5](#source-5) [7](#source-7)
 
 15. <a id="source-15"></a> [Claude profile storage](claude-auth.md) — managed relocation, supported local formats, import and preservation order.
 16. <a id="source-16"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1) — same primary state path, native status format and explicit optional AWS injection.
+17. <a id="source-17"></a> [cmd/yoloctl/secret_prompt_unix.go](../../cmd/yoloctl/secret_prompt_unix.go#L22) — `readHiddenLine`: echo off before the prompt, a polled read with nothing left reading after cancellation, settings restored on every return.
