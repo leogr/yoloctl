@@ -18,6 +18,7 @@ class Response(io.BytesIO):
 
 class InstallTest(unittest.TestCase):
     def setUp(self):
+        self.timeouts = {}
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.binary = Path(self.temp.name) / "bin" / "agy"
@@ -49,6 +50,7 @@ class InstallTest(unittest.TestCase):
             manifest["url"] = "https://elsewhere.example/release.tar.gz"
 
         def urlopen(url, **kwargs):
+            self.timeouts[url] = kwargs.get("timeout")
             if url == "https://manifest.example/linux_amd64.json":
                 return Response(json.dumps(manifest).encode())
             self.assertEqual(url, manifest["url"])
@@ -56,6 +58,11 @@ class InstallTest(unittest.TestCase):
 
         with patch("urllib.request.urlopen", urlopen), patch("platform.machine", return_value="x86_64"), patch("platform.system", return_value="Linux"):
             namespace["install"](self.spec)
+
+    def test_each_socket_wait_has_the_fail_safe(self):
+        self.run_install()
+        self.assertEqual(self.timeouts, {"https://manifest.example/linux_amd64.json": 120,
+                                         "https://downloads.example/cli/release.tar.gz": 120})
 
     def test_replaces_binary_and_metadata_without_executing(self):
         self.run_install()

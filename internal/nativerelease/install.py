@@ -15,8 +15,13 @@ import tempfile
 import urllib.request
 
 
+# One socket wait (connect or read) with nothing received ends at the
+# 2-minute fail-safe; a slow download that keeps moving completes.
+SOCKET_FAIL_SAFE = 120
+
+
 def read_manifest(url):
-    with urllib.request.urlopen(url, timeout=30) as response:
+    with urllib.request.urlopen(url, timeout=SOCKET_FAIL_SAFE) as response:
         raw = response.read(1024 * 1024 + 1)
     if len(raw) > 1024 * 1024:
         raise ValueError("release manifest too large")
@@ -50,7 +55,7 @@ def install(spec):
             archive = temp / "release.tar.gz"
             digest = hashlib.sha512()
             size = 0
-            with urllib.request.urlopen(manifest["url"], timeout=60) as source, archive.open("wb") as dest:
+            with urllib.request.urlopen(manifest["url"], timeout=SOCKET_FAIL_SAFE) as source, archive.open("wb") as dest:
                 if not source.geturl().startswith(spec["artifact_base"]):
                     raise ValueError("artifact redirect outside distribution")
                 while chunk := source.read(1024 * 1024):
