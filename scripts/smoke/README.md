@@ -403,9 +403,12 @@ The phases are:
   `npm ci`, build/test scripts, local and downloaded npx commands, global
   installs without sudo, attributed curl denial and an in-sync box;
 - `smoke-go`: the resolved `/usr/local/go/bin/go` behind `PATH`,
-  `GOTOOLCHAIN=local` from Go's own `go.env`, a module dependency downloaded, checksum-verified and
-  built from an empty module cache, a `go.mod` needing a newer Go refused by Go
-  itself, attributed curl denial, no denial of the go binary and an in-sync box;
+  `GOTOOLCHAIN=local` from Go's own `go.env`, verified downloads from an empty
+  module cache, a fixture build, refusal of a newer `go.mod`, attributed curl
+  denial, Go egress and an in-sync box. The pinned lz4 v4.1.26 archive exercises
+  proxy redirects. Go may print a retraction warning for the module's writer
+  bug. The smoke downloads and checksum-verifies that archive and builds its
+  fixture with the existing terminal dependency.
 - `smoke-pip`: matching Python/pip commands, sandbox-owned user installs/cache,
   venv isolation and registry downloads, offline installation from hashed
   requirements, editable project installation with build isolation, project
