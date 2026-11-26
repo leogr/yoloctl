@@ -89,7 +89,7 @@ establish native VM/power-loss qualification. [16](#source-16) [19](#source-19)
 15. <a id="source-15"></a> [internal/controller/server.go](../../internal/controller/server.go#L1) — admission, gate, ping, receipt views and finalization.
 16. <a id="source-16"></a> [internal/controller/recovery_scheduler_test.go](../../internal/controller/recovery_scheduler_test.go#L1) — storage identity loss/restoration, responsive reads, repair and drain regressions.
 
-17. <a id="source-17"></a> [runtime.go](../../internal/controller/runtime.go#L18) — read-only loading/verification; explicit lifecycle preparation.
+17. <a id="source-17"></a> [runtime.go](../../internal/controller/runtime.go#L19) — read-only loading/verification; explicit lifecycle preparation.
 
 18. <a id="source-18"></a> [internal/controller/observation.go](../../internal/controller/observation.go#L1) — scope/disk selection, interruption text and one-shot observations.
 19. <a id="source-19"></a> [internal/controller/interrupted_test.go](../../internal/controller/interrupted_test.go#L1) — migration, observation and compatibility controls.
