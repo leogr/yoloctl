@@ -34,10 +34,67 @@ type managedUnit struct {
 	failed   error
 }
 
-var unitManager = struct {
+type unitName struct {
+	held     chan struct{}
+	users    int
+	starting bool
+}
+
+type unitRegistry struct {
 	sync.Mutex
-	units map[string]*managedUnit
-}{units: map[string]*managedUnit{}}
+	units  map[string]*managedUnit
+	names  map[string]*unitName
+	launch func(*managedUnit) error
+	clean  func(string) error
+}
+
+var unitManager = unitRegistry{
+	units:  make(map[string]*managedUnit),
+	names:  make(map[string]*unitName),
+	launch: (*managedUnit).start,
+	clean:  cleanGroup,
+}
+
+// A reference covers callers waiting for the guard as well as its owner.
+func (m *unitRegistry) lockName(name string) (*unitName, func()) {
+	m.Lock()
+	entry := m.names[name]
+	if entry == nil {
+		entry = &unitName{held: make(chan struct{}, 1)}
+		m.names[name] = entry
+	}
+	entry.users++
+	m.Unlock()
+	entry.held <- struct{}{}
+	return entry, func() {
+		m.Lock()
+		<-entry.held
+		entry.users--
+		if entry.users == 0 {
+			delete(m.names, name)
+		}
+		m.Unlock()
+	}
+}
+
+func (m *unitRegistry) lookup(name string) *managedUnit {
+	m.Lock()
+	defer m.Unlock()
+	return m.units[name]
+}
+
+func (m *unitRegistry) observe(name string) *managedUnit {
+	m.Lock()
+	entry, unit := m.names[name], m.units[name]
+	pending := entry != nil && entry.starting
+	m.Unlock()
+	if !pending {
+		return unit
+	}
+	_, unlock := m.lockName(name)
+	defer unlock()
+	return m.lookup(name)
+}
 
 func validateUnit(u vmwire.Unit, start bool) error {
 	if u.Name == vmwire.AuditUnitName {
@@ -178,7 +235,7 @@ func (u *managedUnit) start() error {
 	u.cmd, u.logDone = cmd, drained
 	return nil
 }
-func (u *managedUnit) watch() {
+func (m *unitRegistry) watch(u *managedUnit) {
 	defer close(u.done)
 	for {
 		u.mu.Lock()
@@ -186,7 +243,7 @@ func (u *managedUnit) watch() {
 		u.mu.Unlock()
 		e := cmd.Wait()
 		ownedChildren.Delete(cmd.Process.Pid)
-		cleanup := cleanGroup(unitGroup(u.spec.Name))
+		cleanup := m.clean(unitGroup(u.spec.Name))
 		// A successful cgroup cleanup has retired the inherited writers: join
 		// the consumer before publishing final state. If cleanup failed, retain
 		// the relay instead of closing its reader and losing descendant output.
@@ -211,7 +268,7 @@ func (u *managedUnit) watch() {
 			u.mu.Unlock()
 			return
 		}
-		e = u.start()
+		e = m.launch(u)
 		u.failed = e
 		u.mu.Unlock()
 		if e != nil {
@@ -220,6 +277,122 @@ func (u *managedUnit) watch() {
 	}
 }
 func manageUnit(r vmwire.UnitRequest) (string, error) {
+	return unitManager.manage(r)
+}
+
+func (m *unitRegistry) list(action, prefix string) string {
+	complete := action == "inventory" || prefix == vmwire.LegacyPortUnitPrefix
+	matches := func(name string) bool {
+		return strings.HasPrefix(name, prefix) ||
+			prefix == vmwire.LegacyPortUnitPrefix && strings.HasPrefix(name, vmwire.OpenShellPortUnitPrefix)
+	}
+	m.Lock()
+	var names []string
+	for name := range m.units {
+		if matches(name) {
+			names = append(names, name)
+		}
+	}
+	for name, entry := range m.names {
+		if entry.starting && m.units[name] == nil && matches(name) {
+			names = append(names, name)
+		}
+	}
+	m.Unlock()
+	if !complete {
+		names = slices.DeleteFunc(names, func(name string) bool {
+			u := m.observe(name)
+			if u == nil {
+				return true
+			}
+			u.mu.Lock()
+			defer u.mu.Unlock()
+			return u.cmd == nil || u.stopping
+		})
+	}
+	sort.Strings(names)
+	return strings.Join(names, "\n")
+}
+
+func (m *unitRegistry) start(spec vmwire.Unit) error {
+	entry, unlock := m.lockName(spec.Name)
+	defer unlock()
+	if previous := m.lookup(spec.Name); previous != nil {
+		select {
+		case <-previous.done:
+		default:
+			return errors.New("managed service already exists")
+		}
+	}
+	u := &managedUnit{spec: spec, stop: make(chan struct{}), done: make(chan struct{})}
+	m.Lock()
+	entry.starting = true
+	m.Unlock()
+	err := m.launch(u)
+	m.Lock()
+	entry.starting = false
+	if err == nil {
+		m.units[spec.Name] = u
+	}
+	m.Unlock()
+	if err == nil {
+		go m.watch(u)
+	}
+	return err
+}
+
+func (m *unitRegistry) cleanup(u *managedUnit, remove bool) error {
+	name := u.spec.Name
+	_, unlock := m.lockName(name)
+	defer unlock()
+	// A finished service can be replaced under the same name.
+	if m.lookup(name) != u {
+		return nil
+	}
+	if err := m.clean(unitGroup(name)); err != nil {
+		return err
+	}
+	if remove {
+		m.Lock()
+		delete(m.units, name)
+		m.Unlock()
+	}
+	return nil
+}
+
+func (m *unitRegistry) stop(name string) error {
+	_, unlock := m.lockName(name)
+	u := m.lookup(name)
+	if u == nil {
+		unlock()
+		return nil
+	}
+	u.mu.Lock()
+	if !u.stopping {
+		u.stopping = true
+		close(u.stop)
+		if u.cmd != nil {
+			_ = u.cmd.Process.Signal(syscall.SIGTERM)
+		}
+	}
+	u.mu.Unlock()
+	unlock()
+	select {
+	case <-u.done:
+	case <-time.After(10 * time.Second):
+		if err := m.cleanup(u, false); err != nil {
+			return err
+		}
+		select {
+		case <-u.done:
+		case <-time.After(3 * time.Second):
+			return errors.New("guest service did not stop")
+		}
+	}
+	return m.cleanup(u, true)
+}
+
+func (m *unitRegistry) manage(r vmwire.UnitRequest) (string, error) {
 	if r.Action == vmwire.AuditCapabilityAction {
 		if r.Unit.Name != vmwire.AuditUnitName || len(r.Unit.Args) != 0 || len(r.Unit.Env) != 0 || r.Unit.Restart {
 			return "", errors.New("invalid audit capability query")
@@ -230,50 +403,18 @@ func manageUnit(r vmwire.UnitRequest) (string, error) {
 		if r.Unit.Name != vmwire.LegacyPortUnitPrefix && r.Unit.Name != vmwire.OpenShellPortUnitPrefix && r.Unit.Name != "yoloctl-session-" {
 			return "", errors.New("unsupported service inventory")
 		}
-		unitManager.Lock()
-		defer unitManager.Unlock()
-		var names []string
-		for name, u := range unitManager.units {
-			u.mu.Lock()
-			matches := strings.HasPrefix(name, r.Unit.Name) || (r.Unit.Name == vmwire.LegacyPortUnitPrefix && strings.HasPrefix(name, vmwire.OpenShellPortUnitPrefix))
-			// The logical port view includes retained/restarting services of
-			// both transports. Keep the old list opcode for legacy VM images;
-			// new native effects separately require the inventory opcode.
-			if matches && (r.Action == "inventory" || r.Unit.Name == vmwire.LegacyPortUnitPrefix || (u.cmd != nil && !u.stopping)) {
-				names = append(names, name)
-			}
-			u.mu.Unlock()
-		}
-		sort.Strings(names)
-		return strings.Join(names, "\n"), nil
+		return m.list(r.Action, r.Unit.Name), nil
 	}
 	if e := validateUnit(r.Unit, r.Action == "start"); e != nil {
 		return "", e
 	}
-	unitManager.Lock()
-	u := unitManager.units[r.Unit.Name]
-	if r.Action == "start" {
-		if u != nil {
-			select {
-			case <-u.done:
-			default:
-				unitManager.Unlock()
-				return "", errors.New("managed service already exists")
-			}
-		}
-		u = &managedUnit{spec: r.Unit, stop: make(chan struct{}), done: make(chan struct{})}
-		if e := u.start(); e != nil {
-			unitManager.Unlock()
-			return "", e
-		}
-		unitManager.units[r.Unit.Name] = u
-		unitManager.Unlock()
-		go u.watch()
-		return "", nil
-	}
-	unitManager.Unlock()
 	switch r.Action {
+	case "start":
+		return "", m.start(r.Unit)
+	case "stop":
+		return "", m.stop(r.Unit.Name)
 	case "process":
+		u := m.observe(r.Unit.Name)
 		observation := vmwire.UnitProcess{Name: r.Unit.Name, State: "inactive"}
 		if u != nil {
 			u.mu.Lock()
@@ -299,6 +440,7 @@ func manageUnit(r vmwire.UnitRequest) (string, error) {
 		raw, err := json.Marshal(observation)
 		return string(raw), err
 	case "state":
+		u := m.observe(r.Unit.Name)
 		if u == nil {
 			return "inactive", nil
 		}
@@ -316,48 +458,6 @@ func manageUnit(r vmwire.UnitRequest) (string, error) {
 		default:
 			return "activating", nil
 		}
-	case "stop":
-		if u == nil {
-			return "", nil
-		}
-		u.mu.Lock()
-		if !u.stopping {
-			u.stopping = true
-			close(u.stop)
-			if u.cmd != nil {
-				_ = u.cmd.Process.Signal(syscall.SIGTERM)
-			}
-		}
-		u.mu.Unlock()
-		// A finished service can be replaced under the same name. An old stop
-		// request must never kill the replacement's cgroup.
-		cleanup := func(remove bool) error {
-			unitManager.Lock()
-			defer unitManager.Unlock()
-			if unitManager.units[r.Unit.Name] != u {
-				return nil
-			}
-			if e := cleanGroup(unitGroup(u.spec.Name)); e != nil {
-				return e
-			}
-			if remove {
-				delete(unitManager.units, r.Unit.Name)
-			}
-			return nil
-		}
-		select {
-		case <-u.done:
-		case <-time.After(10 * time.Second):
-			if e := cleanup(false); e != nil {
-				return "", e
-			}
-			select {
-			case <-u.done:
-			case <-time.After(3 * time.Second):
-				return "", errors.New("guest service did not stop")
-			}
-		}
-		return "", cleanup(true)
 	default:
 		return "", fmt.Errorf("unknown guest service action %q", r.Action)
 	}

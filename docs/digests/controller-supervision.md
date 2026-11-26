@@ -74,7 +74,7 @@ VM restart, or recovery guarantee for PID 1/VM death or unkillable workers.
 ## Sources
 
 1. <a id="source-1"></a> [Controller supervisor](../../internal/vmguest/controller_linux.go#L1) — launcher, `start`, `watch`, `wait`, `stop`, counters and states.
-2. <a id="source-2"></a> [Guest units](../../internal/vmguest/units_linux.go#L65) — `prepareGroup`, `cleanGroup`.
+2. <a id="source-2"></a> [Guest units](../../internal/vmguest/units_linux.go#L145) — `prepareGroup`, `cleanGroup`.
 3. <a id="source-3"></a> [Supervisor tests](../../internal/vmguest/controller_linux_test.go#L1) — virtual-clock transitions, episode boundaries, cleanup failures, concurrent stop/start and owned real children.
 4. <a id="source-4"></a> [Guest dispatch](../../internal/vmguest/init_linux.go#L526) — `service`, `shutdown`.
 5. <a id="source-5"></a> [Deployment guard](../../cmd/yoloctl/controller_deploy.go#L122) — `drainControllerForDeployment`.

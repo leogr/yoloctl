@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/port"
 	"github.com/leogr/yoloctl/internal/vmwire"
@@ -128,4 +130,139 @@ func TestManagedForwardInventoryIncludesRestartGapsAndRetainsBothPrefixes(t *tes
 	if err != nil || managed != listed {
 		t.Fatal("managed view omitted a retained/restarting port service", managed, err)
 	}
+}
+
+func TestManagedStopOrdersAgainstPendingStart(t *testing.T) {
+	const name = "yoloctl-session-pending.service"
+	for _, previous := range []bool{false, true} {
+		for _, fails := range []bool{false, true} {
+			synctest.Test(t, func(t *testing.T) {
+				starting, release := make(chan struct{}), make(chan struct{})
+				launchErr := errors.New("fixture preparation failure")
+				m := unitRegistry{
+					units: make(map[string]*managedUnit),
+					names: make(map[string]*unitName),
+					clean: func(string) error { return nil },
+					launch: func(u *managedUnit) error {
+						close(starting)
+						<-release
+						if fails {
+							return launchErr
+						}
+						cmd := exec.Command("sleep", "60")
+						if err := startOwned(cmd); err != nil {
+							return err
+						}
+						u.cmd = cmd
+						t.Cleanup(func() { _ = cmd.Process.Kill() })
+						return nil
+					},
+				}
+				if previous {
+					u := &managedUnit{spec: vmwire.Unit{Name: name}, stop: make(chan struct{}), done: make(chan struct{})}
+					close(u.done)
+					m.units[name] = u
+				}
+				started, stopped := make(chan error, 1), make(chan error, 1)
+				go func() {
+					_, err := m.manage(vmwire.UnitRequest{Action: "start", Unit: vmwire.Unit{
+						Name: name, Args: []string{vmwire.GuestBinary, "session-hold", "fixture"},
+					}})
+					started <- err
+				}()
+				<-starting
+				go func() {
+					_, err := m.manage(vmwire.UnitRequest{Action: "stop", Unit: vmwire.Unit{Name: name}})
+					stopped <- err
+				}()
+				synctest.Wait()
+				select {
+				case err := <-stopped:
+					t.Errorf("stop acknowledged before preparation settled (previous=%t, fails=%t): %v", previous, fails, err)
+					stopped <- err
+				default:
+				}
+				roster, err := m.manage(vmwire.UnitRequest{Action: "inventory", Unit: vmwire.Unit{Name: "yoloctl-session-"}})
+				if err != nil || roster != name {
+					t.Errorf("pending name must appear once: %q, %v", roster, err)
+				}
+				close(release)
+				if err := <-started; (fails && !errors.Is(err, launchErr)) || (!fails && err != nil) {
+					t.Errorf("start (fails=%t): %v", fails, err)
+				}
+				if err := <-stopped; err != nil || m.lookup(name) != nil || len(m.names) != 0 {
+					t.Errorf("stop failed to retire the selected unit and release the reservation: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestManagedStopCleanupDoesNotTouchReplacement(t *testing.T) {
+	spec := vmwire.Unit{Name: "yoloctl-session-pending.service"}
+	old := &managedUnit{spec: spec}
+	replacement := &managedUnit{spec: spec}
+	m := unitRegistry{
+		units: map[string]*managedUnit{spec.Name: replacement},
+		names: make(map[string]*unitName),
+		clean: func(string) error { t.Error("stale cleanup signaled a replacement"); return nil },
+	}
+	for _, remove := range []bool{false, true} {
+		if err := m.cleanup(old, remove); err != nil || m.lookup(spec.Name) != replacement {
+			t.Fatalf("stale cleanup changed the selected unit: %v", err)
+		}
+	}
+}
+
+func TestManagedPortWithdrawalCanPassStalledRestart(t *testing.T) {
+	const a = "yoloctl-port-alpha-8000-80.service"
+	const b = "yoloctl-port-beta-9000-90.service"
+	t.Run("complete inventory", func(t *testing.T) {
+		restarting, release := make(chan struct{}), make(chan struct{})
+		cmd := exec.Command("false")
+		if err := startOwned(cmd); err != nil {
+			t.Fatal(err)
+		}
+		alpha := &managedUnit{spec: vmwire.Unit{Name: a, Restart: true}, cmd: cmd, stop: make(chan struct{}), done: make(chan struct{})}
+		beta := &managedUnit{spec: vmwire.Unit{Name: b}, stop: make(chan struct{}), done: make(chan struct{})}
+		close(beta.done)
+		m := unitRegistry{
+			units: map[string]*managedUnit{a: alpha, b: beta},
+			names: make(map[string]*unitName),
+			clean: func(string) error { return nil },
+			launch: func(u *managedUnit) error {
+				close(restarting)
+				<-release
+				return errors.New("fixture restart aborted")
+			},
+		}
+		go m.watch(alpha)
+		<-restarting
+		finished := make(chan struct{})
+		go func() {
+			defer close(finished)
+			for _, action := range []string{"inventory", "list"} {
+				got, err := m.manage(vmwire.UnitRequest{Action: action, Unit: vmwire.Unit{Name: vmwire.LegacyPortUnitPrefix}})
+				if err != nil || got != a+"\n"+b {
+					t.Errorf("%s must include both boxes: %q, %v", action, got, err)
+				}
+			}
+			if _, err := m.manage(vmwire.UnitRequest{Action: "stop", Unit: vmwire.Unit{Name: b}}); err != nil {
+				t.Error(err)
+			}
+			got, err := m.manage(vmwire.UnitRequest{Action: "inventory", Unit: vmwire.Unit{Name: vmwire.LegacyPortUnitPrefix}})
+			if err != nil || got != a || m.lookup(a) != alpha {
+				t.Errorf("beta stop must leave alpha alone: %q, %v", got, err)
+			}
+		}()
+		// A failure here means the inventory waited on alpha's held mutex.
+		select {
+		case <-finished:
+		case <-time.After(30 * time.Second):
+			t.Error("beta withdrawal waited for alpha's restart")
+		}
+		close(release)
+		<-finished
+		<-alpha.done
+	})
 }

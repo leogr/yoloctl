@@ -26,6 +26,13 @@ stop joining and VM-image rollout are recorded separately. [6](#source-6)
 Each incarnation gets a fresh cgroup, and cleanup verifies it is empty.
 This avoids the upstream `CLONE_INTO_CGROUP`/`cgroup.kill` bug. [7](#source-7) [8](#source-8) [9](#source-9)
 
+[FACT] An admitted managed-unit start reserves its name through preparation
+and publication. A stop of that name waits for the reservation and captures
+the selected incarnation. Cleanup rechecks that incarnation before a kill or
+deletion. Complete unit inventory and the legacy port list include reserved
+and retained names without waiting for a process restart. Withdrawal then
+filters those names for the target box. [8](#source-8) [16](#source-16) [17](#source-17)
+
 [FACT] Deployment groups native-disk verification, store activation and service
 startup. Native box readiness uses a bounded Unix-socket SSH greeting probe. Container stop signals all task processes before
 the bounded nerdctl stop, allowing the OpenShell supervised child to exit.
@@ -54,3 +61,5 @@ not Firecracker/KVM behavior. The adapter boots fresh; snapshots remain experime
 13. <a id="source-13"></a> [Software gate](../../internal/firecracker/software_linux_test.go#L1) — `TestSoftwareVM`
 14. <a id="source-14"></a> [test-only carrier](../../internal/vmguest/transport_software_linux.go#L1).
 15. <a id="source-15"></a> [experiment](../../scripts/experiments/firecracker/poc.py#L1) .
+16. <a id="source-16"></a> [Port withdrawal](../../internal/agentbox/openshell_withdraw.go#L28) — `WithdrawNativeForwards`.
+17. <a id="source-17"></a> [Box filter](../../internal/port/inventory.go#L43) — `parseForwardInventory`.

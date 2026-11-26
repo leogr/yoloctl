@@ -135,7 +135,7 @@ health is bound to the selected generation. [24](#source-24)
 
 18. <a id="source-18"></a> [Metadata extraction](audit-metadata.md) — C ABI, generation/freshness/identity bounds, packaging and limits.
 
-19. <a id="source-19"></a> [Fixed PID-1 audit unit](../../internal/vmguest/units_linux.go#L39) — `validateUnit`, `manageUnit`; closed launch/query regressions in audit_unit_linux_test.go.
+19. <a id="source-19"></a> [Fixed PID-1 audit unit](../../internal/vmguest/units_linux.go#L99) — `validateUnit`, `manageUnit`; closed launch/query regressions in audit_unit_linux_test.go.
 20. <a id="source-20"></a> [Firecracker support query](../../internal/vmservice/service.go#L211-L253) — `AuditSupported`; old-image pre-effect regression in cmd/yoloctl/audit_image_linux_test.go.
 21. <a id="source-21"></a> [Kernel recipe](../../assets/vm/firecracker/inputs.py#L38) — `KERNEL_EXTRAS`, `publish_kernel`; cross-host ELF/config regression in assets/audit_kernel_test.go.
 
