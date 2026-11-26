@@ -1,13 +1,16 @@
 package term
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -97,6 +100,10 @@ func TestManagedViewChild(t *testing.T) {
 		snapshot = snapshot[n:]
 	}
 	send('S', nil)
+	if os.Getenv("YOLOCTL_TEST_VIEW_EXIT_ON_SNAPSHOT") == "1" {
+		send('e', []byte{0, 0, 0, 0})
+		os.Exit(0)
+	}
 	metadataDone := make(chan struct{})
 	go func() {
 		defer close(metadataDone)
@@ -256,5 +263,70 @@ func TestPrivateHandshakeFailureDoesNotLeaveCLIHanging(t *testing.T) {
 	err = s.Wait(time.Second)
 	if err == nil || !strings.Contains(err.Error(), "protocol mismatch") {
 		t.Fatalf("missing actionable mismatch: %v", err)
+	}
+}
+
+func TestManagedSnapshotDuringChildExitAndPaneClose(t *testing.T) {
+	oldRestore, oldDrain := restoreManagedSnapshot, managedDrainFailSafe
+	t.Cleanup(func() { restoreManagedSnapshot, managedDrainFailSafe = oldRestore, oldDrain })
+	managedDrainFailSafe = 25 * time.Millisecond
+	for _, closePane := range []bool{false, true} {
+		name := "finish decode after exit"
+		if closePane {
+			name = "pane close cancels decode"
+		}
+		t.Run(name, func(t *testing.T) {
+			started, release, canceled := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			restoreManagedSnapshot = func(ctx context.Context, data []byte, reply func([]byte)) (*terminal.Terminal, error) {
+				close(started)
+				select {
+				case <-ctx.Done():
+					close(canceled)
+					return nil, ctx.Err()
+				case <-release:
+					return oldRestore(ctx, data, reply)
+				}
+			}
+			s, err := Start(Options{
+				Argv:        []string{os.Args[0], "-test.run=^TestManagedViewChild$"},
+				Env:         append(os.Environ(), "YOLOCTL_TEST_VIEW_CHILD=1", "YOLOCTL_TEST_VIEW_EXIT_ON_SNAPSHOT=1"),
+				TrustedView: true, Rows: 8, Cols: 60,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			select {
+			case <-started:
+			case <-time.After(4 * time.Second):
+				t.Fatal("snapshot never reached decoder")
+			}
+			if closePane {
+				s.Close()
+				select {
+				case <-canceled:
+				case <-time.After(time.Second):
+					t.Fatal("pane close did not cancel its decoder")
+				}
+				_ = s.Wait(time.Second)
+				return
+			}
+			awaitManagedFixture(t, "child reap", func() bool {
+				return errors.Is(s.cmd.Process.Signal(syscall.Signal(0)), os.ErrProcessDone)
+			})
+			select {
+			case <-canceled:
+				t.Fatal("transport drain deadline canceled an already-received snapshot")
+			case <-time.After(3 * managedDrainFailSafe):
+			}
+			close(release)
+			if err := s.Wait(4 * time.Second); err != nil {
+				t.Fatal(err)
+			}
+			screen := s.GridText()
+			if !strings.Contains(screen, "PRIVATE_SCREEN") {
+				t.Fatalf("completed pane lost the snapshot: %s", screen)
+			}
+		})
 	}
 }

@@ -71,7 +71,7 @@ The end banner says `Press Enter to close` and appends any `EndHint`
 3. <a id="source-3"></a> [Mouse routing](../../internal/tui/mouse.go#L262-L265) — `handleMouse` calls `endedButtonClick` after popups and before chrome.
 4. <a id="source-4"></a> [Drawing order](../../internal/tui/tui.go#L1940) — `applyEndedButtons` before `applyOverlay`.
 5. <a id="source-5"></a> [Tests](../../internal/tui/reattach_test.go#L17) — `TestReattachArgs`, `TestEndedAttachReattachesInPlace`, `TestReattachOnlyEndedAttachViews`, `TestReattachButton`, `TestCloseEndedViewButton`, `TestReattachKeyIgnoresLockModifiers`; `reopen_test.go`, `reopen_launch_test.go` and `reopen_args_test.go` cover non-box actions, actual child argv/context changes, exclusions and clipping.
-6. <a id="source-6"></a> [End banner](../../internal/tui/term/session.go#L455) — `writeExitBanner`, `ExitCloseHint`; `TestExitBannerEndHint` in term_test.go; `attachedSetupOutput` in attach.go.
+6. <a id="source-6"></a> [End banner](../../internal/tui/term/session.go#L453) — `writeExitBanner`, `ExitCloseHint`; `TestExitBannerEndHint` in term_test.go; `attachedSetupOutput` in attach.go.
 
 7. <a id="source-7"></a> [Host publication](../../cmd/yoloctl/resume_target.go#L35) — `publishControllerResumeTarget`, `publishResumeTarget`; `callControllerTerminal` in controller_client.go publishes before dispatch; `TestHostLifecycleResumeTargetThroughClientRoot` in resume_target_test.go.
 8. <a id="source-8"></a> [Typed framing](../../internal/termio/tabrequest.go#L15) — `TabRequest`, `ValidateResumeTarget`, `ReadTabRequests`; `claimTabRequests` in cmd/yoloctl/resume_target.go and startup in main.go; chat_view.go/space_view.go consume that context channel.

@@ -322,7 +322,7 @@ declared box.
 			if err := validateAgentboxName(args[0]); err != nil {
 				return err
 			}
-			resolved, err := newBoxStateResolver().ResolveOne(cmd.Context(), spaceName, args[0], boxstate.FullDiff)
+			resolved, err := newBoxStateResolver().ResolveOneView(cmd.Context(), spaceName, args[0], boxstate.FullDiff)
 			if err != nil {
 				return err
 			}
@@ -2823,9 +2823,9 @@ display state.
 				if err := resolveSpaceFlag(cmd, &spaceName); err != nil {
 					return err
 				}
-				boxes, err = newBoxStateResolver().ResolveSpace(cmd.Context(), spaceName, boxstate.RuntimeSummary)
+				boxes, err = newBoxStateResolver().ResolveSpaceSummary(cmd.Context(), spaceName)
 			} else {
-				boxes, err = newBoxStateResolver().ResolveAll(cmd.Context(), boxstate.RuntimeSummary)
+				boxes, err = newBoxStateResolver().ResolveAllSummary(cmd.Context())
 			}
 			if err != nil {
 				return err

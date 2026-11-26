@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/terminal"
@@ -34,12 +33,7 @@ type statsRequest struct {
 	Core   string `json:"core"`
 }
 
-const (
-	// StatsTimeout bounds one whole stats read. Samplers reading many holders
-	// also share one deadline across them.
-	StatsTimeout  = 500 * time.Millisecond
-	maxStatsReply = 4 << 10
-)
+const maxStatsReply = 4 << 10
 
 // serveStats answers one stats request on a connection that will be closed.
 // It admits no viewer and emits nothing to viewers, so sampling cannot change
@@ -89,8 +83,6 @@ const holderMismatchReason = "session build/core mismatch"
 // holder must run this exact build and terminal core; anything else is an
 // error, never zero counters.
 func ReadStats(ctx context.Context, socket string) (Stats, error) {
-	ctx, cancel := context.WithTimeout(ctx, StatsTimeout)
-	defer cancel()
 	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", socket)
 	if err != nil {
 		return Stats{}, err
@@ -98,10 +90,11 @@ func ReadStats(ctx context.Context, socket string) (Stats, error) {
 	defer func() { _ = conn.Close() }()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
-	if deadline, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(deadline)
+	stats, err := readStats(conn)
+	if err != nil && ctx.Err() != nil {
+		return Stats{}, ctx.Err()
 	}
-	return readStats(conn)
+	return stats, err
 }
 
 func readStats(conn net.Conn) (Stats, error) {

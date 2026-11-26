@@ -15,6 +15,8 @@ import (
 
 const MaxTargets = 64
 
+const viewProbeFailSafe = 2 * time.Minute
+
 type Context struct{ Mode, Space, Base, Root string }
 type Target struct{ Mode, Space, Path, Root string }
 
@@ -89,7 +91,7 @@ func (n *Navigator) Check(ctx context.Context, t Target) error {
 	if n == nil || !n.Context.Accept(t) || n.Probe == nil {
 		return errors.New("local file navigation unavailable")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 7*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, viewProbeFailSafe)
 	defer cancel()
 	results := n.Probe(ctx, []Target{t})
 	err, ok := results[t]
@@ -128,7 +130,7 @@ func (n *Navigator) AdmitDestinations(ctx context.Context, destinations []string
 	if len(targets) == 0 {
 		return admitted
 	}
-	ctx, cancel := context.WithTimeout(ctx, 7*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, viewProbeFailSafe)
 	defer cancel()
 	results := n.Probe(ctx, targets)
 	for s, t := range byDestination {

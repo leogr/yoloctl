@@ -109,9 +109,10 @@ input counters for `space view`. It requires the exact build and admits no
 viewer, so sampling never changes the session. [11](#source-11)
 
 [FACT] The private protocol also carries bounded user-initiated PNG uploads
-and single-view browser requests. The holder uses confined SSH channels to
-create guest temporary files/helpers; no session socket is exposed to the
-workload. Host approval/clipboard reads stay in the managed frontend, outside
+and single-view browser requests. The holder uses confined SSH to create guest temporary files and helpers.
+An image operation has its own connection to the holder's sandbox endpoint,
+so ending the operation leaves the terminal connected. The session socket
+stays outside the workload. Host approval/clipboard reads stay in the managed frontend, outside
 VT replay and snapshots. Passthrough remains terminal-only. [7](#source-7)
 
 [FACT] Runtime stop/recreate must clean holder and session artifacts consistently.

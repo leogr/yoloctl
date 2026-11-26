@@ -68,6 +68,8 @@ type state struct {
 	accepted uint64
 }
 
+var restoreBoxUseSnapshot = terminal.RestoreSnapshot
+
 func newState() *state { return &state{changed: make(chan struct{})} }
 
 func (s *state) close() {
@@ -95,7 +97,7 @@ func (s *state) apply(ctx context.Context, e session.ViewEvent) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(e.Snapshot) > 0 {
-		vt, err := terminal.RestoreSnapshot(ctx, e.Snapshot, func([]byte) {})
+		vt, err := restoreBoxUseSnapshot(ctx, e.Snapshot, func([]byte) {})
 		if err != nil {
 			return err
 		}

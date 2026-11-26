@@ -73,7 +73,7 @@ type fakeSandbox struct {
 	ch      ssh.Channel   // the session channel, for the test to script
 }
 
-func startFakeSandbox(t *testing.T, sockPath string) *fakeSandbox {
+func startFakeSandbox(t *testing.T, sockPath string, browser ...func(ssh.NewChannel)) *fakeSandbox {
 	t.Helper()
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -118,6 +118,12 @@ func startFakeSandbox(t *testing.T, sockPath string) *fakeSandbox {
 		for newCh := range chans {
 			if newCh.ChannelType() != "session" {
 				_ = newCh.Reject(ssh.UnknownChannelType, "session only")
+				continue
+			}
+			if len(browser) != 0 {
+				handle := browser[0]
+				browser = browser[1:]
+				go handle(newCh)
 				continue
 			}
 			ch, chReqs, err := newCh.Accept()
@@ -840,7 +846,7 @@ func TestHolderReleasesClientAcceptedAfterClose(t *testing.T) {
 			t.Cleanup(h.terminalInput.Close)
 			h.broadcast([]byte("final screen"))
 			h.closeClients(tc.exitPayload)
-			go h.acceptLoop(ln)
+			go h.acceptLoop(t.Context(), ln)
 
 			late := attach(t, context.Background(), opts.AttachSocket)
 			got := late.wait(t)
@@ -966,5 +972,67 @@ func TestHolderCancellationInterruptsInitialUnixDial(t *testing.T) {
 	}
 	if _, err := os.Stat(opts.MarkerPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("cancelled dial published an agent marker: %v", err)
+	}
+}
+
+func TestOptionalBrowserStartupDoesNotPreventAttach(t *testing.T) {
+	saved := browserBridgeSetupBudget
+	browserBridgeSetupBudget = 120 * time.Millisecond
+	t.Cleanup(func() { browserBridgeSetupBudget = saved })
+	for _, mode := range []string{"silent READY", "delayed open and silent start"} {
+		t.Run(mode, func(t *testing.T) {
+			opts, _ := testPaths(t)
+			opts.HostIntegration = true
+			bridgeRequested := make(chan struct{})
+			fs := startFakeSandbox(t, opts.SSHSocket, func(newChannel ssh.NewChannel) {
+				if mode != "silent READY" {
+					time.Sleep(browserBridgeSetupBudget / 2)
+				}
+				ch, requests, err := newChannel.Accept()
+				if err != nil {
+					return
+				}
+				defer func() { _ = ch.Close() }()
+				req, ok := <-requests
+				if !ok {
+					return
+				}
+				close(bridgeRequested)
+				if mode == "silent READY" {
+					_ = req.Reply(true, nil)
+				}
+				<-t.Context().Done()
+			})
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			res := runHolderAsync(ctx, opts)
+			select {
+			case <-bridgeRequested:
+			case <-time.After(4 * time.Second):
+				t.Fatal("holder did not attempt optional bridge setup")
+			}
+			select {
+			case <-fs.started:
+			case <-time.After(4 * time.Second):
+				t.Fatal("optional browser setup prevented agent start")
+			}
+			a := attachWhenReady(t, opts.AttachSocket)
+			fs.emit("ordinary session")
+			waitFor(t, "normal attached output", func() bool { return a.output() == "ordinary session" })
+			fs.exit(0)
+			if err := a.wait(t); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case <-res:
+			case <-time.After(4 * time.Second):
+				t.Fatal("holder did not exit")
+			}
+			fs.mu.Lock()
+			defer fs.mu.Unlock()
+			if len(fs.execs) != 1 || !strings.HasPrefix(fs.execs[0], "'agent' ") {
+				t.Fatalf("normal command did not launch exactly once: %q", fs.execs)
+			}
+		})
 	}
 }

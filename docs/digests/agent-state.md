@@ -63,10 +63,10 @@ wait or a failure, so it is never tagged, and agentless boxes have no state.
 
 1. <a id="source-1"></a> [Reader](../../internal/agentsession/observe/read.go#L85-L112) — `Context.Valid`, the `State*` constants, `ValidState`, `Waiting`; `stateEvents`, `contextEvents`, `stateOnlyEvents` at L437-L450, `wireEvent.context` at L413, `parseLine` at L452-L499.
 2. <a id="source-2"></a> [Reader regressions](../../internal/agentsession/observe/observe_test.go#L795-L839) — `TestReadStateAndUsedOnlyContext`: state values and events, subagent and state-only lines, used-only context.
-3. <a id="source-3"></a> [Fold](../../internal/agentsession/apply.go#L257-L290) — `applyLine`: context from any line carrying one, the state rule, the Codex recovery and the wait resolution.
+3. <a id="source-3"></a> [Fold](../../internal/agentsession/apply.go#L258-L291) — `applyLine`: context from any line carrying one, the state rule, the Codex recovery and the wait resolution.
 4. <a id="source-4"></a> [Record](../../internal/agentsession/record.go#L1-L501) — `ObservedState`, `ObservedContext` with optional size and percent, the state and context checks in `Validate`.
 5. <a id="source-5"></a> [Fold regressions](../../internal/agentsession/apply_test.go#L461-L711) — `TestApplyFoldsTheAgentState`: order cases, subagents, used-only context, line and details text; `TestApplyClearsACodexFailureOnlyOnACompletedRequest`: recovery and its negatives; state validation cases at L293.
-6. <a id="source-6"></a> [Public view](../../internal/agentsession/status.go#L143-L170) — `StateView`, `StateText`; `ContextView.text` at L407, `Lines` at L368, `Line` at L420.
+6. <a id="source-6"></a> [Public view](../../internal/agentsession/status.go#L144-L171) — `StateView`, `StateText`; `ContextView.text` at L407, `Lines` at L368, `Line` at L420.
 7. <a id="source-7"></a> [Shape regressions](../../cmd/yoloctl/box_session_test.go#L100-L170) — `statusFixture`, `checkConversationShape` with the state keys.
 8. <a id="source-8"></a> [Chat state](../../internal/chatui/runtime.go#L26-L50) — `RuntimeState`, the state constants, `SourceActivity`; `RuntimeContext.text` at L189, `runtimeRows` at L208, `stateOf`, `stateText`, `stateTag` at L253-L318.
 9. <a id="source-9"></a> [Panel tag](../../internal/chatui/roster.go#L267-L343) — `memberCard`, `stateTagRun` at L336; the adapter in cmd/yoloctl/chat_participant_runtime.go `participantRuntime`.

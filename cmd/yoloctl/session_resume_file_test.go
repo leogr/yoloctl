@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/accountstate"
 	"github.com/leogr/yoloctl/internal/agentbox"
@@ -145,21 +146,53 @@ func TestPersistedFreshAllocationDoesNotProbeOrMintAnotherIdentity(t *testing.T)
 	}
 }
 
-func TestNativeResumeProbeRequiresExplicitOutcomeAndHasDeadline(t *testing.T) {
+func TestNativeResumeProbeUsesItsOwnerDeadlineAndExplicitOutcome(t *testing.T) {
 	const id = "7c9e6679-7425-40de-944b-e07fc1f90ae7"
 	previous := accountStateOperation
 	t.Cleanup(func() { accountStateOperation = previous })
-	for _, outcome := range []string{"present", "absent", ""} {
-		accountStateOperation = func(ctx context.Context, _ string, req accountstate.Request) (accountstate.Result, error) {
-			if _, ok := ctx.Deadline(); !ok || req.Action != "resume-file" || string(req.Data) != id || req.Account != "account" {
-				t.Fatal("resume probe lost its bound or scope")
+	cfg := &agentbox.Config{Space: "space", Agent: "claude", Account: "account"}
+	spec := &agentprofile.SessionSpec{ResumeFile: "projects/*/{{session_id}}.jsonl"}
+	for _, tc := range []struct {
+		name, outcome string
+		owned         bool
+		budget        time.Duration
+	}{{"caller without deadline", "present", false, 0},
+		{"early caller", "absent", false, time.Minute},
+		{"long caller", "present", false, 3 * time.Minute},
+		{"owned setup", "present", true, 0},
+		{"owned setup earlier caller", "absent", true, time.Minute},
+		{"unknown outcome", "", false, 0}} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			if tc.owned {
+				ctx = context.WithValue(ctx, controllerOwnedSetupKey{}, true)
 			}
-			return accountstate.Result{Outcome: outcome}, nil
-		}
-		present, err := resumeFilePresent(t.Context(), &agentbox.Config{Space: "space", Agent: "claude", Account: "account"}, &agentprofile.SessionSpec{ResumeFile: "projects/*/{{session_id}}.jsonl"}, id)
-		if (err != nil) != (outcome == "") || (err == nil && present != (outcome == "present")) {
-			t.Fatal("ambiguous native reply became absence")
-		}
+			if tc.budget != 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tc.budget)
+				defer cancel()
+			}
+			deadline, hasDeadline := ctx.Deadline()
+			start := time.Now()
+			accountStateOperation = func(ctx context.Context, _ string, req accountstate.Request) (accountstate.Result, error) {
+				if req.Action != "resume-file" || string(req.Data) != id || req.Account != "account" {
+					t.Fatal("resume probe lost its scope")
+				}
+				got, ok := ctx.Deadline()
+				if tc.owned && !hasDeadline {
+					if !ok || got.Before(start.Add(ownedSessionProbeFailSafe)) || got.After(time.Now().Add(ownedSessionProbeFailSafe)) {
+						t.Fatalf("owned probe deadline = %v", got)
+					}
+				} else if ok != hasDeadline || got != deadline {
+					t.Fatalf("caller deadline = %v, %v, want %v, %v", got, ok, deadline, hasDeadline)
+				}
+				return accountstate.Result{Outcome: tc.outcome}, nil
+			}
+			present, err := resumeFilePresent(ctx, cfg, spec, id)
+			if (err != nil) != (tc.outcome == "") || (err == nil && present != (tc.outcome == "present")) {
+				t.Fatalf("presence result = %t, %v", present, err)
+			}
+		})
 	}
 }
 

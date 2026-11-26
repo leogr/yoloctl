@@ -324,7 +324,7 @@ func attachView(ctx context.Context, transport io.ReadWriteCloser, aio AttachIO)
 					return errors.New("incomplete session snapshot")
 				}
 				if aio.Host != nil {
-					aio.Host.begin(send, func() { _ = transport.Close() }, state.ImagePaste)
+					aio.Host.begin(ctx, send, func() { _ = transport.Close() }, state.ImagePaste)
 				}
 				if err := aio.OnEvent(ViewEvent{Snapshot: snapshot, Colors: &state.Colors, SessionID: state.Session, ClientID: state.Client, Input: &state.Input}); err != nil {
 					return err

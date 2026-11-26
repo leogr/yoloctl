@@ -271,7 +271,7 @@ func TestResolveNamedLimitsPerBoxWorkToTheNamedBoxes(t *testing.T) {
 			work["image"] = append(work["image"], cfg.Name)
 			return cfg.Image, false, nil
 		}
-		r.Conversation = func(b Box) *agentsession.Status {
+		r.Conversation = func(_ context.Context, b Box) *agentsession.Status {
 			work["conversation"] = append(work["conversation"], b.Name)
 			return nil
 		}
@@ -358,5 +358,68 @@ func TestDisplayPutsTheContainerFirst(t *testing.T) {
 				t.Errorf("runtime %s session %s: %s, want %s", runtime, session, got, want)
 			}
 		}
+	}
+}
+
+func TestResolveSpaceSummaryOmitsConversationWhenContainerListFails(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	saveBox(t, "default", "coder")
+	r := testResolver(nil)
+	reads := 0
+	r.Conversation = func(context.Context, Box) *agentsession.Status {
+		reads++
+		return &agentsession.Status{Provider: "codex"}
+	}
+
+	boxes, err := r.ResolveSpaceSummary(t.Context(), "default")
+	if err != nil || len(boxes) != 1 || boxes[0].Conversation == nil || reads != 1 {
+		t.Fatalf("conversation for a successful list = %+v, reads=%d, err=%v", boxes, reads, err)
+	}
+
+	r.ListContainers = func(context.Context, string) ([]container.Container, error) {
+		return nil, errors.New("engine unavailable")
+	}
+	boxes, err = r.ResolveSpaceSummary(t.Context(), "default")
+	if err != nil || len(boxes) != 1 {
+		t.Fatalf("failed list = %+v, %v", boxes, err)
+	}
+	box := boxes[0]
+	if box.Name != "coder" || box.Runtime != RuntimeUnavailable || box.State != DisplayUnavailable || box.Conversation != nil || reads != 1 {
+		t.Fatalf("failed list row = %+v, conversation reads = %d", box, reads)
+	}
+}
+
+func TestOptionalHolderSummaryKeepsResponsivePeer(t *testing.T) {
+	saved := sessionSummaryAllowance
+	sessionSummaryAllowance = 70 * time.Millisecond
+	t.Cleanup(func() { sessionSummaryAllowance = saved })
+	boxes := []Box{
+		{Name: "silent", Session: SessionInfo{State: SessionRunning, Build: SessionBuildUnknown}},
+		{Name: "responding", Session: SessionInfo{State: SessionRunning, Build: SessionBuildUnknown}},
+	}
+	silent := make(chan struct{}, 1)
+	r := Resolver{
+		HolderBuild: func(ctx context.Context, name string) SessionBuild {
+			if name == "responding" {
+				return SessionBuildCurrent
+			}
+			silent <- struct{}{}
+			<-ctx.Done()
+			return SessionBuildUnknown
+		},
+	}
+	got, err := r.enrichSessionSummary(t.Context(), slices.Clone(boxes))
+	if err != nil || len(got) != 2 || got[0].Session.Build != SessionBuildUnknown || got[1].Session.Build != SessionBuildCurrent {
+		t.Fatalf("summary = %+v, %v", got, err)
+	}
+	<-silent
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { _, err := r.enrichSessionSummary(ctx, slices.Clone(boxes)); done <- err }()
+	<-silent
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled summary = %v", err)
 	}
 }

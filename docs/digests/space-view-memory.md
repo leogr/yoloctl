@@ -82,5 +82,5 @@ breakdown from fixture cgroup files. They use fixtures, not a live VM.
 10. <a id="source-10"></a> [telemetry_test.go](../../internal/spacetelemetry/telemetry_test.go#L54-L73) — `TestParseMemStat`; `TestCollectorNamesUnreadMemoryCounters` L326-L357.
 11. <a id="source-11"></a> [memory_view_test.go](../../internal/tui/spaceview/memory_view_test.go#L33-L160) — fill, stale and heat regressions.
 12. <a id="source-12"></a> [memory_test.go](../../internal/tui/spaceview/memory_test.go#L40-L274) — estimate, cards, details, sort, pool and widths.
-13. <a id="source-13"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L183-L196) — inventory records the running container's ID.
+13. <a id="source-13"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L184-L197) — inventory records the running container's ID.
 14. <a id="source-14"></a> [memory_identity_test.go](../../internal/tui/spaceview/memory_identity_test.go#L1) — replacement and unknown identity; `TestStreamTelemetryCarriesBoxMemory` in cmd/yoloctl/space_telemetry_test.go.

@@ -176,7 +176,9 @@ type Resolver struct {
 	ResolvedImage  func(*agentbox.Config) (string, bool, error)
 	// Conversation describes a declared agent box's conversation identity.
 	// Nil skips it.
-	Conversation func(Box) *agentsession.Status
+	Conversation func(context.Context, Box) *agentsession.Status
+	// HolderBuild samples the optional build of a known running holder.
+	HolderBuild func(context.Context, string) SessionBuild
 	// Launcher reads how a box's container takes a managed session. Nil
 	// skips it; a failed read adds nothing (it is a warning only).
 	Launcher func(ctx context.Context, space, name string) (agentbox.LauncherSupport, error)
@@ -205,7 +207,8 @@ func NewResolver() Resolver {
 			}
 			return info
 		},
-		Conversation: func(b Box) *agentsession.Status {
+		HolderBuild: readHolderBuild,
+		Conversation: func(ctx context.Context, b Box) *agentsession.Status {
 			// Records live on the native disk; only a worker can read them.
 			if !spaceenv.Native() || b.Config == nil || !b.Config.HasAgent() {
 				return nil
@@ -214,7 +217,7 @@ func NewResolver() Resolver {
 			if err != nil {
 				return &agentsession.Status{Provider: b.Config.Agent, Policy: "unknown", Note: "agent profile unavailable: " + err.Error()}
 			}
-			return agentsession.Describe(b.Config, profile, b.Session.State == SessionRunning, b.Session.LaunchToken)
+			return agentsession.DescribeContext(ctx, b.Config, profile, b.Session.State == SessionRunning, b.Session.LaunchToken)
 		},
 		Launcher: func(ctx context.Context, space, name string) (agentbox.LauncherSupport, error) {
 			// Only a native worker can read the box's runtime record.
@@ -445,8 +448,8 @@ func (r Resolver) resolveSpace(ctx context.Context, space string, depth Depth, s
 		if depth == FullDiff {
 			r.resolveDrift(ctx, b)
 		}
-		if depth != RuntimeInventory && r.Conversation != nil && b.Config != nil {
-			b.Conversation = r.Conversation(*b)
+		if depth != RuntimeInventory && !defersInventoryDetails(ctx) && r.Conversation != nil && b.Config != nil {
+			b.Conversation = r.Conversation(ctx, *b)
 		}
 		if depth != RuntimeInventory && r.Launcher != nil && b.Declaration == DeclarationDeclared && (b.Runtime == RuntimeRunning || b.Runtime == RuntimeStopped) {
 			if support, err := r.Launcher(ctx, space, b.Name); err == nil {
@@ -622,8 +625,10 @@ func probeHolderMarker(ctx context.Context, c *container.Client, name string) (S
 	if m, ok := session.ReadVMMarker(ctx, c, name); ok {
 		holder, token = m.Identity(), m.LaunchToken
 	}
-	_, err := session.ReadStats(ctx, session.SocketPath(name))
-	return sessionBuild(err), holder, token
+	if defersInventoryDetails(ctx) {
+		return SessionBuildUnknown, holder, token
+	}
+	return readHolderBuild(ctx, name), holder, token
 }
 
 // sessionBuild classifies a stats handshake: only the holder's explicit

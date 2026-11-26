@@ -137,4 +137,4 @@ continues to come from the controller grant. [17](#source-17)
 
 25. <a id="source-25"></a> [internal/controller/holds.go](../../internal/controller/holds.go#L1) — `heldError`, `loadHolds` and dependency intersections.
 
-26. <a id="source-26"></a> [Controller entry](../../cmd/yoloctl/controller_internal.go#L140) — `runControllerInternal`, `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle` and `prepareRuntimeStorage`.
+26. <a id="source-26"></a> [Controller entry](../../cmd/yoloctl/controller_internal.go#L141) — `runControllerInternal`, `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle` and `prepareRuntimeStorage`.

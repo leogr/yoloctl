@@ -20,9 +20,9 @@ Codex and agy omit the field. [3](#source-3) [4](#source-4) [5](#source-5)
 
 [FACT] Before a new resume allocation, the controller checks ownership of
 `Target` (the last observed ID, otherwise the assigned one), then requests
-`resume-file` for that account/agent leaf. The request has the existing
-10-second guest-probe deadline; only explicit `present` or `absent` outcomes
-are accepted. Errors, including an empty response, refuse dispatch. Already
+`resume-file` for that account/agent leaf. The request follows the caller. Controller-owned attach setup gives this
+single request a two-minute fail-safe. Only explicit `present` or `absent`
+outcomes are accepted. Errors, including an empty response, refuse dispatch. Already
 allocated launches keep their recorded kind, ID, generation and token without
 another presence check. Ordinary live-holder, uncertain-launch and other-owner
 refusals remain; manual/never, explicit new-session and profiles without this
@@ -72,11 +72,11 @@ conversation resumes or validate login/provider behavior.
 4. <a id="source-4"></a> [Profile validation](../../internal/agentprofile/profile.go#L156) — `SessionSpec`, `validateSession`.
 5. <a id="source-5"></a> [Restricted pattern](../../internal/agentprofile/resume_file.go#L11) — `validateResumeFile`.
 6. <a id="source-6"></a> [Tracked launch](../../cmd/yoloctl/session_identity.go#L283) — `launch`, owner/preflight ordering and ordinary allocation/settlement.
-7. <a id="source-7"></a> [Presence request](../../cmd/yoloctl/session_resume_file.go#L15) — `resumeFilePresent`.
-8. <a id="source-8"></a> [Probe deadline](../../internal/lima/probe.go#L8) — `GuestProbeTimeout`, re-exported by `internal/vm`.
+7. <a id="source-7"></a> [Presence request](../../cmd/yoloctl/session_resume_file.go#L17) — `resumeFilePresent`.
+8. <a id="source-8"></a> [Controller-owned setup](../../cmd/yoloctl/controller_internal.go#L596) — worker context marks owned attach setup.
 9. <a id="source-9"></a> [Native helper](../../internal/accountstate/guest.py#L236) — `resume_file_present`, `run`, descriptor helpers.
 10. <a id="source-10"></a> [Conversation record](../../internal/agentsession/record.go#L72) — replacement reason, validation, `retire`, `save`.
-11. <a id="source-11"></a> [Shared status](../../internal/agentsession/status.go#L181) — `PreviousView.Text`, `Describe` note.
+11. <a id="source-11"></a> [Shared status](../../internal/agentsession/status.go#L182) — `PreviousView.Text`, `Describe` note.
 12. <a id="source-12"></a> [Native fixtures](../../internal/accountstate/testdata/test_guest.py#L21) — read-only presence, permissions, links/types and incomplete search.
-13. <a id="source-13"></a> [Launch regressions](../../cmd/yoloctl/session_resume_file_test.go#L21) — pre-dispatch decisions, replay and explicit native outcomes.
+13. <a id="source-13"></a> [Launch regressions](../../cmd/yoloctl/session_resume_file_test.go#L22) — pre-dispatch decisions, replay and explicit native outcomes.
 14. <a id="source-14"></a> [Pattern regressions](../../internal/agentprofile/resume_file_test.go#L1) — valid/invalid grammar and state/argv requirements.

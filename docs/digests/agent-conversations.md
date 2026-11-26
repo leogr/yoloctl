@@ -82,8 +82,8 @@ fixtures; no real Claude, VM, crash or reboot is exercised.
 8. <a id="source-8"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L170) — `plan`, `launch`, `uncertainError`, `checkOwner`, `namesConversation`.
 9. <a id="source-9"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L390) — `retireForNewSession`, `bindLiveLaunch`, `liveHolderError`.
 10. <a id="source-10"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L121-L160) — `noteExit`, `exitHint`, `noteHolderLost`.
-11. <a id="source-11"></a> [status.go](../../internal/agentsession/status.go#L19) — `Status` and its view types, `Describe`, `Line`.
-12. <a id="source-12"></a> [boxstate.go](../../internal/boxstate/boxstate.go#L144-L205) — `Box.Conversation`, resolver hook; filled at L366-L368.
+11. <a id="source-11"></a> [status.go](../../internal/agentsession/status.go#L20) — `Status` and its view types, `Describe`, `Line`.
+12. <a id="source-12"></a> [boxstate.go](../../internal/boxstate/boxstate.go#L144-L207) — `Box.Conversation`, resolver hook; projected at L451–L453 after inventory.
 13. <a id="source-13"></a> [controller_sessions.go](../../cmd/yoloctl/controller_sessions.go#L395) — `restartConversationNote`, which names the last reported conversation after a switch.
 14. <a id="source-14"></a> [agentsession_test.go](../../internal/agentsession/agentsession_test.go#L1) — record, transitions, policy, status.
 15. <a id="source-15"></a> [session_identity_test.go](../../cmd/yoloctl/session_identity_test.go#L1) — tracked lifecycle with fakes.
@@ -91,5 +91,5 @@ fixtures; no real Claude, VM, crash or reboot is exercised.
 17. <a id="source-17"></a> [session_records_test.go](../../internal/spacearchive/session_records_test.go#L1) — export omission; readDeclarations in state.go L30-L74.
 18. <a id="source-18"></a> [box_session.go](../../cmd/yoloctl/box_session.go#L1) — view, probes and output; tests in box_session_test.go.
 19. <a id="source-19"></a> [codex.yaml](../../internal/agentprofile/builtin/codex.yaml#L83-L97) — the Codex block; `TestCodexLearnsAndResumesByThread` in internal/agentsession/agentsession_test.go.
-20. <a id="source-20"></a> [session_resume_file.go](../../cmd/yoloctl/session_resume_file.go#L15) — bounded native presence request and explicit outcomes.
-21. <a id="source-21"></a> [session_resume_file_test.go](../../cmd/yoloctl/session_resume_file_test.go#L21) — absent/saved/unknown, Target, replay and persistent status regressions.
+20. <a id="source-20"></a> [session_resume_file.go](../../cmd/yoloctl/session_resume_file.go#L17) — bounded native presence request and explicit outcomes.
+21. <a id="source-21"></a> [session_resume_file_test.go](../../cmd/yoloctl/session_resume_file_test.go#L22) — absent/saved/unknown, Target, replay and persistent status regressions.

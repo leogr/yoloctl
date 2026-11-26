@@ -222,7 +222,9 @@ func (h *holder) abortDropped(clients []*holderClient) {
 
 // Each admission has its own bounded handshake. A silent or incompatible peer
 // never blocks accepting others, and cannot register before validation.
-func (h *holder) admitView(conn net.Conn) {
+func (h *holder) admitView(ctx context.Context, conn net.Conn) {
+	stopAdmission := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stopAdmission()
 	c := newHolderClient(conn)
 	c.id = rand.Text()
 	defer func() {
@@ -230,7 +232,7 @@ func (h *holder) admitView(conn net.Conn) {
 			c.abort()
 		}
 	}()
-	_ = conn.SetDeadline(time.Now().Add(clientWriteTimeout))
+	_ = conn.SetDeadline(time.Now().Add(holderWaitFailSafe))
 	if err := writeFrame(conn, frameHello, []byte{protocolVersion}); err != nil {
 		return
 	}
@@ -250,6 +252,11 @@ func (h *holder) admitView(conn net.Conn) {
 		_ = writeFrame(conn, frameError, []byte(holderMismatchReason+"; quit the old agent session and attach again with the selected build, or explicitly restart its box"))
 		return
 	}
+	// A validated subscriber belongs to the final writer inventory. An
+	// incomplete admission cannot delay existing viewers when the holder ends.
+	if !stopAdmission() {
+		return
+	}
 	_ = conn.SetDeadline(time.Time{})
 	h.mu.Lock()
 	var snapshot, raw []byte
@@ -264,7 +271,7 @@ func (h *holder) admitView(conn net.Conn) {
 	}
 	if err != nil {
 		h.mu.Unlock()
-		_ = conn.SetWriteDeadline(time.Now().Add(clientWriteTimeout))
+		_ = conn.SetWriteDeadline(time.Now().Add(holderWaitFailSafe))
 		_ = writeFrame(conn, frameError, []byte(fmt.Sprintf("cannot capture session state: %v; retry when the application finishes its control sequence", err)))
 		return
 	}
@@ -287,7 +294,7 @@ func (h *holder) admitView(conn net.Conn) {
 	c.managed, c.admitted = !sub.Passthrough, true
 	c.browser = c.managed && sub.Browser
 	if h.closed {
-		c.finish(h.exitPayload, time.Now().Add(clientWriteTimeout))
+		c.finish(h.exitPayload, time.Now().Add(holderWaitFailSafe))
 	} else {
 		h.clients = append(h.clients, c)
 	}

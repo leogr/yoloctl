@@ -38,4 +38,4 @@ Attempt budgets re-read at `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accomp
 2. <a id="source-2"></a> [Daemon read regressions](../../cmd/yoloctl/controller_codex_observe_test.go#L1) — coalesced inventory storm, uncertain controller, non-blocking read, live folded targets (first report, switch, exited holder), per-box fold budget and read budget.
 3. <a id="source-3"></a> [Writer refresh mode](../../internal/features/agent-observe.py#L1) — `codex_query_mode`, `CodexRead` (peer binding, current-only); launcher `AgentObserveCodexQuery` in internal/features/agent_observe.go.
 4. <a id="source-4"></a> [Holder probe](../../cmd/yoloctl/box_session.go#L138-L155) — `probeBoxSession`; `resetObservationViewBudget` in cmd/yoloctl/session_observe.go.
-5. <a id="source-5"></a> [Conversation view](../../internal/agentsession/status.go#L277) — `Describe`: the read-time fold and `LiveLaunch`.
+5. <a id="source-5"></a> [Conversation view](../../internal/agentsession/status.go#L278) — `Describe`: the read-time fold and `LiveLaunch`.

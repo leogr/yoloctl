@@ -6,12 +6,19 @@ import (
 	"image/color"
 	"io"
 	"os"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
 )
+
+const managedSnapshotFailSafe = 2 * time.Minute
+
+var managedDrainFailSafe = 2 * time.Minute
+var restoreManagedSnapshot = terminal.RestoreSnapshot
 
 type managedView struct {
 	conn   *os.File
@@ -22,6 +29,34 @@ type managedView struct {
 	sizes  chan terminal.Geometry
 	colors chan terminal.Colors
 	host   *session.HostClient
+
+	drainMu  sync.Mutex
+	draining bool
+	decoding bool
+}
+
+// startDrain runs after the child exits. Bound private socket I/O while
+// allowing a snapshot already received to use its own decode context.
+func (v *managedView) startDrain() {
+	v.drainMu.Lock()
+	defer v.drainMu.Unlock()
+	v.draining = true
+	if !v.decoding {
+		_ = v.conn.SetReadDeadline(time.Now().Add(managedDrainFailSafe))
+	}
+}
+
+func (v *managedView) decodingSnapshot(decoding bool) {
+	v.drainMu.Lock()
+	defer v.drainMu.Unlock()
+	v.decoding = decoding
+	if v.draining {
+		var deadline time.Time
+		if !decoding {
+			deadline = time.Now().Add(managedDrainFailSafe)
+		}
+		_ = v.conn.SetReadDeadline(deadline)
+	}
 }
 
 func (s *Session) startView(conn *os.File) {
@@ -39,6 +74,10 @@ func (s *Session) startView(conn *os.File) {
 			Resize: v.sizes, Colors: v.colors,
 			Host: v.host,
 			OnEvent: func(event session.ViewEvent) error {
+				if len(event.Snapshot) != 0 {
+					v.decodingSnapshot(true)
+					defer v.decodingSnapshot(false)
+				}
 				if err := s.applyView(ctx, event); err != nil {
 					return err
 				}
@@ -104,7 +143,9 @@ func (e *emulator) finishView() {
 
 func (e *emulator) applyView(ctx context.Context, event session.ViewEvent) error {
 	if len(event.Snapshot) > 0 {
-		vt, err := terminal.RestoreSnapshot(ctx, event.Snapshot, func([]byte) {})
+		decodeCtx, cancel := context.WithTimeout(ctx, managedSnapshotFailSafe)
+		vt, err := restoreManagedSnapshot(decodeCtx, event.Snapshot, func([]byte) {})
+		cancel()
 		if err != nil {
 			return err
 		}

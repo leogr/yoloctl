@@ -21,7 +21,7 @@ try:
     if len(sys.argv) != 2 or len(sys.argv[1].encode()) > 8192:
         raise ValueError("expected one HTTP(S) URL")
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.settimeout(100)
+    sock.settimeout(120)
     sock.connect(os.path.join(os.path.dirname(os.path.realpath(__file__)), "browser.sock"))
     sock.sendall(json.dumps({"url": sys.argv[1]}, ensure_ascii=False).encode() + b"\n")
     with sock.makefile("rb") as stream:

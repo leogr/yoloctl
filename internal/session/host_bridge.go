@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -25,6 +26,8 @@ var browserBridge string
 // Agents may cache BROWSER/PATH in background processes across session restarts.
 const browserDirectory = "/tmp/yoloctl-browser"
 
+var browserBridgeSetupBudget = 5 * time.Second
+
 type browserBridgeSession struct {
 	session *ssh.Session
 	dir     string
@@ -33,39 +36,52 @@ type browserBridgeSession struct {
 // startBrowserBridge uses a second channel of the already authenticated sandbox
 // SSH connection. It runs as the same confined user, never via container exec.
 // Closing the holder's SSH client closes this pipe and the sandbox helper.
-func (h *holder) startBrowserBridge(client *ssh.Client, opening chan struct{}) (*browserBridgeSession, error) {
-	ctx, cancel := context.WithTimeout(h.hostCtx, 5*time.Second)
+func (h *holder) startBrowserBridge(client *ssh.Client) (*browserBridgeSession, error) {
+	ctx, cancel := context.WithTimeout(h.hostCtx, browserBridgeSetupBudget)
 	defer cancel()
-	s, err := newSandboxSession(ctx, client, opening)
+	s, err := openBrowserSession(ctx, client)
 	if err != nil {
 		return nil, err
 	}
-	stop := context.AfterFunc(ctx, func() { _ = s.Close() })
-	defer stop()
+	readyBridge := false
+	defer func() {
+		if !readyBridge {
+			// The optional channel can be stuck awaiting a peer response.
+			// Closing it must not wait in the normal launch path.
+			go func() { _ = s.Close() }()
+		}
+	}()
 	in, err := s.StdinPipe()
 	if err != nil {
-		_ = s.Close()
 		return nil, err
 	}
 	out, err := s.StdoutPipe()
 	if err != nil {
-		_ = s.Close()
 		return nil, err
 	}
-	// Missing Python or a custom image must not prevent ordinary attachment.
-	if err := s.Start(shellJoin([]string{"python3", "-u", "-c", browserBridge, browserDirectory})); err != nil {
-		_ = s.Close()
-		return nil, err
+	// Start waits for an SSH acknowledgement. A silent optional channel
+	// must not keep a healthy holder from starting its command.
+	started := make(chan error, 1)
+	go func() {
+		started <- s.Start(shellJoin([]string{"python3", "-u", "-c", browserBridge, browserDirectory}))
+	}()
+	select {
+	case err := <-started:
+		if err != nil {
+			return nil, err
+		}
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 	r := bufio.NewReaderSize(out, 2*hostintegration.MaxURLBytes+2048)
 	line, err := browserReadyLine(ctx, r)
 	var ready struct {
 		Directory string `json:"directory"`
 	}
-	if err != nil || decodeJSON(line, &ready) != nil || ready.Directory != browserDirectory {
-		_ = s.Close()
+	if err != nil || ctx.Err() != nil || decodeJSON(line, &ready) != nil || ready.Directory != browserDirectory {
 		return nil, errors.New("sandbox browser helper did not become ready")
 	}
+	readyBridge = true
 	go func() {
 		defer func() { _ = in.Close(); _ = s.Close() }()
 		for {
@@ -121,24 +137,71 @@ func browserLaunch(argv []string, directory string) string {
 		"export PATH=" + shellJoin([]string{directory}) + ":\"$PATH\"; exec " + shellJoin(argv)
 }
 
-// uploadImage creates a private, new sandbox file through the same confined SSH
-// service as the agent. There is no caller-selected destination and no root
-// filesystem write. Files survive a session exit and disappear with the box.
-func uploadImage(ctx context.Context, client *ssh.Client, opening chan struct{}, data []byte) (string, error) {
+// sandboxImages uses the same confined SSH endpoint as the holder. Each
+// operation owns its connection, so canceling a silent peer wakes NewSession,
+// Start and Wait without disturbing the holder's terminal or browser channel.
+type sandboxImages struct {
+	socket   string
+	endpoint os.FileInfo
+	slots    chan struct{}
+}
+
+func (images sandboxImages) run(ctx context.Context, input io.Reader, argv []string) error {
+	select {
+	case images.slots <- struct{}{}:
+		defer func() { <-images.slots }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	// The path is reused across box runs. Only the listener observed when
+	// the holder attached may receive image commands from this holder.
+	if err := images.checkEndpoint(); err != nil {
+		return err
+	}
+	client, err := connectHolderSandbox(ctx, images.socket)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = client.Close() }()
+	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
+	defer stop()
+	if err := images.checkEndpoint(); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	s, err := client.NewSession()
+	if err == nil {
+		s.Stdin, s.Stdout, s.Stderr = input, io.Discard, io.Discard
+		err = s.Run(shellJoin(argv))
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
+}
+
+func (images sandboxImages) checkEndpoint() error {
+	info, err := os.Stat(images.socket)
+	if err != nil {
+		return err
+	}
+	if images.endpoint == nil || info.Mode()&os.ModeSocket == 0 || !os.SameFile(images.endpoint, info) {
+		return errors.New("sandbox image endpoint changed since attachment")
+	}
+	return nil
+}
+
+// upload creates a private file with no caller-selected destination. Files
+// survive a session exit and disappear with the box.
+func (images sandboxImages) upload(ctx context.Context, data []byte) (string, error) {
 	if err := hostintegration.ValidateImage(data); err != nil {
 		return "", err
 	}
 	dir := "yoloctl-image-" + rand.Text()
-	s, err := newSandboxSession(ctx, client, opening)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = s.Close() }()
-	stop := context.AfterFunc(ctx, func() { _ = s.Close() })
-	defer stop()
-	s.Stdin = bytes.NewReader(data)
-	s.Stdout, s.Stderr = io.Discard, io.Discard
-	err = s.Run(shellJoin([]string{"python3", "-c", imageUploadScript, dir, fmt.Sprint(len(data))}))
+	err := images.run(ctx, bytes.NewReader(data), []string{"python3", "-c", imageUploadScript, dir, fmt.Sprint(len(data))})
 	if err != nil {
 		return "", fmt.Errorf("save image in sandbox: %w", err)
 	}
@@ -159,23 +222,15 @@ func workdirImagePath(root, source string) string {
 	return guest
 }
 
-// reuseImage verifies read access and content as the confined sandbox user.
+// reuse verifies read access and content as the confined sandbox user.
 // Neither a manifest mapping nor a host-side stat proves guest accessibility.
-func reuseImage(ctx context.Context, client *ssh.Client, opening chan struct{}, root string, probe imageProbe) (string, error) {
+func (images sandboxImages) reuse(ctx context.Context, root string, probe imageProbe) (string, error) {
 	guest := workdirImagePath(root, probe.Path)
 	if guest == "" {
 		return "", nil
 	}
-	s, err := newSandboxSession(ctx, client, opening)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = s.Close() }()
-	stop := context.AfterFunc(ctx, func() { _ = s.Close() })
-	defer stop()
-	s.Stdout, s.Stderr = io.Discard, io.Discard
 	guestRoot := path.Clean(imageGuestPath(root))
-	err = s.Run(shellJoin([]string{"python3", "-c", imageReuseScript, guestRoot, strings.TrimPrefix(guest, guestRoot+"/"), fmt.Sprint(probe.Size), probe.SHA256}))
+	err := images.run(ctx, nil, []string{"python3", "-c", imageReuseScript, guestRoot, strings.TrimPrefix(guest, guestRoot+"/"), fmt.Sprint(probe.Size), probe.SHA256})
 	if err != nil {
 		var exit *ssh.ExitError
 		if errors.As(err, &exit) && exit.ExitStatus() == 3 {
@@ -189,17 +244,12 @@ func reuseImage(ctx context.Context, client *ssh.Client, opening chan struct{}, 
 //go:embed image_reuse.py
 var imageReuseScript string
 
-// SSH channel opens have no context API. A timed-out open is retired as soon as
-// it returns, without closing other channels or terminating the agent. A slot
-// stays reserved until the underlying open returns, even after a timeout.
-func newSandboxSession(ctx context.Context, client *ssh.Client, opening chan struct{}) (*ssh.Session, error) {
+// Browser startup opens at most one channel per holder. The SSH package
+// has no cancellable channel open, so a late result is retired independently
+// and the regular terminal startup proceeds when the browser deadline ends.
+func openBrowserSession(ctx context.Context, client *ssh.Client) (*ssh.Session, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
-	}
-	select {
-	case opening <- struct{}{}:
-	case <-ctx.Done():
-		return nil, ctx.Err()
 	}
 	type opened struct {
 		session *ssh.Session
@@ -207,7 +257,6 @@ func newSandboxSession(ctx context.Context, client *ssh.Client, opening chan str
 	}
 	result := make(chan opened)
 	go func() {
-		defer func() { <-opening }()
 		s, err := client.NewSession()
 		select {
 		case result <- opened{s, err}:

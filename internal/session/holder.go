@@ -80,6 +80,23 @@ const sandboxConnectTimeout = 2 * time.Minute
 
 var dialHolderSandbox = (&net.Dialer{}).DialContext
 
+// The root-owned Unix socket identifies the sandbox SSH endpoint. It uses
+// auth_none because access to the socket is already restricted.
+func connectHolderSandbox(ctx context.Context, socket string) (*ssh.Client, error) {
+	conn, err := dialHolderSandbox(ctx, "unix", socket)
+	if err != nil {
+		return nil, fmt.Errorf("session: dial sandbox socket: %w", err)
+	}
+	client, err := sshtransport.ConnectWithContextDeadline(ctx, conn, &ssh.ClientConfig{
+		User:            "sandbox",
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("session: ssh handshake: %w", err)
+	}
+	return client, nil
+}
+
 // ErrHolderConnLost reports that the SSH channel to the sandbox died
 // without delivering an agent exit status (sandbox crash, VM trouble, or
 // a dropped channel). The agent's state is unknown: the marker is left
@@ -147,23 +164,15 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	}
 	logf("terminal initialized; connecting sandbox")
 
-	// SSH to the sandbox socket. The socket speaks plain SSH with
-	// auth_none; access is gated by filesystem permissions (root-only on
-	// the VM), which is also why ignoring the host key is sound here:
-	// the endpoint's identity is the root-owned socket path itself.
-	connect, cancelConnect := context.WithTimeout(ctx, sandboxConnectTimeout)
-	conn, err := dialHolderSandbox(connect, "unix", opts.SSHSocket)
-	if err != nil {
-		cancelConnect()
-		return -1, fmt.Errorf("session: dial sandbox socket: %w", err)
+	var imageEndpoint os.FileInfo
+	if opts.HostIntegration {
+		imageEndpoint, _ = os.Stat(opts.SSHSocket)
 	}
-	client, err := sshtransport.ConnectWithContextDeadline(connect, conn, &ssh.ClientConfig{
-		User:            "sandbox",
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	})
+	connect, cancelConnect := context.WithTimeout(ctx, sandboxConnectTimeout)
+	client, err := connectHolderSandbox(connect, opts.SSHSocket)
 	cancelConnect()
 	if err != nil {
-		return -1, fmt.Errorf("session: ssh handshake: %w", err)
+		return -1, err
 	}
 	logf("sandbox connected; preparing session")
 	defer func() { _ = client.Close() }()
@@ -172,12 +181,12 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	// login shell; the browser launch already ends in exec.
 	mainCommand := "exec " + command
 	if opts.HostIntegration {
-		opening := make(chan struct{}, 2)
-		h.upload = func(ctx context.Context, data []byte) (string, error) { return uploadImage(ctx, client, opening, data) }
+		images := sandboxImages{socket: opts.SSHSocket, endpoint: imageEndpoint, slots: make(chan struct{}, 2)}
+		h.upload = images.upload
 		h.reuse = func(ctx context.Context, probe imageProbe) (string, error) {
-			return reuseImage(ctx, client, opening, opts.HostWorkdir, probe)
+			return images.reuse(ctx, opts.HostWorkdir, probe)
 		}
-		bridge, err := h.startBrowserBridge(client, opening)
+		bridge, err := h.startBrowserBridge(client)
 		if err != nil {
 			logf("browser integration unavailable: %v", err)
 		} else {
@@ -325,8 +334,10 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 		_ = ln.Close()
 		_ = os.Remove(opts.AttachSocket)
 	}()
+	admissionCtx, cancelAdmissions := context.WithCancel(ctx)
+	defer cancelAdmissions()
 	acceptDone := make(chan struct{})
-	go func() { defer close(acceptDone); h.acceptLoop(ln) }()
+	go func() { defer close(acceptDone); h.acceptLoop(admissionCtx, ln) }()
 
 	// Keepalive (spike F3): any client→server packet resets russh's
 	// inactivity timer; a global request is the cheapest one.
@@ -374,6 +385,7 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	// closeClients takes its final inventory and before the holder exits.
 	_ = ln.Close()
 	<-acceptDone
+	cancelAdmissions()
 	h.admissions.Wait()
 
 	select {
@@ -555,14 +567,14 @@ func (h *holder) replay() ([]byte, error) {
 
 // acceptLoop admits each client independently: handshake, snapshot or
 // compatibility replay, then ordered live events until the connection drops.
-func (h *holder) acceptLoop(ln net.Listener) {
+func (h *holder) acceptLoop(ctx context.Context, ln net.Listener) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
 			return
 		}
 		h.admissions.Add(1)
-		go func() { defer h.admissions.Done(); h.admitView(conn) }()
+		go func() { defer h.admissions.Done(); h.admitView(ctx, conn) }()
 	}
 }
 
@@ -624,7 +636,7 @@ func (h *holder) clientReadLoop(c *holderClient) {
 					// closes; failing input must not abort the output writer.
 					inputOpen = false
 					c.enqueueFrame(frameError, []byte("session input buffer full; input was not accepted; reattach before retrying"))
-					c.finish(nil, time.Now().Add(clientWriteTimeout))
+					c.finish(nil, time.Now().Add(holderWaitFailSafe))
 				}
 			}
 		case frameResize:
@@ -666,7 +678,7 @@ func (h *holder) closeClients(exitPayload []byte) {
 	clients := h.clients
 	h.clients = nil
 	h.mu.Unlock()
-	deadline := time.Now().Add(clientWriteTimeout)
+	deadline := time.Now().Add(holderWaitFailSafe)
 	for _, c := range clients {
 		c.finish(exitPayload, deadline)
 	}

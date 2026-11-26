@@ -117,7 +117,7 @@ ends the remaining advice walk. [9](#source-9)
 2. <a id="source-2"></a> [Roots](../../internal/layout/layout.go#L117-L171), `ConfigRoot`, `CacheRoot`, `selectedHome`;
    [matrix](../../internal/layout/homes_test.go#L1-L91); test-binary isolation in [testhome.go](../../internal/layout/testhome.go#L1), sentinel regression in [home_isolation_test.go](../../internal/layout/home_isolation_test.go#L1).
 3. <a id="source-3"></a> [Startup](../../cmd/yoloctl/main.go#L71-L112), `main`;
-   [routing](../../cmd/yoloctl/main.go#L262-L269), `readOnlyStartup`;
+   [routing](../../cmd/yoloctl/main.go#L263-L270), `readOnlyStartup`;
    [bounded probe](../../cmd/yoloctl/version.go#L88-L107).
 4. <a id="source-4"></a> [Smoke roots](../../scripts/smoke/common.sh#L146-L194), `smoke_init`;
    [sentinel regression](../../scripts/test_vm_smoke.py#L101-L130);

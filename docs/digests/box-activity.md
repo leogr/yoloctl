@@ -81,11 +81,11 @@ No live VM calibration is recorded here.
 
 ## Sources
 
-1. <a id="source-1"></a> [holder.go](../../internal/session/holder.go#L236-L241) — PTY read count; input count at L550; counters at L398-L403.
-2. <a id="source-2"></a> [stats.go](../../internal/session/stats.go#L18-L119) — `Stats`, `serveStats`, `sessionDigest`, `ReadStats`, `readStats`.
-3. <a id="source-3"></a> [holder_view.go](../../internal/session/holder_view.go#L241-L244) — stats admission branch.
+1. <a id="source-1"></a> [holder.go](../../internal/session/holder.go#L310-L317) — PTY read count and input count at L626.
+2. <a id="source-2"></a> [stats.go](../../internal/session/stats.go#L17-L112) — `Stats`, `serveStats`, `sessionDigest`, `ReadStats`, `readStats`.
+3. <a id="source-3"></a> [holder_view.go](../../internal/session/holder_view.go#L243-L246) — stats admission branch.
 4. <a id="source-4"></a> [protocol.go](../../internal/session/protocol.go#L65-L67) — `frameStats`.
-5. <a id="source-5"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L125-L144) — `telemetryPTYStats`, `liveBox.session`/`sessionUnknown`; unknown-session regression in space_telemetry_test.go `TestTelemetryUnknownSessionIsUnreadOutput`.
+5. <a id="source-5"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L126-L145) — `telemetryPTYStats`, `liveBox.session`/`sessionUnknown`; unknown-session regression in space_telemetry_test.go `TestTelemetryUnknownSessionIsUnreadOutput`.
 6. <a id="source-6"></a> [collect.go](../../internal/spacetelemetry/collect.go#L19-L25) — shared deadline and reader bound; `Target` at L30-L39, container ID at L98, unread counters at L215-L230, `ptys` at L234-L287.
 7. <a id="source-7"></a> [telemetry.go](../../internal/spacetelemetry/telemetry.go#L185-L226) — `Container`, `Unavailable`, `PTY`, `PTYCounters`.
 8. <a id="source-8"></a> [activity.go](../../internal/spacetelemetry/activity.go#L19-L239) — thresholds, `DefaultInterval`, `boxActivity.observe`, `busyPair`, `ActivityTracker`; space view's use in data.go `applySample`; chat's `TelemetryInterval` in chatui/telemetry.go.

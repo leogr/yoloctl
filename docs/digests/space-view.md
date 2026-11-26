@@ -23,6 +23,8 @@ immediately and then every 5s: grants, defaults, the box resolver at
 features and capabilities, the declared `privileged` setting, and observed chat rooms. Account state leaves are refreshed every 30s. Unavailable boxes or
 accounts carry an error and are never shown as empty. Sample frames carry raw
 cumulative counters, and the host derives rates from consecutive samples.
+Recurring inventory gives each holder build lookup a 500 ms attempt under
+its caller. The separate PTY sample budget stays independent. [10](#source-10)
 [9](#source-9) [10](#source-10) [11](#source-11)
 
 [FACT] One `nerdctl inspect` returns each running box's ID, init PID, bridge IP,
@@ -112,13 +114,13 @@ and local PTYs; they do not establish live-VM or proxy-confined chat coverage.
 1. <a id="source-1"></a> [space_view.go](../../cmd/yoloctl/space_view.go#L30-L139) — `newSpaceViewCmd`, `runSpaceView`.
 2. <a id="source-2"></a> [space_view.go](../../cmd/yoloctl/space_view.go#L143-L244) — `streamSpaceView`, `runViewCommand`, `viewChildEnv`.
 3. <a id="source-3"></a> [controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L43) — host-only registration.
-4. <a id="source-4"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L120-L121) — `space.inventory` and `space.telemetry` registry entries.
+4. <a id="source-4"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L121-L122) — `space.inventory` and `space.telemetry` registry entries.
 5. <a id="source-5"></a> [controller_views.go](../../cmd/yoloctl/controller_views.go#L270) — typed internal views.
 6. <a id="source-6"></a> [controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L83-L111) — `checkControllerSpace`.
 7. <a id="source-7"></a> [server.go](../../internal/controller/server.go#L115-L122) — reads are admitted without active-work accounting.
 8. <a id="source-8"></a> [run.go](../../internal/tui/spaceview/run.go#L20-L78) — `Run`, `keepConnected`.
 9. <a id="source-9"></a> [telemetry.go](../../internal/spacetelemetry/telemetry.go#L25-L253) — frame types, limits and decoder.
-10. <a id="source-10"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L28) — cadences, `telemetryAccounts`, inventory (managed room at L203, launch evidence at L196-L199) and `streamTelemetry`.
+10. <a id="source-10"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L28-L84) — cadences, telemetry inventory and the holder stats attempt (managed room at L204, launch evidence at L197–L200) and `streamTelemetry`.
 11. <a id="source-11"></a> [data.go](../../internal/tui/spaceview/data.go#L1) — host rates, history and transitions.
 12. <a id="source-12"></a> [runtime_state.go](../../internal/container/runtime_state.go#L31) — `RuntimeStates`; shared `inspectEntry` decoding in `container.go` at L592.
 13. <a id="source-13"></a> [collect.go](../../internal/spacetelemetry/collect.go#L14-L193) — bounded reads, `Sample`, `BoxCgroup`.

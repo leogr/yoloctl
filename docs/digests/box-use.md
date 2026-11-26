@@ -101,9 +101,9 @@ success nor graphical parity. [2](#source-2) [7](#source-7)
 7. <a id="source-7"></a> [box_use_test.go](../../cmd/yoloctl/box_use_test.go#L104) — routing, input, detach, exit, uncertain setup and holder acceptance.
 8. <a id="source-8"></a> [box-use.py](../../scripts/smoke/box-use.py#L87) — disposable-space `run`.
 9. <a id="source-9"></a> [controller_client.go](../../cmd/yoloctl/controller_client.go#L309) — frontend routing.
-10. <a id="source-10"></a> [holder.go](../../internal/session/holder.go#L530) — `clientReadLoop` admission, per-attachment bytes and activity.
+10. <a id="source-10"></a> [holder.go](../../internal/session/holder.go#L607) — `clientReadLoop` admission, per-attachment bytes and activity.
 11. <a id="source-11"></a> [protocol.go](../../internal/session/protocol.go#L40) — protocol version 6.
-12. <a id="source-12"></a> [state_test.go](../../internal/boxuse/state_test.go#L45) — observations, redraws, holds, waits, acceptance, input and bounds.
+12. <a id="source-12"></a> [state_test.go](../../internal/boxuse/state_test.go#L49) — observations, redraws, holds, waits, acceptance, input and bounds.
 13. <a id="source-13"></a> [test_box_use.py](../../scripts/test_box_use.py#L18) — local driver framing and failure checks.
 14. <a id="source-14"></a> [box_use_cli.go](../../cmd/yoloctl/box_use_cli.go#L21) — CLI, validation, delegation and completion.
 15. <a id="source-15"></a> [batch.go](../../internal/boxuse/batch.go#L30) — `ReadBatch`, `Batch.Run`, `exchange`.

@@ -124,6 +124,7 @@ func main() {
 		root = newRootCmd()
 	}
 	describeSpaceFlagHelp(root)
+	beginObservationViewBudget(ctx)
 	err = executeRoot(root, func() (*cobra.Command, error) { return root.ExecuteContextC(ctx) })
 	os.Exit(classifyError(err))
 }

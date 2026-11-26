@@ -121,9 +121,9 @@ holder view are unaffected. [24](#source-24)
 8. <a id="source-8"></a> [channel.go](../../internal/termio/channel.go#L12) — private pollable socket pair and inherited descriptor validation.
 9. <a id="source-9"></a> [server.go](../../internal/controller/server.go#L324) — separate view queues, worker streams and receipt completion; client counterpart in `client.go`.
 10. <a id="source-10"></a> [worker.go](../../internal/controller/worker.go#L27) — private worker descriptor and bounded output drain; request validation in `protocol.go`.
-11. <a id="source-11"></a> [managed.go](../../internal/tui/term/managed.go#L26) — private attachment and replica publication; PTY ownership in `session.go` and `emulator.go`.
+11. <a id="source-11"></a> [managed.go](../../internal/tui/term/managed.go#L61) — private attachment and replica publication; PTY ownership in `session.go` and `emulator.go`.
 12. <a id="source-12"></a> [view_test.go](../../internal/controller/view_test.go#L17) — real RPC/worker/PTY stream, status and cancellation tests.
-13. <a id="source-13"></a> [managed_process_test.go](../../internal/tui/term/managed_process_test.go#L20) — inherited-channel fixture, `TestManagedExitFitsLocalViewport`, PTY forgery and typeahead; state contracts in `managed_test.go`.
+13. <a id="source-13"></a> [managed_process_test.go](../../internal/tui/term/managed_process_test.go#L23) — inherited-channel fixture, `TestManagedExitFitsLocalViewport`, PTY forgery and typeahead; state contracts in `managed_test.go`.
 14. <a id="source-14"></a> [controller_view_test.go](../../cmd/yoloctl/controller_view_test.go#L19) — shared CLI routing, flags and exit status.
 15. <a id="source-15"></a> [view_test.go](../../internal/session/view_test.go#L17) — ordered buffered stdin, EOF/status preservation and malformed state/event rejection.
 16. <a id="source-16"></a> [signals.go](../../cmd/yoloctl/signals.go#L20) — `commandSignalContext` owns process signals.

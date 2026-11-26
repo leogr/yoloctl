@@ -298,7 +298,7 @@ func runControllerView(ctx context.Context, req controller.Request, out io.Write
 		}
 		return true, json.NewEncoder(out).Encode(view)
 	case "box.inventory":
-		boxes, err := newBoxStateResolver().ResolveSpace(ctx, req.Space, boxstate.RuntimeSummary)
+		boxes, err := newBoxStateResolver().ResolveSpaceSummary(ctx, req.Space)
 		if err != nil {
 			return true, err
 		}

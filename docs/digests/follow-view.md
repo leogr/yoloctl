@@ -32,7 +32,11 @@ workdir as relative paths, followed by the absolute grant roots. Typed
 relative prefixes keep their spelling, and a leading dot in the current
 component reveals hidden names. Selecting an absolute grant root lists
 its guest children. Completion uses up to 512 guest directory entries, a
-short timeout and `NoFileComp` on success or error. If workdir settings or
+two-second timeout and `NoFileComp` on success or error. Workdir resolution
+when starting the command follows its caller. VM polling uses short attempts
+and retries. A file-link check can wait up to two minutes, canceled with
+its view. Inherited subprocess pipes drain for up to two minutes after the
+leader exits, with earlier caller cancellation. If workdir settings or
 listing are unavailable, empty-token completion can still show the known
 grant roots. Only explicit host mode uses host enumeration. [1](#source-1) [2](#source-2) [3](#source-3)
 

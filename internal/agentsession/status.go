@@ -1,6 +1,7 @@
 package agentsession
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -278,6 +279,11 @@ const Untracked = "untracked (the running session predates conversation tracking
 // liveToken the launch token in its marker ("" for a tokenless or unread
 // marker). A record that cannot be read is named, never shown as empty.
 func Describe(cfg *agentbox.Config, profile *agentprofile.Profile, live bool, liveToken string) *Status {
+	return DescribeContext(context.Background(), cfg, profile, live, liveToken)
+}
+
+// DescribeContext applies the view's cancellation to its optional live fold.
+func DescribeContext(ctx context.Context, cfg *agentbox.Config, profile *agentprofile.Profile, live bool, liveToken string) *Status {
 	if cfg == nil || !cfg.HasAgent() || profile == nil {
 		return nil
 	}
@@ -313,7 +319,7 @@ func Describe(cfg *agentbox.Config, profile *agentprofile.Profile, live bool, li
 		st.Note = fmt.Sprintf("stale record of account %s and agent %s; the next start replaces it", rec.Account, rec.Provider)
 		return st
 	}
-	fold := rec.foldForView(cfg.Name, FoldFor(profile))
+	fold := rec.foldForView(ctx, cfg.Name, FoldFor(profile))
 	if rec.Assigned != nil {
 		st.ID = rec.Assigned.ID
 		at := rec.Assigned.At

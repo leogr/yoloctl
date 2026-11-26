@@ -92,7 +92,7 @@ or live Lima validation. [3](#source-3) [8](#source-8) [10](#source-10)
 12. <a id="source-12"></a> [xterm operating-system commands](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Operating-System-Commands) — OSC 4 queries/reports and reset controls, consulted 2026-10-02.
 13. <a id="source-13"></a> [terminal_state.go](../../internal/session/terminal_state.go#L1-L90) — filter errors, evicted-prefix ownership and replay admission.
 14. <a id="source-14"></a> [bell_test.go](../../internal/terminal/bell_test.go#L1-L66) — native classification and Unicode boundaries.
-15. <a id="source-15"></a> [holder_test.go](../../internal/session/holder_test.go#L556) — `TestHolderBellsAreLiveOnly`: quiet replay with unchanged live bells and titles.
+15. <a id="source-15"></a> [holder_test.go](../../internal/session/holder_test.go#L562) — `TestHolderBellsAreLiveOnly`: quiet replay with unchanged live bells and titles.
 16. <a id="source-16"></a> [cell.go](../../third_party/ultraviolet/cell.go#L416-L446) — palette-aware `colorEqual` and `paletteIndex`.
 17. <a id="source-17"></a> [palette_identity_test.go](../../internal/tui/palette_identity_test.go#L14-L97) — actual renderer transitions and color-only repaint.
 18. <a id="source-18"></a> [vendor-ultraviolet.py](../../scripts/vendor-ultraviolet.py#L1-L55) — module pin, checksum, isolated patches and reproduction comparison.

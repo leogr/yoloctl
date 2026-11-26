@@ -138,7 +138,7 @@ Disk/owner/target errors fail startup; systemd retries are unchanged. [23](#sour
 
 22. <a id="source-22"></a> [Boot resource application](../../cmd/yoloctl/space_nested_virtualization.go#L1) — `applySpaceBootResources`, verified with accompanying changes on fc48bca3.
 
-23. <a id="source-23"></a> [Controller startup](../../cmd/yoloctl/controller_internal.go#L286) — `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle`; internal/controller/service.go:`ServiceUnit`.
+23. <a id="source-23"></a> [Controller startup](../../cmd/yoloctl/controller_internal.go#L287) — `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle`; internal/controller/service.go:`ServiceUnit`.
 24. <a id="source-24"></a> [Lima boot order](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/cidata/cidata.TEMPLATE.d/boot.sh#L64-L180) — distribution boot files run before system provisioning.
 25. <a id="source-25"></a> [Archive qualification](../../assets/lima/yoloctl.yaml.tmpl#L136) — selected archive digest, verified removal and per-boot readiness result.
 26. <a id="source-26"></a> [Lima cidata](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/cidata/cidata.go#L126) — `templateArgs` gives the selected archive a generic name.

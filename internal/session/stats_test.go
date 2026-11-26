@@ -228,7 +228,7 @@ func TestReadStatsReportsOlderHolders(t *testing.T) {
 
 // A holder that never answers costs one bounded read, and cancellation ends
 // it at once.
-func TestReadStatsIsBounded(t *testing.T) {
+func TestReadStatsFollowsCaller(t *testing.T) {
 	dir, err := os.MkdirTemp("", "ys")
 	if err != nil {
 		t.Fatal(err)
@@ -239,33 +239,78 @@ func TestReadStatsIsBounded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = ln.Close() })
-	go func() {
-		for {
-			c, err := ln.Accept()
-			if err != nil {
-				return
-			}
+	defer func() { _ = ln.Close() }()
+
+	for _, name := range []string{"no deadline", "long deadline", "short deadline", "cancel"} {
+		t.Run(name, func(t *testing.T) {
+			requested := make(chan struct{})
+			reply := make(chan struct{})
+			defer close(reply)
 			go func() {
+				c, err := ln.Accept()
+				if err != nil {
+					return
+				}
 				defer func() { _ = c.Close() }()
 				_ = writeFrame(c, frameHello, []byte{protocolVersion})
 				_, _ = readFrame(c)
-				_, _ = io.Copy(io.Discard, c) // never replies
+				close(requested)
+				<-reply
+				bundle, _ := controller.ExecutableIdentity()
+				payload, _ := json.Marshal(Stats{Bundle: bundle, Session: "holder"})
+				_ = writeFrame(c, frameStats, payload)
 			}()
-		}
-	}()
-	start := time.Now()
-	if _, err := ReadStats(context.Background(), sock); err == nil {
-		t.Fatal("silent holder produced stats")
-	}
-	if elapsed := time.Since(start); elapsed < StatsTimeout/2 || elapsed > StatsTimeout+time.Second {
-		t.Fatalf("silent holder read took %v, bound %v", elapsed, StatsTimeout)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	start = time.Now()
-	if _, err := ReadStats(ctx, sock); err == nil || time.Since(start) > StatsTimeout/2 {
-		t.Fatalf("canceled read: %v after %v", err, time.Since(start))
+			var ctx context.Context
+			var cancel context.CancelFunc
+			switch name {
+			case "long deadline":
+				ctx, cancel = context.WithTimeout(t.Context(), 5*time.Second)
+			case "short deadline":
+				ctx, cancel = context.WithTimeout(t.Context(), 50*time.Millisecond)
+			default:
+				ctx, cancel = context.WithCancel(t.Context())
+			}
+			defer cancel()
+			results := make(chan error, 1)
+			go func() { _, err := ReadStats(ctx, sock); results <- err }()
+			select {
+			case <-requested:
+			case <-time.After(3 * time.Second):
+				t.Fatal("holder did not receive stats request")
+			}
+			switch name {
+			case "short deadline":
+				if err := <-results; !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("silent holder: %v", err)
+				}
+			case "cancel":
+				cancel()
+				select {
+				case err := <-results:
+					if !errors.Is(err, context.Canceled) {
+						t.Fatalf("canceled holder read: %v", err)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("caller cancellation did not interrupt the holder read")
+				}
+			default:
+				// The removed 500 ms cap used to reject this valid reply.
+				select {
+				case err := <-results:
+					t.Fatalf("stats stopped before the reply: %v", err)
+				case <-time.After(550 * time.Millisecond):
+				}
+				reply <- struct{}{}
+				select {
+				case err := <-results:
+					if err != nil {
+						t.Fatalf("delayed holder reply: %v", err)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("holder read did not finish")
+				}
+			}
+		})
 	}
 }
 

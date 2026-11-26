@@ -81,7 +81,7 @@ and the theme's `Warn` tone. [8](#source-8)
 5. <a id="source-5"></a> [Colour](../../pkg/prettylog/color.go#L38-L140) — `ANSIPalette`, `sgr`, `DecideColor`, `BackgroundFrom`.
 6. <a id="source-6"></a> [Adapter](../../internal/logging/logging.go#L79-L270) — `LogLevels`, `ParseLogLevel`, `FromEnv`, `Init`, `InitWorker`, `InitFile`, `SetLogger`, `SetPalette`; logtheme/logtheme.go `Palette`, `SetBackground`; spaceview visual.go `Color.Spec`.
 7. <a id="source-7"></a> [Root flags](../../cmd/yoloctl/logflags.go#L15-L81) — `addLogFlags`, `logSettings`, `renderCLIError`, `executeRoot`; main.go calls `executeRoot`.
-8. <a id="source-8"></a> [Holder and chat](../../internal/session/holder.go#L226) — `agentLaunchSummary` (L642); chatui view.go `noticeRuns`, transcript.go error and delivery labels.
+8. <a id="source-8"></a> [Holder and chat](../../internal/session/holder.go#L288-L290) — `agentLaunchSummary` (L703); chatui view.go `noticeRuns`, transcript.go error and delivery labels.
 9. <a id="source-9"></a> [Rendering regressions](../../pkg/prettylog/render_test.go#L1-L160) — pretty/plain goldens, escaping, colour, quiet and error levels, `DecideColor` table; fold, blocking writer and interleaving in behavior_test.go.
 
 10. <a id="source-10"></a> [Adapter regressions](../../internal/logging/logging_test.go#L1) — env, `SetLogger` restore, palette, no UI imports; logtheme and cmd/yoloctl logflags_test.go; chatui level_glyph_test.go; session holder_argv_test.go.

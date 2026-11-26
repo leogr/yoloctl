@@ -75,6 +75,7 @@ func nativeTelemetrySource(space string) telemetrySource {
 		space:    space,
 		settings: func() (*spaceconfig.Config, error) { return spaceconfig.Load(space) },
 		boxes: func(ctx context.Context) ([]boxstate.Box, error) {
+			ctx = boxstate.WithHolderStatsAttempt(ctx, 500*time.Millisecond)
 			return newBoxStateResolver().ResolveSpace(ctx, space, boxstate.RuntimeSummary)
 		},
 		runtime: func(ctx context.Context, names []string) (map[string]container.RuntimeState, error) {

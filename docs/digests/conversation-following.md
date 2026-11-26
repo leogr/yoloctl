@@ -90,15 +90,15 @@ is exercised here. [7](#source-7) [8](#source-8) [13](#source-13)
 
 1. <a id="source-1"></a> [Record](../../internal/agentsession/record.go#L83-L128) — `Record.Current`, `Assigned`, `Current`; sources and reasons L37-L81; `Validate` L244; `CurrentSource` L340; `retire`, `addPrevious`, `Target` L447-L479.
 2. <a id="source-2"></a> [Allocation](../../internal/agentsession/launch.go#L99-L210) — `Allocate` (learn, switch adoption), `CloseExit`, `SettleResume`.
-3. <a id="source-3"></a> [Fold](../../internal/agentsession/apply.go#L86-L263) — `Apply` rules, `applyLine` (learned assignment, `current`).
+3. <a id="source-3"></a> [Fold](../../internal/agentsession/apply.go#L87-L264) — `Apply` rules, `applyLine` (learned assignment, `current`).
 4. <a id="source-4"></a> [Fold regressions](../../internal/agentsession/apply_test.go#L307) — `TestApplyCurrentFollowsTheLastMainStart`, `TestApplyLearnsTheFirstReportedConversation`.
 5. <a id="source-5"></a> [Plan](../../cmd/yoloctl/session_identity.go#L170) — `plan`, `uncertainError`, `checkOwner`, `namesConversation`; target check in `launch` L283; `CloseExit` in `noteExit` and `settle`.
 6. <a id="source-6"></a> [Plan regressions](../../cmd/yoloctl/session_observe_test.go#L205) — `TestReportedMismatchResumesTheReportedConversation`, `TestTheNextStartResumesTheLastObservedConversation`; owner by `current` in session_identity_test.go `TestResumeRefusesAConversationOwnedElsewhere`.
 7. <a id="source-7"></a> [Learn regressions](../../cmd/yoloctl/session_observe_test.go#L678) — `TestBoxSessionTextNamesALearnedConversation`; `TestArgvLearnsWithoutAnID` and `Argv` in policy.go L92-L134.
-8. <a id="source-8"></a> [Failed resume](../../cmd/yoloctl/session_observe.go#L174-L195) — `observeCurrentLaunch` settles after a successful read; regressions `TestAFailedResumeIsRetriedNeverReplaced`, `TestSettleResumeDecidesOnlyAReadSilentFailure`.
+8. <a id="source-8"></a> [Failed resume](../../cmd/yoloctl/session_observe.go#L176-L197) — `observeCurrentLaunch` settles after a successful read; regressions `TestAFailedResumeIsRetriedNeverReplaced`, `TestSettleResumeDecidesOnlyAReadSilentFailure`.
 9. <a id="source-9"></a> [Selection](../../internal/agentprofile/profile.go#L216) — `ObserveSpec.Selection`, `SelectionReport`; validation in `validateSession`; builtin/claude.yaml and builtin/codex.yaml `session.observe`.
-10. <a id="source-10"></a> [Status](../../internal/agentsession/status.go#L181) — `Status` fields, `CurrentView`, `PreviousView.Text`, `LearnsID`, `Switched`; `Describe` L280.
+10. <a id="source-10"></a> [Status](../../internal/agentsession/status.go#L182) — `Status` fields, `CurrentView`, `PreviousView.Text`, `LearnsID`, `Switched`; `Describe` L280.
 11. <a id="source-11"></a> [box session](../../cmd/yoloctl/box_session.go#L162) — `writeBoxSession`; keys in box_session_test.go `checkConversationShape`.
 12. <a id="source-12"></a> [Card row](../../cmd/yoloctl/chat_participant_runtime.go#L36-L106) — `participantRuntime`, `participantConversation`, `resumeOutcome`; `AgentRuntime.Conversation` and `runtimeRows` in internal/chatui/runtime.go.
 13. <a id="source-13"></a> [Card regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L75) — `TestParticipantConversationIsCertainOnly`; the card row in internal/chatui/ui_package_test.go `TestParticipantsShowObservedModelAndEffortOnly`.
-14. <a id="source-14"></a> [Status line identity](../../internal/agentsession/apply.go#L24-L42) — `Fold`, `FoldFor`, `statusLineIdentity` at L345; `recordedCurrentSource` in record.go L386; `SettleResume` in launch.go L203; tests statusline_identity_test.go, cmd/yoloctl/agy_session_test.go.
+14. <a id="source-14"></a> [Status line identity](../../internal/agentsession/apply.go#L25-L43) — `Fold`, `FoldFor`, `statusLineIdentity` at L345; `recordedCurrentSource` in record.go L386; `SettleResume` in launch.go L203; tests statusline_identity_test.go, cmd/yoloctl/agy_session_test.go.

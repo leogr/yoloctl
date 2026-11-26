@@ -154,7 +154,7 @@ this test seam does not change server authorization. [19](#source-19)
 ## Sources
 
 1. <a id="source-1"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L30) — newClientRootCmd.
-2. <a id="source-2"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L40) — controllerOperations, runControllerWorker, controllerCommandArgs.
+2. <a id="source-2"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L41) — controllerOperations, runControllerWorker, controllerCommandArgs.
 3. <a id="source-3"></a> [internal/controller/runtime.go](../../internal/controller/runtime.go#L18) — `LoadRuntime`, `VerifyRuntimeStorage`, `PrepareRuntimeForLifecycle`, `PrivateDir`.
 4. <a id="source-4"></a> [internal/spaceconfig/bootstrap.go](../../internal/spaceconfig/bootstrap.go#L24) — Bootstrap, Settings.
 5. <a id="source-5"></a> [internal/manifestio/io.go](../../internal/manifestio/io.go#L26) — Read, Write, Remove.

@@ -177,6 +177,9 @@ type guestResponse struct {
 }
 
 func (r VMReader) Read(ctx context.Context, q Query) (Snapshot, error) {
+	// Follow rechecks on its next poll even when this try fails.
+	ctx, cancel := context.WithTimeout(ctx, 7*time.Second)
+	defer cancel()
 	result, err := r.call(ctx, guestRequest{Op: "read", Path: r.Path, Query: q})
 	if err != nil {
 		return Snapshot{}, err
@@ -218,8 +221,6 @@ func (r VMReader) List(ctx context.Context, path, prefix string) ([]string, erro
 }
 func (r VMReader) call(ctx context.Context, req guestRequest) (guestResponse, error) {
 	var result guestResponse
-	ctx, cancel := context.WithTimeout(ctx, 7*time.Second)
-	defer cancel()
 	roots, err := r.Authority(ctx)
 	if err != nil {
 		return result, err
@@ -255,8 +256,6 @@ func (r VMReader) call(ctx context.Context, req guestRequest) (guestResponse, er
 		return result, errors.New("follow request too large")
 	}
 	cmd := r.Command(ctx, "python3", "-c", guestReader)
-	cmd.Stdin = strings.NewReader(string(input))
-	cmd.WaitDelay = time.Second
 	// Own the finite shell/SSH client group; cancellation must not leave its
 	// reader descendants holding the response pipes after this view closes.
 	attr := syscall.SysProcAttr{}
@@ -277,8 +276,7 @@ func (r VMReader) call(ctx context.Context, req guestRequest) (guestResponse, er
 	}
 	output := &boundedBuffer{limit: 3 << 20}
 	diagnostic := &boundedBuffer{limit: 4096}
-	cmd.Stdout, cmd.Stderr = output, diagnostic
-	err = cmd.Run()
+	err = runVMReaderCommand(ctx, cmd, input, output, diagnostic, vmReaderDrainFailSafe)
 	if ctx.Err() != nil {
 		return result, ctx.Err()
 	}

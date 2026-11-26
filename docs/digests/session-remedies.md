@@ -93,7 +93,7 @@ live update was run. [5](#source-5) [6](#source-6)
 4. <a id="source-4"></a> [Controller view](../../cmd/yoloctl/controller_views.go#L286-L298) — `box.drift` in `runControllerView`; its registry entry in controller_internal.go L77.
 5. <a id="source-5"></a> [Classification regressions](../../internal/session/view_mismatch_test.go#L18) — `TestViewRefusalsClassifyOnlyExplicitBuildAnswers`.
 6. <a id="source-6"></a> [Remedy regressions](../../cmd/yoloctl/session_remedy_test.go#L1) — attach paths, guidance cases, `box.drift`, `TestBoxDriftBatchHasOneInventoryAndOneBound`, the offer; caller, partial-minute and owned-setup fail-safe regressions in session_remedy_budget_test.go.
-7. <a id="source-7"></a> [Named resolution](../../internal/boxstate/boxstate.go#L256-L472) — `ResolveNamed` and `resolveSpace`; spy regression `TestResolveNamedLimitsPerBoxWorkToTheNamedBoxes` in boxstate_test.go L245; the partial read `incompleteAtDeadline`, `TestResolveNamedIsPartialWhenItsContextEnds` in partial_test.go.
+7. <a id="source-7"></a> [Named resolution](../../internal/boxstate/boxstate.go#L259-L475) — `ResolveNamed` and `resolveSpace`; spy regression `TestResolveNamedLimitsPerBoxWorkToTheNamedBoxes` in boxstate_test.go L245; the partial read `incompleteAtDeadline`, `TestResolveNamedIsPartialWhenItsContextEnds` in partial_test.go.
 
 8. <a id="source-8"></a> [Fresh-session guard](../../cmd/yoloctl/session_remedy.go#L271) — `guardFreshSessionImage`; caller in session_client.go before `beginTrackedSession`.
 9. <a id="source-9"></a> [Shared diff](../../internal/agentbox/diff.go#L179) — `Diff`, `imageRecreateReason`, `ImageRecreateReason`.

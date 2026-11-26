@@ -2,6 +2,7 @@ package session
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -77,7 +78,7 @@ func fanoutHolder(t *testing.T) (*holder, *pipeListener) {
 	t.Cleanup(func() { close(inputDone) })
 	ln := &pipeListener{connections: make(chan net.Conn, 8), closed: make(chan struct{})}
 	done := make(chan struct{})
-	go func() { defer close(done); h.acceptLoop(ln) }()
+	go func() { defer close(done); h.acceptLoop(t.Context(), ln) }()
 	t.Cleanup(func() {
 		_ = ln.Close()
 		<-done
@@ -420,5 +421,27 @@ func TestHolderClientFinishBoundsStalledWrite(t *testing.T) {
 				t.Fatal("writer extended its shutdown deadline")
 			}
 		})
+	}
+}
+
+func TestIncompleteHolderAdmissionEndsWithListener(t *testing.T) {
+	server, peer := net.Pipe()
+	defer func() { _ = peer.Close() }()
+	h := &holder{}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		h.admitView(ctx, server)
+		close(done)
+	}()
+	if hello, err := readFrame(peer); err != nil || hello.Type != frameHello {
+		t.Fatalf("admission hello = %+v, %v", hello, err)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("incomplete admission blocked holder shutdown")
 	}
 }

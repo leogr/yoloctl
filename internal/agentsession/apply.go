@@ -1,6 +1,7 @@
 package agentsession
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/leogr/yoloctl/internal/agentprofile"
@@ -19,7 +20,7 @@ import (
 // ReadCurrentReports reads a box's unread reports of generation gen for
 // read-only views. The controller sets it; elsewhere it is nil and views show
 // only the persisted evidence.
-var ReadCurrentReports func(box string, gen uint64, cur observe.Cursor) (observe.Result, error)
+var ReadCurrentReports func(ctx context.Context, box string, gen uint64, cur observe.Cursor) (observe.Result, error)
 
 // Fold is the profile's rule for which reports name the conversation. Every
 // fold of a record (the persisted one before a start, the live one of an
@@ -60,12 +61,12 @@ type viewFold struct {
 // read_at is this read's sampling time. The persisted outcome stands: a
 // report that would change it is returned as pending, and a divergence seen
 // only now is marked pending. The next start's persisted fold decides both.
-func (r *Record) foldForView(box string, rule Fold) viewFold {
+func (r *Record) foldForView(ctx context.Context, box string, rule Fold) viewFold {
 	if ReadCurrentReports == nil || r.Launch == nil || !r.Observable(r.Launch.Generation) {
 		return viewFold{}
 	}
 	gen := r.Launch.Generation
-	res, err := ReadCurrentReports(box, gen, r.ObservationCursor(gen))
+	res, err := ReadCurrentReports(ctx, box, gen, r.ObservationCursor(gen))
 	if err != nil {
 		return viewFold{live: "unavailable: " + err.Error()}
 	}

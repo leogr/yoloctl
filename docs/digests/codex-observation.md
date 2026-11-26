@@ -97,4 +97,4 @@ the writer's `codex-query` mode [10](#source-10).
 8. <a id="source-8"></a> [Codex 0.165 `--no-daemon`](https://github.com/openai/codex/blob/rust-v0.165.0/codex-rs/tui/src/cli.rs#L87) — the explicit switch.
 9. <a id="source-9"></a> [Stop-box start modes](stop-box.md) — the reaper is gone.
 10. <a id="source-10"></a> [Codex refresh read](codex-refresh-read.md) — the controller's scheduler, targets and writer mode.
-11. <a id="source-11"></a> [State fold](../../internal/agentsession/apply.go#L274-L288) — a completed model request clears only a matching failure; any other line with a state replaces the observed one.
+11. <a id="source-11"></a> [State fold](../../internal/agentsession/apply.go#L275-L289) — a completed model request clears only a matching failure; any other line with a state replaces the observed one.

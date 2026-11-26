@@ -74,8 +74,8 @@ retry occurs. [1](#source-1) [6](#source-6)
 5. <a id="source-5"></a> [nerdctl v2.4.2 stopped snapshot and tar arguments](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/containerutil/cp_linux.go#L254-L300) — container-to-stdout tar and its source directory.
 6. <a id="source-6"></a> [Archive validation and publication](../../internal/boxexport/export.go#L43-L467) — `Copy`, `receive`, `publishEntry`, `checkLink`.
 7. <a id="source-7"></a> [Host directory authority](../../internal/boxexport/fs_unix.go#L32-L218) — `openHostDirectory`, `newStage`, `moveEntry`, `cleanupStage`; platform `renameExclusive` uses Linux `RENAME_NOREPLACE` / Darwin `RENAME_EXCL`.
-8. <a id="source-8"></a> [Host-only registry](../../cmd/yoloctl/controller_internal.go#L40-L125) — `controllerOperations`;
-   `executeControllerWorker` [dispatches the typed read](../../cmd/yoloctl/controller_internal.go#L749-L750).
+8. <a id="source-8"></a> [Host-only registry](../../cmd/yoloctl/controller_internal.go#L41-L126) — `controllerOperations`;
+   `executeControllerWorker` [dispatches the typed read](../../cmd/yoloctl/controller_internal.go#L753-L754).
 9. <a id="source-9"></a> [Server authorization](../../internal/controller/protocol.go#L231-L266) — `Authorize`, `BoxAllowed`.
 10. <a id="source-10"></a> [Export-only record decoder](../../internal/openshell/export_record_linux.go#L10-L49) — `DecodeExportRecord`.
 11. <a id="source-11"></a> [nerdctl v2.4.2 source resolution](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/containerutil/cp_resolve_linux.go) — relative-root, source-link and mount mapping.

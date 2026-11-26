@@ -106,7 +106,7 @@ echo-independent readiness and preserved shell state.
 
 1. <a id="source-1"></a> [internal/session/view.go](../../internal/session/view.go#L147) — `attachView`.
 2. <a id="source-2"></a> [internal/session/dial.go](../../internal/session/dial.go#L21) — `DialVM`.
-3. <a id="source-3"></a> [internal/session/holder.go](../../internal/session/holder.go#L98-L287) — `RunHolder`, initial title before output/admission.
+3. <a id="source-3"></a> [internal/session/holder.go](../../internal/session/holder.go#L115-L306) — `RunHolder`, initial title before output/admission.
 4. <a id="source-4"></a> [internal/session/session.go](../../internal/session/session.go#L1-L107) — socket/state layout and ring/keepalive defaults.
 5. <a id="source-5"></a> [cmd/yoloctl/session_client.go](../../cmd/yoloctl/session_client.go#L43) — holder setup, tuning and finishAttach.
 6. <a id="source-6"></a> [internal/session/protocol.go](../../internal/session/protocol.go#L25) — frame types, `readFrame`, `writeFrame`.

@@ -75,7 +75,7 @@ characters (copy maps them to chips, see the terminal selection digest).
 2. <a id="source-2"></a> [frames.go](../../internal/tui/frames.go#L40-L109) — `consoleDisplayFrame`, `sessionFrame`, `filterImages`; `View` captures in tui.go.
 3. <a id="source-3"></a> [image_filter_test.go](../../internal/tui/image_filter_test.go#L1) — owner, forging pane, console, composed view, release and a placeholder title; `emulator.Title` and the browser popup URL use `NeutralizeText`.
 4. <a id="source-4"></a> [protocol.go](../../internal/chatimage/protocol.go#L1-L285) — `Frame`, `Validate`, `Conn.Send`/`Receive`, `ChannelPair`, `InheritedChannel`; tests in protocol_test.go.
-5. <a id="source-5"></a> [session.go](../../internal/tui/term/session.go#L640-L672) — `Options.OnImage`, channel setup in `Start`, reader, close in `pump`, `SendImage`, `QueueImage` and the per-pane writer; image_channel_test.go with a real child.
+5. <a id="source-5"></a> [session.go](../../internal/tui/term/session.go#L638-L670) — `Options.OnImage`, channel setup in `Start`, reader, close in `pump`, `SendImage`, `QueueImage` and the per-pane writer; image_channel_test.go with a real child.
 6. <a id="source-6"></a> [detect.go](../../internal/chatimage/detect.go#L1) — `ParseTerminalVersion`, `Terminal.Supported`, `Probe`; ids.go `IDs`; detect_test.go.
 7. <a id="source-7"></a> [image_probe.go](../../internal/tui/image_probe.go#L1) — `startImageProbe`, `imageProbeMsg`, `checkImageProbe`, `imagesSupported`; image_probe_test.go.
 8. <a id="source-8"></a> [host_geometry.go](../../internal/tui/host_geometry.go#L39) — `acceptHostCellSize` re-checks the probe.

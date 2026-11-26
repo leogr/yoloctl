@@ -68,7 +68,7 @@ refusal on older servers. None of these proves a VM or live room.
 
 1. <a id="source-1"></a> [CLI](../../cmd/yoloctl/chat_channels.go#L70-L131) — `delete` command, `channelRequestFromSnapshot`, `runChatChannelMutation`.
 2. <a id="source-2"></a> [Typed request](../../cmd/yoloctl/chat_channels_runtime.go#L22-L74) — `decodeChatChannelRequest`.
-3. <a id="source-3"></a> [Registry](../../cmd/yoloctl/controller_internal.go#L58) — `chat.channel.delete`; `operatorChatMethod` in chat_operator.go.
+3. <a id="source-3"></a> [Registry](../../cmd/yoloctl/controller_internal.go#L59) — `chat.channel.delete`; `operatorChatMethod` in chat_operator.go.
 4. <a id="source-4"></a> [Ledger](../../internal/managedchat/channels.go#L14-L196) — `DeletedChannel`, `ValidateDeletedChannels`, `RemovedChannelNames`, `reidentifyChannels`.
 5. <a id="source-5"></a> [Mutation](../../internal/managedchat/channels.go#L266-L295) — `DeleteChannel`.
 6. <a id="source-6"></a> [Apply](../../cmd/yoloctl/chat_channels_runtime.go#L197-L262) — `mutateChatChannels`, `applyChatChannelProof`.

@@ -259,3 +259,66 @@ func TestCancellationReapsTheOwnedReader(t *testing.T) {
 		t.Fatal("reader survived cancellation")
 	}
 }
+
+func TestVMReaderInheritedPipesAfterLeaderExit(t *testing.T) {
+	for _, pipe := range []string{"stdin", "stdout"} {
+		for _, how := range []string{"cancel", "expire"} {
+			t.Run(pipe+"/"+how, func(t *testing.T) {
+				root := fixtureDir(t)
+				ready := filepath.Join(root, "ready")
+				release := filepath.Join(root, "release")
+				t.Cleanup(func() { _ = os.WriteFile(release, nil, 0600) })
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				script := `
+import os, pathlib, sys, time
+pipe, ready, release = sys.argv[1:]
+if os.fork():
+    os.write(1, b"reply")
+    pathlib.Path(ready).touch()
+    os._exit(0)
+os.close(2)
+os.close(1 if pipe == "stdin" else 0)
+until = time.monotonic() + 10
+while not pathlib.Path(release).exists() and time.monotonic() < until:
+    time.sleep(0.02)
+`
+				cmd := exec.CommandContext(ctx, "python3", "-c", script, pipe, ready, release)
+				var out, stderr bytes.Buffer
+				input := bytes.Repeat([]byte("x"), 1<<20)
+				budget := 45 * time.Millisecond
+				if how == "cancel" {
+					budget = time.Minute
+				}
+				done := make(chan error, 1)
+				go func() { done <- runVMReaderCommand(ctx, cmd, input, &out, &stderr, budget) }()
+				if how == "cancel" {
+					deadline := time.After(4 * time.Second)
+					for {
+						if _, err := os.Stat(ready); err == nil {
+							break
+						}
+						select {
+						case <-deadline:
+							t.Fatal("reader has not produced its reply")
+						case <-time.After(5 * time.Millisecond):
+						}
+					}
+					cancel()
+				}
+				want := exec.ErrWaitDelay
+				if how == "cancel" {
+					want = context.Canceled
+				}
+				select {
+				case err := <-done:
+					if !errors.Is(err, want) || cmd.ProcessState == nil {
+						t.Fatalf("read = %v, want %v, reaped=%t", err, want, cmd.ProcessState != nil)
+					}
+				case <-time.After(4 * time.Second):
+					t.Fatal("inherited pipe still holds the reader")
+				}
+			})
+		}
+	}
+}

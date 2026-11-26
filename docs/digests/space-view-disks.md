@@ -73,14 +73,14 @@ hover and popups with fixtures. No live VM measurement is established by them.
 ## Sources
 
 1. <a id="source-1"></a> [collect.go](../../internal/spacetelemetry/collect.go#L89-L98) — `Sample` disk reads; `SystemDisk` in `telemetry.go` at L151-L154.
-2. <a id="source-2"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L96-L103) — native collector with `SystemMount: "/"`.
+2. <a id="source-2"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L97-L104) — native collector with `SystemMount: "/"`.
 3. <a id="source-3"></a> [init_linux.go](../../internal/vmguest/init_linux.go#L270-L294) — runtime directories bound from `/run/system`; root overlay at L550-L556.
 4. <a id="source-4"></a> [disk.go](../../internal/spacetelemetry/disk.go#L1-L56) — `DiskLevel`, thresholds, `Used`, `WarnFree`, `CriticalFree`, `Pressure`.
 5. <a id="source-5"></a> [disks.go](../../internal/tui/spaceview/disks.go#L14-L166) — `disks`, `levelGauge`, `diskBlock`, `diskBand`; popups at L234-L278.
 6. <a id="source-6"></a> [layout.go](../../internal/tui/spaceview/layout.go#L411-L421) — disk hover hints; `tSystemDisk` at L29; click in `popup.go` at L164.
 7. <a id="source-7"></a> [disks.go](../../internal/tui/spaceview/disks.go#L168-L230) — `diskAlerts`, `diskEvents`; title slot in `layout.go` at L255-L270.
 8. <a id="source-8"></a> [data.go](../../internal/tui/spaceview/data.go#L168) — disk events per sample.
-9. <a id="source-9"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L122) — `space.storage` entry; view in `controller_views.go` at L284-L285.
+9. <a id="source-9"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L123) — `space.storage` entry; view in `controller_views.go` at L284–L285.
 10. <a id="source-10"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L400) — `newSpaceStorageCmd`; registered in `controller_lifecycle.go` at L45.
 11. <a id="source-11"></a> [collectSpaceStorage](../../cmd/yoloctl/space_storage.go#L149) — measurement budget and partial results.
 12. <a id="source-12"></a> [storage.go](../../internal/container/storage.go#L129-L245) — keyed/global snapshot measurements and strict parsers.

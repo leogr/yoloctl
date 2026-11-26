@@ -133,7 +133,7 @@ func readBoxSession(ctx context.Context, c *container.Client, space, name string
 	// A running holder whose marker could not be read is neither tracked nor
 	// untracked: its session error says so instead.
 	known := view.Session.State == boxSessionRunning && view.Session.Error == ""
-	view.Conversation = agentsession.Describe(resolved.Config, profile, known, token)
+	view.Conversation = agentsession.DescribeContext(ctx, resolved.Config, profile, known, token)
 	view.Session.Tracked = view.Conversation.LiveLaunch()
 	return view, nil
 }

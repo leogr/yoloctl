@@ -92,7 +92,7 @@ a process can still write outside `.cache`.
 8. <a id="source-8"></a> [cache_test.go](../../internal/boxcache/cache_test.go#L1) — filesystem retention, ownership, links and exact removal.
 9. <a id="source-9"></a> [cache_test.go](../../internal/agentbox/cache_test.go#L1) — mount assembly, overlap, policy and drift controls.
 
-10. <a id="source-10"></a> [boxstate.go](../../internal/boxstate/boxstate.go#L509) — narrow cache conflict validation in `declaredBoxes`.
+10. <a id="source-10"></a> [boxstate.go](../../internal/boxstate/boxstate.go#L512) — narrow cache conflict validation in `declaredBoxes`.
 11. <a id="source-11"></a> [cache_preflight_test.go](../../cmd/yoloctl/cache_preflight_test.go#L1) — persisted recreate entry, managed pre-teardown and common runtime-preparation controls.
 
 12. <a id="source-12"></a> [clear.go](../../internal/boxcache/clear.go#L1) — owned leaf clear, footprint measurement, cancellable traversal and private recreation.

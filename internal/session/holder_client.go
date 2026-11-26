@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	clientWriteTimeout     = 5 * time.Second
+	holderWaitFailSafe     = 2 * time.Minute
 	maxClientOutputBytes   = 4 << 20
 	maxClientOutputPackets = 4096
 )
@@ -112,7 +112,7 @@ func (c *holderClient) abort() {
 func (c *holderClient) writeDeadline() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	deadline := time.Now().Add(clientWriteTimeout)
+	deadline := time.Now().Add(holderWaitFailSafe)
 	if !c.drainBy.IsZero() && c.drainBy.Before(deadline) {
 		deadline = c.drainBy
 	}

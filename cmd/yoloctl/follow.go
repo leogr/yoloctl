@@ -144,9 +144,10 @@ Fragments open the file only. A failed read marks the last display stale.
 			// Resolve the absolute name once. Polls use only that pinned name and space.
 			// The same pinned default workdir also supplies the title base for
 			// absolute paths; it never changes the path used by the reader.
-			ctx, cancel := context.WithTimeout(cmd.Context(), 7*time.Second)
-			workdir, err = resolveFollowWorkdir(ctx, space)
-			cancel()
+			workdir, err = resolveFollowWorkdir(cmd.Context(), space)
+			if cmd.Context().Err() != nil {
+				return cmd.Context().Err()
+			}
 			if err != nil {
 				if followRelativePath(args[0]) {
 					return err

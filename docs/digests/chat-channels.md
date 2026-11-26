@@ -128,7 +128,7 @@ Separate opt-in tests against real AIRC binaries are summarized in
 
 1. <a id="source-1"></a> [CLI](../../cmd/yoloctl/chat_channels.go#L48) — command construction, immutable resolution, catalog refresh.
 2. <a id="source-2"></a> [Controller](../../cmd/yoloctl/chat_channels_runtime.go#L22) — strict requests, authority, apply transaction.
-3. <a id="source-3"></a> [Registry](../../cmd/yoloctl/controller_internal.go#L40) — `controllerOperations`, channel dispatcher.
+3. <a id="source-3"></a> [Registry](../../cmd/yoloctl/controller_internal.go#L41) — `controllerOperations`, channel dispatcher.
 4. <a id="source-4"></a> [Catalog](../../internal/managedchat/channels.go#L18) — validation, mutation, enrollment and remapping.
 5. <a id="source-5"></a> [Native regressions](../../internal/managedchat/channels_test.go#L21) — legacy, ACL, interruption and publication.
 6. <a id="source-6"></a> [Rendering](../../internal/managedchat/render.go#L196) — `buildRender`, `renderChannels`.

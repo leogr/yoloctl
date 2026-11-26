@@ -47,11 +47,9 @@ var (
 // observationViewBudget is one command's cooperative live-read budget: every
 // read runs under a context ending at it, which ReadWithin checks between
 // steps, so a read can overrun it by one step and a hung kernel call is not
-// bounded (see ReadWithin). The budget is process-global, so it is a per-command deadline only because each
-// command's views run in their own controller worker process (records are
-// read only there); a long-lived caller would need its own budget. Past it, a
-// view shows its live values as unavailable instead of waiting.
-var observationViewBudget = 2 * time.Second
+// bounded (see ReadWithin). Each controller command has its own worker
+// process. Past that worker's budget its live fields are unavailable.
+var observationViewBudget = time.Minute
 
 var viewReads struct {
 	sync.Mutex
@@ -60,16 +58,11 @@ var viewReads struct {
 	parent context.Context
 }
 
-// beginObservationViewBudget starts a new live-read budget under ctx, for a
-// worker that reads one box at a time as separate commands would: the reads
-// end at ctx's deadline when that comes first, and with its cancellation.
+// beginObservationViewBudget selects the command context for live reads.
+// Its allowance starts when the first live read is needed.
 func beginObservationViewBudget(ctx context.Context) {
-	start := time.Now()
-	if limit, ok := ctx.Deadline(); ok && limit.Before(start.Add(observationViewBudget)) {
-		start = limit.Add(-observationViewBudget)
-	}
 	viewReads.Lock()
-	viewReads.start, viewReads.parent = start, ctx
+	viewReads.start, viewReads.parent = time.Time{}, ctx
 	viewReads.Unlock()
 }
 
@@ -84,7 +77,7 @@ func resetObservationViewBudget() {
 // The controller reads current reports for views; on a host build the owner
 // is unknown and views show only the persisted evidence.
 func init() {
-	agentsession.ReadCurrentReports = func(box string, gen uint64, cur observe.Cursor) (observe.Result, error) {
+	agentsession.ReadCurrentReports = func(ctx context.Context, box string, gen uint64, cur observe.Cursor) (observe.Result, error) {
 		viewReads.Lock()
 		if viewReads.start.IsZero() {
 			viewReads.start = time.Now()
@@ -92,8 +85,10 @@ func init() {
 		deadline := viewReads.start.Add(observationViewBudget)
 		parent := viewReads.parent
 		viewReads.Unlock()
-		if parent == nil {
-			parent = context.Background()
+		if parent != nil {
+			if limit, ok := parent.Deadline(); ok && limit.Before(deadline) {
+				deadline = limit
+			}
 		}
 		if !time.Now().Before(deadline) {
 			return observe.Result{}, errors.New("skipped: this command's live-read budget is spent")
@@ -103,8 +98,15 @@ func init() {
 		if err != nil || !ok {
 			return observe.Result{}, observe.ErrUnavailable
 		}
-		ctx, cancel := context.WithDeadline(parent, deadline)
+		ctx, cancel := context.WithDeadline(ctx, deadline)
 		defer cancel()
+		if parent != nil {
+			stop := context.AfterFunc(parent, cancel)
+			defer stop()
+			if parent.Err() != nil {
+				cancel()
+			}
+		}
 		return readObservationFn(ctx, dir, gen, cur, uid, sessionNow())
 	}
 }

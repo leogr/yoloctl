@@ -19,6 +19,7 @@ import (
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/atomicfile"
+	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/catalogsnapshot"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
@@ -593,6 +594,7 @@ func runControllerWorker(ctx context.Context) error {
 	operation := controllerOperations[work.Request.Method]
 	if operation.OwnedSetup {
 		ctx = context.WithValue(ctx, controllerOwnedSetupKey{}, true)
+		ctx = boxstate.WithHolderStatsAttempt(ctx, ownedSessionProbeFailSafe)
 	}
 	if operation.EffectGated {
 		checkpoints.Gate()
@@ -692,6 +694,8 @@ func completeBeforeUnlock(ctx context.Context, result *error, publicationFailed 
 }
 
 func executeControllerWorker(ctx context.Context, work controller.WorkerInput) error {
+	beginObservationViewBudget(ctx)
+	defer resetObservationViewBudget()
 	if work.Request.Method == "account.secret.set" {
 		var secret controllerSecret
 		if err := decodeBoundedJSON(bytes.NewReader(work.Request.Payload), &secret, 2*controller.MaxDocument); err != nil {

@@ -1,14 +1,18 @@
 package boxuse
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/session"
 	"github.com/leogr/yoloctl/internal/terminal"
 )
@@ -275,5 +279,77 @@ func TestBlockedOutputCanBeCanceled(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("blocked output prevented cancellation")
+	}
+}
+
+func TestCanceledSnapshotKeepsBoxUseUnready(t *testing.T) {
+	saved := restoreBoxUseSnapshot
+	t.Cleanup(func() { restoreBoxUseSnapshot = saved })
+	started := make(chan struct{})
+	restoreBoxUseSnapshot = func(ctx context.Context, _ []byte, _ func([]byte)) (*terminal.Terminal, error) {
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	client, peer := net.Pipe()
+	defer func() { _ = client.Close() }()
+	defer func() { _ = peer.Close() }()
+	bundle, err := controller.ExecutableIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		send := func(kind byte, p []byte) error {
+			var header [3]byte
+			header[0] = kind
+			binary.BigEndian.PutUint16(header[1:], uint16(len(p)))
+			_, err := peer.Write(append(header[:], p...))
+			return err
+		}
+		if send('h', []byte{6}) != nil {
+			return
+		}
+		var subscribe [3]byte
+		if _, err := io.ReadFull(peer, subscribe[:]); err != nil {
+			return
+		}
+		if _, err := io.CopyN(io.Discard, peer, int64(binary.BigEndian.Uint16(subscribe[1:]))); err != nil {
+			return
+		}
+		meta, _ := json.Marshal(map[string]any{
+			"Bundle": bundle, "Core": terminal.CoreIdentity(), "Session": "fixture",
+			"Client": "client", "SnapshotBytes": 1, "Sequence": 0, "Colors": terminal.Colors{},
+		})
+		for _, f := range []struct {
+			kind byte
+			data []byte
+		}{{'b', meta}, {'s', []byte{1}}, {'S', nil}} {
+			if err := send(f.kind, f.data); err != nil {
+				return
+			}
+		}
+		_, _ = io.Copy(io.Discard, peer)
+	}()
+	var sent bytes.Buffer
+	done := make(chan error, 1)
+	go func() {
+		requests := strings.NewReader("{\"id\":\"1\",\"op\":\"text\",\"text\":\"before ready\"}\n")
+		done <- Run(ctx, client, requests, io.Discard, &sent)
+	}()
+	select {
+	case <-started:
+	case <-time.After(4 * time.Second):
+		t.Fatal("box-use never entered snapshot restore")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) || sent.Len() != 0 {
+			t.Fatalf("box-use restore result = %v, input bytes = %d", err, sent.Len())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("box-use still waited for snapshot readiness after cancellation")
 	}
 }

@@ -108,6 +108,6 @@ it is for Claude. [1](#source-1) [7](#source-7)
 12. <a id="source-12"></a> [Guest regressions](../../internal/accountstate/testdata/test_guest.py#L115-L191) — set and restore, kept keys, refusals, links.
 13. <a id="source-13"></a> [Command regressions](../../cmd/yoloctl/account_observe_test.go#L1-L121) — request, outcomes, refusals, registry class, launcher match.
 14. <a id="source-14"></a> [Profile](../../internal/agentprofile/builtin/agy.yaml#L24-L57) — `session`; `StatusLineIdentity`, `CarryArgs.Format` in profile.go.
-15. <a id="source-15"></a> [Fold](../../internal/agentsession/apply.go#L345) — `statusLineIdentity`; `modelLabel` in policy.go; `unlearnedNote` in status.go; cmd/yoloctl/agy_session_test.go.
+15. <a id="source-15"></a> [Fold](../../internal/agentsession/apply.go#L346) — `statusLineIdentity`; `modelLabel` in policy.go; `unlearnedNote` in status.go; cmd/yoloctl/agy_session_test.go.
 16. <a id="source-16"></a> [Quoting](../../internal/session/shell_join_test.go#L13) — the label stays one argument.
 17. <a id="source-17"></a> [CLI reference](https://antigravity.google/docs/cli/reference), read 2026-11-09; installed 1.5.3 help, report and layout read by a team researcher, not re-executed.

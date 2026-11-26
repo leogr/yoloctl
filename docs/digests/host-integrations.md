@@ -26,7 +26,7 @@ pane is marked [24](#source-24).
 
 [FACT] Browser routing chooses one accepting managed view with the latest input
 activity; ties choose the last attached. One request can be pending per holder.
-Only its chosen view can answer; disconnect or 90 seconds cancels it without
+Only its chosen view can answer. Disconnection or a two-minute wait cancels it without
 retry/rerouting. There is no replay. Host `seams.browser` defaults to `on`;
 explicit `ask`/`off` persist; unknown values use `ask`. Ask immediately opens
 the palette/dialog with source, URL and Ctrl+O Open / Esc Cancel. A shared popup
@@ -73,10 +73,13 @@ creates a random `/tmp/yoloctl-image-…/clipboard.png`, directory 0700/file 060
 with exclusive/no-follow writes and file/directory fsync. There is no supplied
 destination. Caught partial-write failures are cleaned up; completed files remain in
 the container until removed or the box is replaced. They are not account state.
-An upload ended by its fail-safe, Ctrl+C or detach can leave an uncertain file; a canceled blocked transfer
-closes only its attachment, never retries, and preserves the holder/other views.
-Unanswered SSH opens retain a slot until resolved, bounded to two.
-[1](#source-1) [4](#source-4) [6](#source-6)
+Upload and reuse follow attachment cancellation and have a two-minute
+fail-safe. Each operation opens a confined connection to the listener observed
+when the holder attached. At most two image operations run at once. Expiry or
+detach closes the operation's SSH transport and releases its slot. A file can
+remain after cancellation. Each new paste needs its own user action, and the
+holder's terminal and other views stay connected.
+[1](#source-1) [5](#source-5) [26](#source-26) [27](#source-27)
 
 [FACT] Local tests cover PTYs/private descriptors, image bytes/input ordering,
 real TUI prompt rendering across repeated decisions/cancellation/disconnect,
@@ -90,11 +93,11 @@ OAuth need separate acceptance; macOS decoding tests are synthetic.
 
 ## Sources
 
-1. <a id="source-1"></a> [host_actions.go](../../internal/session/host_actions.go#L73) — routing, HostClient lifecycle and bounded imageReceiver.
+1. <a id="source-1"></a> [host_actions.go](../../internal/session/host_actions.go#L71) — routing, HostClient lifecycle and bounded imageReceiver.
 2. <a id="source-2"></a> [view.go](../../internal/session/view.go#L147) — private admission/delivery.
 3. <a id="source-3"></a> [host_actions.go](../../internal/tui/host_actions.go#L28) — prompts, approval and ordered image key ownership.
-4. <a id="source-4"></a> [host_bridge.go](../../internal/session/host_bridge.go#L36) — startBrowserBridge and browserLaunch.
-5. <a id="source-5"></a> [holder.go](../../internal/session/holder.go#L174) — optional integration setup.
+4. <a id="source-4"></a> [host_bridge.go](../../internal/session/host_bridge.go#L39) — startBrowserBridge and browserLaunch.
+5. <a id="source-5"></a> [holder.go](../../internal/session/holder.go#L183) — optional integration setup.
 6. <a id="source-6"></a> [host.go](../../internal/hostintegration/host.go#L22) — validators, desktop dispatch, bounds and deadlines.
 7. <a id="source-7"></a> [tui.go](../../internal/config/tui.go#L217) — policies and commented defaults.
 8. <a id="source-8"></a> [input.go](../../internal/tui/term/input.go#L60) — Transform reserves ordered input.
@@ -115,3 +118,5 @@ OAuth need separate acceptance; macOS decoding tests are synthetic.
 23. <a id="source-23"></a> [popup.go](../../internal/tui/popup.go#L9) — shared popup frame, wrapping and palette background.
 24. <a id="source-24"></a> [TUI pane requests](tui-pane-requests.md) — requests matched to panes, attention marks.
 25. <a id="source-25"></a> [host_failsafe_test.go](../../internal/tui/host_failsafe_test.go#L1) — paste cancel and fail-safes; hostintegration failsafe_test.go.
+26. <a id="source-26"></a> [host_bridge.go](../../internal/session/host_bridge.go#L149) — image transport ownership and endpoint check.
+27. <a id="source-27"></a> [host_actions_test.go](../../internal/session/host_actions_test.go#L304) — withheld exec acknowledgement, expiry and detach.

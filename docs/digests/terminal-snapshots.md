@@ -21,7 +21,9 @@ envelope/core, validates native record framing/CRCs and full consumption through
 FINISH, and rejects trailing bytes. The bridge checks constructor geometry bounds
 including whole-cell pixel dimensions, and the declared history policy before loading history. Each instance retains
 the 256 MiB memory ceiling. Native decoding is interruptible by the caller's
-context and capped at five seconds; a failed candidate is closed. A successful
+context. The managed TUI gives one restore a two-minute fail-safe and
+allows a received snapshot to finish even after its child exits. Box use
+uses its command deadline. A failed candidate is closed. A successful
 terminal has an independent lifetime after the decode context is canceled.
 The owner publishes the new instance only after success. [1](#source-1)
 [2](#source-2) [3](#source-3)
@@ -58,12 +60,12 @@ not live Lima or graphical-host parity results. [4](#source-4)
 
 ## Sources
 
-1. <a id="source-1"></a> [snapshot.go](../../internal/terminal/snapshot.go#L13) — envelope, `Snapshot`, `RestoreSnapshot`, size/context bounds and error ownership.
+1. <a id="source-1"></a> [snapshot.go](../../internal/terminal/snapshot.go#L12) — envelope, `Snapshot`, `RestoreSnapshot`, size/context bounds and error ownership.
 2. <a id="source-2"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L20-L121) — creation, callback installation and strict native restore.
 3. <a id="source-3"></a> [terminal.go](../../internal/terminal/terminal.go#L39-L262) — runtime from `runtimeConfig` (cache.go: interruptible, bounded), `New`, isolated instances and call errors.
 4. <a id="source-4"></a> [snapshot_test.go](../../internal/terminal/snapshot_test.go#L99) — restoration/continuation/effect/malformed-input tests and `FuzzRestoreSnapshot`.
 5. <a id="source-5"></a> [Pinned Ghostty snapshot format](https://github.com/ghostty-org/ghostty/blob/573c4a21e02311ae87844af26b6a7a179f82858e/src/terminal/snapshot/main.zig#L19-L93) — version 1 at `573c4a21`, verified against the hash-pinned archive.
-6. <a id="source-6"></a> [holder_view.go](../../internal/session/holder_view.go#L225) — native snapshot admission and compatibility subscription.
+6. <a id="source-6"></a> [holder_view.go](../../internal/session/holder_view.go#L225) — admission cancellation, native snapshot capture and compatibility subscription.
 7. <a id="source-7"></a> [Pinned Ghostty field classification](https://github.com/ghostty-org/ghostty/blob/573c4a21e02311ae87844af26b6a7a179f82858e/src/terminal/snapshot/terminal.zig#L217-L237) — retained, local and omitted state at the same verified revision.
 8. <a id="source-8"></a> [geometry_test.go](../../internal/terminal/geometry_test.go#L18) — measured-size restoration.
 9. <a id="source-9"></a> [mouse_test.go](../../internal/terminal/mouse_test.go#L59) — Shift-state restoration.

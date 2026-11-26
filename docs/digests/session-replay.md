@@ -35,9 +35,10 @@ colors. App overrides remain native terminal state. [2](#source-2)
 [FACT] Every viewer has an independent writer and immutable queued events.
 Socket writes do not hold the parser lock. The live queue allows 4 MiB/4096
 packets including in-flight bytes; the private snapshot is separate. Overflow
-or a five-second write timeout closes that viewer without inventing agent exit.
-Shutdown stops admission and drains accepted output before EXIT, under a shared
-five-second deadline. An input buffer overflow is an explicit failure. A
+or a two-minute stalled write closes that viewer without inventing agent exit.
+Shutdown closes incomplete admissions and drains accepted output before EXIT
+under a shared two-minute deadline. A stalled final writer can defer the next
+session start, restart or recreate. Box stop uses its independent stop path. An input buffer overflow is an explicit failure. A
 canonical parser/reply failure closes the sandbox connection, leaving an
 uncertain-session marker instead of continuing with divergent state.
 [1](#source-1) [2](#source-2) [6](#source-6)
@@ -84,7 +85,7 @@ These tests do not establish a live-VM pass or graphical parity.
 
 ## Sources
 
-1. <a id="source-1"></a> [holder.go](../../internal/session/holder.go#L72) — `RunHolder`, `broadcast`, `retainReplay`, shutdown and marker outcomes.
+1. <a id="source-1"></a> [holder.go](../../internal/session/holder.go#L115) — `RunHolder`, `broadcast`, `retainReplay`, shutdown and marker outcomes.
 2. <a id="source-2"></a> [holder_view.go](../../internal/session/holder_view.go#L18) — `initView`, `flushRepliesLocked`, `resizeView`, `selectColorsLocked`, `admitView`.
 3. <a id="source-3"></a> [colors.go](../../internal/terminal/colors.go#L60) — shared `ColorQueries`, native overrides, bounded pending reports.
 4. <a id="source-4"></a> [view.go](../../internal/session/view.go#L145) — `attachView`, identity, snapshot and ordered event validation.
@@ -93,11 +94,11 @@ These tests do not establish a live-VM pass or graphical parity.
 7. <a id="source-7"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L224) — native `PassthroughHandler` and bounded control publication.
 8. <a id="source-8"></a> [passthrough_test.go](../../internal/terminal/passthrough_test.go#L11) — receiving-parser query suppression and byte-split UTF-8/control preservation.
 9. <a id="source-9"></a> [terminal_state.go](../../internal/session/terminal_state.go#L9) — evicted-prefix state, bell filter, replay and recovery.
-10. <a id="source-10"></a> [managed.go](../../internal/tui/term/managed.go#L98) — replica publication, canonical geometry and measured metadata.
+10. <a id="source-10"></a> [managed.go](../../internal/tui/term/managed.go#L137) — replica publication, canonical geometry and measured metadata.
 11. <a id="source-11"></a> [holder_view_test.go](../../internal/session/holder_view_test.go#L96) — snapshot, mixed-view, clipboard and query-burst regressions.
-12. <a id="source-12"></a> [holder_fanout_test.go](../../internal/session/holder_fanout_test.go#L140) — backpressure, order, queue ownership, exit and shutdown tests.
+12. <a id="source-12"></a> [holder_fanout_test.go](../../internal/session/holder_fanout_test.go#L141) — backpressure, order, queue ownership, exit and shutdown tests.
 13. <a id="source-13"></a> [terminal_state_test.go](../../internal/session/terminal_state_test.go#L68) — overflow, continuation and input-state comparisons.
-14. <a id="source-14"></a> [managed.go](../../internal/tui/term/managed.go#L98) — per-view history cap and typed hold release; native/local separation in `internal/terminal/frame.go:SetHistoryViewLimit`; regressions in `managed_test.go`.
+14. <a id="source-14"></a> [managed.go](../../internal/tui/term/managed.go#L137) — per-view history cap and typed hold release; native/local separation in `internal/terminal/frame.go:SetHistoryViewLimit`; regressions in `managed_test.go`.
 15. <a id="source-15"></a> [attach-mixed.py](../../scripts/smoke/attach-mixed.py#L143) — `prepare_python_probe`, `Driver.start_flood`, `check_live_rejoin`, `wait_audit` and `run`, invoked by `box-attach.sh`.
 16. <a id="source-16"></a> [test_attach_mixed.py](../../scripts/test_attach_mixed.py#L24) — local PTY driver/probe, fragmented repaint/rejoin, canonical/Readline startup and audit negative controls.
 17. <a id="source-17"></a> [attach-probe.py](../../scripts/smoke/attach-probe.py#L20) — guest `run`: raw input, paced output, resize and cursor-reply audit.

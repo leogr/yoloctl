@@ -72,7 +72,7 @@ generated policy or diagnose why a box is drifted.
 			if err := validateAgentboxName(name); err != nil {
 				return err
 			}
-			resolved, err := newBoxStateResolver().ResolveOne(cmd.Context(), spaceName, name, boxstate.FullDiff)
+			resolved, err := newBoxStateResolver().ResolveOneView(cmd.Context(), spaceName, name, boxstate.FullDiff)
 			if err != nil {
 				return err
 			}

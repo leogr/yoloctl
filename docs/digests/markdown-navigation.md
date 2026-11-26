@@ -62,7 +62,7 @@ is trimmed from the intent without moving the scan boundary. [10](#source-10)
 
 ## Sources
 
-1. <a id="source-1"></a> [Navigation context](../../internal/filelink/navigation.go#L18) — Context, Resolve, Accept, AdmitDestinations.
+1. <a id="source-1"></a> [Navigation context](../../internal/filelink/navigation.go#L20) — Context, Resolve, Accept, AdmitDestinations.
 2. <a id="source-2"></a> [CLI binding](../../cmd/yoloctl/file_navigation.go#L22) — fileNavigation; follow.go newFollowCmd and chat_view.go runChatView/configureChatBrowser.
 3. <a id="source-3"></a> [Linked readers](../../internal/followview/navigation.go#L17) — openBounded, HostProbe, VMReader.Probe; source.go HostReader.Read/VMReader.call and reader.py open_selected/probe.
 4. <a id="source-4"></a> [Follow actions](../../internal/followview/links.go#L16) — activateLink, browserKey, browserView; model.go work/Update/mouse/View.

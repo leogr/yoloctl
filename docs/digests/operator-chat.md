@@ -79,7 +79,7 @@ confinement or AIRC connection proof.
 
 ## Sources
 
-1. <a id="source-1"></a> [Registry and worker](../../cmd/yoloctl/controller_internal.go#L40) — `controllerOperations`, `runControllerWorker`.
+1. <a id="source-1"></a> [Registry and worker](../../cmd/yoloctl/controller_internal.go#L41) — `controllerOperations`, `runControllerWorker`.
 2. <a id="source-2"></a> [Operator preflight](../../cmd/yoloctl/chat_operator.go#L43) — `checkOperatorChatRuntime`, `validateOperatorChatRuntime`.
 3. <a id="source-3"></a> [Runtime membership](../../cmd/yoloctl/chat_runtime.go#L39) — `runControllerChatRuntime`, enrollment/apply/recreate.
 4. <a id="source-4"></a> [Participation](../../cmd/yoloctl/chat_participation.go#L84) — dispatcher, `resolveChatParticipant`, server proof and `executeChatParticipation`.

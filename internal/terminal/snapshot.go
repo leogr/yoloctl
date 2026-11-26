@@ -7,17 +7,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"time"
 )
 
 // MaxSnapshotBytes bounds the complete snapshot, including its adapter header.
-// WASM memory is independently capped at 256 MiB; decoding has a time budget.
+// WASM memory is independently capped at 256 MiB. The caller bounds decoding.
 const MaxSnapshotBytes = 64 << 20
 
 const (
 	snapshotMagic      = "YOLOVT\x00\x01"
 	snapshotHeaderSize = len(snapshotMagic) + sha256.Size + 4
-	snapshotDecodeTime = 5 * time.Second
 )
 
 var (
@@ -113,15 +111,13 @@ func RestoreSnapshot(ctx context.Context, data []byte, reply func([]byte)) (*Ter
 			_ = t.Close()
 		}
 	}()
-	decodeContext, cancel := context.WithTimeout(ctx, snapshotDecodeTime)
-	defer cancel()
-	t.ctx = context.WithValue(decodeContext, contextKey{}, t)
+	t.ctx = context.WithValue(ctx, contextKey{}, t)
 	t.history = int(binary.LittleEndian.Uint32(data[snapshotHeaderSize-4:]))
 	t.visibleHistory = t.history
 	data = data[snapshotHeaderSize:]
 	ptr := t.call("ghostty_wasm_alloc", uint64(len(data)))
 	if t.err != nil {
-		return nil, fmt.Errorf("allocate terminal snapshot: %w", errors.Join(decodeContext.Err(), t.err))
+		return nil, fmt.Errorf("allocate terminal snapshot: %w", errors.Join(ctx.Err(), t.err))
 	}
 	if ptr == 0 || !t.writeCore(uint32(ptr), data) {
 		return nil, errors.New("cannot allocate terminal snapshot")
@@ -129,7 +125,7 @@ func RestoreSnapshot(ctx context.Context, data []byte, reply func([]byte)) (*Ter
 	status := int32(t.call("yolo_vt_snapshot_restore", ptr, uint64(len(data)), uint64(t.history), t.scratch))
 	t.call("ghostty_wasm_free", ptr, uint64(len(data)))
 	if t.err != nil {
-		return nil, fmt.Errorf("decode terminal snapshot: %w", errors.Join(decodeContext.Err(), t.err))
+		return nil, fmt.Errorf("decode terminal snapshot: %w", errors.Join(ctx.Err(), t.err))
 	}
 	if status != 0 {
 		return nil, fmt.Errorf("invalid terminal snapshot (native result %d)", status)

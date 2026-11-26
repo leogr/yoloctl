@@ -413,12 +413,10 @@ func (s *Session) pump(onData func(), inlineHolderClose bool) {
 
 	var reason string
 	if s.managed != nil {
-		select {
-		case <-s.managed.done:
-		case <-time.After(5 * time.Second):
-			s.managed.cancel()
-			<-s.managed.done
-		}
+		// Only the private transport drain needs a fail-safe. A snapshot
+		// already received keeps its own decoder budget until pane close.
+		s.managed.startDrain()
+		<-s.managed.done
 		s.managed.cancel()
 		s.finishView()
 		// The reader retains its error after the UI has consumed TakeViewError.

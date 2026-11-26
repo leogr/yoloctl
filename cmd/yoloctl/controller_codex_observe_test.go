@@ -247,7 +247,7 @@ func TestCodexObserveFoldIsCanceledWithItsWorker(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	beginObservationViewBudget(ctx)
 	cancel()
-	_, _ = agentsession.ReadCurrentReports("cx", 1, observe.Cursor{Generation: 1})
+	_, _ = agentsession.ReadCurrentReports(t.Context(), "cx", 1, observe.Cursor{Generation: 1})
 	if !canceled {
 		t.Fatal("the fold's read outlived its worker's cancellation")
 	}

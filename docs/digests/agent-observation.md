@@ -89,9 +89,13 @@ Each line is decoded strictly against the writer's schema:
   `SubagentStart` is subagent evidence ([Codex reporter](codex-observation.md));
 - an enumerated `state` on the events [agent state](agent-state.md) lists.
 
-`ReadWithin` checks a context between steps: a cooperative deadline that a
-step in progress can overrun once, and that leaves a hung kernel call
-unbounded. The cursor
+The optional live reads of one view share a minute and follow earlier
+caller cancellation. Box list, inventory, show and inspect share that allowance with holder
+build reads and keep known results. An unavailable holder build stays unknown.
+A failed container list yields unavailable box rows without conversation
+enrichment. [15](#source-15)
+`ReadWithin` checks context between filesystem steps, so an in-progress
+step can overrun the deadline. The cursor
 (generation, k, offset, SHA-256 of the last line) makes rereads idempotent. A partial last line waits for the next read. A rotated-away
 cursor, a missing index or a rewritten line is a `gap`. Health (`ok`,
 `no-report`, `gap`, `invalid`) is reported beside observations; it never
@@ -121,3 +125,4 @@ Claude run need the isolated live check. [12](#source-12) [13](#source-13) [14](
 12. <a id="source-12"></a> [Substrate regressions](../../internal/agentsession/observe/observe_test.go#L1-L839) — root, generations, exhaustion recovery, reader, status line and query validation, the Claude and Codex vectors.
 13. <a id="source-13"></a> [Writer regressions](../../scripts/test_agent_observe.py#L1-L909) — fields, payload shapes, absence, links, contention, rotation, full tmpfs, status line and hand-over, Codex mode and its daemon read; bounds and interpreter resolution in internal/features/agent_observe_test.go.
 14. <a id="source-14"></a> [Binding regressions](../../internal/agentbox/observe_test.go#L1-L128) — bind, overlap, runtime remount, destroy, no recreate reason.
+15. <a id="source-15"></a> [session_summary.go](../../internal/boxstate/session_summary.go#L73) — optional enrichment after required box inventory.
