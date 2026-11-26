@@ -1,6 +1,6 @@
 # Terminal compatibility evidence and limits
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; soft reset on `eace98ecbb1991693f7b8629d8bc6d95452b3cad`; re-read cited sources when changing behavior.
 
 [FACT] `make test-terminal-fidelity` runs both the strict VT corpus and the
 host-compatibility tests; ordinary `make check` also includes them. The core
@@ -50,6 +50,13 @@ that cursor and grid are coherent. These fixtures do not measure glyph rasteriza
 cursor blink timing, ZWJ font policies or desktop IME candidate placement.
 [8](#source-8) [9](#source-9)
 
+[FACT] The embedded core acts on the soft terminal reset (DECSTR, `CSI ! p`).
+DECSTR restores selected modes and the margins, pen and cursor style to their
+defaults. It clears the saved cursor and palette overrides and preserves the
+screen contents and current cursor position. A passthrough view forwards the
+control to the host terminal, as it does a full reset; the literal-stream test
+includes it. [11](#source-11) [12](#source-12) [13](#source-13)
+
 [FACT] The isolated live attach smoke covers transport across TUI, standalone
 managed and compatibility views, including input, resize, slow readers and
 exit. Its guest audit is not a graphical-terminal oracle. [10](#source-10)
@@ -66,3 +73,6 @@ exit. Its guest audit is not a graphical-terminal oracle. [10](#source-10)
 8. <a id="source-8"></a> [host_compatibility_test.go](../../internal/tui/host_compatibility_test.go#L166-L239) — `TestHostCompatibilityUnicodeCellsAndCursor`.
 9. <a id="source-9"></a> [frames_test.go](../../internal/tui/frames_test.go#L25-L53) — `TestViewCapturesCursorWithGrid`, concurrent coherent-frame assertions.
 10. <a id="source-10"></a> [attach-mixed.py](../../scripts/smoke/attach-mixed.py#L1) — PTY frontends, guest input/resize audit and completion checks.
+11. <a id="source-11"></a> [Ghostty Terminal.zig at the pinned revision](https://github.com/ghostty-org/ghostty/blob/573c4a21e02311ae87844af26b6a7a179f82858e/src/terminal/Terminal.zig#L5973-L6024) — `softReset`; the stream handler calls it for `.soft_reset` (`src/terminal/stream_terminal.zig` L754). The native patch does not touch it.
+12. <a id="source-12"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L238-L256) — `PassthroughHandler.vt` publishes `.full_reset` and `.soft_reset`.
+13. <a id="source-13"></a> [passthrough_test.go](../../internal/terminal/passthrough_test.go#L50-L71) — `TestPassthroughPreservesOrdinaryDisplayAndInputModes`, a stream ending in `CSI ! p` passes unchanged.
