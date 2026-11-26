@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -28,6 +29,15 @@ func TestMain(m *testing.M) {
 	if socket := os.Getenv(ownedClientEnv); socket != "" {
 		ownedSetupClient(socket)
 	}
+	if len(os.Args) == 3 && os.Args[1] == "controller-internal" && os.Args[2] == "verify-closeinput" {
+		// Never reads its input and waits "for the lock" until it is killed.
+		_ = os.NewFile(3, "verifier-request").Close()
+		time.Sleep(time.Minute)
+		os.Exit(0)
+	}
+	if len(os.Args) == 3 && os.Args[1] == "controller-internal" && os.Args[2] == "verify-exitearly" {
+		os.Exit(95) // fails by itself before reading its input or taking the lock
+	}
 	if len(os.Args) == 3 && os.Args[1] == "controller-internal" && os.Args[2] == "verify" {
 		var in VerifierInput
 		if err := json.NewDecoder(os.NewFile(3, "verifier-request")).Decode(&in); err != nil {
@@ -43,6 +53,12 @@ func TestMain(m *testing.M) {
 			time.Sleep(time.Minute)
 		case "lockfail":
 			os.Exit(93)
+		case "oversize":
+			// Holds a real lock (standing in for the space lock) from now on.
+			f, err := os.OpenFile(testVerifierLockPath(in.Space), os.O_RDWR|os.O_CREATE, 0o600)
+			if err != nil || syscall.Flock(int(f.Fd()), syscall.LOCK_EX) != nil {
+				os.Exit(96)
+			}
 		}
 		if err := MarkVerifierObservation(out); err != nil {
 			os.Exit(94)
@@ -61,6 +77,13 @@ func TestMain(m *testing.M) {
 		switch in.Documents[0].Name {
 		case "hang", "observehang":
 			time.Sleep(time.Minute)
+		case "oversize":
+			chunk := bytes.Repeat([]byte("x"), 64<<10)
+			for {
+				if _, err := out.Write(chunk); err != nil {
+					os.Exit(97)
+				}
+			}
 		case "garbage":
 			_, _ = out.Write([]byte("[{\"unknown\":1}]"))
 			os.Exit(0)
@@ -503,4 +526,9 @@ func testVerifierCase(in VerifierInput) string {
 		return in.Boxes[0]
 	}
 	return ""
+}
+
+// testVerifierLockPath is the lock the "oversize" stand-in verifier holds.
+func testVerifierLockPath(space string) string {
+	return filepath.Join(os.TempDir(), "yoloctl-test-verifier-"+space+".lock")
 }

@@ -87,7 +87,7 @@ the standalone `smoke-attach-interrupt` stage is the live gate.
 7. <a id="source-7"></a> [cmd/yoloctl/attach_effects_test.go](../../cmd/yoloctl/attach_effects_test.go#L1) — registry, gate order, denial, role-sync failure and detached acknowledgment.
 8. <a id="source-8"></a> [internal/controller/receipts.go](../../internal/controller/receipts.go#L22) — receipt fields, `interrupt`, `Recover`.
 9. <a id="source-9"></a> [internal/controller/ownership_test.go](../../internal/controller/ownership_test.go#L1) — owned-setup client-loss, race (`TestSetupOwnerLateDetachKeepsDetachedHandoff`), stream and negative-recovery regressions.
-10. <a id="source-10"></a> [internal/controller/worker_test.go](../../internal/controller/worker_test.go#L27) — `TestMain` worker/client helpers.
+10. <a id="source-10"></a> [internal/controller/worker_test.go](../../internal/controller/worker_test.go#L28) — `TestMain` worker/client helpers.
 11. <a id="source-11"></a> [scripts/smoke/attach-interrupt.sh](../../scripts/smoke/attach-interrupt.sh#L1) — live kill and closed-pipe gate with receipt-traced phases; opt-in after-handoff stage.
 12. <a id="source-12"></a> [cmd/yoloctl/attach_signal_test.go](../../cmd/yoloctl/attach_signal_test.go#L1) — CLI-path signal regressions before and after handoff; `reportClientDetached`, `exitDetached` in `controller_client.go`/`main.go`.
 13. <a id="source-13"></a> [cmd/yoloctl/signals.go](../../cmd/yoloctl/signals.go#L20) — `commandSignalContext`: first signal forwarded, second cancels.

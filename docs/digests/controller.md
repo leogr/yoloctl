@@ -164,7 +164,7 @@ this test seam does not change server authorization. [19](#source-19)
 12. <a id="source-12"></a> [internal/controller/server.go](../../internal/controller/server.go#L66) — Drain, admission, recovery refusal, receipts and stream dispatch.
 13. <a id="source-13"></a> [internal/controller/receipts.go](../../internal/controller/receipts.go#L79) — authorizedCommand, interrupt, Recover, Begin, retention.
 14. <a id="source-14"></a> [internal/controller/protocol_test.go](../../internal/controller/protocol_test.go#L22) — recovery, framing, stream, drain and publication regressions.
-15. <a id="source-15"></a> [internal/controller/worker_test.go](../../internal/controller/worker_test.go#L90) — worker byte streams, PTY and cancellation regressions.
+15. <a id="source-15"></a> [internal/controller/worker_test.go](../../internal/controller/worker_test.go#L113) — worker byte streams, PTY and cancellation regressions.
 16. <a id="source-16"></a> [scripts/smoke/space-archive.sh](../../scripts/smoke/space-archive.sh#L1) — archive runtime smoke; controller-operator sibling covers live operator RPC.
 17. <a id="source-17"></a> [internal/controller/client.go](../../internal/controller/client.go#L47) — Call, methodHasInput.
 18. <a id="source-18"></a> [internal/controller/transport.go](../../internal/controller/transport.go#L39) — bounded graceful commandTransport.Close; subprocess regressions in transport_test.go.

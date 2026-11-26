@@ -3,8 +3,11 @@ package controller
 import (
 	"context"
 	"errors"
+	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -165,5 +168,64 @@ func TestRecoveryStorageVerifyEndsAtItsFailSafe(t *testing.T) {
 	}
 	if time.Since(start) > 10*time.Second {
 		t.Fatal("the storage verify was not bounded by its fail-safe", time.Since(start))
+	}
+}
+
+func withVerifierCommand(t *testing.T, args ...string) {
+	t.Helper()
+	saved := verifierCommand
+	verifierCommand = args
+	t.Cleanup(func() { verifierCommand = saved })
+}
+
+// Cancelled before it read its input: the input write breaks, and still
+// nothing was observed, so the receipt's one observation is not consumed.
+func TestVerifierCancelledBeforeReadingItsInputObservedNothing(t *testing.T) {
+	withVerifierCommand(t, "controller-internal", "verify-closeinput")
+	withObservationFailSafe(t, time.Hour)
+	ctx, cancel := context.WithCancel(t.Context())
+	saved := verifierStarted
+	t.Cleanup(func() { verifierStarted = saved })
+	// The verifier closes its input at once; the pass is cancelled before the
+	// parent writes it, so that write breaks.
+	verifierStarted = func() { time.Sleep(300 * time.Millisecond); cancel(); time.Sleep(300 * time.Millisecond) }
+	_, err := RunVerifier(ctx, "work", documentReceipt("personal"))
+	if !errors.Is(err, errObservationNotStarted) {
+		t.Fatal("a cancelled verifier whose input broke was reported as an observation", err)
+	}
+}
+
+// A verifier that fails by itself before its input or the lock is an ordinary
+// error, recorded once, never "not started".
+func TestVerifierFailingBeforeItsInputIsAnOrdinaryError(t *testing.T) {
+	withVerifierCommand(t, "controller-internal", "verify-exitearly")
+	_, err := RunVerifier(t.Context(), "work", documentReceipt("personal"))
+	if err == nil || errors.Is(err, errObservationNotStarted) {
+		t.Fatal("an independent pre-marker failure was not an ordinary error", err)
+	}
+}
+
+// A result over the bound while the verifier is still writing: the verifier is
+// ended and reaped at once, well within the fail-safe, and its lock is free.
+func TestVerifierOversizedResultEndsTheWriterAndReleasesItsLock(t *testing.T) {
+	withObservationFailSafe(t, time.Hour)
+	space := "ovr" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	path := testVerifierLockPath(space)
+	t.Cleanup(func() { _ = os.Remove(path) })
+	start := time.Now()
+	_, err := RunVerifier(t.Context(), space, documentReceipt("oversize"))
+	if err == nil || !strings.Contains(err.Error(), "exceeds its limit") {
+		t.Fatal("an oversized result was not refused", err)
+	}
+	if time.Since(start) > 20*time.Second {
+		t.Fatal("the writing verifier was not ended before reaping", time.Since(start))
+	}
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatal("the verifier's lock was still held after it returned", err)
 	}
 }
