@@ -45,7 +45,9 @@ equals that box's `ResolveSpace` entry, and a name with neither a declaration
 nor a container is missing. When the context ends during a `FullDiff` read,
 boxes finished before then keep their results and every other existing
 container reports a drift error, so a deadline yields a partial result, never a
-wrong one. [3](#source-3) [24](#source-24)
+wrong one. A resolver's optional `Each` receives every box of the per-box pass as
+soon as its own resolution ends, in order and on the read's context.
+[3](#source-3) [24](#source-24)
 
 [FACT] `space show --json` reports disk/VM metadata and, when reachable, native
 declarations. The top-level `declarations_available` boolean is always present.
@@ -116,7 +118,7 @@ adding a new command. [3](#source-3) [11](#source-11)
 
 1. <a id="source-1"></a> [cmd/yoloctl/context.go](../../cmd/yoloctl/context.go#L14) — selection helpers.
 2. <a id="source-2"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L31) — box command tree, create defaults and `ensureAgentboxAbsent`; `newAgentboxCreateCmd` at L849, Args/RunE validation at L886–898.
-3. <a id="source-3"></a> [internal/boxstate/boxstate.go](../../internal/boxstate/boxstate.go#L21-L306) — `Depth` through `ResolveSpace`.
+3. <a id="source-3"></a> [internal/boxstate/boxstate.go](../../internal/boxstate/boxstate.go#L21-L311) — `Depth` through `ResolveSpace`.
 4. <a id="source-4"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L1328) — space JSON and unavailable declarations.
 5. <a id="source-5"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L1521) — runtime list JSON.
 6. <a id="source-6"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2639) — box state JSON.
@@ -137,7 +139,7 @@ adding a new command. [3](#source-3) [11](#source-11)
 21. <a id="source-21"></a> [Host command assembly](../../cmd/yoloctl/controller_lifecycle.go#L25) — `newClientRootCmd`.
 22. <a id="source-22"></a> [Chat callbacks](../../cmd/yoloctl/chat_completion.go#L17) — native manifest/declaration completion; registered by `registerCompletions`.
 23. <a id="source-23"></a> [Chat completion regression](../../cmd/yoloctl/chat_completion_test.go#L28) — host/operator routing, identities, prefix, cancellation and offline refusal.
-24. <a id="source-24"></a> [Named resolution](../../internal/boxstate/boxstate.go#L225-L421) — `ResolveOne`, `ResolveNamed`, `resolveSpace`, `incompleteAtDeadline`; `TestResolveNamedIsPartialWhenItsContextEnds` in partial_test.go; `TestResolveNamedLimitsPerBoxWorkToTheNamedBoxes` in boxstate_test.go L245.
+24. <a id="source-24"></a> [Named resolution](../../internal/boxstate/boxstate.go#L256-L472) — `ResolveOne`, `ResolveNamed`, `resolveSpace`, `incompleteAtDeadline`; `TestResolveNamedIsPartialWhenItsContextEnds` in partial_test.go; `TestResolveNamedLimitsPerBoxWorkToTheNamedBoxes` in boxstate_test.go L245.
 25. <a id="source-25"></a> [Name validator](../../internal/layout/layout.go#L55-L115) — `ValidateName`, patterns and reserved names.
 26. <a id="source-26"></a> [Copy validation](../../cmd/yoloctl/agentbox_copy.go#L69-L88) — shared Args and native RunE validate destination/source.
 27. <a id="source-27"></a> [Manifest validation](../../internal/agentbox/agentbox.go#L519-L520) — `Config.Validate` uses the shared box rule.

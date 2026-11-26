@@ -35,7 +35,7 @@ func stubStaleSessionResolution(t *testing.T, b boxstate.Box, err error) *int {
 	t.Helper()
 	calls := 0
 	previous := resolveStaleSessionsFn
-	resolveStaleSessionsFn = func(_ context.Context, space string, names []string) ([]boxstate.Box, error) {
+	resolveStaleSessionsFn = func(_ context.Context, space string, names []string, _ func(context.Context, boxstate.Box)) ([]boxstate.Box, error) {
 		calls++
 		if space != "default-fc" || !slices.Equal(names, []string{"astra"}) {
 			t.Fatalf("resolved %s/%v", space, names)
@@ -172,7 +172,7 @@ func TestBoxDriftViewIsBoundedAndHostOnly(t *testing.T) {
 	t.Cleanup(func() { resolveStaleSessionsFn = previous })
 	var asked [][]string
 	var batchErr error
-	resolveStaleSessionsFn = func(_ context.Context, space string, names []string) ([]boxstate.Box, error) {
+	resolveStaleSessionsFn = func(_ context.Context, space string, names []string, _ func(context.Context, boxstate.Box)) ([]boxstate.Box, error) {
 		asked = append(asked, append([]string{space}, names...))
 		if batchErr != nil {
 			return nil, batchErr

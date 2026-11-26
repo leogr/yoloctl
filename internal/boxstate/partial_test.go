@@ -74,3 +74,41 @@ func TestResolveNamedIsPartialWhenItsContextEnds(t *testing.T) {
 		}
 	}
 }
+
+// Each sees every box of the per-box pass right after that box's own
+// resolution, in order and on the read's context: a box finished before the
+// context ended is handed over while it is still live, its final state
+// included.
+func TestResolveNamedEachSeesEveryBoxAsItEnds(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	for _, name := range []string{"alpha", "beta"} {
+		saveBox(t, "default", name)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r := testResolver([]container.Container{{Name: "alpha", Status: "Up"}, {Name: "beta", Status: "Up"}})
+	inspect := r.InspectActual
+	r.InspectActual = func(ctx context.Context, cfg *agentbox.Config) (agentbox.ActualState, error) {
+		if cfg.Name == "beta" {
+			cancel()
+			return agentbox.ActualState{}, ctx.Err()
+		}
+		return inspect(ctx, cfg)
+	}
+	type seen struct {
+		name  string
+		live  bool
+		drift DriftState
+	}
+	var got []seen
+	r.Each = func(ctx context.Context, b Box) {
+		got = append(got, seen{b.Name, ctx.Err() == nil, b.Drift})
+	}
+	if _, err := r.ResolveNamed(ctx, "default", []string{"beta", "alpha"}, FullDiff); err != nil {
+		t.Fatal(err)
+	}
+	want := []seen{{"alpha", true, DriftInSync}, {"beta", false, DriftError}}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("Each saw %+v, want %+v", got, want)
+	}
+}

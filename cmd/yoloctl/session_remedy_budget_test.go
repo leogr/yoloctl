@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/leogr/yoloctl/internal/agentsession"
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/internal/managedchat"
 	"github.com/leogr/yoloctl/internal/session"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 )
@@ -157,16 +159,17 @@ func wrapInspect(t *testing.T, observe func(context.Context) error) {
 	}
 }
 
-// Both box.drift views (the post-update restart offer and space upgrade) keep
-// the rows resolved within their minute and mark only the remaining boxes
-// unavailable; the caller's cancellation still ends the view.
-func TestBoxDriftViewsArePartialAfterTheirMinute(t *testing.T) {
-	previousBudget, previousResolver, previousTarget := driftViewBudget, resolveStaleSessionsFn, readUpgradeTargetFn
-	t.Cleanup(func() {
-		driftViewBudget, resolveStaleSessionsFn, readUpgradeTargetFn = previousBudget, previousResolver, previousTarget
-	})
+// The post-update restart offer keeps the rows resolved within its minute and
+// marks only the remaining boxes unavailable; the caller's cancellation still
+// ends the view.
+func TestBoxDriftRestartOfferIsPartialAfterItsMinute(t *testing.T) {
+	previousBudget, previousResolver := driftViewBudget, resolveStaleSessionsFn
+	t.Cleanup(func() { driftViewBudget, resolveStaleSessionsFn = previousBudget, previousResolver })
 	driftViewBudget = 100 * time.Millisecond
-	resolveStaleSessionsFn = func(ctx context.Context, _ string, names []string) ([]boxstate.Box, error) {
+	resolveStaleSessionsFn = func(ctx context.Context, _ string, _ []string, each func(context.Context, boxstate.Box)) ([]boxstate.Box, error) {
+		if each != nil {
+			t.Fatal("the restart offer reads no per-box target")
+		}
 		// alpha resolves at once; beta's evidence is still being read when
 		// the minute ends.
 		alpha := upgradeTestBox("alpha", boxstate.RuntimeRunning, "")
@@ -176,32 +179,107 @@ func TestBoxDriftViewsArePartialAfterTheirMinute(t *testing.T) {
 		beta.Drift, beta.DriftError = boxstate.DriftError, ctx.Err().Error()
 		return []boxstate.Box{alpha, beta}, nil
 	}
-	readUpgradeTargetFn = func(_ context.Context, b boxstate.Box) (*upgradeTarget, bool, error) {
-		return upgradeTestDrift(b, b.Drift).Upgrade, false, nil
+	start := time.Now()
+	view, err := collectBoxDrift(t.Context(), "test", []string{"alpha", "beta"})
+	if err != nil {
+		t.Fatalf("partial view failed as a whole: %v", err)
 	}
-	for _, upgrade := range []bool{false, true} {
-		start := time.Now()
-		view, err := collectBoxDriftView(t.Context(), "test", []string{"alpha", "beta"}, upgrade)
-		if err != nil {
-			t.Fatalf("upgrade=%v: partial view failed as a whole: %v", upgrade, err)
-		}
-		if elapsed := time.Since(start); elapsed > 10*time.Second {
-			t.Fatalf("upgrade=%v: view outlived its minute: %v", upgrade, elapsed)
-		}
-		if len(view) != 2 || view[0].Name != "alpha" || view[0].Error != "" || view[0].Drift != boxstate.DriftNeedsRestart {
-			t.Fatalf("upgrade=%v: resolved row lost: %+v", upgrade, view)
-		}
-		if r, reason := view[1].remedy(); view[1].Name != "beta" || r != remedyUnknown || !strings.Contains(reason, "deadline exceeded") {
-			t.Fatalf("upgrade=%v: unresolved row = %+v (%v %q)", upgrade, view[1], r, reason)
-		}
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("view outlived its minute: %v", elapsed)
+	}
+	if len(view) != 2 || view[0].Name != "alpha" || view[0].Error != "" || view[0].Drift != boxstate.DriftNeedsRestart {
+		t.Fatalf("resolved row lost: %+v", view)
+	}
+	if r, reason := view[1].remedy(); view[1].Name != "beta" || r != remedyUnknown || !strings.Contains(reason, "deadline exceeded") {
+		t.Fatalf("unresolved row = %+v (%v %q)", view[1], r, reason)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
-	resolveStaleSessionsFn = func(ctx context.Context, _ string, names []string) ([]boxstate.Box, error) {
+	resolveStaleSessionsFn = func(ctx context.Context, _ string, _ []string, _ func(context.Context, boxstate.Box)) ([]boxstate.Box, error) {
 		cancel()
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
 	if _, err := collectBoxDriftView(ctx, "test", []string{"alpha"}, true); !errors.Is(err, context.Canceled) {
 		t.Fatalf("a cancelled caller got %v, want its cancellation", err)
+	}
+}
+
+// In the space-upgrade view a healthy box's target is read as soon as its own
+// drift is resolved, on the shared inventory, so a slow box that then uses the
+// minute up cannot hide it: the upgrade classifier sees alpha's row in full and
+// only beta's evidence as unavailable. The target lookup fails on an ended
+// context, as the real container inspection does.
+func TestUpgradeDriftReadsATargetBeforeASlowBoxUsesTheMinute(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("LIMA_HOME", t.TempDir())
+	workdir := t.TempDir()
+	saveSpaceForTest(t, "work", workdir)
+	configs := map[string]*agentbox.Config{}
+	for _, name := range []string{"alpha", "beta"} {
+		cfg := &agentbox.Config{Name: name, Space: "work", Agent: "none", Account: "none", Image: "img",
+			Workdir: agentbox.Workdir{Mode: agentbox.WorkdirModeHost, Source: workdir, Canonical: workdir}}
+		if err := cfg.Save(); err != nil {
+			t.Fatal(err)
+		}
+		configs[name] = cfg
+	}
+	ids := map[string]string{"alpha": strings.Repeat("a", 64), "beta": strings.Repeat("b", 64)}
+	previousResolver, previousBudget, previousTarget := newBoxStateResolver, driftViewBudget, readUpgradeTargetFn
+	t.Cleanup(func() {
+		newBoxStateResolver, driftViewBudget, readUpgradeTargetFn = previousResolver, previousBudget, previousTarget
+	})
+	driftViewBudget = 200 * time.Millisecond
+	lists := 0
+	newBoxStateResolver = func() boxstate.Resolver {
+		return boxstate.Resolver{
+			ListSpaces: func(context.Context) ([]vmhost.Instance, error) {
+				return []vmhost.Instance{{Name: "work", Status: "Running"}}, nil
+			},
+			ListContainers: func(context.Context, string) ([]container.Container, error) {
+				lists++
+				return []container.Container{{Name: "alpha", ID: ids["alpha"], Status: "Up"}, {Name: "beta", ID: ids["beta"], Status: "Up"}}, nil
+			},
+			ProbeSession: func(context.Context, string, string, bool) boxstate.SessionInfo {
+				return boxstate.SessionInfo{State: boxstate.SessionNone}
+			},
+			InspectActual: func(ctx context.Context, cfg *agentbox.Config) (agentbox.ActualState, error) {
+				if cfg.Name == "beta" {
+					<-ctx.Done()
+					return agentbox.ActualState{}, ctx.Err()
+				}
+				return agentbox.ActualState{Exists: true, Image: cfg.Image, ReadOnlyWD: !cfg.WorkdirWritable(),
+					WorkdirSource: cfg.Workdir.MountSource(), WorkdirDest: cfg.Workdir.ContainerPath(),
+					Labels: map[string]string{agentbox.LabelAgent: cfg.Agent}, PolicyContent: []byte("policy")}, nil
+			},
+			ComposePolicy: func(*agentbox.Config) ([]byte, error) { return []byte("policy"), nil },
+			ResolvedImage: func(cfg *agentbox.Config) (string, bool, error) { return cfg.Image, false, nil },
+		}
+	}
+	readUpgradeTargetFn = func(ctx context.Context, b boxstate.Box) (*upgradeTarget, bool, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, false, fmt.Errorf("inspect container %s: %w", b.Name, err)
+		}
+		return &upgradeTarget{ManifestHash: "hash", Mode: agentbox.RuntimeModeConfined, Run: container.Run{ID: b.Container.ID},
+			Running: b.Runtime == boxstate.RuntimeRunning}, false, nil
+	}
+	view, err := collectBoxDriftView(t.Context(), "work", []string{"alpha", "beta"}, true)
+	if err != nil {
+		t.Fatalf("upgrade view failed as a whole: %v", err)
+	}
+	if lists != 1 || len(view) != 2 || view[0].Name != "alpha" || view[1].Name != "beta" {
+		t.Fatalf("one shared inventory and one row per box: lists %d, view %+v", lists, view)
+	}
+	if view[0].Error != "" || !driftDetermined(view[0].Drift) || view[0].Upgrade == nil {
+		t.Fatalf("a healthy box lost its row to a slow one: %+v", view[0])
+	}
+	inventory := func(name string) boxstate.Box {
+		return boxstate.Box{Name: name, Space: "work", Declaration: boxstate.DeclarationDeclared, Runtime: boxstate.RuntimeRunning,
+			Config: configs[name], Container: &container.Container{ID: ids[name]}, Session: boxstate.SessionInfo{State: boxstate.SessionNone}}
+	}
+	if row := classifySpaceUpgradeBox("work", inventory("alpha"), view[0], managedchat.Status{}, nil); strings.Contains(row.reason, "unavailable") {
+		t.Fatalf("the upgrade classifier sees alpha as unavailable: %s (%s)", row.action, row.reason)
+	}
+	if row := classifySpaceUpgradeBox("work", inventory("beta"), view[1], managedchat.Status{}, nil); row.action != upgradeManual || !strings.Contains(row.reason, "drift evidence unavailable") {
+		t.Fatalf("the slow box is not shown as unavailable: %s (%s)", row.action, row.reason)
 	}
 }

@@ -90,7 +90,7 @@ func TestLiveHolderSkipsFreshSessionImageGuard(t *testing.T) {
 }
 func TestRealExit137IsNotRewrittenAsImageDrift(t *testing.T) {
 	old := resolveStaleSessionsFn
-	resolveStaleSessionsFn = func(context.Context, string, []string) ([]boxstate.Box, error) {
+	resolveStaleSessionsFn = func(context.Context, string, []string, func(context.Context, boxstate.Box)) ([]boxstate.Box, error) {
 		t.Fatal("exit137 triggered build-mismatch classification")
 		return nil, nil
 	}

@@ -66,9 +66,12 @@ func sessionRemedyOf(b boxstate.Box) (sessionRemedy, string) {
 
 // resolveStaleSessionsFn is the full, read-only drift resolution of only the
 // named boxes: one inventory of the space under the caller's context, with one
-// result per distinct name in order.
-var resolveStaleSessionsFn = func(ctx context.Context, space string, names []string) ([]boxstate.Box, error) {
-	return newBoxStateResolver().ResolveNamed(ctx, space, names, boxstate.FullDiff)
+// result per distinct name in order. each, when set, receives every box as
+// soon as its own resolution ends (boxstate.Resolver.Each).
+var resolveStaleSessionsFn = func(ctx context.Context, space string, names []string, each func(context.Context, boxstate.Box)) ([]boxstate.Box, error) {
+	r := newBoxStateResolver()
+	r.Each = each
+	return r.ResolveNamed(ctx, space, names, boxstate.FullDiff)
 }
 
 // staleSessionError replaces the fixed advice of a holder of another build
@@ -90,7 +93,7 @@ func staleSessionGuidance(ctx context.Context, space, name string, err error) er
 	}
 	var b boxstate.Box
 	remedy, reason := remedyUnknown, ""
-	if boxes, rerr := resolveStaleSessionsFn(ctx, space, []string{name}); rerr != nil {
+	if boxes, rerr := resolveStaleSessionsFn(ctx, space, []string{name}, nil); rerr != nil {
 		reason = rerr.Error()
 	} else {
 		b = boxes[0]
@@ -171,7 +174,21 @@ func collectBoxDriftView(parent context.Context, space string, names []string, u
 	}
 	ctx, cancel := context.WithTimeout(parent, driftViewBudget)
 	defer cancel()
-	boxes, err := resolveStaleSessionsFn(ctx, space, names)
+	// The upgrade view reads each box's target as soon as that box's own
+	// drift is resolved, on the same shared inventory, so a later slow box
+	// cannot use the minute up before a healthy box's target is read.
+	var targets map[string]upgradeTargetRead
+	var each func(context.Context, boxstate.Box)
+	if upgrade {
+		targets = map[string]upgradeTargetRead{}
+		each = func(ctx context.Context, b boxstate.Box) {
+			if upgradeTargetWanted(b) {
+				target, earlierHelper, err := readUpgradeTargetFn(ctx, b)
+				targets[b.Name] = upgradeTargetRead{target: target, earlierHelper: earlierHelper, err: err}
+			}
+		}
+	}
+	boxes, err := resolveStaleSessionsFn(ctx, space, names, each)
 	view := make([]boxDriftView, len(names))
 	for i, name := range names {
 		view[i].Name = name
@@ -181,8 +198,12 @@ func collectBoxDriftView(parent context.Context, space string, names []string, u
 		case i < len(boxes) && boxes[i].Name == name:
 			view[i].Drift, view[i].Reasons, view[i].DriftError = boxes[i].Drift, boxes[i].Reasons, boxes[i].DriftError
 			view[i].LegacyRuntime = boxes[i].LegacyRuntime
-			if b := boxes[i]; upgrade && b.Declaration == boxstate.DeclarationDeclared && (b.Runtime == boxstate.RuntimeRunning || b.Runtime == boxstate.RuntimeStopped) {
-				target, earlierHelper, targetErr := readUpgradeTargetFn(ctx, b)
+			if b := boxes[i]; upgrade && upgradeTargetWanted(b) {
+				read, ok := targets[b.Name]
+				if !ok {
+					read.err = errors.New("upgrade target not read")
+				}
+				target, earlierHelper, targetErr := read.target, read.earlierHelper, read.err
 				view[i].Upgrade = target
 				if targetErr != nil {
 					view[i].Error = targetErr.Error()
@@ -213,6 +234,18 @@ func collectBoxDriftView(parent context.Context, space string, names []string, u
 		}
 	}
 	return view, nil
+}
+
+// upgradeTargetRead is one box's upgrade target, read right after its drift.
+type upgradeTargetRead struct {
+	target        *upgradeTarget
+	earlierHelper bool
+	err           error
+}
+
+// upgradeTargetWanted: only a declared box with a container has a target.
+func upgradeTargetWanted(b boxstate.Box) bool {
+	return b.Declaration == boxstate.DeclarationDeclared && (b.Runtime == boxstate.RuntimeRunning || b.Runtime == boxstate.RuntimeStopped)
 }
 
 // driftDetermined reports a drift that a completed resolution established.

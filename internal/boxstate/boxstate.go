@@ -180,6 +180,11 @@ type Resolver struct {
 	// Launcher reads how a box's container takes a managed session. Nil
 	// skips it; a failed read adds nothing (it is a warning only).
 	Launcher func(ctx context.Context, space, name string) (agentbox.LauncherSupport, error)
+	// Each, when set, receives every box of the per-box pass as soon as its
+	// own resolution ends, in resolution order and on the read's context, so
+	// a caller can add a per-box read before a later slow box uses that
+	// context up. It is not called for boxes the pass never reached.
+	Each func(ctx context.Context, b Box)
 }
 
 func NewResolver() Resolver {
@@ -458,6 +463,9 @@ func (r Resolver) resolveSpace(ctx context.Context, space string, depth Depth, s
 			incompleteAtDeadline(ctx, b)
 		}
 		b.State = deriveDisplay(*b)
+		if r.Each != nil {
+			r.Each(ctx, *b)
+		}
 	}
 	sortBoxes(boxes)
 	return boxes, nil

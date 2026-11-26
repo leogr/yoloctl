@@ -97,7 +97,10 @@ func TestSpaceUpgradeOldHelperUsesNamedConsent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			box := upgradeTestBox("older", tt.runtime, "")
 			box.Drift = boxstate.DriftInSync
-			resolveStaleSessionsFn = func(context.Context, string, []string) ([]boxstate.Box, error) {
+			resolveStaleSessionsFn = func(ctx context.Context, _ string, _ []string, each func(context.Context, boxstate.Box)) ([]boxstate.Box, error) {
+				if each != nil {
+					each(ctx, box)
+				}
 				return []boxstate.Box{box}, nil
 			}
 			readUpgradeTargetFn = func(_ context.Context, b boxstate.Box) (*upgradeTarget, bool, error) {

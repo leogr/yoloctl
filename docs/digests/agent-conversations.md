@@ -83,7 +83,7 @@ fixtures; no real Claude, VM, crash or reboot is exercised.
 9. <a id="source-9"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L390) — `retireForNewSession`, `bindLiveLaunch`, `liveHolderError`.
 10. <a id="source-10"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L121-L160) — `noteExit`, `exitHint`, `noteHolderLost`.
 11. <a id="source-11"></a> [status.go](../../internal/agentsession/status.go#L19) — `Status` and its view types, `Describe`, `Line`.
-12. <a id="source-12"></a> [boxstate.go](../../internal/boxstate/boxstate.go#L144-L200) — `Box.Conversation`, resolver hook; filled at L366-L368.
+12. <a id="source-12"></a> [boxstate.go](../../internal/boxstate/boxstate.go#L144-L205) — `Box.Conversation`, resolver hook; filled at L366-L368.
 13. <a id="source-13"></a> [controller_sessions.go](../../cmd/yoloctl/controller_sessions.go#L395) — `restartConversationNote`, which names the last reported conversation after a switch.
 14. <a id="source-14"></a> [agentsession_test.go](../../internal/agentsession/agentsession_test.go#L1) — record, transitions, policy, status.
 15. <a id="source-15"></a> [session_identity_test.go](../../cmd/yoloctl/session_identity_test.go#L1) — tracked lifecycle with fakes.
