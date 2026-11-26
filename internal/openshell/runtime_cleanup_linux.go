@@ -375,8 +375,9 @@ func (p *nativeRuntimeCleanup) removeAfterACK(ctx context.Context, ack *nativeCo
 		return errors.New("private cleanup lacks original native/current verifier")
 	}
 	s := p.namespace.retirement.scope
+	verifyRemaining := func(c context.Context) error { return runRuntimeWait(c, remaining) }
 	return p.removeWithCurrentVerifier(ctx, ack, func(c context.Context) error {
-		if err := s.checkKernelStorage(c, remaining); err != nil {
+		if err := s.checkKernelStorage(c, verifyRemaining); err != nil {
 			return err
 		}
 		return verifyNativeNamespaceCleanupBare(c, s)

@@ -141,18 +141,31 @@ func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string,
 	if forResult {
 		verify = result.verify
 	}
-	if err := verify(ctx); err != nil {
+	// A failed-start cleanup continues on a detached context. Apply the
+	// fail-safe at each independent wait, including on repeated SDK callbacks.
+	wait := runCallerStep
+	if attempt != nil {
+		wait = runRuntimeStep
+	}
+	if err := wait(ctx, verify); err != nil {
 		return err
 	}
-	selected, err := inspectOpenShellRuntime(ctx, a.Client, name, id)
-	if err != nil {
+	observe := func(check context.Context) (OpenShellRuntime, error) {
+		return inspectOpenShellRuntime(check, a.Client, name, id)
+	}
+	var selected OpenShellRuntime
+	if err := wait(ctx, func(check context.Context) error {
+		var err error
+		selected, err = observe(check)
+		return err
+	}); err != nil {
 		return err
 	}
 	if selected.ContainerID != id {
 		return errors.New("native stop observation differs from its selected CID")
 	}
 	if attempt != nil {
-		if err := attempt.verifySelected(ctx, selected); err != nil {
+		if err := wait(ctx, func(check context.Context) error { return attempt.verifySelected(check, selected) }); err != nil {
 			return err
 		}
 	}
@@ -168,17 +181,22 @@ func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string,
 	}
 	// This closure is read-only, including when called repeatedly around actual
 	// namespace effects. Endpoint deletion is the separate final callback below.
-	resources := func(check context.Context) error {
-		if err := verify(check); err != nil {
+	resources := func(check context.Context, wait func(context.Context, func(context.Context) error) error) error {
+		if err := wait(check, verify); err != nil {
 			return err
 		}
 		if attempt != nil {
-			if err := attempt.verifySelected(check, selected); err != nil {
+			if err := wait(check, func(step context.Context) error { return attempt.verifySelected(step, selected) }); err != nil {
 				return err
 			}
 		}
 		if !forResult {
-			known, err := port.Inventory(check, a.Client, "")
+			var known []port.ForwardService
+			err := wait(check, func(step context.Context) error {
+				var err error
+				known, err = port.Inventory(step, a.Client, "")
+				return err
+			})
 			if err != nil {
 				return err
 			}
@@ -212,23 +230,21 @@ func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string,
 		}
 		return nil
 	}
-	checks := nativeRuntimeStopChecks{
-		selected: selected, resources: resources,
-		read: func(check context.Context) (OpenShellRuntime, *container.Details, error) {
-			if err := verify(check); err != nil {
-				return OpenShellRuntime{}, nil, err
-			}
-			current, err := inspectOpenShellRuntime(check, a.Client, name, id)
-			if err != nil {
-				return OpenShellRuntime{}, nil, err
-			}
-			details, err := a.Client.Inspect(check, id)
-			if err == nil && attempt != nil && attempt.target.ContainerID != "" {
-				err = validateNativeCleanupState(details, id, attempt.target, true)
-			}
-			return current, details, err
-		},
+	ownership := func(wait func(context.Context, func(context.Context) error) error) nativeRuntimeStopChecks {
+		return nativeRuntimeStopChecks{
+			selected:  selected,
+			resources: func(check context.Context) error { return resources(check, wait) },
+			read: func(check context.Context) (OpenShellRuntime, *container.Details, error) {
+				current, details, err := readNativeStopOwnership(check, wait, verify, observe,
+					func(step context.Context) (*container.Details, error) { return a.Client.Inspect(step, id) })
+				if err == nil && attempt != nil && attempt.target.ContainerID != "" {
+					err = validateNativeCleanupState(details, id, attempt.target, true)
+				}
+				return current, details, err
+			},
+		}
 	}
+	checks := ownership(wait)
 	if err := checks.owned(ctx); err != nil {
 		return err
 	}
@@ -236,13 +252,13 @@ func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string,
 		if forResult {
 			result.invoked()
 		}
-		return a.Client.Stop(stop, id)
+		return a.stopNativeRuntimeEngine(stop, id, attempt != nil)
 	}
 	endpoint := func(check context.Context) error {
 		if directory == nil || forResult {
 			return nil
 		}
-		if err := resources(check); err != nil {
+		if err := checks.resources(check); err != nil {
 			return err
 		}
 		return removeOwnedNativeSSHSocket(directory)
@@ -253,8 +269,46 @@ func (a LiveApplier) stopNativeRuntimeMode(ctx context.Context, name, id string,
 	}
 	return completeNativeStopRoute(ctx, selected.Record.Launch.UnconfinedNetwork, stop, checks.inactive,
 		func(retire context.Context) error {
-			return openshell.StopNativeNamespace(retire, selected.Record, selected.Release, id, openshell.NativeNamespaceStop{VerifyOwned: checks.owned, Stop: stop, VerifyInactive: checks.inactive})
+			// The SDK calls VerifyInactive after Stop ACK on its detached
+			// context, while its pre-effect checks still follow the caller.
+			return openshell.StopNativeNamespace(retire, selected.Record, selected.Release, id,
+				openshell.NativeNamespaceStop{VerifyOwned: checks.owned, Stop: stop, VerifyInactive: ownership(runRuntimeStep).inactive})
 		}, endpoint)
+}
+
+func (a LiveApplier) stopNativeRuntimeEngine(ctx context.Context, id string, detached bool) error {
+	if detached {
+		return runRuntimeStep(ctx, func(engine context.Context) error { return a.Client.Stop(engine, id) })
+	}
+	return a.Client.Stop(ctx, id)
+}
+
+// Each invocation reads fresh admitted ownership. The runtime observation
+// and the independently repeated engine inspection each own their wait.
+func readNativeStopOwnership(ctx context.Context,
+	wait func(context.Context, func(context.Context) error) error,
+	verify func(context.Context) error,
+	observe func(context.Context) (OpenShellRuntime, error),
+	inspect func(context.Context) (*container.Details, error),
+) (OpenShellRuntime, *container.Details, error) {
+	if err := wait(ctx, verify); err != nil {
+		return OpenShellRuntime{}, nil, err
+	}
+	var current OpenShellRuntime
+	if err := wait(ctx, func(check context.Context) error {
+		var err error
+		current, err = observe(check)
+		return err
+	}); err != nil {
+		return OpenShellRuntime{}, nil, err
+	}
+	var details *container.Details
+	err := wait(ctx, func(check context.Context) error {
+		var err error
+		details, err = inspect(check)
+		return err
+	})
+	return current, details, err
 }
 
 // These same read-only predicates feed both the outer preflight and actual

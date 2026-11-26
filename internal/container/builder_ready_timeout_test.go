@@ -45,6 +45,7 @@ esac
 
 func TestBuilderReadinessExceedsFormer15Seconds(t *testing.T) {
 	c, calls, _ := builderTimeoutFixture(t, "slow")
+	shortVMReadFailSafe(t, time.Minute) // tell the pool read's budget apart
 	budgets := []time.Duration{}
 	c.newTimeout = func(ctx context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
 		budgets = append(budgets, budget)
@@ -109,6 +110,7 @@ func TestBuilderReadinessCallerCancellationWins(t *testing.T) {
 
 func TestBuilderReadinessEarlierDeadlineWins(t *testing.T) {
 	c, calls, _ := builderTimeoutFixture(t, "")
+	shortVMReadFailSafe(t, time.Minute) // tell the pool read's budget apart
 	c.newTimeout = func(ctx context.Context, budget time.Duration) (context.Context, context.CancelFunc) {
 		if budget == vmapi.BuilderReadyTimeout {
 			return context.WithDeadline(ctx, time.Now().Add(-time.Second))

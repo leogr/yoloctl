@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"time"
 )
 
 // Only prepareNativePinRetirement constructs this descriptor in production,
@@ -56,10 +55,8 @@ func (p *nativePreparedPinRetirement) afterContainerStop(ctx context.Context, ac
 		return pinRetirementProgress{}, err
 	}
 	p.consumed = true
-	// The enclosing protocol already owns bounded cleanup after its actual
-	// Stop ACK. Respect its cancellation/deadline; never extend it per member.
-	cleanup, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
+	// The protocol retains the same Stop ACK. Each wait inside this
+	// generation has its own bound from the cleanup parent.
 	progress := pinRetirementProgress{stopAttempted: true, stopAcknowledged: true}
-	return continueAcknowledgedPinRetirement(cleanup, p.completed, p.hooks, progress)
+	return continueAcknowledgedPinRetirement(ctx, p.completed, p.hooks, progress)
 }

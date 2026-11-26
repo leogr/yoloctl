@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/leogr/yoloctl/internal/execpipe"
 )
 
 // NativeMountEntry is read-only containerd OCI-spec observation, including
@@ -125,6 +126,11 @@ func (c *Client) NativeMountInventory(ctx context.Context) ([]NativeMountEntry, 
 	return second, nil
 }
 
+// mountDrainFailSafe ends the wait for output after a mount read's command
+// has exited, when a descendant keeps the pipe open and nothing else ends it.
+// Tests shorten it.
+var mountDrainFailSafe = 2 * time.Minute
+
 type nativeMountOutput struct {
 	buffer bytes.Buffer
 	limit  int
@@ -146,11 +152,10 @@ func (c *Client) nativeMountRead(ctx context.Context, remaining *int, limit int,
 	}
 	output := &nativeMountOutput{limit: min(limit, *remaining)}
 	cmd := c.command(ctx, append([]string{"sudo", "nerdctl"}, args...)...)
-	cmd.Stdout, cmd.Stderr = output, io.Discard
-	// A direct adapter exit/deadline does not settle pipes inherited by its
-	// descendants. Bound that separate wait; partial output remains unavailable.
-	cmd.WaitDelay = time.Second
-	if err := cmd.Run(); err != nil {
+	// A direct adapter exit does not settle pipes inherited by its
+	// descendants. The read owns stdout, so the caller's cancellation, or the
+	// fail-safe after the exit, ends that wait; partial output stays unused.
+	if err := execpipe.Run(ctx, cmd, mountDrainFailSafe, output, nil); err != nil {
 		return nil, fmt.Errorf("native mount inventory command/pipe settlement failed: %w", errors.Join(err, ctx.Err()))
 	}
 	if err := ctx.Err(); err != nil {

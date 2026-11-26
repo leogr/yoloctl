@@ -27,7 +27,7 @@ func TestNativeStartupDiagnosticIsCollectedBeforeOwnedCleanup(t *testing.T) {
 		})
 		return err
 	}
-	actions.cleanup = func(context.Context, nativeCreateProgress) error {
+	actions.cleanup = func(*detachedCleanup, nativeCreateProgress) error {
 		available = false
 		events = append(events, "cleanup")
 		return nil

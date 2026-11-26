@@ -1,10 +1,13 @@
 package agentbox
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"net"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -115,5 +118,66 @@ func TestProbeMainSessionCurrentEndpoint(t *testing.T) {
 		if ok, err := probeMainSessionAt(t.Context(), "current", socket); err != nil || !ok {
 			t.Fatalf("probe %d: accepted=%v err=%v", i, ok, err)
 		}
+	}
+}
+
+// silentEndpoint accepts connections and never answers.
+func silentEndpoint(t *testing.T) string {
+	t.Helper()
+	socket := filepath.Join(t.TempDir(), "s.sock")
+	l, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var conns []net.Conn
+	t.Cleanup(func() {
+		_ = l.Close()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, conn := range conns {
+			_ = conn.Close()
+		}
+	})
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			conns = append(conns, conn)
+			mu.Unlock()
+		}
+	}()
+	return socket
+}
+
+// An endpoint that never answers ends the probe with today's i/o timeout:
+// at the fail-safe, at an earlier caller deadline, or at once on Ctrl+C.
+func TestProbeMainSessionSilentEndpointEndsWithFailSafeOrCaller(t *testing.T) {
+	probe := func(ctx context.Context) error {
+		start := time.Now()
+		_, err := probeMainSessionAt(ctx, "coder", silentEndpoint(t))
+		if time.Since(start) > 30*time.Second {
+			t.Fatal("probe outlived its end", time.Since(start))
+		}
+		return err
+	}
+	old := runtimeStepFailSafe
+	shortRuntimeStepFailSafe(t, 200*time.Millisecond)
+	if err := probe(t.Context()); err == nil || !strings.Contains(err.Error(), "i/o timeout") {
+		t.Fatal("silent endpoint did not end at the fail-safe", err)
+	}
+	runtimeStepFailSafe = old
+	caller, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+	if err := probe(caller); err == nil || !strings.Contains(err.Error(), "i/o timeout") {
+		t.Fatal("earlier caller deadline did not end the probe", err)
+	}
+	cancelled, cancelNow := context.WithCancel(t.Context())
+	time.AfterFunc(200*time.Millisecond, cancelNow)
+	if err := probe(cancelled); err == nil {
+		t.Fatal("caller cancellation did not end the probe")
 	}
 }

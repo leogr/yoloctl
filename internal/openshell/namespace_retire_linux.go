@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
-	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -65,11 +64,9 @@ func runPinRetirement(ctx context.Context, alreadyRetired bool, h pinRetirementH
 		return p, &NativeEffectsUncertain{Cause: err}
 	}
 	p.stopAcknowledged = true
-	// Stop succeeded: finish this one bounded owned cleanup even if the
-	// request's transport disappears. This is not a new operation/replay.
-	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	defer cancel()
-	return continueAcknowledgedPinRetirement(cleanup, alreadyRetired, h, p)
+	// Stop succeeded. Continue the owned cleanup even if the request
+	// disappears, with independent bounds at its waits.
+	return continueAcknowledgedPinRetirement(context.WithoutCancel(ctx), alreadyRetired, h, p)
 }
 
 // Shared effect suffix. Its only production callers obtain Stop authority from
@@ -382,6 +379,9 @@ func prepareNativePinRetirement(ctx context.Context, kernel *kernelInfrastructur
 		}
 		return nil
 	}
+	checkMounts := func(c context.Context, p pinRetirementProgress) error {
+		return runRuntimeWait(c, func(check context.Context) error { return checkView(check, p) })
+	}
 	var result []byte
 	hooks := pinRetirementHooks{
 		beforeStop: func(c context.Context) error {
@@ -395,7 +395,7 @@ func prepareNativePinRetirement(ctx context.Context, kernel *kernelInfrastructur
 			if err := owner.inactive(c); err != nil {
 				return err
 			}
-			return checkView(c, p)
+			return checkMounts(c, p)
 		},
 		persist: func(phase namespacePinPhase) error {
 			next := state
@@ -414,20 +414,20 @@ func prepareNativePinRetirement(ctx context.Context, kernel *kernelInfrastructur
 			if err != nil {
 				return err
 			}
-			child, cancel := context.WithTimeout(c, 12*time.Second)
-			defer cancel()
-			cmd := exec.CommandContext(child, "/proc/self/exe", NetworkWorkerCommand, "retire")
-			cmd.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL=C"}
-			cmd.ExtraFiles = []*os.File{namespace}
-			cmd.Stdin = bytes.NewReader(raw)
-			cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
-			stdout, stderr := boundedCommandOutput(4096), boundedCommandOutput(64<<10)
-			cmd.Stdout, cmd.Stderr = stdout, stderr
-			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("fixed-plan retirement child failed: %w: %s", err, stderr.String())
-			}
-			result = bytes.Clone(stdout.Bytes())
-			return nil
+			return runRuntimeWait(c, func(child context.Context) error {
+				cmd := exec.CommandContext(child, "/proc/self/exe", NetworkWorkerCommand, "retire")
+				cmd.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL=C"}
+				cmd.ExtraFiles = []*os.File{namespace}
+				cmd.Stdin = bytes.NewReader(raw)
+				cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+				stdout, stderr := boundedCommandOutput(4096), boundedCommandOutput(64<<10)
+				cmd.Stdout, cmd.Stderr = stdout, stderr
+				if err := cmd.Run(); err != nil {
+					return fmt.Errorf("fixed-plan retirement child failed: %w: %s", err, stderr.String())
+				}
+				result = bytes.Clone(stdout.Bytes())
+				return nil
+			})
 		},
 		verifyTable: func() error { return decodeNativeEgressRetirement(result, state.Plan) },
 		unmountPin: func() error {
@@ -448,7 +448,7 @@ func prepareNativePinRetirement(ctx context.Context, kernel *kernelInfrastructur
 			if err := owner.inactive(c); err != nil {
 				return err
 			}
-			return checkView(c, pinRetirementProgress{pinUnmountAcknowledged: true})
+			return checkMounts(c, pinRetirementProgress{pinUnmountAcknowledged: true})
 		},
 		unmountDirectory: func() error {
 			// Use the native parent for the syscall, and release our own
@@ -480,7 +480,7 @@ func prepareNativePinRetirement(ctx context.Context, kernel *kernelInfrastructur
 			if err := owner.inactive(c); err != nil {
 				return err
 			}
-			return checkView(c, pinRetirementProgress{pinUnmountAcknowledged: true, directoryUnmountAcknowledged: true})
+			return checkMounts(c, pinRetirementProgress{pinUnmountAcknowledged: true, directoryUnmountAcknowledged: true})
 		},
 		complete: files.publishRetired,
 	}

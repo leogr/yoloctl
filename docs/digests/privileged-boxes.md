@@ -153,12 +153,12 @@ were not run. [28](#source-28)
 2. <a id="source-2"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L22-L52) — `PrivilegedAuthority`, `PrivilegedOperatorAccess` and `RuntimeFeatures`.
 3. <a id="source-3"></a> [internal/features/privileged.go](../../internal/features/privileged.go#L5-L61) — internal installer and its identity note.
 4. <a id="source-4"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L438-L489) — privileged launch; creation check at L263.
-5. <a id="source-5"></a> [internal/container/container.go](../../internal/container/container.go#L86-L122) — run option; inspected record at L546.
+5. <a id="source-5"></a> [internal/container/container.go](../../internal/container/container.go#L87-L123) — run option; inspected record at L546.
 6. <a id="source-6"></a> [nerdctl v2.4.2 run_security_linux.go](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/cmd/container/run_security_linux.go#L43-L48) — spec options; `dockercompat.go#L690` and `create.go#L999` record it and reserve its label.
 7. <a id="source-7"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L148-L199) — binary verification.
 8. <a id="source-8"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1824-L1830) — runtime preflight.
 9. <a id="source-9"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L36-L40) — early dispatch.
-10. <a id="source-10"></a> [internal/boxendpoint/server_linux.go](../../internal/boxendpoint/server_linux.go#L89-L1174) — server, children, reaper, PID 1 and socket.
+10. <a id="source-10"></a> [internal/boxendpoint/server_linux.go](../../internal/boxendpoint/server_linux.go#L93-L1178) — server, children, reaper, PID 1 and socket.
 11. <a id="source-11"></a> [internal/boxendpoint/boxendpoint.go](../../internal/boxendpoint/boxendpoint.go#L24-L219) — main-session request, limits, argv and environment.
 12. <a id="source-12"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L54-L146) — `ClassifyRuntime`.
 13. <a id="source-13"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L196-L248) — policy note and `runtimeModeReason`.

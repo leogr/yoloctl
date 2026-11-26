@@ -45,28 +45,15 @@ func startOwnedNativeOpenShellForward(ctx context.Context, client *container.Cli
 	if err != nil {
 		return ownedNativeForward{}, err
 	}
-	setup, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	if err := verifyStorage(setup); err != nil {
+	if err := runRuntimeStep(ctx, verifyStorage); err != nil {
 		return ownedNativeForward{}, err
 	}
-	selected, err := InspectOpenShellRuntime(setup, client, spec.Agentbox)
+	selected, err := prepareNativeForwardStart(ctx, spec, func(check context.Context) (OpenShellRuntime, error) {
+		return InspectOpenShellRuntime(check, client, spec.Agentbox)
+	}, preflightForwardCLI, func(check context.Context) ([]port.ForwardService, error) {
+		return port.Inventory(check, client, "")
+	})
 	if err != nil {
-		return ownedNativeForward{}, err
-	}
-	if !selected.Running || selected.PID <= 1 || selected.StartedAt.IsZero() {
-		return ownedNativeForward{}, errors.New("start the OpenShell box before forwarding")
-	}
-	if err := preflightForwardCLI(setup); err != nil {
-		return ownedNativeForward{}, err
-	}
-	known, err := port.Inventory(setup, client, "")
-	if err != nil {
-		// A missing matching-init inventory must fail before Start. Never
-		// replace it with an active-only inventory or an empty result.
-		return ownedNativeForward{}, fmt.Errorf("complete forward service inventory: %w", err)
-	}
-	if err := noNativeForwardConflict(known, spec); err != nil {
 		return ownedNativeForward{}, err
 	}
 	var attempt [16]byte
@@ -83,8 +70,6 @@ func startOwnedNativeOpenShellForward(ctx context.Context, client *container.Cli
 		Env: []string{"HOME=/root", spaceenv.ContextEnv + "=" + spaceenv.ContextPath}}
 	err = completeForwardCreation(ctx,
 		func(start context.Context) error {
-			start, cancel := context.WithTimeout(start, 10*time.Second)
-			defer cancel()
 			return vmservice.Start(start, client, unit)
 		},
 		func(ready context.Context) error {
@@ -97,6 +82,38 @@ func startOwnedNativeOpenShellForward(ctx context.Context, client *container.Cli
 		return ownedNativeForward{}, err
 	}
 	return ownedNativeForward{selected: selected, spec: spec, binding: binding}, nil
+}
+
+func prepareNativeForwardStart(ctx context.Context, spec port.Spec,
+	observe func(context.Context) (OpenShellRuntime, error),
+	preflight func(context.Context) error,
+	inventory func(context.Context) ([]port.ForwardService, error),
+) (OpenShellRuntime, error) {
+	var selected OpenShellRuntime
+	if err := runRuntimeStep(ctx, func(check context.Context) error {
+		var err error
+		selected, err = observe(check)
+		return err
+	}); err != nil {
+		return OpenShellRuntime{}, err
+	}
+	if !selected.Running || selected.PID <= 1 || selected.StartedAt.IsZero() {
+		return OpenShellRuntime{}, errors.New("start the OpenShell box before forwarding")
+	}
+	if err := runRuntimeStep(ctx, preflight); err != nil {
+		return OpenShellRuntime{}, err
+	}
+	var known []port.ForwardService
+	if err := runRuntimeStep(ctx, func(check context.Context) error {
+		var err error
+		known, err = inventory(check)
+		return err
+	}); err != nil {
+		// A missing matching-init inventory must fail before Start. Never
+		// replace it with an active-only inventory or an empty result.
+		return OpenShellRuntime{}, fmt.Errorf("complete forward service inventory: %w", err)
+	}
+	return selected, noNativeForwardConflict(known, spec)
 }
 
 func noNativeForwardConflict(known []port.ForwardService, spec port.Spec) error {
@@ -112,13 +129,14 @@ func noNativeForwardConflict(known []port.ForwardService, spec port.Spec) error 
 // A failed/lost Start reply never triggers an automatic stop or retry. After a
 // known Start, failed readiness stops only this attempt using independent proof.
 func completeForwardCreation(ctx context.Context, start, ready, cleanup func(context.Context) error) error {
-	if err := start(ctx); err != nil {
+	acknowledged, cancel := context.WithTimeout(ctx, runtimeStepFailSafe)
+	err := start(acknowledged)
+	cancel()
+	if err != nil {
 		return &NativeEffectsUncertain{Cause: fmt.Errorf("forward service creation was not acknowledged; do not retry or adopt it automatically: %w", err)}
 	}
 	if err := ready(ctx); err != nil {
-		stop, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
-		defer cancel()
-		if cleanupErr := cleanup(stop); cleanupErr != nil {
+		if cleanupErr := cleanup(context.WithoutCancel(ctx)); cleanupErr != nil {
 			return &NativeEffectsUncertain{Cause: errors.Join(err, fmt.Errorf("owned forward cleanup remains unproved: %w", cleanupErr))}
 		}
 		return err
@@ -157,7 +175,8 @@ func preflightForwardCLI(ctx context.Context) error {
 var errForwardNotReady = errors.New("owned forward has not published a current listener")
 
 func waitNativeForwardReady(ctx context.Context, client *container.Client, selected OpenShellRuntime, spec port.Spec, binding port.ForwardBinding, verifyStorage func(context.Context) error) error {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	// The whole wait is one wait; its 10 ms tries below stay.
+	ctx, cancel := context.WithTimeout(ctx, runtimeStepFailSafe)
 	defer cancel()
 	unitName, _ := port.OpenShellUnitName(spec)
 	store := forwardStatusStore{directory: filepath.Join(selected.ControlRoot, "generations", binding.Generation, "status", "forwards"), uid: 0, gid: 0}
@@ -242,10 +261,32 @@ func sameForwardRuntime(current, selected OpenShellRuntime, binding port.Forward
 	return current.matchesForward(binding) && current.ContainerID == selected.ContainerID && current.PID == selected.PID && current.StartedAt.Equal(selected.StartedAt) && current.ControlRoot == selected.ControlRoot
 }
 
-func cleanupNativeForwardAttempt(ctx context.Context, client *container.Client, selected OpenShellRuntime, spec port.Spec, binding port.ForwardBinding, verifyStorage func(context.Context) error) error {
-	if err := verifyStorage(ctx); err != nil {
+func cleanupNativeForwardAttempt(ctx context.Context, client *container.Client, selected OpenShellRuntime, spec port.Spec, binding port.ForwardBinding, verifyStorage func(context.Context) error) (err error) {
+	defer func() {
+		if nativeLostReply(err) {
+			err = &NativeEffectsUncertain{Cause: err}
+		}
+	}()
+	if err := runRuntimeStep(ctx, verifyStorage); err != nil {
 		return err
 	}
+	directory := filepath.Join(selected.ControlRoot, "generations", binding.Generation, "status", "forwards")
+	store := forwardStatusStore{directory: directory, uid: 0, gid: 0}
+	return completeNativeForwardCleanup(ctx, func(check context.Context) error {
+		return waitOwnedNativeForward(check, client, spec, binding)
+	}, func(stop context.Context) error {
+		return stopNativeForwardAndRemoveStatus(stop, client, spec, binding, store)
+	})
+}
+
+func completeNativeForwardCleanup(ctx context.Context, wait, stop func(context.Context) error) error {
+	if err := runRuntimeStep(ctx, wait); err != nil {
+		return err
+	}
+	return stop(ctx)
+}
+
+func waitOwnedNativeForward(ctx context.Context, client *container.Client, spec port.Spec, binding port.ForwardBinding) error {
 	name, _ := port.OpenShellUnitName(spec)
 	for {
 		if err := ctx.Err(); err != nil {
@@ -289,9 +330,7 @@ func cleanupNativeForwardAttempt(ctx context.Context, client *container.Client, 
 	}
 	// Inactive/activating instances still belong to the acknowledged Start
 	// under the caller's continuously held admission; no mutation was retried.
-	directory := filepath.Join(selected.ControlRoot, "generations", binding.Generation, "status", "forwards")
-	store := forwardStatusStore{directory: directory, uid: 0, gid: 0}
-	return stopNativeForwardAndRemoveStatus(ctx, client, spec, binding, store)
+	return nil
 }
 
 // This is the actual adapter/status boundary. A failed acknowledgement must
@@ -301,18 +340,20 @@ func stopNativeForwardAndRemoveStatus(ctx context.Context, client *container.Cli
 	if err != nil {
 		return err
 	}
-	if err := vmservice.StopAcknowledged(ctx, client, name); err != nil {
+	if err := runRuntimeStep(ctx, func(stop context.Context) error { return vmservice.StopAcknowledged(stop, client, name) }); err != nil {
 		return err
 	}
-	err = store.transaction(ctx, binding.Attempt+".json", func() error {
-		raw, status, err := readForwardStatusLocked(store.directory, binding.Attempt+".json", store.uid, store.gid)
-		if err != nil {
-			return err
-		}
-		if status.Spec != spec || status.Binding != binding || status.Unit != name {
-			return errors.New("refusing cleanup of foreign forward status")
-		}
-		return store.removeLocked(binding.Attempt+".json", raw)
+	err = runRuntimeStep(ctx, func(check context.Context) error {
+		return store.transaction(check, binding.Attempt+".json", func() error {
+			raw, status, err := readForwardStatusLocked(store.directory, binding.Attempt+".json", store.uid, store.gid)
+			if err != nil {
+				return err
+			}
+			if status.Spec != spec || status.Binding != binding || status.Unit != name {
+				return errors.New("refusing cleanup of foreign forward status")
+			}
+			return store.removeLocked(binding.Attempt+".json", raw)
+		})
 	})
 	if errors.Is(err, os.ErrNotExist) {
 		return nil

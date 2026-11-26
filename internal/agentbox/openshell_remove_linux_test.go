@@ -3,11 +3,59 @@
 package agentbox
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/synctest"
+	"time"
 )
+
+func TestNativeRemovalOwnershipRenewsDetachedChecks(t *testing.T) {
+	for _, hung := range []bool{false, true} {
+		t.Run(fmt.Sprintf("hung-%t", hung), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				const delay = 80 * time.Second
+				slow := func(ctx context.Context) error {
+					select {
+					case <-time.After(delay):
+						return nil
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+				checks := nativeRemovalOwnership{
+					verifyStorage: slow,
+					inspect: func(ctx context.Context) error {
+						if hung {
+							<-ctx.Done()
+							return ctx.Err()
+						}
+						return slow(ctx)
+					},
+				}
+				caller, cancel := context.WithTimeout(t.Context(), time.Minute)
+				defer cancel()
+				if err := checks.verify(caller); !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatal("foreground ownership did not follow the caller", err)
+				}
+				checks.stopAcknowledged = true
+				start := time.Now()
+				err := checks.verify(context.WithoutCancel(t.Context()))
+				if hung {
+					if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) != delay+runtimeStepFailSafe {
+						t.Fatalf("silent inspect lost its own bound: %v after %v", err, time.Since(start))
+					}
+				} else if err != nil || time.Since(start) != 2*delay {
+					t.Fatalf("storage and inspect shared one wait: %v after %v", err, time.Since(start))
+				}
+			})
+		})
+	}
+}
 
 func TestNativeRemovalPublicSSHSocket(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ssh.sock")

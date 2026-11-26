@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -167,7 +168,7 @@ func TestNativeContainerRemovalCancellationRetainsOnlyOriginalCleanupAdmission(t
 				return func(check context.Context) error {
 					events = append(events, name)
 					deadline, ok := check.Deadline()
-					if check.Err() != nil || check.Value(admissionKey{}) != "original admitted operation" || !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 90*time.Second {
+					if check.Err() != nil || check.Value(admissionKey{}) != "original admitted operation" || !ok || time.Until(deadline) < time.Minute || time.Until(deadline) > runtimeFailSafe {
 						t.Fatal("cleanup lost original bounded admission", name, check.Err())
 					}
 					return nil
@@ -188,14 +189,19 @@ func TestNativeContainerRemovalCancellationRetainsOnlyOriginalCleanupAdmission(t
 					}
 					return nil
 				},
-				inactive: post("inactive"), remove: post("remove"), remaining: post("remaining"),
+				inactive: func(ctx context.Context) error { return runRuntimeWait(ctx, post("inactive")) },
+				remove:   post("remove"), remaining: post("remaining"),
 			}
 			a.refresh = func(check context.Context, _ *nativeContainerStopACK) error { return post("refresh")(check) }
-			a.retire = func(check context.Context, _ *nativeContainerStopACK) error { return post("retire")(check) }
-			a.namespaceMetadata = func(check context.Context, _ *nativeContainerRemoveACK) error {
-				return post("namespace-metadata")(check)
+			a.retire = func(check context.Context, _ *nativeContainerStopACK) error {
+				return runRuntimeWait(check, post("retire"))
 			}
-			a.runtimeMetadata = func(check context.Context, _ *nativeContainerRemoveACK) error { return post("runtime-metadata")(check) }
+			a.namespaceMetadata = func(check context.Context, _ *nativeContainerRemoveACK) error {
+				return runRuntimeWait(check, post("namespace-metadata"))
+			}
+			a.runtimeMetadata = func(check context.Context, _ *nativeContainerRemoveACK) error {
+				return runRuntimeWait(check, post("runtime-metadata"))
+			}
 			err := completeNativeContainerRemoval(ctx, scope, a)
 			switch point {
 			case "before-qualify":
@@ -244,6 +250,87 @@ func TestNativeContainerRemovalRejectsMissingWiringAndIncompleteScopeBeforeEffec
 	}
 }
 
+func TestNativeRemovalPostStopReadsAndGenerationsHaveIndependentAllowances(t *testing.T) {
+	for _, stage := range []string{"inactivity", "same boot", "different boot", "silent generation"} {
+		t.Run(stage, func(t *testing.T) {
+			scope := nativeRemovalScopeFixture(t)
+			if len(scope.records) < 2 {
+				t.Fatal("fixture needs successive retained generations")
+			}
+			synctest.Test(t, func(t *testing.T) {
+				const delay = 70 * time.Second
+				slow := func(ctx context.Context) error {
+					select {
+					case <-time.After(delay):
+						return nil
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+				step := func(ctx context.Context) error { return runRuntimeWait(ctx, slow) }
+				ok := func(context.Context) error { return nil }
+				a, removes := refreshProtocolActions(t, scope, func(context.Context, *nativeContainerStopACK) error { return nil })
+				a.inactive = ok
+				if stage == "inactivity" {
+					a.inactive = func(ctx context.Context) error {
+						if err := step(ctx); err != nil {
+							return err
+						}
+						return step(ctx)
+					}
+				}
+				retired := 0
+				a.retire = func(ctx context.Context, ack *nativeContainerStopACK) error {
+					for _, record := range scope.records {
+						switch stage {
+						case "inactivity":
+							continue
+						case "same boot":
+							var events []string
+							h := namespaceRetireScript("", &events, nil)
+							h.check = func(c context.Context, _ pinRetirementProgress) error { return step(c) }
+							p := preparedRetirementFixture(record, scope.cid, h, false)
+							_, err := p.afterContainerStop(ctx, ack)
+							_ = p.Close()
+							if err != nil {
+								return err
+							}
+						default:
+							mapping := slow
+							if stage == "silent generation" {
+								mapping = func(c context.Context) error { <-c.Done(); return c.Err() }
+							}
+							p := &nativePreparedObservationRetirement{record: record, cid: scope.cid, ready: true, verify: func(c context.Context) error {
+								return checkInactiveThenMapping(c, step, mapping)
+							}}
+							_, err := p.afterContainerStop(ctx, ack)
+							_ = p.Close()
+							if err != nil {
+								return err
+							}
+						}
+						retired++
+					}
+					return nil
+				}
+				start := time.Now()
+				err := completeNativeContainerRemoval(t.Context(), scope, a)
+				if stage == "silent generation" {
+					if !errors.Is(err, context.DeadlineExceeded) || retired != 0 || *removes != 0 ||
+						time.Since(start) != delay+runtimeFailSafe {
+						t.Fatal("silent generation did not end within its own wait", err, retired, *removes, time.Since(start))
+					}
+					return
+				}
+				if err != nil || *removes != 1 || time.Since(start) <= runtimeFailSafe ||
+					stage != "inactivity" && retired != len(scope.records) {
+					t.Fatal("independent removal waits shared an allowance", err, retired, *removes, time.Since(start))
+				}
+			})
+		})
+	}
+}
+
 func captureNativeRemovalNotices(t *testing.T) *[]error {
 	t.Helper()
 	var notices []error
@@ -281,4 +368,31 @@ func decision3Outcome(err error, notices []error, cause error, afterRemove bool)
 		return err == nil && len(notices) == 1 && errors.Is(notices[0], cause)
 	}
 	return errors.Is(err, cause) && !errors.As(err, &uncertain) && len(notices) == 0
+}
+
+// A CID remove that its fail-safe cut off, with its caller still live, has a
+// lost reply: the result is typed uncertainty, remove ran once, and nothing
+// after it ran (no replay).
+func TestNativeContainerRemovalCutOffRemoveIsUncertainWithoutReplay(t *testing.T) {
+	previous := runtimeFailSafe
+	runtimeFailSafe = 100 * time.Millisecond
+	t.Cleanup(func() { runtimeFailSafe = previous })
+	ok := func(context.Context) error { return nil }
+	removes, after := 0, 0
+	a := nativeContainerRemovalActions{qualify: ok, stop: ok, inactive: ok,
+		remove: func(ctx context.Context) error {
+			removes++
+			<-ctx.Done()
+			return errors.New("exit status 137") // a killed engine call
+		},
+		remaining:         func(context.Context) error { after++; return nil },
+		refresh:           func(context.Context, *nativeContainerStopACK) error { return nil },
+		retire:            func(context.Context, *nativeContainerStopACK) error { return nil },
+		namespaceMetadata: func(context.Context, *nativeContainerRemoveACK) error { after++; return nil },
+		runtimeMetadata:   func(context.Context, *nativeContainerRemoveACK) error { after++; return nil }}
+	err := completeNativeContainerRemoval(t.Context(), nativeRemovalScopeFixture(t), a)
+	var uncertain *NativeEffectsUncertain
+	if !errors.As(err, &uncertain) || removes != 1 || after != 0 {
+		t.Fatal("cut-off remove was not uncertain, or was replayed or followed", err, removes, after)
+	}
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"time"
 )
 
 type stalePinStopHooks struct {
@@ -31,16 +30,20 @@ func runStalePinStop(ctx context.Context, h stalePinStopHooks) (p pinRetirementP
 		return p, &NativeEffectsUncertain{Cause: err}
 	}
 	p.stopAcknowledged = true
-	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	defer cancel()
-	if err := cleanup.Err(); err != nil {
-		return p, &NativeEffectsUncertain{Cause: err}
-	}
-	if err := h.verifyInactiveAndStale(cleanup); err != nil {
+	if err := h.verifyInactiveAndStale(context.WithoutCancel(ctx)); err != nil {
 		return p, &NativeEffectsUncertain{Cause: err}
 	}
 	p.completed = true
 	return p, nil
+}
+
+// Ownership callbacks bound their own independent requests. The mapping
+// receives a fresh allowance only after the inactivity observation returns.
+func checkInactiveThenMapping(ctx context.Context, inactive, mapping func(context.Context) error) error {
+	if err := inactive(ctx); err != nil {
+		return err
+	}
+	return runRuntimeWait(ctx, mapping)
 }
 
 // This comparison is observation only. It neither manufactures an old effect
@@ -75,18 +78,17 @@ func stopStaleNativeNamespacePin(ctx context.Context, kernel *kernelInfrastructu
 		},
 		stop: owner.stop,
 		verifyInactiveAndStale: func(c context.Context) error {
-			if err := owner.inactive(c); err != nil {
-				return err
-			}
-			current, err := observeStaleNamespacePin(c, kernel, lock, record, cid)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = current.Close() }()
-			if !sameStalePinObservation(selected, current) {
-				return errors.New("different-boot namespace metadata/current mapping changed across Stop")
-			}
-			return nil
+			return checkInactiveThenMapping(c, owner.inactive, func(check context.Context) error {
+				current, err := observeStaleNamespacePin(check, kernel, lock, record, cid)
+				if err != nil {
+					return err
+				}
+				defer func() { _ = current.Close() }()
+				if !sameStalePinObservation(selected, current) {
+					return errors.New("different-boot namespace metadata/current mapping changed across Stop")
+				}
+				return nil
+			})
 		},
 	}
 	return runStalePinStop(ctx, h)

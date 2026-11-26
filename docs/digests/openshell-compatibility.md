@@ -251,7 +251,7 @@ operator-box case was not rerun separately. [26](#source-26)
 ## Sources
 
 1. <a id="source-1"></a> [assets/embed.go](../../assets/embed.go#L1) — embedded assets; the `SandboxVersion`/`SandboxSHA*` pins and the legacy Rego embed are removed by the retirement delta (tree `3cc5e841`).
-2. <a id="source-2"></a> [internal/agentbox/openshell_create_linux.go](../../internal/agentbox/openshell_create_linux.go#L25-L180) — private factory and preflight ordering.
+2. <a id="source-2"></a> [internal/agentbox/openshell_create_linux.go](../../internal/agentbox/openshell_create_linux.go#L25-L179) — private factory and preflight ordering.
 3. <a id="source-3"></a> [internal/agentbox/openshell_image.go](../../internal/agentbox/openshell_image.go#L1-L27) — `PreflightNativeImage`, caller contract and refusal wording.
 4. <a id="source-4"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L48-L73) — generated final image starts from the base.
 5. <a id="source-5"></a> [assets/containers/agentbox/Dockerfile](../../assets/containers/agentbox/Dockerfile#L103-L110) — default base startup configuration.

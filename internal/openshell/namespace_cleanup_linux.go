@@ -330,8 +330,9 @@ func (p *nativeNamespaceCleanup) removeAfterACK(ctx context.Context, ack *native
 	if p == nil || p.retirement == nil || p.retirement.closed || !p.retirement.retired || p.retirement.scope == nil || remaining == nil {
 		return errors.New("namespace cleanup lacks original live scope/current verifier")
 	}
+	verifyRemaining := func(c context.Context) error { return runRuntimeWait(c, remaining) }
 	return p.removeWithCurrentVerifier(ctx, ack, func(c context.Context) error {
-		if err := p.retirement.scope.checkInfrastructure(c, remaining); err != nil {
+		if err := p.retirement.scope.checkInfrastructure(c, verifyRemaining); err != nil {
 			return err
 		}
 		if err := p.retirement.full.Check(c); err != nil {

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/openshell"
 	"github.com/leogr/yoloctl/internal/operator"
@@ -72,27 +73,33 @@ func (a LiveApplier) prepareNativeContainerRemoval(ctx context.Context, name, ci
 			err = errors.Join(err, closeOwned())
 		}
 	}()
-	owned := func(check context.Context) error {
+	verifyStorage := func(check context.Context) error {
 		if removed {
 			return errors.New("cannot re-inspect a removed native container")
 		}
-		if err := a.VerifyStorage(check); err != nil {
-			return err
-		}
+		return a.VerifyStorage(check)
+	}
+	observe := func(check context.Context) (OpenShellRuntime, error) {
 		current, err := inspectOpenShellRuntime(check, a.Client, name, cid)
 		if err != nil {
-			return err
+			return OpenShellRuntime{}, err
 		}
 		if !sameNativeStopBinding(current, selected) {
-			return errors.New("native removal original runtime binding changed")
+			return OpenShellRuntime{}, errors.New("native removal original runtime binding changed")
 		}
-		return nil
+		return current, nil
 	}
-	inactive := func(check context.Context) error {
-		if err := owned(check); err != nil {
+	ownership := nativeRemovalOwnership{
+		verifyStorage: verifyStorage,
+		inspect: func(check context.Context) error {
+			_, err := observe(check)
 			return err
-		}
-		d, err := a.Client.Inspect(check, cid)
+		},
+	}
+	owned := ownership.verify
+	inactive := func(check context.Context, wait func(context.Context, func(context.Context) error) error) error {
+		_, d, err := readNativeStopOwnership(check, wait, verifyStorage, observe,
+			func(engine context.Context) (*container.Details, error) { return a.Client.Inspect(engine, cid) })
 		if err != nil {
 			return err
 		}
@@ -147,12 +154,13 @@ func (a LiveApplier) prepareNativeContainerRemoval(ctx context.Context, name, ci
 				if err := a.Client.StopContainerID(stop, cid, force); err != nil {
 					return err
 				}
-				if err := inactive(stop); err != nil {
+				if err := inactive(stop, runCallerStep); err != nil {
 					return err
 				}
+				ownership.stopAcknowledged = true
 				return nil
 			},
-			VerifyInactive: inactive,
+			VerifyInactive: func(check context.Context) error { return inactive(check, runRuntimeStep) },
 			RemoveContainerID: func(remove context.Context, actual string) error {
 				if actual != cid || removed {
 					return errors.New("native removal CID changed or acknowledgement replayed")
@@ -168,14 +176,15 @@ func (a LiveApplier) prepareNativeContainerRemoval(ctx context.Context, name, ci
 				if !removed {
 					return errors.New("native endpoint withdrawal lacks original rm acknowledgement")
 				}
-				if err := remaining(withdraw); err != nil {
+				checkRemaining := func(check context.Context) error { return runRuntimeStep(check, remaining) }
+				if err := checkRemaining(withdraw); err != nil {
 					return err
 				}
 				if retained != nil {
 					// Each registration's own withdrawal result decides; a
 					// leftover is named, never a re-scan condition. A later
 					// create gets a fresh incarnation.
-					if err := retained.withdraw(withdraw, removed, remaining); err != nil {
+					if err := retained.withdraw(withdraw, removed, checkRemaining); err != nil {
 						slog.Warn(fmt.Sprintf("box %s: operator registration was not fully removed: %v", name, err), slog.String("actor", "box"), slog.String("executor", "openshell"))
 					}
 				}
@@ -185,6 +194,26 @@ func (a LiveApplier) prepareNativeContainerRemoval(ctx context.Context, name, ci
 		})
 	}
 	return result, nil
+}
+
+// Removal retains the caller before Stop acknowledgement. The same original
+// ownership callback serves detached retirement and both pre-rm snapshots
+// after the acknowledgement, where storage and engine each own their wait.
+type nativeRemovalOwnership struct {
+	verifyStorage    func(context.Context) error
+	inspect          func(context.Context) error
+	stopAcknowledged bool
+}
+
+func (o *nativeRemovalOwnership) verify(ctx context.Context) error {
+	wait := runCallerStep
+	if o.stopAcknowledged {
+		wait = runRuntimeStep
+	}
+	if err := wait(ctx, o.verifyStorage); err != nil {
+		return err
+	}
+	return wait(ctx, o.inspect)
 }
 
 // Remove the named public endpoint itself. Missing endpoints already satisfy

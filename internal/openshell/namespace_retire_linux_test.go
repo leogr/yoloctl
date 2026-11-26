@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -104,11 +105,16 @@ func TestNamespaceRetirementCancellationBeforeStopVersusBoundedOwnedCleanup(t *t
 	hooks.stop = func(c context.Context) error { err := stop(c); cancel(); return err }
 	check := hooks.check
 	hooks.check = func(c context.Context, p pinRetirementProgress) error {
-		deadline, ok := c.Deadline()
-		if c.Err() != nil || !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 30*time.Second {
-			return errors.New("cleanup lost its independent finite bound")
+		if _, bounded := c.Deadline(); c.Err() != nil || bounded {
+			return errors.New("retirement did not keep an independent cleanup parent")
 		}
-		return check(c, p)
+		return runRuntimeWait(c, func(wait context.Context) error {
+			deadline, ok := wait.Deadline()
+			if !ok || time.Until(deadline) < time.Minute || time.Until(deadline) > runtimeFailSafe {
+				return errors.New("mount check lost its own finite bound")
+			}
+			return check(wait, p)
+		})
 	}
 	if p, err := runPinRetirement(ctx, false, hooks); err != nil || !p.completed || !reflect.DeepEqual(events, namespaceRetireSequence) {
 		t.Fatal(p, err, events)
@@ -118,6 +124,28 @@ func TestNamespaceRetirementCancellationBeforeStopVersusBoundedOwnedCleanup(t *t
 	}
 	if _, err := stopNativeNamespacePin(context.Background(), nil, nil, nativePinStopHooks{}); err == nil {
 		t.Fatal("missing admitted native owner accepted")
+	}
+}
+
+func TestNamespaceRetirementWorkerExpiryPreservesExitAndSkipsSuffix(t *testing.T) {
+	previous := runtimeFailSafe
+	runtimeFailSafe = 300 * time.Millisecond
+	t.Cleanup(func() { runtimeFailSafe = previous })
+	var events []string
+	hooks := namespaceRetireScript("", &events, nil)
+	hooks.retire = func(ctx context.Context) error {
+		events = append(events, "retire")
+		return runRuntimeWait(ctx, func(child context.Context) error {
+			return exec.CommandContext(child, "sleep", "30").Run()
+		})
+	}
+	progress, err := runPinRetirement(t.Context(), false, hooks)
+	var uncertain *NativeEffectsUncertain
+	var exit *exec.ExitError
+	if !errors.As(err, &uncertain) || !errors.As(err, &exit) || !errors.Is(err, context.DeadlineExceeded) ||
+		progress.policyAcknowledged || !progress.policyAttempted || !progress.stopAcknowledged ||
+		t.Context().Err() != nil || !reflect.DeepEqual(events, namespaceRetireSequence[:6]) {
+		t.Fatal("retirement worker deadline lost, replayed or followed by more effects", progress, err, events)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -54,6 +55,38 @@ func noInitializationFixture(t *testing.T) (*NativeGeneration, *NativePreparedGe
 	return g, token, lock, namespaceIdentity{Device: 7, Inode: 91}, "11111111-2222-4333-8444-555555555555"
 }
 
+func TestPreparedGenerationRepeatsOwnershipBeforeAnyCleanupEffect(t *testing.T) {
+	_, token, _, _, _ := noInitializationFixture(t)
+	synctest.Test(t, func(t *testing.T) {
+		checks, stops := 0, 0
+		caller := t.Context()
+		cleanup := context.WithoutCancel(caller)
+		owner := NativeNamespaceStop{
+			VerifyOwned: func(ctx context.Context) error {
+				checks++
+				return runRuntimeWait(ctx, func(check context.Context) error {
+					if checks == 1 {
+						return nil
+					}
+					<-check.Done()
+					return check.Err()
+				})
+			},
+			Stop:           func(context.Context) error { stops++; return nil },
+			VerifyInactive: func(context.Context) error { t.Fatal("inactive check after refused ownership"); return nil },
+		}
+		if err := owner.VerifyOwned(cleanup); err != nil {
+			t.Fatal(err)
+		}
+		start := time.Now()
+		err := token.stopGeneration(cleanup, owner)
+		if !errors.Is(err, context.DeadlineExceeded) || checks != 2 || stops != 0 ||
+			token.cleanupAttempted || caller.Err() != nil || time.Since(start) != runtimeFailSafe {
+			t.Fatalf("repeated ownership: %v checks=%d stops=%d elapsed=%v", err, checks, stops, time.Since(start))
+		}
+	})
+}
+
 func TestNativeGenerationNoInitializationCompletionComposesOriginalCleanupColdStopAndFreshPreparation(t *testing.T) {
 	for _, prefix := range []string{"no-start", "start-ack-no-reservation"} {
 		t.Run(prefix, func(t *testing.T) {
@@ -77,15 +110,20 @@ func TestNativeGenerationNoInitializationCompletionComposesOriginalCleanupColdSt
 				VerifyOwned: func(context.Context) error { return nil },
 				Stop:        func(context.Context) error { stops++; return nil },
 				VerifyInactive: func(c context.Context) error {
-					deadline, ok := c.Deadline()
-					if c.Err() != nil || !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 30*time.Second {
-						t.Fatal("cleanup lost bounded ACK context")
+					if c.Err() != nil {
+						t.Fatal("cleanup lost its detached ACK context")
 					}
 					return nil
 				},
 			}
 			token.cleanupAttempted = true
-			err := token.stopUninitialized(t.Context(), owner, func(context.Context) error { return verifyNoInitializationEntries(lock, record) }, func(_ context.Context, p pinRetirementProgress) error {
+			err := token.stopUninitialized(t.Context(), owner, func(check context.Context) error {
+				deadline, bounded := check.Deadline()
+				if stops > 0 && (!bounded || time.Until(deadline) < time.Minute || time.Until(deadline) > runtimeFailSafe) {
+					t.Fatal("post-ACK namespace verification lost its own wait", deadline)
+				}
+				return verifyNoInitializationEntries(lock, record)
+			}, func(_ context.Context, p pinRetirementProgress) error {
 				return publishNoInitializationAt(lock, record, cid, boot, mount, p)
 			})
 			if err != nil || stops != 1 {

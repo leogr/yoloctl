@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"syscall"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -14,6 +15,11 @@ import (
 )
 
 var errRuntimeSSHKey = errors.New("runtime SSH endpoint differs from the pinned generation key")
+
+// errRuntimeProbeTimedOut reports a try that only ran out of time: the
+// endpoint neither answered nor failed. The monitor keeps its previous
+// readiness and tries again, so one slow try never closes SSH admission.
+var errRuntimeProbeTimedOut = errors.New("runtime readiness probe ran out of time")
 
 // probeRuntimeReadyAt requires both the upstream's private readiness listener
 // (published after attach/confirm) and a responding SSH handshake with this
@@ -23,8 +29,17 @@ func probeRuntimeReadyAt(ctx context.Context, run *os.File, key ssh.PublicKey, u
 	if key == nil || key.Type() != ssh.KeyAlgoED25519 {
 		return false, errors.New("runtime readiness lacks its pinned SSH identity")
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	parent := ctx
+	ctx, cancel := context.WithTimeout(parent, time.Second)
 	defer cancel()
+	// notReady is the answer of a try that got no definite result: it ran out
+	// of its own time (not an explicit stop) or the endpoint is not ready.
+	notReady := func(err error) (bool, error) {
+		if probeRanOutOfTime(parent, ctx, err) {
+			return false, errRuntimeProbeTimedOut
+		}
+		return false, nil
+	}
 	for _, name := range []string{"ready.sock", "ssh/ssh.sock"} {
 		if err := checkRuntimePrivateSocket(run, name, uid, gid); err != nil {
 			if errors.Is(err, unix.ENOENT) {
@@ -36,7 +51,7 @@ func probeRuntimeReadyAt(ctx context.Context, run *os.File, key ssh.PublicKey, u
 	health := fmt.Sprintf("/proc/self/fd/%d/ready.sock", run.Fd())
 	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", health)
 	if err != nil {
-		return false, nil
+		return notReady(err)
 	}
 	if err := conn.Close(); err != nil {
 		return false, err
@@ -44,7 +59,7 @@ func probeRuntimeReadyAt(ctx context.Context, run *os.File, key ssh.PublicKey, u
 	target := fmt.Sprintf("/proc/self/fd/%d/ssh/ssh.sock", run.Fd())
 	conn, err = (&net.Dialer{}).DialContext(ctx, "unix", target)
 	if err != nil {
-		return false, nil
+		return notReady(err)
 	}
 	defer func() { _ = conn.Close() }()
 	deadline, _ := ctx.Deadline()
@@ -63,11 +78,11 @@ func probeRuntimeReadyAt(ctx context.Context, run *os.File, key ssh.PublicKey, u
 		if errors.Is(err, errRuntimeSSHKey) {
 			return false, errRuntimeSSHKey
 		}
-		return false, nil
+		return notReady(err)
 	}
 	defer func() { _ = transport.Close() }()
 	if err := ctx.Err(); err != nil {
-		return false, nil
+		return notReady(err)
 	}
 	// Recheck the currently selected paths after the handshake. The private
 	// supervisor can legitimately remove/rebind readiness as attach degrades.
@@ -93,4 +108,15 @@ func checkRuntimePrivateSocket(root *os.File, name string, uid, gid int) error {
 		return errors.New("runtime private endpoint has an unexpected type, owner or link")
 	}
 	return nil
+}
+
+// probeRanOutOfTime reports a try that ended because its own time ran out
+// while its parent is still live. The connection's deadline equals the try's
+// and can fire first, so an I/O timeout counts the same as the try's context.
+func probeRanOutOfTime(parent, try context.Context, err error) bool {
+	// An explicit stop, and a definite refusal, are never a timeout.
+	if parent.Err() != nil || errors.Is(err, syscall.ECONNREFUSED) {
+		return false
+	}
+	return errors.Is(try.Err(), context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded)
 }

@@ -80,17 +80,13 @@ func (a LiveApplier) createNativeContainer(ctx context.Context, c *Config, image
 	var prepared openshell.PreparedRuntime
 	var target openshell.ActivationTarget
 	var forwards []ownedNativeForward
-	inspect := func(check context.Context) (*container.Details, error) {
-		if err := a.VerifyStorage(check); err != nil {
-			return nil, err
-		}
-		if reservation == nil {
-			return nil, errors.New("native creation lacks its continuous reservation")
-		}
-		if err := reservation.Verify(); err != nil {
-			return nil, err
-		}
-		d, err := a.Client.Inspect(check, id)
+	inspectCreated := func(check context.Context, wait func(context.Context, func(context.Context) error) error) (*container.Details, error) {
+		d, err := readNativeCreatedContainer(check, wait, a.VerifyStorage, func() error {
+			if reservation == nil {
+				return errors.New("native creation lacks its continuous reservation")
+			}
+			return reservation.Verify()
+		}, func(engine context.Context) (*container.Details, error) { return a.Client.Inspect(engine, id) })
 		if err != nil {
 			return nil, err
 		}
@@ -121,6 +117,9 @@ func (a LiveApplier) createNativeContainer(ctx context.Context, c *Config, image
 		}
 
 		return d, nil
+	}
+	inspect := func(check context.Context) (*container.Details, error) {
+		return inspectCreated(check, runCallerStep)
 	}
 	running := func(check context.Context) (openshell.ActivationTarget, error) {
 		d, err := inspect(check)
@@ -303,8 +302,8 @@ func (a LiveApplier) createNativeContainer(ctx context.Context, c *Config, image
 			}
 			return nil
 		},
-		cleanup: func(cleanup context.Context, progress nativeCreateProgress) error {
-			if err := a.VerifyStorage(cleanup); err != nil {
+		cleanup: func(cleanup *detachedCleanup, progress nativeCreateProgress) error {
+			if err := cleanup.step(a.VerifyStorage); err != nil {
 				return err
 			}
 			if reservation == nil {
@@ -318,14 +317,16 @@ func (a LiveApplier) createNativeContainer(ctx context.Context, c *Config, image
 					return errors.New("cleanup CID differs from this call's acknowledgement")
 				}
 				verifyRemaining := func(check context.Context) error {
-					if err := a.VerifyStorage(check); err != nil {
+					if err := cleanup.stepFrom(check, a.VerifyStorage); err != nil {
 						return err
 					}
 					if err := reservation.Verify(); err != nil {
 						return err
 					}
 					if progress.Prepared {
-						if err := openshell.VerifyPreparedNativeRecord(check, prepared); err != nil {
+						if err := cleanup.stepFrom(check, func(step context.Context) error {
+							return openshell.VerifyPreparedNativeRecord(step, prepared)
+						}); err != nil {
 							return err
 						}
 					}
@@ -346,20 +347,27 @@ func (a LiveApplier) createNativeContainer(ctx context.Context, c *Config, image
 					}
 					return nil
 				}
-				checks := nativeCreatedCleanupChecks{inspect: inspect, remaining: verifyRemaining, id: id, target: target, started: progress.Started}
-				if err := checks.owned(cleanup); err != nil {
+				// Each engine call and check is one step with its own fail-safe,
+				// also when a callee runs it as a callback.
+				stepInspect := func(check context.Context) (*container.Details, error) {
+					return inspectCreated(check, cleanup.stepFrom)
+				}
+				checks := nativeCreatedCleanupChecks{inspect: stepInspect, remaining: verifyRemaining, id: id, target: target, started: progress.Started}
+				if err := checks.owned(cleanup.ctx); err != nil {
 					return err
 				}
 				for i := len(forwards) - 1; i >= 0; i-- {
 					owned := forwards[i]
-					if err := cleanupNativeForwardAttempt(cleanup, a.Client, owned.selected, owned.spec, owned.binding, a.VerifyStorage); err != nil {
+					if err := cleanupNativeForwardAttempt(cleanup.ctx, a.Client, owned.selected, owned.spec, owned.binding, a.VerifyStorage); err != nil {
 						return err
 					}
 				}
-				if err := cleanupNativeCreatedContainerID(cleanup, checks, activation,
-					func(stop context.Context) error { return a.Client.Stop(stop, id) },
+				if err := cleanupNativeCreatedContainerID(cleanup.ctx, checks, activation,
+					func(stop context.Context) error {
+						return cleanup.stepFrom(stop, func(stop context.Context) error { return a.Client.Stop(stop, id) })
+					},
 					func(remove context.Context, selected string) error {
-						return a.Client.RemoveContainerID(remove, selected)
+						return cleanup.stepFrom(remove, func(remove context.Context) error { return a.Client.RemoveContainerID(remove, selected) })
 					},
 				); err != nil {
 					return err
@@ -377,10 +385,29 @@ func (a LiveApplier) createNativeContainer(ctx context.Context, c *Config, image
 					return err
 				}
 			}
-			return reservation.RemoveAfterContainerRemoval(cleanup)
+			return cleanup.step(reservation.RemoveAfterContainerRemoval)
 		},
 	}
 	return completeNativeContainerCreation(ctx, actions)
+}
+
+func readNativeCreatedContainer(ctx context.Context, wait func(context.Context, func(context.Context) error) error,
+	verifyStorage func(context.Context) error, verifyReservation func() error,
+	inspect func(context.Context) (*container.Details, error),
+) (*container.Details, error) {
+	if err := wait(ctx, verifyStorage); err != nil {
+		return nil, err
+	}
+	if err := verifyReservation(); err != nil {
+		return nil, err
+	}
+	var details *container.Details
+	err := wait(ctx, func(check context.Context) error {
+		var err error
+		details, err = inspect(check)
+		return err
+	})
+	return details, err
 }
 
 // errStoppedBeforeStartFinished is the plain words for a start whose own

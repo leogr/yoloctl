@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -125,6 +126,25 @@ func TestRuntimeReadinessRequiresRespondingSSHAndTheGenerationKey(t *testing.T) 
 	if ready, err := probeRuntimeReadyAt(ctx, dir, signer.PublicKey(), os.Geteuid(), os.Getegid()); ready || err != nil {
 		t.Fatal("stopped SSH backlog counted as readiness", ready, err)
 	}
+
+	// A silent connected peer and no caller deadline: the try runs out of its
+	// own time. That is not a definite answer, so the monitor keeps its
+	// previous readiness (and SSH admission) and tries again.
+	start := time.Now()
+	if ready, err := probeRuntimeReadyAt(t.Context(), dir, signer.PublicKey(), os.Geteuid(), os.Getegid()); ready || !errors.Is(err, errRuntimeProbeTimedOut) {
+		t.Fatal("a silent peer was not reported as a timed-out try", ready, err)
+	}
+	if elapsed := time.Since(start); elapsed < time.Second || elapsed > 3*time.Second {
+		t.Fatal("the try did not end at its own limit", elapsed)
+	}
+	// A definite answer (the endpoint is gone) is still plain "not ready".
+	_ = stalled.Close()
+	if err := os.Remove(filepath.Join(dir.Name(), "ssh", "ssh.sock")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	if ready, err := probeRuntimeReadyAt(t.Context(), dir, signer.PublicKey(), os.Geteuid(), os.Getegid()); ready || err != nil {
+		t.Fatal("a missing endpoint was not a definite answer", ready, err)
+	}
 }
 
 func TestRuntimePrivateSocketRefusesSymlinkAndRegularFile(t *testing.T) {
@@ -139,5 +159,38 @@ func TestRuntimePrivateSocketRefusesSymlinkAndRegularFile(t *testing.T) {
 		if err := checkRuntimePrivateSocket(dir, name, os.Geteuid(), os.Getegid()); err == nil {
 			t.Fatal("untrusted private endpoint accepted", name)
 		}
+	}
+}
+
+// The connection's deadline can fire before the try's context reports its
+// own: that I/O timeout is still a try that ran out of time, not a definite
+// failure, so a ready box keeps SSH admission. An explicit stop (the parent
+// ended) and a refused dial stay definite.
+func TestProbeRanOutOfTimeIncludesTheSocketDeadline(t *testing.T) {
+	live := t.Context()
+	try, cancelTry := context.WithTimeout(live, time.Hour)
+	defer cancelTry()
+	socketTimeout := &net.OpError{Op: "read", Net: "unix", Err: os.ErrDeadlineExceeded}
+	if !probeRanOutOfTime(live, try, socketTimeout) {
+		t.Fatal("a socket deadline before the try's timer counted as definite")
+	}
+	expired, cancelExpired := context.WithTimeout(live, time.Nanosecond)
+	defer cancelExpired()
+	<-expired.Done()
+	if !probeRanOutOfTime(live, expired, nil) {
+		t.Fatal("the try's own deadline was not a timeout")
+	}
+	stopped, stop := context.WithCancel(live)
+	stop()
+	if probeRanOutOfTime(stopped, expired, socketTimeout) {
+		t.Fatal("an explicit stop counted as a timeout")
+	}
+	if probeRanOutOfTime(live, try, syscall.ECONNREFUSED) {
+		t.Fatal("a refused dial counted as a timeout")
+	}
+	// A definite refusal keeps precedence even when the try's own deadline
+	// has already fired by the time it is classified.
+	if probeRanOutOfTime(live, expired, &net.OpError{Op: "dial", Net: "unix", Err: syscall.ECONNREFUSED}) {
+		t.Fatal("a refused dial after the try's deadline counted as a timeout")
 	}
 }

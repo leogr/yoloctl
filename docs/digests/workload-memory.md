@@ -72,7 +72,7 @@ unit tests alone do not validate either backend's kernel enforcement.
 2. <a id="source-2"></a> [resources/workloads_linux.go](../../internal/resources/workloads_linux.go#L16) — dedicated guest cgroup initialization.
 3. <a id="source-3"></a> [vmguest/buildkit_linux.go](../../internal/vmguest/buildkit_linux.go#L77) — daemon leaf, lazy startup and exit handling.
 4. <a id="source-4"></a> [buildkit_gc.go](../../cmd/yoloctl/buildkit_gc.go#L21) — systemd deployment, activation hash and rollback.
-5. <a id="source-5"></a> [container/container.go](../../internal/container/container.go#L75) — managed run placement, pool preflight and resource inspection.
+5. <a id="source-5"></a> [container/container.go](../../internal/container/container.go#L78) — managed run placement, pool preflight and resource inspection.
 6. <a id="source-6"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L985) — create CPU/memory defaults.
 7. <a id="source-7"></a> [agentbox/diff.go](../../internal/agentbox/diff.go#L213) — normalized limits and pool-version drift.
 8. <a id="source-8"></a> [agentbox/live.go](../../internal/agentbox/live.go#L340) — create-time pool membership label.

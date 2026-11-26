@@ -211,7 +211,7 @@ func (r *nativeContainerRetirement) checkStage(ctx context.Context, active *nati
 	if err := r.scope.checkRuntime(ctx); err != nil {
 		return err
 	}
-	if err := r.full.Check(ctx); err != nil {
+	if err := runRuntimeWait(ctx, r.full.Check); err != nil {
 		return err
 	}
 	if !r.scope.selected.Launch.UnconfinedNetwork {
@@ -220,7 +220,9 @@ func (r *nativeContainerRetirement) checkStage(ctx context.Context, active *nati
 		}
 		return verifyConfinedNamespaceAbsence(r.scope.control, r.scope.controlIdentity, r.scope.selected.Launch.Binding.Incarnation)
 	}
-	return compareCurrentRetirementNamespaceStage(ctx, r.scope.namespaces, r.entries, active, p, r.scope.lock.directories[4].identity.mount)
+	return runRuntimeWait(ctx, func(check context.Context) error {
+		return compareCurrentRetirementNamespaceStage(check, r.scope.namespaces, r.entries, active, p, r.scope.lock.directories[4].identity.mount)
+	})
 }
 
 // Shared complete stage read used by the actual parent's independently

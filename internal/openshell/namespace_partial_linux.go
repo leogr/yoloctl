@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -95,8 +94,7 @@ func runPartialPinRetirement(ctx context.Context, bound, needsPrivate bool, h pa
 		return p, &NativeEffectsUncertain{Cause: err}
 	}
 	p.stopAcknowledged = true
-	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	defer cancel()
+	cleanup := context.WithoutCancel(ctx)
 	fail := func(cause error) (partialPinProgress, error) { return p, &NativeEffectsUncertain{Cause: cause} }
 	check := func() error {
 		if err := cleanup.Err(); err != nil {
@@ -222,6 +220,9 @@ func retireKnownUnboundNativePin(ctx context.Context, kernel *kernelInfrastructu
 		}
 		return nil
 	}
+	checkMounts := func(c context.Context, p partialPinProgress) error {
+		return runRuntimeWait(c, func(check context.Context) error { return checkView(check, p) })
+	}
 	if err := checkView(ctx, partialPinProgress{}); err != nil {
 		return nil, err
 	}
@@ -246,7 +247,7 @@ func retireKnownUnboundNativePin(ctx context.Context, kernel *kernelInfrastructu
 			if err := owner.inactive(c); err != nil {
 				return err
 			}
-			return checkView(c, p)
+			return checkMounts(c, p)
 		},
 		persist: func(phase namespacePinPhase) error {
 			next := state
@@ -264,7 +265,7 @@ func retireKnownUnboundNativePin(ctx context.Context, kernel *kernelInfrastructu
 			if err := owner.inactive(c); err != nil {
 				return err
 			}
-			return checkView(c, partialPinProgress{privateAcknowledged: true})
+			return checkMounts(c, partialPinProgress{privateAcknowledged: true})
 		},
 		unmount: func() error {
 			if f.directory == nil {
@@ -291,7 +292,7 @@ func retireKnownUnboundNativePin(ctx context.Context, kernel *kernelInfrastructu
 			if err := owner.inactive(c); err != nil {
 				return err
 			}
-			return checkView(c, partialPinProgress{unmountAcknowledged: true})
+			return checkMounts(c, partialPinProgress{unmountAcknowledged: true})
 		},
 	}
 	result.progress, result.failure = runPartialPinRetirement(ctx, source.directoryMount != 0, needsPrivate, h)

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/execpipe"
 	"github.com/leogr/yoloctl/internal/operator"
 	"github.com/leogr/yoloctl/internal/resources"
 	"github.com/leogr/yoloctl/internal/spaceenv"
@@ -468,14 +469,23 @@ func (c *Client) RequireWorkloadPool(ctx context.Context) error {
 	return err
 }
 
+// vmReadFailSafe ends one read in the VM that nothing else ends. Tests
+// shorten it.
+var vmReadFailSafe = 2 * time.Minute
+
 func (c *Client) workloadPool(ctx context.Context) (bool, error) {
 	systemd, err := c.workloadSystemd()
 	if err != nil {
 		return false, err
 	}
-	probeCtx, cancel := c.withTimeout(ctx, 3*time.Second)
+	probeCtx, cancel := c.withTimeout(ctx, vmReadFailSafe)
 	defer cancel()
-	raw, err := c.ShellOutputQuiet(probeCtx, append([]string{"cat"}, resources.PoolFiles(systemd)...)...)
+	// The read owns its stdout, so the caller's cancellation or the fail-safe
+	// also ends the drain when cat exits but a descendant of the VM transport
+	// keeps the pipe open; stderr goes to /dev/null and cannot hold it.
+	var stdout bytes.Buffer
+	err = execpipe.Run(probeCtx, c.command(probeCtx, append([]string{"cat"}, resources.PoolFiles(systemd)...)...), 0, &stdout, nil)
+	raw := stdout.String()
 	if err == nil {
 		err = resources.ValidatePool(raw)
 	}

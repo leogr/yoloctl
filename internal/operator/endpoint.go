@@ -180,9 +180,14 @@ func Provision(ctx context.Context, box string) (Endpoint, error) {
 	return e, waitForEndpoint(ctx, e)
 }
 
-// waitForEndpoint waits for the controller to serve e's socket.
+// endpointWaitFailSafe ends the wait for the controller to serve an endpoint
+// when nothing else ends it. Tests shorten it.
+var endpointWaitFailSafe = 2 * time.Minute
+
+// waitForEndpoint waits for the controller to serve e's socket. The whole
+// wait is one wait; its 50 ms tries stay.
 func waitForEndpoint(ctx context.Context, e Endpoint) error {
-	deadline, cancel := context.WithTimeout(ctx, 10*time.Second)
+	deadline, cancel := context.WithTimeout(ctx, endpointWaitFailSafe)
 	defer cancel()
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()

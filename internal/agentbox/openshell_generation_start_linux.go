@@ -258,20 +258,23 @@ func (a LiveApplier) startNativeStoppedGenerationWithCheckpoint(ctx context.Cont
 			}
 			return nil
 		},
-		cleanup: func(cleanup context.Context, g *nativeStartedGeneration) error {
-			if err := a.VerifyStorage(cleanup); err != nil {
+		cleanup: func(cleanup *detachedCleanup, g *nativeStartedGeneration) error {
+			if err := cleanup.step(a.VerifyStorage); err != nil {
 				return err
 			}
 			for n := len(forwards) - 1; n >= 0; n-- {
 				owned := forwards[n]
-				if err := cleanupNativeForwardAttempt(cleanup, a.Client, owned.selected, owned.spec, owned.binding, a.VerifyStorage); err != nil {
+				if err := cleanupNativeForwardAttempt(cleanup.ctx, a.Client, owned.selected, owned.spec, owned.binding, a.VerifyStorage); err != nil {
 					return err
 				}
 			}
 			// Unknown Start is rejected by cleanupIdentity before any effect. A known
 			// no-Start prefix also uses the original SDK token and fresh Stop ACK;
 			// merely observing inactivity cannot leave an origin-less generation.
-			return a.stopNativeStartedGeneration(cleanup, c.Name, g)
+			// The stop's checks and its engine Stop each have their own
+			// fail-safe inside it, so it runs under the cleanup's detached
+			// context rather than as one step.
+			return a.stopNativeStartedGeneration(cleanup.ctx, c.Name, g)
 		},
 	}
 	return completeNativeGenerationStart(ctx, actions)

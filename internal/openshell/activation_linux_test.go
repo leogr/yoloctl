@@ -1,9 +1,11 @@
 package openshell
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -158,5 +160,100 @@ func TestActivationReceiveHasABoundedDeadline(t *testing.T) {
 	var message activationEnvelope
 	if _, err := activationPacket(right, &message, 0); err == nil {
 		t.Fatal("unresponsive activation peer was accepted")
+	}
+}
+
+func TestActivationPeersRenewAllowanceAfterConnect(t *testing.T) {
+	previous := runtimeFailSafe
+	runtimeFailSafe = 2 * time.Second
+	t.Cleanup(func() { runtimeFailSafe = previous })
+	const delay = 1200 * time.Millisecond
+	pause := func(ctx context.Context) error {
+		select {
+		case <-time.After(delay):
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	for _, peer := range []string{"dial", "accept"} {
+		t.Run(peer, func(t *testing.T) {
+			dir, err := os.MkdirTemp("", "yac")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.RemoveAll(dir) })
+			address := filepath.Join(dir, activationSocketName)
+			listener, err := net.ListenUnix("unixpacket", &net.UnixAddr{Name: address, Net: "unixpacket"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = listener.Close() }()
+			ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+			defer cancel()
+			dial := func(ctx context.Context) (*net.UnixConn, error) {
+				if err := pause(ctx); err != nil {
+					return nil, err
+				}
+				conn, err := (&net.Dialer{}).DialContext(ctx, "unixpacket", address)
+				if err != nil {
+					return nil, err
+				}
+				return conn.(*net.UnixConn), nil
+			}
+			accept := func(ctx context.Context) (*net.UnixConn, error) {
+				return acceptNativeActivation(ctx, listener)
+			}
+			connect, other := accept, dial
+			if peer == "dial" {
+				status, err := os.Open(dir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = status.Close() }()
+				if err := os.Chmod(address, 0o660); err != nil {
+					t.Fatal(err)
+				}
+				connect = func(ctx context.Context) (*net.UnixConn, error) {
+					conn, _, err := dialNativeActivation(ctx, int(status.Fd()), uint32(os.Geteuid()), uint32(os.Getegid()))
+					return conn, err
+				}
+				other = func(ctx context.Context) (*net.UnixConn, error) {
+					if err := pause(ctx); err != nil {
+						return nil, err
+					}
+					if err := os.Chmod(address, 0o600); err != nil {
+						return nil, err
+					}
+					return accept(ctx)
+				}
+			}
+			message := activationEnvelope{Message: activationMessage{Kind: "activated"}}
+			result := make(chan error, 1)
+			start := time.Now()
+			go func() {
+				conn, err := other(ctx)
+				if err == nil {
+					defer func() { _ = conn.Close() }()
+					err = pause(ctx)
+					if err == nil {
+						err = sendActivationPacket(conn, message, nil)
+					}
+				}
+				result <- err
+			}()
+			_, conn, done, err := beginActivationExchange(ctx, connect)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer done()
+			var got activationEnvelope
+			if _, err := activationPacket(conn, &got, 0); err != nil || got.Message.Kind != message.Message.Kind {
+				t.Fatalf("exchange lost its own allowance: %v", err)
+			}
+			if err := <-result; err != nil || time.Since(start) <= runtimeFailSafe {
+				t.Fatalf("two stages did not exceed one allowance: %v, elapsed %v", err, time.Since(start))
+			}
+		})
 	}
 }

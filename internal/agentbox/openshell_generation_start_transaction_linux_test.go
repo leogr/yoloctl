@@ -9,9 +9,12 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/openshell"
 )
 
@@ -55,12 +58,18 @@ func generationStartScript(t *testing.T, fail string, cause error, events *[]str
 		},
 		ready:    func(context.Context, *nativeStartedGeneration) error { return step("ready") },
 		forwards: func(context.Context, *nativeStartedGeneration) error { return step("forwards") },
-		cleanup: func(c context.Context, actual *nativeStartedGeneration) error {
-			deadline, ok := c.Deadline()
-			if actual != g || c.Err() != nil || !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 90*time.Second {
-				t.Fatal("original cleanup lost bounded independent context")
+		cleanup: func(c *detachedCleanup, actual *nativeStartedGeneration) error {
+			// No bound as a whole; each step gets its own fail-safe.
+			if _, bounded := c.ctx.Deadline(); actual != g || c.ctx.Err() != nil || bounded {
+				t.Fatal("original cleanup lost its independent context or gained a whole bound")
 			}
-			return step("cleanup")
+			return c.step(func(s context.Context) error {
+				deadline, ok := s.Deadline()
+				if s.Err() != nil || !ok || time.Until(deadline) < time.Minute {
+					t.Fatal("cleanup step lost its fail-safe")
+				}
+				return step("cleanup")
+			})
 		},
 	}
 	return actions, g
@@ -116,7 +125,7 @@ func TestNativeGenerationStartProtocolLostActivationHandleAndCleanupFailureWithh
 	cause := errors.New("readiness failure")
 	actions, _ = generationStartScript(t, "ready", cause, &events)
 	cleanupFailure := errors.New("owned cleanup result unavailable")
-	actions.cleanup = func(context.Context, *nativeStartedGeneration) error {
+	actions.cleanup = func(*detachedCleanup, *nativeStartedGeneration) error {
 		events = append(events, "cleanup")
 		return cleanupFailure
 	}
@@ -242,7 +251,7 @@ esac
 				events = append(events, "before-start")
 				return nil
 			}
-			actions.cleanup = func(context.Context, *nativeStartedGeneration) error { events = append(events, "cleanup"); return nil }
+			actions.cleanup = func(*detachedCleanup, *nativeStartedGeneration) error { events = append(events, "cleanup"); return nil }
 			err := completeNativeGenerationStart(t.Context(), actions)
 			var uncertain *NativeEffectsUncertain
 			if status != 0 {
@@ -291,6 +300,197 @@ func TestNativeGenerationStartCancelledEngineProcessIsLost(t *testing.T) {
 			}
 			if errors.As(err, &uncertain) != cancelled || g.startAcknowledged {
 				t.Fatal("cancelled started engine process misclassified", cancelled, err)
+			}
+		})
+	}
+}
+
+// A cleanup step that hangs is cut off by its own fail-safe, and the start
+// stays uncertain although the killed process returned its exit error. The
+// next step gets a fresh fail-safe. An exit error from a step that was not
+// cut off stays a plain failure with one notice.
+func TestNativeGenerationStartCleanupStepCutOffByFailSafeIsUncertain(t *testing.T) {
+	shortRuntimeStepFailSafe(t, 200*time.Millisecond)
+	for _, hang := range []bool{true, false} {
+		t.Run(fmt.Sprintf("hang-%t", hang), func(t *testing.T) {
+			var events []string
+			cause := errors.New("readiness failure")
+			actions, _ := generationStartScript(t, "ready", cause, &events)
+			next := false
+			actions.cleanup = func(cleanup *detachedCleanup, _ *nativeStartedGeneration) error {
+				err := cleanup.step(func(step context.Context) error {
+					if hang {
+						return exec.CommandContext(step, "sleep", "10").Run()
+					}
+					return exec.CommandContext(step, "false").Run()
+				})
+				if stepErr := cleanup.step(func(step context.Context) error {
+					next = step.Err() == nil
+					return nil
+				}); stepErr != nil {
+					t.Fatal(stepErr)
+				}
+				return err
+			}
+			var notices []error
+			old := nativeStartCleanupNotice
+			nativeStartCleanupNotice = func(err error) { notices = append(notices, err) }
+			defer func() { nativeStartCleanupNotice = old }()
+			err := completeNativeGenerationStart(t.Context(), actions)
+			var exit *exec.ExitError
+			var uncertain *NativeEffectsUncertain
+			if hang && (!errors.As(err, &uncertain) || !errors.Is(err, cause) || !errors.As(err, &exit) || len(notices) != 0) {
+				t.Fatal("cut-off cleanup step lost its uncertainty", err, notices)
+			}
+			if !hang && (errors.As(err, &uncertain) || !errors.Is(err, cause) || len(notices) != 1 || !errors.As(notices[0], &exit)) {
+				t.Fatal("plain cleanup failure became uncertain or lost its notice", err, notices)
+			}
+			if !next {
+				t.Fatal("a later cleanup step inherited an earlier step's fail-safe")
+			}
+		})
+	}
+}
+
+func TestFailedStartEngineStopKeepsCutoffWithLiveCaller(t *testing.T) {
+	shortRuntimeStepFailSafe(t, 800*time.Millisecond)
+	for _, hang := range []bool{false, true} {
+		t.Run(fmt.Sprintf("hang-%t", hang), func(t *testing.T) {
+			client, log, _ := nativeCleanupAdapterFixture(t, 23)
+			stop := "exit 23"
+			if hang {
+				stop = "exec sleep 30"
+			}
+			script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$YOLOCTL_NATIVE_CLEANUP_FIXTURE/commands.log\"\n" + stop + "\n"
+			if err := os.WriteFile(filepath.Join(filepath.Dir(log), "limactl"), []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			ready := errors.New("ready failed")
+			var events []string
+			actions, _ := generationStartScript(t, "ready", ready, &events)
+			var stopErr error
+			actions.cleanup = func(cleanup *detachedCleanup, _ *nativeStartedGeneration) error {
+				stopErr = (LiveApplier{Client: client}).stopNativeRuntimeEngine(cleanup.ctx, resultTargetID, true)
+				return &NativeEffectsUncertain{Cause: stopErr}
+			}
+			caller := t.Context()
+			err := completeNativeGenerationStart(caller, actions)
+			var exit *exec.ExitError
+			var uncertain *NativeEffectsUncertain
+			commands := loggedCommands(t, log)
+			if caller.Err() != nil || !errors.Is(err, ready) || !errors.As(stopErr, &exit) ||
+				errors.Is(stopErr, context.DeadlineExceeded) != hang || errors.As(err, &uncertain) != hang ||
+				strings.Count(commands, "nerdctl stop") != 1 || strings.Contains(commands, "nerdctl rm") {
+				t.Fatalf("stop=%v result=%v caller=%v\n%s", stopErr, err, caller.Err(), commands)
+			}
+		})
+	}
+}
+
+func TestFailedStartOwnershipReadRenewsEachInspectionAndSDKCallback(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		caller := t.Context()
+		cleanup := newDetachedCleanup(caller)
+		delay := func(ctx context.Context) error {
+			select {
+			case <-time.After(80 * time.Second):
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		reads := 0
+		read := func(c context.Context) error {
+			_, _, err := readNativeStopOwnership(c, runRuntimeStep, func(context.Context) error { return nil },
+				func(step context.Context) (OpenShellRuntime, error) { return OpenShellRuntime{}, delay(step) },
+				func(step context.Context) (*container.Details, error) {
+					reads++
+					if reads == 2 {
+						<-step.Done()
+						return nil, errors.New("adapter exited on timeout")
+					}
+					return &container.Details{}, delay(step)
+				})
+			return err
+		}
+		start := time.Now()
+		if err := read(cleanup.ctx); err != nil || time.Since(start) != 160*time.Second {
+			t.Fatalf("two engine inspections shared one allowance: %v at %v", err, time.Since(start))
+		}
+		start = time.Now()
+		if err := read(cleanup.ctx); !errors.Is(err, context.DeadlineExceeded) ||
+			time.Since(start) != 80*time.Second+runtimeStepFailSafe || caller.Err() != nil {
+			t.Fatalf("repeated callback lost its independent bound: %v at %v", err, time.Since(start))
+		}
+	})
+}
+
+func TestFailedCreateStorageAndCIDInspectionHaveSeparateAllowances(t *testing.T) {
+	for _, hung := range []bool{false, true} {
+		t.Run(fmt.Sprintf("hung-%t", hung), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				const delay = 80 * time.Second
+				slow := func(ctx context.Context) error {
+					select {
+					case <-time.After(delay):
+						return nil
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				}
+				cleanup := newDetachedCleanup(t.Context())
+				var events []string
+				start := time.Now()
+				d, err := readNativeCreatedContainer(cleanup.ctx, cleanup.stepFrom, func(ctx context.Context) error {
+					events = append(events, "storage")
+					return slow(ctx)
+				}, func() error {
+					events = append(events, "reservation")
+					return nil
+				}, func(ctx context.Context) (*container.Details, error) {
+					events = append(events, "inspect")
+					if hung {
+						<-ctx.Done()
+						return nil, ctx.Err()
+					}
+					return &container.Details{ID: resultTargetID}, slow(ctx)
+				})
+				if !reflect.DeepEqual(events, []string{"storage", "reservation", "inspect"}) || t.Context().Err() != nil {
+					t.Fatal("cleanup changed inspection order or ended caller", events)
+				}
+				if hung {
+					if !errors.Is(err, context.DeadlineExceeded) || !cleanup.cutOff.Load() || time.Since(start) != delay+runtimeStepFailSafe {
+						t.Fatalf("silent CID inspect lost its own bound: %v at %v", err, time.Since(start))
+					}
+				} else if err != nil || d == nil || d.ID != resultTargetID || cleanup.cutOff.Load() || time.Since(start) != 2*delay {
+					t.Fatalf("storage and CID inspection shared an allowance: %v at %v", err, time.Since(start))
+				}
+			})
+		})
+	}
+}
+
+func TestFailedStartLostRetirementReplyRetainsUncertainty(t *testing.T) {
+	workerExit := exec.CommandContext(t.Context(), "false").Run()
+	for _, timedOut := range []bool{false, true} {
+		t.Run(fmt.Sprintf("timeout-%t", timedOut), func(t *testing.T) {
+			ready := errors.New("readiness failed")
+			var events []string
+			actions, _ := generationStartScript(t, "ready", ready, &events)
+			attempts := 0
+			actions.cleanup = func(*detachedCleanup, *nativeStartedGeneration) error {
+				attempts++
+				cause := workerExit
+				if timedOut {
+					cause = errors.Join(cause, context.DeadlineExceeded)
+				}
+				return &NativeEffectsUncertain{Cause: cause}
+			}
+			err := completeNativeGenerationStart(t.Context(), actions)
+			var uncertain *NativeEffectsUncertain
+			if attempts != 1 || !errors.Is(err, ready) || errors.As(err, &uncertain) != timedOut || t.Context().Err() != nil ||
+				timedOut && (!errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, workerExit)) {
+				t.Fatal("failed start lost its unacknowledged worker result or replayed cleanup", err, attempts)
 			}
 		})
 	}

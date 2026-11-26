@@ -76,7 +76,7 @@ func ServeNativeOpenShellForward(ctx context.Context, client *container.Client, 
 	}
 	// Obtain the trusted native status path before the listener starts. This
 	// read grants no readiness; publication happens only after exclusive bind.
-	setup, cancel := context.WithTimeout(ctx, 5*time.Second)
+	setup, cancel := context.WithTimeout(ctx, runtimeStepFailSafe)
 	if err := verifyStorage(setup); err != nil {
 		cancel()
 		return err
@@ -110,7 +110,7 @@ func ServeNativeOpenShellForward(ctx context.Context, client *container.Client, 
 		if !ok || !endpoint.IP.Equal(net.IPv4(127, 0, 0, 1)) || endpoint.Port != spec.HostPort {
 			return errors.New("forward bound an unexpected listener")
 		}
-		check, stop := context.WithTimeout(ctx, 5*time.Second)
+		check, stop := context.WithTimeout(ctx, runtimeStepFailSafe)
 		defer stop()
 		if _, err := verify(check); err != nil {
 			return err

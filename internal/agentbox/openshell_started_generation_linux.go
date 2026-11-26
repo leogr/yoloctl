@@ -102,5 +102,7 @@ func completeNativeGenerationStop(ctx context.Context, preparation *openshell.Na
 	if err := preparation.StopGeneration(ctx, openshell.NativeNamespaceStop{VerifyOwned: owned, Stop: stop, VerifyInactive: inactive}); err != nil {
 		return err
 	}
-	return completeNativeStopEndpoint(ctx, inactive, endpoint)
+	// The original failed-start callbacks supply a fresh bound for each
+	// ownership read and endpoint check.
+	return finishNativeStopEndpoint(context.WithoutCancel(ctx), inactive, endpoint)
 }

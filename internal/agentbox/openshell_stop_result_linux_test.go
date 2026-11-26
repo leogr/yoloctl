@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/openshell"
@@ -70,7 +71,9 @@ func TestEngineCallsFollowTheNativeStartTransaction(t *testing.T) {
 			return nil
 		}
 		actions.ready = func(context.Context, *nativeStartedGeneration) error { return errors.New("readiness failed") }
-		actions.cleanup = func(c context.Context, _ *nativeStartedGeneration) error { return client.Stop(c, id) }
+		actions.cleanup = func(c *detachedCleanup, _ *nativeStartedGeneration) error {
+			return c.step(func(stop context.Context) error { return client.Stop(stop, id) })
+		}
 		actions.start = func(c context.Context, actual *nativeStartedGeneration) error { return client.Start(c, actual.cid) }
 		calls := &container.EngineCalls{}
 		err := completeNativeGenerationStart(container.WithEngineCalls(t.Context(), calls), actions)
@@ -169,5 +172,32 @@ func TestResultStopEntryFallsBackWhenStorageFails(t *testing.T) {
 	if err := a.stopNativeRuntimeForResult(t.Context(), "coder", resultTargetID); err == nil || errors.As(err, &rest) ||
 		strings.Contains(loggedCommands(t, log), "nerdctl stop") {
 		t.Fatalf("unreadable record: %v", err)
+	}
+}
+
+func TestForegroundResultStopStorageUsesCallerDeadline(t *testing.T) {
+	shortRuntimeStepFailSafe(t, time.Millisecond)
+	old := nativeVMRootAdmitted
+	nativeVMRootAdmitted = func() bool { return true }
+	t.Cleanup(func() { nativeVMRootAdmitted = old })
+	client, log := resultStopFixture(t, resultTargetJSON("coder", "fixture", true))
+	caller, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	deadline, _ := caller.Deadline()
+	checked := false
+	applier := LiveApplier{Client: client, VerifyStorage: func(ctx context.Context) error {
+		checked = true
+		if got, ok := ctx.Deadline(); !ok || got != deadline {
+			t.Fatalf("foreground storage was shortened: %v, want %v", got, deadline)
+		}
+		time.Sleep(5 * time.Millisecond)
+		return ctx.Err()
+	}}
+	// This fixture lacks a native record after storage approves. It must
+	// refuse there without taking the engine-only storage-failure route.
+	err := applier.stopNativeRuntimeForResult(caller, "coder", resultTargetID)
+	var leftover *ResultLeftover
+	if !checked || err == nil || errors.As(err, &leftover) || strings.Contains(loggedCommands(t, log), "nerdctl stop") {
+		t.Fatal("foreground stop fell back after shortening the storage check", err)
 	}
 }

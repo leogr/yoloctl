@@ -25,16 +25,20 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// handshakeFailSafe ends a connection's SSH handshake when the peer never
+// completes it. Tests shorten it.
+var handshakeFailSafe = 2 * time.Minute
+
 const (
-	handshakeTimeout = 10 * time.Second
 	// Below the runtime's 30-second stop grace, so PID 1 always escalates
 	// before the runtime has to.
 	shutdownGrace       = 10 * time.Second
 	defaultHangupGrace  = 5 * time.Second
 	defaultDrainTimeout = 2 * time.Second
-	// DefaultCloseTimeout bounds each endpoint channel-close phase. Native
-	// OpenShell PID 1 maps its two remaining phases onto twice this value.
-	DefaultCloseTimeout = 2 * time.Second
+	// DefaultCloseTimeout is the fail-safe of each endpoint channel-close
+	// phase. Native OpenShell's 4 s main-exit drain is independent of it.
+	// Config.CloseTimeout shortens it in tests.
+	DefaultCloseTimeout = 2 * time.Minute
 	// abandonGrace lets copies that were mid-read finish after their sources
 	// close; a copy parked on the peer's channel window does not.
 	abandonGrace = 100 * time.Millisecond
@@ -185,7 +189,7 @@ func (s *Server) Serve(ln net.Listener) error {
 
 func (s *Server) serveConn(nc net.Conn) {
 	defer func() { _ = nc.Close() }()
-	_ = nc.SetDeadline(time.Now().Add(handshakeTimeout))
+	_ = nc.SetDeadline(time.Now().Add(handshakeFailSafe))
 	sc, chans, reqs, err := ssh.NewServerConn(nc, s.ssh)
 	if err != nil {
 		return // includes readiness probes, which close after the greeting

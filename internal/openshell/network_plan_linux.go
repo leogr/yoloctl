@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"slices"
 	"syscall"
-	"time"
 )
 
 // nativeEgressPlan is a read-only discovery result, never proof that a rule,
@@ -139,7 +138,7 @@ func discoverNativeEgressPlan(ctx context.Context, namespace *os.File, record Ru
 	if namespace == nil || !record.Launch.UnconfinedNetwork {
 		return nativeEgressPlan{}, errors.New("native egress planning requires its selected unconfined namespace")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, runtimeFailSafe)
 	defer cancel()
 	selected, err := nativeInfrastructureInputs()
 	if err != nil {

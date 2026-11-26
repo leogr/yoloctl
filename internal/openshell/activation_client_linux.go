@@ -57,8 +57,6 @@ func (a *NativeActivation) activate(ctx context.Context, inspect func(context.Co
 	if err := rejectNoInitializationCompletion(prepared); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
 	status, err := openActivationDirectory(prepared.ContainerRoot, prepared.Record.Generation)
 	if err != nil {
 		return err
@@ -73,42 +71,16 @@ func (a *NativeActivation) activate(ctx context.Context, inspect func(context.Co
 		return err
 	}
 	var socket unix.Stat_t
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		err := unix.Fstatat(status, activationSocketName, &socket, unix.AT_SYMLINK_NOFOLLOW)
-		if err == nil {
-			if socket.Mode&unix.S_IFMT != unix.S_IFSOCK || socket.Uid != 0 || socket.Gid != 0 || socket.Nlink != 1 {
-				return errors.New("native activation endpoint is not an owned socket")
-			}
-			if socket.Mode&0o7777 == 0o600 {
-				break
-			}
-		} else if !errors.Is(err, unix.ENOENT) {
-			return err
-		}
-		// This is read-only startup readiness, before any connection or
-		// authentication packet. It is never an authorization retry.
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(10 * time.Millisecond):
-		}
-	}
-	address := fmt.Sprintf("/proc/self/fd/%d/%s", status, activationSocketName)
-	connection, err := (&net.Dialer{}).DialContext(ctx, "unixpacket", address)
+	ctx, conn, done, err := beginActivationExchange(ctx, func(wait context.Context) (*net.UnixConn, error) {
+		var connection *net.UnixConn
+		var err error
+		connection, socket, err = dialNativeActivation(wait, status, 0, 0)
+		return connection, err
+	})
 	if err != nil {
 		return err
 	}
-	conn := connection.(*net.UnixConn)
-	defer func() { _ = conn.Close() }()
-	deadline, _ := ctx.Deadline()
-	if err := conn.SetDeadline(deadline); err != nil {
-		return err
-	}
-	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	defer stop()
+	defer done()
 	var current unix.Stat_t
 	if unix.Fstatat(status, activationSocketName, &current, unix.AT_SYMLINK_NOFOLLOW) != nil || current.Dev != socket.Dev || current.Ino != socket.Ino || current.Mode&0o7777 != 0o600 {
 		return errors.New("native activation socket changed during connect")
@@ -184,4 +156,37 @@ func (a *NativeActivation) activate(ctx context.Context, inspect func(context.Co
 	// of the complete enclosing transaction. The native caller still checks
 	// readiness and completes its original durable operation receipt.
 	return peer.revalidate(ctx)
+}
+
+func dialNativeActivation(ctx context.Context, status int, uid, gid uint32) (*net.UnixConn, unix.Stat_t, error) {
+	var socket unix.Stat_t
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, unix.Stat_t{}, err
+		}
+		err := unix.Fstatat(status, activationSocketName, &socket, unix.AT_SYMLINK_NOFOLLOW)
+		if err == nil {
+			if socket.Mode&unix.S_IFMT != unix.S_IFSOCK || socket.Uid != uid || socket.Gid != gid || socket.Nlink != 1 {
+				return nil, unix.Stat_t{}, errors.New("native activation endpoint is not an owned socket")
+			}
+			if socket.Mode&0o7777 == 0o600 {
+				break
+			}
+		} else if !errors.Is(err, unix.ENOENT) {
+			return nil, unix.Stat_t{}, err
+		}
+		// This is read-only startup readiness, before any connection or
+		// authentication packet. It is never an authorization retry.
+		select {
+		case <-ctx.Done():
+			return nil, unix.Stat_t{}, ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	address := fmt.Sprintf("/proc/self/fd/%d/%s", status, activationSocketName)
+	connection, err := (&net.Dialer{}).DialContext(ctx, "unixpacket", address)
+	if err != nil {
+		return nil, unix.Stat_t{}, err
+	}
+	return connection.(*net.UnixConn), socket, nil
 }

@@ -17,8 +17,9 @@ import (
 const (
 	runtimeMainExitName             = "main-exit"
 	runtimeMainAttachmentsEndedName = "main-attachments-ended"
-	// Pinned to twice boxendpoint.DefaultCloseTimeout by the ordering test,
-	// keeping the native helper's production source closure unchanged.
+	// A fixed wait whose end fails nothing: the box stops as it should once
+	// its main process has exited. It is kept independent of the endpoint's
+	// close fail-safe, which would keep a finished box up for minutes.
 	runtimeMainExitWait = 4 * time.Second
 )
 

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 )
 
 // Private original-call wiring only. These callbacks are not a request or
@@ -19,12 +18,13 @@ type nativeGenerationStartActions struct {
 	activate     func(context.Context, *nativeStartedGeneration) error
 	ready        func(context.Context, *nativeStartedGeneration) error
 	forwards     func(context.Context, *nativeStartedGeneration) error
-	cleanup      func(context.Context, *nativeStartedGeneration) error
+	cleanup      func(*detachedCleanup, *nativeStartedGeneration) error
 }
 
 // Failed/lost preparation, Start or nested effect result halts every suffix.
-// A known post-ACK failure gets one bounded cleanup of this original attempt;
-// no CID removal or automatic second launch is supplied here.
+// A known post-ACK failure gets one cleanup of this original attempt, each
+// step with its own fail-safe; no CID removal or automatic second launch is
+// supplied here.
 func completeNativeGenerationStart(ctx context.Context, a nativeGenerationStartActions) error {
 	if a.preflight == nil || a.stopPrevious == nil || a.prepare == nil || a.beforeStart == nil || a.start == nil || a.activate == nil || a.ready == nil || a.forwards == nil || a.cleanup == nil {
 		return errors.New("native generation Start requires complete admitted wiring")
@@ -67,13 +67,13 @@ func completeNativeGenerationStart(ctx context.Context, a nativeGenerationStartA
 		if errors.As(cause, &uncertain) {
 			return cause
 		}
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 90*time.Second)
-		defer cancel()
+		cleanup := newDetachedCleanup(ctx)
 		if err := a.cleanup(cleanup, g); err != nil {
 			// As on the old path, the cleanup step's own failure is a named
 			// warning and the start keeps its plain error. Only a genuinely
-			// lost cleanup reply stays uncertain.
-			if nativeLostReply(err) || cleanup.Err() != nil {
+			// lost cleanup reply, or a step cut off by its fail-safe, stays
+			// uncertain.
+			if nativeLostReply(err) || cleanup.cutOff.Load() {
 				return &NativeEffectsUncertain{Cause: errors.Join(cause, err)}
 			}
 			nativeStartCleanupNotice(fmt.Errorf("failed start left generation state behind: %w", err))

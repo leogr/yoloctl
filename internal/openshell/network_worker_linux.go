@@ -13,7 +13,6 @@ import (
 	"slices"
 	"strings"
 	"syscall"
-	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -39,7 +38,7 @@ func NetworkWorkerMain(args []string) int {
 		_, _ = fmt.Fprintln(os.Stderr, "native egress child requires root and exactly its private namespace descriptor")
 		return 1
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), runtimeFailSafe)
 	defer cancel()
 	var err error
 	if mode == "apply" || mode == "retire" {

@@ -18,8 +18,10 @@ func TestRuntimeMainExitDrainDeadlineAndEarlyCompletion(t *testing.T) {
 	now := time.Date(2026, 11, 14, 1, 0, 0, 0, time.UTC)
 	code := 7
 	d := runtimeMainExitDrain{exit: &runtimeMainExit{&code}, deadline: now.Add(runtimeMainExitWait)}
-	if runtimeMainExitWait != 2*boxendpoint.DefaultCloseTimeout {
-		t.Fatal("endpoint budget diverged")
+	// The main-exit drain stays 4 s, independent of the endpoint's
+	// two-minute close fail-safe: its end fails nothing (yolo-cla's ruling).
+	if runtimeMainExitWait != 4*time.Second || runtimeMainExitWait >= boxendpoint.DefaultCloseTimeout {
+		t.Fatal("main-exit drain no longer the independent 4 s")
 	}
 	for _, elapsed := range []time.Duration{0, time.Second, runtimeMainExitWait - time.Nanosecond} {
 		if d.complete(now.Add(elapsed), false) {

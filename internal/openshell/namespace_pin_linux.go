@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
-	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -265,7 +264,7 @@ func createNativeNamespacePin(ctx context.Context, kernel *kernelInfrastructure,
 			if err != nil {
 				return err
 			}
-			child, cancel := context.WithTimeout(ctx, 12*time.Second)
+			child, cancel := context.WithTimeout(ctx, runtimeFailSafe)
 			defer cancel()
 			cmd := exec.CommandContext(child, "/proc/self/exe", NetworkWorkerCommand, "apply")
 			cmd.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL=C"}

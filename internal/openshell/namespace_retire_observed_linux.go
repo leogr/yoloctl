@@ -3,7 +3,6 @@ package openshell
 import (
 	"context"
 	"errors"
-	"time"
 )
 
 // These two cold cases have no current kernel mutation to repeat: an
@@ -49,12 +48,10 @@ func (p *nativePreparedObservationRetirement) afterContainerStop(ctx context.Con
 	}
 	p.consumed = true
 	progress := pinRetirementProgress{stopAttempted: true, stopAcknowledged: true}
-	finish, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	if err := finish.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return progress, &NativeEffectsUncertain{Cause: err}
 	}
-	if err := p.verify(finish); err != nil {
+	if err := p.verify(ctx); err != nil {
 		return progress, &NativeEffectsUncertain{Cause: err}
 	}
 	progress.completed = true
@@ -83,10 +80,7 @@ func prepareNativeNoInitializationRetirement(ctx context.Context, kernel *kernel
 		return nil, err
 	}
 	return &nativePreparedObservationRetirement{record: cloneRuntimeRecord(record), cid: cid, ready: true, verify: func(c context.Context) error {
-		if err := owner.inactive(c); err != nil {
-			return err
-		}
-		return check(c)
+		return checkInactiveThenMapping(c, owner.inactive, check)
 	}}, nil
 }
 
@@ -107,17 +101,16 @@ func prepareNativeStaleRetirement(ctx context.Context, kernel *kernelInfrastruct
 		return nil, err
 	}
 	return &nativePreparedObservationRetirement{record: cloneRuntimeRecord(record), cid: cid, ready: true, release: selected.Close, originalStaleFiles: selected.files, verify: func(c context.Context) error {
-		if err := owner.inactive(c); err != nil {
-			return err
-		}
-		current, err := observeStaleNamespacePin(c, kernel, lock, record, cid)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = current.Close() }()
-		if !sameStalePinObservation(selected, current) {
-			return errors.New("different-boot mapping changed across original container Stop")
-		}
-		return nil
+		return checkInactiveThenMapping(c, owner.inactive, func(check context.Context) error {
+			current, err := observeStaleNamespacePin(check, kernel, lock, record, cid)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = current.Close() }()
+			if !sameStalePinObservation(selected, current) {
+				return errors.New("different-boot mapping changed across original container Stop")
+			}
+			return nil
+		})
 	}}, nil
 }

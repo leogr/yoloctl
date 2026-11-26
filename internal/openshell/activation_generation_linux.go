@@ -3,7 +3,6 @@ package openshell
 import (
 	"context"
 	"errors"
-	"time"
 )
 
 // StopStartedGeneration retires only this activation's owned namespace after
@@ -62,12 +61,13 @@ func (a *NativeActivation) StopStartedGeneration(ctx context.Context, owner Nati
 		if a.partial == nil || a.partial.failure != nil || !a.partial.progress.ready {
 			return &NativeEffectsUncertain{Cause: errors.New("generation cleanup lacks its original completed partial retirement")}
 		}
-		complete, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
+		complete := context.WithoutCancel(ctx)
 		if err := owner.VerifyInactive(complete); err != nil {
 			return &NativeEffectsUncertain{Cause: err}
 		}
-		if err := verifyNamespaceRemovalMapping(complete, kernel, a.reservation.files, a.partial); err != nil {
+		if err := runRuntimeWait(complete, func(check context.Context) error {
+			return verifyNamespaceRemovalMapping(check, kernel, a.reservation.files, a.partial)
+		}); err != nil {
 			return &NativeEffectsUncertain{Cause: err}
 		}
 		if err := a.partial.publishKnownUnboundRetired(); err != nil {

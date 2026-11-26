@@ -80,7 +80,7 @@ func ServeForward(ctx context.Context, listener net.Listener, target ForwardTarg
 			defer func() { _ = conn.Close() }()
 			closeOnCancel := context.AfterFunc(serveCtx, func() { _ = conn.Close() })
 			defer closeOnCancel()
-			setup, setupCancel := context.WithTimeout(serveCtx, 5*time.Second)
+			setup, setupCancel := context.WithTimeout(serveCtx, runtimeFailSafe)
 			defer setupCancel()
 			if validateLive(setup) != nil {
 				return

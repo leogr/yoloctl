@@ -137,7 +137,7 @@ physical power loss.
 20. <a id="source-20"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2134) — `newAgentboxDestroyCmd` requires `RuntimeInventory` before teardown.
 21. <a id="source-21"></a> [cmd/yoloctl/agentbox_test.go](../../cmd/yoloctl/agentbox_test.go#L30) — `TestAgentboxDestroyUncertainRuntimePreservesDeclaration`: inventory failures, force/keep-manifest combinations.
 22. <a id="source-22"></a> [Inspector regressions](../../internal/agentbox/live_inspect_test.go#L20) — convergence, drift and refusal.
-23. <a id="source-23"></a> [Inspect selection](../../internal/container/container.go#L615-L726) — `parseContainerIP`, `parseInspect`, `selectInspectEntry`;
+23. <a id="source-23"></a> [Inspect selection](../../internal/container/container.go#L619-L730) — `parseContainerIP`, `parseInspect`, `selectInspectEntry`;
     [tests](../../internal/container/inspect_select_test.go#L1-L99).
 24. <a id="source-24"></a> [nerdctl v2.4.2](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/inspecttypes/dockercompat/dockercompat.go#L375-L384) — `Path`/`Args` from OCI argv.
 25. <a id="source-25"></a> [reconcile.go](../../internal/agentbox/reconcile.go#L91) — `ReconcileForStart`, `CheckStart`, shared planning.

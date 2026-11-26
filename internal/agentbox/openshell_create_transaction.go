@@ -5,8 +5,56 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 )
+
+// runtimeStepFailSafe ends one runtime wait that nothing else ends: a step of
+// a detached cleanup, a forward setup step or a probe. Tests shorten it.
+var runtimeStepFailSafe = 2 * time.Minute
+
+func runCallerStep(ctx context.Context, run func(context.Context) error) error { return run(ctx) }
+
+// runRuntimeStep bounds one request and retains the context error when the
+// interrupted adapter reports only its exit status.
+func runRuntimeStep(parent context.Context, run func(context.Context) error) error {
+	ctx, cancel := context.WithTimeout(parent, runtimeStepFailSafe)
+	defer cancel()
+	err := run(ctx)
+	if err != nil && ctx.Err() != nil {
+		return errors.Join(err, ctx.Err())
+	}
+	return err
+}
+
+// detachedCleanup is a cleanup that continues after its caller ends. It has
+// no bound as a whole: each of its steps gets its own fail-safe.
+type detachedCleanup struct {
+	ctx    context.Context
+	cutOff atomic.Bool
+}
+
+func newDetachedCleanup(ctx context.Context) *detachedCleanup {
+	return &detachedCleanup{ctx: context.WithoutCancel(ctx)}
+}
+
+// step runs one call of the cleanup under its own fail-safe.
+func (c *detachedCleanup) step(run func(context.Context) error) error {
+	return c.stepFrom(c.ctx, run)
+}
+
+// stepFrom is step for a callback, under the context its callee passed.
+func (c *detachedCleanup) stepFrom(parent context.Context, run func(context.Context) error) error {
+	ctx, cancel := context.WithTimeout(parent, runtimeStepFailSafe)
+	defer cancel()
+	err := run(ctx)
+	// Read the step's own context: a killed engine call returns its exit
+	// error, not a context error.
+	if ctx.Err() != nil {
+		c.cutOff.Store(true)
+	}
+	return err
+}
 
 // nativeCreateProgress records only acknowledgements obtained continuously
 // inside this admitted call. Metadata/current state cannot set these fields.
@@ -37,7 +85,7 @@ type nativeCreateActions struct {
 	activate  func(context.Context) error
 	ready     func(context.Context) error
 	forwards  func(context.Context) error
-	cleanup   func(context.Context, nativeCreateProgress) error
+	cleanup   func(*detachedCleanup, nativeCreateProgress) error
 }
 
 func (a nativeCreateActions) complete() bool {
@@ -67,15 +115,14 @@ func completeNativeContainerCreation(ctx context.Context, actions nativeCreateAc
 			// result. Do not start more mutations in an attempt to settle it.
 			return cause
 		}
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 90*time.Second)
-		defer cancel()
+		cleanup := newDetachedCleanup(ctx)
 		if err := actions.cleanup(cleanup, progress); err != nil {
 			// As on the old path, the cleanup step's own failure is a named
 			// warning; the create keeps its plain original error, and a later
 			// create of the same name gets a fresh incarnation.
 			var uncertain *NativeEffectsUncertain
-			if errors.As(err, &uncertain) || cleanup.Err() != nil {
-				// A typed lost result, or a cleanup cut off by its own bound
+			if errors.As(err, &uncertain) || cleanup.cutOff.Load() {
+				// A typed lost result, or a step cut off by its fail-safe
 				// while an engine call may have run, stays uncertain.
 				return &NativeEffectsUncertain{Cause: errors.Join(cause, err)}
 			}

@@ -122,6 +122,10 @@ func (t *NativePreparedGeneration) StopGeneration(ctx context.Context, owner Nat
 	if err := nativePreparedIdentity(t.prepared); err != nil {
 		return err
 	}
+	return t.stopGeneration(ctx, owner)
+}
+
+func (t *NativePreparedGeneration) stopGeneration(ctx context.Context, owner NativeNamespaceStop) error {
 	if err := owner.VerifyOwned(ctx); err != nil {
 		return err
 	}
@@ -155,7 +159,9 @@ func (t *NativePreparedGeneration) StopGeneration(ctx context.Context, owner Nat
 			return err
 		}
 		defer func() { _ = control.Close() }()
-		lock, err := lockNamespacePinsAt(ctx, control, t.prepared.Record.Launch.Binding.Incarnation, 0, 0)
+		wait, cancel := context.WithTimeout(ctx, runtimeFailSafe)
+		lock, err := lockNamespacePinsAt(wait, control, t.prepared.Record.Launch.Binding.Incarnation, 0, 0)
+		cancel()
 		if err != nil {
 			return &NativeEffectsUncertain{Cause: err}
 		}
@@ -192,13 +198,13 @@ func (t *NativePreparedGeneration) stopUninitialized(ctx context.Context, owner 
 			if err := owner.VerifyInactive(c); err != nil {
 				return err
 			}
-			return verify(c)
+			return runRuntimeWait(c, verify)
 		},
 		complete: func(c context.Context, p pinRetirementProgress) error {
 			if err := owner.VerifyInactive(c); err != nil {
 				return err
 			}
-			if err := verify(c); err != nil {
+			if err := runRuntimeWait(c, verify); err != nil {
 				return err
 			}
 			return publish(c, p)

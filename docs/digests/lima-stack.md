@@ -31,8 +31,9 @@ requires a working engine.
 recursively read-only when the guest kernel and OCI runtime support it. This
 also makes mounts below the source read-only inside the box. The native
 operator projection accepts one `ro` or `rro` option with the bind flag and
-continues to refuse `rw`.
-[27](#source-27) [28](#source-28) [29](#source-29)
+continues to refuse `rw`. Its two inspections each get a two-minute
+allowance, shortened by an earlier caller deadline or cancellation.
+[27](#source-27) [28](#source-28) [29](#source-29) [30](#source-30)
 
 [FACT] Lima v2.2.1 combines archives in override → instance → default order,
 substituting its built-in list only when empty. Its boot installer compares
@@ -144,4 +145,5 @@ Disk/owner/target errors fail startup; systemd retries are unchanged. [23](#sour
 26. <a id="source-26"></a> [Lima cidata](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/cidata/cidata.go#L126) — `templateArgs` gives the selected archive a generic name.
 27. <a id="source-27"></a> [nerdctl mount options](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/mountutil/mountutil_linux.go#L120-L140) — `readOnlyMountOptions` selects recursive read-only or falls back to plain read-only.
 28. <a id="source-28"></a> [nerdctl recursive read-only support](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/ociruntimeutil/rro_linux.go#L48-L70) — kernel and OCI runtime checks.
-29. <a id="source-29"></a> [Native operator projection](../../internal/container/operator_projection.go#L138) — `parseNativeOperatorProjection` checks read-only and bind options on the recorded OCI mount.
+29. <a id="source-29"></a> [Native operator projection](../../internal/container/operator_projection.go#L137) — `parseNativeOperatorProjection` checks read-only and bind options on the recorded OCI mount.
+30. <a id="source-30"></a> [Projection reads](../../internal/container/operator_projection.go#L55-L85) — `NativeOperatorProjection` bounds each read and requires matching observations.

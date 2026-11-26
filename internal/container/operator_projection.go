@@ -8,7 +8,6 @@ import (
 	"path"
 	"reflect"
 	"strings"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/operator"
@@ -57,11 +56,11 @@ func (c *Client) NativeOperatorProjection(ctx context.Context, cid, box string) 
 	if c == nil || !nativeMountCID(cid) || layout.ValidateName("agentbox", box) != nil {
 		return nil, errors.New("native operator projection requires original full CID and box")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
 	remaining := 16 << 20
 	read := func() (NativeOperatorSelection, NativeMountEntry, error) {
-		raw, err := c.nativeMountRead(ctx, &remaining, 8<<20, "inspect", "--mode", "native", cid)
+		attempt, cancel := context.WithTimeout(ctx, vmReadFailSafe)
+		defer cancel()
+		raw, err := c.nativeMountRead(attempt, &remaining, 8<<20, "inspect", "--mode", "native", cid)
 		if err != nil {
 			return NativeOperatorSelection{}, NativeMountEntry{}, err
 		}

@@ -106,7 +106,7 @@ cancellation; the orphan ledger is separate from receipt retention. See
 6. <a id="source-6"></a> [maintenance.go](../../internal/controller/maintenance.go#L9) — admission.
 7. <a id="source-7"></a> [storage_gc.go](../../cmd/yoloctl/storage_gc.go#L30) — inventory/preflight.
 8. <a id="source-8"></a> [policy.go](../../internal/storagegc/policy.go#L46) — retention.
-9. <a id="source-9"></a> [container.go](../../internal/container/container.go#L293) — build/pull guards.
+9. <a id="source-9"></a> [container.go](../../internal/container/container.go#L294) — build/pull guards.
 10. <a id="source-10"></a> [policy_test.go](../../internal/storagegc/policy_test.go#L11) — policy tests.
 11. <a id="source-11"></a> [storage-gc.sh](../../scripts/smoke/storage-gc.sh#L1) — isolated smoke.
 12. <a id="source-12"></a> [policy.go](../../internal/storagegc/policy.go#L19) — measured disk budgets.

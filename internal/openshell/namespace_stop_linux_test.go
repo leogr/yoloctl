@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -52,11 +53,16 @@ func TestNamespaceStaleStopFreshInvocationAndBoundedCleanupAfterCancellation(t *
 		stop:       func(context.Context) error { stops++; cancel(); return nil },
 		verifyInactiveAndStale: func(c context.Context) error {
 			checks++
-			deadline, ok := c.Deadline()
-			if c.Err() != nil || !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 30*time.Second {
-				return errors.New("cleanup lost independent bounded context")
+			if _, bounded := c.Deadline(); c.Err() != nil || bounded {
+				return errors.New("cleanup did not keep an independent parent")
 			}
-			return nil
+			return checkInactiveThenMapping(c, func(context.Context) error { return nil }, func(mapping context.Context) error {
+				deadline, ok := mapping.Deadline()
+				if !ok || time.Until(deadline) < time.Minute || time.Until(deadline) > runtimeFailSafe {
+					return errors.New("mapping lost its own finite bound")
+				}
+				return nil
+			})
 		},
 	}
 	if p, err := runStalePinStop(ctx, h); err != nil || !p.completed {
@@ -71,6 +77,34 @@ func TestNamespaceStaleStopFreshInvocationAndBoundedCleanupAfterCancellation(t *
 	if _, err := runStalePinStop(context.Background(), stalePinStopHooks{}); err == nil {
 		t.Fatal("missing callbacks accepted")
 	}
+}
+
+func TestDifferentBootStopInactivityAndMappingHaveSeparateAllowances(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const delay = 80 * time.Second
+		slow := func(ctx context.Context) error {
+			select {
+			case <-time.After(delay):
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		inactive := func(c context.Context) error { return runRuntimeWait(c, slow) }
+		stops := 0
+		h := stalePinStopHooks{
+			beforeStop: func(context.Context) error { return nil },
+			stop:       func(context.Context) error { stops++; return nil },
+			verifyInactiveAndStale: func(c context.Context) error {
+				return checkInactiveThenMapping(c, inactive, slow)
+			},
+		}
+		start := time.Now()
+		p, err := runStalePinStop(t.Context(), h)
+		if err != nil || !p.completed || stops != 1 || time.Since(start) != 2*delay {
+			t.Fatal("inactivity and mapping shared an allowance", p, err, stops, time.Since(start))
+		}
+	})
 }
 
 func TestNamespaceStaleStopRequiresExactBracketingMetadataObservation(t *testing.T) {

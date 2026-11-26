@@ -255,3 +255,77 @@ func TestRuntimeSSHDegradedAdmissionOpensNoPrivateConnection(t *testing.T) {
 		t.Fatal("degraded relay did not stop")
 	}
 }
+
+// Only the private dial has the setup fail-safe. An established stream that
+// stays quiet past it keeps relaying: an idle interactive shell may send
+// nothing for minutes. Bytes and a half-close after the quiet still arrive.
+func TestRuntimeSSHRelayQuietStreamOutlivesSetupFailSafe(t *testing.T) {
+	previous := runtimeFailSafe
+	runtimeFailSafe = 200 * time.Millisecond
+	t.Cleanup(func() { runtimeFailSafe = previous })
+	dir := runtimeSocketFixture(t)
+	target := fmt.Sprintf("/proc/self/fd/%d/target.sock", dir.Fd())
+	upstream, err := net.ListenUnix("unix", &net.UnixAddr{Name: target, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = upstream.Close() }()
+	upstreamResult := make(chan error, 1)
+	go func() {
+		conn, err := upstream.AcceptUnix()
+		if err != nil {
+			upstreamResult <- err
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+		raw, err := io.ReadAll(conn)
+		if err == nil {
+			_, err = conn.Write(append([]byte("response:"), raw...))
+		}
+		if err == nil {
+			err = conn.CloseWrite()
+		}
+		upstreamResult <- err
+	}()
+	endpoint, err := listenRuntimeSSHAt(dir, os.Geteuid(), os.Getegid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = endpoint.Close() }()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	served := make(chan error, 1)
+	go func() {
+		served <- endpoint.serveRuntimeSSH(ctx, target, func() bool { return true }, func() error { return nil })
+	}()
+	conn, err := net.DialUnix("unix", nil, &net.UnixAddr{Name: fmt.Sprintf("/proc/self/fd/%d/ssh.sock", dir.Fd()), Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	time.Sleep(3 * runtimeFailSafe) // quiet, well past the setup fail-safe
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := conn.Write([]byte("late")); err != nil {
+		t.Fatal("the quiet stream was closed", err)
+	}
+	if err := conn.CloseWrite(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := io.ReadAll(conn)
+	if err != nil || string(raw) != "response:late" {
+		t.Fatalf("the quiet stream lost its bytes or half-close: %q %v", raw, err)
+	}
+	if err := <-upstreamResult; err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	select {
+	case err := <-served:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("runtime SSH relay did not stop")
+	}
+}

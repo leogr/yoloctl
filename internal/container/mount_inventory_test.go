@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/execpipe"
 	"golang.org/x/sys/unix"
 )
 
@@ -67,6 +68,7 @@ if args==['ps','-a','-q','--no-trunc']:
  if case.get('fail_list_at')==n+1:sys.exit(23)
 elif args[:3]==['inspect','--mode','native']:
  n=sum(1 for row in old if row[5:6]==['inspect'])
+ time.sleep(case.get('inspect_delay',0))
  if case.get('overflow_inspect'):print(json.dumps([{'ID':args[3],'Spec':{'ociVersion':'1.3.0','root':{'path':'rootfs'}},'ignored_padding':'x'*(8*1024*1024)}]))
  else:
   values=case.get('inspects',[])
@@ -305,6 +307,9 @@ func TestNativeMountInventoryCopyDispatchRetainsOutputBound(t *testing.T) {
 }
 
 func TestNativeMountInventoryBoundsInheritedOutputPipes(t *testing.T) {
+	previous := mountDrainFailSafe
+	mountDrainFailSafe = 300 * time.Millisecond
+	t.Cleanup(func() { mountDrainFailSafe = previous })
 	for _, operation := range []string{"inventory", "projection"} {
 		for _, mode := range []string{"stdout", "stderr", "cancel"} {
 			t.Run(operation+"/"+mode, func(t *testing.T) {
@@ -355,25 +360,32 @@ func TestNativeMountInventoryBoundsInheritedOutputPipes(t *testing.T) {
 				if operation == "inventory" {
 					var result []NativeMountEntry
 					result, err = client.NativeMountInventory(ctx)
-					if result != nil {
+					if result != nil && mode != "stderr" {
 						t.Fatal("incomplete inventory returned metadata")
 					}
 				} else {
 					var result *NativeOperatorProjection
 					result, err = client.NativeOperatorProjection(ctx, operatorProjectionCID, "selected")
-					if result != nil {
+					if result != nil && mode != "stderr" {
 						t.Fatal("incomplete projection returned metadata")
 					}
 				}
 				<-ready
-				if err == nil {
+				// stderr goes to /dev/null, not a pipe, so a descendant that
+				// keeps stderr cannot hold the read: it completes.
+				if mode == "stderr" {
+					if err != nil {
+						t.Fatal("a descendant holding stderr failed the read", err)
+					}
+				} else if err == nil {
 					t.Fatal("inherited metadata pipe became success")
 				}
-				if mode == "cancel" {
+				if mode == "stderr" {
+				} else if mode == "cancel" {
 					if !errors.Is(err, context.Canceled) {
 						t.Fatal("original cancellation lost", err)
 					}
-				} else if !errors.Is(err, exec.ErrWaitDelay) {
+				} else if !errors.Is(err, execpipe.ErrOutputHeld) {
 					t.Fatal("pipe settlement failure lost", err)
 				}
 				if time.Since(start) > 4*time.Second {
@@ -382,7 +394,7 @@ func TestNativeMountInventoryBoundsInheritedOutputPipes(t *testing.T) {
 				if _, err := os.Stat(childFile); err != nil {
 					t.Fatal("owned metadata descendant never started", err)
 				}
-				if calls := operatorProjectionCalls(t, log); len(calls) != 1 {
+				if calls := operatorProjectionCalls(t, log); mode != "stderr" && len(calls) != 1 {
 					t.Fatal("failed metadata read retried or continued", calls)
 				}
 			})

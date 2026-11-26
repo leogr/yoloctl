@@ -150,7 +150,7 @@ func monitorRuntime(ctx context.Context, record RuntimeRecord, shared runtimeSha
 			err = errors.Join(err, publicDirectory.Close())
 		}
 	}()
-	initialDeadline := time.Now().Add(45 * time.Second)
+	initialDeadline := time.Now().Add(runtimeFailSafe)
 	everReady := false
 	lastPhase, lastReason := "", ""
 	stored := false
@@ -225,7 +225,12 @@ func monitorRuntime(ctx context.Context, record RuntimeRecord, shared runtimeSha
 		}
 		now := time.Now()
 		if supervisorAlive && boundaryAlive && (lastProbe.IsZero() || now.Sub(lastProbe) >= time.Second) {
-			upstreamReady, probeErr = probeRuntimeReadyAt(ctx, shared.supervisorRun, key, int(SupervisorUID), int(SupervisorGID))
+			ready, err := probeRuntimeReadyAt(ctx, shared.supervisorRun, key, int(SupervisorUID), int(SupervisorGID))
+			// A try that only ran out of time changes nothing and the next one
+			// decides; definite answers, and an explicit stop, apply at once.
+			if !errors.Is(err, errRuntimeProbeTimedOut) {
+				upstreamReady, probeErr = ready, err
+			}
 			if stopping, ordered := runtimeStopAfterProbe(ctx, lastPhase, probeErr); stopping {
 				return ordered, nil
 			}

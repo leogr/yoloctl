@@ -9,7 +9,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/safepath"
@@ -222,15 +221,8 @@ func runNoInitializationStop(ctx context.Context, h noInitializationStopHooks) (
 		return p, &NativeEffectsUncertain{Cause: err}
 	}
 	p.stopAcknowledged = true
-	finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	defer cancel()
-	if err := finish.Err(); err != nil {
-		return p, &NativeEffectsUncertain{Cause: err}
-	}
+	finish := context.WithoutCancel(ctx)
 	if err := h.inactive(finish); err != nil {
-		return p, &NativeEffectsUncertain{Cause: err}
-	}
-	if err := finish.Err(); err != nil {
 		return p, &NativeEffectsUncertain{Cause: err}
 	}
 	if err := h.complete(finish, p); err != nil {
@@ -270,7 +262,7 @@ func completeUninitializedNativeStop(ctx context.Context, owner nativePinStopHoo
 			if err := owner.inactive(c); err != nil {
 				return err
 			}
-			return check(c)
+			return runRuntimeWait(c, check)
 		},
 		complete: func(context.Context, pinRetirementProgress) error { return nil }, // Existing completion never rewritten.
 	})

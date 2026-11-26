@@ -26,7 +26,9 @@ func nativeTransactionFixture(events *[]string, failed string, failure error) na
 		create:  func(ctx context.Context) (string, error) { return strings.Repeat("a", 64), step("create")(ctx) },
 		inspect: func(ctx context.Context) (string, error) { return strings.Repeat("a", 64), step("inspect")(ctx) },
 		prepare: step("prepare"), start: step("start"), activate: step("activate"), ready: step("ready"), forwards: step("forwards"),
-		cleanup: func(ctx context.Context, progress nativeCreateProgress) error { return step("cleanup")(ctx) },
+		cleanup: func(cleanup *detachedCleanup, progress nativeCreateProgress) error {
+			return cleanup.step(step("cleanup"))
+		},
 	}
 }
 
@@ -60,7 +62,7 @@ func TestNativeCreateTransactionKnownFailuresRequireOwnedCleanupAndKeepHistory(t
 				var events []string
 				failure, cleanupError := errors.New("startup failed"), errors.New("stop acknowledgement lost")
 				actions := nativeTransactionFixture(&events, stage, failure)
-				actions.cleanup = func(ctx context.Context, got nativeCreateProgress) error {
+				actions.cleanup = func(_ *detachedCleanup, got nativeCreateProgress) error {
 					events = append(events, "cleanup")
 					wantStarted := stage == "activate" || stage == "ready" || stage == "forwards"
 					wantActivated := stage == "ready" || stage == "forwards"
@@ -131,10 +133,19 @@ func TestNativeCreateTransactionCancellationBeforeEffectsAndDuringKnownCleanup(t
 	actions := nativeTransactionFixture(&events, "", nil)
 	actions.prepare = func(context.Context) error { cancel(); return context.Canceled }
 	cleaned := false
-	actions.cleanup = func(cleanup context.Context, progress nativeCreateProgress) error {
-		deadline, bounded := cleanup.Deadline()
-		if cleanup.Err() != nil || !bounded || time.Until(deadline) > 91*time.Second || cleanup.Value(admissionKey{}) != "same-admitted-scope" || !progress.Created || progress.Started {
-			t.Fatal("owned cleanup lost its bound/admission/history", progress)
+	actions.cleanup = func(cleanup *detachedCleanup, progress nativeCreateProgress) error {
+		// The cleanup has no bound as a whole; each step has its own.
+		if _, bounded := cleanup.ctx.Deadline(); cleanup.ctx.Err() != nil || bounded || cleanup.ctx.Value(admissionKey{}) != "same-admitted-scope" || !progress.Created || progress.Started {
+			t.Fatal("owned cleanup lost its admission/history or gained a whole bound", progress)
+		}
+		if err := cleanup.step(func(step context.Context) error {
+			deadline, bounded := step.Deadline()
+			if step.Err() != nil || !bounded || time.Until(deadline) < time.Minute || step.Value(admissionKey{}) != "same-admitted-scope" {
+				t.Fatal("cleanup step lost its fail-safe or admission")
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
 		}
 		cleaned = true
 		return nil
@@ -180,7 +191,7 @@ func TestNativeCreateTransactionInspectionCannotReplaceAcknowledgedIdentity(t *t
 		actions := nativeTransactionFixture(&events, "", nil)
 		actions.inspect = func(context.Context) (string, error) { return observed, nil }
 		cleaned := false
-		actions.cleanup = func(_ context.Context, progress nativeCreateProgress) error {
+		actions.cleanup = func(_ *detachedCleanup, progress nativeCreateProgress) error {
 			if progress.ContainerID != strings.Repeat("a", 64) || !progress.Created || progress.Started {
 				t.Fatal("observation selected cleanup identity or invented start history", progress)
 			}
@@ -229,5 +240,66 @@ func TestNativeCreateTransactionCancelledEngineProcessIsLost(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// shortRuntimeStepFailSafe shortens the package fail-safe for one test.
+func shortRuntimeStepFailSafe(t *testing.T, d time.Duration) {
+	t.Helper()
+	old := runtimeStepFailSafe
+	runtimeStepFailSafe = d
+	t.Cleanup(func() { runtimeStepFailSafe = old })
+}
+
+func TestRuntimeStepFailSafeDefault(t *testing.T) {
+	if runtimeStepFailSafe != 2*time.Minute {
+		t.Fatal("runtime step fail-safe changed", runtimeStepFailSafe)
+	}
+}
+
+// A cleanup step that hangs is cut off by its own fail-safe, and the create
+// stays uncertain although the killed process returned its exit error. The
+// next step gets a fresh fail-safe: nothing bounds the cleanup as a whole.
+// An exit error from a step that was not cut off stays a plain failure.
+func TestNativeCreateCleanupStepCutOffByFailSafeIsUncertain(t *testing.T) {
+	shortRuntimeStepFailSafe(t, 200*time.Millisecond)
+	for _, hang := range []bool{true, false} {
+		t.Run(fmt.Sprintf("hang-%t", hang), func(t *testing.T) {
+			var events []string
+			failure := errors.New("startup failed")
+			actions := nativeTransactionFixture(&events, "ready", failure)
+			next := false
+			actions.cleanup = func(cleanup *detachedCleanup, _ nativeCreateProgress) error {
+				err := cleanup.step(func(step context.Context) error {
+					if hang {
+						return exec.CommandContext(step, "sleep", "10").Run()
+					}
+					return exec.CommandContext(step, "false").Run()
+				})
+				if stepErr := cleanup.step(func(step context.Context) error {
+					next = step.Err() == nil
+					return nil
+				}); stepErr != nil {
+					t.Fatal(stepErr)
+				}
+				return err
+			}
+			var notices []error
+			old := nativeCreateCleanupNotice
+			nativeCreateCleanupNotice = func(err error) { notices = append(notices, err) }
+			defer func() { nativeCreateCleanupNotice = old }()
+			err := completeNativeContainerCreation(t.Context(), actions)
+			var exit *exec.ExitError
+			var uncertain *NativeEffectsUncertain
+			if hang && (!errors.As(err, &uncertain) || !errors.Is(err, failure) || !errors.As(err, &exit) || len(notices) != 0) {
+				t.Fatal("cut-off cleanup step lost its uncertainty", err, notices)
+			}
+			if !hang && (errors.As(err, &uncertain) || !errors.Is(err, failure) || len(notices) != 1 || !errors.As(notices[0], &exit)) {
+				t.Fatal("plain cleanup failure became uncertain or lost its notice", err, notices)
+			}
+			if !next {
+				t.Fatal("a later cleanup step inherited an earlier step's fail-safe")
+			}
+		})
 	}
 }

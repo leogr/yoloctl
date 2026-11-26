@@ -10,11 +10,27 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/operator"
 )
 
 const operatorProjectionCID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+func TestNativeOperatorProjectionRenewsAllowanceForSecondRead(t *testing.T) {
+	shortVMReadFailSafe(t, 2*time.Second)
+	client, log := nativeMountCommandFixture(t, map[string]any{
+		"inspects":      []string{operatorProjectionJSON(t, operatorProjectionFixture())},
+		"inspect_delay": 1.2,
+	})
+	start := time.Now()
+	if _, err := client.NativeOperatorProjection(t.Context(), operatorProjectionCID, "selected"); err != nil {
+		t.Fatal("successive inspect replies shared one allowance", err)
+	}
+	if len(operatorProjectionCalls(t, log)) != 2 || time.Since(start) <= vmReadFailSafe {
+		t.Fatal("fixture did not complete both independent waits", time.Since(start))
+	}
+}
 
 func operatorProjectionFixture() map[string]any {
 	endpoint := operator.Endpoint{Box: "selected", Incarnation: strings.Repeat("a", 32)}

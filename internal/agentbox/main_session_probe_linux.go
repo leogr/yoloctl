@@ -10,8 +10,6 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const mainSessionProbeTimeout = 10 * time.Second
-
 // ProbeMainSession sends the request once on a fresh session channel of box
 // name's endpoint and closes it: true when accepted, false when refused (an
 // endpoint from before), an error when the endpoint could not be asked. It
@@ -21,17 +19,22 @@ func ProbeMainSession(ctx context.Context, name string) (bool, error) {
 }
 
 func probeMainSessionAt(ctx context.Context, name, socket string) (bool, error) {
-	dialer := net.Dialer{Timeout: mainSessionProbeTimeout}
+	// The probe is one request and its reply. The caller ends it earlier.
+	ctx, cancel := context.WithTimeout(ctx, runtimeStepFailSafe)
+	defer cancel()
+	var dialer net.Dialer
 	conn, err := dialer.DialContext(ctx, "unix", socket)
 	if err != nil {
 		return false, err
 	}
 	defer func() { _ = conn.Close() }()
-	_ = conn.SetDeadline(time.Now().Add(mainSessionProbeTimeout))
+	deadline, _ := ctx.Deadline()
+	_ = conn.SetDeadline(deadline)
+	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Unix(1, 0)) })
+	defer stop()
 	cc, chans, reqs, err := ssh.NewClientConn(conn, name, &ssh.ClientConfig{
 		User:            "sandbox",
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         mainSessionProbeTimeout,
 	})
 	if err != nil {
 		return false, err

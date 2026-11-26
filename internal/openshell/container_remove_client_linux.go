@@ -84,7 +84,11 @@ func RemoveNativeContainer(ctx context.Context, selected RuntimeRecord, release 
 				// endpoint withdrawal and private metadata removal each run and
 				// report their own result.
 				for _, check := range []func() error{
-					func() error { return scope.checkInfrastructure(c, owner.VerifyRemaining) },
+					func() error {
+						return scope.checkInfrastructure(c, func(check context.Context) error {
+							return runRuntimeWait(check, owner.VerifyRemaining)
+						})
+					},
 					func() error { return retirement.full.Check(c) },
 					func() error { return verifyNativeNamespaceCleanupBare(c, scope) },
 					func() error { return runtime.checkClearedNamespaces(c) },

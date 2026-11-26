@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -268,37 +267,50 @@ func runNamespaceContainerRemoval(ctx context.Context, h namespaceRemovalHooks) 
 	if h.beforeRemove == nil || h.removeCID == nil || h.remaining == nil || h.removeMetadata == nil {
 		return p, errors.New("incomplete retired namespace/container removal protocol")
 	}
-	// The effect wrapper supplies its independent cleanup context. Preserve
-	// that earlier deadline rather than renewing a consumed cleanup budget.
-	cleanup, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
+	// The effect wrapper supplies its detached cleanup context. The compound
+	// checks own their individual waits. The remove request gets its own bound.
 	fail := func(cause error) (namespaceRemovalProgress, error) { return p, &NativeEffectsUncertain{Cause: cause} }
-	if err := cleanup.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return fail(err)
 	}
-	if err := h.beforeRemove(cleanup); err != nil {
+	if err := h.beforeRemove(ctx); err != nil {
 		return fail(err)
 	}
-	if err := cleanup.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return fail(err)
 	}
 	p.removeAttempted = true
-	if err := h.removeCID(cleanup); err != nil {
+	if err := runRuntimeWait(ctx, h.removeCID); err != nil {
 		return fail(err)
 	}
 	p.removeAcknowledged = true
-	if err := h.remaining(cleanup); err != nil {
+	if err := h.remaining(ctx); err != nil {
 		return fail(err)
 	}
-	if err := cleanup.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return fail(err)
 	}
 	p.metadataAttempted = true
-	if err := h.removeMetadata(cleanup); err != nil {
+	if err := h.removeMetadata(ctx); err != nil {
 		return fail(err)
 	}
 	p.metadataAcknowledged, p.completed = true, true
 	return p, nil
+}
+
+// The owner supplies each independently bounded inspection. The detached
+// caller still has to observe inactivity again after selecting the metadata.
+func checkNamespaceBeforeRemove(ctx context.Context, inactive, mapping func(context.Context) error, inventory func() error) error {
+	if err := inactive(ctx); err != nil {
+		return err
+	}
+	if err := runRuntimeWait(ctx, mapping); err != nil {
+		return err
+	}
+	if err := inventory(); err != nil {
+		return err
+	}
+	return inactive(ctx)
 }
 
 type namespaceContainerRemoveOwner struct {
@@ -460,48 +472,46 @@ func removeNativeNamespaceContainer(ctx context.Context, kernel *kernelInfrastru
 	}
 	// Continue only this bounded suffix after its known Stop, even if the
 	// request transport disappeared. No mutation is replayed after lost replies.
-	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	defer cancel()
+	// Each call below is its own wait with its own fail-safe; the removal
+	// steps get theirs in runNamespaceContainerRemoval.
+	cleanup := context.WithoutCancel(ctx)
 	if files == nil {
 		if err := owner.stop.inactive(cleanup); err != nil {
 			return namespaceRemovalProgress{}, &NativeEffectsUncertain{Cause: err}
 		}
-		var err error
-		files, err = selectNamespaceRemovalFiles(cleanup, kernel, lock, record, cid)
+		err := runRuntimeWait(cleanup, func(check context.Context) error {
+			var err error
+			files, err = selectNamespaceRemovalFiles(check, kernel, lock, record, cid)
+			return err
+		})
 		if err != nil {
 			return namespaceRemovalProgress{}, &NativeEffectsUncertain{Cause: err}
 		}
 	}
 	defer func() { _ = files.Close() }()
 	var snapshot *namespaceMetadataSnapshot
+	verifyMapping := func(c context.Context) error { return verifyNamespaceRemovalMapping(c, kernel, files, partial) }
 	h := namespaceRemovalHooks{
 		beforeRemove: func(c context.Context) error {
-			if err := owner.stop.inactive(c); err != nil {
+			return checkNamespaceBeforeRemove(c, owner.stop.inactive, verifyMapping, func() error {
+				var err error
+				snapshot, err = inventoryNamespaceBookkeeping(files)
 				return err
-			}
-			if err := verifyNamespaceRemovalMapping(c, kernel, files, partial); err != nil {
-				return err
-			}
-			var err error
-			snapshot, err = inventoryNamespaceBookkeeping(files)
-			if err != nil {
-				return err
-			}
-			return owner.stop.inactive(c)
+			})
 		},
 		removeCID: func(c context.Context) error { return owner.removeCID(c, cid) },
 		remaining: func(c context.Context) error {
 			if err := owner.remaining(c); err != nil {
 				return err
 			}
-			if err := verifyNamespaceRemovalMapping(c, kernel, files, partial); err != nil {
+			if err := runRuntimeWait(c, verifyMapping); err != nil {
 				return err
 			}
 			return snapshot.checkComplete()
 		},
 		removeMetadata: func(c context.Context) error {
 			return snapshot.remove(c, func(check context.Context) error {
-				if err := kernel.revalidate(check); err != nil {
+				if err := runRuntimeWait(check, kernel.revalidate); err != nil {
 					return err
 				}
 				return owner.remaining(check)

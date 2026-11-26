@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 )
 
 // Private original-call protocol only. The future admitted adapter must build
@@ -142,13 +141,18 @@ func completeNativeContainerRemoval(ctx context.Context, scope nativeContainerRe
 	stopACK := &nativeContainerStopACK{attempt}
 	// Continue only this original owned cleanup after a positive Stop ACK,
 	// retaining admission values with a finite bound after client cancellation.
-	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 90*time.Second)
-	defer cancel()
+	// Each step is one wait with its own fail-safe; nothing bounds the
+	// sequence as a whole. A step that its fail-safe cut off reports that
+	// context's error with the step's own, read after the call, because a
+	// killed engine process returns its exit error, not a context error.
+	cleanup := context.WithoutCancel(ctx)
 	step := func(stage string, run func(context.Context) error) error {
-		if err := cleanup.Err(); err != nil {
-			return fmt.Errorf("native removal %s: %w", stage, err)
-		}
-		if err := run(cleanup); err != nil {
+		check, cancel := context.WithTimeout(cleanup, runtimeFailSafe)
+		defer cancel()
+		if err := run(check); err != nil {
+			if cut := check.Err(); cut != nil {
+				err = errors.Join(err, cut)
+			}
 			return fmt.Errorf("native removal %s: %w", stage, err)
 		}
 		return nil
@@ -166,19 +170,26 @@ func completeNativeContainerRemoval(ctx context.Context, scope nativeContainerRe
 		nativeRemovalNotice(err)
 		return nil
 	}
-	if err := step("inactivity", a.inactive); err != nil {
-		return err
+	// The inactivity and retirement callbacks contain multiple independently
+	// bounded requests. Pass the detached parent through to those waits.
+	if err := a.inactive(cleanup); err != nil {
+		return fmt.Errorf("native removal inactivity: %w", err)
 	}
 	attempt.inactiveVerified = true
 	if err := step("immutable ownership/status refresh", func(check context.Context) error { return a.refresh(check, stopACK) }); err != nil {
 		return err
 	}
-	if err := step("all-generation namespace retirement", func(check context.Context) error { return a.retire(check, stopACK) }); err != nil {
-		return err
+	if err := a.retire(cleanup, stopACK); err != nil {
+		return fmt.Errorf("native removal all-generation namespace retirement: %w", err)
 	}
 	attempt.namespacesRetired = true
 	attempt.removeAttempted = true // retirement ACK can no longer be reused
 	if err := step("CID removal", a.remove); err != nil {
+		// A remove whose own fail-safe cut it off may have happened: its
+		// reply is lost, so the outcome is uncertain, and it is never retried.
+		if errors.Is(err, context.DeadlineExceeded) {
+			return &NativeEffectsUncertain{Cause: err}
+		}
 		return err
 	}
 	attempt.removeAcknowledged = true
@@ -186,12 +197,17 @@ func completeNativeContainerRemoval(ctx context.Context, scope nativeContainerRe
 		return err
 	}
 	removeACK := &nativeContainerRemoveACK{attempt}
-	if err := step("namespace metadata removal", func(clean context.Context) error { return a.namespaceMetadata(clean, removeACK) }); err != nil {
+	// Each metadata verifier has its own storage wait. Keep the original
+	// remove ACK and the detached parent throughout the cleanup loops.
+	if err := a.namespaceMetadata(cleanup, removeACK); err != nil {
 		// Private runtime metadata removal depends on this step's ACK.
-		return notice(errors.Join(err, errors.New("native removal kept private runtime metadata")))
+		return notice(errors.Join(fmt.Errorf("native removal namespace metadata removal: %w", err), errors.New("native removal kept private runtime metadata")))
 	}
 	attempt.namespaceMetadataAcknowledged = true
-	return notice(step("private runtime metadata removal", func(clean context.Context) error { return a.runtimeMetadata(clean, removeACK) }))
+	if err := a.runtimeMetadata(cleanup, removeACK); err != nil {
+		return notice(fmt.Errorf("native removal private runtime metadata removal: %w", err))
+	}
+	return nil
 }
 
 // nativeRemovalNotice names cleanup left behind after the container was

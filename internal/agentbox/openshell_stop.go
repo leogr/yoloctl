@@ -139,6 +139,10 @@ func completeNativeStopEndpoint(ctx context.Context, inactive, endpoint func(con
 	}
 	check, cancel := context.WithTimeout(context.WithoutCancel(ctx), stopCheckFailSafe)
 	defer cancel()
+	return finishNativeStopEndpoint(check, inactive, endpoint)
+}
+
+func finishNativeStopEndpoint(check context.Context, inactive, endpoint func(context.Context) error) error {
 	if err := inactive(check); err != nil {
 		return &NativeEffectsUncertain{Cause: fmt.Errorf("acknowledged native namespace Stop inactivity remains unproved: %w", err)}
 	}

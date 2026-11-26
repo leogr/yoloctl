@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -21,8 +20,6 @@ func awaitNativeActivation(ctx context.Context, record RuntimeRecord) (_ activat
 	if os.Getpid() != 1 || os.Geteuid() != 0 {
 		return activationProof{}, errors.New("native activation server requires the container's root PID 1")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
 	generationRoot := filepath.Join(NativeProjection, "generations", record.Generation)
 	status, err := openActivationDirectory(NativeProjection, record.Generation)
 	if err != nil {
@@ -69,19 +66,13 @@ func awaitNativeActivation(ctx context.Context, record RuntimeRecord) (_ activat
 	if err := unix.Fchmodat(status, activationSocketName, 0o600, 0); err != nil {
 		return activationProof{}, err
 	}
-	stop := context.AfterFunc(ctx, func() { _ = listener.Close() })
-	defer stop()
-	conn, err := listener.AcceptUnix()
+	ctx, conn, done, err := beginActivationExchange(ctx, func(wait context.Context) (*net.UnixConn, error) {
+		return acceptNativeActivation(wait, listener)
+	})
 	if err != nil {
 		return activationProof{}, err
 	}
-	defer func() { _ = conn.Close() }()
-	deadline, _ := ctx.Deadline()
-	if err := conn.SetDeadline(deadline); err != nil {
-		return activationProof{}, err
-	}
-	stopConn := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	defer stopConn()
+	defer done()
 	credentials, err := activationCredentials(conn)
 	// The native PID can be outside the container's PID namespace (Pid=0).
 	// Root credentials plus the per-generation authenticator prove this end;
@@ -166,4 +157,35 @@ func openActivationDirectory(runtimeRoot, generation string) (int, error) {
 		}
 	}
 	return fd, nil
+}
+
+func acceptNativeActivation(ctx context.Context, listener *net.UnixListener) (*net.UnixConn, error) {
+	stop := context.AfterFunc(ctx, func() { _ = listener.Close() })
+	defer stop()
+	return listener.AcceptUnix()
+}
+
+// Connection setup and the authenticated exchange each get their own
+// allowance under the original caller. Both peers use the same boundary.
+func beginActivationExchange(caller context.Context, connect func(context.Context) (*net.UnixConn, error)) (context.Context, *net.UnixConn, func(), error) {
+	wait, cancelWait := context.WithTimeout(caller, runtimeFailSafe)
+	conn, err := connect(wait)
+	cancelWait()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	exchange, cancelExchange := context.WithTimeout(caller, runtimeFailSafe)
+	deadline, _ := exchange.Deadline()
+	if err := conn.SetDeadline(deadline); err != nil {
+		cancelExchange()
+		_ = conn.Close()
+		return nil, nil, nil, err
+	}
+	stop := context.AfterFunc(exchange, func() { _ = conn.Close() })
+	done := func() {
+		stop()
+		cancelExchange()
+		_ = conn.Close()
+	}
+	return exchange, conn, done, nil
 }

@@ -1,6 +1,7 @@
 # Box stop and start results
 
 Verification: `54e0df18de728fadc88d0fae984ece2cee237083` and accompanying changes; result-policy users, storage failure and source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; re-read cited sources when changing behavior.
+Detached cleanup waits verified at `c33648af` and accompanying changes.
 
 [FACT] `box stop` runs each step once, in order: read the box's exact container;
 withdraw the session holder; withdraw the box's forwards; one engine stop when the
@@ -45,6 +46,18 @@ it running. Without an engine start the start's own error stands, including
 recreate-only drift and pre-engine native refusals.
 [1](#source-1) [4](#source-4) [6](#source-6) [8](#source-8) [13](#source-13)
 
+[FACT] A foreground native stop checks storage under the caller's deadline.
+After a failed start, the detached cleanup gives each engine inspection,
+Stop request and namespace retirement worker a fresh two-minute allowance.
+A lost Stop or retirement reply leaves the start uncertain. The cleanup
+attempts each effect once. [3](#source-3) [17](#source-17) [18](#source-18)
+
+[FACT] Whole-container removal keeps the original Stop acknowledgement
+through retirement and the pre-removal snapshots. Storage verification and
+the exact engine inspection each get a fresh wait in that detached work.
+After the exact-CID removal reply, each metadata check gets a fresh storage
+wait under the same removal acknowledgement. [19](#source-19) [20](#source-20)
+
 [FACT] Restart, recreate, destroy, account and space teardown keep today's
 native stop with its forward precondition, endpoint removal and early returns.
 The `box start` command passes the result policy; the one other user is a
@@ -81,7 +94,7 @@ refuses the stop (`persistExecution`, `deferExecution` in live_receipts.go). [14
 
 1. <a id="source-1"></a> [cmd/yoloctl/box_stop_result.go](../../cmd/yoloctl/box_stop_result.go#L40-L237) — `liveBoxStopSteps`, `stopAgentboxForResult`, `runBoxStop`, `removeStartLeftovers`, `runStartForResult`, `settleStartForResult`.
 2. <a id="source-2"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2250) — `box stop` RunE calls `runBoxStop`.
-3. <a id="source-3"></a> [internal/agentbox/openshell_stop_linux.go](../../internal/agentbox/openshell_stop_linux.go#L24-L280) — `stopNativeRuntimeForResult`, `stopForResultWithStorageFallback`, `stopExactContainerWithoutStorage`, `stopNativeRuntimeMode`; `RemoveStoppedEndpoint` and `removeStoppedEndpoint` at L321-L401.
+3. <a id="source-3"></a> [internal/agentbox/openshell_stop_linux.go](../../internal/agentbox/openshell_stop_linux.go#L24-L312) — `stopNativeRuntimeForResult`, `stopForResultWithStorageFallback`, `stopExactContainerWithoutStorage`, `stopNativeRuntimeMode`, `readNativeStopOwnership`. Endpoint removal is at L381–L455.
 4. <a id="source-4"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L745-L920) — `startAgentboxCore` `resultPolicy`; `startExistingAgentboxContainerPrepared`; the recreate's `legacyRemedyFlag` branch (legacy_runtime.go L132).
 5. <a id="source-5"></a> [internal/agentbox/openshell_stop.go](../../internal/agentbox/openshell_stop.go#L13-L70) — `Stop` (today's mode), `StopRuntimeForResult` and `ResultLeftover`.
 6. <a id="source-6"></a> [cmd/yoloctl/box_stop_result_test.go](../../cmd/yoloctl/box_stop_result_test.go#L46) — stop step failures, lost replies, reads, absent/exited, start leftovers and rollback.
@@ -95,3 +108,7 @@ refuses the stop (`persistExecution`, `deferExecution` in live_receipts.go). [14
 14. <a id="source-14"></a> [cmd/yoloctl/box_stop_beside.go](../../cmd/yoloctl/box_stop_beside.go#L1) — `stopBoxBeside`, `stopTargetBeside`; wired in `registerSpaceOperations`.
 15. <a id="source-15"></a> [internal/controller/server.go](../../internal/controller/server.go#L196) — `Operation.Beside` in admission and the effect gate; `holds.unresolvedOnly`.
 16. <a id="source-16"></a> [cmd/yoloctl/box_stop_beside_test.go](../../cmd/yoloctl/box_stop_beside_test.go#L1) — results, wrapper; controller `beside_test.go`.
+17. <a id="source-17"></a> [Failed-start result](../../internal/agentbox/openshell_generation_start_transaction_linux.go#L64-L85) — the original failure and lost cleanup reply retain their causes.
+18. <a id="source-18"></a> [Retirement worker wait](../../internal/openshell/namespace_retire_linux.go#L409-L431) — the worker owns its deadline through its exit or reply.
+19. <a id="source-19"></a> [Removal ownership checks](../../internal/agentbox/openshell_remove_linux.go#L199-L217) — each detached read owns its wait.
+20. <a id="source-20"></a> [Removal acknowledgements](../../internal/openshell/container_remove_protocol_linux.go#L171-L216) — original Stop, CID removal and metadata stages.

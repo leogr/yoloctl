@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"sync"
-	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -159,7 +158,7 @@ func (e *runtimeSSH) serveRuntimeSSH(ctx context.Context, target string, admit f
 			if !admit() || checkTarget() != nil {
 				return
 			}
-			setup, cancelSetup := context.WithTimeout(serveCtx, time.Second)
+			setup, cancelSetup := context.WithTimeout(serveCtx, runtimeFailSafe)
 			outgoing, err := (&net.Dialer{}).DialContext(setup, "unix", target)
 			cancelSetup()
 			if err != nil {
