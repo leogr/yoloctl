@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -49,9 +50,9 @@ func TestWorkerDescendantHoldingStdoutEndsAtExit(t *testing.T) {
 	}
 }
 
-// A process outside the worker's group still holding stdout (or the PTY) keeps
-// the output join only until the fail-safe: the worker returns while that
-// holder is still alive, and the command is reported interrupted.
+// A live process outside the worker's group can hold output open only
+// until the fail-safe. Darwin revokes the controlling PTY at leader exit,
+// so the worker can return its original status while the holder lives.
 func TestWorkerOutputHeldOutsideTheGroupEndsAtFailSafe(t *testing.T) {
 	withFailSafe(t, 300*time.Millisecond)
 	for _, terminal := range []bool{false, true} {
@@ -67,12 +68,23 @@ func TestWorkerOutputHeldOutsideTheGroupEndsAtFailSafe(t *testing.T) {
 		}
 		alive := syscall.Kill(pid, 0) == nil
 		_ = syscall.Kill(pid, syscall.SIGKILL)
+		if !alive || elapsed > 5*time.Second {
+			t.Fatalf("terminal=%v: holder alive=%v after %s: code=%d err=%v", terminal, alive, elapsed, code, err)
+		}
+		if terminal && runtime.GOOS == "darwin" {
+			// XNU revokes the slave descriptors when the controlling
+			// session leader exits, including those held by the child.
+			if code != 0 || err != nil {
+				t.Fatalf("revoked terminal lost the worker result: code=%d err=%v", code, err)
+			}
+			continue
+		}
 		want := "worker exited with its output still open"
 		if terminal {
 			want = "worker exited with an inherited terminal still open"
 		}
 		var interrupted *WorkerInterrupted
-		if !alive || elapsed > 5*time.Second || !errors.As(err, &interrupted) || !strings.Contains(err.Error(), want) || code != 2 {
+		if !errors.As(err, &interrupted) || !strings.Contains(err.Error(), want) || code != 2 {
 			t.Fatalf("terminal=%v: holder alive=%v after %s: code=%d err=%v", terminal, alive, elapsed, code, err)
 		}
 	}

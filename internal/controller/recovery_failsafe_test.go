@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
-	"strconv"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -209,11 +209,12 @@ func TestVerifierFailingBeforeItsInputIsAnOrdinaryError(t *testing.T) {
 // ended and reaped at once, well within the fail-safe, and its lock is free.
 func TestVerifierOversizedResultEndsTheWriterAndReleasesItsLock(t *testing.T) {
 	withObservationFailSafe(t, time.Hour)
-	space := "ovr" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	path := testVerifierLockPath(space)
-	t.Cleanup(func() { _ = os.Remove(path) })
+	// RunVerifier supplies a sanitized environment. Pass the exact fixture
+	// path to the child, even when its default temp directory differs.
+	path := filepath.Join(t.TempDir(), "verifier.lock")
+	withVerifierCommand(t, "controller-internal", "verify", path)
 	start := time.Now()
-	_, err := RunVerifier(t.Context(), space, documentReceipt("oversize"))
+	_, err := RunVerifier(t.Context(), "work", documentReceipt("oversize"))
 	if err == nil || !strings.Contains(err.Error(), "exceeds its limit") {
 		t.Fatal("an oversized result was not refused", err)
 	}

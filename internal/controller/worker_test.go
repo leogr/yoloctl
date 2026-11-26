@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 	if len(os.Args) == 3 && os.Args[1] == "controller-internal" && os.Args[2] == "verify-exitearly" {
 		os.Exit(95) // fails by itself before reading its input or taking the lock
 	}
-	if len(os.Args) == 3 && os.Args[1] == "controller-internal" && os.Args[2] == "verify" {
+	if (len(os.Args) == 3 || len(os.Args) == 4) && os.Args[1] == "controller-internal" && os.Args[2] == "verify" {
 		var in VerifierInput
 		if err := json.NewDecoder(os.NewFile(3, "verifier-request")).Decode(&in); err != nil {
 			os.Exit(91)
@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 			os.Exit(93)
 		case "oversize":
 			// Holds a real lock (standing in for the space lock) from now on.
-			f, err := os.OpenFile(testVerifierLockPath(in.Space), os.O_RDWR|os.O_CREATE, 0o600)
+			f, err := openTestVerifierLock(os.Args)
 			if err != nil || syscall.Flock(int(f.Fd()), syscall.LOCK_EX) != nil {
 				os.Exit(96)
 			}
@@ -553,7 +553,10 @@ func testVerifierCase(in VerifierInput) string {
 	return ""
 }
 
-// testVerifierLockPath is the lock the "oversize" stand-in verifier holds.
-func testVerifierLockPath(space string) string {
-	return filepath.Join(os.TempDir(), "yoloctl-test-verifier-"+space+".lock")
+// The stand-in verifier receives the parent fixture's absolute lock path.
+func openTestVerifierLock(args []string) (*os.File, error) {
+	if len(args) != 4 || !filepath.IsAbs(args[3]) {
+		return nil, errors.New("test verifier requires an absolute lock path")
+	}
+	return os.OpenFile(args[3], os.O_RDWR|os.O_CREATE, 0o600)
 }
