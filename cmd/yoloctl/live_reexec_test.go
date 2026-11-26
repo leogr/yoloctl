@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"testing"
+
+	"github.com/leogr/yoloctl/internal/controller"
 )
 
 // liveReexecEnv marks the children of an opt-in live test. Its real VM
@@ -17,5 +19,8 @@ func TestMain(m *testing.M) {
 		main() // exits with the private command's status
 		os.Exit(2)
 	}
+	// Ordinary tests and their re-exec children use host routing by default.
+	// Tests that exercise operator routing install their own client.
+	loadOperatorClient = func() (*controller.OperatorClient, error) { return nil, nil }
 	os.Exit(m.Run())
 }

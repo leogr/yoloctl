@@ -62,7 +62,7 @@ func TestLiveChatAttachTargetAnswersWhileSpaceLockIsHeld(t *testing.T) {
 	}
 	// Never the space hosting this session: an operator client would select
 	// its own space's endpoint.
-	if operator, err := loadOperatorClient(); err != nil || operator != nil {
+	if operator, err := controller.LoadOperatorClient(); err != nil || operator != nil {
 		t.Fatalf("run this from the disposable space's host, not inside a box (%v)", err)
 	}
 	boot, err := spaceconfig.LoadBootstrap(space)
