@@ -74,7 +74,7 @@ hover and popups with fixtures. No live VM measurement is established by them.
 
 1. <a id="source-1"></a> [collect.go](../../internal/spacetelemetry/collect.go#L89-L98) — `Sample` disk reads; `SystemDisk` in `telemetry.go` at L151-L154.
 2. <a id="source-2"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L96-L103) — native collector with `SystemMount: "/"`.
-3. <a id="source-3"></a> [init_linux.go](../../internal/vmguest/init_linux.go#L268-L292) — runtime directories bound from `/run/system`; root overlay at L638-L646.
+3. <a id="source-3"></a> [init_linux.go](../../internal/vmguest/init_linux.go#L270-L294) — runtime directories bound from `/run/system`; root overlay at L550-L556.
 4. <a id="source-4"></a> [disk.go](../../internal/spacetelemetry/disk.go#L1-L56) — `DiskLevel`, thresholds, `Used`, `WarnFree`, `CriticalFree`, `Pressure`.
 5. <a id="source-5"></a> [disks.go](../../internal/tui/spaceview/disks.go#L14-L166) — `disks`, `levelGauge`, `diskBlock`, `diskBand`; popups at L234-L278.
 6. <a id="source-6"></a> [layout.go](../../internal/tui/spaceview/layout.go#L411-L421) — disk hover hints; `tSystemDisk` at L29; click in `popup.go` at L164.

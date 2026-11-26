@@ -32,7 +32,7 @@ same verdict; privileged boxes stay `not applied`/`not-applied`. [1](#source-1)
 
 1. <a id="source-1"></a> [Landlock probe](../../cmd/yoloctl/landlock.go#L60-L267) — `classifyLandlockABI`, `probeVMLandlockKernel`, `inspectLandlock`, `landlockVerdict`, `landlockLogFailureMarkers`, `scanOpenshellLandlockLog`, `landlockSummaryLine`.
 2. <a id="source-2"></a> [Linux query](../../cmd/yoloctl/landlock_linux.go#L7) — `queryLandlockABI`.
-3. <a id="source-3"></a> [Guest boot](../../internal/vmguest/init_linux.go#L154-L199) — mounted filesystems and the ABI >= 3 guard.
+3. <a id="source-3"></a> [Guest boot](../../internal/vmguest/init_linux.go#L156-L201) — mounted filesystems and the ABI >= 3 guard.
 4. <a id="source-4"></a> [Kernel Landlock ABI](https://docs.kernel.org/userspace-api/landlock.html#landlock-abi-versions) — version query and ENOSYS/EOPNOTSUPP meanings.
 5. <a id="source-5"></a> [OpenShell v0.0.72 Landlock events](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-process/src/sandbox/linux/landlock.rs#L120-L310) — unavailable and `restrict_self` failure events; readiness in `mod.rs` `log_sandbox_readiness`.
 6. <a id="source-6"></a> [Regressions](../../cmd/yoloctl/landlock_test.go#L16-L241) — summary text, errno classification, outside-controller probe, verdict precedence, log scan and text/JSON agreement.

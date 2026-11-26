@@ -97,7 +97,7 @@ Firecracker/Lima resizing or restart behavior. [16](#source-16) [17](#source-17)
 11. <a id="source-11"></a> [cmd/yoloctl/space_resources.go](../../cmd/yoloctl/space_resources.go#L42) — `newSpaceSetCmd`, `newSpaceEditCmd`, stopped guard, snapshots, editor and desired-first publication.
 12. <a id="source-12"></a> [cmd/yoloctl/controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L151) — `startControllerSpaceImpl` synchronizes saved resources before an existing stopped VM starts.
 13. <a id="source-13"></a> [internal/vmapi/resources.go](../../internal/vmapi/resources.go#L23) — `ValidateResources` adapter bounds and stopped-state error.
-14. <a id="source-14"></a> [internal/firecracker/driver_linux.go](../../internal/firecracker/driver_linux.go#L168) — `SetResources` stopped/identity checks and narrow configuration update.
+14. <a id="source-14"></a> [internal/firecracker/driver_linux.go](../../internal/firecracker/driver_linux.go#L175) — `SetResources` stopped/identity checks and narrow configuration update.
 15. <a id="source-15"></a> [internal/lima/resources.go](../../internal/lima/resources.go#L21) — `SetInstanceResources`, stopped/process checks and resolved-YAML resource updates.
 16. <a id="source-16"></a> [cmd/yoloctl/space_resources_test.go](../../cmd/yoloctl/space_resources_test.go#L73) — preservation, refusal, pending apply and editor/host-only regressions.
 17. <a id="source-17"></a> [Firecracker regressions](../../internal/firecracker/resources_linux_test.go#L57) — narrow writes, stopped-state proof and temporary configurations.

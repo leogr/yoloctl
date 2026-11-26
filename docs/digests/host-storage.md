@@ -71,13 +71,13 @@ not establish that host exhaustion can never race the monitor.
 
 1. <a id="source-1"></a> [Host storage guard](../../internal/firecracker/host_storage_linux.go#L23) — thresholds, pinned measurement, state machine, bounded read-only status.
 2. <a id="source-2"></a> [Account disk creation](../../internal/firecracker/disk_linux.go#L48) — `CreateAccountDisk`, sparse allocation.
-3. <a id="source-3"></a> [VM adapter](../../internal/firecracker/driver_linux.go#L37) — `List`, `Create`, `Start`, `Stop` and pause handling.
-4. <a id="source-4"></a> [Helper lifetime](../../internal/firecracker/helper_linux.go#L163) — `Helper`, pinned backing disks and monitor lifetime.
-5. <a id="source-5"></a> [Process identity](../../internal/firecracker/process_linux.go#L60) — `process.signal`, pidfd/start-time verification.
+3. <a id="source-3"></a> [VM adapter](../../internal/firecracker/driver_linux.go#L40) — `List`, `Create`, `Start`, `Stop` and pause handling.
+4. <a id="source-4"></a> [Helper lifetime](../../internal/firecracker/helper_linux.go#L187) — `Helper`, pinned backing disks and monitor lifetime.
+5. <a id="source-5"></a> [Process identity](../../internal/firecracker/process_linux.go#L86) — `process.signal`, pidfd/start-time verification.
 6. <a id="source-6"></a> [Host controller lifecycle](../../cmd/yoloctl/controller_deploy.go#L83) — controller admission/start/stop guards.
 7. <a id="source-7"></a> [Space views](../../cmd/yoloctl/space.go#L1255) — human/JSON pause reason.
 8. <a id="source-8"></a> [Guard tests](../../internal/firecracker/host_storage_linux_test.go#L26) — capacity, state transitions, socket and real child process.
 9. <a id="source-9"></a> [Unavailable declarations view](../../cmd/yoloctl/space_storage_test.go#L11) — pause diagnostics without native data.
 10. <a id="source-10"></a> [Storage runtime smoke](../../scripts/smoke/storage-gc.sh#L18) — isolated helper-status check and existing GC/data checks.
 11. <a id="source-11"></a> [Status socket](../../internal/firecracker/host_storage_linux.go#L181) — `serve`, `readHostStorage`.
-12. <a id="source-12"></a> [Boot failure settlement](../../internal/firecracker/process_linux.go#L173) — `settleBootFailure`.
+12. <a id="source-12"></a> [Boot failure settlement](../../internal/firecracker/process_linux.go#L201) — `settleBootFailure`.

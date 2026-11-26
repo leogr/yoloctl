@@ -79,8 +79,8 @@ classification, durable evidence or existing admission/cancellation rules.
 2. <a id="source-2"></a> [Controller notices](../../cmd/yoloctl/controller_operator.go#L75) — `restoreOperatorEndpoints`, `serveOperatorEndpoints`; `controller_storage.go` `scheduleStorageGC`; `controller_codex_observe.go` `scheduleCodexObserve`; `internal/session/holder.go` agent launch summary.
 3. <a id="source-3"></a> [Append protocol](../../internal/rotatelog/append.go#L35) — `Append`, `appendLocked`, `rotate`; `internal/lima/diagnostics.go` `hostLogAppender`, `appendHostLog`.
 4. <a id="source-4"></a> [Stream writer](../../internal/rotatelog/writer.go#L37) — `Open`, `Write`, `Err`, `BestEffort`; `pipe.go` `Pipe`.
-5. <a id="source-5"></a> [VM helper](../../internal/firecracker/helper_linux.go#L169) — `Helper`; `helper_log.go` `helperLogFinalizer`; `driver_linux.go` `Start`; `internal/rotatelog/startup.go` `OpenStartupFile`; `stdio_linux.go` `CaptureStdio`.
-6. <a id="source-6"></a> [Unit supervisor](../../internal/vmguest/units_linux.go#L176) — `managedUnit.start`, `watch`, `cleanGroup`.
+5. <a id="source-5"></a> [VM helper](../../internal/firecracker/helper_linux.go#L187) — `Helper`; `helper_log.go` `helperLogFinalizer`; `driver_linux.go` `Start`; `internal/rotatelog/startup.go` `OpenStartupFile`; `stdio_linux.go` `CaptureStdio`.
+6. <a id="source-6"></a> [Unit supervisor](../../internal/vmguest/units_linux.go#L183) — `managedUnit.start`, `watch`, `cleanGroup`.
 7. <a id="source-7"></a> [Existing preparation log](../../internal/firecracker/prepare_linux.go#L60) — `prepareLocalImage`, `assembleLocalImage` progress callback in `assemble_linux.go`; `host_storage_linux.go` `hostStorageGuard.step`, `watch`; Lima `limaDriver.LogPath` in `internal/vm/lima.go`.
 8. <a id="source-8"></a> [Raw grow settlement](../../internal/firecracker/datadisk_linux.go#L188) — `DataDiskGrowLogged`; `internal/rotatelog/read.go` `ReadTail`; `internal/vmguest/controller_linux.go` supervisor `logf`; `init_linux.go` ready/grow output.
 

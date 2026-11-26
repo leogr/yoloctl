@@ -3,6 +3,7 @@
 package vmguest
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -142,7 +143,10 @@ func unitGroup(name string) string { return filepath.Join("/sys/fs/cgroup/yoloct
 // Use a fresh, empty cgroup for every incarnation. Older kernels can SIGKILL
 // CLONE_INTO_CGROUP children after cgroup.kill was written even once (upstream
 // fix 8e359920216689b3b79e0fe8961a77fe312a511f). Never reuse that kill sequence.
-func prepareGroup(path string) error {
+func prepareGroup(ctx context.Context, path string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if e := os.MkdirAll(filepath.Dir(path), 0755); e != nil {
 		return e
 	}
@@ -151,11 +155,14 @@ func prepareGroup(path string) error {
 	} else if !errors.Is(e, os.ErrExist) {
 		return e
 	}
-	if e := cleanGroup(path); e != nil {
+	if e := cleanGroupContext(ctx, path); e != nil {
 		return e
 	}
 	if e := removeGroup(path); e != nil {
 		return e
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	return os.Mkdir(path, 0755)
 }
@@ -174,10 +181,21 @@ func removeGroup(path string) error {
 	return os.Remove(path)
 }
 func cleanGroup(path string) error {
+	return cleanGroupContext(context.Background(), path)
+}
+
+func cleanGroupContext(ctx context.Context, path string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if e := os.WriteFile(filepath.Join(path, "cgroup.kill"), []byte("1"), 0600); e != nil {
 		return e
 	}
-	for deadline := time.Now().Add(3 * time.Second); ; {
+	wait, cancel := context.WithTimeout(ctx, guestWaitTimeout)
+	defer cancel()
+	check := time.NewTicker(time.Millisecond)
+	defer check.Stop()
+	for {
 		raw, e := os.ReadFile(filepath.Join(path, "cgroup.events"))
 		if e != nil {
 			return e
@@ -185,15 +203,16 @@ func cleanGroup(path string) error {
 		if strings.Contains(string(raw), "populated 0") {
 			return nil
 		}
-		if time.Now().After(deadline) {
-			return errors.New("guest service cgroup did not terminate")
+		select {
+		case <-wait.Done():
+			return fmt.Errorf("guest service cgroup did not terminate: %w", wait.Err())
+		case <-check.C:
 		}
-		time.Sleep(time.Millisecond)
 	}
 }
 func (u *managedUnit) start() error {
 	group := unitGroup(u.spec.Name)
-	if e := prepareGroup(group); e != nil {
+	if e := prepareGroup(context.Background(), group); e != nil {
 		return e
 	}
 	fd, e := unix.Open(group, unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
@@ -385,7 +404,7 @@ func (m *unitRegistry) stop(name string) error {
 		}
 		select {
 		case <-u.done:
-		case <-time.After(3 * time.Second):
+		case <-time.After(guestWaitTimeout):
 			return errors.New("guest service did not stop")
 		}
 	}

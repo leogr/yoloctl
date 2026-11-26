@@ -66,9 +66,9 @@ transport require no installed host build or SSH tools. Other platforms default 
 preserving its Linux/macOS/Rosetta selection. Existing empty backend records
 continue to select Lima. Firecracker readiness uses current-boot log activity
 with a two-minute inactivity window and caller cancellation; activity alone is
-never readiness, and storage pauses retain the runtime. Guest containerd and
-lazy-builder readiness each use a scoped two-minute budget; ordinary
-diagnostic and cleanup limits remain separate. [1](#source-1) [3](#source-3) [6](#source-6)
+never readiness, and storage pauses retain the runtime. Guest containerd,
+lazy-builder readiness and each SSHFS grant have their own two-minute waits.
+The host inactivity watch continues across serial mounts. [1](#source-1) [3](#source-3) [6](#source-6)
 [18](#source-18) [19](#source-19)
 
 [FACT] New/recreated Lima VMs use pinned Ubuntu Minimal 24.04 images and

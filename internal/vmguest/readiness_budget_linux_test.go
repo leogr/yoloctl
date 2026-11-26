@@ -42,24 +42,28 @@ func TestBuildkitControlReplyBudget(t *testing.T) {
 						return "ready", nil
 					})
 				}()
+				time.Sleep(31 * time.Second)
 				if err := json.NewEncoder(client).Encode(vmwire.ControlRequest{Action: action}); err != nil {
 					t.Fatal(err)
 				}
+				// Work finishes, then a live peer starts listening after the
+				// old 30-second reply allowance has passed.
+				delay := 31 * time.Second
+				if mode == "work-timeout" {
+					delay = vmapi.BuilderReadyTimeout
+				}
+				time.Sleep(delay + 31*time.Second)
 				var reply vmwire.ControlReply
 				err := json.NewDecoder(client).Decode(&reply)
 				<-done
 				switch mode {
-				case "slow-success":
+				case "slow-success", "ordinary":
 					if err != nil || reply.State != "ready" {
 						t.Fatalf("late success lost: %+v %v", reply, err)
 					}
 				case "work-timeout":
 					if err != nil || !strings.Contains(reply.Error, context.DeadlineExceeded.Error()) {
 						t.Fatalf("full-budget result lost: %+v %v", reply, err)
-					}
-				case "ordinary":
-					if err == nil {
-						t.Fatal("ordinary action deadline extended")
 					}
 				}
 				if calls != 1 {
@@ -70,7 +74,7 @@ func TestBuildkitControlReplyBudget(t *testing.T) {
 	}
 }
 
-func TestControlReadBudgetUnchanged(t *testing.T) {
+func TestControlReadBudget(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		server, client := net.Pipe()
 		defer func() { _ = client.Close() }()
@@ -88,10 +92,41 @@ func TestControlReadBudgetUnchanged(t *testing.T) {
 			t.Fatal("incomplete request accepted")
 		}
 		<-done
-		if time.Since(start) != 30*time.Second {
-			t.Fatalf("intake budget changed: %v", time.Since(start))
+		if time.Since(start) != 2*time.Minute {
+			t.Fatalf("intake budget: %v", time.Since(start))
 		}
 	})
+}
+
+func TestControlReplyReleasesSilentOrClosedPeer(t *testing.T) {
+	for _, disconnect := range []bool{false, true} {
+		synctest.Test(t, func(t *testing.T) {
+			server, client := net.Pipe()
+			defer func() { _ = client.Close() }()
+			dispatched, done := make(chan struct{}), make(chan struct{})
+			go func() {
+				defer close(done)
+				serveControl(server, func(string) (string, error) {
+					close(dispatched)
+					return "ready", nil
+				})
+			}()
+			if err := json.NewEncoder(client).Encode(vmwire.ControlRequest{Action: "ports"}); err != nil {
+				t.Fatal(err)
+			}
+			<-dispatched
+			start := time.Now()
+			want := 2 * time.Minute
+			if disconnect {
+				want = 0
+				_ = client.Close()
+			}
+			<-done
+			if got := time.Since(start); got != want {
+				t.Fatalf("closed=%t: reply wait %v, want %v", disconnect, got, want)
+			}
+		})
+	}
 }
 
 func TestContainerdReadinessBudgetAndCancellation(t *testing.T) {

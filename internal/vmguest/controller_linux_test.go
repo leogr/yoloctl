@@ -434,7 +434,7 @@ func TestControllerForcedStopAndUnjoinableChild(t *testing.T) {
 						t.Fatal(err, time.Since(before))
 					}
 				} else {
-					if err == nil || time.Since(before) != 20*time.Second {
+					if err == nil || time.Since(before) != 2*time.Minute {
 						t.Fatal(err, time.Since(before))
 					}
 					if err := f.s.start(); err == nil {
@@ -452,6 +452,24 @@ func TestControllerForcedStopAndUnjoinableChild(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestControllerStopAcknowledgesLateWorker(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		f := newControllerFixture()
+		f.start(t)
+		p := f.child(0)
+		p.ignoreTERM = true
+		f.setClean(func() error {
+			time.Sleep(15 * time.Second)
+			p.exit <- errors.New("KILL")
+			return nil
+		})
+		before := time.Now()
+		if err := f.s.stop(); err != nil || time.Since(before) != 25*time.Second {
+			t.Fatal(err, time.Since(before))
+		}
+	})
 }
 
 // Real children verify signal exit classification and owned-child Wait handling.
@@ -535,7 +553,7 @@ func TestControllerRealTERMThroughForcedCleanup(t *testing.T) {
 			if d == 10*time.Second {
 				d = 20 * time.Millisecond
 			}
-			if d == 20*time.Second {
+			if d == 2*time.Minute {
 				d = 2 * time.Second
 			}
 			return time.NewTimer(d)

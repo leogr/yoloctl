@@ -26,6 +26,15 @@ pause retains the live runtime before destructive cleanup. Noisy output can
 prolong waiting; silence can expire without proving a hung guest.
 [8](#source-8) [4](#source-4) [9](#source-9)
 
+[FACT] The private helper gives its Firecracker API socket wait and each API
+request a separate two-minute fail-safe. The socket wait also ends on child
+exit, and both waits respect the helper's signal context. Ordinary VM stop
+follows the caller and observes termination after a
+lost poweroff reply. When boot fails, settlement keeps the exact helper's
+five-second TERM grace. The post-KILL join and the subsequent forced stop
+each get two minutes. The original boot cause and the existing ownership and
+storage checks still apply. [1](#source-1) [4](#source-4) [8](#source-8) [18](#source-18)
+
 [FACT] Before the VMM exists, the helper's preparation writes its own records
 into that log: begin and end of the guest artifact hash (resolved once for the
 boot disk and the system-disk seed), a data-disk format, the seed build, verify
@@ -66,4 +75,5 @@ mounts, controller bundle and generation. [8](#source-8) [15](#source-15) [16](#
 14. <a id="source-14"></a> [Guest maintenance](../../cmd/yoloctl/controller_storage.go#L1) — `collectControllerStorage`, `trimGuestStorage`.
 15. <a id="source-15"></a> [disk safety](../../internal/firecracker/disk_linux.go#L1) — `blank`, `formatDisk`
 16. <a id="source-16"></a> [deployment](../../cmd/yoloctl/controller_deploy.go#L139) — `startControllerSpace`.
-17. <a id="source-17"></a> [Vsock acknowledgment](../../internal/firecracker/api.go#L44) — `DialGuest`.
+17. <a id="source-17"></a> [Vsock acknowledgment](../../internal/firecracker/api.go#L52) — `DialGuest`.
+18. <a id="source-18"></a> [Bootstrap API](../../internal/firecracker/api.go#L17) — `API`, `apiRequest`.

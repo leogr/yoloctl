@@ -10,6 +10,12 @@ read-only catalogs; native accounts/declarations remain on ext4. Open descriptor
 retain their original objects across host renames, as with `os.Root`.
 [1](#source-1) [2](#source-2) [3](#source-3) [13](#source-13)
 
+[FACT] Guest init waits up to two minutes for each started SSHFS mount. The
+host's separate boot inactivity watch spans all mounts. On child exit the
+guest interrupts the transport's input and drains final output before closing
+it. A stalled final drain ends after two minutes. Mount expiry kills and
+closes only that grant's incomplete SSHFS. [2](#source-2) [17](#source-17) [18](#source-18)
+
 [FACT] The server pins `pkg/sftp/v2 v2.0.0-alpha2` and two reproducible patches:
 bounded counted-field decoding from upstream PR 649, and connection/open-handle
 cleanup on every `Serve` exit, including failed negotiation. The local replacement
@@ -53,7 +59,7 @@ validation or power-loss durability proof. [6](#source-6) [7](#source-7)
 ## Sources
 
 1. <a id="source-1"></a> [Share adapter](../../internal/vmshare/share.go#L24) — `Share`, `Open`, `fileHandle.SetStat`, `SetStat`.
-2. <a id="source-2"></a> [Guest mount](../../internal/vmguest/init_linux.go#L375) — `share`.
+2. <a id="source-2"></a> [Guest mount](../../internal/vmguest/init_linux.go#L378) — `share`.
 3. <a id="source-3"></a> [Namespace operations](../../internal/vmshare/namespace.go#L12) — pinned parents, exclusive creation, synchronization.
 4. <a id="source-4"></a> [Vendor recipe](../../scripts/vendor-sftp.py#L11) — alpha pin/checksum, patches, license and regeneration.
 5. <a id="source-5"></a> [Patched server](../../third_party/sftp-v2/server.go#L386) — `Serve` dispatch/cleanup.
@@ -68,3 +74,5 @@ validation or power-loss durability proof. [6](#source-6) [7](#source-7)
 14. <a id="source-14"></a> [Count-bounds changes](https://github.com/pkg/sftp/pull/649/commits/a422f1388530aaa616ebe3de224d9f6bb6a313cb) — upstream patch source.
 15. <a id="source-15"></a> [Host verification](../../scripts/smoke/space-lifecycle.sh#L74) — guest probe plus host bytes/modes.
 16. <a id="source-16"></a> [macOS unit/race verification](../../scripts/check-vmshare-macos.sh#L1) — umask matrix and recorded toolchain/architecture; no mounted-filesystem qualification.
+17. <a id="source-17"></a> [Share transport](../../internal/vmguest/share_linux.go#L1) — `startShareTransport`, `awaitShare`.
+18. <a id="source-18"></a> [Host inactivity watch](../../internal/firecracker/boot_activity_linux.go#L41) — `bootActivity.observe`.

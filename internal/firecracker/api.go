@@ -12,16 +12,24 @@ import (
 	"time"
 )
 
+const bootAPIWait = 2 * time.Minute
+
 func API(ctx context.Context, path, method, route string, value any) error {
-	raw, e := json.Marshal(value)
-	if e != nil {
-		return e
-	}
 	t := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", path)
 	}}
 	defer t.CloseIdleConnections()
-	c := http.Client{Transport: t, Timeout: 30 * time.Second}
+	return apiRequest(ctx, t, method, route, value)
+}
+
+func apiRequest(ctx context.Context, transport http.RoundTripper, method, route string, value any) error {
+	raw, e := json.Marshal(value)
+	if e != nil {
+		return e
+	}
+	ctx, cancel := context.WithTimeout(ctx, bootAPIWait)
+	defer cancel()
+	c := http.Client{Transport: transport}
 	req, e := http.NewRequestWithContext(ctx, method, "http://firecracker"+route, bytes.NewReader(raw))
 	if e != nil {
 		return e

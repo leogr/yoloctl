@@ -30,6 +30,8 @@ import (
 
 var shutdownOnce sync.Once
 
+const guestWaitTimeout = 2 * time.Minute
+
 func Run(args []string) error {
 	if os.Geteuid() != 0 {
 		return errors.New("guest supervisor requires root")
@@ -395,37 +397,25 @@ func share(port uint32, source, dest string, writable bool) error {
 		opts += ",ro"
 	}
 	cmd := exec.Command("sshfs", "-f", "-o", opts, ":/", dest)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = conn, conn, os.Stderr
-	if e = startOwned(cmd); e != nil {
-		_ = conn.Close()
+	cmd.Stderr = os.Stderr
+	done, abort, e := startShareTransport(cmd, conn, guestWaitTimeout)
+	if e != nil {
 		return e
 	}
-	done := make(chan error, 1)
-	go func() { e := cmd.Wait(); ownedChildren.Delete(cmd.Process.Pid); _ = conn.Close(); done <- e }()
-	until := time.Now().Add(5 * time.Second)
-	for {
+	timer := time.NewTimer(guestWaitTimeout)
+	defer timer.Stop()
+	e = awaitShare(dest, func() bool {
 		var st unix.Statfs_t
-		if unix.Statfs(dest, &st) == nil && st.Type == unix.FUSE_SUPER_MAGIC {
-			go func() {
-				e := <-done
-				slog.Error("Required host share exited", "actor", logging.VM, "err", e)
-				shutdown()
-			}()
-			return nil
-		}
-		select {
-		case e := <-done:
-			return fmt.Errorf("mount host grant: %w", e)
-		default:
-		}
-		if time.Now().After(until) {
-			_ = cmd.Process.Kill()
-			raw, _ := os.ReadFile("/proc/mounts")
-			fmt.Fprintln(os.Stderr, string(raw))
-			return errors.New("host grant mount timed out: " + dest)
-		}
-		time.Sleep(time.Millisecond)
+		return unix.Statfs(dest, &st) == nil && st.Type == unix.FUSE_SUPER_MAGIC
+	}, done, timer.C, abort, func(err error) {
+		slog.Error("Required host share exited", "actor", logging.VM, "err", err)
+		shutdown()
+	})
+	if errors.Is(e, errShareMountDeadline) {
+		raw, _ := os.ReadFile("/proc/mounts")
+		fmt.Fprintln(os.Stderr, string(raw))
 	}
+	return e
 }
 func sshBridge() error {
 	ln, e := listenSSH(vmwire.SSHPort)
@@ -609,20 +599,17 @@ func waitForContainerd(ctx context.Context, probe func(context.Context) error) e
 	}
 }
 
-// serveControl changes only BuildKit's work/reply timing. Requests retain the
-// ordinary 30s intake deadline; other service/unit actions keep that deadline.
+// Intake and reply are separate waits. Dispatched work owns its own policy.
 func serveControl(c net.Conn, dispatch func(string) (string, error)) {
 	defer func() { _ = c.Close() }()
-	_ = c.SetDeadline(time.Now().Add(30 * time.Second))
+	_ = c.SetReadDeadline(time.Now().Add(guestWaitTimeout))
 	var req vmwire.ControlRequest
 	dec := json.NewDecoder(io.LimitReader(c, 1<<20))
 	dec.DisallowUnknownFields()
 	if dec.Decode(&req) != nil {
 		return
 	}
-	if req.Action == "buildkit" {
-		_ = c.SetDeadline(time.Now().Add(vmapi.BuilderReadyTimeout))
-	}
+	_ = c.SetReadDeadline(time.Time{})
 	var state string
 	var err error
 	if req.Action == "unit" && req.Unit != nil {
@@ -634,11 +621,7 @@ func serveControl(c net.Conn, dispatch func(string) (string, error)) {
 	if err != nil {
 		result.Error = err.Error()
 	}
-	// Work that reaches its complete budget must still return its outcome.
-	// This grants at most the existing 30s result-I/O grace, never more work.
-	if req.Action == "buildkit" {
-		_ = c.SetWriteDeadline(time.Now().Add(30 * time.Second))
-	}
+	_ = c.SetWriteDeadline(time.Now().Add(guestWaitTimeout))
 	_ = json.NewEncoder(c).Encode(result)
 	if req.Action == "poweroff" && err == nil {
 		go shutdown()

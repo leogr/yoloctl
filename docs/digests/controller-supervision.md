@@ -34,7 +34,8 @@ are never stored on the native data disk. [1](#source-1) [3](#source-3)
 [FACT] One run owns launch, exactly one Wait per child, cleanup, timers and
 cancellation. Stop cancels first, sends TERM when a child exists, allows ten
 seconds for exit, then kills/verifies the whole controller cgroup and joins the
-child. The total stop budget is 20 seconds. An unjoined run cannot be replaced;
+child. The stop acknowledgment wait has a two-minute fail-safe. An unjoined
+run cannot be replaced;
 a concurrent start while stopping receives a retryable state error. Old callbacks
 never clean a successor's cgroup. Poweroff and every shutdown entry latch a
 terminal prohibition on start before signalling processes. [1](#source-1)
@@ -74,9 +75,9 @@ VM restart, or recovery guarantee for PID 1/VM death or unkillable workers.
 ## Sources
 
 1. <a id="source-1"></a> [Controller supervisor](../../internal/vmguest/controller_linux.go#L1) — launcher, `start`, `watch`, `wait`, `stop`, counters and states.
-2. <a id="source-2"></a> [Guest units](../../internal/vmguest/units_linux.go#L145) — `prepareGroup`, `cleanGroup`.
+2. <a id="source-2"></a> [Guest units](../../internal/vmguest/units_linux.go#L146) — `prepareGroup`, `cleanGroup`.
 3. <a id="source-3"></a> [Supervisor tests](../../internal/vmguest/controller_linux_test.go#L1) — virtual-clock transitions, episode boundaries, cleanup failures, concurrent stop/start and owned real children.
-4. <a id="source-4"></a> [Guest dispatch](../../internal/vmguest/init_linux.go#L526) — `service`, `shutdown`.
+4. <a id="source-4"></a> [Guest dispatch](../../internal/vmguest/init_linux.go#L491) — `service`, `shutdown`.
 5. <a id="source-5"></a> [Deployment guard](../../cmd/yoloctl/controller_deploy.go#L122) — `drainControllerForDeployment`.
 6. <a id="source-6"></a> [Controller startup](../../cmd/yoloctl/controller_internal.go#L337) — `serveController`.
 7. <a id="source-7"></a> [Recovery proof rules](controller-recovery.md) — permitted evidence and holds.

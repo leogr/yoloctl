@@ -7,10 +7,11 @@ it does not run systemd or first-boot package installation. BuildKit starts lazi
 an image-build request; an exited daemon can restart on a later explicit
 request, while failures remain explicit. Guest
 lazy-builder readiness and boot containerd readiness each use a two-minute
-budget; the latter cancels an in-flight nerdctl probe. Only decoded buildkit
-control requests extend their reply deadline: after at most two minutes of
-work, an ordinary 30-second write grace delivers success or timeout. Request
-intake and other control actions retain their 30-second deadline. Its containerd worker uses nerdctl's `default` namespace for local base images. [1](#source-1) [2](#source-2)
+budget. Containerd readiness cancels an in-flight nerdctl probe. BuildKit
+preparation respects the remaining startup budget. Each control request gets
+two minutes to decode and a fresh two minutes to write the reply after the
+action finishes. The action keeps its own work policy. BuildKit's containerd
+worker uses nerdctl's `default` namespace for local base images. [1](#source-1) [2](#source-2)
 Its cache root is `/var/lib/buildkit/default`. The guest configures shared GC
 budgets before readiness without starting BuildKit. [2](#source-2) [3](#source-3) Guest
 protocol 4 requires a rebuilt image. [4](#source-4) The immutable root
@@ -23,7 +24,9 @@ systemd; Firecracker uses root-only fixed supervisor requests for controller,
 holder and port services. Holders have fixed names and never automatically
 restart. Controller failure-only retries, their episode limit and diagnostics,
 stop joining and VM-image rollout are recorded separately. [6](#source-6)
-Each incarnation gets a fresh cgroup, and cleanup verifies it is empty.
+Each incarnation gets a fresh cgroup, and cleanup after kill has up to two
+minutes to verify it is empty. Managed-unit stop keeps ten seconds of TERM
+grace and uses two minutes for its post-escalation acknowledgment wait.
 This avoids the upstream `CLONE_INTO_CGROUP`/`cgroup.kill` bug. [7](#source-7) [8](#source-8) [9](#source-9)
 
 [FACT] An admitted managed-unit start reserves its name through preparation

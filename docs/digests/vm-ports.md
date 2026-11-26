@@ -20,6 +20,10 @@ datagrams. The inventory SSH connection does not carry forwarded traffic.
 one two-minute budget, shortened by caller cancellation or deadline. It clears
 the setup deadline before forwarding traffic. [11](#source-11)
 
+[FACT] In the guest, request read, loopback dial and ACK write each get their
+own two-minute fail-safe. The bridge clears its setup deadlines before the
+live stream and preserves request-buffered bytes. [2](#source-2)
+
 [FACT] New peers negotiate a bounded TCP byte-stream protocol with an in-band
 end-of-write marker. The duplex bridge waits for both directions before closing,
 so either endpoint can send a reply after receiving EOF. Cancellation or transport
@@ -39,9 +43,9 @@ that pipe, while `Run` waits for the session before closing its SSH client.
 ## Sources
 
 1. <a id="source-1"></a> [Host forwarding](../../internal/firecracker/ports_linux.go#L56) — `portInventory.query`, `forwardPorts`, `exposePort`.
-2. <a id="source-2"></a> [Guest discovery and bridge](../../internal/vmguest/ports_linux.go#L22) — `portInventory`, `forwardBridge`, `copyDatagrams`.
+2. <a id="source-2"></a> [Guest discovery and bridge](../../internal/vmguest/ports_linux.go#L23) — `portInventory`, `forwardBridge`, `serveForward`, `copyDatagrams`.
 3. <a id="source-3"></a> [Guest vsock endpoints](../../internal/vmguest/transport_linux.go#L13) — `hostPeer`, `listenForward`.
-4. <a id="source-4"></a> [Host vsock carrier](../../internal/firecracker/api.go#L44) — `DialGuest`, `bufferedConn.CloseWrite`.
+4. <a id="source-4"></a> [Host vsock carrier](../../internal/firecracker/api.go#L52) — `DialGuest`, `bufferedConn.CloseWrite`.
 5. <a id="source-5"></a> [Firecracker 1.17.0 connection state](https://github.com/firecracker-microvm/firecracker/blob/v1.17.0/src/vmm/src/devices/virtio/vsock/csm/connection.rs#L207-L221) — `recv_pkt` maps host EOF to both shutdown flags.
 6. <a id="source-6"></a> [Firecracker version pin](../../assets/vm/firecracker/pins.json#L2).
 7. <a id="source-7"></a> [SSH session transport](../../internal/sshtransport/client.go#L18) — `Run` closes the session stdin pipe independently of the client connection.

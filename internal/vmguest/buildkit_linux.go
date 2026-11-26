@@ -81,7 +81,7 @@ func ensureBuilder() error {
 	defer cancel()
 	return builder.ensure(ctx, func() (*exec.Cmd, error) {
 		group := resources.CgroupPath(false) + "/builder"
-		if err := prepareGroup(group); err != nil {
+		if err := prepareGroup(ctx, group); err != nil {
 			return nil, err
 		}
 		fd, err := unix.Open(group, unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
@@ -93,6 +93,9 @@ func ensureBuilder() error {
 		cmd := exec.Command("/usr/local/bin/buildkitd", "--config=/etc/buildkit/buildkitd.toml", "--root=/var/lib/buildkit/default", "--oci-worker=false", "--containerd-worker=true", "--containerd-worker-namespace=default")
 		cmd.SysProcAttr = &syscall.SysProcAttr{UseCgroupFD: true, CgroupFD: fd}
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if err := startOwned(cmd); err != nil {
 			return nil, err
 		}

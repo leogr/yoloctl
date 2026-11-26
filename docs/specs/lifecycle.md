@@ -227,7 +227,8 @@ running helpers need a normal VM restart to acquire it. [9](#source-9)
 worker cleanup, with five delayed attempts per failure episode. Uptime of at
 least 60 seconds resets the budget; repeated slow crashes can therefore continue.
 Clean exit, intentional stop and poweroff suppress restart; stop joins the old
-run. Cleanup failure blocks replacement. `active` describes a process, while
+run with a two-minute acknowledgment window. Cleanup failure blocks
+replacement. `active` describes a process, while
 backoff/cleanup is `activating`; neither proves readiness. Existing spaces need
 `space recreate NAME --update-vm-image`, preserving native data and losing
 sessions/ephemeral workdirs. Controller-only updates cannot replace PID 1.

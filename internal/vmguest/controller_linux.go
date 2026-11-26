@@ -3,6 +3,7 @@
 package vmguest
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -36,7 +37,7 @@ func (p controllerChild) terminate() error { return p.cmd.Process.Signal(syscall
 // Only this fixed launcher enters the controller cgroup. Each successful spawn
 // has exactly one Wait, registered against PID 1's orphan reaper by startOwned.
 func launchController() (controllerProcess, error) {
-	if err := prepareGroup(controllerGroup); err != nil {
+	if err := prepareGroup(context.Background(), controllerGroup); err != nil {
 		return nil, err
 	}
 	fd, err := unix.Open(controllerGroup, unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
@@ -147,8 +148,6 @@ func (s *controllerSupervisor) shutdown() {
 	}
 }
 func (s *controllerSupervisor) stop() error {
-	deadline := s.hooks.timer(20 * time.Second)
-	defer deadline.Stop()
 	s.mu.Lock()
 	r := s.run
 	if r == nil {
@@ -157,6 +156,8 @@ func (s *controllerSupervisor) stop() error {
 	}
 	s.cancelLocked(r)
 	s.mu.Unlock()
+	deadline := s.hooks.timer(guestWaitTimeout)
+	defer deadline.Stop()
 	select {
 	case <-r.done:
 		s.mu.Lock()
@@ -165,7 +166,7 @@ func (s *controllerSupervisor) stop() error {
 		s.mu.Unlock()
 		return err
 	case <-deadline.C:
-		return errors.New("controller did not stop within 20 seconds")
+		return errors.New("controller did not stop within 2 minutes")
 	}
 }
 
@@ -207,7 +208,7 @@ func (s *controllerSupervisor) cleanedExit(r *controllerRun, e controllerExit) (
 
 // A TERM-ignoring child is killed through its entire cgroup after ten seconds.
 // The worker remains the sole cleanup owner, including on forced stop. The
-// outer stop's twenty-second deadline also bounds an unjoinable child.
+// outer stop's two-minute deadline also bounds the join of that worker.
 func (s *controllerSupervisor) wait(r *controllerRun, p controllerProcess) (controllerExit, error) {
 	exited := make(chan controllerExit, 1)
 	go func() { err := p.wait(); exited <- controllerExit{err: err, at: s.hooks.now()} }()

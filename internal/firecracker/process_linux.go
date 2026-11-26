@@ -21,6 +21,30 @@ type process struct {
 	PID   int    `json:"pid"`
 	Start string `json:"start"`
 }
+
+const bootSettlementWait = 2 * time.Minute
+
+// Signal only the child started by this invocation, even before publication.
+func retireBootHelper(done <-chan error, signal func(os.Signal) error, kill func() error) error {
+	_ = signal(unix.SIGTERM)
+	grace := time.NewTimer(5 * time.Second)
+	defer grace.Stop()
+	select {
+	case <-done:
+		return nil
+	case <-grace.C:
+		_ = kill()
+	}
+	timer := time.NewTimer(bootSettlementWait)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return nil
+	case <-timer.C:
+		return errors.New("VM helper termination could not be established")
+	}
+}
+
 type runtimeState struct {
 	Helper process `json:"helper"`
 	VM     process `json:"vm"`
@@ -214,7 +238,7 @@ func settleBootFailure(ctx context.Context, dir string, owner process, published
 	if err := checkHostStoragePause(storage, s); err != nil {
 		return err
 	}
-	cleanup, cancel := context.WithTimeout(ctx, 5*time.Second)
+	cleanup, cancel := context.WithTimeout(ctx, bootSettlementWait)
 	defer cancel()
 	return stop(cleanup)
 }

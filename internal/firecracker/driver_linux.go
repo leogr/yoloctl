@@ -21,7 +21,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type Driver struct{}
+type Driver struct {
+	poweroffGuest func(context.Context, string) ([]byte, error)
+}
 
 var _ vmapi.Driver = Driver{}
 
@@ -344,19 +346,7 @@ func (d Driver) Start(ctx context.Context, name string) error {
 			return fmt.Errorf("VM helper exited (%v); inspect %s: %s", e, filepath.Join(dir, "vm.log"), out)
 		case <-ready.Done():
 			cleanupErr := settleBootFailure(context.WithoutCancel(ctx), dir, owner, published, func() error {
-				// Only signal the child launched by this Start, even before publication.
-				_ = helper.Process.Signal(syscall.SIGTERM)
-				select {
-				case <-done:
-				case <-time.After(5 * time.Second):
-					_ = helper.Process.Kill()
-					select {
-					case <-done:
-					case <-time.After(5 * time.Second):
-						return errors.New("VM helper termination could not be established")
-					}
-				}
-				return nil
+				return retireBootHelper(done, helper.Process.Signal, helper.Process.Kill)
 			}, func(cleanup context.Context) error { return d.Stop(cleanup, name, true) })
 			return errors.Join(context.Cause(ready), cleanupErr)
 
@@ -365,8 +355,6 @@ func (d Driver) Start(ctx context.Context, name string) error {
 	}
 }
 func (d Driver) Stop(ctx context.Context, name string, force bool) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
 	dir, e := d.InstanceDir(name)
 	if e != nil {
 		return e
@@ -381,11 +369,17 @@ func (d Driver) Stop(ctx context.Context, name string, force bool) error {
 	if e = checkHostStoragePause(ctx, s); e != nil {
 		return e
 	}
+	if e = ctx.Err(); e != nil {
+		return e
+	}
 	var shutdownErr error
 	if force {
 		if live, e := s.VM.alive(); e != nil {
 			return e
 		} else if live {
+			if e = ctx.Err(); e != nil {
+				return e
+			}
 			if e = s.VM.signal(unix.SIGKILL); e != nil {
 				return e
 			}
@@ -393,6 +387,9 @@ func (d Driver) Stop(ctx context.Context, name string, force bool) error {
 		if live, e := s.Helper.alive(); e != nil {
 			return e
 		} else if live {
+			if e = ctx.Err(); e != nil {
+				return e
+			}
 			if e = s.Helper.signal(unix.SIGTERM); e != nil {
 				return e
 			}
@@ -403,23 +400,36 @@ func (d Driver) Stop(ctx context.Context, name string, force bool) error {
 			return e
 		}
 		if live {
-			cmd := d.Shell(ctx, name, "", []string{"sudo", "/sbin/yoloctl-init", "poweroff"})
-			if b, e := cmd.CombinedOutput(); e != nil {
+			poweroff := d.poweroffGuest
+			if poweroff == nil {
+				poweroff = d.requestPoweroff
+			}
+			if b, e := poweroff(ctx, name); e != nil {
 				// Poweroff can close SSH before its successful reply arrives.
 				// Observe termination without replaying or racing a disk flush.
 				shutdownErr = fmt.Errorf("guest shutdown: %w: %s", e, b)
 			}
 		}
 	}
+	return waitForStop(ctx, func() (bool, error) { return running(dir) }, func() error {
+		return checkHostStoragePause(ctx, s)
+	}, shutdownErr)
+}
+
+func (d Driver) requestPoweroff(ctx context.Context, name string) ([]byte, error) {
+	return d.Shell(ctx, name, "", []string{"sudo", "/sbin/yoloctl-init", "poweroff"}).CombinedOutput()
+}
+
+func waitForStop(ctx context.Context, running func() (bool, error), checkStorage func() error, shutdownErr error) error {
 	for {
-		live, e := running(dir)
+		live, e := running()
 		if e != nil {
 			return e
 		}
 		if !live {
 			return nil
 		}
-		if e = checkHostStoragePause(ctx, s); e != nil {
+		if e = checkStorage(); e != nil {
 			return e
 		}
 		select {

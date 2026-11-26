@@ -4,6 +4,7 @@ package vmguest
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -105,62 +106,68 @@ func forwardBridge() error {
 				_ = c.Close()
 				continue
 			}
-			go func() {
-				defer func() { _ = c.Close() }()
-				_ = c.SetDeadline(time.Now().Add(5 * time.Second))
-				r := bufio.NewReaderSize(c, 256)
-				line, e := r.ReadSlice('\n')
-				if e != nil {
-					return
-				}
-				var p vmwire.ForwardRequest
-				if json.Unmarshal(line, &p) != nil || p.Number == 0 || (p.Protocol != "tcp" && p.Protocol != "udp") {
-					return
-				}
-				target, e := net.DialTimeout(p.Protocol, net.JoinHostPort("127.0.0.1", strconv.Itoa(int(p.Number))), 2*time.Second)
-				if e != nil {
-					_, _ = c.Write([]byte{1})
-					return
-				}
-				defer func() { _ = target.Close() }()
-				ack := byte(vmwire.ForwardOK)
-				if p.Protocol == "tcp" && p.TCPStream {
-					ack = vmwire.ForwardStreamOK
-				}
-				if _, e = c.Write([]byte{ack}); e != nil {
-					return
-				}
-				_ = c.SetDeadline(time.Time{})
-				if p.Protocol == "tcp" {
-					if p.TCPStream {
-						vmwire.BridgeTCP(target, vmwire.NewTCPStream(c, r))
-						return
-					}
-					go func() { _, _ = io.Copy(target, r); _ = target.(*net.TCPConn).CloseWrite() }()
-					_, _ = io.Copy(c, target)
-					return
-				}
-				go func() {
-					defer func() { _ = c.Close() }()
-					buf := make([]byte, 65535)
-					for {
-						_ = target.SetReadDeadline(time.Now().Add(60 * time.Second))
-						n, e := target.Read(buf[2:])
-						if e != nil {
-							return
-						}
-						binary.BigEndian.PutUint16(buf[:2], uint16(n))
-						if _, e = c.Write(buf[:n+2]); e != nil {
-							return
-						}
-					}
-				}()
-				_ = copyDatagrams(target, r)
-			}()
+			go serveForward(c, (&net.Dialer{}).DialContext)
 		}
 	}()
 	return nil
 }
+func serveForward(c net.Conn, dial func(context.Context, string, string) (net.Conn, error)) {
+	defer func() { _ = c.Close() }()
+	_ = c.SetReadDeadline(time.Now().Add(guestWaitTimeout))
+	r := bufio.NewReaderSize(c, 256)
+	line, e := r.ReadSlice('\n')
+	if e != nil {
+		return
+	}
+	var p vmwire.ForwardRequest
+	if json.Unmarshal(line, &p) != nil || p.Number == 0 || (p.Protocol != "tcp" && p.Protocol != "udp") {
+		return
+	}
+	_ = c.SetReadDeadline(time.Time{})
+	ctx, cancel := context.WithTimeout(context.Background(), guestWaitTimeout)
+	target, e := dial(ctx, p.Protocol, net.JoinHostPort("127.0.0.1", strconv.Itoa(int(p.Number))))
+	cancel()
+	_ = c.SetWriteDeadline(time.Now().Add(guestWaitTimeout))
+	if e != nil {
+		_, _ = c.Write([]byte{1})
+		return
+	}
+	defer func() { _ = target.Close() }()
+	ack := byte(vmwire.ForwardOK)
+	if p.Protocol == "tcp" && p.TCPStream {
+		ack = vmwire.ForwardStreamOK
+	}
+	if _, e = c.Write([]byte{ack}); e != nil {
+		return
+	}
+	_ = c.SetWriteDeadline(time.Time{})
+	if p.Protocol == "tcp" {
+		if p.TCPStream {
+			vmwire.BridgeTCP(target, vmwire.NewTCPStream(c, r))
+			return
+		}
+		go func() { _, _ = io.Copy(target, r); _ = target.(*net.TCPConn).CloseWrite() }()
+		_, _ = io.Copy(c, target)
+		return
+	}
+	go func() {
+		defer func() { _ = c.Close() }()
+		buf := make([]byte, 65535)
+		for {
+			_ = target.SetReadDeadline(time.Now().Add(60 * time.Second))
+			n, e := target.Read(buf[2:])
+			if e != nil {
+				return
+			}
+			binary.BigEndian.PutUint16(buf[:2], uint16(n))
+			if _, e = c.Write(buf[:n+2]); e != nil {
+				return
+			}
+		}
+	}()
+	_ = copyDatagrams(target, r)
+}
+
 func copyDatagrams(dst io.Writer, src io.Reader) error {
 	buf := make([]byte, 65535)
 	var h [2]byte

@@ -163,15 +163,40 @@ func Proxy(ctx context.Context, name string) error {
 	return e
 }
 
+func waitForAPISocket(ctx context.Context, path string, wait chan error) (exited bool, err error) {
+	ctx, cancel := context.WithTimeout(ctx, bootAPIWait)
+	defer cancel()
+	for ctx.Err() == nil {
+		if _, err := os.Stat(path); err == nil {
+			return false, nil
+		}
+		select {
+		case err := <-wait:
+			// The finalizer consumes the single Wait result.
+			wait <- err
+			return true, fmt.Errorf("firecracker exited: %w", err)
+		case <-ctx.Done():
+		case <-time.After(time.Millisecond):
+		}
+	}
+	return false, fmt.Errorf("firecracker API did not start: %w", ctx.Err())
+}
+
 // Helper owns exactly one VM, its private network and fixed host grants. It
 // has no declaration/controller API and never installs a service on the host.
-func Helper(parent context.Context, name string) (result error) {
+func Helper(parent context.Context, name string) error {
 	// Linux parent-death signals track the creating thread. Keep that thread
 	// alive until its VMM has exited, even if Go retires other runtime threads.
 	goruntime.LockOSThread()
 	defer goruntime.UnlockOSThread()
 	ctx, cancel := signal.NotifyContext(parent, syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
+	return withHelperInstance(name, func(dir, dataDir string, c Config) error {
+		return runHelper(ctx, cancel, name, dir, dataDir, c)
+	})
+}
+
+func withHelperInstance(name string, run func(dir, dataDir string, c Config) error) error {
 	d := Driver{}
 	dir, e := d.InstanceDir(name)
 	if e != nil {
@@ -203,6 +228,10 @@ func Helper(parent context.Context, name string) (result error) {
 		return e
 	}
 	defer func() { _ = dataLock.Close() }()
+	return run(dir, dataDir, c)
+}
+
+func runHelper(ctx context.Context, cancel context.CancelFunc, name, dir, dataDir string, c Config) (result error) {
 	// One resolution (and hash) of the start's guest artifact serves the
 	// system-disk seed and the boot disk.
 	hash := newPrepProgress("guest binary hash")
@@ -376,23 +405,9 @@ func Helper(parent context.Context, name string) (result error) {
 		return e
 	}
 	api := filepath.Join(runtime, "api.sock")
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if _, e = os.Stat(api); e == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			return errors.New("firecracker API did not start")
-		}
-		select {
-		case e := <-wait:
-			producerRetired = true
-			wait <- e
-			return fmt.Errorf("firecracker exited: %w", e)
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Millisecond):
-		}
+	producerRetired, e = waitForAPISocket(ctx, api, wait)
+	if e != nil {
+		return e
 	}
 	mem, e := Bytes(c.Spec.Memory)
 	if e != nil {
