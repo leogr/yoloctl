@@ -30,7 +30,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/pelletier/go-toml/v2 v2.4.3
-	github.com/pkg/sftp v1.13.11
+	github.com/pkg/sftp v1.13.13
 	github.com/pkg/sftp/v2 v2.0.0-alpha2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
