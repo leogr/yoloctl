@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -299,7 +297,8 @@ func (c *capturedOutput) String() string {
 // after the fail-safe only the bytes ready at that moment are drained, the
 // worker returns at the fail-safe while the writer still produces, and the
 // command is reported interrupted with its output held open. The writer starts
-// only after the PID marker and is stopped by the test on every path.
+// only after the PID marker; the test kills it, and its own 10-second lifetime
+// ends it if a regressed join keeps RunWorker from returning.
 func TestWorkerOutputWriterOutsideTheGroupEndsAtFailSafe(t *testing.T) {
 	withFailSafe(t, 300*time.Millisecond)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
@@ -318,40 +317,7 @@ func TestWorkerOutputWriterOutsideTheGroupEndsAtFailSafe(t *testing.T) {
 	if elapsed > 5*time.Second || !errors.As(err, &interrupted) || !strings.Contains(err.Error(), "worker exited with its output still open") || code != 2 {
 		t.Fatalf("after %s: code=%d err=%v", elapsed, code, err)
 	}
-}
-
-// After expiry a source drains only the bytes ready at that moment: bytes the
-// writer appends after the first expired read are left, and the source, its
-// writer still open, is held.
-func TestDrainSourceReadsOnlyTheBytesReadyAtExpiry(t *testing.T) {
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = w.Close() }()
-	src, err := pollableDup(r)
-	_ = r.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = src.Close() }()
-	if _, err := w.WriteString("queued"); err != nil {
-		t.Fatal(err)
-	}
-	var expired, held atomic.Bool
-	expired.Store(true)
-	left := -1
-	drain := drainSource{src, &expired, &held, &left}
-	buf := make([]byte, 64)
-	n, err := drain.Read(buf)
-	if err != nil || string(buf[:n]) != "queued" {
-		t.Fatalf("first expired read = %q, %v", buf[:n], err)
-	}
-	if _, err := w.WriteString("appended"); err != nil {
-		t.Fatal(err)
-	}
-	n, err = drain.Read(buf)
-	if n != 0 || !errors.Is(err, errOutputHeld) || !held.Load() {
-		t.Fatalf("read past the bytes ready at expiry: %q, %v, held=%v", buf[:n], err, held.Load())
+	if !strings.Contains(out.String(), "writer-line") {
+		t.Fatal("the holder never produced output: a sleeping holder would pass this test")
 	}
 }

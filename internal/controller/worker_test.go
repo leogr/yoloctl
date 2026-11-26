@@ -404,9 +404,10 @@ func TestMain(m *testing.M) {
 			child := exec.Command("/bin/sleep", holdFor)
 			var gate *os.File
 			if work.Request.Method == "test.escape-writer" {
-				// A holder that keeps producing output for as long as it lives,
+				// A holder that keeps producing output,
 				// starting only once the worker printed its PID marker.
-				child = exec.Command("/bin/sh", "-c", "read gate; while :; do echo writer-line; done")
+				// Its own 10-second lifetime ends it even if the join under test hangs.
+				child = exec.Command("/bin/sh", "-c", `read gate; end=$(($(date +%s)+10)); while [ "$(date +%s)" -lt "$end" ]; do echo writer-line; done`)
 				var err error
 				if child.Stdin, gate, err = os.Pipe(); err != nil {
 					finishExit(92)

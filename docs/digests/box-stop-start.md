@@ -88,7 +88,7 @@ refuses the stop (`persistExecution`, `deferExecution` in live_receipts.go). [14
 7. <a id="source-7"></a> [internal/agentbox/openshell_stop_endpoint_linux_test.go](../../internal/agentbox/openshell_stop_endpoint_linux_test.go#L52) — endpoint kept unless every check holds.
 8. <a id="source-8"></a> [cmd/yoloctl/agentbox_start_test.go](../../cmd/yoloctl/agentbox_start_test.go#L24) — `TestBoxStartAndRestartPreserveExistingContainer`: start rollback, restart unchanged.
 9. <a id="source-9"></a> [internal/controller/receipts.go](../../internal/controller/receipts.go#L76-L180) — `interrupt`, `terminal`.
-10. <a id="source-10"></a> [internal/controller/server.go](../../internal/controller/server.go#L1119) — finalization exit state; interruption text in observation.go; `explainOutcome` in holds.go.
+10. <a id="source-10"></a> [internal/controller/server.go](../../internal/controller/server.go#L955-L962) — finalization exit state; interruption text in observation.go; `explainOutcome` in holds.go.
 11. <a id="source-11"></a> [internal/controller/interrupted_test.go](../../internal/controller/interrupted_test.go#L20) — classification, holds and reservations.
 12. <a id="source-12"></a> [internal/agentbox/openshell_stop_result_test.go](../../internal/agentbox/openshell_stop_result_test.go#L65) — replacement never targeted; `openshell_stop_result_linux_test.go` storage failure and transaction accounting.
 13. <a id="source-13"></a> [internal/container/engine_calls.go](../../internal/container/engine_calls.go#L1-L71) — `EngineCalls`, marked in `Client.Start`, `createOrRun`, `Stop`, `StopContainerID`.
