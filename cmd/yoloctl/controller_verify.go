@@ -47,8 +47,13 @@ func runControllerVerifier(ctx context.Context) error {
 		return err
 	}
 	defer unlock()
-	// Lock waits consume the verifier budget. Recheck the live disk/bind
-	// after that wait, rather than relying only on process-entry evidence.
+	// The controller's fail-safe for this observation starts now that the
+	// lock is held; the lock wait itself followed only the recovery pass.
+	if err := controller.MarkVerifierObservation(output); err != nil {
+		return err
+	}
+	// Recheck the live disk/bind after the lock wait, rather than relying only
+	// on process-entry evidence.
 	if err := controller.VerifyRuntimeStorage(ctx); err != nil {
 		return err
 	}

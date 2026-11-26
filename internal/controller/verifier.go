@@ -5,14 +5,32 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/leogr/yoloctl/internal/spaceenv"
 )
+
+// verifierLockMarker is the first byte a verifier writes on its result
+// descriptor, once it holds the space lock and its observation starts.
+const verifierLockMarker byte = 0x06
+
+// errObservationNotStarted: the caller's context ended while the verifier was
+// still waiting for the space lock, so nothing was observed and nothing is
+// recorded; a verifier that ends by itself before the lock is an ordinary error.
+var errObservationNotStarted = errors.New("observation not started: the recovery pass ended while the verifier waited for the space lock")
+
+// MarkVerifierObservation is written by the verifier right after it acquires
+// the space lock: the controller's fail-safe for one observation starts there.
+func MarkVerifierObservation(out io.Writer) error {
+	_, err := out.Write([]byte{verifierLockMarker})
+	return err
+}
 
 // DocumentRef names one document a verifier reads back.
 type DocumentRef struct {
@@ -66,7 +84,8 @@ func verifierInput(space string, r Receipt) VerifierInput {
 // It returns the observed documents in proof order. The worker receives its
 // descriptor and returns its observations over private descriptors; it is
 // not a registered operation and has no public RPC. Its process group is
-// killed when ctx ends.
+// killed when ctx ends or, once it holds the space lock, when the 2-minute
+// observation fail-safe expires.
 func RunVerifier(ctx context.Context, space string, r Receipt) ([]DocumentIntent, error) {
 	raw, err := runVerifier(ctx, space, verifierInput(space, r))
 	if err != nil {
@@ -115,7 +134,12 @@ func runVerifier(ctx context.Context, space string, in VerifierInput) ([]byte, e
 		return nil, err
 	}
 	defer func() { _ = outRead.Close(); _ = outWrite.Close() }()
-	cmd := exec.CommandContext(ctx, executable, "controller-internal", "verify")
+	// The lock wait follows ctx alone. The fail-safe for this one observation
+	// starts at the verifier's marker, once it holds the space lock: a long
+	// operation that owns the lock says nothing about the interrupted one.
+	child, cancelChild := context.WithCancel(ctx)
+	defer cancelChild()
+	cmd := exec.CommandContext(child, executable, "controller-internal", "verify")
 	cmd.Env = []string{
 		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 		"HOME=/root", "LANG=C.UTF-8", spaceenv.ContextEnv + "=" + spaceenv.ContextPath,
@@ -126,28 +150,61 @@ func runVerifier(ctx context.Context, space string, in VerifierInput) ([]byte, e
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = time.Second
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Join(errObservationNotStarted, err)
+	}
 	if err := cmd.Start(); err != nil {
+		if ctx.Err() != nil {
+			return nil, errors.Join(errObservationNotStarted, err)
+		}
 		return nil, err
 	}
 	_ = inRead.Close()
 	_ = outWrite.Close()
 	encodeErr := json.NewEncoder(inWrite).Encode(in)
 	_ = inWrite.Close()
-	raw, readErr := io.ReadAll(io.LimitReader(outRead, MaxFrame+1))
+	var mark [1]byte
+	n, _ := io.ReadFull(outRead, mark[:])
+	started := n == 1 && mark[0] == verifierLockMarker
+	var expired atomic.Bool
+	var raw []byte
+	var readErr error
+	if started {
+		failSafe := time.AfterFunc(recoveryObservationFailSafe, func() { expired.Store(true); cancelChild() })
+		raw, readErr = io.ReadAll(io.LimitReader(outRead, MaxFrame+1))
+		failSafe.Stop()
+	}
 	waitErr := cmd.Wait()
 	// A verifier's own children never outlive its check.
 	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	switch {
 	case encodeErr != nil:
 		return nil, encodeErr
+	case !started && ctx.Err() != nil && killedBySignal(waitErr):
+		// Cancelled while it waited for the lock: nothing was observed.
+		return nil, errors.Join(errObservationNotStarted, ctx.Err())
+	case expired.Load():
+		return nil, fmt.Errorf("observation did not finish within its %s fail-safe", recoveryObservationFailSafe)
 	case readErr != nil:
 		return nil, readErr
 	case waitErr != nil:
 		return nil, errors.Join(waitErr, errors.New(diagnostics.String()))
+	case !started:
+		return nil, errors.New("verifier output lacks its observation marker")
 	case len(raw) > MaxFrame:
 		return nil, errors.New("verifier output exceeds its limit")
 	}
 	return raw, nil
+}
+
+// killedBySignal reports a verifier ended by a signal, as its cancellation does.
+func killedBySignal(err error) bool {
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) {
+		return false
+	}
+	status, ok := exit.Sys().(syscall.WaitStatus)
+	return ok && status.Signaled()
 }
 
 // limitedWriter keeps a bounded prefix of diagnostics.

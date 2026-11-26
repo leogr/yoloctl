@@ -34,6 +34,19 @@ func TestMain(m *testing.M) {
 			os.Exit(91)
 		}
 		out := os.NewFile(4, "verifier-result")
+		// The stand-in "acquires the space lock" here, as the real verifier
+		// does before its marker; the lock* cases model the wait and its end.
+		switch testVerifierCase(in) {
+		case "lockwait":
+			time.Sleep(400 * time.Millisecond)
+		case "lockhang":
+			time.Sleep(time.Minute)
+		case "lockfail":
+			os.Exit(93)
+		}
+		if err := MarkVerifierObservation(out); err != nil {
+			os.Exit(94)
+		}
 		if len(in.Boxes) != 0 {
 			if err := in.Validate(in.Space); err != nil {
 				os.Exit(92)
@@ -46,7 +59,7 @@ func TestMain(m *testing.M) {
 			os.Exit(0)
 		}
 		switch in.Documents[0].Name {
-		case "hang":
+		case "hang", "observehang":
 			time.Sleep(time.Minute)
 		case "garbage":
 			_, _ = out.Write([]byte("[{\"unknown\":1}]"))
@@ -448,4 +461,16 @@ func killTestWorker(finishExit func(int), send func() error) {
 	for {
 		time.Sleep(time.Hour)
 	}
+}
+
+// testVerifierCase picks the stand-in verifier's behaviour: the first
+// document's name, or for a container observation its first box name.
+func testVerifierCase(in VerifierInput) string {
+	if len(in.Documents) != 0 {
+		return in.Documents[0].Name
+	}
+	if len(in.Boxes) != 0 {
+		return in.Boxes[0]
+	}
+	return ""
 }

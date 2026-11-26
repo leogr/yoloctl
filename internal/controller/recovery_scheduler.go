@@ -12,12 +12,14 @@ import (
 	"github.com/leogr/yoloctl/internal/safepath"
 )
 
-// Recovery budgets (PLAN-r1 D4): one checker, a bounded check per receipt,
-// a bounded pass including lock waits, and a capped retry backoff.
+// Recovery has one checker and a capped retry backoff. A pass follows the
+// controller's lifetime and Drain's cancel. Nothing else can end one of its
+// waits, so each gets a 2-minute fail-safe: a storage verify, and a
+// verifier's observation from the moment it holds the space lock (its lock
+// wait follows the pass alone).
 var (
-	recoveryReceiptBudget = 5 * time.Second
-	recoveryPassBudget    = 30 * time.Second
-	recoveryBackoff       = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 15 * time.Second, 30 * time.Second}
+	recoveryObservationFailSafe = 2 * time.Minute
+	recoveryBackoff             = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 15 * time.Second, 30 * time.Second}
 )
 
 // ledgerEntry is the in-memory account of a receipt whose durable state is
@@ -157,7 +159,7 @@ func (s *Server) recoveryPass(parent context.Context) bool {
 		s.mu.Unlock()
 		return false
 	}
-	ctx, cancel := context.WithTimeout(parent, recoveryPassBudget)
+	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	s.recoveryCancel = cancel
 	s.recoveryIdle = make(chan struct{})
@@ -211,7 +213,7 @@ func (s *Server) repairStorage(ctx context.Context) error {
 		return errors.New("native storage identity has not been verified")
 	}
 	if verify != nil {
-		checkCtx, cancel := context.WithTimeout(ctx, recoveryReceiptBudget)
+		checkCtx, cancel := context.WithTimeout(ctx, recoveryObservationFailSafe)
 		err := verify(checkCtx)
 		cancel()
 		if err != nil {
@@ -407,9 +409,13 @@ func (s *Server) verifyOutcomes(ctx context.Context) bool {
 		if ctx.Err() != nil {
 			return true
 		}
-		checkCtx, cancel := context.WithTimeout(ctx, recoveryReceiptBudget)
-		next, observed := s.checkInterrupted(checkCtx, r)
-		cancel()
+		next, observed, notStarted := s.checkInterrupted(ctx, r)
+		if notStarted {
+			// The pass ended while the verifier waited for the space lock:
+			// nothing was observed, so nothing is recorded and the receipt
+			// stays eligible for a later pass.
+			return true
+		}
 		p := pendingClosingCheck{checked: r, next: next, observed: observed}
 		s.mu.Lock()
 		s.pendingChecks[receiptCheckKey(r)] = p

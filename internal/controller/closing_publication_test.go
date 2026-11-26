@@ -86,7 +86,7 @@ func TestClosingObservationPreservesNewerLegacyFact(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, _ = s.Receipts.Read(r.ID)
-	next, observed := s.checkInterrupted(t.Context(), r)
+	next, observed, _ := s.checkInterrupted(t.Context(), r)
 	current := r
 	phase := *r.Image
 	phase.LegacyBoot = strings.Repeat("b", 64)
@@ -134,7 +134,7 @@ func TestClosingObservationWriteFailureDoesNotRestoreOlderImageFact(t *testing.T
 		t.Fatal(err)
 	}
 	r, _ = s.Receipts.Read(r.ID)
-	next, observed := s.checkInterrupted(t.Context(), r)
+	next, observed, _ := s.checkInterrupted(t.Context(), r)
 	p := pendingClosingCheck{checked: r, next: next, observed: observed}
 	s.pendingChecks = map[string]pendingClosingCheck{receiptCheckKey(r): p}
 	oldWrite := writeReceipt

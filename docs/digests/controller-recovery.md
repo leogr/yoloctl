@@ -53,8 +53,13 @@ chat-revoke document proofs. Only exact fingerprints and an unchanged receipt
 publish `recovered`/`applied`. A mismatch, unavailable verifier or timeout leaves
 the record interrupted, remembers that check and is not polled again once its check is durably recorded,
 including after controller restart. The check describes observed state, never completes or
-replays the original command. Each receipt check is bounded to5s, a pass to30s;
-drain cancels and waits. Storage repair retains its existing backoff.
+replays the original command. A verifier's observation has a two-minute fail-safe
+from the moment it holds the exclusive space lock; its lock wait follows the pass,
+which has no budget of its own and ends with the controller or when drain cancels
+and waits. A pass cancelled while the verifier still waits for the lock records
+nothing, so the record stays eligible; a verifier that ends by itself before the
+lock is recorded once. A storage identity check has the same fail-safe. Storage
+repair retains its existing backoff.
 [11](#source-11) [12](#source-12) [18](#source-18)
 
 [FACT] Ordinary records use the live controller admission, not durable bytes, as

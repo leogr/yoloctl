@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -71,10 +72,13 @@ func observationBoxes(r Receipt, disk string) ([]string, string) {
 	return names, ""
 }
 
-// checkInterrupted uses one overall deadline for container observation and the
-// existing document proof. Failure is a recorded observation, not a hold/retry.
-func (s *Server) checkInterrupted(ctx context.Context, r Receipt) (Receipt, []DocumentIntent) {
-	next := r
+// checkInterrupted observes containers and reads the existing document proof
+// under the pass context; each verifier has its own fail-safe once it holds the
+// space lock. Failure is a recorded observation, not a hold/retry. notStarted
+// reports that the pass ended before any observation started (every verifier
+// called was still waiting for the lock): nothing is recorded then.
+func (s *Server) checkInterrupted(ctx context.Context, r Receipt) (next Receipt, observedDocs []DocumentIntent, notStarted bool) {
+	next = r
 	o := &Observation{At: time.Now().UTC()}
 	next.Observation = o
 	names, reason := observationBoxes(r, s.DiskID)
@@ -84,6 +88,9 @@ func (s *Server) checkInterrupted(ctx context.Context, r Receipt) (Receipt, []Do
 			o.Reason = "container observer unavailable"
 		} else {
 			boxes, err := s.Observe(ctx, r)
+			if errors.Is(err, errObservationNotStarted) {
+				return r, nil, true
+			}
 			if err != nil {
 				o.Reason = err.Error()
 				for _, name := range names {
@@ -111,32 +118,36 @@ func (s *Server) checkInterrupted(ctx context.Context, r Receipt) (Receipt, []Do
 		if len(names) == 0 && o.Reason == "" {
 			o.Reason = "no box named in recorded scope"
 		}
-		return next, nil
+		return next, nil, false
 	}
 	if reason != "" {
 		o.Proof = "not observed (" + reason + ")"
-		return next, nil
+		return next, nil, false
 	}
 	if s.Verify == nil || s.RecoveryKey == nil {
 		o.Proof = "not observed (verifier unavailable)"
-		return next, nil
+		return next, nil, false
 	}
 	observed, err := s.Verify(ctx, r)
+	if errors.Is(err, errObservationNotStarted) && len(o.Boxes) == 0 {
+		// No container observation preceded it: nothing started.
+		return r, nil, true
+	}
 	if err != nil {
 		o.Proof = "not observed (" + strings.TrimSpace(err.Error()) + ")"
-		return next, nil
+		return next, nil, false
 	}
 	o.Proof = "mismatch"
 	if len(observed) != len(r.Proofs) {
-		return next, nil
+		return next, nil, false
 	}
 	for i, p := range r.Proofs {
 		if !s.RecoveryKey.matchesVersion(r.ProofVersion, r.DiskID, r.ID, r.Verifier, p, observed[i]) {
-			return next, nil
+			return next, nil, false
 		}
 	}
 	o.Proof = "matched"
-	return next, observed
+	return next, observed, false
 }
 
 // Inspection stderr is plain text, not a terminal-control channel.
