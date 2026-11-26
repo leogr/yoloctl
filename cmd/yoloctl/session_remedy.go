@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -28,8 +29,21 @@ const (
 	remedyRecreate
 )
 
-// staleSessionInspectTimeout bounds one request's whole drift resolution.
+// staleSessionInspectTimeout bounds only refuseRecreateBeforeImageWork, an
+// optional early refusal whose unreadable evidence decides nothing: the later
+// authoritative check still runs, so giving up there fails no command.
 var staleSessionInspectTimeout = 30 * time.Second
+
+// driftViewBudget is the box.drift view's one partial-data minute. Rows
+// resolved by then keep their result; every other box reports its evidence as
+// unavailable. The caller's own cancellation still ends the view.
+var driftViewBudget = time.Minute
+
+// ownedSetupGuardFailSafe bounds the fresh-session image guard only in
+// controller-owned attach setup: that setup can outlive its viewer while it
+// holds the native space lock and, for a tracked box, the box lock, so nothing
+// else could end a silent resolution there.
+var ownedSetupGuardFailSafe = 2 * time.Minute
 
 // sessionRemedyOf classifies one full drift resolution. The reason names
 // the recreation drift, or why neither remedy could be proved.
@@ -51,11 +65,9 @@ func sessionRemedyOf(b boxstate.Box) (sessionRemedy, string) {
 }
 
 // resolveStaleSessionsFn is the full, read-only drift resolution of only the
-// named boxes: one inventory of the space and one bound for the whole batch,
-// with one result per distinct name in order.
+// named boxes: one inventory of the space under the caller's context, with one
+// result per distinct name in order.
 var resolveStaleSessionsFn = func(ctx context.Context, space string, names []string) ([]boxstate.Box, error) {
-	ctx, cancel := context.WithTimeout(ctx, staleSessionInspectTimeout)
-	defer cancel()
 	return newBoxStateResolver().ResolveNamed(ctx, space, names, boxstate.FullDiff)
 }
 
@@ -139,12 +151,11 @@ func collectBoxDrift(ctx context.Context, space string, names []string) ([]boxDr
 	return collectBoxDriftView(ctx, space, names, false)
 }
 
-func collectBoxDriftView(ctx context.Context, space string, names []string, upgrade bool) ([]boxDriftView, error) {
-	if upgrade {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, staleSessionInspectTimeout)
-		defer cancel()
-	}
+// collectBoxDriftView reads both box.drift views (the post-update restart offer
+// and, with upgrade, space upgrade) within one partial-data minute: a box not
+// resolved by then reports its evidence as unavailable, the others keep their
+// rows. The caller's cancellation ends the view with its error.
+func collectBoxDriftView(parent context.Context, space string, names []string, upgrade bool) ([]boxDriftView, error) {
 	if len(names) == 0 || len(names) > maxDriftBoxes {
 		return nil, fmt.Errorf("box.drift takes 1 to %d boxes", maxDriftBoxes)
 	}
@@ -158,6 +169,8 @@ func collectBoxDriftView(ctx context.Context, space string, names []string, upgr
 		}
 		seen[name] = true
 	}
+	ctx, cancel := context.WithTimeout(parent, driftViewBudget)
+	defer cancel()
 	boxes, err := resolveStaleSessionsFn(ctx, space, names)
 	view := make([]boxDriftView, len(names))
 	for i, name := range names {
@@ -187,10 +200,28 @@ func collectBoxDriftView(ctx context.Context, space string, names []string, upgr
 			view[i].Error = "not resolved"
 		}
 	}
-	if upgrade && ctx.Err() != nil {
-		return nil, ctx.Err()
+	if err := parent.Err(); err != nil {
+		return nil, err
+	}
+	if expired := ctx.Err(); expired != nil {
+		// The minute ended: a box whose drift was not determined by then shows
+		// its own drift error, else the expiry, as its unavailable evidence.
+		for i := range view {
+			if view[i].Error == "" && !driftDetermined(view[i].Drift) {
+				view[i].Error = cmp.Or(view[i].DriftError, expired.Error())
+			}
+		}
 	}
 	return view, nil
+}
+
+// driftDetermined reports a drift that a completed resolution established.
+func driftDetermined(d boxstate.DriftState) bool {
+	switch d {
+	case boxstate.DriftInSync, boxstate.DriftNeedsRestart, boxstate.DriftLiveOnly, boxstate.DriftNeedsRecreate, boxstate.DriftNeedsCreate:
+		return true
+	}
+	return false
 }
 
 // remedy classifies one box.drift entry.
@@ -205,8 +236,14 @@ func (v boxDriftView) remedy() (sessionRemedy, string) {
 // image is still old. Live-holder attachment never calls this guard. FullDiff
 // owns comparison/normalization; unavailable evidence is not called drift.
 func guardFreshSessionImage(ctx context.Context, space, name string) error {
-	ctx, cancel := context.WithTimeout(ctx, staleSessionInspectTimeout)
-	defer cancel()
+	// An ordinary start follows its caller. Owned attach setup gets one
+	// fail-safe: on expiry the evidence is unavailable, so the guard refuses
+	// and its callers release their locks without launching.
+	if ctx.Value(controllerOwnedSetupKey{}) == true {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, ownedSetupGuardFailSafe)
+		defer cancel()
+	}
 	b, err := newBoxStateResolver().ResolveOne(ctx, space, name, boxstate.FullDiff)
 	if err != nil {
 		return fmt.Errorf("cannot check the image for a new session of box %s: %w", name, err)

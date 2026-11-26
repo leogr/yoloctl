@@ -83,7 +83,7 @@ without a retry prompt. A later explicit invocation reads state again.
 
 1. <a id="source-1"></a> [controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L71) — `hostControllerLifecycle`.
 2. <a id="source-2"></a> [space_upgrade.go](../../cmd/yoloctl/space_upgrade.go#L125) — `readSpaceUpgradePlan`, `classifySpaceUpgradeBox`, `runSpaceUpgrade`, `recheckSpaceUpgradeRow`.
-3. <a id="source-3"></a> [session_remedy.go](../../cmd/yoloctl/session_remedy.go#L141) — `collectBoxDriftView`.
+3. <a id="source-3"></a> [session_remedy.go](../../cmd/yoloctl/session_remedy.go#L158) — `collectBoxDriftView`.
 4. <a id="source-4"></a> [controller_sessions.go](../../cmd/yoloctl/controller_sessions.go#L98) — `ensureControllerChat`, `sessionRestartRequest`, `startRestartedWorkload`.
 5. <a id="source-5"></a> [space_upgrade_target.go](../../cmd/yoloctl/space_upgrade_target.go#L92) — `readUpgradeRecreateBinding`, `checkUpgradeRecreateTarget`.
 6. <a id="source-6"></a> [space_upgrade.go](../../cmd/yoloctl/space_upgrade.go#L80) — `finishRepairedSpaceUpgrade`.

@@ -352,8 +352,8 @@ func TestSessionRestartOfferLeavesRecreationsRunning(t *testing.T) {
 }
 
 // The real batch path lists the space once and does per-box work only for the
-// named boxes, all under one overall bound: an inspection that never answers
-// ends at that bound for the whole batch, as each box's error.
+// named boxes, all within the view's one partial-data minute: an inspection
+// that never answers ends there, as each unresolved box's error.
 func TestBoxDriftBatchHasOneInventoryAndOneBound(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("LIMA_HOME", t.TempDir())
@@ -367,9 +367,9 @@ func TestBoxDriftBatchHasOneInventoryAndOneBound(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	previousResolver, previousBound := newBoxStateResolver, staleSessionInspectTimeout
-	t.Cleanup(func() { newBoxStateResolver, staleSessionInspectTimeout = previousResolver, previousBound })
-	staleSessionInspectTimeout = 100 * time.Millisecond
+	previousResolver, previousBound := newBoxStateResolver, driftViewBudget
+	t.Cleanup(func() { newBoxStateResolver, driftViewBudget = previousResolver, previousBound })
+	driftViewBudget = 100 * time.Millisecond
 	var mu sync.Mutex
 	work := map[string][]string{}
 	note := func(kind, name string) {

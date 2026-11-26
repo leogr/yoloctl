@@ -262,6 +262,9 @@ func (r Resolver) ResolveOne(ctx context.Context, space, name string, depth Dept
 // alone, so each result equals that box's ResolveSpace entry. The results
 // follow names, one per distinct name; a name with neither a declaration nor
 // a container is reported missing.
+// When ctx ends during a FullDiff read, the boxes finished before then keep
+// their results and every other existing container reports a drift error, so
+// a caller's deadline yields a partial result, never a wrong one.
 func (r Resolver) ResolveNamed(ctx context.Context, space string, names []string, depth Depth) ([]Box, error) {
 	want := make(map[string]bool, len(names))
 	for _, name := range names {
@@ -451,10 +454,30 @@ func (r Resolver) resolveSpace(ctx context.Context, space string, depth Depth, s
 				}
 			}
 		}
+		if depth == FullDiff {
+			incompleteAtDeadline(ctx, b)
+		}
 		b.State = deriveDisplay(*b)
 	}
 	sortBoxes(boxes)
 	return boxes, nil
+}
+
+// incompleteAtDeadline reports an existing container's drift as an error when
+// the context ended while its evidence was read: a later step (the launcher
+// check) may have failed on the expired context without saying so. A partial
+// read therefore never shows such a box as resolved; boxes finished before the
+// deadline keep their results, and unreadable evidence decides nothing.
+func incompleteAtDeadline(ctx context.Context, b *Box) {
+	err := ctx.Err()
+	if err == nil || b.Declaration != DeclarationDeclared || (b.Runtime != RuntimeRunning && b.Runtime != RuntimeStopped) ||
+		b.Drift == DriftError || b.Drift == DriftUnknown {
+		return
+	}
+	b.Drift = DriftError
+	b.DriftError = err.Error()
+	b.DiffPlan = nil
+	b.Reasons = append(b.Reasons, Reason{Code: ReasonDriftError, Message: b.DriftError})
 }
 
 func declaredBoxes(space string) ([]Box, map[string]int, error) {
