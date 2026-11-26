@@ -143,6 +143,11 @@ func (a managedApplier) Recreate(ctx context.Context, c *agentbox.Config, policy
 				return err
 			}
 		}
+		if details != nil {
+			if err := agentbox.CheckSecretInjectionRecreate(ctx, c, details.Labels); err != nil {
+				return err
+			}
+		}
 		if err := agentbox.CheckRuntimeModeChange(ctx, c, details); err != nil {
 			return err
 		}

@@ -97,7 +97,7 @@ separate checks. [8](#source-8) [20](#source-20)
 12. <a id="source-12"></a> [Upstream auth storage](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/opencode/src/auth/index.ts#L10) — credential file.
 13. <a id="source-13"></a> [Import implementation](../../cmd/yoloctl/account_auth.go#L169) — defaultHostAuthPaths and import.
 14. <a id="source-14"></a> [Profile validation](../../internal/agentprofile/profile.go#L528) — validateAuth.
-15. <a id="source-15"></a> [Secret projection tests](../../internal/agentbox/secret_injection_test.go#L12) — declared keys and argv/label isolation.
+15. <a id="source-15"></a> [Secret projection tests](../../internal/agentbox/secret_injection_test.go#L15) — declared keys and argv/label isolation.
 16. <a id="source-16"></a> [Confined exec](../../cmd/yoloctl/run.go#L95) — explicit argv through OpenShell SSH.
 17. <a id="source-17"></a> [Upstream catalog](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/core/src/models-dev.ts#L217) — snapshot and fetch control.
 18. <a id="source-18"></a> [Upstream skills](https://github.com/anomalyco/opencode/blob/v1.18.34/packages/opencode/src/skill/index.ts#L21) — external skills.

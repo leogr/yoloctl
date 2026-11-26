@@ -12,6 +12,7 @@ import (
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/agentboximage"
+	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/agentsession"
 	"github.com/leogr/yoloctl/internal/capabilities"
 	"github.com/leogr/yoloctl/internal/container"
@@ -475,6 +476,7 @@ func newAgentboxSetCmd() *cobra.Command {
 		extraFeatures     []string
 		featureOptions    []string
 		capabilities      []string
+		secrets           []string
 	)
 	cmd := &cobra.Command{
 		Use:   "set BOX [flags]",
@@ -488,6 +490,10 @@ you explicitly pass are applied; the rest of the declaration is left untouched.
   yoloctl box set coder --capability network.github
   yoloctl box set coder --features go,github
   yoloctl box set coder --agent-extra-args=--model,opus
+  yoloctl box set publisher --secret GITHUB_TOKEN_WORK:GH_TOKEN
+
+--secret adds an account mapping. Use box edit to remove or remap a rule.
+Applying a mapping change to an existing container requires box recreate.
 
 ` + "`--read-only`" + ` toggles the fs.workdir.write capability (true removes it →
 /workdir read-only, false adds it → read-write). ` + "`--capability`" + ` appends
@@ -513,6 +519,10 @@ dedicated commands (` + "`port forward`" + `) or ` + "`box edit`" + `.`,
 			if err := validateAgentboxName(args[0]); err != nil {
 				return err
 			}
+			rules, err := parseSecretFlags(secrets)
+			if err != nil {
+				return err
+			}
 			return runSet(cmd.Context(), cmd.OutOrStdout(), spaceName, args[0], setOptions{
 				Image:             stringFlag(cmd, "image", image),
 				CPUs:              stringFlag(cmd, "cpus", cpus),
@@ -526,6 +536,7 @@ dedicated commands (` + "`port forward`" + `) or ` + "`box edit`" + `.`,
 				Features:          selectedFeatureFlag(cmd, featureNames, extraFeatures),
 				FeatureOptions:    featureOptions,
 				Capabilities:      capabilities,
+				SecretInjection:   rules,
 			})
 		},
 	}
@@ -542,6 +553,7 @@ dedicated commands (` + "`port forward`" + `) or ` + "`box edit`" + `.`,
 	cmd.Flags().StringArrayVar(&extraFeatures, "feature", nil, "Replace explicit features with these names or OCI references (repeatable)")
 	cmd.Flags().StringArrayVar(&featureOptions, "feature-option", nil, "Set OCI Feature option FEATURE.OPTION=VALUE (repeatable; non-secret)")
 	cmd.Flags().StringSliceVar(&featureNames, "features", nil, "Replace the box's explicit features (repeatable / comma-separated). Changing the effective feature set re-composes the runtime image and triggers a recreate.")
+	cmd.Flags().StringArrayVar(&secrets, "secret", nil, "Add an account secret mapping KEY or KEY:ENV (repeatable; apply with box recreate)")
 	cmd.Flags().StringSliceVar(&capabilities, "capability", nil, "Append a positive capability grant (repeatable; triggers a restart), e.g. network.github or fs.pty.allocate")
 	return cmd
 }
@@ -563,13 +575,14 @@ type setOptions struct {
 	Features          *[]string
 	FeatureOptions    []string
 	Capabilities      []string
+	SecretInjection   []agentprofile.SecretInjection
 }
 
 // empty reports whether no field flag was passed at all.
 func (o setOptions) empty() bool {
 	return o.Image == nil && o.CPUs == nil && o.Memory == nil && o.ReadOnly == nil &&
 		o.UnconfinedNetwork == nil && o.Privileged == nil && o.AgentExtraArgs == nil && o.SessionResume == nil && o.SessionCommand == nil && o.Features == nil &&
-		len(o.Capabilities) == 0 && len(o.FeatureOptions) == 0
+		len(o.Capabilities) == 0 && len(o.FeatureOptions) == 0 && len(o.SecretInjection) == 0
 }
 
 func selectedFeatureFlag(cmd *cobra.Command, plural, singular []string) *[]string {
@@ -659,7 +672,7 @@ func runSet(ctx context.Context, out io.Writer, spaceName, name string, opts set
 func applySetOptions(cfg *agentbox.Config, opts setOptions) (bool, error) {
 	// mutated tracks whether the manifest really changes: every field is
 	// compared, so a flag repeating the stored value is not a rewrite.
-	mutated := false
+	mutated := cfg.AddSecretInjection(opts.SecretInjection)
 	if opts.Image != nil && cfg.Image != *opts.Image {
 		cfg.Image = *opts.Image
 		mutated = true

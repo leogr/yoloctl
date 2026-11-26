@@ -36,4 +36,4 @@ same verdict; privileged boxes stay `not applied`/`not-applied`. [1](#source-1)
 4. <a id="source-4"></a> [Kernel Landlock ABI](https://docs.kernel.org/userspace-api/landlock.html#landlock-abi-versions) — version query and ENOSYS/EOPNOTSUPP meanings.
 5. <a id="source-5"></a> [OpenShell v0.0.72 Landlock events](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-process/src/sandbox/linux/landlock.rs#L120-L310) — unavailable and `restrict_self` failure events; readiness in `mod.rs` `log_sandbox_readiness`.
 6. <a id="source-6"></a> [Regressions](../../cmd/yoloctl/landlock_test.go#L16-L241) — summary text, errno classification, outside-controller probe, verdict precedence, log scan and text/JSON agreement.
-7. <a id="source-7"></a> [Show rendering](../../cmd/yoloctl/agentbox.go#L384-L389) — text line; JSON `landlockJSON` and privileged `not-applied` follow `writeAgentboxShowJSON`.
+7. <a id="source-7"></a> [Show rendering](../../cmd/yoloctl/agentbox.go#L385-L390) — text line; JSON `landlockJSON` and privileged `not-applied` follow `writeAgentboxShowJSON`.

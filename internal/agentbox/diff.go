@@ -130,6 +130,10 @@ type DiffPlan struct {
 	// stronger recreation reason (for example launch mode) is shown first.
 	ImageRecreateReason string
 
+	// SecretInjectionChanged requires explicit replacement during reconcile,
+	// while an ordinary start or restart can still use the recorded environment.
+	SecretInjectionChanged bool
+
 	NeedsCreate   bool
 	NeedsRecreate bool
 	NeedsRestart  bool
@@ -183,6 +187,18 @@ func (p DiffPlan) HasChanges() bool {
 // forward (the strategy will have torn them down; keeping the field
 // populated lets Reconcile and downstream callers act uniformly).
 func Diff(c *Config, actual ActualState, desiredImage string, desiredPolicy []byte) DiffPlan {
+	return diff(c, actual, desiredImage, desiredPolicy, false)
+}
+
+const secretInjectionRecreateReason = "account secret mappings changed; explicit box recreate required"
+
+// BlocksStart allows use of the original environment until explicit recreate
+// while preserving the start restrictions for other immutable drift.
+func (p DiffPlan) BlocksStart() bool {
+	return p.NeedsRecreate && p.RecreateReason != secretInjectionRecreateReason
+}
+
+func diff(c *Config, actual ActualState, desiredImage string, desiredPolicy []byte, starting bool) DiffPlan {
 	if !actual.Exists {
 		return DiffPlan{
 			NeedsCreate:       true,
@@ -191,13 +207,19 @@ func Diff(c *Config, actual ActualState, desiredImage string, desiredPolicy []by
 		}
 	}
 
-	if reason := recreateReason(c, actual, desiredImage); reason != "" {
+	secretInjectionChanged := !starting && c.secretInjectionChanged(actual.Labels)
+	reason := recreateReason(c, actual, desiredImage)
+	if reason == "" && secretInjectionChanged {
+		reason = secretInjectionRecreateReason
+	}
+	if reason != "" {
 		return DiffPlan{
-			NeedsRecreate:        true,
-			ImageRecreateReason:  imageRecreateReason(actual, desiredImage),
-			RecreateReason:       reason,
-			PortForwardsToAdd:    append([]Port(nil), c.Ports...),
-			PortForwardsToRemove: append([]Port(nil), actual.PortForwards...),
+			SecretInjectionChanged: secretInjectionChanged,
+			NeedsRecreate:          true,
+			ImageRecreateReason:    imageRecreateReason(actual, desiredImage),
+			RecreateReason:         reason,
+			PortForwardsToAdd:      append([]Port(nil), c.Ports...),
+			PortForwardsToRemove:   append([]Port(nil), actual.PortForwards...),
 		}
 	}
 

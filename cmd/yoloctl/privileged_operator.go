@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -192,6 +193,14 @@ func guardOperatorPrivilegedCreate(ctx context.Context, cfg *agentbox.Config) er
 func savedDeclarationError(ctx context.Context, cfg *agentbox.Config, err error) error {
 	if err == nil {
 		return nil
+	}
+	var secretChange *agentbox.SecretInjectionChange
+	if errors.As(err, &secretChange) {
+		message := fmt.Errorf("box %s declaration is saved and its container is unchanged: %w", cfg.Name, err)
+		if removedDeclarationPermissions(ctx, cfg) {
+			message = fmt.Errorf("%w; the previous container may still run with the removed permission(s) until recreated or stopped", message)
+		}
+		return asUserError(message)
 	}
 	message := fmt.Errorf("box %s declaration is saved; applying it failed: %w; inspect the current box state and fix the cause before running yoloctl box reconcile %s --space %s to retry", cfg.Name, err, cfg.Name, cfg.Space)
 	if removedDeclarationPermissions(ctx, cfg) {

@@ -65,6 +65,13 @@ declaration has no expanding operator role or automatic chat enrollment.
 The same shared flag is available through shell and palette completion.
 [5](#source-5)
 
+[FACT] Repeat `box create --secret KEY[:ENV]` to request account secrets for
+one box. `box set --secret` adds mappings. Use `box edit` to remove or
+remap a rule. `box copy` inherits the references and uses the destination
+account. Explicit flags replace the list, and `--secret=''` clears it.
+`box show` and its JSON show requested names. On an existing container, apply
+the changed list with `box recreate`. [40](#source-40)
+
 [FACT] VM backend completion lists adapters linked into the host build without
 probing a VM. Prepared-image arguments complete host directories. These
 callbacks cover both space creation and import. [1](#source-1)
@@ -377,3 +384,4 @@ the writable layer require their tool's cache command or explicit recreation
 37. <a id="source-37"></a> [Log steps](../digests/log-steps.md).
 38. <a id="source-38"></a> [Managed chat membership application](../digests/chat-application.md).
 39. <a id="source-39"></a> [Stored log views](../digests/log-views.md).
+40. <a id="source-40"></a> [Box secret declaration and delivery](../digests/auth.md).

@@ -116,7 +116,7 @@ Claude run need the isolated live check. [12](#source-12) [13](#source-13) [14](
 3. <a id="source-3"></a> [Root mount](../../internal/agentsession/observe/root.go#L19-L137) — `rootOptions`, `EnsureRoot`, `RemoveRoot`, `openRoot`, `mounted`; the Linux mount and filesystem check in root_linux.go, host stubs in root_other.go.
 4. <a id="source-4"></a> [Box binding](../../internal/agentbox/observe.go#L1-L90) — `addObservationRunOptions`, `ObservationBound`, `PrepareObservationRuntime`, `RemoveObservationRuntime`.
 5. <a id="source-5"></a> [Create and inspect](../../internal/agentbox/live.go#L127-L130) — `ObservationEnabled` classification; `Create` calls `addObservationRunOptions` after chat options; `ActualState.ObservationEnabled` in diff.go.
-6. <a id="source-6"></a> [Start and destroy](../../cmd/yoloctl/agentbox.go#L1947-L1951) — `startExistingAgentboxContainer` remounts; destroy calls `RemoveObservationRuntime` after the container's VM state.
+6. <a id="source-6"></a> [Start and destroy](../../cmd/yoloctl/agentbox.go#L2013-L2017) — `startExistingAgentboxContainer` remounts; destroy calls `RemoveObservationRuntime` after the container's VM state.
 7. <a id="source-7"></a> [Generations](../../internal/agentsession/observe/generation.go#L1-L108) — `Prepare` (discardable evidence, proof-gated retry), `parseGenName`, `createGeneration`; `removeAt` in root.go.
 8. <a id="source-8"></a> [Feature](../../internal/features/agent_observe.go#L1-L173) — status line, async hooks, interpreter resolution, wrappers and drop-in.
 9. <a id="source-9"></a> [Writer](../../internal/features/agent-observe.py#L1-L829) — `record`, `statusline_record`, `codex_record`, `lock`, `append`, `write`, `main`.

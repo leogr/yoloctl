@@ -102,7 +102,7 @@ they establish no live VM, SQLite, Unix-socket or AIRC revocation behavior.
 10. <a id="source-10"></a> [Model](../../internal/managedchat/model.go#L33) — `Room`, `Validate`, `Reidentify`.
 11. <a id="source-11"></a> [No-follow directories](../../internal/safepath/directory.go#L14) — `VerifyPrivateDirectory`, `PrivateDirectory`.
 12. <a id="source-12"></a> [Atomic writes](../../internal/safepath/safepath.go#L166) — `WriteFileOwned`.
-13. <a id="source-13"></a> [Copy options](../../cmd/yoloctl/agentbox_copy.go#L190) — `copyOptionsFromSource`.
+13. <a id="source-13"></a> [Copy options](../../cmd/yoloctl/agentbox_copy.go#L195) — `copyOptionsFromSource`.
 14. <a id="source-14"></a> [Native archive](../../internal/spacearchive/state.go#L30) — `readDeclarations`, `WriteState`, `inspectState`, `RestoreState`.
 15. <a id="source-15"></a> [Import preparation](../../cmd/yoloctl/space_archive.go#L260) — `prepareImportedSpace`.
 16. <a id="source-16"></a> [Archive regressions](../../internal/spacearchive/chat_test.go#L1) — independent identities, interrupted restore, unsafe inventories.

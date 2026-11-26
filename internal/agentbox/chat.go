@@ -169,10 +169,16 @@ func addChatEnvironment(c *Config, opts *container.RunOptions, p *managedchat.Pr
 	}
 	account, _ := managedchat.AuthAccount(p.MemberID)
 	env := map[string]string{}
+	if opts.PrivateEnv != "" {
+		raw, ok := strings.CutPrefix(opts.PrivateEnv, openshellUserEnvironment+"=")
+		if !ok || json.Unmarshal([]byte(raw), &env) != nil || env == nil {
+			return errors.New("invalid sandbox child environment")
+		}
+	}
 	index := -1
 	for i, raw := range opts.Env {
 		if value, ok := strings.CutPrefix(raw, openshellUserEnvironment+"="); ok {
-			if index >= 0 || json.Unmarshal([]byte(value), &env) != nil || env == nil {
+			if opts.PrivateEnv != "" || index >= 0 || json.Unmarshal([]byte(value), &env) != nil || env == nil {
 				return errors.New("invalid or duplicate sandbox child environment")
 			}
 			index = i
@@ -203,7 +209,9 @@ func addChatEnvironment(c *Config, opts *container.RunOptions, p *managedchat.Pr
 		return err
 	}
 	value := openshellUserEnvironment + "=" + string(raw)
-	if index < 0 {
+	if opts.PrivateEnv != "" {
+		opts.PrivateEnv = value
+	} else if index < 0 {
 		opts.Env = append(opts.Env, value)
 	} else {
 		opts.Env[index] = value

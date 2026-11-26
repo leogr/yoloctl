@@ -43,6 +43,10 @@ const (
 	// or diffed. NEVER a secret value or a value-derived hash.
 	LabelAccount = "yoloctl.account"
 
+	// LabelSecretInjection is a digest of the box's requested source/target
+	// pairs. Older containers and boxes with no additional rules omit it.
+	LabelSecretInjection = "yoloctl.secret_injection"
+
 	// LabelNetworkUnconfined marks a box created with the network confinement
 	// layer dropped (Config.UnconfinedNetwork → openshell --mode=process). The
 	// value is "true" when set; the label is OMITTED entirely for the normal
@@ -79,7 +83,8 @@ type LabelSet struct {
 	Agentbox string
 	Agent    string
 	// EnvKeys is the sorted list of yoloctl-managed env var keys (keys only).
-	EnvKeys []string
+	EnvKeys         []string
+	SecretInjection string
 	// Account is the plain account NAME this box selects, or empty/"none" for
 	// a generic-shell box. The non-secret identity signal — a name, never a
 	// secret value.
@@ -106,6 +111,7 @@ func (c *Config) Labels() LabelSet {
 		Agentbox:          c.Name,
 		Agent:             c.Agent,
 		EnvKeys:           managedEnvKeys(c.Env),
+		SecretInjection:   c.secretInjectionSnapshot(),
 		Account:           c.Account,
 		UnconfinedNetwork: c.UnconfinedNetwork,
 	}
@@ -128,6 +134,7 @@ func EncodeLabels(ls LabelSet) (map[string]string, error) {
 	put(LabelAgentbox, ls.Agentbox)
 	put(LabelAgent, ls.Agent)
 	put(LabelEnvKeys, strings.Join(ls.EnvKeys, ","))
+	put(LabelSecretInjection, ls.SecretInjection)
 	// The account NAME is the box's recorded identity: stamped only for
 	// a real account, compared by the reconcile diff against the desired
 	// Config.Account to catch a re-point. A generic-shell box (Account "" or
@@ -178,6 +185,7 @@ func DecodeLabels(m map[string]string) LabelSet {
 		Agentbox:          m[LabelAgentbox],
 		Agent:             m[LabelAgent],
 		Account:           m[LabelAccount],
+		SecretInjection:   m[LabelSecretInjection],
 		UnconfinedNetwork: m[LabelNetworkUnconfined] == "true",
 		Privileged:        m[LabelRuntimeMode] == string(RuntimeModePrivileged),
 		Launcher:          m[LabelLauncher],

@@ -75,7 +75,7 @@ fixtures; no real Claude, VM, crash or reboot is exercised.
 1. <a id="source-1"></a> [profile.go](../../internal/agentprofile/profile.go#L151) — `Profile.Session`, `SessionSpec`, `ObserveSpec`; `validateSession`.
 2. <a id="source-2"></a> [claude.yaml](../../internal/agentprofile/builtin/claude.yaml#L56) — the Claude block.
 3. <a id="source-3"></a> [policy.go](../../internal/agentsession/policy.go#L12) — `EffectivePolicy`, `ReservedArg`, `Argv`.
-4. <a id="source-4"></a> [agentbox.go](../../internal/agentbox/agentbox.go#L99-L178) — `AgentSession`, `ResumePolicy`; validation at L524-L533; cmd checks in `requireResolvableManifest`.
+4. <a id="source-4"></a> [agentbox.go](../../internal/agentbox/agentbox.go#L100-L181) — `AgentSession`, `ResumePolicy`; validation at L524-L533; cmd checks in `requireResolvableManifest`.
 5. <a id="source-5"></a> [layout.go](../../internal/layout/layout.go#L355) — `BoxSessionPath`.
 6. <a id="source-6"></a> [record.go](../../internal/agentsession/record.go#L86) — `Record`, `Validate`, `Load`, `Remove`, `save`, `retire`, `Target`.
 7. <a id="source-7"></a> [launch.go](../../internal/agentsession/launch.go#L15-L96) — `BoxLock`, `LoadLocked`, `Save`; destroy in `removeAgentboxConfig`.

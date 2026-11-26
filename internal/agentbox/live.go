@@ -492,15 +492,19 @@ func (a LiveApplier) applyPortForwards(ctx context.Context, c *Config, pfs []Por
 // including namespaces, resources and the child environment channel, is the
 // same as for a confined box. Unused legacy program/Rego binds are omitted.
 func buildRunOptions(c *Config, runtimeImage string, endpoint *EndpointBinary) (container.RunOptions, error) {
-	envVars, err := resolveEnv(c)
+	envVars, userEnv, err := resolveLaunchEnvironment(c)
 	if err != nil {
 		return container.RunOptions{}, err
 	}
-	return buildRunOptionsWithEnv(c, runtimeImage, endpoint, envVars)
+	opts, err := buildRunOptionsWithEnv(c, runtimeImage, endpoint, envVars)
+	if err == nil && userEnv != "" {
+		opts.PrivateEnv = openshellUserEnvironment + "=" + userEnv
+	}
+	return opts, err
 }
 
-// New native preparation separates private account overrides before building
-// container argv. Legacy callers still use resolveEnv's historical projection.
+// Both launch paths supply private account overrides separately from the
+// public environment assembled here.
 func buildRunOptionsWithEnv(c *Config, runtimeImage string, endpoint *EndpointBinary, envVars []string) (container.RunOptions, error) {
 	// Stamp the compact identity/reconciliation label set so the live box is
 	// reconstructable from container labels alone (no private DB): kind,
@@ -605,31 +609,8 @@ func buildMounts(c *Config) []container.Mount {
 	return mounts
 }
 
-// resolveEnv renders Config.Env (literal, non-secret values) into "KEY=VALUE"
-// strings the container runtime accepts, sorted for deterministic argv. Always
-// appends YOLOCTL_HOST_UID / GID so the entrypoint shim can align the
-// in-container `sandbox` user with the host developer's UID/GID at startup.
-//
-// Env is literal-only: a box does not own secret values, so
-// there is no credential-store lookup here. Supported account secrets reach
-// the agent through secret_injection; native credentials remain agent-owned in
-// the account-state leaf. A secret-injection computation that cannot resolve
-// its profile or load its account is a hard error: the create fails
-// cleanly rather than launching the agent silently unauthenticated.
-func resolveEnv(c *Config) ([]string, error) {
-	out, userEnv, err := resolveLaunchEnvironment(c)
-	if err != nil {
-		return nil, err
-	}
-	if userEnv != "" {
-		out = append(out, fmt.Sprintf("%s=%s", openshellUserEnvironment, userEnv))
-	}
-	return out, nil
-}
-
-// resolveLaunchEnvironment returns literal container ENV separately from the
-// private account JSON channel, so new native launch argv never contains it.
-// It resolves the account exactly once using the existing narrowing router.
+// resolveLaunchEnvironment returns sorted container literals and the host UID
+// and GID, separately from the account's private JSON environment map.
 func resolveLaunchEnvironment(c *Config) ([]string, string, error) {
 	keys := make([]string, 0, len(c.Env))
 	for k := range c.Env {

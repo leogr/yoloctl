@@ -90,7 +90,7 @@ without a retry prompt. A later explicit invocation reads state again.
 4. <a id="source-4"></a> [controller_sessions.go](../../cmd/yoloctl/controller_sessions.go#L98) — `ensureControllerChat`, `sessionRestartRequest`, `startRestartedWorkload`.
 5. <a id="source-5"></a> [space_upgrade_target.go](../../cmd/yoloctl/space_upgrade_target.go#L92) — `readUpgradeRecreateBinding`, `checkUpgradeRecreateTarget`.
 6. <a id="source-6"></a> [space_upgrade.go](../../cmd/yoloctl/space_upgrade.go#L80) — `finishRepairedSpaceUpgrade`.
-7. <a id="source-7"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2378) — `newAgentboxRestartCmd` and `recreateAgentbox`.
+7. <a id="source-7"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2447) — `newAgentboxRestartCmd` and `recreateAgentbox`.
 8. <a id="source-8"></a> [managed_applier.go](../../cmd/yoloctl/managed_applier.go#L87) — `Recreate`.
 9. <a id="source-9"></a> [space_upgrade_vm.go](../../cmd/yoloctl/space_upgrade_vm.go#L39) — `readSpaceVMReplacement`, `offerSpaceUpgradeVMRecreate`, `confirmSpaceUpgradeVM`; install_migration.go `firecrackerImageState`, `readLimaStackState`; call site in controller_lifecycle.go `hostControllerLifecycle`; result reporting in space_upgrade.go `runSpaceUpgrade`.
 10. <a id="source-10"></a> [space_upgrade_vm_test.go](../../cmd/yoloctl/space_upgrade_vm_test.go#L1) — Firecracker/Lima selection cases, consent matrix, exit status, and the order before the controller update.

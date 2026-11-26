@@ -86,14 +86,14 @@ confinement or AIRC connection proof.
 5. <a id="source-5"></a> [Protected target](../../cmd/yoloctl/chat_operator_server.go#L33) — `operatorManagedServerTarget`, `protectedManagedServerTarget`.
 6. <a id="source-6"></a> [Native admission](../../cmd/yoloctl/space_operation.go#L30) — `registerSpaceOperations`.
 7. <a id="source-7"></a> [Attachment](../../cmd/yoloctl/session_client.go#L48) — `prepareAutoAttach`, `selectSessionTransport`, `ensureAndAttachSession`.
-8. <a id="source-8"></a> [Rebuild](../../cmd/yoloctl/agentbox_reconcile.go#L162) — `runRebuild`.
+8. <a id="source-8"></a> [Rebuild](../../cmd/yoloctl/agentbox_reconcile.go#L163) — `runRebuild`.
 9. <a id="source-9"></a> [Installed guidance](../../assets/embed.go#L13) — `BoxOperatorSkill` embeds the managed chat workflow and independent peer-session rule.
 10. <a id="source-10"></a> [Authority tests](../../cmd/yoloctl/chat_operator_test.go#L18) — allowlist, scope, first human identity and self-recreation preflight.
 11. <a id="source-11"></a> [Typed frontend](../../cmd/yoloctl/chat.go#L75) — `callChatControllerInto`.
 12. <a id="source-12"></a> [Exec](../../cmd/yoloctl/run.go#L95) — `execInAgentboxInteractive`.
 13. <a id="source-13"></a> [Finite tail](../../cmd/yoloctl/agentbox.go#L247) — `maybeAutoAttach`.
 14. <a id="source-14"></a> [Server declaration](../../internal/agentbox/chat.go#L53) — `ValidateChatServer`.
-15. <a id="source-15"></a> [Copy](../../cmd/yoloctl/agentbox_copy.go#L190) — `copyOptionsFromSource`.
+15. <a id="source-15"></a> [Copy](../../cmd/yoloctl/agentbox_copy.go#L195) — `copyOptionsFromSource`.
 16. <a id="source-16"></a> [Participation tests](../../cmd/yoloctl/chat_participation_test.go#L28) — identity, fixed argv, bounded output and no replay.
 17. <a id="source-17"></a> [Server guard tests](../../cmd/yoloctl/chat_operator_server_test.go#L18) — protected targets, attachment intent and selection ordering.
 18. <a id="source-18"></a> [Combined identity and target selection](../../cmd/yoloctl/chat_attach_test.go#L87) — `TestChatAttachGuardedSelectionPinsValidatedIdentity`.

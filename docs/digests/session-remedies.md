@@ -96,6 +96,6 @@ live update was run. [5](#source-5) [6](#source-6)
 7. <a id="source-7"></a> [Named resolution](../../internal/boxstate/boxstate.go#L259-L475) — `ResolveNamed` and `resolveSpace`; spy regression `TestResolveNamedLimitsPerBoxWorkToTheNamedBoxes` in boxstate_test.go L245; the partial read `incompleteAtDeadline`, `TestResolveNamedIsPartialWhenItsContextEnds` in partial_test.go.
 
 8. <a id="source-8"></a> [Fresh-session guard](../../cmd/yoloctl/session_remedy.go#L271) — `guardFreshSessionImage`; caller in session_client.go before `beginTrackedSession`.
-9. <a id="source-9"></a> [Shared diff](../../internal/agentbox/diff.go#L179) — `Diff`, `imageRecreateReason`, `ImageRecreateReason`.
+9. <a id="source-9"></a> [Shared diff](../../internal/agentbox/diff.go#L183) — `Diff`, `imageRecreateReason`, `ImageRecreateReason`.
 10. <a id="source-10"></a> [Guard regressions](../../cmd/yoloctl/session_image_test.go#L1) — isolated resolver, live-holder and preserved exit status.
 11. <a id="source-11"></a> [Early recreation](../../cmd/yoloctl/recreate_offer.go#L50-L111) — `offerRecreate`, `boxRecreateOffer`; `refuseRecreateBeforeImageWork` in session_remedy.go; callers in agentbox.go (start, restart), session_client.go (`ensureAgentSession`), chat_runtime.go (`warmChatServer`), controller_client.go (`callControllerTerminal`), chat_open.go and chat.go; regressions in recreate_offer_test.go (main `3736b1c` and accompanying changes).

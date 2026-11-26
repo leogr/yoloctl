@@ -99,7 +99,7 @@ func ReconcileForStart(ctx context.Context, c *Config, inspector StateInspector,
 // state. Callers must still use ReconcileForStart afterward: the inspected state
 // may change between preflight and application.
 func CheckStart(ctx context.Context, c *Config, inspector StateInspector) error {
-	plan, _, err := planReconcile(ctx, c, inspector)
+	plan, _, err := planReconcile(ctx, c, inspector, true)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func CheckStart(ctx context.Context, c *Config, inspector StateInspector) error 
 }
 
 func checkStartPlan(c *Config, plan DiffPlan) error {
-	if !plan.NeedsRecreate {
+	if !plan.BlocksStart() {
 		return nil
 	}
 	return StartRecreateError(c, plan.RecreateReason)
@@ -119,8 +119,11 @@ func StartRecreateError(c *Config, reason string) error {
 		c.Name, reason, c.Name, c.Space, c.Name, c.Space)
 }
 
-func planReconcile(ctx context.Context, c *Config, inspector StateInspector) (DiffPlan, []byte, error) {
+func planReconcile(ctx context.Context, c *Config, inspector StateInspector, starting bool) (DiffPlan, []byte, error) {
 	if err := c.Validate(); err != nil {
+		return DiffPlan{}, nil, fmt.Errorf("validate config: %w", err)
+	}
+	if err := c.ValidateSecretInjection(); err != nil {
 		return DiffPlan{}, nil, fmt.Errorf("validate config: %w", err)
 	}
 	actual, err := inspector.Inspect(ctx, c)
@@ -135,14 +138,17 @@ func planReconcile(ctx context.Context, c *Config, inspector StateInspector) (Di
 	if err != nil {
 		return DiffPlan{}, nil, err
 	}
-	return Diff(c, actual, desiredImage, desiredPolicy), desiredPolicy, nil
+	return diff(c, actual, desiredImage, desiredPolicy, starting), desiredPolicy, nil
 }
 
 func reconcile(ctx context.Context, c *Config, inspector StateInspector, applier Applier, preserveContainer bool) (ReconcileResult, error) {
 	var result ReconcileResult
-	plan, desiredPolicy, err := planReconcile(ctx, c, inspector)
+	plan, desiredPolicy, err := planReconcile(ctx, c, inspector, preserveContainer)
 	if err != nil {
 		return result, err
+	}
+	if plan.SecretInjectionChanged {
+		return result, &SecretInjectionChange{Box: c.Name, Space: c.Space}
 	}
 	if preserveContainer {
 		if err := checkStartPlan(c, plan); err != nil {

@@ -181,9 +181,9 @@ func TestResolveEnv_Literals(t *testing.T) {
 			"EMPTY": {Literal: ""},
 		},
 	}
-	got, err := resolveEnv(c)
-	if err != nil {
-		t.Fatalf("resolveEnv: %v", err)
+	got, private, err := resolveLaunchEnvironment(c)
+	if err != nil || private != "" {
+		t.Fatalf("literal-only environment unexpectedly requested a private launch: %v", err)
 	}
 	// Expect: sorted env entries first, then the two UID/GID trailers.
 	want := []string{
@@ -206,9 +206,9 @@ func TestResolveEnv_Literals(t *testing.T) {
 func TestResolveEnv_AlwaysAppendsUIDGID(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	c := &Config{Name: "x", Space: "default"} // no env declared
-	got, err := resolveEnv(c)
-	if err != nil {
-		t.Fatalf("resolveEnv: %v", err)
+	got, private, err := resolveLaunchEnvironment(c)
+	if err != nil || private != "" {
+		t.Fatalf("literal-only environment unexpectedly requested a private launch: %v", err)
 	}
 	if len(got) != 2 {
 		t.Fatalf("expected 2 entries (UID+GID), got %v", got)

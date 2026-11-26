@@ -153,5 +153,5 @@ not retry. Lost application replies retain the normal fence contract.
 35. <a id="source-35"></a> [session_native_image_test.go](../../cmd/yoloctl/session_native_image_test.go#L27) — `TestMissingSessionRetainsExistingImageBeforeApply`.
 36. <a id="source-36"></a> [controller_native_images_test.go](../../cmd/yoloctl/controller_native_images_test.go#L351) — creation-mode and post-effect rejection controls.
 
-37. <a id="source-37"></a> [Builder service readiness](../../internal/container/container.go#L430) — `EnsureBuilder`; scoped shared policy in internal/vmapi/readiness.go.
+37. <a id="source-37"></a> [Builder service readiness](../../internal/container/container.go#L468) — `EnsureBuilder`; scoped shared policy in internal/vmapi/readiness.go.
 38. <a id="source-38"></a> [BuildKit connection readiness](../../internal/controller/image_connection.go#L40) — `readyBuilder`, known not-started failure and caller cancellation.

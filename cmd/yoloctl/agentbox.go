@@ -307,7 +307,8 @@ func newAgentboxShowCmd() *cobra.Command {
 declaration, runtime, session, and reconcile drift. If the container exists,
 the rich view also includes identity (name / image / labels), agent +
 installed CLI version, policy, bind mounts (with read-only flag), Landlock
-state, and account-state bind mount. If the runtime is missing or unavailable,
+state, and account-state bind mount. Requested secret mappings show account
+key and environment names. If the runtime is missing or unavailable,
 show prints a compact state summary and next action hints instead of hiding the
 declared box.
 
@@ -395,6 +396,9 @@ func writeAgentboxShow(w io.Writer, d *container.Details, querySpace string, ll 
 	if acct := d.Labels[agentbox.LabelAccount]; acct != "" {
 		_, _ = fmt.Fprintf(w, "Account:  %s\n", acct)
 	}
+	if resolved != nil {
+		writeRequestedSecrets(w, resolved.Config)
+	}
 	if meta.Policy != "" {
 		_, _ = fmt.Fprintf(w, "Policy:   %s\n", meta.Policy)
 	}
@@ -474,6 +478,7 @@ func writeBoxStateSummary(w io.Writer, b boxstate.Box) error {
 		_, _ = fmt.Fprintf(w, "Agent:       %s\n", b.Config.Agent)
 		_, _ = fmt.Fprintf(w, "Image:       %s\n", b.Config.Image)
 		_, _ = fmt.Fprintf(w, "Workdir:     %s\n", boxStateWorkdirField(b))
+		writeRequestedSecrets(w, b.Config)
 	}
 	if reason := boxStateReasonField(b); reason != "" {
 		_, _ = fmt.Fprintf(w, "Reason:      %s\n", reason)
@@ -485,6 +490,27 @@ func writeBoxStateSummary(w io.Writer, b boxstate.Box) error {
 		_, _ = fmt.Fprintf(w, "Next:        yoloctl box start %s --space %s\n", b.Name, b.Space)
 	}
 	return nil
+}
+
+func writeRequestedSecrets(w io.Writer, cfg *agentbox.Config) {
+	if cfg == nil || len(cfg.SecretInjection) == 0 {
+		return
+	}
+	_, _ = fmt.Fprintln(w, "Requested account secret mappings:")
+	for _, rule := range cfg.SecretInjection {
+		_, _ = fmt.Fprintf(w, "  %q → %s\n", rule.Secret, rule.EnvName())
+	}
+}
+
+func requestedSecretsJSON(cfg *agentbox.Config) []agentprofile.SecretInjection {
+	if cfg == nil {
+		return nil
+	}
+	rules := slices.Clone(cfg.SecretInjection)
+	for i := range rules {
+		rules[i].Env = rules[i].EnvName()
+	}
+	return rules
 }
 
 func sessionStatusFromBoxState(s boxstate.SessionInfo) sessionStatus {
@@ -572,8 +598,9 @@ func writeAgentboxShowJSON(w io.Writer, d *container.Details, querySpace string,
 		// Account is the plain account NAME the box selects (the
 		// yoloctl.account label). Omitted for a generic shell; never secret
 		// values.
-		Account string `json:"account,omitempty"`
-		Policy  string `json:"policy,omitempty"`
+		Account         string                         `json:"account,omitempty"`
+		SecretInjection []agentprofile.SecretInjection `json:"secret_injection,omitempty"`
+		Policy          string                         `json:"policy,omitempty"`
 		// UnconfinedNetwork is the declared network confinement posture; true
 		// means open egress (no allow-list / L7 proxy — openshell --mode=process).
 		UnconfinedNetwork bool `json:"unconfined_network"`
@@ -632,6 +659,7 @@ func writeAgentboxShowJSON(w io.Writer, d *container.Details, querySpace string,
 	}
 	if resolved != nil {
 		out.State = string(resolved.State)
+		out.SecretInjection = requestedSecretsJSON(resolved.Config)
 		out.Dimensions = &boxDimensionsJSON{
 			Declaration: string(resolved.Declaration),
 			Runtime:     string(resolved.Runtime),
@@ -937,6 +965,10 @@ The workdir defaults to the space's configured default workdir. Pass
 throwaway VM-local storage. --read-only omits the fs.workdir.write
 capability so /workdir is mounted read-only.
 
+--secret KEY or --secret KEY:ENV adds a requested mapping from the box's
+account alongside the agent profile defaults. With --manifest-only, these
+mappings resolve when the container is first created.
+
 --operator adds yolo.space.operator and yolo.chat.skill, with open networking
 unless --unconfined-network=false is explicit. This grants full box authority
 in this space, including other accounts and their credentials, stronger grants,
@@ -982,6 +1014,10 @@ space VM. Only the host starts it; space operators may declare it with
 				return err
 			}
 			opts.Env = envMap
+			opts.SecretInjection, err = parseSecretFlags(specs.Secrets)
+			if err != nil {
+				return err
+			}
 			if err := resolveSpaceFlag(cmd, &opts.Space); err != nil {
 				return err
 			}
@@ -1047,13 +1083,14 @@ space VM. Only the host starts it; space operators may declare it with
 	return cmd
 }
 
-// agentboxCreateSpecs holds the raw repeatable --port/--mount/--env specs that
+// agentboxCreateSpecs holds the raw repeatable collection flags that
 // create-shaped commands parse in their RunE (the parsed forms land in
 // agentboxCreateOptions).
 type agentboxCreateSpecs struct {
-	Ports  []string
-	Mounts []string
-	Envs   []string
+	Ports   []string
+	Mounts  []string
+	Envs    []string
+	Secrets []string
 }
 
 // registerAgentboxCreateFlags registers the common creation options on cmd,
@@ -1080,6 +1117,7 @@ func registerAgentboxCreateFlags(cmd *cobra.Command, opts *agentboxCreateOptions
 	cmd.Flags().StringSliceVar(&opts.Capabilities, "capability", nil, "Explicit positive capability to grant (repeatable), e.g. network.github, or fs.pty.allocate to let the box allocate pseudo-terminals (tmux, script, PTY-backed tests). See yoloctl box inspect for the effective set.")
 	cmd.Flags().StringSliceVar(&opts.DropCapabilities, "drop-capability", nil, "Drop a capability from the box's default+explicit set (repeatable), e.g. fs.workdir.write. Cannot deny a capability a resolved feature requires (that fails with an explanation).")
 	cmd.Flags().StringArrayVar(&specs.Mounts, "mount", nil, "Extra bind mount source:target[:ro] (repeatable; host source accepts ~ or relative paths, target must be absolute). Advanced escape hatch beyond /workdir and the managed account-state mount.")
+	cmd.Flags().StringArrayVar(&specs.Secrets, "secret", nil, "Request an account secret by KEY or KEY:ENV (repeatable)")
 	cmd.Flags().StringArrayVar(&specs.Envs, "env", nil, "Set a literal environment variable KEY=VALUE in the box (repeatable). Non-secret by convention — put secrets in the box's account.")
 	cmd.Flags().StringArrayVar(&specs.Ports, "port", nil, "Forward a port into the box (repeatable). Docker host:container order: published:target (e.g. 8080:3000), or a bare target (e.g. 3000) which publishes on the same port. host_ip/protocol default to 127.0.0.1/tcp.")
 	cmd.Flags().BoolVar(&opts.ManifestOnly, "manifest-only", false, "Write the box manifest on the running space controller without creating a container. Materialize later with: yoloctl box reconcile NAME.")
@@ -1135,8 +1173,8 @@ type agentboxCreateOptions struct {
 	// bind-mount escape hatch beyond the workdir + managed agent-state mounts.
 	Mounts []agentbox.Mount
 	// Env are the explicit --env KEY=VALUE literals (non-secret by convention).
-	// Merged into Config.Env alongside credential-derived entries.
-	Env map[string]agentbox.EnvVar
+	Env             map[string]agentbox.EnvVar
+	SecretInjection []agentprofile.SecretInjection
 	// Ports are the explicit --port forwards (published:target or bare
 	// target), parsed from the CLI. Merged with devcontainer-derived
 	// forwards in buildAgentboxConfig.
@@ -1255,6 +1293,30 @@ func parseMountSpec(s string) (agentbox.Mount, error) {
 		return agentbox.Mount{}, fmt.Errorf("target %q must be an absolute path", m.Target)
 	}
 	return m, nil
+}
+
+func parseSecretFlags(specs []string) ([]agentprofile.SecretInjection, error) {
+	var cfg agentbox.Config
+	rules := make([]agentprofile.SecretInjection, 0, len(specs))
+	for _, spec := range specs {
+		key, target := spec, ""
+		if i := strings.LastIndexByte(spec, ':'); i >= 0 {
+			key, target = spec[:i], spec[i+1:]
+			if target == "" {
+				return nil, asUserError(errors.New("--secret requires an environment name after the colon"))
+			}
+		}
+		if strings.TrimSpace(key) == "" {
+			return nil, asUserError(errors.New("--secret requires a nonblank account key"))
+		}
+		rule := agentprofile.SecretInjection{Secret: key, Env: target}
+		if !agentprofile.ValidEnvName(rule.EnvName()) {
+			return nil, asUserError(fmt.Errorf("--secret target %q is not a valid environment variable name", rule.EnvName()))
+		}
+		rules = append(rules, rule)
+	}
+	cfg.AddSecretInjection(rules)
+	return cfg.SecretInjection, nil
 }
 
 // parseEnvFlags parses the repeatable --env flag values into a literal env map.
@@ -1638,21 +1700,22 @@ func buildAgentboxConfig(ctx context.Context, opts agentboxCreateOptions) (*agen
 	}
 
 	cfg := &agentbox.Config{
-		Name:           opts.Name,
-		Space:          opts.Space,
-		Agent:          opts.Agent,
-		Account:        opts.Account,
-		Image:          opts.Image,
-		AgentExtraArgs: append([]string(nil), opts.AgentExtraArgs...),
-		SessionCommand: append([]string(nil), opts.SessionCommand...),
-		Workdir:        opts.workdir,
-		Resources:      agentbox.Resources{CPUs: opts.CPUs, Memory: opts.Memory},
-		Features:       opts.Features,
-		FeatureOptions: featureOptions,
-		FeatureLocks:   opts.FeatureLocks,
-		Capabilities:   caps,
-		Env:            envMap,
-		Ports:          ports,
+		Name:            opts.Name,
+		Space:           opts.Space,
+		Agent:           opts.Agent,
+		Account:         opts.Account,
+		Image:           opts.Image,
+		AgentExtraArgs:  append([]string(nil), opts.AgentExtraArgs...),
+		SessionCommand:  append([]string(nil), opts.SessionCommand...),
+		Workdir:         opts.workdir,
+		Resources:       agentbox.Resources{CPUs: opts.CPUs, Memory: opts.Memory},
+		Features:        opts.Features,
+		FeatureOptions:  featureOptions,
+		FeatureLocks:    opts.FeatureLocks,
+		Capabilities:    caps,
+		Env:             envMap,
+		SecretInjection: opts.SecretInjection,
+		Ports:           ports,
 		// Explicit --mount binds (the advanced escape hatch). The managed
 		// agent-state slot is appended afterward by applyAgentStateMount, so
 		// these are the user's extra binds only.
@@ -1904,6 +1967,9 @@ type runtimePreparation struct {
 }
 
 func validateAgentboxRuntime(ctx context.Context, c *container.Client, cfg *agentbox.Config, persisted bool) (runtimePreparation, error) {
+	if err := cfg.ValidateSecretInjection(); err != nil {
+		return runtimePreparation{}, asUserError(err)
+	}
 	switch cfg.Workdir.Mode {
 	case agentbox.WorkdirModeHost, agentbox.WorkdirModeEphemeral:
 	default:
@@ -2074,6 +2140,9 @@ func rejectAccountRootBinds(cfg *agentbox.Config) error {
 // Reconcile. Installers still run only when an image is built. Invalid selections
 // are reported as user errors before any declaration is saved.
 func requireResolvableManifest(ctx context.Context, cfg *agentbox.Config) error {
+	if err := cfg.ValidateSecretInjection(); err != nil {
+		return asUserError(err)
+	}
 	ignored, err := cfg.ResolveFeatures(ctx)
 	if err != nil {
 		return asUserError(err)
@@ -3027,9 +3096,13 @@ func boxStateJSONRow(b boxstate.Box) boxStateRowJSON {
 }
 
 func writeBoxStateJSON(w io.Writer, b boxstate.Box) error {
+	out := struct {
+		boxStateRowJSON
+		SecretInjection []agentprofile.SecretInjection `json:"secret_injection,omitempty"`
+	}{boxStateRowJSON: boxStateJSONRow(b), SecretInjection: requestedSecretsJSON(b.Config)}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(boxStateJSONRow(b))
+	return enc.Encode(out)
 }
 
 func writeBoxStatesJSON(w io.Writer, boxes []boxstate.Box) error {

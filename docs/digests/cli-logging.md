@@ -90,17 +90,17 @@ notice's existing once-per-attachment rule are unchanged.
 ## Sources
 
 1. <a id="source-1"></a> [CLI logging helpers](../../cmd/yoloctl/cli_logging.go#L17) — `cliLog`, `renderLoggedCLIError`, `cliOperation`, `cliFinishOutcome`, `cliRoutedOutcome`, `wrapHostLogCommand`, `suspendCLISteps`.
-2. <a id="source-2"></a> [Reconcile output](../../cmd/yoloctl/agentbox_reconcile.go#L209) — `printDryRun`, `printReconcileResult`; account.go command results; internal/openshell/helper_pins.go `existingHelperNotice`.
+2. <a id="source-2"></a> [Reconcile output](../../cmd/yoloctl/agentbox_reconcile.go#L210) — `printDryRun`, `printReconcileResult`; account.go command results; internal/openshell/helper_pins.go `existingHelperNotice`.
 3. <a id="source-3"></a> [Controller routing](../../cmd/yoloctl/controller_client.go#L114) — `routeControllerCommands`, `reportClientDetached`; internal/controller/client.go `ExitError.State`, `OutcomeRendered`.
 4. <a id="source-4"></a> [CLI regressions](../../cmd/yoloctl/cli_logging_test.go#L47) — finalization, error identity/status, uncertainty, sink rejection, JSON/raw command routing and warning separation.
 5. <a id="source-5"></a> [Host lifecycle](../../cmd/yoloctl/controller_lifecycle.go#L71) — `hostControllerLifecycle`, `createControllerSpace`; controller_deploy.go `startControllerSpaceImpl`, `stopControllerSpace`; space_archive.go export/import wrappers.
 6. <a id="source-6"></a> [Input boundary](../../cmd/yoloctl/agent.go#L322) — `promptYesNo`; agentbox_reconcile.go `runEditor`, session_client.go `attachToSession`, controller_mounts.go `controllerSpaceShell`, install_migration.go `confirmInstall`.
 7. <a id="source-7"></a> [Installer output](../../cmd/yoloctl/install_output.go#L34) — `paint`, `ok`, `warn`, `bad`; install.go command outcome wrapper.
-8. <a id="source-8"></a> [Authority warnings](../../cmd/yoloctl/privileged_operator.go#L65) — `guardPrivilegedLaunch`, `warnBoxAuthority`; controller_operator.go `warnBoxOperator`; CLI regression `TestCLIPrivilegedAuthoritySurvivesMessageCap`.
+8. <a id="source-8"></a> [Authority warnings](../../cmd/yoloctl/privileged_operator.go#L66) — `guardPrivilegedLaunch`, `warnBoxAuthority`; controller_operator.go `warnBoxOperator`; CLI regression `TestCLIPrivilegedAuthoritySurvivesMessageCap`.
 
 9. <a id="source-9"></a> [Launcher capture](../../internal/lima/diagnostics.go#L213) — `WithProgress`, `runWithProgress`; lima.go lifecycle callers; diagnostics_test.go progress and daemon-FD fixtures.
 
-10. <a id="source-10"></a> [Ephemeral notice](../../cmd/yoloctl/agentbox.go#L1759) — `noticeEphemeralWorkdir`, `createAgentbox`; ephemeral_notice_test.go two-pass warm/admission regression.
+10. <a id="source-10"></a> [Ephemeral notice](../../cmd/yoloctl/agentbox.go#L1822) — `noticeEphemeralWorkdir`, `createAgentbox`; ephemeral_notice_test.go two-pass warm/admission regression.
 
 11. <a id="source-11"></a> [Remaining CLI notices](../../cmd/yoloctl/image.go#L115) — `newImageRefreshCmd`; space_lifecycle.go `deleteSpaceRuntime`, session_client.go `attachToSession`, controller_client.go `callControllerTerminal`.
 12. <a id="source-12"></a> [Terminal diagnostic boundary](../../cmd/yoloctl/controller_stderr.go#L16) — `attachLogWriter`, `rawTerminalStderr`; owned_notice_test.go raw PTY, wire and caller-writer/stream controls.

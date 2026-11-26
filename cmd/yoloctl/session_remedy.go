@@ -299,7 +299,7 @@ func refuseRecreateBeforeImageWork(ctx context.Context, space string, cfg *agent
 	ctx, cancel := context.WithTimeout(ctx, staleSessionInspectTimeout)
 	defer cancel()
 	b, err := newBoxStateResolver().ResolveOne(ctx, space, cfg.Name, boxstate.FullDiff)
-	if err != nil || b.DiffPlan == nil || !b.DiffPlan.NeedsRecreate {
+	if err != nil || b.DiffPlan == nil || !b.DiffPlan.BlocksStart() {
 		return nil
 	}
 	return asUserError(agentbox.StartRecreateError(cfg, b.DiffPlan.RecreateReason))

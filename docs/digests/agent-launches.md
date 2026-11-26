@@ -61,8 +61,8 @@ afterwards. An unproved cleanup or in-sync reconcile records nothing.
 6. <a id="source-6"></a> [tombstone.go](../../internal/session/tombstone.go#L13-L60) — `LaunchToken`, `ValidLaunchToken`; holder writes at holder.go L220, L364.
 7. <a id="source-7"></a> [unit.go](../../internal/session/unit.go#L33-L150) — `UnitSpec.LaunchToken`, `--launch-token`, `HolderUnitState`, `ProbeVMMarker`; parsed in session_hold.go L47.
 8. <a id="source-8"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L412) — `applySessionStart`, `recordSessionEnded`.
-9. <a id="source-9"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L725) — `startAgentbox`; `recreateAgentbox` at L2572; `removeAgentboxConfig` at L2467.
-10. <a id="source-10"></a> [Managed reconcile](../../cmd/yoloctl/agentbox_reconcile.go#L780-L805) — `reconcileManaged` wires `onSessionEnded` before reconcile and passes the creation result to `applySessionStart`.
+9. <a id="source-9"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L753) — `startAgentbox`; `recreateAgentbox` at L2572; `removeAgentboxConfig` at L2467.
+10. <a id="source-10"></a> [Managed reconcile](../../cmd/yoloctl/agentbox_reconcile.go#L793-L818) — `reconcileManaged` wires `onSessionEnded` before reconcile and passes the creation result to `applySessionStart`.
 11. <a id="source-11"></a> [replacement_settlement_test.go](../../cmd/yoloctl/replacement_settlement_test.go#L124-L331) — seam regressions, the policy restart, failures after a proved cleanup, an unproved cleanup, missing-member creation and negatives; `recreateChatMember` in chat_runtime.go L417-L440.
-12. <a id="source-12"></a> [managed_applier.go](../../cmd/yoloctl/managed_applier.go#L127-L169) — `endSession`, `cleanupManagedSession`, the restart and recreate close details.
+12. <a id="source-12"></a> [managed_applier.go](../../cmd/yoloctl/managed_applier.go#L127-L174) — `endSession`, `cleanupManagedSession`, the restart and recreate close details.
 13. <a id="source-13"></a> [Controller edit apply](../../cmd/yoloctl/controller_documents.go#L247-L250) — `runControllerDocument` saves the box manifest and calls `reconcileAndPrint`.

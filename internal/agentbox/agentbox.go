@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/leogr/yoloctl/internal/account"
+	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/capabilities"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/managedchat"
@@ -131,9 +132,11 @@ type Config struct {
 	// Ports declares the host <-> container TCP/UDP forwards in the
 	// Docker-Compose-style shape (target = box/container port, published =
 	// host port; host_ip/protocol optional). See the Port type.
-	Ports  []Port            `yaml:"ports,omitempty"`
-	Env    map[string]EnvVar `yaml:"env,omitempty"`
-	Mounts []Mount           `yaml:"mounts,omitempty"`
+	Ports []Port            `yaml:"ports,omitempty"`
+	Env   map[string]EnvVar `yaml:"env,omitempty"`
+	// SecretInjection adds account-key references to the selected agent profile.
+	SecretInjection []agentprofile.SecretInjection `yaml:"secret_injection,omitempty"`
+	Mounts          []Mount                        `yaml:"mounts,omitempty"`
 
 	// UnconfinedNetwork drops the openshell-sandbox network confinement layer
 	// for this box: the sandbox runs with --mode=process, so NO inner netns and
@@ -559,6 +562,9 @@ func (c *Config) Validate() error {
 	if err := c.validateAccount(); err != nil {
 		return err
 	}
+	if err := c.validateSecretInjection(nil); err != nil {
+		return err
+	}
 	if err := c.validateWorkdir(); err != nil {
 		return err
 	}
@@ -644,6 +650,9 @@ func (c *Config) Save() error {
 	if err := c.Validate(); err != nil {
 		return err
 	}
+	if err := c.ValidateSecretInjection(); err != nil {
+		return err
+	}
 	if _, err := c.ResolveFeatures(context.Background()); err != nil {
 		return err
 	}
@@ -660,6 +669,11 @@ func (c *Config) Save() error {
 	}
 	if err := ValidateChatDeclaration(c); err != nil {
 		return err
+	}
+	if len(c.SecretInjection) > 1 {
+		rules := c.SecretInjection
+		c.SecretInjection = nil
+		c.AddSecretInjection(rules)
 	}
 	raw, err := strictyaml.Marshal(c)
 	if err != nil {

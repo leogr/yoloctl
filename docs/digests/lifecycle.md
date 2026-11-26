@@ -121,7 +121,7 @@ physical power loss.
 
 ## Sources
 
-1. <a id="source-1"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L163) — Diff and recreateReason.
+1. <a id="source-1"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L167) — Diff and recreateReason.
 2. <a id="source-2"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L68) — `Inspect` and `liveWorkdirMount`, lines 66–211.
 3. <a id="source-3"></a> [cmd/yoloctl/managed_applier.go](../../cmd/yoloctl/managed_applier.go#L23) — managed session cleanup.
 4. <a id="source-4"></a> [internal/agentbox/readiness.go](../../internal/agentbox/readiness.go#L40) — SSH readiness and container exit probe.
@@ -141,14 +141,14 @@ physical power loss.
 17. <a id="source-17"></a> [scripts/smoke/box-stop.sh](../../scripts/smoke/box-stop.sh#L1) — isolated graceful shutdown acceptance.
 18. <a id="source-18"></a> [internal/sandbox/stop_test.go](../../internal/sandbox/stop_test.go#L18) — SSH request, timeout and fallback tests.
 19. <a id="source-19"></a> [OpenShell v0.0.72 process runner](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-process/src/run.rs) — supervised entrypoint wait/cleanup.
-20. <a id="source-20"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2134) — `newAgentboxDestroyCmd` requires `RuntimeInventory` before teardown.
+20. <a id="source-20"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2203) — `newAgentboxDestroyCmd` requires `RuntimeInventory` before teardown.
 21. <a id="source-21"></a> [cmd/yoloctl/agentbox_test.go](../../cmd/yoloctl/agentbox_test.go#L30) — `TestAgentboxDestroyUncertainRuntimePreservesDeclaration`: inventory failures, force/keep-manifest combinations.
 22. <a id="source-22"></a> [Inspector regressions](../../internal/agentbox/live_inspect_test.go#L20) — convergence, drift and refusal.
-23. <a id="source-23"></a> [Inspect selection](../../internal/container/container.go#L619-L730) — `parseContainerIP`, `parseInspect`, `selectInspectEntry`;
+23. <a id="source-23"></a> [Inspect selection](../../internal/container/container.go#L657-L768) — `parseContainerIP`, `parseInspect`, `selectInspectEntry`;
     [tests](../../internal/container/inspect_select_test.go#L1-L99).
 24. <a id="source-24"></a> [nerdctl v2.4.2](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/inspecttypes/dockercompat/dockercompat.go#L375-L384) — `Path`/`Args` from OCI argv.
 25. <a id="source-25"></a> [reconcile.go](../../internal/agentbox/reconcile.go#L91) — `ReconcileForStart`, `CheckStart`, shared planning.
-26. <a id="source-26"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L664) — `startAgentbox`, `preflightAgentboxRestart`, `newAgentboxRestartCmd`.
+26. <a id="source-26"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L692) — `startAgentbox`, `preflightAgentboxRestart`, `newAgentboxRestartCmd`.
 27. <a id="source-27"></a> [Command regressions](../../cmd/yoloctl/agentbox_start_test.go#L24) — early/late drift refusal and teardown ordering.
 
 28. <a id="source-28"></a> [Interrupted-outcome recovery](controller-recovery.md) — durable proofs, interrupted closing without holds and deferred records.
@@ -157,13 +157,13 @@ physical power loss.
 31. <a id="source-31"></a> [Maintenance](../../cmd/yoloctl/autoupdate.go#L100) — npm/version helpers; native install in agent_distribution.go and process probe in agent.go; container_target_test.go covers target argv and refusals.
 32. <a id="source-32"></a> [Legacy forwarding](../../internal/port/port.go#L94-L172) — inspected bridge/CID and `dnatExecArgs`; `legacyDNATTarget` verifies cleanup routing, and `TestLegacyDNATUsesSystemPathAndExactSelectedID` checks argv, mode and refusals.
 
-33. <a id="source-33"></a> [Saved apply errors](../../cmd/yoloctl/privileged_operator.go#L192) — `savedDeclarationError`.
-34. <a id="source-34"></a> [Set/edit apply tail](../../cmd/yoloctl/agentbox_reconcile.go#L766) — `reconcileAndPrint`.
+33. <a id="source-33"></a> [Saved apply errors](../../cmd/yoloctl/privileged_operator.go#L193) — `savedDeclarationError`.
+34. <a id="source-34"></a> [Set/edit apply tail](../../cmd/yoloctl/agentbox_reconcile.go#L779) — `reconcileAndPrint`.
 35. <a id="source-35"></a> [Controller edit apply](../../cmd/yoloctl/controller_documents.go#L250) — saved declaration enters the shared reconcile tail.
 
 36. <a id="source-36"></a> [Declaration permission comparison](../../cmd/yoloctl/saved_permissions.go#L16) — immutable prior snapshot and removal warning, not runtime proof.
 
-37. <a id="source-37"></a> [Environment drift](../../internal/agentbox/diff.go#L388) — `envRecreateReason`; verified at `ed0f79a6f4e9e03e8c0777ec612b58315cbf86b1` and accompanying changes.
+37. <a id="source-37"></a> [Environment drift](../../internal/agentbox/diff.go#L410) — `envRecreateReason`; verified at `ed0f79a6f4e9e03e8c0777ec612b58315cbf86b1` and accompanying changes.
 38. <a id="source-38"></a> [Native engine stop](../../internal/agentbox/openshell_stop_linux.go#L279-L284) — exact container ID.
 39. <a id="source-39"></a> [PID 1 signal and cleanup](../../internal/openshell/runtime_main_linux.go#L40-L80) — TERM handling, child reaping and final status.
 40. <a id="source-40"></a> [Helper exit code](../../internal/openshell/runtime_manifest_linux.go#L19-L34) — `projectedRuntimeResult`.

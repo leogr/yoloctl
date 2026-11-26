@@ -80,7 +80,7 @@ Unauthorized curl still requires an attributed denial. [7](#source-7)
 3. <a id="source-3"></a> [Installer](../../internal/features/pi.go#L3) — latest npm and search-tool recipe.
 4. <a id="source-4"></a> [CLI regressions](../../cmd/yoloctl/pi_test.go#L16) — launch, maintenance, import, completion.
 5. <a id="source-5"></a> [Capability](../../internal/capabilities/capabilities.go#L253).
-6. <a id="source-6"></a> [Secret projection tests](../../internal/agentbox/secret_injection_test.go#L12).
+6. <a id="source-6"></a> [Secret projection tests](../../internal/agentbox/secret_injection_test.go#L15).
 7. <a id="source-7"></a> [Pi smoke](../../scripts/smoke/pi.sh#L1).
 8. <a id="source-8"></a> [Local runtime fixture](../../scripts/smoke/pi-runtime.mjs#L1).
 9. <a id="source-9"></a> [Pi v1.0.3 bash](https://github.com/earendil-works/pi/blob/v1.0.3/packages/coding-agent/src/core/tools/bash.ts#L105).

@@ -37,11 +37,11 @@ JSON remains the structured measurement alone. [7](#source-7) [8](#source-8) [9]
 ## Sources
 
 1. <a id="source-1"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L400) — `newSpaceStorageCmd` help and explicit remedies.
-2. <a id="source-2"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2671) — `newAgentboxExecCmd` argv and confined command transport.
+2. <a id="source-2"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2740) — `newAgentboxExecCmd` argv and confined command transport.
 3. <a id="source-3"></a> [Go clean](https://pkg.go.dev/cmd/go#hdr-Remove_object_files_and_cached_files) — `-cache` and `-modcache`.
 4. <a id="source-4"></a> [npm cache](https://docs.npmjs.com/cli/v11/commands/npm-cache/) — `clean` and required force flag.
 5. <a id="source-5"></a> [pip cache](https://pip.pypa.io/en/stable/cli/pip_cache/) — `purge`.
-6. <a id="source-6"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2594) — recreate's kept binds and removal confirmation in `recreateAgentbox`.
+6. <a id="source-6"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2663) — recreate's kept binds and removal confirmation in `recreateAgentbox`.
 
 7. <a id="source-7"></a> [storage_remedy.go](../../cmd/yoloctl/storage_remedy.go#L1) — shared explicit-action wording used by `diskReserveWarning`, `beforeBuild` and the storage report footer.
 8. <a id="source-8"></a> [storage_warning.go](../../cmd/yoloctl/storage_warning.go#L30) — `diskReserveWarning` appends the shared explicit cache remedy.

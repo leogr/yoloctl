@@ -93,9 +93,9 @@ refuses the stop (`persistExecution`, `deferExecution` in live_receipts.go). [14
 ## Sources
 
 1. <a id="source-1"></a> [cmd/yoloctl/box_stop_result.go](../../cmd/yoloctl/box_stop_result.go#L40-L237) — `liveBoxStopSteps`, `stopAgentboxForResult`, `runBoxStop`, `removeStartLeftovers`, `runStartForResult`, `settleStartForResult`.
-2. <a id="source-2"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2250) — `box stop` RunE calls `runBoxStop`.
+2. <a id="source-2"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2319) — `box stop` RunE calls `runBoxStop`.
 3. <a id="source-3"></a> [internal/agentbox/openshell_stop_linux.go](../../internal/agentbox/openshell_stop_linux.go#L24-L312) — `stopNativeRuntimeForResult`, `stopForResultWithStorageFallback`, `stopExactContainerWithoutStorage`, `stopNativeRuntimeMode`, `readNativeStopOwnership`. Endpoint removal is at L381–L455.
-4. <a id="source-4"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L745-L920) — `startAgentboxCore` `resultPolicy`; `startExistingAgentboxContainerPrepared`; the recreate's `legacyRemedyFlag` branch (legacy_runtime.go L132).
+4. <a id="source-4"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L773-L948) — `startAgentboxCore` `resultPolicy`; `startExistingAgentboxContainerPrepared`; the recreate's `legacyRemedyFlag` branch (legacy_runtime.go L132).
 5. <a id="source-5"></a> [internal/agentbox/openshell_stop.go](../../internal/agentbox/openshell_stop.go#L13-L70) — `Stop` (today's mode), `StopRuntimeForResult` and `ResultLeftover`.
 6. <a id="source-6"></a> [cmd/yoloctl/box_stop_result_test.go](../../cmd/yoloctl/box_stop_result_test.go#L46) — stop step failures, lost replies, reads, absent/exited, start leftovers and rollback.
 7. <a id="source-7"></a> [internal/agentbox/openshell_stop_endpoint_linux_test.go](../../internal/agentbox/openshell_stop_endpoint_linux_test.go#L52) — endpoint kept unless every check holds.

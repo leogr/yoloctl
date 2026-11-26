@@ -1,13 +1,19 @@
 # Account authentication and mutation safety
 
-Verification: `cae7f0d106ee85c3193168becc12a3ee8fdc25c6` and accompanying changes; re-read cited sources when changing behavior. Source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`. Native auth and account-view waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
+Verification: `cae7f0d106ee85c3193168becc12a3ee8fdc25c6` and accompanying changes; re-read cited sources when changing behavior. Per-box mapping and launch paths verified on `7ebfb55569107f56773798c76f68c515e0cf609d` and accompanying changes. Source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`. Native auth and account-view waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
-[FACT] Account secrets and native state are separate delivery paths. At container
-creation, `userEnvironmentJSON` reloads the selected account and projects only
-nonempty secrets named by the agent's injection declarations. The JSON map
-reaches the supervisor through `OPENSHELL_USER_ENVIRONMENT`. A malformed/missing
-account fails creation even for an agent with no secret-injection rules; a
-missing secret value is nonfatal. [1](#source-1)
+[FACT] At creation, `userEnvironmentJSON` loads the selected account and
+projects nonempty values from the profile and the box's extra
+`secret_injection` references. The native confined path uses its private
+bootstrap. The privileged endpoint receives the map via a VM-local engine
+environment entry. An unreadable or invalid account fails creation, even
+with no rules. [1](#source-1) [18](#source-18) [19](#source-19)
+
+[FACT] Extra rules require a real agent and account. Exact pairs coalesce.
+A target with a second source, a literal, a profile launch variable, or a
+reserved OpenShell or managed chat name is rejected before reading values.
+Account secrets retain precedence over Feature defaults. [1](#source-1)
+[18](#source-18) [20](#source-20)
 
 [FACT] The built-in Claude adapter declares `ANTHROPIC_API_KEY`, a native
 `.credentials.json`, and `CLAUDE_CONFIG_DIR` pointing into its mounted leaf.
@@ -63,11 +69,11 @@ or add a mount; use --file for a host CODEX_HOME override. Claude's managed in-l
 relocation and selected-profile import are detailed separately. List/show never reveal
 secret values. [5](#source-5) [7](#source-7) [15](#source-15) [16](#source-16)
 
-[FACT] Reconcile compares the account reference, not account secret/native
-contents. Changing a secret does not automatically restart or recreate a box;
-container recreation is how changed create-time environment is delivered.
-Changing the selected account reference is a recreate reason. [1](#source-1)
-[8](#source-8)
+[FACT] Reconcile compares the account name and a digest of the extra
+reference pairs recorded at creation. Absence of the digest means no extras.
+Order, duplicate pairs and account contents do not affect it. Saving changed
+mappings preserves the container and names the explicit recreate remedy.
+Start and restart can reuse the recorded values. [1](#source-1) [8](#source-8)
 
 [FACT] Antigravity (`agy`) declares a separate native leaf and nested token file,
 plus optional `GEMINI_API_KEY` injection. API-key mode additionally requires
@@ -88,14 +94,14 @@ cancellation ends either request. [5](#source-5) [7](#source-7)
 
 ## Sources
 
-1. <a id="source-1"></a> [internal/agentbox/secret_injection.go](../../internal/agentbox/secret_injection.go#L44-L73) — `userEnvironmentJSON`.
+1. <a id="source-1"></a> [internal/agentbox/secret_injection.go](../../internal/agentbox/secret_injection.go#L15) — validation, snapshot and `userEnvironmentJSON`.
 2. <a id="source-2"></a> [internal/agentprofile/builtin/claude.yaml](../../internal/agentprofile/builtin/claude.yaml#L46-L116) — `launch_env`, `auth`, `secret_injection`.
 3. <a id="source-3"></a> [internal/agentprofile/builtin/codex.yaml](../../internal/agentprofile/builtin/codex.yaml#L13) — `command`, `requires_features`, `auth` (line 89).
 4. <a id="source-4"></a> [cmd/yoloctl/launchenv.go](../../cmd/yoloctl/launchenv.go#L26-L42) — `applyLaunchEnv`.
 5. <a id="source-5"></a> [cmd/yoloctl/account_auth.go](../../cmd/yoloctl/account_auth.go#L131-L437) — `resolveAccountAuthTarget`, `defaultHostAuthPaths`, `newAccountAuthImportCmd`, `importSecretIntoAccount`, `accountAuthStatus`.
 6. <a id="source-6"></a> [cmd/yoloctl/space_lifecycle.go](../../cmd/yoloctl/space_lifecycle.go#L80) — authoritative consumer matching.
 7. <a id="source-7"></a> [cmd/yoloctl/account.go](../../cmd/yoloctl/account.go#L220) — show, edit, deletion, secret commands.
-8. <a id="source-8"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L214) — account-reference drift.
+8. <a id="source-8"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L193) — account name and reference-pair drift; `reconcile.go` implements the replacement refusal.
 9. <a id="source-9"></a> [cmd/yoloctl/controller_documents.go](../../cmd/yoloctl/controller_documents.go#L231) — native import and profile digest validation.
 10. <a id="source-10"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L181) — caller secret capture and local editor.
 
@@ -110,3 +116,6 @@ cancellation ends either request. [5](#source-5) [7](#source-7)
 15. <a id="source-15"></a> [Claude profile storage](claude-auth.md) — managed relocation, supported local formats, import and preservation order.
 16. <a id="source-16"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1) — same primary state path, native status format and explicit optional AWS injection.
 17. <a id="source-17"></a> [cmd/yoloctl/secret_prompt_unix.go](../../cmd/yoloctl/secret_prompt_unix.go#L22) — `readHiddenLine`: echo off before the prompt, a polled read with nothing left reading after cancellation, settings restored on every return.
+18. <a id="source-18"></a> [Native launch plan](../../internal/agentbox/openshell_container_plan_linux.go#L78) — private bootstrap and literal precedence in `bootstrapForCreated`.
+19. <a id="source-19"></a> [Privileged engine launch](../../internal/container/container.go#L189) — private entry inheritance with only its key in argv.
+20. <a id="source-20"></a> [Privileged child environment](../../internal/boxendpoint/boxendpoint.go#L148-L201) — Feature defaults and account-map precedence.

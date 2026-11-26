@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/account"
+	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/capabilities"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/openshell"
@@ -95,9 +96,11 @@ func TestNativeContainerPlanKeepsAccountOverridesPrivateAndPreservesPrecedence(t
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	c, current, release := nativeContainerPlanFixture(t)
 	c.Agent, c.Account = "claude", account.Default
+	c.SecretInjection = []agentprofile.SecretInjection{{Secret: "publisher:token", Env: "GH_TOKEN"}}
 	c.Env = map[string]EnvVar{openshellUserEnvironment: {Literal: `{"LITERAL_PRIVATE":"literal-value"}`}, "PUBLIC": {Literal: "public-value"}, "ANTHROPIC_API_KEY": {Literal: "overridden-literal"}}
 	acct := account.New(c.Space, c.Account)
 	acct.SetSecret("ANTHROPIC_API_KEY", "unit-account-private-value")
+	acct.SetSecret("publisher:token", "unit-account-private-extra")
 	if err := acct.Save(); err != nil {
 		t.Fatal(err)
 	}
@@ -110,17 +113,18 @@ func TestNativeContainerPlanKeepsAccountOverridesPrivateAndPreservesPrecedence(t
 		t.Fatal(err)
 	}
 	for _, text := range []string{strings.Join(options.Env, "\n"), strings.Join(options.Command, "\n"), fmt.Sprint(options.Labels), fmt.Sprintf("%v %#v", plan, plan)} {
-		if strings.Contains(text, "unit-account-private-value") {
+		if strings.Contains(text, "unit-account-private-") {
 			t.Fatal("private account override leaked to argv/options/labels/formatting")
 		}
 	}
 	input, err := plan.bootstrapForCreated(createdNativePlanDetails(options))
-	if err != nil || len(input.Environment) != 2 || input.Environment["ANTHROPIC_API_KEY"] != "unit-account-private-value" || input.Environment["PUBLIC"] != "public-value" {
+	if err != nil || len(input.Environment) != 3 || input.Environment["GH_TOKEN"] != "unit-account-private-extra" || input.Environment["ANTHROPIC_API_KEY"] != "unit-account-private-value" || input.Environment["PUBLIC"] != "public-value" {
 		t.Fatal("account channel did not replace image/literal map privately", err)
 	}
 	// No injected account value: preserve the effective literal-over-image
 	// private channel without merging other image ENV into later SSH.
 	c.Agent, c.Account = "none", "none"
+	c.SecretInjection = nil
 	options, plan, err = planNativeContainer(c, c.Image, current, release, strings.Repeat("e", 32), policy)
 	if err != nil {
 		t.Fatal(err)

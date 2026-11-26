@@ -1,6 +1,6 @@
 # Privileged development boxes
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; managed endpoint shutdown `549d46495e13d1814aff3358c3a68fc7463211be` and accompanying changes; re-read cited sources when changing behavior. nerdctl privilege sources re-read at `fcd4a112` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; managed endpoint shutdown `549d46495e13d1814aff3358c3a68fc7463211be` and accompanying changes; re-read cited sources when changing behavior. Private environment delivery verified on `7ebfb55569107f56773798c76f68c515e0cf609d` and accompanying changes. nerdctl privilege sources re-read at `fcd4a112` and accompanying changes.
 
 [FACT] Only the box's explicit `privileged: true` setting selects a privileged
 box: `--privileged` on create, copy and set (`=false` clears it), or an edit.
@@ -38,6 +38,12 @@ resources, binds and child environment. PID 1 is the shim plus
 bind; preflight requires a root-owned chain and a static executable for the VM
 architecture. Labels record the mode, launcher protocol and binary hash. [4](#source-4)
 [5](#source-5) [6](#source-6) [7](#source-7) [8](#source-8)
+
+[FACT] The native VM worker passes the account JSON map to its local
+nerdctl process in its environment. The engine gets a bare variable name in
+argv and takes the value from its process environment. A launch with private
+input reports engine exit status and keeps engine stderr private.
+[34](#source-34) [35](#source-35)
 
 [FACT] The endpoint is dispatched before CLI, controller, Lima or operator setup.
 It requires root PID 1, strict argv for its protocol, the workdir, a non-root
@@ -153,21 +159,21 @@ were not run. [28](#source-28)
 2. <a id="source-2"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L22-L52) — `PrivilegedAuthority`, `PrivilegedOperatorAccess` and `RuntimeFeatures`.
 3. <a id="source-3"></a> [internal/features/privileged.go](../../internal/features/privileged.go#L5-L61) — internal installer and its identity note.
 4. <a id="source-4"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L438-L489) — privileged launch; creation check at L263.
-5. <a id="source-5"></a> [internal/container/container.go](../../internal/container/container.go#L87-L123) — run option; inspected record at L546.
+5. <a id="source-5"></a> [internal/container/container.go](../../internal/container/container.go#L90-L130) — run option; inspected record at L546.
 6. <a id="source-6"></a> [nerdctl v2.4.2 run_security_linux.go](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/cmd/container/run_security_linux.go#L43-L48) — spec options; `dockercompat.go#L690` and `create.go#L999` record it and reserve its label.
 7. <a id="source-7"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L148-L199) — binary verification.
-8. <a id="source-8"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1824-L1830) — runtime preflight.
+8. <a id="source-8"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1887-L1893) — runtime preflight.
 9. <a id="source-9"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L36-L40) — early dispatch.
 10. <a id="source-10"></a> [internal/boxendpoint/server_linux.go](../../internal/boxendpoint/server_linux.go#L93-L1178) — server, children, reaper, PID 1 and socket.
 11. <a id="source-11"></a> [internal/boxendpoint/boxendpoint.go](../../internal/boxendpoint/boxendpoint.go#L24-L219) — main-session request, limits, argv and environment.
 12. <a id="source-12"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L54-L146) — `ClassifyRuntime`.
-13. <a id="source-13"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L196-L248) — policy note and `runtimeModeReason`.
+13. <a id="source-13"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L217-L270) — policy note and `runtimeModeReason`.
 14. <a id="source-14"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L203-L231) — explicit-recreate mode gate.
 15. <a id="source-15"></a> [cmd/yoloctl/managed_applier.go](../../cmd/yoloctl/managed_applier.go#L35-L91) — launch guards before teardown and the shared recreate gate.
 16. <a id="source-16"></a> [internal/port/port.go](../../internal/port/port.go#L40-L48) — direct routing; teardown at L182-L213.
-17. <a id="source-17"></a> [cmd/yoloctl/privileged_operator.go](../../cmd/yoloctl/privileged_operator.go#L16-L211) — flag help, `guardPrivilegedLaunch`, `privilegedLaunchReason`, continuation, `authorizePrivilegedRestart`, create refusal, `savedDeclarationError` and `warnBoxAuthority`.
-18. <a id="source-18"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2033-L2040) — `startExistingAgentboxContainer` guard; explicit restart's start-leg context at L2242-L2262.
-19. <a id="source-19"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1760-L1775) — manifest-only notice and create/copy refusal; saved-declaration reports in `agentbox_reconcile.go` at L728 and L782.
+17. <a id="source-17"></a> [cmd/yoloctl/privileged_operator.go](../../cmd/yoloctl/privileged_operator.go#L17-L220) — flag help, `guardPrivilegedLaunch`, `privilegedLaunchReason`, continuation, `authorizePrivilegedRestart`, create refusal, `savedDeclarationError` and `warnBoxAuthority`.
+18. <a id="source-18"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2099-L2106) — `startExistingAgentboxContainer` guard; explicit restart's start-leg context at L2242-L2262.
+19. <a id="source-19"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1823-L1838) — manifest-only notice and create/copy refusal; saved-declaration reports in `agentbox_reconcile.go` at L728 and L782.
 20. <a id="source-20"></a> [internal/boxendpoint/server_linux_test.go](../../internal/boxendpoint/server_linux_test.go#L1) — protocol tests.
 21. <a id="source-21"></a> [internal/session/holder_endpoint_linux_test.go](../../internal/session/holder_endpoint_linux_test.go#L1) — holder against the endpoint.
 22. <a id="source-22"></a> [internal/agentbox/privileged_test.go](../../internal/agentbox/privileged_test.go#L1) — setting-only resolution, retired-grant refusal without rewrite, setting round trip, installer contract, evidence and drift.
@@ -177,9 +183,11 @@ were not run. [28](#source-28)
 26. <a id="source-26"></a> [assets/vm/firecracker/inputs.py](../../assets/vm/firecracker/inputs.py#L24-L35) — required built-in options.
 27. <a id="source-27"></a> [assets/vm/firecracker/kernel.config](../../assets/vm/firecracker/kernel.config#L718-L725) — effective KVM options.
 28. <a id="source-28"></a> [internal/firecracker/driver_linux.go](../../internal/firecracker/driver_linux.go#L245-L296) — `Driver.Start`: `/dev/kvm` open and `setsid` helper.
-29. <a id="source-29"></a> [internal/agentbox/agentbox.go](../../internal/agentbox/agentbox.go#L155-L162) — `Config.Privileged`; retired-name validation at L580, run by `Save` at L641, `planReconcile` in `reconcile.go` at L118 and `runRebuild` in `cmd/yoloctl/agentbox_reconcile.go` at L163, which composes policy at L169 before its build (`box edit` hint at L679); policy errors as drift with a present runtime in `internal/boxstate/boxstate.go` at L474-L495; chat-server refusal in `chat.go` at L69; feature refusal in `compose.go` at L84.
-30. <a id="source-30"></a> [cmd/yoloctl/agentbox_reconcile.go](../../cmd/yoloctl/agentbox_reconcile.go#L636-L641) — `box set --privileged`; create/copy flag in `agentbox.go` at L989 and copy inheritance in `agentbox_copy.go` at L306.
+29. <a id="source-29"></a> [internal/agentbox/agentbox.go](../../internal/agentbox/agentbox.go#L158-L165) — `Config.Privileged`; retired-name validation at L580, run by `Save` at L641, `planReconcile` in `reconcile.go` at L118 and `runRebuild` in `cmd/yoloctl/agentbox_reconcile.go` at L163, which composes policy at L169 before its build (`box edit` hint at L679); policy errors as drift with a present runtime in `internal/boxstate/boxstate.go` at L474-L495; chat-server refusal in `chat.go` at L69; feature refusal in `compose.go` at L84.
+30. <a id="source-30"></a> [cmd/yoloctl/agentbox_reconcile.go](../../cmd/yoloctl/agentbox_reconcile.go#L649-L654) — `box set --privileged`; create/copy flag in `agentbox.go` at L989 and copy inheritance in `agentbox_copy.go` at L306.
 31. <a id="source-31"></a> [internal/features/privileged_test.go](../../internal/features/privileged_test.go#L1) — installer wording and its script run against fake package, account and sudo tools.
 32. <a id="source-32"></a> [Live space view](space-view.md) — inventory launch evidence and the privilege pill rule.
 
 33. <a id="source-33"></a> [internal/boxendpoint/main_session_linux_test.go](../../internal/boxendpoint/main_session_linux_test.go#L1-L227) — real serving/stop path with unprivileged isolated process groups; output/status, holder loss, probe, unmarked and failed-start controls.
+34. <a id="source-34"></a> [Container launch](../../internal/container/container.go#L126) — `createOrRun` inherits the private entry and discards stderr for that launch.
+35. <a id="source-35"></a> [nerdctl 2.4.2 environment resolution](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/flagutil/flagutil.go) — `MergeEnvFileAndOSEnv`, `withOSEnv`.

@@ -1,11 +1,14 @@
 package agentbox
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/account"
+	"github.com/leogr/yoloctl/internal/agentprofile"
 )
 
 func TestUserEnvironmentJSON_AgentsProjectOnlyDeclaredAccountSecrets(t *testing.T) {
@@ -178,5 +181,157 @@ func TestUserEnvironmentJSON_EmptyCases(t *testing.T) {
 	codex := &Config{SchemaVersion: 1, Name: "codex-box", Space: "default", Agent: "codex", Account: account.Default}
 	if got, err := userEnvironmentJSON(codex); err != nil || got != "" {
 		t.Errorf("agent without injection rules: got (%q, %v), want (\"\", nil)", got, err)
+	}
+}
+
+func TestBoxSecretInjectionUsesSelectedAccountAtCreation(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	const original = "fixture value # with equals= and\na second line"
+	const rotated = "fixture rotated"
+	const independent = "fixture other account"
+	acct := account.New("default", "shared")
+	acct.SetSecret("team:publisher", original)
+	acct.SetSecret("AWS_ACCESS_KEY_ID", "fixture-default")
+	acct.SetSecret("EMPTY", "")
+	if err := acct.Save(); err != nil {
+		t.Fatal(err)
+	}
+	other := account.New("staging", "shared")
+	other.SetSecret("team:publisher", independent)
+	if err := other.Save(); err != nil {
+		t.Fatal(err)
+	}
+	publisher := &Config{Name: "publisher", Space: "default", Agent: "codex", Account: "shared", Image: "example:latest", Workdir: NewEphemeralWorkdir("publisher")}
+	publisher.SecretInjection = []agentprofile.SecretInjection{
+		{Secret: "team:publisher", Env: "GH_TOKEN"},
+		{Secret: "EMPTY"}, {Secret: "MISSING"},
+	}
+	reviewer := *publisher
+	reviewer.Name, reviewer.SecretInjection = "reviewer", nil
+	env := func(c *Config) map[string]string {
+		t.Helper()
+		raw, err := userEnvironmentJSON(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := map[string]string{}
+		if raw != "" && json.Unmarshal([]byte(raw), &result) != nil {
+			t.Fatal("private environment was not a JSON map")
+		}
+		return result
+	}
+	published := env(publisher)
+	if len(published) != 2 || published["GH_TOKEN"] != original || published["AWS_ACCESS_KEY_ID"] != "fixture-default" {
+		t.Fatal("publisher got the wrong account projection")
+	}
+	if reviewed := env(&reviewer); len(reviewed) != 1 || reviewed["AWS_ACCESS_KEY_ID"] != "fixture-default" {
+		t.Fatal("reviewer got more than its existing profile projection")
+	}
+	dest := *publisher
+	dest.Space = "staging"
+	if copied := env(&dest); len(copied) != 1 || copied["GH_TOKEN"] != independent {
+		t.Fatal("copy did not use the independent destination account")
+	}
+	opts, err := buildRunOptions(publisher, publisher.Image, &EndpointBinary{SHA256: "fixture"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(opts.PrivateEnv, openshellUserEnvironment+"=") || strings.Contains(strings.Join(opts.Env, "\n"), openshellUserEnvironment) {
+		t.Fatal("privileged projection entered public environment arguments")
+	}
+	visible, err := json.Marshal([]any{opts.Env, opts.Command, opts.Labels, publisher})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(visible), "fixture value") {
+		t.Fatal("secret leaked into the manifest or launch metadata")
+	}
+	acct.SetSecret("team:publisher", rotated)
+	if err := acct.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if published["GH_TOKEN"] != original || env(publisher)["GH_TOKEN"] != rotated || publisher.secretInjectionChanged(opts.Labels) {
+		t.Fatal("rotation altered the saved environment or caused mapping drift")
+	}
+}
+
+func TestBoxSecretInjectionValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		rules []agentprofile.SecretInjection
+		want  string
+	}{
+		{"alias", []agentprofile.SecretInjection{{Secret: "team:token", Env: "GH_TOKEN"}}, ""},
+		{"matches default", []agentprofile.SecretInjection{{Secret: "ANTHROPIC_API_KEY", Env: "ANTHROPIC_API_KEY"}}, ""},
+		{"profile conflict", []agentprofile.SecretInjection{{Secret: "OTHER", Env: "ANTHROPIC_API_KEY"}}, "ANTHROPIC_API_KEY"},
+		{"same target", []agentprofile.SecretInjection{{Secret: "FIRST", Env: "TOKEN"}, {Secret: "SECOND", Env: "TOKEN"}}, "maps both"},
+		{"invalid target", []agentprofile.SecretInjection{{Secret: "team:token"}}, "environment variable name"},
+		{"blank source", []agentprofile.SecretInjection{{Secret: " ", Env: "TOKEN"}}, "nonblank"},
+		{"literal", []agentprofile.SecretInjection{{Secret: "TOKEN", Env: "DECLARED"}}, "box env literal"},
+		{"launch env", []agentprofile.SecretInjection{{Secret: "TOKEN", Env: "CLAUDE_CONFIG_DIR"}}, "launch_env"},
+		{"OpenShell", []agentprofile.SecretInjection{{Secret: "TOKEN", Env: "OPENSHELL_ENDPOINT"}}, "reserved"},
+		{"chat", []agentprofile.SecretInjection{{Secret: "TOKEN", Env: "YOLOCTL_CHAT_CONFIG"}}, "reserved"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{Agent: "claude", Account: "selected", SecretInjection: tc.rules, Env: map[string]EnvVar{"DECLARED": {Literal: "literal-fixture"}}}
+			err := cfg.ValidateSecretInjection()
+			if tc.want == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.want) || strings.Contains(err.Error(), "literal-fixture") {
+				t.Fatal("unexpected validation result", err)
+			}
+		})
+	}
+	shell := &Config{Agent: "none", Account: "none", SecretInjection: []agentprofile.SecretInjection{{Secret: "TOKEN"}}}
+	if err := shell.ValidateSecretInjection(); err == nil {
+		t.Fatal("agentless box accepted an account reference")
+	}
+}
+
+func TestBoxSecretInjectionDriftRequiresExplicitRecreation(t *testing.T) {
+	cfg := validConfig()
+	cfg.Agent, cfg.Account = "codex", "shared"
+	image, _, err := ResolvedImage(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := ComposePolicy(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual := ActualState{Exists: true, Image: image, ReadOnlyWD: !cfg.WorkdirWritable(), Labels: map[string]string{LabelAgent: "codex"}, PolicyContent: policy}
+	if plan := Diff(cfg, actual, image, policy); plan.HasChanges() {
+		t.Fatal("legacy container with no extra mappings drifted", plan)
+	}
+	cfg.SecretInjection = []agentprofile.SecretInjection{{Secret: "TOKEN"}, {Secret: "SECOND", Env: "ALIAS"}}
+	if plan := Diff(cfg, actual, image, policy); !plan.NeedsRecreate || plan.BlocksStart() || !plan.SecretInjectionChanged {
+		t.Fatal("adding a mapping failed to report explicit recreation", plan)
+	}
+	inspector := &fakeInspector{state: actual}
+	applier := &fakeApplier{}
+	var pending *SecretInjectionChange
+	if result, err := Reconcile(t.Context(), cfg, inspector, applier); !errors.As(err, &pending) || result.HasChanges() || len(applier.recreateCalls) != 0 || len(applier.restartCalls) != 0 {
+		t.Fatal("reconcile changed a container with pending secret mappings", result, err)
+	}
+	if err := CheckStart(t.Context(), cfg, inspector); err != nil {
+		t.Fatal("pending secret mappings blocked reuse of the original environment", err)
+	}
+	if err := CheckSecretInjectionRecreate(WithRuntimeModeChange(t.Context()), cfg, actual.Labels); err != nil {
+		t.Fatal("explicit recreation refused", err)
+	}
+	actual.Labels[LabelSecretInjection] = cfg.secretInjectionSnapshot()
+	cfg.SecretInjection = []agentprofile.SecretInjection{{Secret: "SECOND", Env: "ALIAS"}, {Secret: "TOKEN", Env: "TOKEN"}, {Secret: "TOKEN"}}
+	if plan := Diff(cfg, actual, image, policy); plan.HasChanges() {
+		t.Fatal("ordering or repeats caused mapping drift", plan)
+	}
+	cfg.SecretInjection = nil
+	if plan := Diff(cfg, actual, image, policy); !plan.SecretInjectionChanged {
+		t.Fatal("removing the last mapping failed to report drift", plan)
+	}
+	inspector.state = actual
+	if _, err := Reconcile(t.Context(), cfg, inspector, applier); !errors.As(err, &pending) {
+		t.Fatal("ordinary reconcile could replace an existing secret recipient", err)
 	}
 }

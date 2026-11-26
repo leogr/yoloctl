@@ -1,6 +1,6 @@
 # Opt-in space operator authority
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Native bind startup re-read at `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes. Acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes. Admission-only authorization re-read at `0bfec5a3ac693f226a04d280634025bf35d66e1a` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Native bind startup re-read at `2c911fb23783c65f13488438858f36f873aaee09` and accompanying changes. Acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes. Per-box secret selection verified on `7ebfb55569107f56773798c76f68c515e0cf609d` and accompanying changes. Admission-only authorization re-read at `0bfec5a3ac693f226a04d280634025bf35d66e1a` and accompanying changes.
 
 [FACT] Feature `yolo.space.operator` installs a `yoloctl` PATH symlink and requires the
 same-name positive capability. That grant provides helper read access and the
@@ -32,6 +32,11 @@ are not granted by a prefix wildcard. [3](#source-3) [4](#source-4)
 use a running one, gaining its space-VM root, but never launch one: only the host
 creates or starts a privileged container, and an operator may only restart or
 recreate one the same request proved running. [23](#source-23)
+
+[FACT] The standard box commands let an authorized operator request a key
+from any existing account in its space. The value can reach a box it creates
+or recreates. Per-box selection controls ordinary recipients. Account secret
+administration remains host-only. [4](#source-4) [27](#source-27)
 
 [FACT] Provisioning creates a random container-incarnation directory beneath
 `/run/yoloctl/operators/`, mounted read-only at `/run/yoloctl/operator` in that
@@ -129,7 +134,7 @@ continues to come from the controller grant. [17](#source-17)
 17. <a id="source-17"></a> [OpenCode adapter](opencode.md) — native runtime, account and validation contracts.
 18. <a id="source-18"></a> [Box-use](box-use.md) — shared-agent interaction contract.
 19. <a id="source-19"></a> [Creation preset](../../cmd/yoloctl/agentbox_operator.go#L5-L31) — maintained list and `applyOperatorCreatePreset`.
-20. <a id="source-20"></a> [Create command](../../cmd/yoloctl/agentbox.go#L764-L884) — shared handler, validation, workdir and flag registration.
+20. <a id="source-20"></a> [Create command](../../cmd/yoloctl/agentbox.go#L792-L912) — shared handler, validation, workdir and flag registration.
 21. <a id="source-21"></a> [Preset regressions](../../cmd/yoloctl/agentbox_operator_test.go#L17) — decoded controller requests, saved settings, validation and real Cobra completion.
 22. <a id="source-22"></a> [Operator chat boundary](operator-chat.md) — allowed administration, participation and protected human server.
 23. <a id="source-23"></a> [Privileged development boxes](privileged-boxes.md) — host-started launch boundary.
@@ -138,3 +143,4 @@ continues to come from the controller grant. [17](#source-17)
 25. <a id="source-25"></a> [internal/controller/holds.go](../../internal/controller/holds.go#L1) — `heldError`, `loadHolds` and dependency intersections.
 
 26. <a id="source-26"></a> [Controller entry](../../cmd/yoloctl/controller_internal.go#L141) — `runControllerInternal`, `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle` and `prepareRuntimeStorage`.
+27. <a id="source-27"></a> [Box secret resolution](../../internal/agentbox/secret_injection.go#L126) — request uses the selected account and profile.

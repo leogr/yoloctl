@@ -97,13 +97,13 @@ available with its own launch and authentication conventions.
 
 11. <a id="source-11"></a> [internal/features/gemini_test.go](../../internal/features/gemini_test.go#L11) — image settings regression.
 12. <a id="source-12"></a> [Gemini policy golden](../../internal/agentbox/testdata/policy_golden/gemini.yaml#L1) — complete compiled policy.
-13. <a id="source-13"></a> [internal/agentbox/secret_injection_test.go](../../internal/agentbox/secret_injection_test.go#L12) — secret isolation and create-time projection.
+13. <a id="source-13"></a> [internal/agentbox/secret_injection_test.go](../../internal/agentbox/secret_injection_test.go#L15) — secret isolation and create-time projection.
 14. <a id="source-14"></a> [Gemini v0.62.0 settings schema](https://github.com/google-gemini/gemini-cli/blob/v0.62.0/packages/cli/src/config/settingsSchema.ts#L970) — usage-statistics default.
 15. <a id="source-15"></a> [Gemini v0.62.0 Clearcut logger](https://github.com/google-gemini/gemini-cli/blob/v0.62.0/packages/core/src/telemetry/clearcut-logger/clearcut-logger.ts#L247) — creation gate, endpoint, flushes and retries.
 16. <a id="source-16"></a> [Gemini v0.62.0 env auth](https://github.com/google-gemini/gemini-cli/blob/v0.62.0/packages/core/src/core/contentGenerator.ts#L80) — `getAuthTypeFromEnv`.
 17. <a id="source-17"></a> [cmd/yoloctl/run.go](../../cmd/yoloctl/run.go#L95) — explicit confined exec command.
 18. <a id="source-18"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L426) — container environment rendering.
 19. <a id="source-19"></a> [OpenShell v0.0.72 SSH](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-process/src/ssh.rs#L690) — `apply_child_env` clears inherited variables.
-20. <a id="source-20"></a> [internal/agentbox/secret_injection.go](../../internal/agentbox/secret_injection.go#L44) — declared account secrets only.
+20. <a id="source-20"></a> [internal/agentbox/secret_injection.go](../../internal/agentbox/secret_injection.go#L154) — declared account secrets only.
 
 21. <a id="source-21"></a> [Official Gemini migration guide](https://www.antigravity.google/docs/cli/gcli-migration/) — configuration migration, accessed 2026-10-05.

@@ -106,7 +106,7 @@ cancellation; the orphan ledger is separate from receipt retention. See
 6. <a id="source-6"></a> [maintenance.go](../../internal/controller/maintenance.go#L9) — admission.
 7. <a id="source-7"></a> [storage_gc.go](../../cmd/yoloctl/storage_gc.go#L30) — inventory/preflight.
 8. <a id="source-8"></a> [policy.go](../../internal/storagegc/policy.go#L46) — retention.
-9. <a id="source-9"></a> [container.go](../../internal/container/container.go#L294) — build/pull guards.
+9. <a id="source-9"></a> [container.go](../../internal/container/container.go#L332) — build/pull guards.
 10. <a id="source-10"></a> [policy_test.go](../../internal/storagegc/policy_test.go#L11) — policy tests.
 11. <a id="source-11"></a> [storage-gc.sh](../../scripts/smoke/storage-gc.sh#L1) — isolated smoke.
 12. <a id="source-12"></a> [policy.go](../../internal/storagegc/policy.go#L19) — measured disk budgets.
@@ -126,7 +126,7 @@ cancellation; the orphan ledger is separate from receipt retention. See
 26. <a id="source-26"></a> [nerdctl 2.4.2 inspect](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/inspecttypes/dockercompat/dockercompat.go#L352-L365) — recorded digest with a mutable-name fallback.
 27. <a id="source-27"></a> [controller_storage_test.go](../../cmd/yoloctl/controller_storage_test.go#L16) — scheduler/process tests.
 28. <a id="source-28"></a> [Lima 1.2 boot](https://github.com/lima-vm/lima/blob/v1.2.0/pkg/cidata/cidata.TEMPLATE.d/boot/40-install-containerd.sh#L44-L64) — overwrites config.
-29. <a id="source-29"></a> [Save](../../internal/agentbox/agentbox.go#L557) — persistence validation.
+29. <a id="source-29"></a> [Save](../../internal/agentbox/agentbox.go#L560) — persistence validation.
 30. <a id="source-30"></a> [agentbox_reconcile_test.go](../../cmd/yoloctl/agentbox_reconcile_test.go#L119) — invalid-image repair.
 31. <a id="source-31"></a> [nerdctl 2.4 inspect](https://github.com/containerd/nerdctl/blob/v2.4.0/pkg/inspecttypes/dockercompat/dockercompat.go#L344-L369) — recorded digest.
 32. <a id="source-32"></a> [Guest builder](../../internal/vmguest/buildkit_linux.go#L1) — `configureBuilder`, shared policy before lazy startup.

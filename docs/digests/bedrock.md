@@ -106,7 +106,7 @@ fixtures. No AWS account was available for live provider testing.
 ## Sources
 
 1. <a id="source-1"></a> [Claude profile](../../internal/agentprofile/builtin/claude.yaml#L1-L151) — explicit optional AWS and existing Anthropic-key declarations.
-2. <a id="source-2"></a> [Private projection](../../internal/agentbox/secret_injection.go#L1-L73) — profile narrowing and create-time account reload; native/chat regression in `aws_environment_linux_test.go`.
+2. <a id="source-2"></a> [Private projection](../../internal/agentbox/secret_injection.go#L1-L186) — profile narrowing and create-time account reload; native/chat regression in `aws_environment_linux_test.go`.
 3. <a id="source-3"></a> [Auth status](../../cmd/yoloctl/account_auth.go#L1-L430) — value-free summary through `awsSecretsPresent` and retained native errors.
 4. <a id="source-4"></a> [Verified installer](../../internal/features/aws-install.sh#L1-L36) — signing-key fingerprint, architecture selection and verification before execution.
 5. <a id="source-5"></a> [AWS invalidation test](../../internal/agentboximage/aws_recipe_test.go#L1-L56) — installer/key bytes in the recipe consumed by `composedImageRef`.

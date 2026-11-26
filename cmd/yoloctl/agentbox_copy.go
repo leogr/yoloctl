@@ -48,8 +48,9 @@ Copy shares the box settings flags from ` + "`box create`" + `. The --operator
 preset is available on create only. A setting flag you pass explicitly
 overrides the source's setting. Omitted settings keep the source's value.
 Collection flags (--features, --capability, --mount, --env, --port,
---agent-extra-args) replace the source's list wholesale; pass an empty
-value (e.g. --port "") to clear one. Overriding --agent re-derives
+--agent-extra-args, --secret) replace the source's list wholesale; pass an empty
+value (e.g. --secret="") to clear one. Secret references use the destination
+account. Overriding --agent re-derives
 --image and --features — from the new agent's profile, or the create
 defaults for --agent none — unless you pass those flags too, and
 re-defaults the account when the source's selection no longer fits.
@@ -118,6 +119,10 @@ destination controller. Cross-space copying requires both spaces running.
 				return err
 			}
 			opts.Env = envMap
+			opts.SecretInjection, err = parseSecretFlags(dropEmptySpecs(specs.Secrets))
+			if err != nil {
+				return err
+			}
 			src, err := loadCopySourceForOperation(cmd, srcSpace, source)
 			if err != nil {
 				return err
@@ -238,6 +243,14 @@ func copyOptionsFromSource(changed func(string) bool, flags agentboxCreateOption
 		return agentboxCreateOptions{}, nil, err
 	}
 	opts.Agent, opts.Account = resolvedAgent, resolvedAccount
+
+	opts.SecretInjection = slices.Clone(src.SecretInjection)
+	if changed("secret") {
+		opts.SecretInjection = flags.SecretInjection
+	} else if !hasRealAgent(opts.Agent) && len(opts.SecretInjection) > 0 {
+		notices = append(notices, "dropping secret_injection: generic-shell boxes have no account")
+		opts.SecretInjection = nil
+	}
 
 	opts.AgentExtraArgs = slices.Clone(src.AgentExtraArgs)
 	if changed("agent-extra-args") {

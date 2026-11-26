@@ -306,34 +306,21 @@ once with `account auth import ACCOUNT AGENT` while all consumers of that
 account are stopped. Codex uses native credentials; storing `OPENAI_API_KEY`
 alone does not configure its built-in adapter.
 
-**Give one publishing agent GitHub credentials.** Use a dedicated account and
-an adapter that explicitly delivers the token. For example, copy the Claude
-adapter with `agent copy claude claude-publisher`, then run
-`agent edit claude-publisher` and add this item to its existing
-`secret_injection` list:
-
-```yaml
-- secret: GITHUB_TOKEN
-  env: GH_TOKEN
-```
-
-Create its account, import an existing host Claude login while the account has
-no active consumers, then store the GitHub token from your environment:
+**Give one publishing box GitHub credentials.** Suppose a publisher and
+reviewer use Codex and the existing `personal` account. Store the token on
+the host, then request it for the publisher:
 
 ```sh
-yoloctl account create release
-yoloctl account auth import release claude-publisher
-yoloctl account secret set release GITHUB_TOKEN --from-env
-yoloctl box create publisher --agent claude-publisher --account release --no-attach
+yoloctl account secret set personal GITHUB_TOKEN --from-env
+yoloctl box create publisher --agent codex --account personal --feature github --secret GITHUB_TOKEN:GH_TOKEN
 ```
 
-Ordinary workers on other accounts do not receive this token. Any box that
-selects the same account and a matching injection rule can receive it, so
-reserve that combination for the publisher. Arbitrary stored secret names are
-not automatically injected. Account secrets are delivered at container creation;
-use `box recreate` to apply a changed value. Operator and privileged authority
-can cross these account boundaries. See [accounts](docs/specs/accounts.md) and
-[secret delivery](docs/digests/auth.md).
+Both boxes use the same native Codex login. The publisher receives the extra
+`GH_TOKEN` environment variable when its container is created. To update an
+existing publisher, run `yoloctl box set publisher --secret GITHUB_TOKEN:GH_TOKEN`
+and `yoloctl box recreate publisher`. Recreate to pick up a rotated value too.
+A space operator can choose references from any account in its space.
+See [accounts](docs/specs/accounts.md) and [secret delivery](docs/digests/auth.md).
 
 ### Tools and images
 

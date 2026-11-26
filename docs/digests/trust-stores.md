@@ -92,9 +92,9 @@ boxes change only through an explicit rebuild/recreate.
 20. <a id="source-20"></a> [Historical OpenShell hashes](../../internal/container/container.go#L1) — the two retained v0.0.72 binary hashes in `legacy_openshell.go` L20–L21 (retirement delta); `assets/vm/firecracker/pins.json` no longer lists `openshell.tgz` (retirement tree `3cc5e841`).
 21. <a id="source-21"></a> [Base Dockerfile](../../assets/containers/agentbox/Dockerfile#L27-L31) — index refresh and `ca-certificates`.
 22. <a id="source-22"></a> [Composed identity](../../internal/agentboximage/composed.go#L69) — hash inputs; an existing tag is reused at L109.
-23. <a id="source-23"></a> [Forced rebuild](../../cmd/yoloctl/agentbox_reconcile.go#L162) — `runRebuild`.
+23. <a id="source-23"></a> [Forced rebuild](../../cmd/yoloctl/agentbox_reconcile.go#L163) — `runRebuild`.
 24. <a id="source-24"></a> [Refresh notice](../../cmd/yoloctl/image.go#L124).
-25. <a id="source-25"></a> [Recreate help](../../cmd/yoloctl/agentbox.go#L2491).
+25. <a id="source-25"></a> [Recreate help](../../cmd/yoloctl/agentbox.go#L2560).
 26. <a id="source-26"></a> [Ubuntu source package](https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/ca-certificates/20260816ubuntu0.24.04.1/ca-certificates_20260816ubuntu0.24.04.1.tar.xz) — `update-ca-certificates` and maintainer scripts (sha256 f592cceb…).
 27. <a id="source-27"></a> [Pinned AIRC verifier](https://github.com/leogr/airc/blob/b76ba355863cc3eb51900a313d7647d9190eedfa/Cargo.lock#L1403-L1412) — rustls-webpki version/checksum.
 28. <a id="source-28"></a> [Pinned AIRC roots](https://github.com/leogr/airc/blob/b76ba355863cc3eb51900a313d7647d9190eedfa/Cargo.lock#L2073-L2080) — webpki-roots version/checksum.

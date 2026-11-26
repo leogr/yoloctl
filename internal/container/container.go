@@ -78,6 +78,9 @@ type RunOptions struct {
 	WorkloadPool    bool // managed boxes share the VM's bounded workload pool
 	Mounts          []Mount
 	Env             []string
+	// PrivateEnv is a KEY=VALUE entry inherited by the VM-local engine.
+	// Only its key appears in the command and its runtime metadata.
+	PrivateEnv string
 	// Sysctl entries are "key=value" pairs forwarded to `nerdctl run
 	// --sysctl`. Each lands as a per-netns/per-container kernel setting
 	// at startup. /proc/sys is mounted read-only inside containers by
@@ -119,6 +122,10 @@ func (c *Client) Create(ctx context.Context, opts RunOptions) (string, error) {
 }
 
 func (c *Client) createOrRun(ctx context.Context, opts RunOptions, start bool, stdout io.Writer) error {
+	privateKey, err := c.privateEnvironmentKey(opts.PrivateEnv)
+	if err != nil {
+		return err
+	}
 	if guard, ok := ctx.Value(buildGuardKey{}).(BuildGuard); ok {
 		present, err := c.ImagePresent(ctx, opts.Image)
 		if err != nil {
@@ -189,7 +196,13 @@ func (c *Client) createOrRun(ctx context.Context, opts RunOptions, start bool, s
 		args = append(args, "-v", spec)
 	}
 	for _, e := range opts.Env {
-		args = append(args, "-e", e)
+		key, _, _ := strings.Cut(e, "=")
+		if privateKey == "" || key != privateKey {
+			args = append(args, "-e", e)
+		}
+	}
+	if privateKey != "" {
+		args = append(args, "-e", privateKey)
 	}
 	for _, s := range opts.Sysctl {
 		args = append(args, "--sysctl", s)
@@ -198,15 +211,40 @@ func (c *Client) createOrRun(ctx context.Context, opts RunOptions, start bool, s
 	args = append(args, opts.Command...)
 	cmd := c.command(ctx, append([]string{"sudo", "nerdctl"}, args...)...)
 	cmd.Stdout = stdout
+	stderr := c.stderr
+	if privateKey != "" {
+		// The native VM adapter executes nerdctl directly as the controller
+		// worker. nerdctl resolves bare -e keys from its own environment.
+		cmd.Env = append(cmd.Environ(), opts.PrivateEnv)
+		// Engine failures may contain environment data. Only return status.
+		stderr = io.Discard
+	}
 	if !start {
-		return vmhost.RunWithFilteredStderr(cmd, c.stderr)
+		return vmhost.RunWithFilteredStderr(cmd, stderr)
 	}
 	markEngineStart(ctx)
-	if err := vmhost.RunWithFilteredStderr(cmd, c.stderr); err != nil {
+	if err := vmhost.RunWithFilteredStderr(cmd, stderr); err != nil {
 		return err
 	}
 	c.recordStarted(ctx, opts.Name, opts.Name)
 	return nil
+}
+
+func (c *Client) privateEnvironmentKey(entry string) (string, error) {
+	if entry == "" {
+		return "", nil
+	}
+	if !spaceenv.Native() {
+		return "", errors.New("private container environment requires the native space controller")
+	}
+	if err := spaceenv.RequireSpace(c.env); err != nil {
+		return "", err
+	}
+	key, _, ok := strings.Cut(entry, "=")
+	if !ok || key == "" || strings.ContainsAny(key, " \t\r\n") || strings.ContainsRune(entry, 0) {
+		return "", errors.New("invalid private container environment entry")
+	}
+	return key, nil
 }
 
 // Start re-launches a stopped container.

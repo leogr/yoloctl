@@ -86,8 +86,8 @@ a process can still write outside `.cache`.
 2. <a id="source-2"></a> [cache.go](../../internal/agentbox/cache.go#L1) — cache option assembly, overlap and retained-bind checks.
 3. <a id="source-3"></a> [openshell_create_linux.go](../../internal/agentbox/openshell_create_linux.go#L1) — native creation adds the cache bind after image/storage qualification.
 4. <a id="source-4"></a> [live.go](../../internal/agentbox/live.go#L1) — `LiveInspector` separates cache mounts, `Create` shares cache assembly.
-5. <a id="source-5"></a> [agentbox.go](../../internal/agentbox/agentbox.go#L504) — `Config.Validate` rejects overlapping declarations.
-6. <a id="source-6"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2193) — existing-container start prepares the retained cache.
+5. <a id="source-5"></a> [agentbox.go](../../internal/agentbox/agentbox.go#L507) — `Config.Validate` rejects overlapping declarations.
+6. <a id="source-6"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L2262) — existing-container start prepares the retained cache.
 7. <a id="source-7"></a> [agentbox_destroy.go](../../cmd/yoloctl/agentbox_destroy.go#L1) — explicit destroy cache cleanup before declaration removal.
 8. <a id="source-8"></a> [cache_test.go](../../internal/boxcache/cache_test.go#L1) — filesystem retention, ownership, links and exact removal.
 9. <a id="source-9"></a> [cache_test.go](../../internal/agentbox/cache_test.go#L1) — mount assembly, overlap, policy and drift controls.

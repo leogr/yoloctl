@@ -110,7 +110,7 @@ upstream Feature or either CPU architecture. [8](#source-8) [9](#source-9) [15](
 
 ## Sources
 
-1. <a id="source-1"></a> [CLI options](../../cmd/yoloctl/agentbox.go#L882) — create/copy flags.
+1. <a id="source-1"></a> [CLI options](../../cmd/yoloctl/agentbox.go#L910) — create/copy flags.
 2. <a id="source-2"></a> [Plan](../../internal/ocifeature/plan.go#L75) — `Definition`, `Compatible`, `RuntimeRequests`, `Values`, `ApplyOptions`, `Resolve`, `Dockerfile`.
 3. <a id="source-3"></a> [Persistence](../../internal/agentbox/oci_features.go#L10) — `ResolveFeatures`, `FeaturePlan`.
 4. <a id="source-4"></a> [Registry](../../internal/ocifeature/registry.go#L30) — `Parse`, `get`, `Resolve`, `Files`, `unpack`.
@@ -119,7 +119,7 @@ upstream Feature or either CPU architecture. [8](#source-8) [9](#source-9) [15](
 7. <a id="source-7"></a> [Advisory cache](../../internal/ocifeature/completion.go#L30) — `remember`, `MetadataForCompletion`, `CachedReferences`.
 8. <a id="source-8"></a> [Resolver tests](../../internal/ocifeature/oci_test.go#L66) — registry, archive, options and dependencies.
 9. <a id="source-9"></a> [Declaration tests](../../internal/agentbox/oci_features_test.go#L9) — persisted pins and option drift.
-10. <a id="source-10"></a> [Set options](../../cmd/yoloctl/agentbox_reconcile.go#L440) — replacement and option updates.
+10. <a id="source-10"></a> [Set options](../../cmd/yoloctl/agentbox_reconcile.go#L441) — replacement and option updates.
 11. <a id="source-11"></a> [Manual builds](../../cmd/yoloctl/image.go#L344) — Feature-aware build context.
 12. <a id="source-12"></a> [Image composition](../../internal/agentboximage/composed.go#L45) — recipe identity and archive context.
 13. <a id="source-13"></a> [OCI lookup](../../internal/features/features.go#L279) — no implicit capability requirements.

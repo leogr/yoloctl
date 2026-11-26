@@ -1,6 +1,6 @@
 # Declarations, ownership and workdirs
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Native settings fields and source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. Per-box secret references verified on `7ebfb55569107f56773798c76f68c515e0cf609d` and accompanying changes. Native settings fields and source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`.
 
 [FACT] A space owns a selected-adapter VM and an independent ext4 data disk. Host
 `spaces/<space>/space.yaml` is schema-3 bootstrap only: identity, disk ID/UUID,
@@ -44,11 +44,18 @@ architectures. The stack digest records empty-archive drift, overrides and
 mixed-stack privilege-evidence limits. [27](#source-27)
 
 [FACT] Box desired state includes agent/account, base image, workdir, features,
-capabilities, literal environment, ports, mounts, resources, network mode,
+capabilities, literal environment, account secret references, ports, mounts, resources, network mode,
 extra agent arguments and agentless session argv. Real agents require an existing
 account; agentless boxes use `none`. Creating a space initializes its required first account; later
 account creation is explicit. Same-name accounts across spaces are independent.
 [3](#source-3) [6](#source-6)
+
+[FACT] Box `secret_injection` stores only extra mappings, each with an
+account key and an optional environment alias. Create and edit save validated
+references. Set appends new pairs and copy inherits or replaces the list.
+Show displays the requested names, independent of runtime availability.
+Values are resolved when making a container. [29](#source-29) [30](#source-30)
+[31](#source-31) [32](#source-32)
 
 [FACT] Saving a box or resolving its runtime image requires a nonempty, parseable
 image reference. Invalid references report the box name. Loading remains
@@ -100,7 +107,7 @@ rejected. This does not delete native state or change credential import.
 3. <a id="source-3"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L363-L370) — initial account and private initialization seed.
 4. <a id="source-4"></a> [cmd/yoloctl/controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L25) — host grants and narrow read-only catalog mounts.
 5. <a id="source-5"></a> [internal/lima/template.go](../../internal/lima/template.go#L31) — template boot settings, Lima-selected backend/architecture.
-6. <a id="source-6"></a> [internal/agentbox/agentbox.go](../../internal/agentbox/agentbox.go#L54) — box schema and validation.
+6. <a id="source-6"></a> [internal/agentbox/agentbox.go](../../internal/agentbox/agentbox.go#L55) — box schema and validation.
 7. <a id="source-7"></a> [cmd/yoloctl/context.go](../../cmd/yoloctl/context.go#L14) — shared space selection.
 8. <a id="source-8"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L39) — host/operator target and path selection, copy snapshots.
 9. <a id="source-9"></a> [internal/agentbox/workdir.go](../../internal/agentbox/workdir.go#L26) — workdir identity and canonicalization.
@@ -109,11 +116,11 @@ rejected. This does not delete native state or change credential import.
 12. <a id="source-12"></a> [cmd/yoloctl/agentbox_copy.go](../../cmd/yoloctl/agentbox_copy.go#L24) — copy merge and destination validation.
 13. <a id="source-13"></a> [internal/agentprofile/profile.go](../../internal/agentprofile/profile.go#L53) — adapter schema and lookup.
 14. <a id="source-14"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L200) — `expandControllerPaths` validates and canonicalizes host path flags.
-15. <a id="source-15"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1771) — `rejectAccountRootBinds` checks the native worker's path namespace.
+15. <a id="source-15"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1834) — `rejectAccountRootBinds` checks the native worker's path namespace.
 16. <a id="source-16"></a> [cmd/yoloctl/controller_client_test.go](../../cmd/yoloctl/controller_client_test.go#L18) — host alias, disk identity, project-path and pre-dispatch command regressions.
 17. <a id="source-17"></a> [resolved_image.go](../../internal/agentbox/resolved_image.go#L12) — image validation at resolution.
 18. <a id="source-18"></a> [agentbox_reconcile_test.go](../../cmd/yoloctl/agentbox_reconcile_test.go#L101) — reject invalid changes; repair a missing image.
-19. <a id="source-19"></a> [agentbox.go](../../internal/agentbox/agentbox.go#L549) — image validation at persistence.
+19. <a id="source-19"></a> [agentbox.go](../../internal/agentbox/agentbox.go#L552) — image validation at persistence.
 20. <a id="source-20"></a> [internal/vm/vm.go](../../internal/vm/vm.go#L1) — `Driver`, `ForSpace`
 21. <a id="source-21"></a> [bootstrap](../../internal/spaceconfig/bootstrap.go#L58) — `VMSettings`, `Validate`.
 22. <a id="source-22"></a> [assets/lima/yoloctl.yaml.tmpl](../../assets/lima/yoloctl.yaml.tmpl#L6) — image pins and system provisioning.
@@ -123,3 +130,7 @@ rejected. This does not delete native state or change credential import.
 26. <a id="source-26"></a> [Canonical release checksums](https://cloud-images.ubuntu.com/minimal/releases/noble/release-20261001/SHA256SUMS) — pinned amd64/arm64 Minimal images.
 27. <a id="source-27"></a> [Lima stack](lima-stack.md) — archive selection and privilege evidence.
 28. <a id="source-28"></a> [internal/strictyaml/marshal.go](../../internal/strictyaml/marshal.go#L1) — `Marshal`; marshal_test.go and agentbox `TestSaveLoadsBackMultilineStrings`.
+29. <a id="source-29"></a> [Box declaration](../../internal/agentbox/agentbox.go#L135) — `Config.SecretInjection` and `Save`.
+30. <a id="source-30"></a> [Box create/show](../../cmd/yoloctl/agentbox.go#L953) — create flags, Config construction and requested-name views.
+31. <a id="source-31"></a> [Copy declarations](../../cmd/yoloctl/agentbox_copy.go#L245) — inherit or replace reference pairs.
+32. <a id="source-32"></a> [Set declarations](../../cmd/yoloctl/agentbox_reconcile.go#L672) — append pairs with `applySetOptions`.

@@ -28,8 +28,11 @@ mount; file-store guidance is explicit and no store override is forced.
 [9](#source-9) AWS status reports stored presence only, not provider validity or
 current-box delivery; provider/egress setup is explicit. [10](#source-10)
 
-[FACT] Account content is not reconcile drift. Changed environment secrets need
-explicit recreation; changing the selected identity is itself a recreate reason.
+[FACT] A box can request account secrets in addition to its agent defaults.
+A request records a source key and environment name. Creation uses the
+selected account and skips missing or empty values. Changing a mapping or
+rotating a value takes effect on explicit box recreation. Restart keeps the
+original environment and account state. Account contents do not count as drift.
 Forced account destruction stops users and removes native state before its
 manifest. [2](#source-2)
 

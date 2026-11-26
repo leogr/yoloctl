@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/leogr/yoloctl/internal/resources"
+	"github.com/leogr/yoloctl/internal/spaceenv"
 )
 
 func TestCreateRefusesMissingPoolOrBuildGuardBeforeContainerCommand(t *testing.T) {
@@ -194,5 +195,55 @@ exit %d
 				t.Fatal("acknowledgement failure triggered another action", readErr)
 			}
 		})
+	}
+}
+
+func TestRunPrivateEnvironmentUsesOnlyKeyInNativeEngineArgs(t *testing.T) {
+	const child = "YOLOCTL_TEST_PRIVATE_RUN_CHILD"
+	const value = "synthetic private envelope"
+	if os.Getenv(child) == "" {
+		opts := RunOptions{Name: "fixture", Image: "fixture", PrivateEnv: "PRIVATE=" + value, Detach: true}
+		if err := New("fixture").Run(t.Context(), opts); err == nil || !strings.Contains(err.Error(), "native space controller") {
+			t.Fatal("non-native engine accepted private input", err)
+		}
+		cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestRunPrivateEnvironmentUsesOnlyKeyInNativeEngineArgs$")
+		cmd.Env = append(os.Environ(), child+"=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("native engine fixture failed: %s", out)
+		}
+		return
+	}
+	err := spaceenv.Configure(spaceenv.Context{
+		Schema: 1, Space: "fixture", DiskID: strings.Repeat("a", 32), DiskUUID: "uuid",
+		DiskMount: "/mnt/native", ConfigDir: "/mnt/native/config", CatalogDir: spaceenv.CatalogRoot,
+		HostConfigRoot: "/home/developer/.config/yoloctl", UID: 1000, GID: 1000, Bundle: "bundle", Generation: "generation",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("YOLOCTL_TEST_PRIVATE_ARGV", filepath.Join(dir, "argv"))
+	script := `#!/bin/sh
+set -eu
+printf '%s\n' "$@" > "$YOLOCTL_TEST_PRIVATE_ARGV"
+[ "$PRIVATE" = 'synthetic private envelope' ] || exit 99
+printf '%s\n' "$PRIVATE" >&2
+exit 23
+`
+	if err := os.WriteFile(filepath.Join(dir, "nerdctl"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var out, warnings bytes.Buffer
+	client := NewWithOutput("fixture", &out, &warnings)
+	opts := RunOptions{Name: "fixture", Image: "fixture", PrivateEnv: "PRIVATE=" + value, Detach: true, Env: []string{"PUBLIC=visible", "PRIVATE=old"}}
+	err = client.Run(t.Context(), opts)
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 23 || out.Len() != 0 || warnings.Len() != 0 {
+		t.Fatal("private launch exposed engine output or lost its failure status")
+	}
+	args, err := os.ReadFile(os.Getenv("YOLOCTL_TEST_PRIVATE_ARGV"))
+	if err != nil || !bytes.Contains(args, []byte("-e\nPRIVATE\n")) || !bytes.Contains(args, []byte("-e\nPUBLIC=visible\n")) || bytes.Contains(args, []byte("PRIVATE=")) || bytes.Contains(args, []byte(value)) {
+		t.Fatal("private engine arguments were incorrect or contained values")
 	}
 }

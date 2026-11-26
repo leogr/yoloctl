@@ -359,10 +359,10 @@ type ImportSecret struct {
 // secret→env-var mapping.
 type SecretInjection struct {
 	// Secret is the account secret KEY to read (e.g. "ANTHROPIC_API_KEY").
-	Secret string `yaml:"secret"`
+	Secret string `yaml:"secret" json:"secret"`
 	// Env is the environment variable to set in the agent. Optional; defaults to
 	// Secret when empty (the common case where the names match).
-	Env string `yaml:"env,omitempty"`
+	Env string `yaml:"env,omitempty" json:"env,omitempty"`
 }
 
 // EnvName returns the environment variable the secret is injected as: Env when
@@ -723,7 +723,7 @@ func validateSecretInjection(profileName string, rules []SecretInjection) error 
 		if strings.TrimSpace(r.Secret) == "" {
 			return fmt.Errorf("agent-profile %q: secret_injection[%d] has an empty secret", profileName, i)
 		}
-		if !validEnvName(r.EnvName()) {
+		if !ValidEnvName(r.EnvName()) {
 			return fmt.Errorf("agent-profile %q: secret_injection[%d] env %q is not a valid environment variable name", profileName, i, r.EnvName())
 		}
 	}
@@ -745,7 +745,7 @@ func validateSecretInjection(profileName string, rules []SecretInjection) error 
 func (p *Profile) validateLaunchEnv() error {
 	usesStateDir := false
 	for k, v := range p.LaunchEnv {
-		if !validEnvName(k) {
+		if !ValidEnvName(k) {
 			return fmt.Errorf("agent-profile %q: launch_env key %q is not a valid environment variable name", p.Name, k)
 		}
 		if strings.Contains(v, "{{state_dir}}") {
@@ -761,9 +761,9 @@ func (p *Profile) validateLaunchEnv() error {
 	return nil
 }
 
-// validEnvName reports whether s is a valid environment variable name:
+// ValidEnvName reports whether s is a valid environment variable name:
 // a non-empty string of [A-Za-z0-9_] not starting with a digit.
-func validEnvName(s string) bool {
+func ValidEnvName(s string) bool {
 	if s == "" {
 		return false
 	}

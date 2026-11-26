@@ -131,7 +131,7 @@ adding a new command. [3](#source-3) [11](#source-11)
 3. <a id="source-3"></a> [internal/boxstate/boxstate.go](../../internal/boxstate/boxstate.go#L21-L314) — `Depth` through `ResolveSpace`.
 4. <a id="source-4"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L1331) — space JSON and unavailable declarations.
 5. <a id="source-5"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L1524) — runtime list JSON.
-6. <a id="source-6"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2639) — box state JSON.
+6. <a id="source-6"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L2708) — box state JSON.
 7. <a id="source-7"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L154) — remote/user/runtime exit classification.
 8. <a id="source-8"></a> [cmd/yoloctl/main.go](../../cmd/yoloctl/main.go#L114) — shared root definitions and TUI.
 9. <a id="source-9"></a> [internal/tui/yoloctlcli/complete.go](../../internal/tui/yoloctlcli/complete.go#L1-L100) — `Complete` and completion result parsing.
@@ -151,8 +151,8 @@ adding a new command. [3](#source-3) [11](#source-11)
 23. <a id="source-23"></a> [Chat completion regression](../../cmd/yoloctl/chat_completion_test.go#L28) — host/operator routing, identities, prefix, cancellation and offline refusal.
 24. <a id="source-24"></a> [Named resolution](../../internal/boxstate/boxstate.go#L259-L493) — `ResolveOne`, `ResolveNamed`, `resolveSpace`, `incompleteAtDeadline`; `TestResolveNamedIsPartialWhenItsContextEnds` in partial_test.go; `TestResolveNamedLimitsPerBoxWorkToTheNamedBoxes` in boxstate_test.go L245.
 25. <a id="source-25"></a> [Name validator](../../internal/layout/layout.go#L55-L115) — `ValidateName`, patterns and reserved names.
-26. <a id="source-26"></a> [Copy validation](../../cmd/yoloctl/agentbox_copy.go#L69-L88) — shared Args and native RunE validate destination/source.
-27. <a id="source-27"></a> [Manifest validation](../../internal/agentbox/agentbox.go#L519-L520) — `Config.Validate` uses the shared box rule.
+26. <a id="source-26"></a> [Copy validation](../../cmd/yoloctl/agentbox_copy.go#L70-L89) — shared Args and native RunE validate destination/source.
+27. <a id="source-27"></a> [Manifest validation](../../internal/agentbox/agentbox.go#L522-L523) — `Config.Validate` uses the shared box rule.
 28. <a id="source-28"></a> [nerdctl v2.4.2 validator](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/identifiers/validate.go#L25-L45) — `AllowedIdentifierPattern`, `ValidateDockerCompat`.
 29. <a id="source-29"></a> [Completion audit regressions](../../cmd/yoloctl/completion_audit_test.go#L37) — host `__complete` for persistent `--space` and backup/observe positionals; tree-wide entity flag and positional wiring.
 

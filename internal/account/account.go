@@ -182,7 +182,8 @@ func Load(space, name string) (*Config, error) {
 	}
 	c, err := ParseManifest(raw)
 	if err != nil {
-		return nil, fmt.Errorf("parse account %s (%s): %w", name, path, err)
+		// YAML diagnostics can quote malformed secret material.
+		return nil, fmt.Errorf("parse account %s (%s): invalid YAML; expected one document with schema_version, name and secrets", name, path)
 	}
 	if c.SchemaVersion != SchemaVersion {
 		return nil, fmt.Errorf("account %s (%s): unsupported schema_version %d (want %d)", name, path, c.SchemaVersion, SchemaVersion)

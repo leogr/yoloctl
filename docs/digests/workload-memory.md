@@ -73,8 +73,8 @@ unit tests alone do not validate either backend's kernel enforcement.
 3. <a id="source-3"></a> [vmguest/buildkit_linux.go](../../internal/vmguest/buildkit_linux.go#L77) — daemon leaf, lazy startup and exit handling.
 4. <a id="source-4"></a> [buildkit_gc.go](../../cmd/yoloctl/buildkit_gc.go#L21) — systemd deployment, activation hash and rollback.
 5. <a id="source-5"></a> [container/container.go](../../internal/container/container.go#L78) — managed run placement, pool preflight and resource inspection.
-6. <a id="source-6"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L985) — create CPU/memory defaults.
-7. <a id="source-7"></a> [agentbox/diff.go](../../internal/agentbox/diff.go#L213) — normalized limits and pool-version drift.
+6. <a id="source-6"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L1021) — create CPU/memory defaults.
+7. <a id="source-7"></a> [agentbox/diff.go](../../internal/agentbox/diff.go#L235) — normalized limits and pool-version drift.
 8. <a id="source-8"></a> [agentbox/live.go](../../internal/agentbox/live.go#L340) — create-time pool membership label.
 9. <a id="source-9"></a> [managed_applier.go](../../cmd/yoloctl/managed_applier.go#L36) — preflight before session teardown.
 10. <a id="source-10"></a> [container/memory.go](../../internal/container/memory.go#L16) — bounded aggregate counter reads.
@@ -83,5 +83,5 @@ unit tests alone do not validate either backend's kernel enforcement.
 13. <a id="source-13"></a> [vmguest/buildkit_linux_test.go](../../internal/vmguest/buildkit_linux_test.go#L14) — process recovery and bounded readiness.
 14. <a id="source-14"></a> [smoke/memory.sh](../../scripts/smoke/memory.sh#L1) — isolated runtime gate.
 15. <a id="source-15"></a> [Linux cgroup v2 memory interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files) — throttle versus hard limit, checked against Linux 7.2.11 documentation/source; hierarchical `memory.events`, read at docs.kernel.org 7.3.0 on 2026-10-26.
-16. <a id="source-16"></a> [agentbox_copy.go](../../cmd/yoloctl/agentbox_copy.go#L310) — copy keeps the source CPU value without an override.
+16. <a id="source-16"></a> [agentbox_copy.go](../../cmd/yoloctl/agentbox_copy.go#L323) — copy keeps the source CPU value without an override.
 17. <a id="source-17"></a> [Space view memory readings](space-view-memory.md) — where pool and box counters are shown.
