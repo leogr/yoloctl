@@ -33,7 +33,16 @@ printf '%s\n' "$*" >> "$START_INVENTORY_FIXTURE/argv"
 case "$START_INVENTORY_MODE" in
  silent) exec sleep 3;;
  held-pipe)
-  (exec 2>/dev/null; exec sleep 3) &
+  (
+   exec 2>/dev/null
+   : > "$START_INVENTORY_FIXTURE/holder-started"
+   attempts=0
+   until [ -e "$START_INVENTORY_FIXTURE/release-holder" ] || [ "$attempts" -ge 240 ]; do
+    attempts=$((attempts + 1))
+    sleep 0.05
+   done
+   : > "$START_INVENTORY_FIXTURE/holder-released"
+  ) &
   cat "$START_INVENTORY_FIXTURE/rows";;
  slow-foreground) sleep 1; cat "$START_INVENTORY_FIXTURE/rows";;
  slow-owned) sleep 0.45; cat "$START_INVENTORY_FIXTURE/rows";;
@@ -77,6 +86,9 @@ func TestNativeStartForwardInventoryDiscardsIncompleteOwnedReply(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			client, dir := startInventoryFixture(t)
 			t.Setenv("START_INVENTORY_MODE", mode)
+			if mode == "held-pipe" {
+				t.Cleanup(func() { releaseStartInventoryHolder(t, dir) })
+			}
 			caller, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 
@@ -88,12 +100,38 @@ func TestNativeStartForwardInventoryDiscardsIncompleteOwnedReply(t *testing.T) {
 			if time.Since(start) < failSafe {
 				t.Fatal("inventory did not wait for its deadline")
 			}
+			if mode == "held-pipe" {
+				if _, err := os.Stat(filepath.Join(dir, "holder-started")); err != nil {
+					t.Fatal("the stdout holder did not start", err)
+				}
+				if _, err := os.Stat(filepath.Join(dir, "holder-released")); !errors.Is(err, os.ErrNotExist) {
+					t.Fatal("inventory waited until the holder released stdout", err)
+				}
+			}
 			argv, err := os.ReadFile(filepath.Join(dir, "argv"))
 			if err != nil || strings.Count(string(argv), "--no-pager --full") != 1 {
 				t.Fatalf("wanted one bounded complete inventory command, got %q (%v)", argv, err)
 			}
 		})
 	}
+}
+
+// The holder keeps stdout open beyond the caller's five-second watchdog.
+// A fixture file releases it early after the checked read returns.
+func releaseStartInventoryHolder(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "release-holder"), nil, 0600); err != nil {
+		t.Error(err)
+		return
+	}
+	wait := time.Now().Add(2 * time.Second)
+	for time.Now().Before(wait) {
+		if _, err := os.Stat(filepath.Join(dir, "holder-released")); err == nil {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Error("the stdout holder did not acknowledge release")
 }
 
 func TestNativeStartForwardInventoryFollowsCallerCancellation(t *testing.T) {
@@ -177,5 +215,32 @@ func TestNativeStartForwardInventoryRenewsOwnedWaitAndKeepsAllBoxes(t *testing.T
 	t.Setenv("START_INVENTORY_MODE", "empty")
 	if services, err := nativeStartForwardInventory(owned, client); err != nil || len(services) != 0 {
 		t.Fatalf("successful empty inventory: services=%v error=%v", services, err)
+	}
+}
+
+// The create transaction runs the same forwarding preflight used by the
+// native adapter. Root-only image, storage and helper checks are separate.
+func TestNativeCreateOwnedInventoryTimeoutPrecedesReservation(t *testing.T) {
+	setStartInventoryFailSafe(t, 750*time.Millisecond)
+	client, dir := startInventoryFixture(t)
+	t.Setenv("START_INVENTORY_MODE", "silent")
+	caller, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	cfg := &Config{Name: "fixture"}
+	a := LiveApplier{Client: client}
+	var events []string
+	actions := nativeTransactionFixture(&events, "", nil)
+	actions.preflight = func(ctx context.Context) error {
+		return a.preflightNativeCreateForwards(ctx, cfg)
+	}
+
+	err := completeNativeContainerCreation(WithOwnedStartInventory(caller), actions)
+	var uncertain *NativeEffectsUncertain
+	if !errors.Is(err, context.DeadlineExceeded) || errors.As(err, &uncertain) || caller.Err() != nil || len(events) != 0 {
+		t.Fatalf("create preflight did not return its own deadline before reservation: err=%v events=%v", err, events)
+	}
+	argv, err := os.ReadFile(filepath.Join(dir, "argv"))
+	if err != nil || strings.Count(string(argv), "--no-pager --full") != 1 {
+		t.Fatalf("wanted one bounded create inventory, got %q (%v)", argv, err)
 	}
 }

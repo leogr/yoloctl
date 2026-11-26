@@ -73,6 +73,11 @@ wins. Incomplete inventory fails qualification before the engine or session
 starts, and the wrapper releases its lock. Foreground start uses the caller's
 context. [14](#source-14) [15](#source-15) [16](#source-16) [17](#source-17) [6](#source-6)
 
+[FACT] When the container is missing, owned attach reconciles its declaration.
+Native creation uses the same all-box allowance for its forward inventory.
+Expiry fails preflight before native reservation or an engine create.
+[18](#source-18) [19](#source-19) [20](#source-20)
+
 [FACT] Real worker and client-process regressions kill the client (SIGTERM,
 SIGKILL), close its stdout consumer (client SIGPIPE), send cancel, signal,
 malformed and overflowing frames, race detach with permission, keep typeahead
@@ -102,3 +107,6 @@ the standalone `smoke-attach-interrupt` stage is the live gate.
 15. <a id="source-15"></a> [Start inventory selector](../../internal/agentbox/openshell_start_inventory.go#L12-L24) — all-box inventory and caller context.
 16. <a id="source-16"></a> [Initial and repeated qualification](../../internal/agentbox/openshell_policy_restart_linux.go#L79-L120) — saved-policy qualification reused by `NativePreparedStart`.
 17. <a id="source-17"></a> [Generation start preflight](../../internal/agentbox/openshell_generation_start_linux.go#L154-L181) — independent read; `readServiceInventory` in vmservice owns the two-minute capture.
+18. <a id="source-18"></a> [Missing container attach](../../cmd/yoloctl/session_client.go#L553-L563) — reconcile before session launch.
+19. <a id="source-19"></a> [Native create transaction wiring](../../internal/agentbox/openshell_create_linux.go#L130-L150) — checks before reservation.
+20. <a id="source-20"></a> [Native create forward qualification](../../internal/agentbox/openshell_create_linux.go#L515-L534) — owned inventory, retained and conflicting services.

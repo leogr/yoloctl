@@ -13,7 +13,6 @@ import (
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/openshell"
 	"github.com/leogr/yoloctl/internal/operator"
-	"github.com/leogr/yoloctl/internal/port"
 	"github.com/leogr/yoloctl/internal/sandbox"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"golang.org/x/crypto/ssh"
@@ -145,24 +144,7 @@ func (a LiveApplier) createNativeContainer(ctx context.Context, c *Config, image
 			if _, err := openshell.InstallNativeHelper(check, release); err != nil {
 				return err
 			}
-			known, err := port.Inventory(check, a.Client, "")
-			if err != nil {
-				return fmt.Errorf("matching-init forward inventory: %w", err)
-			}
-			for _, service := range known {
-				if service.Spec.Agentbox == c.Name {
-					return errors.New("new container still has retained forwarding services")
-				}
-			}
-			for _, pf := range c.Ports {
-				if err := noNativeForwardConflict(known, portSpec(c, pf)); err != nil {
-					return err
-				}
-			}
-			if len(c.Ports) > 0 {
-				return preflightForwardCLI(check)
-			}
-			return nil
+			return a.preflightNativeCreateForwards(check, c)
 		},
 		reserve: func(check context.Context) error {
 			var err error
@@ -528,4 +510,25 @@ func removeOwnedNativeSSHSocket(directory *os.File) error {
 		return err
 	}
 	return directory.Sync()
+}
+
+func (a LiveApplier) preflightNativeCreateForwards(ctx context.Context, c *Config) error {
+	known, err := nativeStartForwardInventory(ctx, a.Client)
+	if err != nil {
+		return fmt.Errorf("matching-init forward inventory: %w", err)
+	}
+	for _, service := range known {
+		if service.Spec.Agentbox == c.Name {
+			return errors.New("new container still has retained forwarding services")
+		}
+	}
+	for _, pf := range c.Ports {
+		if err := noNativeForwardConflict(known, portSpec(c, pf)); err != nil {
+			return err
+		}
+	}
+	if len(c.Ports) > 0 {
+		return preflightForwardCLI(ctx)
+	}
+	return nil
 }

@@ -15,11 +15,12 @@ adopt the existing child. Markers/tombstones distinguish known completion from
 uncertain loss. [1](#source-1) Once an attach's setup is authorized, a client
 that leaves or is signalled cannot cancel it: the holder may finish starting
 afterwards, and a client timeout is no proof of a failed launch; inspect
-`box session` or the request ID instead of retrying. For a stopped native box,
-each owned-setup start qualification inventory has a two-minute fail-safe.
-Expiry fails qualification before starting the container or session. After
-the attachment starts, one signal is forwarded to it and ends it (the ordinary detach, status
-0); a second ends the client unconditionally. [16](#source-16)
+`box session` or the request ID instead of retrying. When owned setup starts
+a stopped native box or creates a missing container, each forward inventory
+read during start or create preflight has a two-minute fail-safe. Expiry
+fails qualification before engine start or creation. After the attachment
+starts, one signal is forwarded to it and ends it (the ordinary detach,
+status 0); a second ends the client unconditionally. [16](#source-16)
 [FACT] Inside a box the bundled sandbox's signal broker delivers a mediated
 `kill` before answering it, and its listener lets a signal interrupt and
 restart that call, so one `kill` can arrive twice; both copies name the broker
