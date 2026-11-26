@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/managedchat"
 	"github.com/leogr/yoloctl/internal/session"
+	"github.com/leogr/yoloctl/internal/spacelock"
 	"github.com/spf13/cobra"
 )
 
@@ -27,10 +29,10 @@ import (
 // holder launch or workload is reachable from this fixture.
 func TestChatRoleLifecycleHolderReadiness(t *testing.T) {
 	for _, tc := range []struct {
-		name, state, failure string
-		delayed, orphan      bool
-		wantErr              bool
-		reloads              int
+		name, state, failure   string
+		delayed, orphan, owned bool
+		wantErr                bool
+		reloads                int
 	}{
 		{name: "recreated-no-attach", state: "inactive"},
 		{name: "exited-holder", state: "failed"},
@@ -54,6 +56,10 @@ func TestChatRoleLifecycleHolderReadiness(t *testing.T) {
 		{name: "partial-inventory", state: "inactive", failure: "inventory", wantErr: true},
 		{name: "publication-error", state: "inactive", failure: "publication", wantErr: true},
 		{name: "live-control-missing", state: "active", failure: "missing", wantErr: true},
+		{name: "owned-live-control-missing", state: "active", failure: "missing", owned: true, wantErr: true},
+		{name: "caller-deadline", state: "active", failure: "caller-deadline", wantErr: true},
+		{name: "silent-first-status", state: "active", failure: "first-status", reloads: 1},
+		{name: "silent-reload", state: "active", failure: "silent-reload", wantErr: true, reloads: 1},
 		{name: "peer-verification-error", state: "active", failure: "peer", wantErr: true},
 		{name: "invalid-readiness-proof", state: "active", failure: "readiness", wantErr: true},
 		{name: "uncertain-reload", state: "active", failure: "reload", wantErr: true, reloads: 1},
@@ -119,7 +125,7 @@ func TestChatRoleLifecycleHolderReadiness(t *testing.T) {
 			}
 			var listener net.Listener
 			if tc.state == "active" || tc.state == "activating" || tc.orphan {
-				if tc.failure != "missing" {
+				if tc.failure != "missing" && tc.failure != "caller-deadline" {
 					listener, err = net.Listen("unix", path)
 					if err != nil {
 						t.Fatal(err)
@@ -148,6 +154,12 @@ func TestChatRoleLifecycleHolderReadiness(t *testing.T) {
 							ops = append(ops, request.Op)
 							count := len(ops)
 							mu.Unlock()
+							if (tc.failure == "first-status" && count == 1) ||
+								(tc.failure == "silent-reload" && request.Op == "reload") {
+								_, _ = io.Copy(io.Discard, conn) // the waiting caller must close it
+								_ = conn.Close()
+								continue
+							}
 							if tc.failure == "reload" && request.Op == "reload" || tc.failure == "status" && request.Op == "status" {
 								_ = conn.Close()
 								continue
@@ -232,12 +244,41 @@ func TestChatRoleLifecycleHolderReadiness(t *testing.T) {
 			registerSpaceOperations(root)
 			root.SetArgs([]string{"box", "recreate", "--no-attach"})
 			ctx := t.Context()
+			if tc.owned {
+				ctx = context.WithValue(ctx, controllerOwnedSetupKey{}, true)
+			}
+			ready, attempt := managedServerReadyTimeout, managedServerStatusAttempt
+			t.Cleanup(func() { managedServerReadyTimeout, managedServerStatusAttempt = ready, attempt })
 			if tc.failure == "missing" {
+				managedServerReadyTimeout = 180 * time.Millisecond
+			}
+			if tc.failure == "first-status" {
+				managedServerStatusAttempt = 100 * time.Millisecond
+			}
+			var timeout time.Duration
+			switch tc.failure {
+			case "first-status":
+				timeout = 3 * time.Second
+			case "caller-deadline", "silent-reload":
+				timeout = 500 * time.Millisecond
+			}
+			if timeout > 0 {
 				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, 180*time.Millisecond)
+				ctx, cancel = context.WithTimeout(ctx, timeout)
 				defer cancel()
 			}
 			err = root.ExecuteContext(ctx)
+			switch tc.failure {
+			case "missing", "caller-deadline", "silent-reload":
+				if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "runtime application pending") {
+					t.Fatalf("timeout lost role-recovery text: %v", err)
+				}
+				unlock, err := spacelock.TryAcquire(t.Context(), "work", true)
+				if err != nil {
+					t.Fatalf("pending roles retained the operation guard: %v", err)
+				}
+				unlock()
+			}
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("lifecycle error = %v; want error %v", err, tc.wantErr)
 			}
@@ -289,13 +330,16 @@ func TestChatRoleLifecycleHolderReadiness(t *testing.T) {
 			if reloads != tc.reloads {
 				t.Fatalf("control requests %v; want %d reloads", got, tc.reloads)
 			}
-			if strings.HasPrefix(tc.failure, "ack-") && len(got) != 2 {
+			if tc.failure == "first-status" && strings.Join(got, ",") != "status,status,reload,status" {
+				t.Fatalf("only the first silent status should retry: %v", got)
+			}
+			if (strings.HasPrefix(tc.failure, "ack-") || tc.failure == "silent-reload") && len(got) != 2 {
 				t.Fatalf("uncertain acknowledgment reached another request: %v", got)
 			}
 			if !tc.wantErr && tc.orphan && notice.Len() != 0 {
 				t.Fatalf("live orphan incorrectly deferred: %s", notice.String())
 			}
-			if tc.reloads != 0 && (len(got) < 2 || got[0] != "status" || got[1] != "reload") {
+			if tc.reloads != 0 && tc.failure != "first-status" && (len(got) < 2 || got[0] != "status" || got[1] != "reload") {
 				t.Fatalf("reload preceded readiness: %v", got)
 			}
 		})

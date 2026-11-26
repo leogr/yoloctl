@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,10 +11,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/agentbox"
+	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/managedchat"
+	"github.com/spf13/cobra"
 )
 
 func TestCatalogRetriesOnlyConcurrentChange(t *testing.T) {
@@ -80,8 +84,8 @@ func TestCatalogRetriesOnlyConcurrentChange(t *testing.T) {
 			newBoxStateResolver = attachObserveRuntime(func(c context.Context) ([]container.Container, error) {
 				calls++
 				d, ok := c.Deadline()
-				if !ok || time.Until(d) > chatObservationTimeout {
-					t.Fatal("missing shared five-second bound")
+				if !ok || time.Until(d) > chatOptionalObservationTimeout {
+					t.Fatal("missing shared one-minute runtime bound")
 				}
 				if calls == 1 {
 					deadline = d
@@ -177,6 +181,100 @@ func TestCatalogRetriesOnlyConcurrentChange(t *testing.T) {
 				if errors.Is(err, errChatObservationChanged) {
 					t.Fatal("identity or regression was retryable", err)
 				}
+			}
+		})
+	}
+}
+
+func TestChatObservationExpiresOptionalInventoryWithoutInventingAbsence(t *testing.T) {
+	store, inventory, room, _ := attachObserveFixture(t)
+	former := managedchat.Box{Name: "former", ID: agentbox.NewIdentity()}
+	inventory.Declarations[former.Name] = former.ID
+	room, err := store.Enroll(former, room.Generation, inventory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, err = store.Revoke(room.Members[1].ID, room.Generation, inventory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newBoxStateResolver = attachObserveRuntime(func(ctx context.Context) ([]container.Container, error) {
+		<-ctx.Done()
+		return nil, nil // even a late empty listing is not evidence of absence
+	})
+	runtime, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	status, err := observeManagedChatAttempt(t.Context(), runtime, "work", store, &chatObservationBinding{})
+	if err != nil || status.Room == nil || status.Room.ID != room.ID || status.ServerReady || status.RuntimeApplied || status.SetupRequired ||
+		len(status.Pending) != 1 || status.Pending[0] != "runtime observation deadline reached" {
+		t.Fatalf("unavailable inventory became a runtime conclusion: %+v %v", status, err)
+	}
+	var out bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	if err := writeChatStatus(cmd, status); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range room.Members {
+		kind := "enrolled"
+		if m.Revoked {
+			kind = "revoked"
+		}
+		if !strings.Contains(out.String(), m.Name+"  "+m.ID+"  "+kind) {
+			t.Fatalf("verified roster row missing: %s", out.String())
+		}
+	}
+}
+
+func TestChatOptionalRuntimeExpiryKeepsServerProof(t *testing.T) {
+	store, _, room, member := attachObserveFixture(t)
+	proof, err := store.Render(room)
+	if err != nil {
+		t.Fatal(err)
+	}
+	control := (&fakeChatControl{
+		applied:  proof,
+		features: []string{"unix-listeners", "control-reload", "acl-revoke", "server-presence"},
+	}).serve(t, store)
+	oldServer, oldActive, oldInspect := statusServerControlFn, holderUnitActiveFn, statusInspectFn
+	t.Cleanup(func() {
+		statusServerControlFn, holderUnitActiveFn, statusInspectFn = oldServer, oldActive, oldInspect
+	})
+	statusServerControlFn = func(context.Context, *managedchat.Room, *agentbox.Config) (managedchat.Control, *container.Details, error) {
+		return control, &container.Details{Running: true}, nil
+	}
+	server := &agentbox.Config{Name: room.Server.Name, ID: room.Server.ID, Space: "work"}
+	boxes := []boxstate.Box{
+		{Name: server.Name, Config: server, Declaration: boxstate.DeclarationDeclared, Runtime: boxstate.RuntimeRunning, Container: &container.Container{Name: server.Name}},
+		{Name: member.Name, Config: member, Declaration: boxstate.DeclarationDeclared, Runtime: boxstate.RuntimeRunning, Container: &container.Container{Name: member.Name}},
+	}
+	for _, source := range []string{"holder", "participant"} {
+		t.Run(source, func(t *testing.T) {
+			optional, expire := context.WithCancel(t.Context())
+			defer expire()
+			holderUnitActiveFn = func(context.Context, *container.Client, string) bool {
+				if source == "holder" {
+					expire()
+				}
+				return true
+			}
+			statusInspectFn = func(_ *container.Client, ctx context.Context, name string) (*container.Details, error) {
+				if name != member.Name || source == "holder" {
+					t.Fatalf("unexpected optional participant %s", name)
+				}
+				expire()
+				return nil, ctx.Err()
+			}
+			got, err := observeManagedChatRoom(optional, "work", store, room, boxes)
+			got = finishChatRuntimeObservation(optional, got)
+			if err != nil || got.ServerReady != (source == "participant") || got.Server == nil || got.Server.AppliedGeneration != proof.Generation ||
+				got.RuntimeApplied || got.SetupRequired || len(got.Members) != 1 || got.Members[0].Bound ||
+				!strings.Contains(got.Members[0].Reason, "could not be inspected") {
+				t.Fatalf("optional expiry erased proof or invented participant state: %+v %v", got, err)
+			}
+			pending := strings.Join(got.Pending, "\n")
+			if source == "holder" && (!strings.Contains(pending, "holder state unavailable") || strings.Contains(pending, "holder is not active")) {
+				t.Fatalf("missing holder proof became an inactive holder: %s", pending)
 			}
 		})
 	}

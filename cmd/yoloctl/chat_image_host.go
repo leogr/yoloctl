@@ -143,7 +143,7 @@ func configureChatImages(s *chatSession, opts *chatui.Options, enabled bool, rea
 				return result
 			}
 			result.RequestID = rand.Text()
-			ctx, cancel := context.WithTimeout(s.ctx, 50*time.Second)
+			ctx, cancel := context.WithTimeout(s.ctx, chatViewRequestTimeout)
 			defer cancel()
 			var raw bytes.Buffer
 			request := draft.request

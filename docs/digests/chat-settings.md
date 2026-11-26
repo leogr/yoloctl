@@ -1,6 +1,6 @@
 # Managed chat roles, nicknames and attachment
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; native nickname entry points verified at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; native nickname entry points verified at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior. Chat wait lifetimes re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] An enrolled box receives configured IRC channel `+o` only when its
 current declaration ID matches membership, its effective capabilities include
@@ -25,7 +25,10 @@ uncertain reload. Missing/stopped servers retain published configuration for
 explicit start. Identity/binds and authoritative service state precede control.
 Stopped/absent holders get one verified status probe: only dial ENOENT/ECONNREFUSED
 defer with a pending notice; live orphan servers reload once. Other errors fail.
-Active/activating holders get bounded read-only startup probes. Reload
+Active/activating holders get a two-minute startup wait with retryable
+read-only probes. Other role checks follow the initiating context. When
+authorized attach setup outlives its viewer, each external check or exchange
+has its own two-minute fail-safe. Reload
 acknowledgment and fresh proof must match the readiness incarnation; no holder
 starts. [1](#source-1) [23](#source-23) Container preparation and every fresh server-holder launch
 refuse stale/unavailable published bytes after an interrupted publication,
@@ -54,8 +57,9 @@ runtime-derived operator grants for the independent restored space.
 [12](#source-12) [14](#source-14)
 
 [FACT] Host-admin `chat.attach-target` accepts only an immutable `member_id`
-and never waits for the native space lock. Within 5 s it reads one strict
-manifest snapshot and a complete runtime inventory, then re-reads the manifest:
+and never waits for the native space lock. With the click's request context
+it reads one strict manifest snapshot and a complete runtime inventory, then
+re-reads the manifest:
 a changed room, an unavailable inventory or the deadline is an error, never a
 stopped box. It returns room/member/box IDs, state and a box name only when the
 current declaration matches. Human, unknown, revoked and replaced identities
@@ -64,10 +68,15 @@ has a nonempty box and `missing` state; an absent/replaced declaration has no
 box target. The preview grants nothing; the guarded attach below rechecks under
 the lock. [7](#source-7) [24](#source-24) [25](#source-25)
 
+[FACT] The host chat view allows one minute to look up the optional default
+workdir for file links. If the lookup fails, the transcript still opens
+with the links-unavailable notice. The view cancels the lookup on exit.
+[28](#source-28)
+
 [FACT] Typed attachment carries all three IDs in hidden ordinary-attach guard
 flags. The native mutation guard bypasses the unguarded live-holder shortcut,
 rechecks membership and declaration identity, and verifies existing chat binds
-before ordinary session lifecycle. `--chat-allow-start` records explicit start
+using the command's context before session setup is authorized. `--chat-allow-start` records explicit start
 consent; without it, a target that stopped after lookup is refused. These fields
 constrain an already-authorized attachment and grant no new authority. UI tab
 reuse must also perform fresh validation instead of dropping these guards.
@@ -92,13 +101,13 @@ confinement, actual UID/cgroup verification, UI reconnection or tab routing.
 
 ## Sources
 
-1. <a id="source-1"></a> [Role synchronization](../../cmd/yoloctl/chat_roles.go#L28) — `desiredChatOperators`, `synchronizeChatRoles`, `applyChangedChatRoles`, `syncNativeChatRoles`.
+1. <a id="source-1"></a> [Role synchronization](../../cmd/yoloctl/chat_roles.go#L26) — `desiredChatOperators`, `synchronizeChatRoles`, `applyChangedChatRoles`, `syncNativeChatRoles`.
 2. <a id="source-2"></a> [Native settings](../../internal/managedchat/settings.go#L26) — `SetHumanNickname`, `SetOperators`.
 3. <a id="source-3"></a> [Mutation guard](../../cmd/yoloctl/space_operation.go#L20) — `releaseSpaceOperation`, `registerSpaceOperations`.
-4. <a id="source-4"></a> [Observation](../../cmd/yoloctl/chat_status.go#L16) — `observeManagedChat`.
+4. <a id="source-4"></a> [Observation](../../cmd/yoloctl/chat_status.go#L15) — `observeManagedChat`.
 5. <a id="source-5"></a> [CLI](../../cmd/yoloctl/chat.go#L18) — `newChatCmd`.
 6. <a id="source-6"></a> [Trusted header](../../internal/chatstream/protocol.go#L33) — `RoomHeader`.
-7. <a id="source-7"></a> [Attachment boundary](../../cmd/yoloctl/chat_attach.go#L17) — lookup, complete guard validation and action-time checks.
+7. <a id="source-7"></a> [Attachment boundary](../../cmd/yoloctl/chat_attach.go#L15) — lookup, complete guard validation and action-time checks.
 8. <a id="source-8"></a> [Settings regressions](../../internal/managedchat/settings_test.go#L17).
 9. <a id="source-9"></a> [Role regressions](../../cmd/yoloctl/chat_roles_test.go#L27).
 10. <a id="source-10"></a> [Real AIRC fixture](../../internal/managedchat/airc_integration_test.go#L22) — `TestRealAIRCControlContract`.
@@ -114,8 +123,9 @@ confinement, actual UID/cgroup verification, UI reconnection or tab routing.
 20. <a id="source-20"></a> [Locked transport selection](../../cmd/yoloctl/session_client.go#L76) — `selectSessionTransport`.
 21. <a id="source-21"></a> [Release failure regressions](../../cmd/yoloctl/chat_operator_server_test.go#L332) — selection/attachment/exec close connected transports before streaming on release errors.
 22. <a id="source-22"></a> [Real channel role fixture](../../internal/managedchat/airc_channel_integration_test.go#L108) — `TestRealAIRCChannelAdditionAndACLRemovalWithoutRevocation`; production rendering plus isolated aircd, stubbed peer verification.
-23. <a id="source-23"></a> [Holder readiness regressions](../../cmd/yoloctl/chat_roles_readiness_test.go#L28) — lifecycle guard, real publication/private Unix control, inert runtime/service inspection, including live orphans.
-24. <a id="source-24"></a> [Lock-free lookup](../../cmd/yoloctl/chat_attach_observe.go#L21-L55) — `observeChatAttachTarget`, dispatched before the lock in chat_runtime.go `runControllerChatRuntime`.
+23. <a id="source-23"></a> [Holder readiness regressions](../../cmd/yoloctl/chat_roles_readiness_test.go#L30) — lifecycle guard, real publication/private Unix control, inert runtime/service inspection, including live orphans.
+24. <a id="source-24"></a> [Lock-free lookup](../../cmd/yoloctl/chat_attach_observe.go#L22-L60) — `observeChatAttachTarget`, dispatched before the lock in chat_runtime.go `runControllerChatRuntime`.
 25. <a id="source-25"></a> [Lookup regressions](../../cmd/yoloctl/chat_attach_observe_test.go#L77) — held lock, deadline, unavailable inventory, room change, name reuse, revocation.
 26. <a id="source-26"></a> [Stream nickname](../../cmd/yoloctl/chat_stream.go#L47-L63) — `runControllerChatStream` registers `RoomHeader`'s saved human nickname.
-27. <a id="source-27"></a> [Native nickname save](../../cmd/yoloctl/chat_view.go#L89-L105) — `runChatView` wires `SaveNick` to `chat.nickname` and returns `NickSavedMsg`; chatui/model.go `slashCommand`/`nickSaved` and overlay.go `saveNick`/`activateSetting`; nickname_display_test.go `TestNicknameSaveReconnectRefreshesOpenLabels` exercises the component with fake callbacks, not the host/controller stream.
+27. <a id="source-27"></a> [Native nickname save](../../cmd/yoloctl/chat_view.go#L126-L139) — `runChatView` wires `SaveNick` to `chat.nickname` and returns `NickSavedMsg`; chatui/model.go `slashCommand`/`nickSaved` and overlay.go `saveNick`/`activateSetting`; nickname_display_test.go `TestNicknameSaveReconnectRefreshesOpenLabels` exercises the component with fake callbacks, not the host/controller stream.
+28. <a id="source-28"></a> [File link settings](../../cmd/yoloctl/chat_view.go#L108-L124) — optional workdir and link-admission setup.

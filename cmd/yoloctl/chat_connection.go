@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/container"
@@ -17,11 +16,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const managedChatConnectionTimeout = 5 * time.Second
-
-var openManagedChatConnectionFn = func(ctx context.Context, space string, store managedchat.Store) (*managedChatConnection, error) {
-	return openManagedChatConnectionWithTimeout(ctx, space, store, 0)
-}
+var openManagedChatConnectionFn = openManagedChatConnection
 
 // A connection pins one verified OpenShell peer. Neither feature probes nor
 // later client commands redial a mutable box-name socket.
@@ -35,7 +30,6 @@ type managedChatConnection struct {
 	live                     map[string]managedchat.Connections // last verified status, per AIRC account
 	stop                     func() bool
 	ops                      managedChatConnectionOps
-	probeTimeout             time.Duration
 }
 
 type managedChatConnectionOps struct {
@@ -46,25 +40,12 @@ type managedChatConnectionOps struct {
 }
 
 func openManagedChatConnection(ctx context.Context, space string, store managedchat.Store) (*managedChatConnection, error) {
-	return openManagedChatConnectionWithTimeout(ctx, space, store, managedChatConnectionTimeout)
-}
-
-func openManagedChatConnectionWithTimeout(ctx context.Context, space string, store managedchat.Store, timeout time.Duration) (*managedChatConnection, error) {
 	return openManagedChatConnectionWith(ctx, space, store, managedChatConnectionOps{
 		load: agentbox.Load, control: managedServerControl, dial: dialManagedChatPeer, active: holderUnitActiveFn,
-	}, timeout)
+	})
 }
 
-func managedChatProbeContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
-	if timeout == 0 {
-		return ctx, func() {}
-	}
-	return context.WithTimeout(ctx, timeout)
-}
-
-func openManagedChatConnectionWith(ctx context.Context, space string, store managedchat.Store, ops managedChatConnectionOps, timeout time.Duration) (*managedChatConnection, error) {
-	probe, cancel := managedChatProbeContext(ctx, timeout)
-	defer cancel()
+func openManagedChatConnectionWith(ctx context.Context, space string, store managedchat.Store, ops managedChatConnectionOps) (*managedChatConnection, error) {
 	room, err := store.ReadManifestSnapshot()
 	if err != nil {
 		return nil, err
@@ -73,7 +54,7 @@ func openManagedChatConnectionWith(ctx context.Context, space string, store mana
 	if err != nil {
 		return nil, err
 	}
-	control, details, err := ops.control(probe, room, cfg)
+	control, details, err := ops.control(ctx, room, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -81,25 +62,25 @@ func openManagedChatConnectionWith(ctx context.Context, space string, store mana
 	if err != nil {
 		return nil, err
 	}
-	applied, err := control.CallWithContextDeadline(probe, "status")
+	applied, err := control.Call(ctx, "status")
 	if err != nil {
 		return nil, err
 	}
 	if err := applied.Matches(proof); err != nil {
 		return nil, err
 	}
-	conn, err := ops.dial(probe, cfg, details)
+	conn, err := ops.dial(ctx, cfg, details)
 	if err != nil {
 		return nil, err
 	}
-	client, err := sshtransport.ConnectWithContextDeadline(probe, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()})
+	client, err := sshtransport.ConnectWithContextDeadline(ctx, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()})
 	if err != nil {
 		return nil, err
 	}
 	result := &managedChatConnection{Room: room, Config: cfg, store: store, client: client,
-		containerID: details.ID, incarnation: details.Labels[managedchat.IncarnationLabel], applied: applied, ops: ops, probeTimeout: timeout}
+		containerID: details.ID, incarnation: details.Labels[managedchat.IncarnationLabel], applied: applied, ops: ops}
 	result.stop = context.AfterFunc(ctx, func() { _ = client.Close() })
-	if err := result.Verify(probe); err != nil {
+	if err := result.Verify(ctx); err != nil {
 		_ = result.Close()
 		return nil, err
 	}
@@ -128,8 +109,6 @@ func dialManagedChatPeer(ctx context.Context, cfg *agentbox.Config, details *con
 // Verify detects native or runtime replacement around setup/probing. A later
 // lifecycle stop can disconnect this connection, but cannot redirect it.
 func (c *managedChatConnection) Verify(ctx context.Context) error {
-	probe, cancel := managedChatProbeContext(ctx, c.probeTimeout)
-	defer cancel()
 	room, err := c.store.ReadManifestSnapshot()
 	if err != nil {
 		return err
@@ -146,7 +125,7 @@ func (c *managedChatConnection) Verify(ctx context.Context) error {
 	if !agentbox.SameDeclaration(c.Config, cfg) {
 		return errors.New("managed server declaration changed during setup")
 	}
-	control, details, err := c.ops.control(probe, room, cfg)
+	control, details, err := c.ops.control(ctx, room, cfg)
 	if err != nil {
 		return err
 	}
@@ -157,14 +136,14 @@ func (c *managedChatConnection) Verify(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	applied, err := control.CallWithContextDeadline(probe, "status")
+	applied, err := control.Call(ctx, "status")
 	if err != nil {
 		return err
 	}
 	if err := applied.MatchesIncarnation(proof, c.applied); err != nil {
 		return err
 	}
-	if !c.ops.active(probe, container.New(cfg.Space), cfg.Name) {
+	if !c.ops.active(ctx, container.New(cfg.Space), cfg.Name) {
 		return errors.New("managed server holder is not active; run chat ensure explicitly")
 	}
 	latest, err := c.store.ReadManifestSnapshot()
@@ -174,7 +153,7 @@ func (c *managedChatConnection) Verify(ctx context.Context) error {
 	if !reflect.DeepEqual(room, latest) {
 		return errors.New("managed chat changed during server verification")
 	}
-	if err := probe.Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	c.live = applied.Accounts

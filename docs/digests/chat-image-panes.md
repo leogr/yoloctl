@@ -1,6 +1,6 @@
 # Chat image panes
 
-Verification: `fc48bca38d7777c07e13bb1610611f9a15c8c17d` and accompanying changes; preview area and hover on `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes.
+Verification: `fc48bca38d7777c07e13bb1610611f9a15c8c17d` and accompanying changes; preview area and hover on `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes. Chat wait lifetimes re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] A native chat pane claims the TUI's image channel first thing. Its
 bridge relays the host's capability, ready and error frames to the chat model
@@ -57,7 +57,8 @@ without a channel it shows chips and never probes its tab's emulated terminal.
 At start it sends the same version, non-storing graphics and CSI 16t queries
 (again on focus) and advertises the outcome as generation 1. It answers
 requests like the TUI broker: stale, unsupported, a cache hit, busy while its
-single 30 s read/decode job runs, then `not_png`, `too_large` or `failed`. It
+single read/decode job runs, then `not_png`, `too_large` or `failed`.
+The job uses the view context with a two-minute fail-safe. It
 reads through the same host controller reader for the view's space, prepares
 for the requested area, deletes its previous image, transmits and replies ready only
 after the transmit is written. A changed cell size starts a new generation and

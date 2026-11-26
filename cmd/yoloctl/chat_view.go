@@ -42,7 +42,7 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 	if !stdinIsTerminal(cmd.InOrStdin()) || !term.IsTerminal(int(os.Stdout.Fd())) {
 		return errors.New("chat needs an interactive terminal; use chat ensure/status for scripts")
 	}
-	header, err := ensureChatHeader(cmd)
+	header, err := openChatHeader(cmd.Context(), cmd, nil)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 	// terminal and is its own image host.
 	var standalone *standaloneImages
 	if ownsTerminalImages(previews, os.Getenv("YOLOCTL_TUI"), prefs.ImagesEnabled()) {
-		standalone = newStandaloneImages(target.Space, readChatArtifactForPreview)
+		standalone = newStandaloneImages(ctx, target.Space, readChatArtifactForPreview)
 		standalone.configure(s, &opts)
 	} else {
 		previews.configure(s, &opts)
@@ -105,7 +105,7 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 		return func() tea.Msg { return s.resolveAttach(cmd, account) }
 	}
 	opts.Attach = chatAttacher(target.Space, requests)
-	settingsCtx, settingsCancel := context.WithTimeout(ctx, 7*time.Second)
+	settingsCtx, settingsCancel := context.WithTimeout(ctx, chatOptionalObservationTimeout)
 	workdir, settingsErr := followDefault(settingsCtx, target.Space)
 	settingsCancel()
 	opts.Context = ctx
@@ -125,8 +125,10 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 
 	opts.SaveNick = func(nick string) tea.Cmd {
 		return func() tea.Msg {
+			wait, stop := context.WithTimeout(ctx, chatViewRequestTimeout)
+			defer stop()
 			var status managedchat.Status
-			err := callChatViewControllerInto(ctx, cmd, "chat.nickname", chatRuntimeRequest{Nickname: nick}, &status)
+			err := callChatViewControllerInto(wait, cmd, "chat.nickname", chatRuntimeRequest{Nickname: nick}, &status)
 			if err != nil {
 				return chatui.NickSavedMsg{Err: err}
 			}
@@ -183,12 +185,6 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	return err
-}
-
-// ensureChatHeader ensures the managed room and returns the client header,
-// including the trusted identity map and the saved human nickname.
-func ensureChatHeader(cmd *cobra.Command) (chatstream.Header, error) {
-	return openChatHeader(cmd)
 }
 
 // chatIdentities maps authenticated accounts to trusted display identities
@@ -318,10 +314,14 @@ func (s *chatSession) current() *chatLink {
 // start connects a new stream; its events reach the program in order.
 // takeOver replaces this account's other session holding the nickname.
 func (s *chatSession) start(takeOver bool) {
+	s.mu.Lock()
+	if s.ctx.Err() != nil {
+		s.mu.Unlock()
+		return
+	}
 	ctx, cancel := context.WithCancel(s.ctx)
 	l := &chatLink{id: chatLinkSequence.Add(1), outgoing: make(chan chatstream.Send, 1), older: make(chan chatstream.HistoryRequest, 1), actions: make(chan chatstream.Action, 1),
 		catalogs: make(chan chatstream.Catalog, 1), ctx: ctx, cancel: cancel, done: make(chan struct{})}
-	s.mu.Lock()
 	s.link = l
 	s.mu.Unlock()
 	requestRead, requestWrite := io.Pipe()
@@ -425,12 +425,16 @@ func (s *chatSession) stop() {
 // for the new header, then connect. Nothing pending is resent.
 func (s *chatSession) reconnect(cmd *cobra.Command) tea.Msg {
 	s.stop()
-	header, err := ensureChatHeader(cmd)
+	header, err := openChatHeader(s.ctx, cmd, &s.target)
 	if err != nil {
 		return chatui.ConnectionMsg{Err: err}
 	}
 	identities, members := chatIdentities(header)
 	s.mu.Lock()
+	if s.ctx.Err() != nil {
+		s.mu.Unlock()
+		return nil
+	}
 	s.members, s.header = members, header
 	s.mu.Unlock()
 	s.program.Send(chatui.SessionMsg{Nick: header.Nick, Identities: identities})
@@ -597,7 +601,12 @@ func (s *chatSession) refreshCatalogRead(read func(context.Context) (chatstream.
 	failed := func(prefix string, err error) tea.Msg {
 		return chatui.RefreshResultMsg{Read: uiCatalogRead(origin), Err: fmt.Errorf("%s: %w", prefix, err)}
 	}
-	c, err := read(l.ctx)
+	wait, stop := context.WithTimeout(l.ctx, chatViewRequestTimeout)
+	defer stop()
+	c, err := read(wait)
+	if err == nil {
+		err = wait.Err()
+	}
 	if l.ctx.Err() != nil || s.current() != l {
 		return nil
 	}
@@ -702,10 +711,12 @@ func (s *chatSession) control(a chatui.Action, readCatalog func(context.Context)
 			if err := l.ctx.Err(); err != nil {
 				return refuse(fmt.Errorf("channel catalog refresh failed before JOIN: %w", err))
 			}
-			catalog, err := readCatalog(l.ctx)
+			wait, stop := context.WithTimeout(l.ctx, chatViewRequestTimeout)
+			catalog, err := readCatalog(wait)
 			if err == nil {
-				err = l.ctx.Err()
+				err = wait.Err()
 			}
+			stop()
 			if err != nil {
 				return refuse(fmt.Errorf("channel catalog refresh failed before JOIN: %w", err))
 			}
@@ -722,9 +733,11 @@ func (s *chatSession) control(a chatui.Action, readCatalog func(context.Context)
 	}
 }
 
+const chatViewRequestTimeout = 2 * time.Minute
+
 // attachLookupTimeout bounds one participant lookup end to end, so a click
 // never waits silently on a busy or unreachable controller.
-var attachLookupTimeout = 10 * time.Second
+var attachLookupTimeout = chatViewRequestTimeout
 
 // resolveAttach asks the controller, at click time, which declaration the
 // account's membership currently names. Only the immutable member ID from

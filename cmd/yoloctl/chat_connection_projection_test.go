@@ -83,7 +83,7 @@ func TestChatConnectionAcceptsItsOwnProjectionRefresh(t *testing.T) {
 		return control, details, agentbox.VerifyChatRuntime(cfg, details)
 	}
 
-	conn, err := openManagedChatConnectionWith(t.Context(), "work", s, f.ops, managedChatConnectionTimeout)
+	conn, err := openManagedChatConnectionWith(t.Context(), "work", s, f.ops)
 	if err != nil {
 		t.Fatal("unchanged declaration rejected after its own projection refresh:", err)
 	}

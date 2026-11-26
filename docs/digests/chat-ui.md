@@ -63,7 +63,7 @@ the adapter from `YOLOCTL_TEST_AIRC_BIN_DIR`. [8](#source-8) [9](#source-9)
 
 2. <a id="source-2"></a> [Transcript](../../internal/chatui/transcript.go#L48-L424) — `humanGlyph`, `identify`, `transcript`, `header`; `iconSlot` in hover.go.
 3. <a id="source-3"></a> [Browser confirmation](../../internal/chatui/link_prompt.go#L18) — fixed destination and modal input.
-4. <a id="source-4"></a> [Host browser policy](../../cmd/yoloctl/chat_view.go#L733-L751) — `configureChatBrowser`, validation and cancellation.
+4. <a id="source-4"></a> [Host browser policy](../../cmd/yoloctl/chat_view.go#L746-L764) — `configureChatBrowser`, validation and cancellation.
 5. <a id="source-5"></a> [Scrolling and anchors](../../internal/chatui/render.go#L279) — `moveScroll`, `captureAnchor`; `place` in view.go.
 6. <a id="source-6"></a> [Stream adapter](../../internal/chatstream/client.go#L160) — `Run`, `topicEvent`, `rosterEvent`, `record`, `historyGap`.
 7. <a id="source-7"></a> [Roster, paging and topic regressions](../../internal/chatstream/roster_test.go#L9) — counts, refusals, gaps, `TestTopicEvents`.

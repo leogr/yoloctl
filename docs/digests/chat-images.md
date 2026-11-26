@@ -1,6 +1,6 @@
 # Managed chat image publication
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Artifact read boundary on `4c2527aa7013f10159edf27819bb572d1ce11be9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior. Shared-source anchors checked at `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Artifact read boundary on `4c2527aa7013f10159edf27819bb572d1ce11be9` and accompanying changes. Chat wait lifetimes re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] Host clipboard preparation and publication are separate callbacks.
 Clipboard-off, unavailable readers and operator endpoints install neither
@@ -31,8 +31,9 @@ It runs fixed confined argv:
 <canonical-channel> --name <generated-name> --stdin`.
 Bytes flow through a private pipe; there are no staging mounts or extra IRC
 client commands. No native space mutation lock is acquired by this path.
-The controller deadline is 45 seconds, and cancellation closes its owned input;
-the host deadline is 50 seconds. Current identity/access is required, while a
+The view gives one upload request two minutes. The controller uses the
+request context, and cancellation closes its owned input. Current
+identity/access is required, while a
 newer desired generation alone does not invalidate the prepared image.
 [2](#source-2) [3](#source-3) [1](#source-1)
 
@@ -70,7 +71,7 @@ authority, AIRC HTTP interoperability or provider image consumption.
 
 1. <a id="source-1"></a> [Host callbacks](../../cmd/yoloctl/chat_image_host.go#L22) — `configureChatImages`, `imageLinkLive`, `chatImageIdentity`, lines 22–202.
 2. <a id="source-2"></a> [Typed protocol](../../cmd/yoloctl/chat_image_protocol.go#L21) — request validation, framing, identity and reply checks, lines 21–167.
-3. <a id="source-3"></a> [Controller publisher](../../cmd/yoloctl/chat_image_runtime.go#L24) — `runControllerChatImage`, `executeChatImageUpload`, `runChatImageCommand`, lines 24–138.
+3. <a id="source-3"></a> [Controller publisher](../../cmd/yoloctl/chat_image_runtime.go#L23) — `runControllerChatImage`, `executeChatImageUpload`, `runChatImageCommand`, lines 24–138.
 4. <a id="source-4"></a> [PNG bounds](../../internal/hostintegration/host.go#L48) — `ValidateImage`.
 5. <a id="source-5"></a> [Receipt contents](../../internal/controller/receipts.go#L17) — `Receipt`.
 6. <a id="source-6"></a> [Reserved metadata](../../internal/chatstream/artifact.go#L8) — `Artifact`, `artifactFromTags`.
@@ -78,6 +79,6 @@ authority, AIRC HTTP interoperability or provider image consumption.
 8. <a id="source-8"></a> [Receipt boundary fixture](../../cmd/yoloctl/chat_image_receipt_test.go#L21) — `TestChatImageReceiptSeparatesPreEffectCancellationFromPossiblePOST`.
 9. <a id="source-9"></a> [Operation registration](../../cmd/yoloctl/controller_internal.go#L40) — `controllerOperations`.
 10. <a id="source-10"></a> [Stream mapping](../../internal/chatstream/client.go#L667) — authenticated message adaptation.
-11. <a id="source-11"></a> [Host regressions](../../cmd/yoloctl/chat_image_host_test.go#L33) — clipboard authority, stale drafts, bounds, outcome correlation and no replay.
+11. <a id="source-11"></a> [Host regressions](../../cmd/yoloctl/chat_image_host_test.go#L34) — clipboard authority, stale drafts, bounds, outcome correlation and no replay.
 12. <a id="source-12"></a> [Upload regressions](../../cmd/yoloctl/chat_image_runtime_test.go#L36) — fixed argv, preflight rejection, bounded outcomes and effect gate.
 13. <a id="source-13"></a> [Metadata regressions](../../internal/chatstream/artifact_test.go#L18) — reserved tags and replay.

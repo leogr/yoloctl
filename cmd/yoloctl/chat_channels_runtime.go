@@ -271,14 +271,14 @@ func mutateChatChannels(ctx context.Context, method string, input chatChannelReq
 // connection; a missing acknowledgment is returned even if later status might
 // prove application. Status inspection and interrupted-receipt recovery are explicit.
 func applyChatChannelProof(ctx context.Context, control managedchat.Control, before managedchat.Applied, proof managedchat.Rendered) error {
-	ack, err := control.Call(ctx, "reload")
+	ack, err := callChatRoleControl(ctx, control, "reload")
 	if err != nil {
 		return err
 	}
 	if err := ack.MatchesReload(proof, before); err != nil {
 		return err
 	}
-	after, err := control.Call(ctx, "status")
+	after, err := callChatRoleControl(ctx, control, "status")
 	if err != nil {
 		return err
 	}

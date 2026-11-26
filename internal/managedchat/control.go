@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net"
 	"slices"
-	"time"
 )
 
 const ControlLimit = 16 << 10 // request and feature-probe limit
@@ -102,17 +101,9 @@ type Control struct {
 	VerifyPeer func(*net.UnixConn) error
 }
 
-// Call performs exactly one bounded request. A failed/lost reload is uncertain;
+// Call performs exactly one verified exchange under the caller context. A failed/lost reload is uncertain;
 // this method never reconnects, resends, unlinks a socket or restarts a server.
 func (c Control) Call(ctx context.Context, op string) (Applied, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	return c.CallWithContextDeadline(ctx, op)
-}
-
-// CallWithContextDeadline performs the same verified exchange under the
-// context of a caller that owns the whole operation.
-func (c Control) CallWithContextDeadline(ctx context.Context, op string) (Applied, error) {
 	var applied Applied
 	if op != "status" && op != "reload" {
 		return applied, errors.New("invalid AIRC control operation")
@@ -132,18 +123,23 @@ func (c Control) CallWithContextDeadline(ctx context.Context, op string) (Applie
 	if err := c.VerifyPeer(u); err != nil {
 		return applied, err
 	}
-	deadline, _ := ctx.Deadline()
-	if err := conn.SetDeadline(deadline); err != nil {
-		return applied, err
-	}
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
+	if err := ctx.Err(); err != nil {
+		return applied, err
+	}
 	if err := json.NewEncoder(conn).Encode(struct {
 		Op string `json:"op"`
 	}{op}); err != nil {
+		if ctx.Err() != nil {
+			return applied, ctx.Err()
+		}
 		return applied, err
 	}
 	line, err := bufio.NewReaderSize(conn, ControlResponseLimit+1).ReadSlice('\n')
+	if ctx.Err() != nil {
+		return applied, ctx.Err()
+	}
 	if err != nil || len(line) > ControlResponseLimit {
 		return applied, errors.New("invalid or incomplete bounded AIRC control reply; inspect status before retrying")
 	}

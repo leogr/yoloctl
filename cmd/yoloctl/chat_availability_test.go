@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/leogr/yoloctl/internal/boxstate"
+	"github.com/leogr/yoloctl/internal/chatui"
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
@@ -220,5 +222,108 @@ func TestChatMutationCancellationBeforeHeldLockKeepsNoEffectReceipt(t *testing.T
 				t.Fatal("waiting mutation changed room", current, err)
 			}
 		})
+	}
+}
+
+func TestChatReconnectCancelsHeldStatusWhenViewCloses(t *testing.T) {
+	store, inventory := roomRuntimeFixture(t)
+	room, err := ensureManagedRoom(store, chatRuntimeRequest{Human: "human"}, inventory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := t.Context()
+	view, closeView := context.WithCancel(parent)
+	defer closeView()
+	statusStarted := make(chan context.Context, 1)
+	releaseStatus := make(chan struct{})
+	defer func() {
+		select {
+		case <-releaseStatus:
+		default:
+			close(releaseStatus)
+		}
+	}()
+	var requests []string
+	s := &chatSession{ctx: view, target: controllerTarget{Space: "work", Call: func(ctx context.Context, req controller.Request, streams controller.ClientIO) error {
+		requests = append(requests, req.Method)
+		if req.Method != "chat.status" {
+			return errors.New("unexpected reconnect request")
+		}
+		statusStarted <- ctx
+		<-releaseStatus
+		return json.NewEncoder(streams.Out).Encode(managedchat.Status{Room: room, SetupRequired: true})
+	}}}
+	cmd := newChatCmd()
+	cmd.SetContext(parent)
+	done := make(chan tea.Msg, 1)
+	go func() { done <- s.reconnect(cmd) }()
+	testWait, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+	var requestContext context.Context
+	select {
+	case requestContext = <-statusStarted:
+	case msg := <-done:
+		t.Fatalf("reconnect finished before status: %+v", msg)
+	case <-testWait.Done():
+		t.Fatal("status request never reached the controller")
+	}
+	deadline, bounded := requestContext.Deadline()
+	if left := time.Until(deadline); !bounded || left <= time.Minute || left > chatViewRequestTimeout {
+		t.Fatalf("status was not one bounded view RPC: %s, %v", left, bounded)
+	}
+	closeView()
+	select {
+	case <-requestContext.Done():
+	case <-testWait.Done():
+		t.Fatal("closed view left status running")
+	}
+	close(releaseStatus)
+	select {
+	case msg := <-done:
+		result, ok := msg.(chatui.ConnectionMsg)
+		if !ok || !errors.Is(result.Err, context.Canceled) {
+			t.Fatalf("late stopped-server result survived view close: %+v", msg)
+		}
+	case <-testWait.Done():
+		t.Fatal("reconnect did not return")
+	}
+	if parent.Err() != nil || !reflect.DeepEqual(requests, []string{"chat.status"}) || s.current() != nil {
+		t.Fatalf("view close disturbed parent or launched another request: %v, %v, %v", parent.Err(), requests, s.current())
+	}
+}
+
+func TestChatReconnectEnsureUsesViewLifetime(t *testing.T) {
+	store, inventory := roomRuntimeFixture(t)
+	room, err := ensureManagedRoom(store, chatRuntimeRequest{Human: "human"}, inventory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	cmd := newChatCmd()
+	cmd.SetIn(strings.NewReader(""))
+	var requests []string
+	target := controllerTarget{Space: "work", Call: func(ctx context.Context, req controller.Request, streams controller.ClientIO) error {
+		requests = append(requests, req.Method)
+		_, limited := ctx.Deadline()
+		switch req.Method {
+		case "chat.status":
+			if !limited {
+				t.Fatal("status has no single-wait allowance")
+			}
+			return json.NewEncoder(streams.Out).Encode(managedchat.Status{Room: room, SetupRequired: true})
+		case "chat.ensure":
+			if ctx != view || limited {
+				t.Fatal("ensure did not use the view lifetime")
+			}
+			return json.NewEncoder(streams.Out).Encode(managedchat.Status{Room: room, ServerReady: true})
+		default:
+			t.Fatalf("unexpected reconnect request %s", req.Method)
+			return nil
+		}
+	}}
+	header, err := openChatHeader(view, cmd, &target)
+	if err != nil || header.RoomID != room.ID || !reflect.DeepEqual(requests, []string{"chat.status", "chat.ensure"}) {
+		t.Fatalf("reconnect requests: %v %v %v", requests, header, err)
 	}
 }

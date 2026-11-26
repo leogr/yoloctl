@@ -85,4 +85,4 @@ refusal on older servers. None of these proves a VM or live room.
 17. <a id="source-17"></a> [Driver regressions](../../internal/chatstream/channel_delete_test.go#L1-L281) — explicit removal, refusals before Write, pending outcomes, header records, KICK before/after the catalog.
 18. <a id="source-18"></a> [View regression](../../internal/chatui/channel_deleted_test.go#L1-L122) — read-only deleted view, including a deletion missed while disconnected.
 19. <a id="source-19"></a> [Real AIRC](../../internal/managedchat/airc_channel_integration_test.go#L349-L420) — opt-in deletion, restart and recreation; skipped on older servers.
-20. <a id="source-20"></a> [Host catalog](../../cmd/yoloctl/chat_view.go#L820-L837) — `chatCatalog` passes channel IDs and ledger IDs; view binding in `bindIdentities` (chatui/channels.go).
+20. <a id="source-20"></a> [Host catalog](../../cmd/yoloctl/chat_view.go#L833-L850) — `chatCatalog` passes channel IDs and ledger IDs; view binding in `bindIdentities` (chatui/channels.go).

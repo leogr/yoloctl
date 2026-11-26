@@ -1,13 +1,14 @@
 # Managed channel catalog and stream
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Pre-JOIN read lifetime re-verified at `76bcf960c0d8d07faae06258f1fb1088bef24bdd` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Pre-JOIN read lifetime re-verified at `76bcf960c0d8d07faae06258f1fb1088bef24bdd` and accompanying changes. Chat wait lifetimes re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 Caller and request deadlines re-read at `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes.
 
 [FACT] `chat channel list/create/add/remove` use finite typed controller requests,
 ordinary admission/receipts and the existing verified host or operator principal.
 Mutations take native space locks and acknowledge the durable effect gate;
-list uses at most two lock-free observations in one five-second context (earlier
-caller deadline wins), retrying only unequal native snapshots. Exact room/disk/human
+list uses at most two lock-free observations, retrying only unequal native
+snapshots. They share one minute for optional runtime evidence under the caller's
+context. Expiry preserves verified facts and reports pending runtime evidence. Exact room/disk/human
 IDs remain bound to the first snapshot; identity change, generation regression,
 strict-store/authority failures and cancellation never retry. Each attempt repeats
 authority/store/runtime checks; rejected evidence is discarded. `chat.status` stays
@@ -145,14 +146,14 @@ Separate opt-in tests against real AIRC binaries are summarized in
 18. <a id="source-18"></a> [Native snapshot](../../internal/managedchat/store.go#L61) — `ReadManifestSnapshot`, shared private manifest reader; mutation callers retain locks.
 19. <a id="source-19"></a> [Host shape regression](../../cmd/yoloctl/chat_catalog_refresh_test.go#L18) — actual builders, JSON and `RunChannels` for legacy/schema-2 catalog generations and a nickname preference saved after the stream connected.
 20. <a id="source-20"></a> [Admission regressions](../../internal/chatstream/channel_admission_test.go#L10) — No MOTD, catalog ordering/conflicts, create-first and real refusal correlation.
-21. <a id="source-21"></a> [Host admission](../../cmd/yoloctl/chat_view.go#L672-L708) — `control` reads and queues JOIN on the captured link.
+21. <a id="source-21"></a> [Host admission](../../cmd/yoloctl/chat_view.go#L681-L718) — `control` reads and queues JOIN on the captured link.
 22. <a id="source-22"></a> [Wire fixture](../../cmd/yoloctl/chat_topic_wire_test.go#L26) — JOIN after opening and confirmed send.
-23. <a id="source-23"></a> [Admission tests](../../cmd/yoloctl/chat_join_admission_test.go#L13) — refresh, link and codes.
+23. <a id="source-23"></a> [Admission tests](../../cmd/yoloctl/chat_join_admission_test.go#L13) — refresh, link deadline and codes.
 24. <a id="source-24"></a> [Connection capability](../../cmd/yoloctl/chat_stream.go#L50) — the confined-client feature probe sets attachment support independently of room metadata.
 25. <a id="source-25"></a> [Refresh send regression](../../internal/chatstream/catalog_attachment_send_test.go#L15) — image send, filter and echo through the real exchange after a newer catalog.
 
-26. <a id="source-26"></a> [Read attempts](../../cmd/yoloctl/chat_observation.go#L28-L129) — `observeManagedChatRead`, `observeManagedChatCatalog`, binding and strict attempt.
-27. <a id="source-27"></a> [Retry tests](../../cmd/yoloctl/chat_catalog_retry_test.go#L18) — churn, revocation, runtime-only change, budgets, identity and authority.
+26. <a id="source-26"></a> [Read attempts](../../cmd/yoloctl/chat_observation.go#L28-L139) — `observeManagedChatRead`, `observeManagedChatCatalog`, binding and strict attempt.
+27. <a id="source-27"></a> [Retry tests](../../cmd/yoloctl/chat_catalog_retry_test.go#L23) — churn, revocation, runtime-only change, budgets, identity and authority.
 
 28. <a id="source-28"></a> [Desired catalog](../../cmd/yoloctl/chat_catalog.go#L15) — `readDesiredChatCatalog`, pure DTO projection, mode validation and captured diagnostics.
 29. <a id="source-29"></a> [Desired-read regressions](../../cmd/yoloctl/chat_catalog_test.go#L42) — one native read, concurrent replacement, strict errors, routing/coalescing and legacy list output.

@@ -168,7 +168,7 @@ func TestChatPinnedConnectionRejectsReplacementAndBoundsExec(t *testing.T) {
 	for _, change := range []string{"container", "declaration", "room", "holder", "stall", "channel-stall"} {
 		t.Run(change, func(t *testing.T) {
 			f := newChatConnectionFixture(t)
-			conn, err := openManagedChatConnectionWith(t.Context(), "work", f.store, f.ops, managedChatConnectionTimeout)
+			conn, err := openManagedChatConnectionWith(t.Context(), "work", f.store, f.ops)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -214,7 +214,7 @@ func TestHealthyChatStreamSetupBypassesExclusiveLock(t *testing.T) {
 	t.Cleanup(func() { nativeChatStoreFn, openManagedChatConnectionFn = oldStore, oldOpen })
 	nativeChatStoreFn = func() (managedchat.Store, error) { return f.store, nil }
 	openManagedChatConnectionFn = func(ctx context.Context, space string, store managedchat.Store) (*managedChatConnection, error) {
-		return openManagedChatConnectionWith(ctx, space, store, f.ops, 0)
+		return openManagedChatConnectionWith(ctx, space, store, f.ops)
 	}
 	unlock, err := spacelock.Acquire(t.Context(), "work", true)
 	if err != nil {
@@ -265,7 +265,7 @@ func TestChatStreamConnectionUsesCallerDeadline(t *testing.T) {
 				check(ctx)
 				return dial(ctx, cfg, details)
 			}
-			conn, err := openManagedChatConnectionWith(ctx, "work", fixture.store, fixture.ops, 0)
+			conn, err := openManagedChatConnectionWith(ctx, "work", fixture.store, fixture.ops)
 			if err != nil {
 				t.Fatal(err)
 			}

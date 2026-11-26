@@ -23,9 +23,6 @@ import (
 // display, as the outer TUI does for a chat pane. It shares the TUI's probe,
 // preparation, ID, cache and filter code (internal/chatimage).
 
-// standaloneImageTimeout bounds one read and decode, as in the TUI.
-const standaloneImageTimeout = 30 * time.Second
-
 const (
 	standaloneUnknown = iota
 	standaloneProbing
@@ -34,6 +31,7 @@ const (
 )
 
 type standaloneImages struct {
+	ctx   context.Context
 	space string
 	read  func(context.Context, string, chatimage.Frame) ([]byte, error)
 	send  func(tea.Msg) // the program's Send, for finished jobs
@@ -78,10 +76,10 @@ func ownsTerminalImages(previews *chatPreviews, yoloctlTUI string, enabled bool)
 	return previews.conn == nil && yoloctlTUI != "1" && enabled
 }
 
-func newStandaloneImages(space string, read func(context.Context, string, chatimage.Frame) ([]byte, error)) *standaloneImages {
+func newStandaloneImages(ctx context.Context, space string, read func(context.Context, string, chatimage.Frame) ([]byte, error)) *standaloneImages {
 	var seed [4]byte
 	_, _ = rand.Read(seed[:])
-	return &standaloneImages{space: space, read: read, ids: chatimage.NewIDs(binary.BigEndian.Uint32(seed[:]))}
+	return &standaloneImages{ctx: ctx, space: space, read: read, ids: chatimage.NewIDs(binary.BigEndian.Uint32(seed[:]))}
 }
 
 // configure installs the preview callbacks. Identities are captured when the
@@ -258,7 +256,7 @@ func (img *standaloneImages) answer(msg standalonePreviewMsg) tea.Cmd {
 	if img.job != nil {
 		return previewError(req, "busy")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), standaloneImageTimeout)
+	ctx, cancel := context.WithTimeout(img.ctx, chatViewRequestTimeout)
 	job := &standaloneJob{req: req, frame: msg.frame, generation: img.generation, cellW: img.cellW, cellH: img.cellH, cancel: cancel}
 	img.job = job
 	read, space, send := img.read, img.space, img.send
@@ -267,6 +265,9 @@ func (img *standaloneImages) answer(msg standalonePreviewMsg) tea.Cmd {
 		data, err := read(ctx, space, job.frame)
 		if err == nil {
 			job.prepared, err = chatimage.Prepare(data, job.cellW, job.cellH, job.frame.MaxCols, job.frame.MaxRows)
+		}
+		if err == nil {
+			err = ctx.Err()
 		}
 		job.err = err
 		if send != nil {

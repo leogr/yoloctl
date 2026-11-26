@@ -97,7 +97,7 @@ AIRC needs a host check. [6](#source-6) [7](#source-7) [10](#source-10)
 6. <a id="source-6"></a> [Composer regressions](../../internal/chatui/staging_test.go#L1-L406) — ordered stages, renumbering, edits, fresh paste, uncertainty, refusals including consumed proof and in-flight reply edits, rendering, legacy fallback, identical pastes.
 7. <a id="source-7"></a> [Stream regressions](../../internal/chatstream/attachments_test.go#L1-L171) — offsets, reserved tags, refusals, forwarding, echo identity.
 8. <a id="source-8"></a> [Staging request](../../cmd/yoloctl/chat_image_protocol.go#L24-L188) — `Stage`, `decodeChatImageStageReply`, `decodeChatImageResult`; host `UploadImage` in chat_image_host.go.
-9. <a id="source-9"></a> [Staging runtime](../../cmd/yoloctl/chat_image_runtime.go#L68-L150) — feature requirement and `--stage` argv.
+9. <a id="source-9"></a> [Staging runtime](../../cmd/yoloctl/chat_image_runtime.go#L65-L147) — feature requirement and `--stage` argv.
 10. <a id="source-10"></a> [Controller regressions](../../cmd/yoloctl/chat_image_staging_test.go#L1-L124) — feature gate, argv, non-stage replies uncertain, probe flag, view conversion.
 11. <a id="source-11"></a> [Source pin](../../internal/features/airc-source/manifest.json#L1) — AIRC release source commit and archive checksums; the pinned `src/lib.rs` L38 lists the feature.
 12. <a id="source-12"></a> [Pre-write refusal](../../internal/chatstream/client.go#L336-L424) — `localRejection` from `exchange` becomes a `rejected` delivery in `driver.send`; chat-stream.md has the stream contract.

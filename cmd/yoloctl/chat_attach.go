@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"errors"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/boxstate"
@@ -101,9 +99,7 @@ func validateChatAttachCommand(cmd *cobra.Command, space string, args []string) 
 	}
 	for _, box := range boxes {
 		if box.Name == args[0] && box.Container != nil {
-			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
-			defer cancel()
-			details, err := container.New(space).Inspect(ctx, box.Name)
+			details, err := container.New(space).Inspect(cmd.Context(), box.Name)
 			if err != nil {
 				return err
 			}

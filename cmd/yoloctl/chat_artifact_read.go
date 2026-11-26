@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/chatstream"
@@ -19,10 +18,6 @@ import (
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/managedchat"
 )
-
-// chatArtifactReadTimeout bounds the controller side of one read; the relay
-// keeps its own shorter deadline inside the chat runtime.
-const chatArtifactReadTimeout = 20 * time.Second
 
 // chatArtifactReadRequest names one artifact of an authenticated message by
 // its validated tuple and the identities it was seen under. It carries no
@@ -100,8 +95,6 @@ func runControllerChatArtifactRead(ctx context.Context, req controller.Request, 
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, chatArtifactReadTimeout)
-	defer cancel()
 	store, err := controller.NativeChatStore()
 	if err != nil {
 		return err

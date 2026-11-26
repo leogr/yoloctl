@@ -1,24 +1,26 @@
 # Chat image fetch
 
-Verification: `fc48bca38d7777c07e13bb1610611f9a15c8c17d` and accompanying changes; preview area on `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes.
+Verification: `fc48bca38d7777c07e13bb1610611f9a15c8c17d` and accompanying changes; preview area on `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes. Chat wait lifetimes re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] A fixed, embedded Python relay reads one artifact inside the confined
 chat runtime: it runs only `airc artifact download --config CONFIG UUID PATH`
 into a new private `/tmp` directory, as its one child in a new process group
 under a 4 MiB file-size limit. Standard input is cancel-only (end of input
-means cancel); its own 15 s deadline, a TERM then KILL of the group and a
-bounded reap stop a stuck child; each output is capped at 8 KiB. It replies
+means cancel). The download and reply each have a two-minute fail-safe.
+TERM then KILL and a bounded reap stop a stuck child; each child output is
+capped at 8 KiB. It replies
 with a 4-byte length and the bytes only after exit 0, a JSON reply naming the
 expected size and hash, an owned no-follow regular 0600 file of exactly those
-bytes, and removal of its exact file and directory; otherwise it writes
-nothing and names the failure (and any residue it kept).
+bytes, and removal of its exact file and directory. A failure before the
+reply writes no frame. A reply cut off in transit is rejected by the reader.
+The relay names failures and any residue it kept.
 [1](#source-1)
 
 [FACT] `chat.artifact.read` is a host-only, read-only controller operation (no
 effect gate, not box- or operator-allowed). It accepts only typed metadata of
 at most 2 KiB: room, disk, human and channel identities, channel name, message
-ID and the artifact UUID, size (1 B–4 MiB) and SHA-256. Under a 20 s bound it
-opens the verified managed chat connection, requires the room, disk and human
+ID and the artifact UUID, size (1 B–4 MiB) and SHA-256. Under the request context
+it opens the verified managed chat connection, requires the room, disk and human
 to match and the human to be a current member of that channel, requires the
 client's `artifact-cli` feature, re-verifies the peer and the room, then runs
 the relay once with a dedicated pipe as its input: the write end stays open
@@ -34,8 +36,8 @@ fill, 1–256 cells wide and 1–256 rows tall) starts the single fetch
 job of the whole TUI when previews are supported; a second request meanwhile
 gets `busy`. The job (30 s) calls the reader that `cmd/yoloctl` installs: it
 resolves the pane's space like the CLI (its `--space`, else the TUI's pinned
-space, else the default) and runs `chat.artifact.read` with output bounded to
-the requested size, accepting only those exact bytes. `chatimage.Prepare`
+space, else the default) and runs `chat.artifact.read` with the job context
+and output bounded to the requested size, accepting only those exact bytes. `chatimage.Prepare`
 then checks the PNG dimensions (at most 16 Mi pixels) before one full decode
 and fits the image, aspect kept, inside that area at the measured cell size
 and inside its own pixel size, so it is never enlarged (a Kitty diacritic

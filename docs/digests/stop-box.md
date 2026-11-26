@@ -114,7 +114,7 @@ nothing here was run on a VM. [7](#source-7) [9](#source-9) [14](#source-14) [15
 5. <a id="source-5"></a> [internal/agentbox/launcher_idle_linux.go](../../internal/agentbox/launcher_idle_linux.go#L1) — `OtherContainerProcesses`.
 6. <a id="source-6"></a> [internal/boxstate/boxstate.go](../../internal/boxstate/boxstate.go#L1) — reasons, `ProbeSession`, `deriveDisplay`.
 7. <a id="source-7"></a> [cmd/yoloctl/launcher_warning.go](../../cmd/yoloctl/launcher_warning.go#L1) — `registerStartModeWarnings`; tests in `launcher_warning_test.go`, `expected_run_test.go`.
-8. <a id="source-8"></a> [cmd/yoloctl/recreate_offer.go](../../cmd/yoloctl/recreate_offer.go#L1) — `launcherRecreateOffered`, `sendOfferedRecreate`; `recreate_offer_test.go`.
+8. <a id="source-8"></a> [cmd/yoloctl/recreate_offer.go](../../cmd/yoloctl/recreate_offer.go#L1) — `launcherRecreateOffered`, `sendRecreateWithContext`; `recreate_offer_test.go`.
 9. <a id="source-9"></a> [cmd/yoloctl/session_identity_test.go](../../cmd/yoloctl/session_identity_test.go#L1) — `TestTrackedStoppedBoxRecordsItsLostHolder`.
 10. <a id="source-10"></a> [internal/agentprofile/profile.go](../../internal/agentprofile/profile.go#L1) — `LegacyDaemons`, `LegacyDaemonsNotice`.
 11. <a id="source-11"></a> [cmd/yoloctl/cli_logging.go](../../cmd/yoloctl/cli_logging.go#L1) — the per-load warning.

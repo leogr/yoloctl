@@ -24,8 +24,9 @@ func TestRefreshQueueIsNotRecoveryAndKeepsRetainedRead(t *testing.T) {
 	}
 	for _, g := range []uint64{6, 5} {
 		if msg := s.refreshCatalogRead(func(ctx context.Context) (chatstream.Catalog, error) {
-			if ctx != l.ctx {
-				t.Fatal("catalog refresh must use the link context directly")
+			deadline, ok := ctx.Deadline()
+			if left := time.Until(deadline); !ok || left <= time.Minute || left > chatViewRequestTimeout {
+				t.Fatalf("catalog refresh lost its single-wait allowance: %s, %v", left, ok)
 			}
 			return snap(g), nil
 		}); msg != nil {

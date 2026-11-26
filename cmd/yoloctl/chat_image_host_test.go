@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/chatstream"
 	"github.com/leogr/yoloctl/internal/chatui"
@@ -93,8 +94,12 @@ func TestChatImageHostConfirmedAndUncertainAttemptsCannotReplay(t *testing.T) {
 		t.Run(outcome, func(t *testing.T) {
 			s, p := chatImageHostFixture(t)
 			calls := 0
-			s.target.Call = func(_ context.Context, req controller.Request, streams controller.ClientIO) error {
+			s.target.Call = func(ctx context.Context, req controller.Request, streams controller.ClientIO) error {
 				calls++
+				deadline, ok := ctx.Deadline()
+				if left := time.Until(deadline); !ok || left <= 50*time.Second || left > chatViewRequestTimeout {
+					t.Fatalf("stage request did not receive the view allowance: %s, %v", left, ok)
+				}
 				input, err := decodeChatImageRequest(req)
 				if err != nil {
 					t.Fatal(err)

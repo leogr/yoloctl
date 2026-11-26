@@ -404,7 +404,7 @@ func TestDesiredCatalogFailureHasPrivateDiagnosticsAndNoFallback(t *testing.T) {
 // tests. These calls additionally exercise the actual public controller framing,
 // finite operation registry and endpoint-derived principal before that handler.
 func desiredCatalogFramedRPC(ctx context.Context) (chatDesiredCatalog, error) {
-	ctx, cancel := context.WithTimeout(ctx, chatObservationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, chatViewRequestTimeout)
 	defer cancel()
 	principal := currentControllerPrincipal(ctx)
 	hello := controller.Hello{Protocol: controller.ProtocolVersion, Bundle: "fixture", Space: "work", Generation: "fixture"}

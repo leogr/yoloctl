@@ -1,6 +1,6 @@
 # Native chat channels and live identities
 
-Verification: `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes. Catalog read lifetime re-verified at `76bcf960c0d8d07faae06258f1fb1088bef24bdd` and accompanying changes.
+Verification: `37fa8447df51ccbea03fea6ce802418e42e3f30e` and accompanying changes. Catalog read lifetime re-verified at `76bcf960c0d8d07faae06258f1fb1088bef24bdd` and accompanying changes. Chat wait lifetimes re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] The chat view keeps one view per channel, embedded as the visible one:
 draft/reply, messages/caches, reading position, selection,
@@ -61,6 +61,7 @@ channel marks where its history stops. A connection gap marks every channel.
 through `chat.channel.catalog` by default (`--catalog-read=single`) when the
 stream starts, every minute while open, on manual refresh, when the view meets
 an unknown authenticated account (at most every 15 s), and before explicit JOIN.
+Each read has a two-minute view fail-safe and ends when its connection closes.
 The mode is fixed for the view. `--catalog-read=observed` instead selects the
 existing list observation/retry route for all those reads; failures never
 fall back. Invalid modes refuse before RPC. Opening/reconnecting still uses its
@@ -120,7 +121,7 @@ view confirmation. [2](#source-2) [7](#source-7) [8](#source-8)
 3. <a id="source-3"></a> [Submit and routing](../../internal/chatui/model.go#L393-L1375) — `Update`, `submit`, `slashCommand`.
 4. <a id="source-4"></a> [Channel rail](../../internal/chatui/roster.go#L63) — `channelRail`.
 5. <a id="source-5"></a> [Channel picker](../../internal/chatui/overlay.go#L723) — `channelPickerRows`.
-6. <a id="source-6"></a> [Host channel view](../../cmd/yoloctl/chat_view.go#L215-L708) — link lifetime, `adoptCatalogFor`, `refreshCatalogRead`, `refreshLoop` and `control`.
+6. <a id="source-6"></a> [Host channel view](../../cmd/yoloctl/chat_view.go#L211-L718) — link lifetime, `adoptCatalogFor`, `refreshCatalogRead`, `refreshLoop` and `control`.
 7. <a id="source-7"></a> [Host regressions](../../cmd/yoloctl/chat_view_test.go#L133-L196) — catalog identities/members and channel events.
 8. <a id="source-8"></a> [Topic wire regression](../../cmd/yoloctl/chat_topic_wire_test.go#L26) — `TestChatTopicCommandsReachWireThroughHostAndRelay`.
 9. <a id="source-9"></a> [Driver actions](../../internal/chatstream/channel_events.go#L24) — `action` refuses a topic field outside `topic-set` and encodes `topic-clear` as empty text.
@@ -131,7 +132,7 @@ view confirmation. [2](#source-2) [7](#source-7) [8](#source-8)
 13. <a id="source-13"></a> [Recovery](../../internal/chatui/refresh.go#L1) — `refreshResult`, `refreshAccepted`.
 14. <a id="source-14"></a> [Recovery tests](../../internal/chatui/refresh_test.go#L19) — ownership, draft retention, ordering, links and hidden channels.
 
-15. <a id="source-15"></a> [Mode and DTO](../../cmd/yoloctl/chat_catalog.go#L74) — fixed desired/observed mode, desired DTO and captured diagnostics.
+15. <a id="source-15"></a> [Mode and DTO](../../cmd/yoloctl/chat_catalog.go#L72) — fixed desired/observed mode, desired DTO and captured diagnostics.
 16. <a id="source-16"></a> [Rendering](../../internal/chatui/overlay.go#L756) — unobserved output and separate observed-pending wording.
 17. <a id="source-17"></a> [View wiring](../../cmd/yoloctl/chat_view.go#L30) — default/single/observed refresh and pre-JOIN route, local correlation and errors.
 18. <a id="source-18"></a> [Desired-read tests](../../cmd/yoloctl/chat_catalog_test.go#L42) — mode routing, coalescing, finite framing and stale-action refusal.

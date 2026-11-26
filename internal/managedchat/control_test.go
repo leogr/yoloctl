@@ -2,6 +2,7 @@ package managedchat
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"net"
@@ -146,6 +147,64 @@ func TestControlStatusListenerWireContract(t *testing.T) {
 			}
 			if (err == nil) != tc.valid {
 				t.Fatalf("valid = %v, error = %v", tc.valid, err)
+			}
+		})
+	}
+}
+
+func TestControlExchangeFollowsCaller(t *testing.T) {
+	for _, stop := range []string{"none", "cancel", "deadline"} {
+		t.Run(stop, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			request := make(chan string, 1)
+			control := testControlSocket(t, func(conn *net.UnixConn) {
+				line, err := bufio.NewReader(conn).ReadString('\n')
+				if err != nil {
+					request <- ""
+					return
+				}
+				request <- line
+				switch stop {
+				case "none":
+					_ = conn.SetDeadline(time.Now().Add(8 * time.Second))
+					time.Sleep(5200 * time.Millisecond) // beyond the former five-second exchange limit
+					applied, _ := appliedFixture()
+					_ = json.NewEncoder(conn).Encode(map[string]any{"ok": true, "result": applied})
+				case "cancel":
+					cancel()
+					_, _ = conn.Read(make([]byte, 1))
+				case "deadline":
+					_, _ = conn.Read(make([]byte, 1))
+				}
+			})
+			if stop == "deadline" {
+				wait, expire := context.WithTimeout(ctx, 250*time.Millisecond)
+				defer expire()
+				ctx = wait
+			}
+			got, err := control.Call(ctx, "status")
+			switch stop {
+			case "cancel":
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("caller cancellation: %v", err)
+				}
+			case "deadline":
+				if !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("caller deadline: %v", err)
+				}
+			case "none":
+				if err != nil || got.Validate() != nil {
+					t.Fatalf("late valid reply: %+v %v", got, err)
+				}
+			}
+			select {
+			case line := <-request:
+				if line != "{\"op\":\"status\"}\n" {
+					t.Fatalf("unexpected request: %q", line)
+				}
+			default:
+				t.Fatal("request never reached the verified peer")
 			}
 		})
 	}

@@ -7,17 +7,12 @@ import (
 	"errors"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/chatimage"
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/tui"
 )
-
-// chatArtifactHostTimeout bounds the host side of one preview read; the
-// controller and the relay keep their own shorter bounds.
-const chatArtifactHostTimeout = 25 * time.Second
 
 func init() { tui.ReadChatArtifact = readChatArtifactForPreview }
 
@@ -34,8 +29,6 @@ func readChatArtifactForPreview(ctx context.Context, space string, f chatimage.F
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, chatArtifactHostTimeout)
-	defer cancel()
 	boot, err := checkControllerSpace(ctx, resolved)
 	if err != nil {
 		return nil, err

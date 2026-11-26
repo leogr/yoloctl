@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
-	"syscall"
 	"time"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
@@ -73,6 +71,23 @@ func verifiedChatOperator(cfg *agentbox.Config, details *container.Details) bool
 var chatRoleServerControl = managedServerControl
 var chatRoleHolderState = vmservice.State
 
+const ownedChatRoleWaitTimeout = 2 * time.Minute
+
+func chatRoleWaitContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx.Value(controllerOwnedSetupKey{}) == true {
+		return context.WithTimeout(ctx, ownedChatRoleWaitTimeout)
+	}
+	return ctx, func() {}
+}
+
+// Each control exchange gets a fresh allowance when authorized attach setup
+// can outlive its viewer. No caller retries a reload on an uncertain result.
+func callChatRoleControl(ctx context.Context, control managedchat.Control, op string) (managedchat.Applied, error) {
+	wait, stop := chatRoleWaitContext(ctx)
+	defer stop()
+	return control.Call(wait, op)
+}
+
 // synchronizeChatRoles persists first, publishes exact private files, then
 // applies once to the verified server. Missing/stopped servers keep the new
 // configuration for their next explicit start; no workload is started here.
@@ -95,9 +110,12 @@ func synchronizeChatRoles(ctx context.Context, space string, store managedchat.S
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	want, err := desiredChatOperators(ctx, r, boxes, container.New(space).Inspect)
+	client := container.New(space)
+	want, err := desiredChatOperators(ctx, r, boxes, func(ctx context.Context, box string) (*container.Details, error) {
+		wait, stop := chatRoleWaitContext(ctx)
+		defer stop()
+		return client.Inspect(wait, box)
+	})
 	if err != nil {
 		return err
 	}
@@ -129,11 +147,15 @@ func synchronizeChatRoles(ctx context.Context, space string, store managedchat.S
 func applyChangedChatRoles(ctx context.Context, r *managedchat.Room, proof managedchat.Rendered, cfg *agentbox.Config) error {
 	// Validate the reserved declaration, current container identity and binds
 	// before treating a missing holder as a legitimate stopped workload.
-	control, _, err := chatRoleServerControl(ctx, r, cfg)
+	wait, stop := chatRoleWaitContext(ctx)
+	control, _, err := chatRoleServerControl(wait, r, cfg)
+	stop()
 	if err != nil {
 		return err
 	}
-	state, err := chatRoleHolderState(ctx, container.New(cfg.Space), session.UnitName(cfg.Name))
+	wait, stop = chatRoleWaitContext(ctx)
+	state, err := chatRoleHolderState(wait, container.New(cfg.Space), session.UnitName(cfg.Name))
+	stop()
 	if err != nil {
 		return fmt.Errorf("inspect managed chat holder: %w", err)
 	}
@@ -142,9 +164,8 @@ func applyChangedChatRoles(ctx context.Context, r *managedchat.Room, proof manag
 	case "inactive", "failed", "unknown":
 		// Holder loss can leave its confined child alive. Probe once before
 		// deferring a role downgrade; never leave a verified live orphan stale.
-		status, err = control.Call(ctx, "status")
-		var dialErr *net.OpError
-		if errors.As(err, &dialErr) && dialErr.Op == "dial" && dialErr.Net == "unix" && (errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED)) {
+		status, err = callChatRoleControl(ctx, control, "status")
+		if chatControlNotListening(err) {
 			cliInfo(logging.Chat, "Channel roles saved and published; managed chat holder is stopped and control is unavailable. Run chat ensure to apply the pending generation.")
 			return nil
 		}
@@ -183,7 +204,9 @@ func syncNativeChatRoles(ctx context.Context, space string) error {
 	if err != nil || !r.RuntimeEnabled || !r.Prepared {
 		return err
 	}
-	boxes, err := newBoxStateResolver().ResolveSpace(ctx, space, boxstate.RuntimeInventory)
+	wait, stop := chatRoleWaitContext(ctx)
+	boxes, err := newBoxStateResolver().ResolveSpace(wait, space, boxstate.RuntimeInventory)
+	stop()
 	if err != nil {
 		return fmt.Errorf("chat role synchronization pending: %w", err)
 	}

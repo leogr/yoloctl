@@ -5,8 +5,8 @@ argv: CONFIG ARTIFACT_UUID EXPECTED_BYTES EXPECTED_SHA256
 Runs only the fixed AIRC client: `airc artifact download --config CONFIG UUID
 PATH` into a new private directory, as this process's one child in its own
 process group, under a 4 MiB file-size limit. Standard input is a cancel-only
-channel: end of input before success means cancel. The relay keeps its own
-15 s deadline. On success (child exit 0 and reaped, bounded JSON naming the
+channel: end of input before success means cancel. The download and reply each
+have a two-minute fail-safe. On success (child exit 0 and reaped, bounded JSON naming the
 expected size and hash, an owned no-follow regular 0600 file of exactly that
 size and hash, private directory removed) it writes a 4-byte big-endian length
 and the bytes to standard output and exits 0. Every failure writes nothing to
@@ -29,7 +29,7 @@ import time
 
 AIRC = "/usr/local/bin/airc"
 MAX_BYTES = 4 << 20
-DEADLINE = 15.0
+WAIT_LIMIT = 120.0
 OUTPUT_LIMIT = 8 << 10
 TERM_GRACE = 0.5
 REAP_LIMIT = 1.5
@@ -223,8 +223,6 @@ def send(data, deadline):
 
 
 def main(argv):
-    start = time.monotonic()
-    deadline = start + DEADLINE
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     try:
         config, artifact, size, digest = parse_args(argv)
@@ -237,7 +235,7 @@ def main(argv):
         fail("cannot create a private download directory")
     path = os.path.join(directory, "artifact")
     try:
-        reply = run_download(config, artifact, path, deadline)
+        reply = run_download(config, artifact, path, time.monotonic() + WAIT_LIMIT)
         data = verify(path, reply, size, digest)
     except Failure as e:
         try:
@@ -256,7 +254,7 @@ def main(argv):
     except OSError:
         fail("cleanup failed; private download left at " + directory)
     try:
-        send(data, start + DEADLINE + 3.0)
+        send(data, time.monotonic() + WAIT_LIMIT)
     except Failure as e:
         fail(str(e))
     sys.exit(0)

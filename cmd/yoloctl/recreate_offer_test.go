@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/creack/pty"
 	"github.com/leogr/yoloctl/internal/agentbox"
@@ -471,5 +472,91 @@ func TestLauncherRecreateOfferForANewManagedSession(t *testing.T) {
 	cmd, errw := offerCmd("y\n")
 	if err := offerRecreate(cmd, offerTarget(report("stopped", "none", "claude", ""), &calls), "api", offerAttach, false); err != nil || len(calls) != 0 || errw.Len() != 0 {
 		t.Fatal("a non-interactive caller was asked", calls, errw.String(), err)
+	}
+}
+
+func TestChatRecreateRetryUsesViewLifetime(t *testing.T) {
+	for _, closeView := range []bool{false, true} {
+		name := "fresh request"
+		if closeView {
+			name = "view closed before answer"
+		}
+		t.Run(name, func(t *testing.T) {
+			master, terminal, err := pty.Open()
+			if err != nil {
+				t.Skipf("PTY unavailable: %v", err)
+			}
+			defer func() { _ = master.Close() }()
+			defer func() { _ = terminal.Close() }()
+			cmd := &cobra.Command{}
+			cmd.SetIn(terminal)
+			cmd.SetOut(terminal)
+			errReader, errWriter := io.Pipe()
+			defer func() { _ = errReader.Close() }()
+			defer func() { _ = errWriter.Close() }()
+			cmd.SetErr(errWriter)
+			view, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			type request struct {
+				id       string
+				isView   bool
+				hasLimit bool
+			}
+			first := make(chan request, 1)
+			var calls []request
+			target := controllerTarget{Space: "work", Call: func(ctx context.Context, req controller.Request, _ controller.ClientIO) error {
+				_, hasLimit := ctx.Deadline()
+				calls = append(calls, request{req.ID, ctx == view, hasLimit})
+				if len(calls) == 1 {
+					first <- calls[0]
+					return &controller.ImageInterrupted{Retryable: true}
+				}
+				return ctx.Err()
+			}}
+			done := make(chan error, 1)
+			go func() {
+				done <- sendRecreateWithContext(view, cmd, target, "chat", false, false)
+			}()
+			prompt := make(chan string, 1)
+			go func() {
+				text := make([]byte, len("retry? [y/N]: "))
+				_, _ = io.ReadFull(errReader, text)
+				prompt <- string(text)
+			}()
+			testWait, stop := context.WithTimeout(t.Context(), 5*time.Second)
+			defer stop()
+			select {
+			case got := <-prompt:
+				if got != "retry? [y/N]: " {
+					t.Fatalf("unexpected retry prompt %q", got)
+				}
+			case err := <-done:
+				t.Fatalf("recreate returned before asking for a retry: %v", err)
+			case <-testWait.Done():
+				t.Fatal("recreate did not reach the retry prompt")
+			}
+			initial := <-first
+			if !initial.isView || initial.hasLimit {
+				t.Fatalf("recreate did not use the view lifetime: %+v", initial)
+			}
+			if closeView {
+				cancel()
+			}
+			if _, err := io.WriteString(master, "y\n"); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case err := <-done:
+				if closeView {
+					if !errors.Is(err, context.Canceled) || len(calls) != 1 {
+						t.Fatalf("closing the view dispatched a retry: %v, %+v", err, calls)
+					}
+				} else if err != nil || len(calls) != 2 || calls[0].id == calls[1].id || !calls[1].isView || calls[1].hasLimit {
+					t.Fatalf("retry reused request identity or changed view lifetime: %v, %+v", err, calls)
+				}
+			case <-testWait.Done():
+				t.Fatal("recreate did not finish after the retry answer")
+			}
+		})
 	}
 }

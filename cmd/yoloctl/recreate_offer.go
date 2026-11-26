@@ -48,6 +48,13 @@ const recreateOfferInspectTimeout = 30 * time.Second
 // nothing: the original request is sent and the worker refuses drift before
 // any image work.
 func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind recreateOfferKind, noAutoupdate bool) error {
+	return offerRecreateWithin(cmd.Context(), cmd, target, box, kind, noAutoupdate, recreateOfferInspectTimeout)
+}
+
+func offerRecreateWithin(ctx context.Context, cmd *cobra.Command, target controllerTarget, box string, kind recreateOfferKind, noAutoupdate bool, inspectWait time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !recreateOfferInteractive(cmd) {
 		return nil
 	}
@@ -57,10 +64,13 @@ func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind
 		Drift    inspectDrift     `json:"drift"`
 	}
 	raw := boundedBuffer{Limit: 4 << 20}
-	ctx, cancel := context.WithTimeout(cmd.Context(), recreateOfferInspectTimeout)
+	probe, cancel := context.WithTimeout(ctx, inspectWait)
 	inspect := controller.Request{ID: rand.Text(), Method: "box.inspect", Space: target.Space, Args: []string{box}, Dash: -1, Flags: map[string][]string{"json": {"true"}}}
-	err := target.Call(ctx, inspect, controller.ClientIO{Out: &raw, Err: &boundedBuffer{Limit: 64 << 10}})
+	err := target.Call(probe, inspect, controller.ClientIO{Out: &raw, Err: &boundedBuffer{Limit: 64 << 10}})
 	cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err != nil || json.Unmarshal(raw.Bytes(), &report) != nil {
 		return nil // not evidence: the worker's early refusal still applies
 	}
@@ -68,6 +78,9 @@ func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind
 		// A pre-native box is never started or restarted: the worker refuses
 		// (stopping a running one first), and offerLegacyRecreate asks then.
 		return nil
+	}
+	recreate := func() error {
+		return sendRecreateWithContext(ctx, cmd, target, box, noAutoupdate, false)
 	}
 	running := report.Identity.RuntimeState == string(boxstate.RuntimeRunning)
 	strategy := report.Drift.Strategy
@@ -83,7 +96,7 @@ func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind
 		if err != nil || !ok {
 			return err
 		}
-		return sendOfferedRecreate(cmd, target, box, noAutoupdate)
+		return recreate()
 	}
 	extra := ""
 	if running {
@@ -97,7 +110,7 @@ func offerRecreate(cmd *cobra.Command, target controllerTarget, box string, kind
 	if err != nil || !ok {
 		return err
 	}
-	return sendOfferedRecreate(cmd, target, box, noAutoupdate)
+	return recreate()
 }
 
 // boxLegacyRecreateOffer selects a request whose refusal for a pre-native box
@@ -204,17 +217,14 @@ func launcherRecreateOffered(id inspectIdentity, manifest *inspectManifest, drif
 	return needs && managed && newSession
 }
 
-// sendOfferedRecreate sends the one ordinary recreate an affirmative answer
-// approved: `box recreate NAME --force --no-attach`; the caller then sends
-// its original request unchanged, only if this one succeeded.
-func sendOfferedRecreate(cmd *cobra.Command, target controllerTarget, box string, noAutoupdate bool) error {
-	return sendRecreate(cmd, target, box, noAutoupdate, false)
-}
-
 // sendRecreate sends that recreate; legacyRemedy marks one accepted from the
 // pre-native remedy, whose failure after its replacement started stops that
 // exact run.
 func sendRecreate(cmd *cobra.Command, target controllerTarget, box string, noAutoupdate, legacyRemedy bool) error {
+	return sendRecreateWithContext(cmd.Context(), cmd, target, box, noAutoupdate, legacyRemedy)
+}
+
+func sendRecreateWithContext(ctx context.Context, cmd *cobra.Command, target controllerTarget, box string, noAutoupdate, legacyRemedy bool) error {
 	flags := map[string][]string{"force": {"true"}, "no-attach": {"true"}}
 	if legacyRemedy {
 		flags[legacyRemedyFlag] = []string{"true"}
@@ -227,10 +237,16 @@ func sendRecreate(cmd *cobra.Command, target controllerTarget, box string, noAut
 	// instead of abandoning it, and an interrupted shared image build keeps
 	// its explicit retry question.
 	signals := make(chan int, 4)
-	stopSignals := forwardCommandSignals(cmd.Context(), signals)
+	stopSignals := forwardCommandSignals(ctx, signals)
 	defer stopSignals()
 	streams := controller.ClientIO{Out: cmd.OutOrStdout(), Err: cmd.ErrOrStderr(), Signals: signals}
-	return callWithImageRetry(cmd.Context(), cmd, recreate, streams, target.Call)
+	return callWithImageRetry(ctx, cmd, recreate, streams, func(ctx context.Context, req controller.Request, streams controller.ClientIO) error {
+		// The view can close while the user is answering a retry prompt.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return target.Call(ctx, req, streams)
+	})
 }
 
 // boxRecreateOffer selects the offer for an outgoing box request, or none:

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/boxstate"
@@ -16,6 +15,7 @@ import (
 
 // statusServerControlFn is managedServerControl, a seam for status tests.
 var statusServerControlFn = managedServerControl
+var statusInspectFn = (*container.Client).Inspect
 
 func observeManagedChat(ctx context.Context, store managedchat.Store, boxes []boxstate.Box) (managedchat.Status, error) {
 	var result managedchat.Status
@@ -26,12 +26,26 @@ func observeManagedChat(ctx context.Context, store managedchat.Store, boxes []bo
 	if err != nil {
 		return result, err
 	}
-	return observeManagedChatRoom(ctx, spaceenv.Current().Space, store, r, boxes)
+	wait, stop := context.WithTimeout(ctx, chatOptionalObservationTimeout)
+	defer stop()
+	result, err = observeManagedChatRoom(wait, spaceenv.Current().Space, store, r, boxes)
+	if ctx.Err() != nil {
+		return managedchat.Status{}, ctx.Err()
+	}
+	return finishChatRuntimeObservation(wait, result), err
+}
+
+// A verified room establishes the roster independently of live runtime.
+func chatStatusFromRoom(room *managedchat.Room) managedchat.Status {
+	result := managedchat.Status{Room: room}
+	for _, m := range room.Members {
+		result.Members = append(result.Members, managedchat.MemberStatus{ID: m.ID, Name: m.Name, BoxID: m.BoxID, Revoked: m.Revoked})
+	}
+	return result
 }
 
 func observeManagedChatRoom(ctx context.Context, space string, store managedchat.Store, r *managedchat.Room, boxes []boxstate.Box) (managedchat.Status, error) {
-	var result managedchat.Status
-	result.Room = r
+	result := chatStatusFromRoom(r)
 	if !r.RuntimeEnabled || !r.Prepared {
 		result.SetupRequired = true
 		result.Pending = []string{"run chat ensure to prepare and enable the managed runtime"}
@@ -46,13 +60,16 @@ func observeManagedChatRoom(ctx context.Context, space string, store managedchat
 		byName[box.Name] = box
 	}
 	server, exists := byName[r.Server.Name]
+	if ctx.Err() != nil {
+		return result, nil
+	}
 	if !exists || server.Config == nil || server.Container == nil {
 		result.SetupRequired = server.ConfigError == ""
 		result.Pending = append(result.Pending, "managed server runtime is absent")
 	} else {
 		control, details, err := statusServerControlFn(ctx, r, server.Config)
 		if err != nil {
-			if details != nil && !details.Running {
+			if ctx.Err() == nil && details != nil && !details.Running {
 				result.SetupRequired = true
 			}
 			result.Pending = append(result.Pending, err.Error())
@@ -73,34 +90,46 @@ func observeManagedChatRoom(ctx context.Context, space string, store managedchat
 			}
 			if err != nil {
 				result.Pending = append(result.Pending, err.Error())
-			} else if !holderUnitActiveFn(ctx, container.New(server.Config.Space), server.Name) {
-				result.Pending = append(result.Pending, "managed server holder is not active")
 			} else {
-				result.ServerReady = true
+				active := holderUnitActiveFn(ctx, container.New(server.Config.Space), server.Name)
+				switch {
+				case ctx.Err() != nil:
+					result.Pending = append(result.Pending, "managed server holder state unavailable")
+				case !active:
+					result.Pending = append(result.Pending, "managed server holder is not active")
+				default:
+					result.ServerReady = true
+				}
 			}
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
 	client := container.New(space)
-	operators, roleErr := desiredChatOperators(ctx, r, boxes, client.Inspect)
-	if roleErr != nil {
-		result.Pending = append(result.Pending, "channel operator inventory unavailable: "+roleErr.Error())
-	} else {
-		for _, m := range r.Members {
-			if m.ChannelOperator != operators[m.ID] {
-				result.Pending = append(result.Pending, m.Name+": channel operator grant changed; run chat ensure to synchronize")
+	inspect := func(ctx context.Context, box string) (*container.Details, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return statusInspectFn(client, ctx, box)
+	}
+	if ctx.Err() == nil {
+		operators, roleErr := desiredChatOperators(ctx, r, boxes, inspect)
+		if roleErr != nil {
+			result.Pending = append(result.Pending, "channel operator inventory unavailable: "+roleErr.Error())
+		} else {
+			for _, m := range r.Members {
+				if m.ChannelOperator != operators[m.ID] {
+					result.Pending = append(result.Pending, m.Name+": channel operator grant changed; run chat ensure to synchronize")
+				}
 			}
 		}
 	}
-	for _, m := range r.Members {
-		observed := managedchat.MemberStatus{ID: m.ID, Name: m.Name, BoxID: m.BoxID, Revoked: m.Revoked}
+	for i, m := range r.Members {
+		observed := &result.Members[i]
 		box, found := byName[m.Name]
 		if m.Revoked && found && box.Container != nil {
 			// A declaration may have been deleted/reused while the old container
 			// still holds its private leaf. Report that retained binding even
 			// though it must never authorize recreation of the replacement ID.
-			details, err := client.Inspect(ctx, m.Name)
+			details, err := inspect(ctx, m.Name)
 			if err != nil {
 				observed.Reason = "revoked participant runtime could not be inspected"
 			} else {
@@ -119,7 +148,7 @@ func observeManagedChatRoom(ctx context.Context, space string, store managedchat
 				observed.Reason = "participant runtime is absent; start the box to install its private binds"
 			}
 		} else {
-			details, err := client.Inspect(ctx, m.Name)
+			details, err := inspect(ctx, m.Name)
 			if err != nil {
 				observed.Reason = "participant runtime could not be inspected"
 			} else if err := agentbox.VerifyChatRuntime(box.Config, details); err != nil {
@@ -132,10 +161,19 @@ func observeManagedChatRoom(ctx context.Context, space string, store managedchat
 		if observed.Reason != "" {
 			result.Pending = append(result.Pending, m.Name+": "+observed.Reason)
 		}
-		result.Members = append(result.Members, observed)
 	}
 	result.RuntimeApplied = result.ServerReady && len(result.Pending) == 0
 	return result, nil
+}
+
+// A late optional source makes application incomplete without erasing a
+// previously verified server or any participant evidence already observed.
+func finishChatRuntimeObservation(ctx context.Context, result managedchat.Status) managedchat.Status {
+	if ctx.Err() != nil {
+		result.RuntimeApplied = false
+		result.Pending = append(result.Pending, "runtime observation deadline reached")
+	}
+	return result
 }
 
 // staleMemberReason names the explicit command for an active membership whose

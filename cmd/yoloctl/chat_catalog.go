@@ -24,11 +24,9 @@ type chatDesiredCatalog struct {
 	RuntimeUnobserved bool                            `json:"runtime_unobserved"`
 }
 
-// readDesiredChatCatalog makes exactly one bounded, verified room-manifest
+// readDesiredChatCatalog makes exactly one verified room-manifest
 // read. Independent live operator authority checks do not load the room.
 func readDesiredChatCatalog(ctx context.Context, store managedchat.Store) (chatDesiredCatalog, error) {
-	ctx, cancel := context.WithTimeout(ctx, chatObservationTimeout)
-	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return chatDesiredCatalog{}, err
 	}

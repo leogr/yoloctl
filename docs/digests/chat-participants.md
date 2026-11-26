@@ -1,6 +1,6 @@
 # Native chat participants, settings and attachment
 
-Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; reconnect re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; collapsible lists re-read at `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; reference clicks re-read at `0398f1f6638de276139c93675958ecade7782073` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; reconnect re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; collapsible lists re-read at `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; reference clicks re-read at `0398f1f6638de276139c93675958ecade7782073` and accompanying changes; re-read cited sources when changing behavior. Chat wait lifetimes re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] Participants sort operators, voiced, then others, case-folded; observed
 `@`/`+` modes, never inferred, precede names. The panel opens from 80 columns
@@ -54,7 +54,7 @@ glyphs and [model and effort](chat-participant-runtime.md). [4](#source-4)
 [FACT] Clicking a participant or author resolves by authenticated account only;
 humans, unverified sessions and boxless members get an explanatory card. One
 lookup runs at a time and stale answers open nothing; the host bounds
-`chat.attach-target` ([lock-free](chat-settings.md), member ID only) to 10 s and
+`chat.attach-target` ([lock-free](chat-settings.md), member ID only) to two minutes and
 refuses it after a membership change. A running match attaches, a stopped one
 asks first, a deleted, replaced or revoked member explains itself. Mentions open
 only the card of the account they name ([identities](chat-filter.md)); shared `m:` or `msgid:` references and reply labels go to their message, fetching it when the chat does not hold it
@@ -65,8 +65,8 @@ reused only for identical guarded argv. A plain terminal runs the same guarded
 [7](#source-7) [11](#source-11) [12](#source-12)
 
 [FACT] Only the attach waits for the space lock. The lookup
-(`resolveAttach` → `callChatAttachTarget`) takes no lock and has its 10 s
-deadline; the chat-opened `box attach` then waits for the exclusive space lock
+(`resolveAttach` → `resolveAttachWith`) takes no lock and uses the view
+context with a two-minute fail-safe; the chat-opened `box attach` then waits for the exclusive space lock
 like any attach: no deadline, polling every 25 ms, printing `Waiting for
 another operation in space …; Ctrl-C cancels.` after 1 s, and cancelling on
 its context. Verified live on 2026-10-28 with the opt-in test on a pre-release build:

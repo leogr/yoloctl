@@ -54,7 +54,7 @@ var graphicsQueryID = regexp.MustCompile(`\x1b_Gi=(\d+),`)
 // with 10×20 pixel cells; read serves artifact reads.
 func probedImages(t *testing.T, read func(context.Context, string, chatimage.Frame) ([]byte, error)) (*standaloneImages, chan tea.Msg) {
 	t.Helper()
-	img := newStandaloneImages("dev", read)
+	img := newStandaloneImages(t.Context(), "dev", read)
 	sent := make(chan tea.Msg, 4)
 	img.send = func(m tea.Msg) { sent <- m }
 	if img.start() == nil || img.probe == nil { // its tick is not run: it is the budget
@@ -119,7 +119,7 @@ func showStandalone(t *testing.T, img *standaloneImages, sent chan tea.Msg, requ
 }
 
 func TestStandaloneProbeFailureAdvertisesNoSupport(t *testing.T) {
-	img := newStandaloneImages("dev", nil)
+	img := newStandaloneImages(t.Context(), "dev", nil)
 	img.start()
 	img.update(uv.CellSizeEvent{Width: 10, Height: 20})
 	cmd, _ := img.update(tea.TerminalVersionMsg{Name: "tmux 3.4"})
@@ -132,7 +132,7 @@ func TestStandaloneProbeFailureAdvertisesNoSupport(t *testing.T) {
 		t.Fatalf("reply %v", msgs)
 	}
 	// Silence is a failure too.
-	img = newStandaloneImages("dev", nil)
+	img = newStandaloneImages(t.Context(), "dev", nil)
 	img.start()
 	cmd, _ = img.update(standaloneProbeTick(1))
 	if _, msgs := runStandalone(cmd); len(msgs) != 1 || msgs[0].(chatui.PreviewCapabilityMsg).Supported {
@@ -270,7 +270,7 @@ func (s *standaloneInner) View() tea.View { return tea.NewView("chat") }
 
 func TestStandaloneChatKeepsImageMessagesFromChat(t *testing.T) {
 	inner := &standaloneInner{}
-	c := newStandaloneImages("dev", nil).wrap(inner)
+	c := newStandaloneImages(t.Context(), "dev", nil).wrap(inner)
 	if c.Init() == nil {
 		t.Fatal("no probe at start")
 	}
@@ -288,7 +288,7 @@ func TestStandaloneChatKeepsImageMessagesFromChat(t *testing.T) {
 	// The version reply can be the probe's last signal: its capability must
 	// still reach chat.
 	inner = &standaloneInner{}
-	img := newStandaloneImages("dev", nil)
+	img := newStandaloneImages(t.Context(), "dev", nil)
 	c = img.wrap(inner)
 	c.Init()
 	id, _ := strconv.Atoi(graphicsQueryID.FindStringSubmatch(img.probe.GraphicsQuery())[1])

@@ -12,7 +12,7 @@ import (
 	"github.com/leogr/yoloctl/internal/managedchat"
 )
 
-const chatObservationTimeout = 5 * time.Second
+const chatOptionalObservationTimeout = time.Minute
 
 // Production always verifies the native store. Tests replace only this provider
 // with a private disk fixture so no active controller paths are touched.
@@ -26,9 +26,9 @@ var chatObservationSnapshot = func(store managedchat.Store) (*managedchat.Room, 
 // catalog is one strict atomic native snapshot; runtime evidence is bounded and
 // explicitly pending when unavailable. Mutations use the locked inventory path.
 func observeManagedChatRead(ctx context.Context, space string, store managedchat.Store) (managedchat.Status, error) {
-	ctx, cancel := context.WithTimeout(ctx, chatObservationTimeout)
+	runtime, cancel := context.WithTimeout(ctx, chatOptionalObservationTimeout)
 	defer cancel()
-	return observeManagedChatAttempt(ctx, space, store, nil)
+	return observeManagedChatAttempt(ctx, runtime, space, store, nil)
 }
 
 var errChatObservationChanged = errors.New("managed chat changed during observation; inspect the current catalog")
@@ -56,9 +56,9 @@ func (b *chatObservationBinding) check(r *managedchat.Room) error {
 	return nil
 }
 
-// Only the list read retries; both complete attempts share this one context.
+// Only the list read retries. Both attempts share one optional runtime budget.
 func observeManagedChatCatalog(ctx context.Context, space string, store managedchat.Store) (managedchat.Status, error) {
-	ctx, cancel := context.WithTimeout(ctx, chatObservationTimeout)
+	runtime, cancel := context.WithTimeout(ctx, chatOptionalObservationTimeout)
 	defer cancel()
 	binding := &chatObservationBinding{}
 	var result managedchat.Status
@@ -67,7 +67,7 @@ func observeManagedChatCatalog(ctx context.Context, space string, store managedc
 		if err := ctx.Err(); err != nil {
 			return managedchat.Status{}, err
 		}
-		result, err = observeManagedChatAttempt(ctx, space, store, binding)
+		result, err = observeManagedChatAttempt(ctx, runtime, space, store, binding)
 		if !errors.Is(err, errChatObservationChanged) {
 			return result, err
 		}
@@ -75,13 +75,16 @@ func observeManagedChatCatalog(ctx context.Context, space string, store managedc
 	return result, err
 }
 
-func observeManagedChatAttempt(ctx context.Context, space string, store managedchat.Store, binding *chatObservationBinding) (managedchat.Status, error) {
+func observeManagedChatAttempt(ctx, runtime context.Context, space string, store managedchat.Store, binding *chatObservationBinding) (managedchat.Status, error) {
+	if err := ctx.Err(); err != nil {
+		return managedchat.Status{}, err
+	}
 	if err := checkOperatorChatRuntime(ctx, "chat.status", chatRuntimeRequest{}, store); err != nil {
 		return managedchat.Status{}, err
 	}
 	room, err := chatObservationSnapshot(store)
 	if errors.Is(err, os.ErrNotExist) && (binding == nil || binding.room == "") {
-		return managedchat.Status{}, nil
+		return managedchat.Status{}, ctx.Err()
 	}
 	if err != nil {
 		return managedchat.Status{}, err
@@ -99,14 +102,19 @@ func observeManagedChatAttempt(ctx context.Context, space string, store managedc
 			return managedchat.Status{}, err
 		}
 	}
-	boxes, err := newBoxStateResolver().ResolveSpace(ctx, space, boxstate.RuntimeInventory)
-	if err != nil {
-		result.Pending = []string{"runtime inventory unavailable: " + err.Error()}
-	} else {
-		result, err = observeManagedChatRoom(ctx, space, store, room, boxes)
+	if err := runtime.Err(); err == nil {
+		boxes, err := newBoxStateResolver().ResolveSpace(runtime, space, boxstate.RuntimeInventory)
 		if err != nil {
-			result = managedchat.Status{Room: room, Pending: []string{"runtime observation unavailable: " + err.Error()}}
+			result.Pending = []string{"runtime inventory unavailable: " + err.Error()}
+		} else if runtime.Err() == nil {
+			result, err = observeManagedChatRoom(runtime, space, store, room, boxes)
+			if err != nil {
+				result = managedchat.Status{Room: room, Pending: []string{"runtime observation unavailable: " + err.Error()}}
+			}
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return managedchat.Status{}, err
 	}
 	// The multi-file observation must not publish a mixed-generation catalog.
 	current, err := chatObservationSnapshot(store)
@@ -122,8 +130,10 @@ func observeManagedChatAttempt(ctx context.Context, space string, store managedc
 		return managedchat.Status{}, errChatObservationChanged
 	}
 	if err := ctx.Err(); err != nil {
-		result.RuntimeApplied, result.ServerReady, result.SetupRequired = false, false, false
-		result.Pending = append(result.Pending, "runtime observation deadline reached")
+		return managedchat.Status{}, err
 	}
-	return result, nil
+	if result.Members == nil && len(room.Members) != 0 {
+		result.Members = chatStatusFromRoom(room).Members
+	}
+	return finishChatRuntimeObservation(runtime, result), nil
 }

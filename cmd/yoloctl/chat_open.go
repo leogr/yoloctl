@@ -12,8 +12,14 @@ import (
 // inspectOrEnsureChat preserves explicit first setup while opening a healthy
 // server without repeating a mutation. Pending participant binds are independent.
 func inspectOrEnsureChat(ctx context.Context, input chatRuntimeRequest, call func(context.Context, string, chatRuntimeRequest) (managedchat.Status, error)) (chatstream.Header, error) {
+	if err := ctx.Err(); err != nil {
+		return chatstream.Header{}, err
+	}
 	status, err := call(ctx, "chat.status", chatRuntimeRequest{})
 	if err != nil {
+		return chatstream.Header{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return chatstream.Header{}, err
 	}
 	if status.Room != nil {
@@ -31,22 +37,49 @@ func inspectOrEnsureChat(ctx context.Context, input chatRuntimeRequest, call fun
 			return chatstream.Header{}, err
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return chatstream.Header{}, err
+	}
 	if status.Room == nil || !status.ServerReady {
 		return chatstream.Header{}, errors.New("managed chat server is not ready; inspect chat status")
 	}
 	return chatstream.RoomHeader(status.Room)
 }
 
-func openChatHeader(cmd *cobra.Command) (chatstream.Header, error) {
+func openChatHeader(ctx context.Context, cmd *cobra.Command, viewTarget *controllerTarget) (chatstream.Header, error) {
 	var last managedchat.Status
-	return inspectOrEnsureChat(cmd.Context(), chatEnsureInput(cmd), func(ctx context.Context, method string, input chatRuntimeRequest) (managedchat.Status, error) {
+	return inspectOrEnsureChat(ctx, chatEnsureInput(cmd), func(ctx context.Context, method string, input chatRuntimeRequest) (managedchat.Status, error) {
+		if err := ctx.Err(); err != nil {
+			return managedchat.Status{}, err
+		}
 		if method == "chat.ensure" {
-			if err := offerChatServerRecreate(cmd, last, input); err != nil {
+			var err error
+			if viewTarget == nil {
+				err = offerChatServerRecreate(cmd, last, input)
+			} else if chatServerRecreateOffered(cmd, last, input) {
+				err = offerRecreateWithin(ctx, cmd, *viewTarget, last.Room.Server.Name, offerChatServer, false, chatViewRequestTimeout)
+			}
+			if err != nil {
 				return managedchat.Status{}, err
 			}
 		}
 		var status managedchat.Status
-		err := callChatViewControllerInto(ctx, cmd, method, input, &status)
+		var err error
+		if viewTarget == nil {
+			err = callChatViewControllerInto(ctx, cmd, method, input, &status)
+		} else if method == "chat.status" {
+			wait, stop := context.WithTimeout(ctx, chatViewRequestTimeout)
+			defer stop()
+			if err := wait.Err(); err != nil {
+				return status, err
+			}
+			err = callChatViewTargetInto(wait, *viewTarget, method, input, &status)
+			if err == nil {
+				err = wait.Err()
+			}
+		} else if err = ctx.Err(); err == nil {
+			err = callChatViewTargetInto(ctx, *viewTarget, method, input, &status)
+		}
 		if method == "chat.status" {
 			last = status
 		}
@@ -59,10 +92,7 @@ func openChatHeader(cmd *cobra.Command) (chatstream.Header, error) {
 // another server or human gets no offer: ensure refuses that owner conflict
 // before any effect, and an accepted recreation must not precede it.
 func offerChatServerRecreate(cmd *cobra.Command, status managedchat.Status, input chatRuntimeRequest) error {
-	if status.Room == nil || status.Room.Server.Name == "" || !recreateOfferInteractive(cmd) {
-		return nil
-	}
-	if (input.ServerBox != "" && input.ServerBox != status.Room.Server.Name) || (input.Human != "" && input.Human != status.Room.Human.Name) {
+	if !chatServerRecreateOffered(cmd, status, input) {
 		return nil
 	}
 	target, err := chatOfferTargetFn(cmd.Context(), cmd)
@@ -70,6 +100,13 @@ func offerChatServerRecreate(cmd *cobra.Command, status managedchat.Status, inpu
 		return err
 	}
 	return offerRecreate(cmd, target, status.Room.Server.Name, offerChatServer, false)
+}
+
+func chatServerRecreateOffered(cmd *cobra.Command, status managedchat.Status, input chatRuntimeRequest) bool {
+	r := status.Room
+	return r != nil && r.Server.Name != "" && recreateOfferInteractive(cmd) &&
+		(input.ServerBox == "" || input.ServerBox == r.Server.Name) &&
+		(input.Human == "" || input.Human == r.Human.Name)
 }
 
 // chatOfferTargetFn is selectControllerTarget, a seam for the chat offer tests.

@@ -2,10 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,7 +33,7 @@ func relayUnderTest(t *testing.T, fakeAirc string, deadline string) string {
 		t.Fatal(err)
 	}
 	script := strings.Replace(chatArtifactRelay, `AIRC = "/usr/local/bin/airc"`, `AIRC = "`+airc+`"`, 1)
-	script = strings.Replace(script, "DEADLINE = 15.0", "DEADLINE = "+deadline, 1)
+	script = strings.Replace(script, "WAIT_LIMIT = 120.0", "WAIT_LIMIT = "+deadline, 1)
 	if script == chatArtifactRelay {
 		t.Fatal("substitution failed")
 	}
@@ -147,5 +150,63 @@ func TestRelayDeadlineStopsAStuckChildEvenIfItIgnoresTerm(t *testing.T) {
 	}
 	if run.took > 4*time.Second {
 		t.Fatalf("relay took %s", run.took)
+	}
+}
+
+func TestRelayReplyHasOwnWaitAndStillHonorsCancel(t *testing.T) {
+	data := make([]byte, 1<<20) // larger than the unread pipe can hold
+	sum := sha256.Sum256(data)
+	download := fmt.Sprintf(`umask 077; sleep 0.6; head -c %d /dev/zero > "$6"
+printf '{"bytes":%d,"sha256":"%x"}\n'
+`, len(data), len(data), sum)
+
+	for _, cancelReply := range []bool{false, true} {
+		name := "downloads and replies within separate waits"
+		if cancelReply {
+			name = "cancel blocked reply"
+		}
+		t.Run(name, func(t *testing.T) {
+			script := relayUnderTest(t, download, "1.5")
+			ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "python3", append([]string{"-c", script}, relayArgs(data)...)...)
+			in, err := cmd.StdinPipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := cmd.StdoutPipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = cmd.Wait() })
+			var header [4]byte
+			if _, err := io.ReadFull(out, header[:]); err != nil || binary.BigEndian.Uint32(header[:]) != uint32(len(data)) {
+				t.Fatalf("no verified reply header: %x %v", header, err)
+			}
+			if cancelReply {
+				if err := in.Close(); err != nil {
+					t.Fatal(err)
+				}
+				if err := cmd.Wait(); err == nil || !strings.Contains(stderr.String(), "canceled during reply") {
+					t.Fatalf("blocked reply survived cancellation: %v %s", err, stderr.String())
+				}
+				return
+			}
+			// The download used at least 0.6 s and the reader now waits 1 s.
+			// Sharing a 1.5 s deadline across both stages would cut the frame.
+			time.Sleep(time.Second)
+			got, err := io.ReadAll(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := cmd.Wait(); err != nil || !bytes.Equal(got, data) {
+				t.Fatalf("reply did not get its own wait: %d bytes, %v %s", len(got), err, stderr.String())
+			}
+		})
 	}
 }

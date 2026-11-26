@@ -1,6 +1,6 @@
 # Managed chat human stream
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior. Chat wait lifetimes re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 Caller and request deadlines re-read at `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes.
 
 [FACT] `chat.stream` pins one confined SSH peer, verifies exact container,
@@ -24,6 +24,8 @@ as 433, shown as a hard error, and nothing is retried. The stream requires the
 client feature `nick-regain`.
 [1](#source-1) [2](#source-2) Setup takes no mutation lock, acknowledges the
 durable effect gate and releases admission; cancellation closes stalled SSH.
+Stream and image artifact operations use the same caller-context peer and
+applied-state verification.
 The OpenShell root supervisor owns the pinned Unix socket. [3](#source-3) [4](#source-4)
 Closing the view closes only its client. The controller canonicalizes an
 allowlist of room send/read/history/members/who/typing/quit and single-channel
@@ -36,7 +38,11 @@ reconnect/resend. Clipboard/link callbacks require a user action and existing
 host policy. [5](#source-5) [6](#source-6) [7](#source-7) [8](#source-8)
 
 [FACT] Stream setup and export use the caller's context. The open view gives
-pending requests, including header and ready, a two-minute fail-safe. A stalled
+pending requests, including header and ready, a two-minute fail-safe.
+Reconnect allows two minutes each for status and inspection. Ensure and the
+accepted recreate, including any explicit retry, follow the view lifetime.
+Closing the view prevents a late status reply from starting ensure or
+replacing the stream, and prevents dispatch of any offered retry. [15](#source-15) A stalled
 wire exchange honors an earlier control deadline. Missing roster or history
 completions produce a gap while the live connection continues. Stream errors
 separate EOF, malformed frames, local closure and transport failures. The
@@ -70,7 +76,7 @@ never every connection of the account. [14](#source-14)
 
 1. <a id="source-1"></a> [Nickname take-over and launcher](../../internal/chatstream/connection.go#L11-L47) — `ErrNickHeld`, `ErrTakenOver`, `NickHeldEvent`, `TakeOverFlag`, `ClientArgv`; embedded client_config.py (`derive`, `main`, `TemporaryFile` unlinks before writes); `runControllerChatStream` refusal at chat_stream.go L53–L65 and `chatStreamTakeOver` L91–L100; `managedChatConnection.Connected` in chat_connection.go L166–L174; driver mapping in channels_client.go `run` L78, channel_events.go `record` L172 and client.go `exchange` L331–L370; host `chatSession.start`/`takeOver` in chat_view.go L266–L396 and chatui `nickHeld`/`overlayTakeOver`.
 2. <a id="source-2"></a> [Take-over regressions](../../internal/chatstream/airc_views_integration_test.go#L14) — opt-in real-AIRC `TestRealAIRCHumanViewTakeOver` (NICK_HELD leaves the holder, take-over ends it as `ErrTakenOver` with peer QUIT, another account's 433); takeover_test.go (nick-held frame, ERROR and closed-event mapping); launcher tests in connection_test.go, including `TestClientLauncherEnablesRegainOnlyForTakeOver` and `TestClientLauncherWithoutOTmpfile`; `TestChatStreamUsesTheSavedNickAndRefusesAHeldOneBeforeEffects` in cmd/yoloctl/chat_stream_test.go; `TestNickHeldAsksToTakeOverOrClose` in internal/chatui/takeover_test.go.
-3. <a id="source-3"></a> [Pinned connection](../../cmd/yoloctl/chat_connection.go#L47) — peer verification and cancellation.
+3. <a id="source-3"></a> [Pinned connection](../../cmd/yoloctl/chat_connection.go#L41) — peer verification and cancellation.
 4. <a id="source-4"></a> [OpenShell v0.0.72](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-process/src/ssh.rs#L53) — `ssh_server_init`.
 5. <a id="source-5"></a> [Controller stream](../../cmd/yoloctl/chat_stream.go#L18) — setup and relay.
 6. <a id="source-6"></a> [JSONL adapter](../../internal/chatstream/client.go#L160) — `Run`, receipt/echo correlation.
@@ -82,3 +88,4 @@ never every connection of the account. [14](#source-14)
 12. <a id="source-12"></a> [Pre-write refusal](../../internal/chatstream/client.go#L336-L424) — `localRejection`, `exchange`, `driver.send`.
 13. <a id="source-13"></a> [Refusal regressions](../../internal/chatstream/local_rejection_test.go#L131-L295) — `TestChannelsPreWriteRejectionKeepsTheStream` runs `channelDriver.run` with a synthetic peer; `TestChannelsWrittenSendFailuresStayUncertain`.
 14. <a id="source-14"></a> [Availability controls](../../internal/chatstream/availability.go#L1) — `availabilityAction`, `availabilityNumeric`, `patchSelfMembers`; protocol.go `decodeChannelRequest`/`FilterChannels`; `TestRealAIRCHumanAvailability` in airc_availability_integration_test.go exercises the managed filter with pinned binaries.
+15. <a id="source-15"></a> [View reconnection](../../cmd/yoloctl/chat_open.go#L49) — `openChatHeader` and `inspectOrEnsureChat`; chat_view.go `reconnect` and `start`.

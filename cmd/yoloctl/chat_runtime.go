@@ -656,15 +656,27 @@ func applyManagedMembership(ctx context.Context, r *managedchat.Room, want manag
 	return errors.New("managed server is absent; run chat ensure to apply the pending generation")
 }
 
+// A dead server may never open the control socket. One readiness wait
+// bounds that case under the operation guard, while individual status
+// attempts can be retried without sending a mutation.
+var managedServerReadyTimeout = 2 * time.Minute
+var managedServerStatusAttempt = 10 * time.Second
+
 func waitManagedServer(ctx context.Context, control managedchat.Control) (managedchat.Applied, error) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, managedServerReadyTimeout)
 	defer cancel()
 	for {
-		status, err := control.Call(ctx, "status")
+		try, stop := context.WithTimeout(ctx, managedServerStatusAttempt)
+		status, err := control.Call(try, "status")
+		expired := errors.Is(err, context.DeadlineExceeded) && try.Err() == context.DeadlineExceeded
+		stop()
 		if err == nil {
-			return status, nil
+			return status, status.Validate()
 		}
-		if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, syscall.ECONNREFUSED) {
+		if ctx.Err() != nil {
+			return status, ctx.Err()
+		}
+		if !expired && !chatControlNotListening(err) {
 			return status, err
 		}
 		select {
@@ -673,6 +685,12 @@ func waitManagedServer(ctx context.Context, control managedchat.Control) (manage
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+}
+
+func chatControlNotListening(err error) bool {
+	var dialErr *net.OpError
+	return errors.As(err, &dialErr) && dialErr.Op == "dial" && dialErr.Net == "unix" &&
+		(errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED))
 }
 
 type boundedChatWriter struct {

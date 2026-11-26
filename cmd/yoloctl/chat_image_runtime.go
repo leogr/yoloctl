@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/chatstream"
 	"github.com/leogr/yoloctl/internal/controller"
@@ -30,8 +29,6 @@ func runControllerChatImage(ctx context.Context, req controller.Request, in *os.
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
 	stop := context.AfterFunc(ctx, func() { _ = in.Close() })
 	defer stop()
 	png, err := readChatImage(in, input)
