@@ -119,6 +119,14 @@ func TestHostIntegrationChild(t *testing.T) {
 				_, _ = image.Write(p)
 			case 'I':
 				_ = os.WriteFile(path+".png", image.Bytes(), 0o600)
+				switch delay := os.Getenv("YOLOCTL_TEST_UPLOAD_DELAY"); delay {
+				case "":
+				case "never":
+					continue // the holder never answers this upload
+				default:
+					d, _ := time.ParseDuration(delay)
+					time.Sleep(d)
+				}
 				p, _ := json.Marshal(map[string]string{"id": id, "path": testImagePath})
 				send('P', p)
 			case 'U':

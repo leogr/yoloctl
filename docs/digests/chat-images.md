@@ -72,7 +72,7 @@ authority, AIRC HTTP interoperability or provider image consumption.
 1. <a id="source-1"></a> [Host callbacks](../../cmd/yoloctl/chat_image_host.go#L22) — `configureChatImages`, `imageLinkLive`, `chatImageIdentity`, lines 22–202.
 2. <a id="source-2"></a> [Typed protocol](../../cmd/yoloctl/chat_image_protocol.go#L21) — request validation, framing, identity and reply checks, lines 21–167.
 3. <a id="source-3"></a> [Controller publisher](../../cmd/yoloctl/chat_image_runtime.go#L23) — `runControllerChatImage`, `executeChatImageUpload`, `runChatImageCommand`, lines 24–138.
-4. <a id="source-4"></a> [PNG bounds](../../internal/hostintegration/host.go#L48) — `ValidateImage`.
+4. <a id="source-4"></a> [PNG bounds](../../internal/hostintegration/host.go#L53) — `ValidateImage`.
 5. <a id="source-5"></a> [Receipt contents](../../internal/controller/receipts.go#L17) — `Receipt`.
 6. <a id="source-6"></a> [Reserved metadata](../../internal/chatstream/artifact.go#L8) — `Artifact`, `artifactFromTags`.
 7. <a id="source-7"></a> [Protocol regressions](../../cmd/yoloctl/chat_image_protocol_test.go#L46) — metadata, framing, identity and reply validation.

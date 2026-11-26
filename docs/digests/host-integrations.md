@@ -1,6 +1,6 @@
 # Explicit host image paste and browser requests
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; open-view fail-safes on `910bb54b2de768615ffda1dff1d11a236b77a04a` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Managed tabs/standalone attachment offer local Ctrl+V PNG reads and
 confined HTTP(S) requests. The private session protocol carries bounded image
@@ -35,7 +35,8 @@ reserved action footer. Pending asks queue without changing tabs; dismissal
 restores focus/drafts. Ordinary typing, paste and Enter cannot approve.
 Requests reject credentials, non-web schemes, controls,
 invisible characters and URLs beyond 8192 bytes. The host runs fixed argv for
-`xdg-open` or macOS `/usr/bin/open`, with no shell interpolation. No callback
+`xdg-open` or macOS `/usr/bin/open`, with no shell interpolation, under a
+2-minute fail-safe. No callback
 port or localhost translation is created. [1](#source-1) [3](#source-3)
 [6](#source-6) [7](#source-7) [23](#source-23)
 
@@ -44,11 +45,15 @@ managed surface starts the read: installed Wayland `wl-paste`, otherwise X11
 `xclip` when DISPLAY is set, or fixed macOS AppleScript. Linux requests offered
 targets, preferring a single local
 PNG file URI, then PNG pixels, then an absolute PNG pathname; macOS tries an
-alias before PNG. Missing images/backends preserve the encoded key pair.
+alias before PNG. Alias-query expiry ends the paste. Missing images/backends
+preserve the encoded key pair.
 There is no guest clipboard-read request. A successful image consumes its
 press/release and inserts a guest path, quoted where necessary, bracketed when
 requested, without Enter. Preparation reserves ordered input so later keys
-cannot overtake it. Text paste preserves PNG paths literally; Ctrl+Shift+V does
+cannot overtake it. Tool runs, their output waits and the upload's reply have
+2-minute fail-safes. The first Ctrl+C cancels a waiting paste. The next
+interrupt reaches the guest in order, even while the clipboard tool unwinds.
+[25](#source-25) Text paste preserves PNG paths literally; Ctrl+Shift+V does
 not trigger image import. [3](#source-3) [6](#source-6) [8](#source-8)
 [10](#source-10)
 [15](#source-15) [20](#source-20)
@@ -68,7 +73,7 @@ creates a random `/tmp/yoloctl-image-…/clipboard.png`, directory 0700/file 060
 with exclusive/no-follow writes and file/directory fsync. There is no supplied
 destination. Caught partial-write failures are cleaned up; completed files remain in
 the container until removed or the box is replaced. They are not account state.
-Upload timeout/detach can leave an uncertain file; a canceled blocked transfer
+An upload ended by its fail-safe, Ctrl+C or detach can leave an uncertain file; a canceled blocked transfer
 closes only its attachment, never retries, and preserves the holder/other views.
 Unanswered SSH opens retain a slot until resolved, bounded to two.
 [1](#source-1) [4](#source-4) [6](#source-6)
@@ -87,14 +92,14 @@ OAuth need separate acceptance; macOS decoding tests are synthetic.
 
 1. <a id="source-1"></a> [host_actions.go](../../internal/session/host_actions.go#L73) — routing, HostClient lifecycle and bounded imageReceiver.
 2. <a id="source-2"></a> [view.go](../../internal/session/view.go#L147) — private admission/delivery.
-3. <a id="source-3"></a> [host_actions.go](../../internal/tui/host_actions.go#L22) — prompts, approval and ordered image key ownership.
+3. <a id="source-3"></a> [host_actions.go](../../internal/tui/host_actions.go#L28) — prompts, approval and ordered image key ownership.
 4. <a id="source-4"></a> [host_bridge.go](../../internal/session/host_bridge.go#L36) — startBrowserBridge and browserLaunch.
-5. <a id="source-5"></a> [holder.go](../../internal/session/holder.go#L158) — optional integration setup.
+5. <a id="source-5"></a> [holder.go](../../internal/session/holder.go#L174) — optional integration setup.
 6. <a id="source-6"></a> [host.go](../../internal/hostintegration/host.go#L22) — validators, desktop dispatch, bounds and deadlines.
 7. <a id="source-7"></a> [tui.go](../../internal/config/tui.go#L217) — policies and commented defaults.
 8. <a id="source-8"></a> [input.go](../../internal/tui/term/input.go#L60) — Transform reserves ordered input.
 9. <a id="source-9"></a> [host_actions_test.go](../../internal/session/host_actions_test.go#L1) — protocol/cancellation tests.
-10. <a id="source-10"></a> [host_actions_test.go](../../internal/tui/host_actions_test.go#L198) — TestBrowserPromptsSurviveRepeatedRequestsAndDisconnect and key/paste tests.
+10. <a id="source-10"></a> [host_actions_test.go](../../internal/tui/host_actions_test.go#L206) — TestBrowserPromptsSurviveRepeatedRequestsAndDisconnect and key/paste tests.
 11. <a id="source-11"></a> [host-integration.py](../../scripts/smoke/host-integration.py#L1) — isolated transport driver.
 12. <a id="source-12"></a> [protocol.go](../../internal/session/protocol.go#L39) — version and action frames.
 13. <a id="source-13"></a> [host_bridge.py](../../internal/session/host_bridge.py#L71) — serve and helper lifecycle.
@@ -109,3 +114,4 @@ OAuth need separate acceptance; macOS decoding tests are synthetic.
 22. <a id="source-22"></a> [image_file_test.go](../../internal/hostintegration/image_file_test.go#L19) — file references, aliases, special files and quoting tests.
 23. <a id="source-23"></a> [popup.go](../../internal/tui/popup.go#L9) — shared popup frame, wrapping and palette background.
 24. <a id="source-24"></a> [TUI pane requests](tui-pane-requests.md) — requests matched to panes, attention marks.
+25. <a id="source-25"></a> [host_failsafe_test.go](../../internal/tui/host_failsafe_test.go#L1) — paste cancel and fail-safes; hostintegration failsafe_test.go.

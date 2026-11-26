@@ -67,7 +67,7 @@ Browser and image requests and real host rendering are not covered.
 
 1. <a id="source-1"></a> [Tab requests](../../internal/tui/tab_requests.go#L1-L81) — `tabRequestMsg.from`, `tabRequestHandler`, `handleTabRequest`.
 2. <a id="source-2"></a> [Empty pane](../../internal/tui/placeholder.go#L36-L54) — `fillPlaceholder`; `Layout.Empty` in panes/layout.go.
-3. <a id="source-3"></a> [Browser requests](../../internal/tui/host_actions.go#L51-L83) — `browserRequest`: badge and mark.
+3. <a id="source-3"></a> [Browser requests](../../internal/tui/host_actions.go#L57-L89) — `browserRequest`: badge and mark.
 4. <a id="source-4"></a> [Bells and marks](../../internal/tui/bell.go#L1-L48) — `paneBellMsg`, `paneBellHandler`, `markUnfocused`; exits in tui.go `Update` (`tabExitMsg`).
 5. <a id="source-5"></a> [Mark drawing](../../internal/tui/panes/compose.go#L261-L321) — `drawBar`; cleared by `Layout.SetFocus` and `tabs.Model.Select`.
 6. <a id="source-6"></a> [D1 test](../../internal/tui/pane_session_test.go#L17-L82) — `TestOneSessionInTwoPanesLatestResizeWins`; `TestPanePTYsHaveTheirPaneSize` follows.

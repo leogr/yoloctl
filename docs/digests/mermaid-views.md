@@ -1,6 +1,6 @@
 # Mermaid drawings in Markdown views
 
-Verification: `b4a1c67f731092a5714834932418178d5483f31a` and accompanying changes.
+Verification: `b4a1c67f731092a5714834932418178d5483f31a` and accompanying changes; follow's publish point on `910bb54b2de768615ffda1dff1d11a236b77a04a` and accompanying changes.
 
 [FACT] `markdownview.Parse` takes an optional non-blocking `Diagrams` lookup,
 called (in rendered mode only) with the source of each closed fence whose info
@@ -25,11 +25,12 @@ with source maps, each fence occurrence getting its own outcome in order: a
 refused one `mermaid: not drawn (<admission reason>)`, admitted ones past the
 20th `too many diagrams` (repeated sources count too), the others a drawing at
 the card's inner width or the renderer's reason. Each distinct source renders
-once, within the refresh's 5 s total: a render gets only the time left, and one
-cut by it is not attempted. Those show `mermaid: drawing…`, and the model
-schedules a render-only continuation on the retained bytes. Continuations
-repeat while each leaves fewer undrawn; one that does not stops the chain and
-labels them `not drawn (refresh budget; r retries)`. Changed content or another
+once. A refresh waits for drawings and visible-link checks up to 5 s, then
+shows the document: fences still drawing show `mermaid: drawing…` while their
+render goes on, unchecked links stay inert until their check ends, and a
+render-only continuation on the retained bytes waits for those renders.
+Continuations repeat while each leaves fewer undrawn or one is still drawing;
+otherwise the chain stops with `not drawn (refresh budget; r retries)`. Changed content or another
 render request starts afresh; `r` also renders when fences are undrawn or fell
 back for a transient reason (busy, unavailable, internal). With drawings, a
 display-to-source line map keeps the paused reading position (a source byte) on
@@ -58,7 +59,7 @@ answer is rebuilt. Before that a paused view anchors its top row, and the
 rebuild carries a reading position over: a line outside the fences keeps its
 place among them, a fence's opener, closer or note stays that line, a content
 row its row. A highlight in a rebuilt body clears. One request runs at a time
-(`Render` off the UI goroutine), for the first pending fence on the screen at
+(`Render` off the UI goroutine, under the view's context), for the first pending fence on the screen at
 the body's card width; a result for an old width is not shown. Quote replays a
 body's outcomes, so a whole drawing quotes its fence. Image chips in the same
 message are placed into the lines parsed with drawings; when a chip falls back
@@ -71,7 +72,7 @@ matches the lines shown. [9](#source-9) [10](#source-10)
 1. <a id="source-1"></a> [Parse options](../../internal/markdownview/document.go#L33) — `ParseOptions.Diagrams`, `Diagram`, `DiagramWidth`, `IsMermaid`.
 2. <a id="source-2"></a> [Drawing rows](../../internal/markdownview/body.go#L55) — `drawDiagram`, the fence-close branch and note row in `parseLines`.
 3. <a id="source-3"></a> [Quote mapping](../../internal/markdownview/quote.go#L183) — `LineSource.Diagram`, `LineStart`, `LineEnd`.
-4. <a id="source-4"></a> [Follow drawing](../../internal/followview/mermaid.go#L51) — `drawBudget`, `maxDiagrams`, `drawing.draw`; `renderFile`, `rendered.sourceLine`/`displayLine`, `captureAnchor`/`placeAnchor`, `work`, the continuation in `Model.Update` and `sameThrough` (model.go).
+4. <a id="source-4"></a> [Follow drawing](../../internal/followview/mermaid.go#L21) — `drawBudget`, `maxDiagrams`, `drawing.draw`, `renderSet`; `renderFile`, `admit`, `rendered.sourceLine`/`displayLine`, `captureAnchor`/`placeAnchor`, `work`, the continuation in `Model.Update` and `sameThrough` (model.go).
 5. <a id="source-5"></a> [Hook regressions](../../internal/markdownview/diagram_test.go#L1) — drawing rows and width, fallback note, lookup scope, whole/partial Quote; `FuzzDiagramSourceMap`.
 6. <a id="source-6"></a> [Follow regressions](../../internal/followview/mermaid_test.go#L1) — occurrence limit and dedupe, total budget, continuation progress, no-progress stop and `r`, transient retry, anchor across replacement, no renderer, selection clearing.
 7. <a id="source-7"></a> [Preference](../../internal/config/tui.go#L75) — `TUIMarkdown`, `MermaidEnabled`, template; `newFollowCmd` in cmd/yoloctl/follow.go; `TestHostFollowNeverResolvesASpaceOrVM` in follow_test.go.

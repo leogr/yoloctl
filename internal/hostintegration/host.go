@@ -26,6 +26,11 @@ const (
 	MaxImagePathBytes = 4096
 )
 
+// failSafe bounds one desktop tool run, and separately the wait for its output
+// pipes after it exits, when nothing else stops it: these requests come only
+// from an open view, where Ctrl+C reaches no single request. A var for tests.
+var failSafe = 2 * time.Minute
+
 var ErrNoImage = errors.New("no PNG image on the host clipboard")
 var errOutputLimit = errors.New("desktop command output exceeds limit")
 
@@ -69,7 +74,7 @@ func OpenURL(ctx context.Context, value string) error {
 	if err := ValidateURL(value); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, failSafe)
 	defer cancel()
 	name, args := "xdg-open", []string{value}
 	if runtime.GOOS == "darwin" {
@@ -95,18 +100,8 @@ type ClipboardImage struct {
 // this operation. A single copied PNG file can be reused in a shared workdir;
 // otherwise only image/png is imported. Ordinary text keeps its terminal path.
 func ReadImage(ctx context.Context) (ClipboardImage, error) {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
 	if runtime.GOOS == "darwin" {
-		cmd := exec.CommandContext(ctx, "/usr/bin/osascript", "-e", "POSIX path of (the clipboard as alias)")
-		cmd.WaitDelay = time.Second
-		if p, err := limitedOutput(cmd, MaxImagePathBytes+1); err == nil {
-			if path := clipboardFilePath(strings.TrimSuffix(string(p), "\n"), false); path != "" {
-				return readImageFile(path)
-			}
-		}
-		p, err := readDarwinImage(ctx)
-		return ClipboardImage{Data: p}, err
+		return readDarwinClipboard(ctx, "/usr/bin/osascript")
 	}
 	// Ask only for offered targets: some clipboard owners return their bytes
 	// even when the requested MIME type is absent.
@@ -152,6 +147,26 @@ func ReadImage(ctx context.Context) (ClipboardImage, error) {
 	return ClipboardImage{}, ErrNoImage
 }
 
+func readDarwinClipboard(ctx context.Context, osascript string) (ClipboardImage, error) {
+	cmd, tool, cancel := toolCommand(ctx, osascript, "-e", "POSIX path of (the clipboard as alias)")
+	alias, err := limitedOutput(tool, cmd, MaxImagePathBytes+1)
+	stopped := tool.Err()
+	cancel()
+	if stopped == nil {
+		stopped = ctx.Err()
+	}
+	if stopped != nil {
+		return ClipboardImage{}, fmt.Errorf("read host clipboard: %w", stopped)
+	}
+	if err == nil {
+		if path := clipboardFilePath(strings.TrimSuffix(string(alias), "\n"), false); path != "" {
+			return readImageFile(path)
+		}
+	}
+	p, err := readDarwinImage(ctx, osascript)
+	return ClipboardImage{Data: p}, err
+}
+
 func readClipboardTarget(ctx context.Context, target string, limit int) ([]byte, error) {
 	var name string
 	var args []string
@@ -172,14 +187,14 @@ func readClipboardTarget(ctx context.Context, target string, limit int) ([]byte,
 	default:
 		return nil, ErrNoImage
 	}
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.WaitDelay = time.Second
-	p, err := limitedOutput(cmd, limit)
+	cmd, tool, cancel := toolCommand(ctx, name, args...)
+	defer cancel()
+	p, err := limitedOutput(tool, cmd, limit)
 	if err == nil {
 		return p, nil
 	}
-	if ctx.Err() != nil {
-		return nil, fmt.Errorf("read host clipboard: %w", ctx.Err())
+	if tool.Err() != nil {
+		return nil, fmt.Errorf("read host clipboard: %w", tool.Err())
 	}
 	var exit *exec.ExitError
 	if errors.As(err, &exit) || errors.Is(err, exec.ErrNotFound) {
@@ -190,13 +205,13 @@ func readClipboardTarget(ctx context.Context, target string, limit int) ([]byte,
 
 // AppleScript's PNG clipboard coercion returns a hex data value. A fixed script
 // avoids temporary host files and interpolating data into executable text.
-func readDarwinImage(ctx context.Context) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "/usr/bin/osascript", "-e", "get the clipboard as «class PNGf»")
-	cmd.WaitDelay = time.Second
-	p, err := limitedOutput(cmd, 2*MaxImageBytes+64)
+func readDarwinImage(ctx context.Context, osascript string) ([]byte, error) {
+	cmd, tool, cancel := toolCommand(ctx, osascript, "-e", "get the clipboard as «class PNGf»")
+	defer cancel()
+	p, err := limitedOutput(tool, cmd, 2*MaxImageBytes+64)
 	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+		if tool.Err() != nil {
+			return nil, tool.Err()
 		}
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
@@ -205,6 +220,16 @@ func readDarwinImage(ctx context.Context) ([]byte, error) {
 		return nil, err
 	}
 	return decodeDarwinImage(strings.TrimSpace(string(p)))
+}
+
+// toolCommand runs one clipboard tool under ctx and the fail-safe, which
+// also bounds the wait for a descendant that keeps its output pipe open. The
+// returned context is the tool's: its error tells a stopped run from a refusal.
+func toolCommand(ctx context.Context, name string, args ...string) (*exec.Cmd, context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(ctx, failSafe)
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = failSafe
+	return cmd, ctx, cancel
 }
 
 type boundedOutput struct {
@@ -219,9 +244,18 @@ func (b *boundedOutput) Write(p []byte) (int, error) {
 	return b.Buffer.Write(p)
 }
 
-func limitedOutput(cmd *exec.Cmd, limit int) ([]byte, error) {
+// limitedOutput runs cmd and returns its bounded stdout. It returns as soon as
+// ctx ends, also when the tool has exited and a descendant still holds its
+// pipe: that wait then ends in the background at WaitDelay.
+func limitedOutput(ctx context.Context, cmd *exec.Cmd, limit int) ([]byte, error) {
 	b := &boundedOutput{limit: limit}
 	cmd.Stdout = b
-	err := cmd.Run()
-	return b.Bytes(), err
+	done := make(chan error, 1)
+	go func() { done <- cmd.Run() }()
+	select {
+	case err := <-done:
+		return b.Bytes(), err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }

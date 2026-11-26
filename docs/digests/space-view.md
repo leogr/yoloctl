@@ -129,7 +129,7 @@ and local PTYs; they do not establish live-VM or proxy-confined chat coverage.
 18. <a id="source-18"></a> [tab_requests.go](../../internal/tui/tab_requests.go#L17-L43) — request handler and validation.
 19. <a id="source-19"></a> [session.go](../../internal/tui/term/session.go#L106) — request channel for a tab child.
 20. <a id="source-20"></a> [tabrequest.go](../../internal/termio/tabrequest.go#L16-L69) — request wire format.
-21. <a id="source-21"></a> [popup.go](../../internal/tui/spaceview/popup.go#L53) — popup loading and JSON decoders.
+21. <a id="source-21"></a> [popup.go](../../internal/tui/spaceview/popup.go#L65) — popup loading and JSON decoders.
 22. <a id="source-22"></a> [telemetry_test.go](../../internal/spacetelemetry/telemetry_test.go#L1) — parser, room and collector tests.
 23. <a id="source-23"></a> [space_telemetry_test.go](../../cmd/yoloctl/space_telemetry_test.go#L1) — stream tests.
 24. <a id="source-24"></a> [view_test.go](../../internal/tui/spaceview/view_test.go#L1) — layout and interaction tests.

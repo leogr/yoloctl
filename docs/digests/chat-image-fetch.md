@@ -34,8 +34,8 @@ uploads, joins or retries. [2](#source-2)
 chip text, one printable line of at most 512 bytes, and the area it may
 fill, 1–256 cells wide and 1–256 rows tall) starts the single fetch
 job of the whole TUI when previews are supported; a second request meanwhile
-gets `busy`. The job (30 s) calls the reader that `cmd/yoloctl` installs: it
-resolves the pane's space like the CLI (its `--space`, else the TUI's pinned
+gets `busy`. The job has a two-minute fail-safe and ends when its pane closes.
+The reader that `cmd/yoloctl` installs resolves the pane's space like the CLI (its `--space`, else the TUI's pinned
 space, else the default) and runs `chat.artifact.read` with the job context
 and output bounded to the requested size, accepting only those exact bytes. `chatimage.Prepare`
 then checks the PNG dimensions (at most 16 Mi pixels) before one full decode

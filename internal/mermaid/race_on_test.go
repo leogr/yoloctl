@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// skipUnderRace skips a test that asserts the real 2 s/4 s limits: the race
+// skipUnderRace skips a test that asserts the real renderer limits: the race
 // detector slows the WASM compiler and guest enough to change the outcome.
 // The ordinary suite still runs it.
 func skipUnderRace(t *testing.T) { t.Skip("real-time renderer limits are not meaningful under -race") }

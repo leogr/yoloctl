@@ -390,9 +390,17 @@ func (m *Model) requestDiagram(rows []transcriptRow) tea.Cmd {
 		s := &m.diagrams
 		s.inflight = true
 		key := diagramKey{body.fences[ref.occ], markdownview.DiagramWidth(body.drawWidth)}
-		renderer, method, channel, epoch := m.opts.Mermaid, m.widthMethod, m.name, s.epoch
+		renderer, method, channel, epoch, jobs := m.opts.Mermaid, m.widthMethod, m.name, s.epoch, m.linkJobs
+		render := func(ctx context.Context) tea.Msg {
+			return diagramResultMsg{channel: channel, epoch: epoch, key: key, result: renderer.Render(ctx, key.source, key.width, method)}
+		}
 		return func() tea.Msg {
-			return diagramResultMsg{channel: channel, epoch: epoch, key: key, result: renderer.Render(context.Background(), key.source, key.width, method)}
+			// The view's context: a render queued when the view closes
+			// starts no worker.
+			if jobs == nil {
+				return render(context.Background())
+			}
+			return jobs.run(render)
 		}
 	}
 	return nil

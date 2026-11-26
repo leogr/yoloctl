@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
+	"maps"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -64,8 +65,9 @@ type rendered struct {
 	refused  []markdownview.TableRowID
 	compact  map[int]bool
 	controls map[markdownview.TableRowID]bool
-	undrawn  int // mermaid fences left for a continuation
-	retry    int // mermaid fences r redraws: undrawn or a transient fallback
+	undrawn  int  // mermaid fences left for a continuation
+	retry    int  // mermaid fences r redraws: undrawn or a transient fallback
+	inflight bool // a mermaid render is still running for a continuation
 	// lines maps each display line to its source line (an index of starts)
 	// when mermaid drawings or notes changed the line count; nil when they
 	// are the same lines.
@@ -163,7 +165,7 @@ func renderFileTables(ctx context.Context, raw []byte, large, source bool, forma
 			starts = append(starts, i+1)
 		}
 	}
-	view := &rendered{drawn: result, doc: doc, rows: layout.Rows, starts: starts, text: text, markdown: isMarkdown, records: records, refused: layout.RefusedTableRows, compact: compact, controls: controls, undrawn: result.undrawn, retry: result.retry}
+	view := &rendered{drawn: result, doc: doc, rows: layout.Rows, starts: starts, text: text, markdown: isMarkdown, records: records, refused: layout.RefusedTableRows, compact: compact, controls: controls, undrawn: result.undrawn, retry: result.retry, inflight: result.inflight}
 	if doc.Sources != nil {
 		view.lines = make([]int, len(doc.Sources))
 		for d, ls := range doc.Sources {
@@ -198,6 +200,23 @@ func (j *jobs) run(fn func(context.Context) tea.Msg) tea.Msg {
 	defer j.wg.Done()
 	return fn(j.ctx)
 }
+
+// spawn runs fn in the background under the jobs' context, joined on close:
+// work that outlasts the job that started it. It reports false once closed.
+func (j *jobs) spawn(fn func(context.Context)) bool {
+	j.mu.Lock()
+	if j.closed {
+		j.mu.Unlock()
+		return false
+	}
+	j.wg.Add(1)
+	j.mu.Unlock()
+	go func() {
+		defer j.wg.Done()
+		fn(j.ctx)
+	}()
+	return true
+}
 func (j *jobs) cancelWork() { j.mu.Lock(); j.closed = true; j.cancel(); j.mu.Unlock() }
 func (j *jobs) close()      { j.cancelWork(); j.wg.Wait() }
 
@@ -209,9 +228,13 @@ type resultMsg struct {
 	raw          []byte
 	view         *rendered
 	admissions   filelink.Admissions
-	observed     map[string]bool
+	linkBatch    []string
+	linkEpoch    uint64
 	linksPending bool
-	err          error
+	// admitting delivers the visible links' admissions that the refresh did
+	// not wait for: it showed them inert at its publish point.
+	admitting <-chan filelink.Admissions
+	err       error
 	// continued: a continuation job (see continueDrawing) whose view had
 	// before undrawn fences.
 	continued bool
@@ -233,6 +256,8 @@ type selection struct{ anchor, focus point }
 
 type Model struct {
 	observed                        map[string]bool
+	checking                        map[string]bool
+	linkEpoch                       uint64
 	hoverAction                     markdownview.Action
 	opening                         bool
 	admissions                      filelink.Admissions
@@ -269,10 +294,21 @@ type Model struct {
 	pressX, pressY int
 	moved          bool
 	now            func() time.Time // the refresh budget's clock
+	renders        *renderSet       // mermaid renders that outlast a refresh
+}
+
+// admissionsMsg carries link admissions that finished after their refresh
+// showed the view.
+type admissionsMsg struct {
+	key        string
+	epoch      uint64
+	batch      []string
+	admissions filelink.Admissions
 }
 
 func New(ctx context.Context, opts Options) *Model {
-	return &Model{opts: opts, jobs: newJobs(ctx), dark: true, theme: spaceview.NewTheme(true, nil, nil), following: true, pendingRead: true, query: Query{Tail: true}, now: time.Now}
+	j := newJobs(ctx)
+	return &Model{opts: opts, jobs: j, renders: &renderSet{spawn: j.spawn}, dark: true, theme: spaceview.NewTheme(true, nil, nil), following: true, pendingRead: true, query: Query{Tail: true}, now: time.Now}
 }
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(tea.RequestBackgroundColor, m.poll(), m.work(false, false))
@@ -295,7 +331,7 @@ func (m *Model) work(read, render bool) tea.Cmd {
 	}
 	m.busy = true
 	read, render = m.pendingRead || m.snapshot.Key == "", m.pendingRender
-	draw := drawing{renderer: m.opts.Mermaid, now: m.now, budget: drawBudget}
+	draw := drawing{renderer: m.opts.Mermaid, now: m.now, budget: drawBudget, renders: m.renders}
 	continued := m.pendingContinue && m.view != nil
 	if continued {
 		draw.before = m.view.undrawn
@@ -305,8 +341,14 @@ func (m *Model) work(read, render bool) tea.Cmd {
 		draw.reuse = &m.view.drawn
 	}
 	gen, q, raw, snapshot := m.gen, m.query, m.raw, m.snapshot
-	previous := m.admissions
-	previousSeen := m.observed
+	epoch := m.linkEpoch
+	// Workers render from their own snapshot. The update loop may receive a
+	// late result while this work is queued or reading the next file window.
+	admissions := make(filelink.Admissions, len(m.admissions))
+	maps.Copy(admissions, m.admissions)
+	requested := make(map[string]bool, len(m.observed)+len(m.checking))
+	maps.Copy(requested, m.observed)
+	maps.Copy(requested, m.checking)
 	top, height, following := m.top, m.bodyHeight(), m.following
 	q.Previous = snapshot.Key
 	width, method, theme, source, format := m.width, m.method, m.theme, m.source, m.opts.Format
@@ -316,7 +358,7 @@ func (m *Model) work(read, render bool) tea.Cmd {
 	}
 	return func() tea.Msg {
 		return m.jobs.run(func(ctx context.Context) tea.Msg {
-			result := resultMsg{gen: gen, read: read, snapshot: snapshot, raw: raw, continued: continued, before: draw.before}
+			result := resultMsg{gen: gen, read: read, snapshot: snapshot, raw: raw, continued: continued, before: draw.before, linkEpoch: epoch}
 			if read {
 				next, err := m.opts.Reader.Read(ctx, q)
 				result.err = err
@@ -337,17 +379,14 @@ func (m *Model) work(read, render bool) tea.Cmd {
 				render = true
 			}
 			if render && (result.err == nil || snapshot.Key != "") {
-				result.admissions = filelink.Admissions{}
-				result.observed = map[string]bool{}
-				if !read || !result.snapshot.Changed {
-					for s, v := range previousSeen {
-						result.observed[s] = v
-					}
-					for s, t := range previous {
-						result.admissions[s] = t
-					}
+				// The view shows by its publish point even while links are
+				// still being checked; those stay inert until they are.
+				publishAt := m.now().Add(drawBudget)
+				if result.snapshot.Key != snapshot.Key {
+					clear(admissions)
+					clear(requested)
 				}
-				result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, draw, opened, linkview.Policy(result.admissions, string(result.raw)))
+				result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, draw, opened, linkview.Policy(admissions, string(result.raw)))
 				if m.opts.Navigation != nil && !source && format == Markdown && !result.snapshot.Large {
 					start := min(top, max(0, len(result.view.rows)-height))
 					if following {
@@ -364,27 +403,23 @@ func (m *Model) work(read, render bool) tea.Cmd {
 							}
 						}
 					}
-					var batch []string
 					for _, s := range visible {
-						if !result.observed[s] {
-							if len(batch) < filelink.MaxTargets {
-								batch = append(batch, s)
-								result.observed[s] = true
+						if !requested[s] {
+							if len(result.linkBatch) < filelink.MaxTargets {
+								result.linkBatch = append(result.linkBatch, s)
 							} else {
 								result.linksPending = true
 							}
 						}
 					}
-					admitted := m.opts.Navigation.AdmitDestinations(ctx, batch)
+					result.admissions, result.admitting = m.admit(ctx, result.linkBatch, publishAt)
 					// No new target: the links, bytes and drawings are those of
 					// the view just rendered, so it is already the final one.
-					if len(admitted) > 0 {
-						for s, t := range admitted {
-							result.admissions[s] = t
-						}
+					if len(result.admissions) > 0 {
+						maps.Copy(admissions, result.admissions)
 						finalDraw := draw
 						finalDraw.reuse = &result.view.drawn
-						result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, finalDraw, opened, linkview.Policy(result.admissions, string(result.raw)))
+						result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, finalDraw, opened, linkview.Policy(admissions, string(result.raw)))
 					}
 				}
 			}
@@ -395,6 +430,74 @@ func (m *Model) work(read, render bool) tea.Cmd {
 		})
 	}
 }
+
+// admit checks the visible links until publishAt. Admissions that finish
+// later arrive on the returned channel instead.
+func (m *Model) admit(ctx context.Context, batch []string, publishAt time.Time) (filelink.Admissions, <-chan filelink.Admissions) {
+	if len(batch) == 0 {
+		return nil, nil
+	}
+	done := make(chan filelink.Admissions, 1)
+	if !m.jobs.spawn(func(ctx context.Context) { done <- m.opts.Navigation.AdmitDestinations(ctx, batch) }) {
+		return nil, nil
+	}
+	timer := time.NewTimer(max(0, publishAt.Sub(m.now())))
+	defer timer.Stop()
+	select {
+	case admitted := <-done:
+		return admitted, nil
+	case <-timer.C:
+		return nil, done
+	case <-ctx.Done():
+		return nil, nil
+	}
+}
+
+func (m *Model) resetLinkAdmissions() {
+	m.linkEpoch++
+	m.admissions, m.observed, m.checking = nil, nil, nil
+}
+
+func (m *Model) recordLinkAdmissions(batch []string, admitted filelink.Admissions) {
+	if m.observed == nil {
+		m.observed = make(map[string]bool, len(batch))
+	}
+	for _, target := range batch {
+		delete(m.checking, target)
+		m.observed[target] = true
+	}
+	if len(admitted) != 0 {
+		if m.admissions == nil {
+			m.admissions = make(filelink.Admissions, len(admitted))
+		}
+		maps.Copy(m.admissions, admitted)
+	}
+}
+
+func (m *Model) acceptLinkBatch(msg resultMsg) tea.Cmd {
+	if len(msg.linkBatch) == 0 || msg.linkEpoch != m.linkEpoch || msg.snapshot.Key != m.snapshot.Key {
+		return m.work(false, false)
+	}
+	if msg.admitting == nil {
+		m.recordLinkAdmissions(msg.linkBatch, msg.admissions)
+		// A resize can discard the layout without invalidating the checks.
+		if msg.gen != m.gen && len(msg.admissions) != 0 {
+			m.pendingRender = true
+		}
+		return m.work(false, false)
+	}
+	if m.checking == nil {
+		m.checking = make(map[string]bool, len(msg.linkBatch))
+	}
+	for _, target := range msg.linkBatch {
+		m.checking[target] = true
+	}
+	key, epoch, batch, admitting := msg.snapshot.Key, msg.linkEpoch, msg.linkBatch, msg.admitting
+	return tea.Batch(m.work(false, false), func() tea.Msg {
+		return admissionsMsg{key: key, epoch: epoch, batch: batch, admissions: <-admitting}
+	})
+}
+
 func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	if m.closed {
 		return m, nil
@@ -447,7 +550,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case resultMsg:
 		m.busy = false
 		if msg.gen != m.gen {
-			return m, m.work(false, false)
+			return m, m.acceptLinkBatch(msg)
 		}
 		keepTop := msg.view != nil && m.sameTopRow(msg.view, msg.snapshot.Start)
 		// Cached rerendering says nothing about source availability. Only an
@@ -457,6 +560,10 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.stale = markdownview.Plain(msg.err.Error())
 			} else {
 				m.stale = ""
+				if msg.snapshot.Key != m.snapshot.Key {
+					m.resetLinkAdmissions()
+					msg.linkEpoch = m.linkEpoch
+				}
 				m.snapshot = msg.snapshot
 				m.raw = msg.raw
 				if msg.snapshot.Changed {
@@ -471,8 +578,6 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.hoverAction = markdownview.Action{}
 			m.view = msg.view
-			m.admissions = msg.admissions
-			m.observed = msg.observed
 			if msg.linksPending {
 				m.pendingRender = true
 			}
@@ -496,11 +601,21 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Mermaid fences left undrawn by the refresh budget: one
 			// render-only continuation on the retained bytes, repeated while
-			// each makes progress.
-			if msg.view.undrawn > 0 && (!msg.continued || msg.view.undrawn < msg.before) {
+			// each makes progress or a render is still drawing.
+			if msg.view.undrawn > 0 && (!msg.continued || msg.view.undrawn < msg.before || msg.view.inflight) {
 				m.pendingContinue, m.pendingRender = true, true
 			}
 		}
+		return m, m.acceptLinkBatch(msg)
+	case admissionsMsg:
+		if msg.epoch != m.linkEpoch || msg.key != m.snapshot.Key {
+			return m, nil
+		}
+		m.recordLinkAdmissions(msg.batch, msg.admissions)
+		if len(msg.admissions) == 0 {
+			return m, nil
+		}
+		m.pendingRender = true
 		return m, m.work(false, false)
 	case tea.KeyPressMsg:
 		if m.linkPrompt != nil {
@@ -513,8 +628,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "r":
 			if m.opts.Navigation != nil {
-				m.observed = nil
-				m.admissions = nil
+				m.resetLinkAdmissions()
 				m.gen++
 				return m, m.work(true, true)
 			}

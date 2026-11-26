@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -19,6 +20,11 @@ import (
 
 var readHostImage = hostintegration.ReadImage
 var openHostURL = hostintegration.OpenURL
+
+// hostFailSafe bounds one wait of a request that only an open view makes (an
+// image upload's reply, a chat image fetch, the mouse encoding answer), where
+// no Ctrl+C reaches that one request. A var for tests.
+var hostFailSafe = 2 * time.Minute
 
 func (m *model) browserHandler() func(*term.Session, session.BrowserRequest, <-chan struct{}) {
 	if m.cfg.BrowserPolicy() == "off" {
@@ -147,7 +153,9 @@ func (m *model) answerBrowser(prompt browserPrompt, accept bool) tea.Cmd {
 		if !accept {
 			err = errors.New("browser request declined on host")
 		} else {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			// OpenURL bounds the opener itself; the holder withdrawing the
+			// request (prompt.done) cancels it.
+			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			select {
 			case <-prompt.done:
@@ -208,18 +216,42 @@ func (m *model) browserPopup(rows int) []string {
 }
 
 // imagePasteKey is a temporary input owner for one Ctrl+V press/release pair.
-// Its fields are used only by the session's ordered input worker. An image
-// consumes both events; a non-image clipboard preserves both encoded events.
+// started and consumed are used only by the session's ordered input worker. An
+// image consumes both events; a non-image clipboard preserves both encoded
+// events. Keys typed while it waits queue behind it: Ctrl+C on its pane stops
+// it (cancelPendingPaste).
 type imagePasteKey struct {
 	*term.Session
 	started  bool
 	consumed bool
 	read     func(context.Context) (hostintegration.ClipboardImage, error)
+	// Retirement belongs either to the first interrupt or to the input
+	// worker when it commits the paste result. A retired paste cannot consume
+	// another Ctrl+C, even while its input worker is unwinding.
+	queued  atomic.Int32
+	retired atomic.Bool
+	stop    chan struct{}
+}
+
+func newImagePasteKey(s *term.Session) *imagePasteKey {
+	return &imagePasteKey{Session: s, read: readHostImage, stop: make(chan struct{})}
+}
+
+func (k *imagePasteKey) pending() bool { return k.queued.Load() > 0 && !k.retired.Load() }
+
+func (k *imagePasteKey) cancel() bool {
+	if !k.retired.CompareAndSwap(false, true) {
+		return false
+	}
+	close(k.stop)
+	return true
 }
 
 func (k *imagePasteKey) SendInput(fallback []byte) error {
 	fallback = bytes.Clone(fallback)
-	return k.PrepareInput(func(ctx context.Context) ([]byte, error) {
+	k.queued.Add(1)
+	err := k.PrepareInput(func(ctx context.Context) ([]byte, error) {
+		defer k.queued.Add(-1)
 		if k.started {
 			if k.consumed {
 				return nil, nil
@@ -227,22 +259,88 @@ func (k *imagePasteKey) SendInput(fallback []byte) error {
 			return fallback, nil
 		}
 		k.started = true
+		if k.retired.Load() {
+			return k.finish(nil, nil)
+		}
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		go func() {
+			select {
+			case <-k.stop:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
 		data, err := k.read(ctx)
+		if k.retired.Load() {
+			return k.finish(nil, nil)
+		}
 		if errors.Is(err, hostintegration.ErrNoImage) {
-			return fallback, nil
+			return k.finish(fallback, nil)
 		}
 		k.consumed = true
 		if err != nil {
-			return nil, fmt.Errorf("image paste: %w", err)
+			return k.finish(nil, err)
 		}
-		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		defer cancel()
-		path, err := k.Host().PasteImage(ctx, data)
+		upload, cancelUpload := context.WithTimeout(ctx, hostFailSafe)
+		defer cancelUpload()
+		path, err := k.Host().PasteImage(upload, data)
 		if err != nil {
-			return nil, fmt.Errorf("image paste: %w", err)
+			return k.finish(nil, err)
 		}
-		return pasteBytes(hostintegration.ImagePathText(path), k.BracketedPaste()), nil
+		return k.finish(pasteBytes(hostintegration.ImagePathText(path), k.BracketedPaste()), nil)
 	})
+	if err != nil {
+		k.queued.Add(-1) // never queued: it never runs
+	}
+	return err
+}
+
+func (k *imagePasteKey) finish(data []byte, err error) ([]byte, error) {
+	if !k.retired.CompareAndSwap(false, true) {
+		k.consumed = true // suppress the remaining packets of the canceled Ctrl+V
+		return nil, errors.New("image paste: canceled")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("image paste: %w", err)
+	}
+	return data, nil
+}
+
+// cancelPendingPaste lets Ctrl+C on the focused pane stop the image pastes
+// still waiting in its input. The key is used up, like the Ctrl+V that started
+// the paste; the next Ctrl+C reaches the program.
+func (m *model) cancelPendingPaste(k tea.Key) bool {
+	mod := k.Mod & ^(tea.ModCapsLock | tea.ModNumLock)
+	if k.IsRepeat || (k.Code != 'c' || mod != tea.ModCtrl) && (k.Code != 0x03 || mod != 0) {
+		return false
+	}
+	p := m.tabs.Focused()
+	if m.focusPalette || p == nil || p.Exited || p.Session == nil {
+		return false
+	}
+	pending := m.pendingPastes(p.Session)
+	canceled := false
+	for _, paste := range pending {
+		canceled = paste.cancel() || canceled
+	}
+	return canceled
+}
+
+// pendingPastes returns a pane's pastes that still wait, forgetting the others.
+func (m *model) pendingPastes(s *term.Session) []*imagePasteKey {
+	kept := m.pastes[s][:0]
+	for _, paste := range m.pastes[s] {
+		if paste.pending() {
+			kept = append(kept, paste)
+		}
+	}
+	if len(kept) == 0 {
+		delete(m.pastes, s)
+		return nil
+	}
+	m.pastes[s] = kept
+	return kept
 }
 
 func (m *model) imageKey(target keyTerminal, k tea.Key, release bool) keyTerminal {
@@ -263,5 +361,10 @@ func (m *model) imageKey(target keyTerminal, k tea.Key, release bool) keyTermina
 	if !ok || s.Host() == nil || !s.Host().CanPasteImage() {
 		return target
 	}
-	return &imagePasteKey{Session: s, read: readHostImage}
+	paste := newImagePasteKey(s)
+	if m.pastes == nil {
+		m.pastes = make(map[*term.Session][]*imagePasteKey)
+	}
+	m.pastes[s] = append(m.pendingPastes(s), paste)
+	return paste
 }

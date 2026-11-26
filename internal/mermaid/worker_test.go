@@ -66,10 +66,20 @@ func TestWorkerFramedSessionSurvivesFailedDiagram(t *testing.T) {
 	}
 }
 
-// At the real limits (64 MiB, 2 s) a compute-bound diagram ends at the
+// leogr's rule: a diagram may draw for 20 s; the view shows its source
+// meanwhile. One exchange with a worker that stops answering ends at the
+// sweep's 2-minute fail-safe.
+func TestRenderDeadlineIsTwentySeconds(t *testing.T) {
+	if renderDeadline != 20*time.Second || exchangeFailSafe != 2*time.Minute {
+		t.Fatalf("render deadline %s, exchange fail-safe %s", renderDeadline, exchangeFailSafe)
+	}
+}
+
+// At the real limits (64 MiB, 20 s) a compute-bound diagram ends at the
 // render deadline: an honest timeout, and the worker keeps serving.
 func TestWorkerRealLimitsTimeOutAComputeBoundDiagram(t *testing.T) {
 	skipUnderRace(t)
+	t.Parallel()
 	var in, out bytes.Buffer
 	for _, source := range []string{denseGraph(), "flowchart LR\n A[Build]-->B[Test]"} {
 		if err := writeFrame(&in, request{protocol, moduleHash(), 80, "grapheme", source}, maxRequest); err != nil {
@@ -88,12 +98,12 @@ func TestWorkerRealLimitsTimeOutAComputeBoundDiagram(t *testing.T) {
 		}
 	}
 	// Without a deadline this graph renders for more than two minutes
-	// (measured: still running at 120 s). Ending within 30 s therefore shows
-	// that the 2 s deadline stopped it, with room for a loaded machine: the
-	// time also covers compiling the module and the second render, which a
-	// 4 s bound did not survive under load.
-	if took := time.Since(start); took > 30*time.Second {
-		t.Fatalf("deadline not enforced: %s", took)
+	// (measured: still running at 120 s). Ending within 30 s after the 20 s
+	// deadline therefore shows that the deadline stopped it, with room for a
+	// loaded machine: the time also covers compiling the module and the
+	// second render. Ending before it would mean a shorter deadline.
+	if took := time.Since(start); took < renderDeadline || took > renderDeadline+30*time.Second {
+		t.Fatalf("render deadline %s not enforced: %s", renderDeadline, took)
 	}
 }
 

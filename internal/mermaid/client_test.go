@@ -115,19 +115,21 @@ func TestClientRendersOnceAndCachesDeterministicOutcomes(t *testing.T) {
 	}
 }
 
-// At the real limits a compute-bound diagram times out; the timeout is kept
-// for the session (no-retry policy), and the worker keeps serving.
+// At the real limits a compute-bound diagram draws until the 20 s render
+// deadline, then times out; the timeout is kept for the session (no-retry
+// policy), and the worker keeps serving.
 func TestClientTimeoutIsNotRetried(t *testing.T) {
 	skipUnderRace(t)
+	t.Parallel()
 	c, _, _ := testClient(t, selfWorker)
 	ctx := context.Background()
-	warm(t, c, 80) // the guard includes startup; measure the render deadline
+	warm(t, c, 80) // measure the render deadline, not the worker's start
 	start := time.Now()
 	if got := c.Render(ctx, denseGraph(), 80, ansi.GraphemeWidth); got.Status != Timeout {
 		t.Fatalf("%+v", got)
 	}
-	if took := time.Since(start); took > renderGuard {
-		t.Fatalf("took %s", took)
+	if took := time.Since(start); took < renderDeadline-time.Second || took > renderDeadline+30*time.Second {
+		t.Fatalf("took %s, want the %s render deadline", took, renderDeadline)
 	}
 	start = time.Now()
 	if got := c.Render(ctx, denseGraph(), 80, ansi.GraphemeWidth); got.Status != Timeout || time.Since(start) > 100*time.Millisecond {
@@ -138,27 +140,51 @@ func TestClientTimeoutIsNotRetried(t *testing.T) {
 	}
 }
 
-// A request still queued at its guard is dropped as busy and not cached.
-func TestClientQueuedRequestIsBusyAtItsGuard(t *testing.T) {
+// A request queued behind a long render waits as long as its caller does: one
+// whose caller gives up is busy and not cached; one whose caller waits draws
+// once the worker is free.
+func TestClientQueuedRequestFollowsItsCaller(t *testing.T) {
 	skipUnderRace(t)
+	t.Parallel()
 	c, _, _ := testClient(t, selfWorker)
 	ctx := context.Background()
-	warm(t, c, 80) // the guard includes startup; measure the render deadline
+	warm(t, c, 80)
 	slow := make(chan Result, 1)
 	go func() { slow <- c.Render(ctx, denseGraph(), 80, ansi.GraphemeWidth) }()
 	for len(c.slot) == 0 {
 		time.Sleep(time.Millisecond)
 	}
-	c.guard.Store(int64(100 * time.Millisecond))
-	if got := c.Render(ctx, simple, 80, ansi.GraphemeWidth); got.Status != Busy {
+	short, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	if got := c.Render(short, simple, 80, ansi.GraphemeWidth); got.Status != Busy {
 		t.Fatalf("%+v", got)
+	}
+	start := time.Now()
+	if got := c.Render(ctx, simple, 80, ansi.GraphemeWidth); got.Status != OK {
+		t.Fatalf("queued request: %+v (busy was cached?)", got)
+	}
+	if took := time.Since(start); took < renderDeadline/2 {
+		t.Fatalf("queued request drew after %s, before the long render ended", took)
 	}
 	if got := <-slow; got.Status != Timeout {
 		t.Fatalf("%+v", got)
 	}
-	c.guard.Store(int64(testGuard))
-	if got := c.Render(ctx, simple, 80, ansi.GraphemeWidth); got.Status != OK {
-		t.Fatalf("busy was cached: %+v", got)
+}
+
+// A closed view starts no worker: a request whose caller has already ended
+// returns at once.
+func TestClientEndedCallerStartsNoWorker(t *testing.T) {
+	c, _, _ := testClient(t, selfWorker)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := c.Render(ctx, simple, 80, ansi.GraphemeWidth); got.Status != Busy {
+		t.Fatalf("%+v", got)
+	}
+	c.mu.Lock()
+	started := c.proc != nil
+	c.mu.Unlock()
+	if started {
+		t.Fatal("an ended caller started a worker")
 	}
 }
 

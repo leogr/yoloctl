@@ -50,14 +50,14 @@ token, the filled command uses `.` in the same directory. [2](#source-2)
 
 ## Sources
 
-1. <a id="source-1"></a> [TUI lifecycle](../../internal/tui/tui.go#L213-L259) — `Run`.
+1. <a id="source-1"></a> [TUI lifecycle](../../internal/tui/tui.go#L214-L260) — `Run`.
 2. <a id="source-2"></a> [Welcome model](../../internal/tui/welcome.go#L63) — `syncWelcome`, `makeWelcomeTip`, `welcomeRows`.
-3. <a id="source-3"></a> [TUI update](../../internal/tui/tui.go#L918-L989) — scheduling and reply handling.
+3. <a id="source-3"></a> [TUI update](../../internal/tui/tui.go#L919-L990) — scheduling and reply handling.
 4. <a id="source-4"></a> [Welcome observation](../../cmd/yoloctl/tui_welcome.go#L24-L66) — host bootstrap and read paths.
 5. <a id="source-5"></a> [Version ordering](../../cmd/yoloctl/tui_welcome.go#L102-L117) — `olderWelcomeRelease`.
 6. <a id="source-6"></a> [Box and chat observation](../../cmd/yoloctl/tui_welcome.go#L119) — `welcomeBoxStatus`.
 7. <a id="source-7"></a> [Welcome mouse interaction](../../internal/tui/welcome_mouse.go#L21) — hit testing, click to fill and drag to copy.
 8. <a id="source-8"></a> [Palette editor](../../internal/tui/palette/palette.go#L114-L127) — `Submit` and whitespace tokenization.
 9. <a id="source-9"></a> [Complete space listing](../../internal/spaceconfig/spaceconfig.go#L182) — `ListStrict`.
-10. <a id="source-10"></a> [Host clipboard](../../internal/tui/tui.go#L297) — `osc52HostMsg` applies the clipboard setting.
+10. <a id="source-10"></a> [Host clipboard](../../internal/tui/tui.go#L298) — `osc52HostMsg` applies the clipboard setting.
 11. <a id="source-11"></a> [Created-space follow](../../internal/tui/space_follow.go#L1) — `followCreated` and `acceptSpaceSwitch` set `saveDefault`.

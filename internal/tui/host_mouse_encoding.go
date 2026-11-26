@@ -104,7 +104,7 @@ func (m *model) syncHostMouseEncoding() tea.Cmd {
 		h.tracking = 0
 		h.epoch++
 		epoch := h.epoch
-		return tea.Sequence(tea.Raw(mouseEncodingRequest(want)), tea.Tick(2*time.Second, func(time.Time) tea.Msg { return mouseEncodingTimeout(epoch) }))
+		return tea.Sequence(tea.Raw(mouseEncodingRequest(want)), tea.Tick(hostFailSafe, func(time.Time) tea.Msg { return mouseEncodingTimeout(epoch) }))
 	}
 	if want := m.wantedMouseTracking(); want != h.tracking {
 		h.pending = true

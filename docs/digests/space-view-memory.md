@@ -77,7 +77,7 @@ breakdown from fixture cgroup files. They use fixtures, not a live VM.
 5. <a id="source-5"></a> [memory.go](../../internal/tui/spaceview/memory.go#L11-L207) — `boxMemory`, `working`, `Model.memory`, `memScale`, `memRow`, details.
 6. <a id="source-6"></a> [model.go](../../internal/tui/spaceview/model.go#L201-L215) — memory sort; `sampleCurrent` at L280-L284.
 7. <a id="source-7"></a> [layout.go](../../internal/tui/spaceview/layout.go#L883-L923) — VM row; card stats L1324-L1331; compact VM row L1409-L1420 and box rows L1433-L1447.
-8. <a id="source-8"></a> [popup.go](../../internal/tui/spaceview/popup.go#L889-L938) — `vmLines`.
+8. <a id="source-8"></a> [popup.go](../../internal/tui/spaceview/popup.go#L901-L950) — `vmLines`.
 9. <a id="source-9"></a> [data.go](../../internal/tui/spaceview/data.go#L157-L163) — aggregate OOM toast.
 10. <a id="source-10"></a> [telemetry_test.go](../../internal/spacetelemetry/telemetry_test.go#L54-L73) — `TestParseMemStat`; `TestCollectorNamesUnreadMemoryCounters` L326-L357.
 11. <a id="source-11"></a> [memory_view_test.go](../../internal/tui/spaceview/memory_view_test.go#L33-L160) — fill, stale and heat regressions.

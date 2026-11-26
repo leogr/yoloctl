@@ -128,7 +128,7 @@ func (m *model) prefixRoute(k tea.Key, modifier bool) (tea.Cmd, bool) {
 		}
 		m.endResize() // any other key leaves the window and takes its route
 	}
-	if k.IsRepeat && m.consumedKeys[keyIdentity(k)] {
+	if k.IsRepeat && m.consumedKeys[keyIdentity(k)] || m.keyOwners[keyIdentity(k)] == nil && m.cancelPendingPaste(k) {
 		return nil, true
 	}
 	if m.panePrefix().matches(k) && !k.IsRepeat {

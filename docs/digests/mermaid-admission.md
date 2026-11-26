@@ -1,6 +1,6 @@
 # Mermaid admission and fidelity corpus
 
-Verification: `9829771d01bcb3ca14f7ec99e8b064f6ac77d4ba` and accompanying changes.
+Verification: `9829771d01bcb3ca14f7ec99e8b064f6ac77d4ba` and accompanying changes; render deadline on `910bb54b2de768615ffda1dff1d11a236b77a04a`.
 
 [FACT] `admit.Check` decides whether a fence may be drawn and never rewrites it:
 the worker gets the original source. It accepts `graph|flowchart` with TD,
@@ -65,7 +65,7 @@ Sugiyama backend (`ascii-dag`), which no source-level test reproduces, so the
 fidelity review and an upstream report cover them. [3](#source-3)
 
 [FACT] Admission sets no size, count, label-length or nesting limit: diagram cost is
-bounded by the worker's 64 MiB and 2 s per diagram and the 120-row drawing cap
+bounded by the worker's 64 MiB and 20 s per diagram and the 120-row drawing cap
 (leogr's approved limits). [1](#source-1) [2](#source-2)
 
 [FACT] The fidelity corpus holds 23 admitted fixtures (the earlier experiment's

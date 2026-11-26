@@ -11,11 +11,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/distribution/reference"
@@ -30,8 +32,24 @@ const layerType = "application/vnd.devcontainers.layer.v1+tar"
 // consult host Docker credentials or forward credentials to redirect targets.
 type Registry struct{ Client *http.Client }
 
+// registryFailSafe bounds each single wait of a registry request that its
+// caller does not end: the connection, the TLS handshake, the response
+// headers, and each body read that receives nothing. A slow download that
+// keeps moving completes. A var for tests.
+var registryFailSafe = 2 * time.Minute
+
 func NewRegistry() *Registry {
-	return &Registry{Client: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.DialContext = (&net.Dialer{Timeout: registryFailSafe, KeepAlive: 30 * time.Second}).DialContext
+	t.TLSHandshakeTimeout = registryFailSafe
+	t.ResponseHeaderTimeout = registryFailSafe
+	return &Registry{Client: &http.Client{Transport: t, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		// net/http may drain a small redirect body before following Location
+		// or returning a policy error. Its contents are unused and the
+		// drain precedes the final body's progress guard.
+		if req.Response != nil {
+			_ = req.Response.Body.Close()
+		}
 		if len(via) >= 5 || req.URL.Scheme != "https" {
 			return fmt.Errorf("unsafe registry redirect")
 		}
@@ -97,11 +115,42 @@ func bounded(r io.Reader, limit int64) ([]byte, error) {
 
 var authPart = regexp.MustCompile(`([a-z]+)="([^"]*)"`)
 
+// stallGuard ends a request whose body receives nothing for registryFailSafe.
+type stallGuard struct {
+	io.Reader
+	timer   *time.Timer
+	stalled atomic.Bool
+}
+
+func (g *stallGuard) Read(p []byte) (int, error) {
+	n, err := g.Reader.Read(p)
+	if n > 0 {
+		g.timer.Reset(registryFailSafe)
+	}
+	if err != nil && g.stalled.Load() {
+		err = fmt.Errorf("registry sent nothing for %v", registryFailSafe)
+	}
+	return n, err
+}
+
+// readBody reads at most limit bytes of body under the fail-safe, then closes
+// it and ends its request (cancel).
+func readBody(body io.ReadCloser, limit int64, cancel context.CancelFunc) ([]byte, error) {
+	defer cancel()
+	defer func() { _ = body.Close() }()
+	g := &stallGuard{Reader: body}
+	g.timer = time.AfterFunc(registryFailSafe, func() { g.stalled.Store(true); cancel() })
+	defer g.timer.Stop()
+	return bounded(g, limit)
+}
+
 func (r *Registry) get(ctx context.Context, endpoint string, limit int64) ([]byte, error) {
 	token := ""
 	for attempt := 0; attempt < 2; attempt++ {
-		req, e := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+		rctx, cancel := context.WithCancel(ctx)
+		req, e := http.NewRequestWithContext(rctx, "GET", endpoint, nil)
 		if e != nil {
+			cancel()
 			return nil, e
 		}
 		req.Header.Set("Accept", "application/vnd.oci.image.manifest.v1+json")
@@ -110,11 +159,13 @@ func (r *Registry) get(ctx context.Context, endpoint string, limit int64) ([]byt
 		}
 		resp, e := r.Client.Do(req)
 		if e != nil {
+			cancel()
 			return nil, e
 		}
 		if resp.StatusCode == 401 && attempt == 0 {
 			challenge := resp.Header.Get("WWW-Authenticate")
 			_ = resp.Body.Close()
+			cancel()
 			if !strings.HasPrefix(strings.ToLower(challenge), "bearer ") {
 				return nil, fmt.Errorf("registry requires authentication; only public Features are supported")
 			}
@@ -130,16 +181,18 @@ func (r *Registry) get(ctx context.Context, endpoint string, limit int64) ([]byt
 			q.Set("service", parts["service"])
 			q.Set("scope", parts["scope"])
 			u.RawQuery = q.Encode()
-			tr, e := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+			tctx, tcancel := context.WithCancel(ctx)
+			tr, e := http.NewRequestWithContext(tctx, "GET", u.String(), nil)
 			if e != nil {
+				tcancel()
 				return nil, e
 			}
 			reply, e := r.Client.Do(tr)
 			if e != nil {
+				tcancel()
 				return nil, e
 			}
-			data, e := bounded(reply.Body, maxMetadata)
-			_ = reply.Body.Close()
+			data, e := readBody(reply.Body, maxMetadata, tcancel)
 			if e != nil {
 				return nil, e
 			}
@@ -164,11 +217,10 @@ func (r *Registry) get(ctx context.Context, endpoint string, limit int64) ([]byt
 		}
 		if resp.StatusCode != 200 {
 			_ = resp.Body.Close()
+			cancel()
 			return nil, fmt.Errorf("registry HTTP %d for %s", resp.StatusCode, req.URL.Path)
 		}
-		data, e := bounded(resp.Body, limit)
-		_ = resp.Body.Close()
-		return data, e
+		return readBody(resp.Body, limit, cancel)
 	}
 	return nil, fmt.Errorf("registry rejected anonymous token")
 }

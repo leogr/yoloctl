@@ -91,7 +91,7 @@ No live VM calibration is recorded here.
 8. <a id="source-8"></a> [activity.go](../../internal/spacetelemetry/activity.go#L19-L239) — thresholds, `DefaultInterval`, `boxActivity.observe`, `busyPair`, `ActivityTracker`; space view's use in data.go `applySample`; chat's `TelemetryInterval` in chatui/telemetry.go.
 9. <a id="source-9"></a> [model.go](../../internal/tui/spaceview/model.go#L278-L294) — `staleAfter`, `sampleCurrent`, `Model.activity`; stall check at L382-L384.
 10. <a id="source-10"></a> [layout.go](../../internal/tui/spaceview/layout.go#L1078-L1113) — `statePill`; hint at L343-L352; `ActiveTone` in theme.go L79-L140.
-11. <a id="source-11"></a> [popup.go](../../internal/tui/spaceview/popup.go#L381-L384) — help legend.
+11. <a id="source-11"></a> [popup.go](../../internal/tui/spaceview/popup.go#L393-L396) — help legend.
 12. <a id="source-12"></a> [stats_test.go](../../internal/session/stats_test.go#L42) — holder counter, admission and bound tests.
 13. <a id="source-13"></a> [telemetry_test.go](../../internal/spacetelemetry/telemetry_test.go#L252-L389) — session-only and unknown-session sampling, unread counters and stalled holders.
 14. <a id="source-14"></a> [activity_test.go](../../internal/tui/spaceview/activity_test.go#L39) — classification, freshness and dot.

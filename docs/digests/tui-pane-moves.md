@@ -73,7 +73,7 @@ join and dock drags.
 
 1. <a id="source-1"></a> [Empty pane](../../internal/tui/placeholder.go#L1-L103) — `openPlaceholder`, `fillPlaceholder`, `inChooser`, `syncPlaceholder`, `placeholderRows`.
 2. <a id="source-2"></a> [Bar buttons and drop](../../internal/tui/panes/layout.go#L273-L439) — `Pane.Empty` at L51; `Layout.Empty`, `Replace`, `barButtons` at L701, `barSegs`, `DropAt`, `SetDrop`.
-3. <a id="source-3"></a> [View and keys](../../internal/tui/tui.go#L1744-L1836) — `View`, `hostCursor`; `handleKey`, `handleChromeClick`, paste in `Update`.
+3. <a id="source-3"></a> [View and keys](../../internal/tui/tui.go#L1745-L1837) — `View`, `hostCursor`; `handleKey`, `handleChromeClick`, paste in `Update`.
 4. <a id="source-4"></a> [Pane keys](../../internal/tui/pane_prefix.go#L393-L461) — `splitAct`, the `!` and `j` rows of `paneKeys`.
 5. <a id="source-5"></a> [Requests](../../internal/tui/tab_requests.go#L39-L78) — `handleTabRequest`; `dispatch` in tui.go.
 6. <a id="source-6"></a> [Session paths](../../internal/tui/frames.go#L20-L155) — `eachSession`, `tabFrame`, `scroller`, `syncFocus`; guards in selection, mouse and geometry files.

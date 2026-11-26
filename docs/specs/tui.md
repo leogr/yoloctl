@@ -464,7 +464,7 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 23. <a id="source-23"></a> [Participant model and effort](../digests/chat-participant-runtime.md).
 24. <a id="source-24"></a> [Chat message references](../digests/chat-references.md).
 25. <a id="source-25"></a> [Chat message filter and mention identities](../digests/chat-filter.md).
-26. <a id="source-26"></a> [Tab strip](../../internal/tui/tui.go#L2408-L2456) — `tabStrip`: the active tab drops the surface background.
+26. <a id="source-26"></a> [Tab strip](../../internal/tui/tui.go#L2409-L2457) — `tabStrip`: the active tab drops the surface background.
 27. <a id="source-27"></a> [Space view memory readings](../digests/space-view-memory.md).
 28. <a id="source-28"></a> [VM disks in space view and `space storage`](../digests/space-view-disks.md).
 29. <a id="source-29"></a> [Chat thread view](../digests/chat-thread-filter.md).

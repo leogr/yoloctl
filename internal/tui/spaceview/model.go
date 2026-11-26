@@ -582,7 +582,7 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.popup != nil {
 		if !ok || tg.kind == tPopupClose {
-			m.popup = nil
+			m.setPopup(nil)
 			return m, nil
 		}
 		if tg.kind == tAction {
@@ -592,7 +592,7 @@ func (m *Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// A click on the dashboard behind the popup only closes it.
-		m.popup = nil
+		m.setPopup(nil)
 		return m, nil
 	}
 	if !ok {

@@ -18,16 +18,19 @@ import (
 )
 
 const (
-	// renderGuard bounds one request from the moment it is enqueued: queue
-	// wait plus the worker's own 2 s render deadline.
-	renderGuard = 4 * time.Second
+	// exchangeFailSafe bounds one exchange with the worker (its start, the
+	// request and the reply) from the moment the request has the worker. The
+	// worker itself ends a render at renderDeadline, so this catches only a
+	// worker that stopped answering.
+	exchangeFailSafe = 2 * time.Minute
 	// restartEvery throttles restarting a crashed or killed worker.
 	restartEvery = 30 * time.Second
 )
 
 // Client runs diagrams in one lazily started worker process. Requests are
-// serialized; each is bounded by renderGuard from enqueue. It never retries a
-// diagram. Methods are safe for concurrent use.
+// serialized: one waits for the worker as long as its caller does, then its
+// exchange is bounded by exchangeFailSafe. It never retries a diagram.
+// Methods are safe for concurrent use.
 type Client struct {
 	// command builds the worker process; nil uses this executable.
 	command func() *exec.Cmd
@@ -35,7 +38,7 @@ type Client struct {
 	// a controller context or an agent box), like follow.
 	hostOnly func() bool
 	now      func() time.Time
-	guard    atomic.Int64 // nanoseconds; renderGuard
+	guard    atomic.Int64 // nanoseconds; exchangeFailSafe
 
 	slot  chan struct{} // one request in flight
 	cache *resultCache
@@ -53,7 +56,7 @@ type Client struct {
 // NewClient returns a Client for this executable's hidden worker.
 func NewClient() *Client {
 	c := &Client{now: time.Now, slot: make(chan struct{}, 1), cache: newResultCache(), hostOnly: onHost}
-	c.guard.Store(int64(renderGuard))
+	c.guard.Store(int64(exchangeFailSafe))
 	return c
 }
 
@@ -159,13 +162,8 @@ func (c *Client) Render(ctx context.Context, source string, width int, method an
 	if r, ok := c.cache.get(key); ok {
 		return r
 	}
-	enqueued, limit := c.now(), time.Duration(c.guard.Load())
-	guard := time.NewTimer(limit)
-	defer guard.Stop()
 	select {
 	case c.slot <- struct{}{}:
-	case <-guard.C:
-		return Result{Status: Busy}
 	case <-ctx.Done():
 		return Result{Status: Busy}
 	}
@@ -173,7 +171,10 @@ func (c *Client) Render(ctx context.Context, source string, width int, method an
 	if r, ok := c.cache.get(key); ok { // filled while this request waited
 		return r
 	}
-	r := c.exchange(ctx, request{protocol, moduleHash(), width, name, source}, enqueued.Add(limit), method)
+	if ctx.Err() != nil { // a closed view starts nothing
+		return Result{Status: Busy}
+	}
+	r := c.exchange(ctx, request{protocol, moduleHash(), width, name, source}, c.now().Add(time.Duration(c.guard.Load())), method)
 	if r.cacheable() {
 		c.cache.put(key, r)
 	}
@@ -199,7 +200,7 @@ func OnHost() bool { return onHost() }
 var errProtocol = errors.New("mermaid worker broke the protocol")
 
 // exchange starts the worker if needed, sends one request and reads its
-// reply, all before deadline (the request's enqueue time plus its guard).
+// reply, all before deadline (the exchange's start plus its fail-safe).
 // Starting runs in the background: if it outlasts the deadline or ctx, the
 // request gives up and a late-started worker still becomes the client's
 // worker (owned, reused, ended by Close), never an orphan.

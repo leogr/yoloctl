@@ -1,6 +1,6 @@
 # Mouse delivery and selection boundaries
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; acknowledgment fail-safe on `910bb54b2de768615ffda1dff1d11a236b77a04a` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] A mouse press records its owner per button. Chrome-owned gestures consume
 their drag and release. Application gestures keep their original surface across
@@ -34,8 +34,8 @@ and drag handling. [1](#source-1) [6](#source-6) [7](#source-7)
 must not overwrite it with cell SGR. Pixel mode needs measured cells and
 advertised host support. Tracking pauses during a units change; DECRPM on the
 input stream acknowledges the boundary. Captured gestures defer unit changes.
-Unconfirmed transitions disable reporting after two seconds with a visible
-notice; reopening restores it. Exit clears tracking and encoding.
+A transition waits for its acknowledgment up to a 2-minute fail-safe, then
+disables reporting with a visible notice; reopening restores it. Exit clears tracking and encoding.
 [20](#source-20) [21](#source-21)
 
 [FACT] Wheel events reach a mouse-reporting application first. Without mouse
@@ -76,7 +76,7 @@ parity in native Ghostty/Kitty. [4](#source-4) [5](#source-5)
 3. <a id="source-3"></a> [mouse.go](../../internal/tui/term/mouse.go#L1-L31) — serialization, ordered input and closed-owner handling.
 4. <a id="source-4"></a> [mouse_test.go](../../internal/tui/mouse_test.go#L1-L233) — real PTY gesture and console tests.
 5. <a id="source-5"></a> [mouse_test.go](../../internal/terminal/mouse_test.go#L1) — independent wire bytes, pixel rejection and native Shift-state/snapshot tests.
-6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L765) — `Update` host acknowledgments; `View` leaves mouse encoding to the adapter.
+6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L766) — `Update` host acknowledgments; `View` leaves mouse encoding to the adapter.
 7. <a id="source-7"></a> [frame.go](../../internal/terminal/frame.go#L18-L96) — `Frame.GridStart` and visible history/grid coordinates.
 8. <a id="source-8"></a> [Ghostty configuration: mouse-shift-capture](https://ghostty.org/docs/config/reference#mouse-shift-capture) — host override semantics, consulted 2026-10-06.
 9. <a id="source-9"></a> [Ghostty XTSHIFTESCAPE](https://ghostty.org/docs/vt/csi/xtshiftescape) — application's request versus host policy, consulted 2026-10-06.

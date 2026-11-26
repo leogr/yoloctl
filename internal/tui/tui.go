@@ -134,8 +134,9 @@ type model struct {
 	chrome              *chromeGesture // a held left press on strip, bar or border
 	confirm             *closeConfirm  // the open "close a running command?" popup
 	keyOwners           map[rune]keyTerminal
-	toastKeys           map[rune]bool // toast-owned physical presses through release
-	consumedKeys        map[rune]bool // keys the prefix layers took, until their release
+	toastKeys           map[rune]bool                      // toast-owned physical presses through release
+	consumedKeys        map[rune]bool                      // keys the prefix layers took, until their release
+	pastes              map[*term.Session][]*imagePasteKey // image pastes a Ctrl+C on their pane may stop
 	hostKitty           bool
 	hostGraphemes       bool // mirrors Bubble Tea's mode-2027 width negotiation
 	hostBlurred         bool

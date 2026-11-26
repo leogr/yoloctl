@@ -8,12 +8,15 @@ and accompanying changes.
 Cluster stand-ins verified on `eace98ecbb1991693f7b8629d8bc6d95452b3cad`
 and accompanying changes.
 
+Render deadline and exchange fail-safe verified on `910bb54b2de768615ffda1dff1d11a236b77a04a`
+and accompanying changes.
+
 [FACT] `yoloctl __mermaid-worker` is dispatched before any CLI, controller or
 terminal initialization. Outside the host CLI context (a controller context,
 its context file, or an agent box) it exits 2 before reading anything;
 otherwise it serves length-framed JSON requests on stdin until it closes. One wazero runtime with a 64 MiB guest limit compiles the embedded
-artifact once; each request runs in a fresh module instance with a 2 s
-deadline, no environment, preopens or host handles, stdout bounded to 256 KiB
+artifact once; each request runs in a fresh module instance with a 20 s
+deadline (the view shows the source meanwhile), no environment, preopens or host handles, stdout bounded to 256 KiB
 and stderr to 4 KiB. The worker's Go heap targets 256 MiB (soft). Requests are
 checked strictly (protocol version, artifact hash, width 1–4096, width method,
 nonempty UTF-8 source without controls, in a request frame of at most 1 MiB,
@@ -47,11 +50,12 @@ run the renderer split or cut is a renderer failure, so the source shows.
 
 [FACT] `Client` starts one worker lazily (minimal environment, own process
 group, 1 s wait delay, discarded stderr), only on the host. Requests are
-serialized; a guard of 4 s from enqueue covers queue wait, worker startup and
-the reply. A start already running when its request gives up still becomes
+serialized: one waits for the worker as long as its caller does (a caller
+already ended starts nothing), then a 2-minute fail-safe from the exchange's
+start covers worker startup, the request and the reply. A start already running when its request gives up still becomes
 the client's worker (ended by `Close`); one not yet begun when its request gave
 up, or requested before a `Close`, never begins. A
-request still queued at its guard is `renderer busy`; a worker that goes away
+request whose caller gives up while it waits is `renderer busy`; a worker that goes away
 or does not answer in time is killed (process group) and reported `renderer
 unavailable`; a reply that breaks the framing, JSON, protocol or drawing checks
 is an internal error and also replaces the worker. A crashed or killed worker restarts at most once per 30 s.
@@ -63,15 +67,15 @@ No diagram is retried automatically. [4](#source-4) [5](#source-5)
 keys sha256 over the artifact hash, width method, source and width. It keeps
 drawings, too wide/tall, parse errors and, as a no-retry policy, timeouts and
 renderer failures; busy, unavailable and internal outcomes are never cached.
-Under `-race` the tests that assert the real 2 s/4 s limits are skipped.
+Under `-race` the tests that assert the real render deadline are skipped.
 [4](#source-4) [5](#source-5)
 
 ## Sources
 
 1. <a id="source-1"></a> [Dispatch](../../cmd/yoloctl/main.go#L54) — early `mermaid.WorkerArgument`; internal/mermaid/worker_main.go `WorkerMain`.
-2. <a id="source-2"></a> [Worker](../../internal/mermaid/worker.go#L31) — `runWorker`, `render` (L80).
+2. <a id="source-2"></a> [Worker](../../internal/mermaid/worker.go#L36) — `runWorker`, `render` (L85).
 3. <a id="source-3"></a> [Protocol and checks](../../internal/mermaid/protocol.go#L177) — `verifyDrawing`, `Result.valid`, `request.valid`, frames.
-4. <a id="source-4"></a> [Client and cache](../../internal/mermaid/client.go#L147) — `Render`, `exchange`, `startLocked` (L82), `onHost`; cache.go `resultCache` (L36).
+4. <a id="source-4"></a> [Client and cache](../../internal/mermaid/client.go#L150) — `Render`, `exchange`, `startLocked` (L89), `onHost`; cache.go `resultCache` (L36).
 5. <a id="source-5"></a> [Regressions](../../internal/mermaid/client_test.go#L1) — client cache/timeout/busy/hung-worker/protocol/host/too-tall/LRU and cancel-without-throttle tests; worker_test.go controlled trap, real-limit timeout, deadline and output bounds.
 6. <a id="source-6"></a> [Renderer width result](../../third_party/mermaid-text/patches/10-fit-strict-width-with-blank-margin.patch#L26) — `fit_strict_width`; internal/mermaid/half_width_test.go checks the embedded worker at follow pane widths.
 7. <a id="source-7"></a> [Cluster stand-ins](../../internal/mermaid/standins.go#L1) — `standsIn`, `withStandIns`, `restoreStandIns`; cluster_width_test.go checks the real worker in both methods for VS16, keycap, ZWJ, skin-tone, wide, flag, CJK and accent labels, the screenshot flowchart, a mark after `:`, `--x` and `--o`, and a 👍🏽 run wrapped at 17 columns.

@@ -22,10 +22,15 @@ type workerLimits struct {
 	stdout   int
 }
 
+// renderDeadline is how long one diagram may draw (leogr): the view shows the
+// source meanwhile and the drawing replaces it if it ends in time; after it
+// the source stays, as a cached renderer timeout.
+const renderDeadline = 20 * time.Second
+
 // RunWorker serves private framed requests. Call only in the owned host child:
 // the guest has a hard 64 MiB ceiling; Go's 256 MiB heap target is soft.
 func RunWorker(ctx context.Context, in io.Reader, out io.Writer) error {
-	return runWorker(ctx, in, out, workerLimits{1024, 2 * time.Second, MaxDrawing})
+	return runWorker(ctx, in, out, workerLimits{1024, renderDeadline, MaxDrawing})
 }
 
 func runWorker(ctx context.Context, in io.Reader, out io.Writer, limits workerLimits) error {

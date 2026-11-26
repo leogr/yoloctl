@@ -63,7 +63,7 @@ clears when the palette was already closed. [4](#source-4) [7](#source-7) [8](#s
 
 1. <a id="source-1"></a> [Notice records](../../internal/tui/log_notices.go#L19) — `noticeRecord`, `noticeLineOptions`, `noticeFooter`.
 2. <a id="source-2"></a> [Notice regressions](../../internal/tui/log_notices_test.go#L23) — error-level refusal, escaping, bounds, shared light/dark theme.
-3. <a id="source-3"></a> [TUI](../../internal/tui/tui.go#L299) — `updateTerminalColors`, `startPane`, background response, `inputLine`.
+3. <a id="source-3"></a> [TUI](../../internal/tui/tui.go#L300) — `updateTerminalColors`, `startPane`, background response, `inputLine`.
 4. <a id="source-4"></a> [Terminal notices](../../internal/tui/term/log_notices.go#L16) — `SetLogPalette`, `logNoticeOptions`; console.go `Run`, `ShowError`, `pump`; session.go `writeExitBanner`.
 5. <a id="source-5"></a> [Toast roles](../../internal/tui/spaceview/log_notices.go#L5) — `Theme.LogTone`.
 6. <a id="source-6"></a> [Toast regressions](../../internal/tui/spaceview/log_notices_test.go#L10) — semantic roles in both themes.

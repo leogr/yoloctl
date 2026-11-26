@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -20,26 +21,35 @@ import (
 // it drew from its cache at once. Tests with a render cost use synctest so
 // rendering and the refresh deadline share one clock.
 type fakeRenderer struct {
+	mu     sync.Mutex
 	cost   time.Duration
 	busy   bool
 	cached map[string]bool
 	rows   int // drawing rows; 0 means one
 	calls  []string
 	widths []int
+	fresh  int // renders that were not answered from the cache
 }
 
 func (f *fakeRenderer) Render(ctx context.Context, source string, width int, _ ansi.Method) mermaid.Result {
+	f.mu.Lock()
 	f.calls, f.widths = append(f.calls, source), append(f.widths, width)
 	if f.cached[source] {
+		f.mu.Unlock()
 		return mermaid.Result{Status: mermaid.OK, Lines: f.drawing(source)}
 	}
-	if f.cost > 0 {
+	f.fresh++
+	cost := f.cost
+	f.mu.Unlock()
+	if cost > 0 {
 		select {
 		case <-ctx.Done():
 			return mermaid.Result{Status: mermaid.Busy}
-		case <-time.After(f.cost):
+		case <-time.After(cost):
 		}
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.busy {
 		return mermaid.Result{Status: mermaid.Busy}
 	}
@@ -49,6 +59,8 @@ func (f *fakeRenderer) Render(ctx context.Context, source string, width int, _ a
 	f.cached[source] = true
 	return mermaid.Result{Status: mermaid.OK, Lines: f.drawing(source)}
 }
+
+func (f *fakeRenderer) freshRenders() int { f.mu.Lock(); defer f.mu.Unlock(); return f.fresh }
 
 func (f *fakeRenderer) drawing(source string) []string {
 	lines := []string{"drawn " + strings.Fields(source)[2]}
@@ -126,15 +138,16 @@ func TestFollowContinuesUndrawnFencesWhileItProgresses(t *testing.T) {
 		for n := range 5 {
 			text.WriteString(fence(n))
 		}
-		// Each refresh has 5 s: one 3 s render, then the next is cut at 5 s;
-		// continuations draw the rest without any read.
+		// Each refresh shows the document after 5 s: one 3 s render, and the
+		// next still drawing; continuations wait for it and draw the rest
+		// without any read, each source rendered once.
 		m := mermaidModel(t, text.String(), r)
 		rows, notes := drawn(m)
 		if len(rows) != 5 || len(notes) != 0 || m.view.undrawn != 0 {
 			t.Fatalf("rows %q notes %q", rows, notes)
 		}
-		if len(r.calls) != 2+3+4+5+5 { // each refresh: the cached ones, one drawn, one cut
-			t.Fatalf("%d renders: %q", len(r.calls), r.calls)
+		if r.freshRenders() != 5 {
+			t.Fatalf("%d renders for 5 sources: %q", r.freshRenders(), r.calls)
 		}
 	})
 }
@@ -154,21 +167,62 @@ func TestDrawKeepsTheRefreshWithinItsTotalBudget(t *testing.T) {
 	})
 }
 
-func TestFollowStopsAContinuationThatMakesNoProgress(t *testing.T) {
+// A diagram that draws longer than a refresh (6 s here, under the renderer's
+// 20 s) shows its source at 5 s and its drawing when the render ends: the
+// render is not cut at the budget, and no continuation starts it again.
+func TestFollowDrawsARenderThatOutlastsTheRefresh(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		r := &fakeRenderer{cost: 6 * time.Second}
-		m := mermaidModel(t, fence(1)+fence(2)+fence(3), r)
-		// Every render is cut at 5 s: the continuation leaves as many undrawn,
-		// so the chain stops, said so.
-		rows, notes := drawn(m)
-		if len(rows) != 0 || strings.Join(notes, "|") != strings.Join([]string{noteStalled, noteStalled, noteStalled}, "|") || len(r.calls) != 2 {
-			t.Fatalf("rows %q notes %q renders %d", rows, notes, len(r.calls))
+		path := fixtureDir(t) + "/doc.md"
+		writeFixture(t, path, []byte(fence(1)+fence(2)+fence(3)))
+		m := New(context.Background(), Options{Reader: HostReader{Path: path}, Path: path, Format: Markdown, Mermaid: r})
+		t.Cleanup(m.Close)
+		_, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+		start := time.Now()
+		msg, ok := cmd().(resultMsg)
+		if !ok || time.Since(start) != drawBudget {
+			t.Fatalf("first view after %s, want %s", time.Since(start), drawBudget)
 		}
-		// r retries: a read plus a render, a fresh chain.
-		r.cost = time.Second
-		applyWork(t, m, key(m, 'r', 0))
-		if rows, notes := drawn(m); len(rows) != 3 || len(notes) != 0 {
-			t.Fatalf("after r: rows %q notes %q", rows, notes)
+		_, next := m.Update(msg)
+		if rows, notes := drawn(m); len(rows) != 0 || strings.Join(notes, "|") != strings.Join([]string{noteDrawing, noteDrawing, noteDrawing}, "|") {
+			t.Fatalf("first view: rows %q notes %q", rows, notes)
+		}
+		applyWork(t, m, next)
+		if rows, notes := drawn(m); len(rows) != 3 || len(notes) != 0 || r.freshRenders() != 3 {
+			t.Fatalf("rows %q notes %q renders %d", rows, notes, r.freshRenders())
+		}
+	})
+}
+
+// A render longer than two refreshes keeps its continuations going: one that
+// draws nothing new while the render runs does not stop the chain.
+func TestFollowWaitsForARenderLongerThanTwoRefreshes(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := &fakeRenderer{cost: 12 * time.Second}
+		m := mermaidModel(t, fence(1), r)
+		if rows, notes := drawn(m); len(rows) != 1 || len(notes) != 0 || r.freshRenders() != 1 {
+			t.Fatalf("rows %q notes %q renders %d", rows, notes, r.freshRenders())
+		}
+	})
+}
+
+// A continuation that makes no progress, with nothing still drawing, stops
+// the chain and says so; r starts afresh.
+func TestDrawStallsOnlyWithoutProgressOrARunningRender(t *testing.T) {
+	r := &fakeRenderer{}
+	ended, cancel := context.WithCancel(context.Background())
+	cancel()
+	d := drawing{renderer: r, now: time.Now, budget: drawBudget, before: 1}
+	got := d.draw(ended, []string{"flowchart LR\na-->b"}, 80, ansi.GraphemeWidth)
+	if got.undrawn != 1 || got.inflight || got.diagrams[0].Note != noteStalled {
+		t.Fatalf("%+v", got)
+	}
+	synctest.Test(t, func(t *testing.T) {
+		r := &fakeRenderer{cost: 6 * time.Second}
+		d := drawing{renderer: r, now: time.Now, budget: drawBudget, before: 1}
+		got := d.draw(t.Context(), []string{"flowchart LR\na-->b"}, 80, ansi.GraphemeWidth)
+		if got.undrawn != 1 || !got.inflight || got.diagrams[0].Note != noteDrawing {
+			t.Fatalf("a running render is progress: %+v", got)
 		}
 	})
 }

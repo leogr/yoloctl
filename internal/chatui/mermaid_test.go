@@ -21,15 +21,17 @@ type fakeDiagrams struct {
 	mu      sync.Mutex
 	cache   map[diagramKey]mermaid.Result
 	renders []diagramKey
+	ctxs    []context.Context
 	rows    int
 	busy    bool
 }
 
-func (f *fakeDiagrams) Render(_ context.Context, source string, width int, _ ansi.Method) mermaid.Result {
+func (f *fakeDiagrams) Render(ctx context.Context, source string, width int, _ ansi.Method) mermaid.Result {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	k := diagramKey{source, width}
 	f.renders = append(f.renders, k)
+	f.ctxs = append(f.ctxs, ctx)
 	if f.busy {
 		return mermaid.Result{Status: mermaid.Busy}
 	}
@@ -145,6 +147,22 @@ func TestChatDrawsAVisibleFenceAndQuotesItsSource(t *testing.T) {
 	got, _, why := m.quoteSource(i)
 	if why != "" || len(got) == 0 || joinQuote(got) != chatFence(1) {
 		t.Fatalf("quote %q (%s)", joinQuote(got), why)
+	}
+}
+
+// A render runs under the view's context, so closing the view stops a render
+// that waits for the worker and starts none.
+func TestChatRendersUnderTheViewContext(t *testing.T) {
+	f := &fakeDiagrams{}
+	m := diagramChat(t, f, 80, 24)
+	arriveText(m, "a", chatFence(1))
+	settle(t, m, nil)
+	if len(f.ctxs) != 1 || f.ctxs[0].Err() != nil {
+		t.Fatalf("renders %d", len(f.ctxs))
+	}
+	m.CloseLinks()
+	if f.ctxs[0].Err() == nil {
+		t.Fatal("render context outlives the view")
 	}
 }
 

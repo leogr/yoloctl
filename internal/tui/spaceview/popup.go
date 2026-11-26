@@ -32,6 +32,7 @@ type popup struct {
 	scroll  int
 	actions []popupAction
 	cmd     tea.Cmd
+	cancel  context.CancelFunc // ends the details command when the popup goes
 }
 
 type popupAction struct {
@@ -48,7 +49,18 @@ type popupLoadedMsg struct {
 
 var popupSeq int
 
-const popupTimeout = 30 * time.Second
+// popupFailSafe bounds a popup's details command when nothing else ends it;
+// closing or replacing the popup cancels it first. A var for tests.
+var popupFailSafe = 2 * time.Minute
+
+// setPopup shows p (nil closes the popup); the popup it replaces stops its
+// details command.
+func (m *Model) setPopup(p *popup) {
+	if old := m.popup; old != nil && old != p && old.cancel != nil {
+		old.cancel()
+	}
+	m.popup = p
+}
 
 func (m *Model) show(p *popup) {
 	popupSeq++
@@ -59,14 +71,15 @@ func (m *Model) show(p *popup) {
 		if ctx == nil {
 			ctx = context.Background()
 		}
+		c, cancel := context.WithTimeout(ctx, popupFailSafe)
+		p.cancel = cancel
 		p.cmd = func() tea.Msg {
-			c, cancel := context.WithTimeout(ctx, popupTimeout)
 			defer cancel()
 			raw, err := run(c, args...)
 			return popupLoadedMsg{id: id, raw: raw, err: err}
 		}
 	}
-	m.popup = p
+	m.setPopup(p)
 	m.hover = "" // the dashboard behind a popup is inert
 }
 
@@ -99,7 +112,7 @@ func (m *Model) popupKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	p := m.popup
 	switch k.String() {
 	case "esc", "q", "ctrl+c":
-		m.popup = nil
+		m.setPopup(nil)
 		if k.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
@@ -115,7 +128,7 @@ func (m *Model) popupKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(p.actions) > 0 {
 			return m, p.actions[0].do(m)
 		}
-		m.popup = nil
+		m.setPopup(nil)
 	default:
 		for _, a := range p.actions {
 			if a.key != "" && a.key == k.String() {
@@ -128,7 +141,7 @@ func (m *Model) popupKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func closeAnd(cmd func(m *Model) tea.Cmd) func(m *Model) tea.Cmd {
 	return func(m *Model) tea.Cmd {
-		m.popup = nil
+		m.setPopup(nil)
 		return cmd(m)
 	}
 }
@@ -281,9 +294,8 @@ func (m *Model) openPort(id string) {
 			url := "http://" + urlHost(port.HostIP) + ":" + published
 			p.actions = append(p.actions, popupAction{"o", "open " + url, func(m *Model) tea.Cmd {
 				return func() tea.Msg {
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-					defer cancel()
-					return urlOpenedMsg{url: url, err: m.opts.OpenURL(ctx, url)}
+					// OpenURL bounds the opener itself.
+					return urlOpenedMsg{url: url, err: m.opts.OpenURL(context.Background(), url)}
 				}
 			}})
 		}

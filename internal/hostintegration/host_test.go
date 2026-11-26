@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func imageFixture(t *testing.T) []byte {
@@ -167,5 +168,61 @@ func TestHostImageReaderFallsBackToX11WithoutWaylandTool(t *testing.T) {
 	t.Setenv("DISPLAY", "")
 	if _, err := ReadImage(context.Background()); !errors.Is(err, ErrNoImage) {
 		t.Fatalf("no usable display should keep Ctrl+V: %v", err)
+	}
+}
+
+func TestDarwinAliasExpiryStopsTheClipboardRead(t *testing.T) {
+	dir := t.TempDir()
+	record := filepath.Join(dir, "clipboard-calls")
+	t.Setenv("YOLOCTL_TEST_CLIPBOARD_CALLS", record)
+	data := imageFixture(t)
+	t.Setenv("YOLOCTL_TEST_CLIPBOARD_PNG", "«data PNGf"+hex.EncodeToString(data)+"»")
+
+	for _, stall := range []bool{true, false} {
+		name := "ordinary non-alias"
+		if stall {
+			name = "expired alias query"
+		}
+		t.Run(name, func(t *testing.T) {
+			tool := filepath.Join(dir, "fixture-osascript")
+			alias := "exit 1"
+			if stall {
+				alias = "exec /bin/sleep 30"
+			}
+			script := `#!/bin/sh
+case "$2" in
+"POSIX path of (the clipboard as alias)")
+	printf 'alias\n' >> "$YOLOCTL_TEST_CLIPBOARD_CALLS"
+	` + alias + `
+	;;
+"get the clipboard as «class PNGf»")
+	printf 'png\n' >> "$YOLOCTL_TEST_CLIPBOARD_CALLS"
+	printf '%s\n' "$YOLOCTL_TEST_CLIPBOARD_PNG"
+	;;
+*) exit 2;;
+esac
+`
+			if err := os.WriteFile(tool, []byte(script), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(record, nil, 0600); err != nil {
+				t.Fatal(err)
+			}
+			old := failSafe
+			failSafe = 300 * time.Millisecond
+			t.Cleanup(func() { failSafe = old })
+			got, err := readDarwinClipboard(t.Context(), tool)
+			calls, readErr := os.ReadFile(record)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if stall {
+				if !errors.Is(err, context.DeadlineExceeded) || len(got.Data) != 0 || string(calls) != "alias\n" {
+					t.Fatalf("expired alias fell through: calls %q, image %d bytes, err %v", calls, len(got.Data), err)
+				}
+			} else if err != nil || !bytes.Equal(got.Data, data) || string(calls) != "alias\npng\n" {
+				t.Fatalf("ordinary fallback: calls %q, image %d bytes, err %v", calls, len(got.Data), err)
+			}
+		})
 	}
 }

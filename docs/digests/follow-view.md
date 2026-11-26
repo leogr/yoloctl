@@ -59,8 +59,10 @@ starting at a shared wrap boundary. Positions remain best-effort and clamp
 after rewrites. Rename-save follows the pinned name. Failures keep the last
 display marked unavailable until an actual successful read. Cached
 resize/source/theme rendering does not clear that state. Changed content clears
-selection.
-[2](#source-2) [4](#source-4)
+selection. File-link checks can finish after publication. An unfinished link
+stays inert, and a successful reply survives a refresh or resize of the same
+snapshot. Rewrites and manual refresh discard the previous checks.
+[2](#source-2) [4](#source-4) [13](#source-13)
 
 [FACT] Markdown parsing/layout/copy geometry comes from `markdownview`, with
 unlimited document rows for this caller; chat retains its default row bound.
@@ -100,14 +102,15 @@ and light themes. [7](#source-7) [8](#source-8)
 1. <a id="source-1"></a> [CLI and completion](../../cmd/yoloctl/follow.go#L71) — `newFollowCmd`, `absoluteFollowPath`, `currentFollowGrants`, `completeFollowPaths`. `TestFollowCompletionOpensWorkdirRelativePath` in cmd/yoloctl/follow_test.go covers the Cobra reply and opening its relative result.
 2. <a id="source-2"></a> [Sources and transport](../../internal/followview/source.go#L26) — limits, `HostReader.Read`, `VMReader.Read`, `VMReader.call`, `Within`.
 3. <a id="source-3"></a> [VM descriptor reader](../../internal/followview/reader.py#L15) — `open_directory`, `open_selected`, `read`, `listing`.
-4. <a id="source-4"></a> [View and job ownership](../../internal/followview/model.go#L95) — `renderFile`, `jobs`, `Model.Update`, `scroll`, `sameTopRow`, `captureAnchor`, `placeAnchor`, `View`, `Run`. Wheel and reflow regressions in `internal/followview/wheel_test.go`.
+4. <a id="source-4"></a> [View and job ownership](../../internal/followview/model.go#L97) — `renderFile`, `jobs`, `Model.Update`, `scroll`, `sameTopRow`, `captureAnchor`, `placeAnchor`, `View`, `Run`. Wheel and reflow regressions in `internal/followview/wheel_test.go`.
 5. <a id="source-5"></a> [Source regressions](../../internal/followview/source_test.go#L38) — temporary-file and fixed-reader transport tests; model_test.go covers rendering/input/state and cmd/yoloctl/follow_test.go covers selection/completion.
 6. <a id="source-6"></a> [Shared layout option](../../internal/markdownview/document.go#L1) — `LayoutOptions.UnlimitedRows`; internal/tui/confirm_close.go `closeEffect` and tui.go `opensLiveSurface` own pane routing/closing.
-7. <a id="source-7"></a> [Body row painting](../../internal/followview/model.go#L859) — `View`, body `Paint` fill.
+7. <a id="source-7"></a> [Body row painting](../../internal/followview/model.go#L973) — `View`, body `Paint` fill.
 8. <a id="source-8"></a> [Background regression](../../internal/followview/background_test.go#L18) — `TestBodyRowsKeepTerminalBackground`.
 9. <a id="source-9"></a> [Reopen classification](../../internal/tui/reopen_args.go#L25) — `parseReopenView` `follow` case, `pinReopenArgs`; `viewEndAction` in reattach.go; follow cases in reopen_args_test.go, reopen_test.go and reopen_launch_test.go.
-10. <a id="source-10"></a> [Copy on release](../../internal/followview/model.go#L754) — `copyText`, `clearSelection`, `mouse`; `TestDragCopiesOnReleaseAndControlsStayInert`, `TestReleaseCopyFollowsChatPolicy`, `TestClearingMidDragEndsTheGesture` in model_test.go; host callback in cmd/yoloctl/follow.go applies `seams.clipboard` and OSC 52 evaluation.
+10. <a id="source-10"></a> [Copy on release](../../internal/followview/model.go#L868) — `copyText`, `clearSelection`, `mouse`; `TestDragCopiesOnReleaseAndControlsStayInert`, `TestReleaseCopyFollowsChatPolicy`, `TestClearingMidDragEndsTheGesture` in model_test.go; host callback in cmd/yoloctl/follow.go applies `seams.clipboard` and OSC 52 evaluation.
 
 11. <a id="source-11"></a> [Compact follow rows](../../internal/followview/table_compact.go#L1) — `toggleTableRows`, `followKey`; table_compact_test.go.
 
-12. <a id="source-12"></a> [Path title](../../internal/followview/model.go#L859) — `Options.Workdir`, `Model.View`, `Within`; cmd/yoloctl/follow.go `newFollowCmd` pins the title base. Header-free viewport/scroll/copy/footer cases in row_layout_test.go; title cases in internal/followview/title_test.go and CLI base/path checks in cmd/yoloctl/follow_test.go.
+12. <a id="source-12"></a> [Path title](../../internal/followview/model.go#L973) — `Options.Workdir`, `Model.View`, `Within`; cmd/yoloctl/follow.go `newFollowCmd` pins the title base. Header-free viewport/scroll/copy/footer cases in row_layout_test.go; title cases in internal/followview/title_test.go and CLI base/path checks in cmd/yoloctl/follow_test.go.
+13. <a id="source-13"></a> [Link admission](../../internal/followview/model.go#L477) — `acceptLinkBatch`, `recordLinkAdmissions` and snapshot checks in `Update`; overlapping refresh, resize and rewrite in publish_test.go.

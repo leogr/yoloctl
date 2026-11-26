@@ -26,7 +26,10 @@ authentication and SHA256 digests. It validates artifact type, manifest/layer
 binding, response sizes and layer checksums. Bounded tar or gzip-tar extraction
 occurs in memory; links, special entries, duplicate paths and traversal fail.
 Files enter a private image-build context and never execute on the host. Registry
-credentials from host Docker configuration are not read. [4](#source-4)
+credentials from host Docker configuration are not read. Connection, TLS,
+headers and stalls during body reads have a two-minute fail-safe. The caller
+can stop the request earlier. Redirects discard intermediate bodies before
+applying the HTTPS and hop-count checks. Redirects that change hosts omit authentication. [4](#source-4)
 
 [FACT] Recursive `dependsOn` expands the installation set. `installsAfter`
 orders already-selected OCI Features. Equal digests/options install once; alias
@@ -110,7 +113,7 @@ upstream Feature or either CPU architecture. [8](#source-8) [9](#source-9) [15](
 1. <a id="source-1"></a> [CLI options](../../cmd/yoloctl/agentbox.go#L882) — create/copy flags.
 2. <a id="source-2"></a> [Plan](../../internal/ocifeature/plan.go#L75) — `Definition`, `Compatible`, `RuntimeRequests`, `Values`, `ApplyOptions`, `Resolve`, `Dockerfile`.
 3. <a id="source-3"></a> [Persistence](../../internal/agentbox/oci_features.go#L10) — `ResolveFeatures`, `FeaturePlan`.
-4. <a id="source-4"></a> [Registry](../../internal/ocifeature/registry.go#L28) — `Parse`, `get`, `Resolve`, `Files`, `unpack`.
+4. <a id="source-4"></a> [Registry](../../internal/ocifeature/registry.go#L30) — `Parse`, `get`, `Resolve`, `Files`, `unpack`.
 5. <a id="source-5"></a> [Capability composition](../../internal/agentbox/compose.go#L55) — `EffectiveCapabilities`.
 6. <a id="source-6"></a> [Completion](../../cmd/yoloctl/completion_features.go#L14) — selected declarations and metadata options.
 7. <a id="source-7"></a> [Advisory cache](../../internal/ocifeature/completion.go#L30) — `remember`, `MetadataForCompletion`, `CachedReferences`.

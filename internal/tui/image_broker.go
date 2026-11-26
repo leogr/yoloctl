@@ -7,7 +7,6 @@ import (
 	"io"
 	"strings"
 	"sync"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/leogr/yoloctl/internal/chatimage"
@@ -242,7 +241,7 @@ func (m *model) answerPreview(msg imageMsg) tea.Cmd {
 		m.sendImage(msg.session, chatimage.Frame{Op: chatimage.OpError, Generation: a.generation, Request: msg.frame.Request, Code: code})
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), imageJobTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), hostFailSafe)
 	job := &imageJob{msg: msg, generation: a.generation, cellW: m.hostGeometry.width, cellH: m.hostGeometry.height, cancel: cancel}
 	b.job = job
 	read := ReadChatArtifact
@@ -260,9 +259,6 @@ func (m *model) answerPreview(msg imageMsg) tea.Cmd {
 	}()
 	return nil
 }
-
-// imageJobTimeout bounds one fetch and decode on the host.
-const imageJobTimeout = 30 * time.Second
 
 // finishImageJob consumes a finished job: a result for a pane that is gone,
 // an old generation or a withdrawn capability is discarded; otherwise the
@@ -343,6 +339,7 @@ func (m *model) endImagePane(s *term.Session) {
 	if job := m.images.job; job != nil && job.msg.session == s {
 		job.cancel()
 	}
+	delete(m.pastes, s)
 	if s.HasImageChannel() {
 		m.images.cache.Clear()
 	}

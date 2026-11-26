@@ -86,7 +86,7 @@ proof.
 1. <a id="source-1"></a> [Shared resolver](../../internal/config/context.go#L107) — `SpaceEnv`, `ResolveSpace`, `SourceEnvironment`.
 2. <a id="source-2"></a> [CLI selection](../../cmd/yoloctl/context.go#L25) — `resolveSpacePositional`, `selectedSpace`.
 3. <a id="source-3"></a> [Switcher](../../internal/tui/space_switch.go#L25) — `initSpace`, `childEnv`, picker, snapshot, `acceptSpaceSwitch`.
-4. <a id="source-4"></a> [TUI](../../internal/tui/tui.go#L185) — `Run`, `dispatch`, `startPane`, `Update`, `suggestionsCommand`, `completePalette`, `contextChip`.
+4. <a id="source-4"></a> [TUI](../../internal/tui/tui.go#L186) — `Run`, `dispatch`, `startPane`, `Update`, `suggestionsCommand`, `completePalette`, `contextChip`.
 5. <a id="source-5"></a> [Completion subprocess](../../internal/tui/yoloctlcli/complete.go#L47) — `Complete`.
 6. <a id="source-6"></a> [Pane bindings](../../internal/tui/pane_prefix.go#L425) — `paneKeys`.
 7. <a id="source-7"></a> [Close confirmation](../../internal/tui/confirm_close.go#L62) — aggregate confirmation, `closeEffect`, `checkConfirm`, labels.
