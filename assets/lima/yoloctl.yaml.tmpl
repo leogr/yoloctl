@@ -141,7 +141,13 @@ provision:
     set -eu -o pipefail
     status=/run/yoloctl-container-stack
     rm -f -- "$status"
-    bin=$(realpath -ms -- "${LIMA_CIDATA_GUEST_INSTALL_PREFIX:-/usr/local}/bin")
+    # Lima installs the guest agent and container stack under the same prefix.
+    if ! bin=$(sed -n 's|^ExecStart=\(/.*\)/lima-guestagent daemon .*|\1|p' /etc/systemd/system/lima-guestagent.service) ||
+       [[ "$bin" != */bin || "$bin" == *$'\n'* || ! -x "$bin/lima-guestagent" ]]; then
+      echo 'yoloctl: cannot identify the Lima container stack install directory' >&2
+      exit 1
+    fi
+    bin=$(realpath -ms -- "$bin")
     debugger="$bin/buildg"
     if [[ ! -e "$debugger" && ! -L "$debugger" ]]; then
       printf '%s\n' "$debugger" > "$status"
@@ -158,11 +164,8 @@ provision:
         debugger_checksum=0bd5ed100fda179043afaa79e77a41931a9c9b95b9333e8ea5fd8844e5e165d0
         ;;
     esac
-    archive=
-    # The cidata member name is the same for the default and an override.
-    if [[ -n "${LIMA_CIDATA_MNT:-}" && -n "${LIMA_CIDATA_CONTAINERD_ARCHIVE:-}" ]]; then
-      archive="$LIMA_CIDATA_MNT/$LIMA_CIDATA_CONTAINERD_ARCHIVE"
-    fi
+    # Both default and override archives use this member of Lima's Linux seed.
+    archive=/mnt/lima-cidata/nerdctl-full.tgz
     if [[ ! -f "$archive" ]] || ! digest=$(sha256sum < "$archive"); then
       echo 'yoloctl: cannot identify the selected Lima container archive' >&2
       exit 1

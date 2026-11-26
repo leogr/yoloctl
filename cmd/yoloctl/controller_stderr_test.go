@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -15,11 +16,101 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/leogr/yoloctl/internal/controller"
+	"github.com/leogr/yoloctl/internal/logging"
+	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
+	"github.com/leogr/yoloctl/pkg/prettylog"
 	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 )
+
+func TestHostControllerAttachRendersLimaStderr(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("YOLOCTL_DEBUG", "")
+	dir := t.TempDir()
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("YOLOCTL_TEST_CONTROLLER_FRAMES", filepath.Join(dir, "frames"))
+	const message = "provisioning scripts should not reference the LIMA_CIDATA variables"
+	const upstream = `time="2026-11-26T17:28:17+01:00" level=warning msg="` + message + `"` + "\n"
+	const ordinary = "ordinary SSH stderr\r\n"
+	const unrecognized = "time=invalid level=warning msg=raw\n"
+	const bareSuffix = `time="2026-11-26T17:28:17+01:00" level=debug msg="probe" trailing plain text` + "\n"
+	const badQuote = `time="2026-11-26T17:28:17+01:00" level=debug msg="probe" error="unfinished` + "\n"
+	const terminalBytes = "session\r\n\x1b[2C"
+	script := `#!/bin/sh
+test "$1" = shell || exit 2
+printf '%s' '` + upstream + `' >&2
+printf '%s\n' 'time="2026-11-26T17:28:17+01:00" level=error msg="could not open \"socket\"" error="no such file"' >&2
+printf '%s' '` + bareSuffix + badQuote + `' >&2
+printf 'ordinary SSH stderr\r\ntime=invalid level=warning msg=raw\nlast fragment' >&2
+cat "$YOLOCTL_TEST_CONTROLLER_FRAMES"
+exec cat >/dev/null
+`
+	if err := os.WriteFile(filepath.Join(dir, "limactl"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	boot := &spaceconfig.Bootstrap{Name: "work", Bundle: "fixture", Generation: "fixture"}
+	var frames bytes.Buffer
+	wire := controller.NewWire(nil, &frames)
+	for _, frame := range []controller.Frame{
+		{Type: "hello", Hello: &controller.Hello{Protocol: controller.ProtocolVersion, Bundle: boot.Bundle, Space: boot.Name, Generation: boot.Generation}},
+		{Type: "stdout", Data: []byte(terminalBytes)},
+		{Type: "stderr", Data: []byte(upstream)},
+		{Type: "exit"},
+	} {
+		if err := wire.Write(frame); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "frames"), frames.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, method string
+		verbosity    prettylog.Verbosity
+		visible      bool
+	}{
+		{"attach", "box.attach", prettylog.Normal, true},
+		{"private telemetry", "space.telemetry", prettylog.Errors, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr lockedBuffer
+			logger := prettylog.New(&stderr, logging.Presentation(prettylog.Options{
+				Format: prettylog.FormatPlain, Verbosity: tc.verbosity,
+			}))
+			restore := logging.SetLogger(logger)
+			t.Cleanup(func() { _ = logger.Close(); restore() })
+			streams := controller.ClientIO{Out: &stdout, Err: &stderr}
+			if tc.visible {
+				streams.Log = controller.HostLogSink()
+			}
+			req := controller.Request{ID: "lima-attach-stderr-test", Method: tc.method, Space: boot.Name, Dash: -1}
+			if err := callHostController(t.Context(), boot, req, streams); err != nil {
+				t.Fatal(err)
+			}
+			if stdout.String() != terminalBytes {
+				t.Fatalf("controller stdout = %q, want %q", &stdout, terminalBytes)
+			}
+			got := stderr.String()
+			for _, raw := range []string{ordinary, unrecognized, bareSuffix, badQuote, "last fragment"} {
+				if !strings.Contains(got, raw) {
+					t.Fatalf("stderr lost %q: %q", raw, got)
+				}
+			}
+			const rendered = "warning: host>vm: lima: " + message + "\n"
+			if tc.visible {
+				if strings.Count(got, rendered) != 1 || strings.Count(got, upstream) != 1 ||
+					!strings.Contains(got, `error: host>vm: lima: could not open "socket" error="no such file"`+"\n") {
+					t.Fatalf("unexpected attach stderr: %q", got)
+				}
+			} else if strings.Count(got, upstream) != 2 || strings.Contains(got, rendered) {
+				t.Fatalf("private capture changed: %q", got)
+			}
+		})
+	}
+}
 
 // Exercise the actual raw-mode CLI path on a real PTY, then render the captured
 // bytes with the pinned VT. A buffer-only writer test misses kernel ONLCR and

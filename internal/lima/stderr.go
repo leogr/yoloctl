@@ -99,6 +99,17 @@ func RunWithFilteredStderr(cmd *exec.Cmd, stderr io.Writer) error {
 // reader and force it closed shortly after the child exits, so a lingering
 // grandchild can't wedge us.
 func AttachFilteredStderr(cmd *exec.Cmd, stderr io.Writer) func() {
+	return attachStderr(cmd, stderr, nil)
+}
+
+// AttachLoggedStderr uses the same process-owned pipe as AttachFilteredStderr.
+// handle returns true for a line it rendered. Other lines pass through.
+// Debug mode keeps the original child stderr.
+func AttachLoggedStderr(cmd *exec.Cmd, stderr io.Writer, handle func(string) bool) func() {
+	return attachStderr(cmd, stderr, handle)
+}
+
+func attachStderr(cmd *exec.Cmd, stderr io.Writer, handle func(string) bool) func() {
 	if stderr == nil || DebugEnabled() {
 		// Debug / discard: hand stderr straight to the child. Callers pass an
 		// *os.File (os.Stderr or similar), so this stays copier-free too; a
@@ -115,7 +126,7 @@ func AttachFilteredStderr(cmd *exec.Cmd, stderr io.Writer) func() {
 		return func() {}
 	}
 	cmd.Stderr = pw
-	filter := &stderrLineFilter{dst: stderr}
+	filter := &stderrLineFilter{dst: stderr, handle: handle}
 	done := make(chan struct{})
 	go func() {
 		buf := make([]byte, 16*1024)
@@ -153,6 +164,7 @@ func AttachFilteredStderr(cmd *exec.Cmd, stderr io.Writer) func() {
 type stderrLineFilter struct {
 	mu      sync.Mutex
 	dst     io.Writer
+	handle  func(string) bool
 	partial string
 }
 
@@ -169,10 +181,8 @@ func (f *stderrLineFilter) Write(p []byte) (int, error) {
 			break
 		}
 		line := raw[:idx+1]
-		if !isKnownBenignWarning(line) {
-			if _, err := io.WriteString(f.dst, line); err != nil {
-				return 0, err
-			}
+		if err := f.writeLine(line); err != nil {
+			return 0, err
 		}
 		raw = raw[idx+1:]
 	}
@@ -185,10 +195,16 @@ func (f *stderrLineFilter) Flush() {
 	if f.partial == "" {
 		return
 	}
-	if !isKnownBenignWarning(f.partial) {
-		_, _ = io.WriteString(f.dst, f.partial)
-	}
+	_ = f.writeLine(f.partial)
 	f.partial = ""
+}
+
+func (f *stderrLineFilter) writeLine(line string) error {
+	if isKnownBenignWarning(line) || (f.handle != nil && f.handle(line)) {
+		return nil
+	}
+	_, err := io.WriteString(f.dst, line)
+	return err
 }
 
 func isKnownBenignWarning(line string) bool {

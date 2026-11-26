@@ -190,14 +190,19 @@ func TestTemplateDoesNotProvisionRetiredOpenShell(t *testing.T) {
 }
 
 func TestContainerStackRespectsLimaArchiveOverride(t *testing.T) {
-	provision := provisionScript(t, "LIMA_CIDATA_CONTAINERD_ARCHIVE")
+	const marker = "/run/yoloctl-container-stack"
+	const service = "/etc/systemd/system/lima-guestagent.service"
+	const archive = "/mnt/lima-cidata/nerdctl-full.tgz"
+	provision := provisionScript(t, marker)
+	if strings.Contains(provision, "LIMA_CIDATA") {
+		t.Fatal("container provisioning uses an internal Lima variable")
+	}
 	var tmpl struct {
 		Probes []struct{ Mode, Script string }
 	}
 	if err := yaml.Unmarshal(TemplateWithAccountDisk(nil, "", false), &tmpl); err != nil {
 		t.Fatal(err)
 	}
-	const marker = "/run/yoloctl-container-stack"
 	var readiness string
 	for _, probe := range tmpl.Probes {
 		if probe.Mode == "readiness" && strings.Contains(probe.Script, marker) {
@@ -219,41 +224,63 @@ func TestContainerStackRespectsLimaArchiveOverride(t *testing.T) {
 	for _, tc := range []struct {
 		name, archive, debugger string
 		ready, remove           bool
+		pathNerdctl             string
+		missingUnit             bool
 	}{
-		{"pinned", qualifiedArchive, qualifiedDebugger, true, true},
-		{"explicit override", "other archive bytes", "other buildg bytes", true, false},
-		{"pinned with modified buildg", qualifiedArchive, "modified buildg bytes", false, false},
-		{"missing selected archive", "", "unidentified buildg bytes", false, false},
+		{name: "pinned", archive: qualifiedArchive, debugger: qualifiedDebugger, ready: true, remove: true},
+		{name: "earlier nerdctl on PATH", archive: qualifiedArchive, debugger: qualifiedDebugger, ready: true, remove: true, pathNerdctl: "other"},
+		{name: "symlinked nerdctl on PATH", archive: qualifiedArchive, debugger: qualifiedDebugger, ready: true, remove: true, pathNerdctl: "symlink"},
+		{name: "explicit override", archive: "other archive bytes", debugger: "other buildg bytes", ready: true},
+		{name: "explicit override with pinned leaf", archive: "other archive bytes", debugger: qualifiedDebugger, ready: true},
+		{name: "pinned with modified buildg", archive: qualifiedArchive, debugger: "modified buildg bytes"},
+		{name: "missing selected archive", debugger: "unidentified buildg bytes"},
+		{name: "missing guest agent unit", archive: qualifiedArchive, debugger: qualifiedDebugger, missingUnit: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			bin := filepath.Join(dir, "bin")
-			if err := os.Mkdir(bin, 0o755); err != nil {
+			bin := filepath.Join(dir, "opt", "lima", "bin")
+			if err := os.MkdirAll(bin, 0o755); err != nil {
 				t.Fatal(err)
 			}
+			tools := t.TempDir()
 			status := filepath.Join(dir, "stack-status")
 			debugger := filepath.Join(bin, "buildg")
+			agent := filepath.Join(bin, "lima-guestagent")
+			unit := filepath.Join(dir, "lima-guestagent.service")
+			stagedArchive := filepath.Join(dir, "nerdctl-full.tgz")
 			provisionWrite(t, status, "unqualified\n", 0o644)
+			provisionWrite(t, agent, "#!/bin/sh\n", 0o755)
+			if !tc.missingUnit {
+				provisionWrite(t, unit, "[Service]\nExecStart="+agent+" daemon --runtime-dir=\"%t/%N\"\n", 0o644)
+			}
 			if tc.archive != "" {
-				provisionWrite(t, filepath.Join(dir, "nerdctl-full.tgz"), tc.archive, 0o600)
+				provisionWrite(t, stagedArchive, tc.archive, 0o600)
 			}
 			provisionWrite(t, debugger, tc.debugger, 0o755)
-			provisionWrite(t, filepath.Join(bin, "uname"), "#!/bin/sh\necho x86_64\n", 0o755)
-			provisionWrite(t, filepath.Join(bin, "stat"), `#!/bin/sh
+			provisionWrite(t, filepath.Join(tools, "uname"), "#!/bin/sh\necho x86_64\n", 0o755)
+			provisionWrite(t, filepath.Join(tools, "stat"), `#!/bin/sh
 case "$2" in
   '%u %a') echo '0 755' ;;
   '%u') echo 0 ;;
   *) exit 2 ;;
 esac
 `, 0o755)
-			provisionWrite(t, filepath.Join(bin, "sudo"), "#!/bin/sh\nexec \"$@\"\n", 0o755)
-			provisionWrite(t, filepath.Join(bin, "nerdctl"), "#!/bin/sh\ntest \"$1\" = info\n", 0o755)
-			t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
-			t.Setenv("LIMA_CIDATA_MNT", dir)
-			t.Setenv("LIMA_CIDATA_CONTAINERD_ARCHIVE", "nerdctl-full.tgz")
-			t.Setenv("LIMA_CIDATA_GUEST_INSTALL_PREFIX", dir)
+			provisionWrite(t, filepath.Join(tools, "sudo"), "#!/bin/sh\nexec \"$@\"\n", 0o755)
+			nerdctl := filepath.Join(bin, "nerdctl")
+			const nerdctlInfo = "#!/bin/sh\ntest \"$1\" = info\n"
+			provisionWrite(t, nerdctl, nerdctlInfo, 0o755)
+			switch tc.pathNerdctl {
+			case "other":
+				provisionWrite(t, filepath.Join(tools, "nerdctl"), nerdctlInfo, 0o755)
+			case "symlink":
+				if err := os.Symlink(nerdctl, filepath.Join(tools, "nerdctl")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("PATH", tools+":"+bin+":"+os.Getenv("PATH"))
 
-			runProvision(t, strings.ReplaceAll(provision, marker, status), tc.ready)
+			hook := strings.NewReplacer(marker, status, service, unit, archive, stagedArchive).Replace(provision)
+			runProvision(t, hook, tc.ready)
 			probe := strings.ReplaceAll(readiness, marker, status)
 			runProvision(t, probe, tc.ready)
 			if tc.ready && !tc.remove {
@@ -266,8 +293,8 @@ esac
 					t.Fatalf("expected pinned buildg to be absent, got %v", err)
 				}
 				// An ordinary restart leaves no debugger to classify.
-				provisionWrite(t, filepath.Join(bin, "sha256sum"), "#!/bin/sh\nexit 2\n", 0o755)
-				runProvision(t, strings.ReplaceAll(provision, marker, status), true)
+				provisionWrite(t, filepath.Join(tools, "sha256sum"), "#!/bin/sh\nexit 2\n", 0o755)
+				runProvision(t, hook, true)
 				runProvision(t, probe, true)
 				provisionWrite(t, debugger, tc.debugger, 0o755)
 				runProvision(t, probe, false)

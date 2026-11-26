@@ -73,7 +73,7 @@ func nativeInfrastructure(ctx context.Context, space, action string, input any, 
 // only place that can select a deployment or bring a stopped space online.
 func callHostController(ctx context.Context, boot *spaceconfig.Bootstrap, req controller.Request, streams controller.ClientIO) error {
 	bridge := vmhost.ShellCommand(ctx, boot.Name, "sudo", session.VMBinaryPath, "controller-internal", "connect")
-	flush := vmhost.AttachFilteredStderr(bridge, streams.Err)
+	flush := attachControllerBridgeStderr(ctx, bridge, req, streams)
 	defer flush()
 	conn, err := controller.StartTransport(bridge)
 	if err != nil {

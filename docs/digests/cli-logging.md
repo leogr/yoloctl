@@ -44,6 +44,13 @@ consumers retain their writers. Owned pipes retain bounded private host-log
 tails without waiting for descendant-held FDs. [9](#source-9)
 [1](#source-1) [5](#source-5)
 
+[FACT] The host controller bridge renders complete Lima text log records for
+user-facing attach as yoloctl VM diagnostics, including warnings from saved
+provisioning. Private captures, debug stderr and unrecognized lines keep the
+existing stderr route. Controller stdout and stderr frames stay on their own
+protocol stream. [14](#source-14)
+[15](#source-15)
+
 [FACT] A command report or notice aimed at the process stderr is a log record:
 `cliReportTo` (chat export failures and its per-channel report, which goes to
 stderr for file and stdout targets alike) and `cliNoticeSink` (image refresh and
@@ -100,3 +107,5 @@ notice's existing once-per-attachment rule are unchanged.
 
 13. <a id="source-13"></a> [Report routing](../../cmd/yoloctl/cli_logging.go#L32-L73) — `cliLogLines`, `cliReportTo`, `cliNoticeSink`; chat_export.go `exportChat`, `finishChatExportChannel`, `writeChatExport`; controller_sessions.go and space.go listings; image.go, agentbox_reconcile.go; agentbox.go `warnPostAutoupdateFailure`; cli_report_test.go.
 
+14. <a id="source-14"></a> [Lima bridge diagnostics](../../cmd/yoloctl/controller_lima_stderr.go#L18) — `attachControllerBridgeStderr`.
+15. <a id="source-15"></a> [Controller attach fixture](../../cmd/yoloctl/controller_stderr_test.go#L28) — Lima warning formatting, identical guest stderr frames, malformed text and private capture.

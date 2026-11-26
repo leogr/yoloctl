@@ -18,14 +18,18 @@ fresh/preserved data-disk rendering and equality with Firecracker's amd64 pin.
 
 [FACT] The full release bundles containerd 2.4.2, runc 1.5.2, CNI 1.9.1 and
 BuildKit 0.34.1. When `buildg` is present after Lima installs the selected
-archive, provisioning checks the archive's cidata digest. For a qualified pin,
+archive, provisioning finds it beside the guest-agent executable recorded in
+Lima's systemd service and hashes the selected archive at
+`/mnt/lima-cidata/nerdctl-full.tgz`. Lima 2.2.1 and 2.3.0 use that path for
+defaults and overrides. For a qualified pin,
 it removes the checksummed debugger and refuses an unexpected leaf. This leaves
 `nerdctl builder debug` unavailable on the pinned stack. A selected archive
 whose digest differs keeps its files and is logged as unqualified. If the
 archive cannot be identified, provisioning leaves the debugger and fails
 readiness. An absent debugger requires only the absence check. Readiness also
-requires a working engine.
-[3](#source-3) [24](#source-24) [25](#source-25) [26](#source-26)
+requires a working engine. Existing instances keep their saved provisioning
+script until recreate.
+[3](#source-3) [6](#source-6) [11](#source-11) [24](#source-24) [25](#source-25) [26](#source-26) [31](#source-31) [32](#source-32) [33](#source-33) [34](#source-34) [35](#source-35)
 
 [FACT] On Lima and Firecracker, nerdctl 2.4.2 makes a read-only box bind
 recursively read-only when the guest kernel and OCI runtime support it. This
@@ -147,3 +151,8 @@ Disk/owner/target errors fail startup; systemd retries are unchanged. [23](#sour
 28. <a id="source-28"></a> [nerdctl recursive read-only support](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/ociruntimeutil/rro_linux.go#L48-L70) — kernel and OCI runtime checks.
 29. <a id="source-29"></a> [Native operator projection](../../internal/container/operator_projection.go#L137) — `parseNativeOperatorProjection` checks read-only and bind options on the recorded OCI mount.
 30. <a id="source-30"></a> [Projection reads](../../internal/container/operator_projection.go#L55-L85) — `NativeOperatorProjection` bounds each read and requires matching observations.
+31. <a id="source-31"></a> [Lima v2.3.0 cidata](https://github.com/lima-vm/lima/blob/v2.3.0/pkg/cidata/cidata.go#L133) — generic archive name.
+32. <a id="source-32"></a> [Linux cidata mount](https://lima-vm.io/docs/dev/internals/#cidataiso) — guest path and archive name.
+33. <a id="source-33"></a> [Lima guest-agent unit](https://github.com/lima-vm/lima/blob/v2.3.0/cmd/lima-guestagent/lima-guestagent.TEMPLATE.service#L5) — configured executable.
+34. <a id="source-34"></a> [Lima v2.3.0 guest-agent installer](https://github.com/lima-vm/lima/blob/v2.3.0/pkg/cidata/cidata.TEMPLATE.d/boot.Linux/25-guestagent-base.sh#L20-L27) — same prefix as the container stack.
+35. <a id="source-35"></a> [Lima v2.2.1 guest-agent installer](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/cidata/cidata.TEMPLATE.d/boot.Linux/25-guestagent-base.sh#L20-L27) — same prefix as the container stack.
