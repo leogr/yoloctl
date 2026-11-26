@@ -16,10 +16,13 @@ import (
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/boxstate"
 	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/internal/controller"
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/port"
+	"github.com/leogr/yoloctl/internal/spacelock"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/leogr/yoloctl/internal/vmservice"
+	"github.com/spf13/cobra"
 )
 
 type preparedStartFixture struct {
@@ -292,9 +295,10 @@ func TestNativeAttachToStoppedBoxEndsSilentWithdrawalInventoryAtFailSafe(t *test
 	script := `#!/bin/sh
 printf '%s\n' "$*" >> "$ATTACH_TEST_FIXTURE/calls"
 case "$*" in
- *'systemctl list-units'*)
-  if [ -e "$ATTACH_TEST_FIXTURE/qualified" ]; then sleep 30 & echo $! > "$ATTACH_TEST_FIXTURE/silent"; wait; fi
-  : > "$ATTACH_TEST_FIXTURE/qualified";;
+ *'systemctl list-units'*'--no-pager --full'*)
+  # Only the bounded withdrawal read passes these flags; it is never answered.
+  sleep 30 & echo $! > "$ATTACH_TEST_FIXTURE/silent"; wait;;
+ *'systemctl list-units'*) ;;
  *) exit 42;;
 esac
 `
@@ -338,16 +342,67 @@ esac
 	launches := 0
 	prepared.start = func() error { launches++; return nil }
 	prepareNativeExistingStart = func(ctx context.Context, _ *container.Client, _ *agentbox.Config, observed bool) (nativePreparedStart, bool, error) {
-		// The qualification inventory is a separate, answered read.
+		// The qualification inventory is a separate, unbounded read; it is answered
+		// here (archyAstra: it does not inherit the withdrawal read's fail-safe).
 		if _, err := port.Inventory(ctx, client, cfg.Name); err != nil {
 			t.Fatal("qualification inventory failed", err)
 		}
 		return prepared, true, nil
 	}
+	// The attach runs through the real command wrapper, which takes the
+	// space-operation lock and releases it when the command returns. While the
+	// withdrawal read is withheld, another operation finds the lock busy; after
+	// the command returns, the same lock is free again.
+	previousSync := syncNativeChatRolesFn
+	t.Cleanup(func() { syncNativeChatRolesFn = previousSync })
+	syncNativeChatRolesFn = func(context.Context, string) error { return nil }
+	busy := make(chan error, 1)
+	go func() {
+		for {
+			if _, err := os.Stat(filepath.Join(bin, "silent")); err == nil {
+				release, err := spacelock.TryAcquire(t.Context(), cfg.Space, true)
+				if release != nil {
+					release()
+				}
+				busy <- err
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
 	starts := len(f.starts)
+	var err error
+	root := &cobra.Command{Use: "yoloctl", SilenceUsage: true, SilenceErrors: true}
+	boxCmd := &cobra.Command{Use: "box"}
+	attach := &cobra.Command{Use: "attach", RunE: func(cmd *cobra.Command, _ []string) error {
+		_, err := ensureAgentSession(cmd.Context(), client, cfg.Space, cfg.Name, io.Discard, true, nil, sessionStartOptions{})
+		return err
+	}}
+	attach.Flags().String("space", cfg.Space, "")
+	attach.Flags().Bool(newSessionFlag, false, "")
+	boxCmd.AddCommand(attach)
+	root.AddCommand(boxCmd)
+	registerSpaceOperations(root)
+	ctx := context.WithValue(t.Context(), controllerRequestKey{}, "request-0123456789abcdef")
+	ctx = controller.WithEffectGate(ctx, func(context.Context, controller.EffectIntent) error { return nil })
+	ctx = context.WithValue(ctx, controllerReleaseKey{}, func() error { return nil })
+	root.SetArgs([]string{"box", "attach", cfg.Name, "--space", cfg.Space})
 	start := time.Now()
-	_, err := ensureAgentSession(held(t.Context()), client, cfg.Space, cfg.Name, io.Discard, true, nil, sessionStartOptions{})
+	err = root.ExecuteContext(ctx)
 	elapsed := time.Since(start)
+	select {
+	case busyErr := <-busy:
+		if !errors.Is(busyErr, spacelock.ErrBusy) {
+			t.Fatal("the withheld read did not hold the space lock", busyErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the withdrawal read was never withheld")
+	}
+	again, againErr := spacelock.TryAcquire(t.Context(), cfg.Space, true)
+	if againErr != nil {
+		t.Fatal("the attach's space lock was not released on return", againErr)
+	}
+	again()
 	if !errors.Is(err, context.DeadlineExceeded) || launches != 0 || len(f.starts) != starts {
 		t.Fatal("silent withdrawal inventory did not end the attach before any start", err, launches, len(f.starts)-starts)
 	}
@@ -355,7 +410,7 @@ esac
 		t.Fatal("withdrawal inventory followed something other than its fail-safe", elapsed)
 	}
 	raw, _ := os.ReadFile(filepath.Join(bin, "calls"))
-	if strings.Count(string(raw), "systemctl list-units") != 2 || strings.Contains(string(raw), "nerdctl start") || strings.Contains(string(raw), "systemd-run") {
+	if strings.Count(string(raw), "--no-pager --full") != 1 || strings.Contains(string(raw), "nerdctl start") || strings.Contains(string(raw), "systemd-run") {
 		t.Fatal("attach reached the engine or a session after the silent inventory", string(raw))
 	}
 }
