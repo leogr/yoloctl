@@ -35,15 +35,13 @@ func runControllerChatStream(ctx context.Context, req controller.Request, in *os
 	defer func() { _ = connection.Close() }()
 	r := connection.Room
 	var probe bytes.Buffer
-	probeCtx, stop := context.WithTimeout(ctx, chatObservationTimeout)
-	defer stop()
-	if err := connection.Run(probeCtx, []string{"/usr/local/bin/airc", "features"}, nil, &boundedChatWriter{Out: &probe, Remaining: managedchat.ControlLimit}, notice); err != nil {
+	if err := connection.Run(ctx, []string{"/usr/local/bin/airc", "features"}, nil, &boundedChatWriter{Out: &probe, Remaining: managedchat.ControlLimit}, notice); err != nil {
 		return err
 	}
 	if err := validateManagedChatClientFeatures(probe.Bytes()); err != nil {
 		return err
 	}
-	if err := connection.Verify(probeCtx); err != nil {
+	if err := connection.Verify(ctx); err != nil {
 		return err
 	}
 	header, err := chatstream.RoomHeader(r)

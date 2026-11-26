@@ -1,6 +1,7 @@
 # Chat export
 
 Verification: `fc48bca38d7777c07e13bb1610611f9a15c8c17d` and accompanying changes.
+Caller and request deadlines re-read at `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes.
 
 [FACT] `yoloctl chat export` is host only: an operator endpoint is refused.
 It reads `chat.status` and refuses unless the room exists and its server is
@@ -26,8 +27,8 @@ target:
 - It waits for the default channel's startup join and initial page. A channel
   the session has not joined is joined for the read and parted afterwards; only
   such joins are parted. A join or part refused only for pending setup
-  (`setup-pending`) was not sent and is repeated after 100 ms; the driver's
-  setup deadline bounds that.
+  (`setup-pending`) was not sent and is repeated after 100 ms. The command's
+  context ends that wait, as it does for the stream's replies.
 - A channel's history is its LATEST page, which the driver now reports as
   `history-latest` when it finishes or fails, then BEFORE pages from the oldest
   received message ID until a page holds zero messages. Live messages are not

@@ -109,13 +109,13 @@ confinement, actual UID/cgroup verification, UI reconnection or tab routing.
 15. <a id="source-15"></a> [Header regression](../../internal/chatstream/settings_test.go#L9).
 16. <a id="source-16"></a> [Attachment regressions](../../cmd/yoloctl/chat_attach_test.go#L25).
 17. <a id="source-17"></a> [Server preparation](../../internal/agentbox/chat.go#L62) — shared `VerifyChatServerPublication` invariant.
-18. <a id="source-18"></a> [Fresh holder launch](../../cmd/yoloctl/session_client.go#L413) — publication verification even when the container is running.
+18. <a id="source-18"></a> [Fresh holder launch](../../cmd/yoloctl/session_client.go#L414) — publication verification even when the container is running.
 19. <a id="source-19"></a> [Holder revival regression](../../cmd/yoloctl/chat_session_publication_test.go#L27) — actual session path with isolated native files and inert service-command spies.
-20. <a id="source-20"></a> [Locked transport selection](../../cmd/yoloctl/session_client.go#L75) — `selectSessionTransport`.
+20. <a id="source-20"></a> [Locked transport selection](../../cmd/yoloctl/session_client.go#L76) — `selectSessionTransport`.
 21. <a id="source-21"></a> [Release failure regressions](../../cmd/yoloctl/chat_operator_server_test.go#L332) — selection/attachment/exec close connected transports before streaming on release errors.
 22. <a id="source-22"></a> [Real channel role fixture](../../internal/managedchat/airc_channel_integration_test.go#L108) — `TestRealAIRCChannelAdditionAndACLRemovalWithoutRevocation`; production rendering plus isolated aircd, stubbed peer verification.
 23. <a id="source-23"></a> [Holder readiness regressions](../../cmd/yoloctl/chat_roles_readiness_test.go#L28) — lifecycle guard, real publication/private Unix control, inert runtime/service inspection, including live orphans.
 24. <a id="source-24"></a> [Lock-free lookup](../../cmd/yoloctl/chat_attach_observe.go#L21-L55) — `observeChatAttachTarget`, dispatched before the lock in chat_runtime.go `runControllerChatRuntime`.
 25. <a id="source-25"></a> [Lookup regressions](../../cmd/yoloctl/chat_attach_observe_test.go#L77) — held lock, deadline, unavailable inventory, room change, name reuse, revocation.
-26. <a id="source-26"></a> [Stream nickname](../../cmd/yoloctl/chat_stream.go#L49-L65) — `runControllerChatStream` registers `RoomHeader`'s saved human nickname.
+26. <a id="source-26"></a> [Stream nickname](../../cmd/yoloctl/chat_stream.go#L47-L63) — `runControllerChatStream` registers `RoomHeader`'s saved human nickname.
 27. <a id="source-27"></a> [Native nickname save](../../cmd/yoloctl/chat_view.go#L89-L105) — `runChatView` wires `SaveNick` to `chat.nickname` and returns `NickSavedMsg`; chatui/model.go `slashCommand`/`nickSaved` and overlay.go `saveNick`/`activateSetting`; nickname_display_test.go `TestNicknameSaveReconnectRefreshesOpenLabels` exercises the component with fake callbacks, not the host/controller stream.

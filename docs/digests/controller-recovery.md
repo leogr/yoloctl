@@ -84,8 +84,8 @@ establish native VM/power-loss qualification. [16](#source-16) [19](#source-19)
 11. <a id="source-11"></a> [internal/controller/recovery_scheduler.go](../../internal/controller/recovery_scheduler.go#L1) — ledger, `RunRecovery`, `repairStorage`, `publishApplied`.
 12. <a id="source-12"></a> [internal/controller/verifier.go](../../internal/controller/verifier.go#L1) — `RunVerifier` descriptors and bounds.
 13. <a id="source-13"></a> [cmd/yoloctl/controller_verify.go](../../cmd/yoloctl/controller_verify.go#L25) — read-only verifier worker.
-14. <a id="source-14"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L336-L385) — `serveController` current identity verification;
-    [degraded recovery](../../cmd/yoloctl/controller_internal.go#L461-L463).
+14. <a id="source-14"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L337-L386) — `serveController` current identity verification;
+    [degraded recovery](../../cmd/yoloctl/controller_internal.go#L462-L464).
 15. <a id="source-15"></a> [internal/controller/server.go](../../internal/controller/server.go#L1) — admission, gate, ping, receipt views and finalization.
 16. <a id="source-16"></a> [internal/controller/recovery_scheduler_test.go](../../internal/controller/recovery_scheduler_test.go#L1) — storage identity loss/restoration, responsive reads, repair and drain regressions.
 

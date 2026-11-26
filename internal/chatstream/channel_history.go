@@ -97,7 +97,7 @@ func (d *channelDriver) advance() error {
 			continue
 		}
 		channel.setup, channel.whoPending = false, true
-		channel.until = time.Now().Add(15 * time.Second)
+		channel.until = deadlineAfter(d.partialTimeout)
 		reply, err := d.wire.exchange(Request{Op: "who", Channel: entry.Name})
 		if err != nil {
 			return err
@@ -112,7 +112,7 @@ func (d *channelDriver) advance() error {
 	}
 	d.history, d.queue = d.queue[0], d.queue[1:]
 	history := d.history
-	history.until = time.Now().Add(15 * time.Second)
+	history.until = deadlineAfter(d.partialTimeout)
 	channel := d.channels[history.Channel]
 	if channel == nil || channel.membership != "joined" {
 		d.finishHistory(false, errors.New("channel left before history request"))

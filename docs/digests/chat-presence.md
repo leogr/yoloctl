@@ -99,7 +99,7 @@ exercised. [15](#source-15) [16](#source-16) [17](#source-17)
 4. <a id="source-4"></a> [space_telemetry_chat.go](../../cmd/yoloctl/space_telemetry_chat.go#L58-L139) — `managedRoomTelemetry`, `nativeServerStatus`; `refresh` (stale-holder release) at L353-L390.
 5. <a id="source-5"></a> [space_telemetry_chat.go](../../cmd/yoloctl/space_telemetry_chat.go#L208-L248) — reader validation in `room`.
 6. <a id="source-6"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L195-L200) — inventory wiring of the managed room; stream lease lifetime and early inventory at L255-L285.
-7. <a id="source-7"></a> [client.go](../../internal/chatstream/client.go#L536-L584) — WHO flags and `AWAY` in the roster.
+7. <a id="source-7"></a> [client.go](../../internal/chatstream/client.go#L547-L595) — WHO flags and `AWAY` in the roster.
 8. <a id="source-8"></a> [presence.go](../../internal/spacetelemetry/presence.go#L1-L41) — `PresenceEvidence`, `ClassifyPresence`.
 9. <a id="source-9"></a> [chat_view_telemetry.go](../../cmd/yoloctl/chat_view_telemetry.go#L12-L38) — `streamChatTelemetry`.
 10. <a id="source-10"></a> [telemetry.go](../../internal/chatui/telemetry.go#L1-L142) — `participantBox`, `memberPresence`, pulse tick and frame time.

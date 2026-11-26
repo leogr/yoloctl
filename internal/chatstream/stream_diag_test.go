@@ -17,8 +17,6 @@ func (nopWriteCloser) Close() error { return nil }
 // the controller's), a clean end, this side's deadline or cancellation, or a
 // malformed frame, instead of one message for every cause.
 func TestStreamEndsSayWhy(t *testing.T) {
-	defer func(d time.Duration) { streamReplyTimeout = d }(streamReplyTimeout)
-	streamReplyTimeout = 50 * time.Millisecond
 	for _, tc := range []struct {
 		name string
 		feed func(*io.PipeWriter, context.CancelFunc)
@@ -44,7 +42,9 @@ func TestStreamEndsSayWhy(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			go tc.feed(w, cancel)
-			err := RunChannels(ctx, r, nopWriteCloser{io.Discard}, nil, nil, nil, nil, func(Event) {})
+			driver := newChannelDriver(r, nopWriteCloser{io.Discard}, func(Event) {})
+			driver.wire.replyTimeout = 50 * time.Millisecond
+			err := driver.run(ctx, nil, nil, nil, nil)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("got %v, want %q", err, tc.want)
 			}

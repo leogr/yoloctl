@@ -55,7 +55,7 @@ afterwards. An unproved cleanup or in-sync reconcile records nothing.
 
 1. <a id="source-1"></a> [space_operation.go](../../cmd/yoloctl/space_operation.go#L26) — `spaceOperationHeld`, `attachFastPathEligible`; witness at L234.
 2. <a id="source-2"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L54) — `sessionTrackingFor`, `beginTrackedSession`.
-3. <a id="source-3"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L326-L520) — `ensureAgentSession`.
+3. <a id="source-3"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L327-L521) — `ensureAgentSession`.
 4. <a id="source-4"></a> [launch.go](../../internal/agentsession/launch.go#L107) — `Allocate`, `Dispatch`, `Bind`, `CloseExit`, `SettleResume`, `Close`, `SandboxReplaced`, `Uncertain`.
 5. <a id="source-5"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L283) — `launch`, `settle`.
 6. <a id="source-6"></a> [tombstone.go](../../internal/session/tombstone.go#L13-L60) — `LaunchToken`, `ValidLaunchToken`; holder writes at holder.go L220, L364.

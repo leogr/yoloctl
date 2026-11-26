@@ -336,7 +336,7 @@ func (s *chatSession) start(takeOver bool) {
 	go func() {
 		defer close(l.done)
 		s.program.Send(chatui.RefreshLinkMsg{Link: l.id})
-		_ = chatstream.RunChannels(ctx, responseRead, requestWrite, l.outgoing, l.older, l.actions, l.catalogs, func(e chatstream.Event) {
+		_ = chatstream.RunViewChannels(ctx, responseRead, requestWrite, l.outgoing, l.older, l.actions, l.catalogs, func(e chatstream.Event) {
 			if l.stopping.Load() && e.Kind == "connection" {
 				// A requested reconnect ends this stream; it is not a failure.
 				s.program.Send(chatui.ConnectionMsg{})

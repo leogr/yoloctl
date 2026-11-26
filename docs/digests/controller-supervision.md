@@ -78,7 +78,7 @@ VM restart, or recovery guarantee for PID 1/VM death or unkillable workers.
 3. <a id="source-3"></a> [Supervisor tests](../../internal/vmguest/controller_linux_test.go#L1) — virtual-clock transitions, episode boundaries, cleanup failures, concurrent stop/start and owned real children.
 4. <a id="source-4"></a> [Guest dispatch](../../internal/vmguest/init_linux.go#L526) — `service`, `shutdown`.
 5. <a id="source-5"></a> [Deployment guard](../../cmd/yoloctl/controller_deploy.go#L122) — `drainControllerForDeployment`.
-6. <a id="source-6"></a> [Controller startup](../../cmd/yoloctl/controller_internal.go#L336) — `serveController`.
+6. <a id="source-6"></a> [Controller startup](../../cmd/yoloctl/controller_internal.go#L337) — `serveController`.
 7. <a id="source-7"></a> [Recovery proof rules](controller-recovery.md) — permitted evidence and holds.
 8. <a id="source-8"></a> [VM image selection](vm-images.md) — explicit replacement and retained media.
 9. <a id="source-9"></a> [Lima controller unit](../../internal/controller/service.go#L5) — `ServiceUnit`.
@@ -90,4 +90,4 @@ VM restart, or recovery guarantee for PID 1/VM death or unkillable workers.
 14. <a id="source-14"></a> [Lazy BuildKit](../../internal/vmguest/buildkit_linux.go#L77) — independent service ownership.
 15. <a id="source-15"></a> [Image recipe](../../internal/firecracker/recipe_linux.go#L18) — `defaultRecipe` hashes init bytes.
 
-16. <a id="source-16"></a> [Service entry](../../cmd/yoloctl/controller_internal.go#L285) — `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle`, internal/accountstate/guest.py:`run` and testdata/test_guest.py absent/present/identity controls.
+16. <a id="source-16"></a> [Service entry](../../cmd/yoloctl/controller_internal.go#L286) — `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle`, internal/accountstate/guest.py:`run` and testdata/test_guest.py absent/present/identity controls.

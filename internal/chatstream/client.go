@@ -146,8 +146,10 @@ type driver struct {
 	out         io.WriteCloser
 	// A multi-channel owner retains one transport/cursor and delegates only
 	// channel-local message/roster parsing to this existing adapter.
-	exchangeFn     func(Request) (envelope, error)
-	allowedChannel func(string) bool
+	exchangeFn      func(Request) (envelope, error)
+	allowedChannel  func(string) bool
+	replyTimeout    time.Duration
+	controlDeadline func() time.Time
 	// closedFor records why this side closed the stream (a reply deadline or
 	// local cancellation), so a failed read reports that cause.
 	closedFor atomic.Pointer[string]
@@ -169,11 +171,6 @@ func Run(ctx context.Context, in io.ReadCloser, out io.WriteCloser, outgoing <-c
 		}
 		emit(Event{Kind: "connection", Err: err})
 	}()
-	timeout := streamReplyTimeout // read once, before any callback can run
-	initial := time.AfterFunc(timeout, func() {
-		d.closeFor(fmt.Sprintf("sent no room header and client handshake within %v", timeout), closeStream)
-	})
-	defer initial.Stop()
 	if err = d.frame(&d.header); err != nil {
 		return err
 	}
@@ -188,7 +185,6 @@ func Run(ctx context.Context, in io.ReadCloser, out io.WriteCloser, outgoing <-c
 	if ready.Event != "ready" || ready.Version != 2 || !validReference(ready.Epoch, 80) || ready.Account != d.header.SelfAccount || ready.Nick != d.header.Nick || json.Unmarshal(ready.Multiline, &limits) != nil || limits.MaxBytes <= 0 || limits.MaxLines <= 0 {
 		return errors.New("AIRC client did not establish the expected authenticated multiline JSONL v2 connection")
 	}
-	initial.Stop()
 	d.epoch = ready.Epoch
 	// The stream allowlist bounds a request below the server's own limit.
 	limits.MaxBytes = min(limits.MaxBytes, MaxMessageBytes)
@@ -284,8 +280,26 @@ func validateHeader(h Header) error {
 	return validateHeaderChannels(h)
 }
 
-// streamReplyTimeout bounds the wait for the room header and each reply.
-var streamReplyTimeout = 30 * time.Second
+// watchReply closes a stalled stream only when the open view uses a fail-safe.
+// An unconfirmed connection-wide control can end the stream sooner. A
+// late roster or history response is handled in the channel loop as a gap.
+func (d *driver) watchReply(reason string) func() {
+	if d.replyTimeout == 0 {
+		return func() {}
+	}
+	deadline := time.Now().Add(d.replyTimeout)
+	detail := fmt.Sprintf(" within %v", d.replyTimeout)
+	if d.controlDeadline != nil {
+		if pending := d.controlDeadline(); !pending.IsZero() && pending.Before(deadline) {
+			deadline = pending
+			detail = " before the pending control deadline"
+		}
+	}
+	timer := time.AfterFunc(time.Until(deadline), func() {
+		d.closeFor(reason+detail, func() { _ = d.in.Close(); _ = d.out.Close() })
+	})
+	return func() { timer.Stop() }
+}
 
 // closeFor records why this side is closing the stream, then closes it.
 func (d *driver) closeFor(reason string, close func()) {
@@ -350,11 +364,8 @@ func (d *driver) exchange(request Request) (envelope, error) {
 	if _, err := decodeChannelRequest(line, allowed, d.header.Attachments); err != nil {
 		return reply, &localRejection{err}
 	}
-	timeout := streamReplyTimeout // read once, before any callback can run
-	timer := time.AfterFunc(timeout, func() {
-		d.closeFor(fmt.Sprintf("sent no reply within %v", timeout), func() { _ = d.in.Close(); _ = d.out.Close() })
-	})
-	defer timer.Stop()
+	stop := d.watchReply("sent no reply")
+	defer stop()
 	if _, err := d.out.Write(append(line, '\n')); err != nil {
 		return reply, err
 	}

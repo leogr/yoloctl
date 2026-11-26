@@ -84,7 +84,7 @@ These tests do not establish a live-VM pass or graphical parity.
 
 ## Sources
 
-1. <a id="source-1"></a> [holder.go](../../internal/session/holder.go#L71) — `RunHolder`, `broadcast`, `retainReplay`, shutdown and marker outcomes.
+1. <a id="source-1"></a> [holder.go](../../internal/session/holder.go#L72) — `RunHolder`, `broadcast`, `retainReplay`, shutdown and marker outcomes.
 2. <a id="source-2"></a> [holder_view.go](../../internal/session/holder_view.go#L18) — `initView`, `flushRepliesLocked`, `resizeView`, `selectColorsLocked`, `admitView`.
 3. <a id="source-3"></a> [colors.go](../../internal/terminal/colors.go#L60) — shared `ColorQueries`, native overrides, bounded pending reports.
 4. <a id="source-4"></a> [view.go](../../internal/session/view.go#L145) — `attachView`, identity, snapshot and ordered event validation.

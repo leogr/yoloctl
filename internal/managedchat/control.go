@@ -105,6 +105,14 @@ type Control struct {
 // Call performs exactly one bounded request. A failed/lost reload is uncertain;
 // this method never reconnects, resends, unlinks a socket or restarts a server.
 func (c Control) Call(ctx context.Context, op string) (Applied, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return c.CallWithContextDeadline(ctx, op)
+}
+
+// CallWithContextDeadline performs the same verified exchange under the
+// context of a caller that owns the whole operation.
+func (c Control) CallWithContextDeadline(ctx context.Context, op string) (Applied, error) {
 	var applied Applied
 	if op != "status" && op != "reload" {
 		return applied, errors.New("invalid AIRC control operation")
@@ -112,8 +120,6 @@ func (c Control) Call(ctx context.Context, op string) (Applied, error) {
 	if c.VerifyPeer == nil {
 		return applied, errors.New("AIRC control requires live peer verification")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", c.Socket)
 	if err != nil {
 		return applied, err

@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/leogr/yoloctl/internal/sshtransport"
 	"github.com/leogr/yoloctl/internal/terminal"
 	"github.com/leogr/yoloctl/internal/termio"
 	"golang.org/x/crypto/ssh"
@@ -73,9 +74,11 @@ type HolderOptions struct {
 	Logf func(format string, args ...any) // optional progress/diagnostic log
 }
 
-// sshDialTimeout bounds the unix-socket dial plus SSH handshake to the
-// sandbox.
-const sshDialTimeout = 10 * time.Second
+// sandboxConnectTimeout lets a standalone holder fail if its sandbox never
+// answers. One budget covers the dial and SSH handshake.
+const sandboxConnectTimeout = 2 * time.Minute
+
+var dialHolderSandbox = (&net.Dialer{}).DialContext
 
 // ErrHolderConnLost reports that the SSH channel to the sandbox died
 // without delivering an agent exit status (sandbox crash, VM trouble, or
@@ -148,27 +151,21 @@ func RunHolder(ctx context.Context, opts HolderOptions) (int, error) {
 	// auth_none; access is gated by filesystem permissions (root-only on
 	// the VM), which is also why ignoring the host key is sound here:
 	// the endpoint's identity is the root-owned socket path itself.
-	conn, err := net.DialTimeout("unix", opts.SSHSocket, sshDialTimeout)
+	connect, cancelConnect := context.WithTimeout(ctx, sandboxConnectTimeout)
+	conn, err := dialHolderSandbox(connect, "unix", opts.SSHSocket)
 	if err != nil {
+		cancelConnect()
 		return -1, fmt.Errorf("session: dial sandbox socket: %w", err)
 	}
-	// NewClientConn does not apply ClientConfig.Timeout to an existing socket.
-	// Bound the handshake itself and close it when the holder is canceled.
-	_ = conn.SetDeadline(time.Now().Add(sshDialTimeout))
-	stopHandshake := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	cc, chans, reqs, err := ssh.NewClientConn(conn, opts.Agentbox, &ssh.ClientConfig{
+	client, err := sshtransport.ConnectWithContextDeadline(connect, conn, &ssh.ClientConfig{
 		User:            "sandbox",
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		Timeout:         sshDialTimeout,
 	})
-	stopHandshake()
+	cancelConnect()
 	if err != nil {
-		_ = conn.Close()
 		return -1, fmt.Errorf("session: ssh handshake: %w", err)
 	}
-	_ = conn.SetDeadline(time.Time{})
 	logf("sandbox connected; preparing session")
-	client := ssh.NewClient(cc, chans, reqs)
 	defer func() { _ = client.Close() }()
 	command := shellJoin(opts.Argv)
 	// The main process's command is today's command made to replace the

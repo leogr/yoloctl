@@ -31,7 +31,8 @@ var ensureVMBinaryFn = session.EnsureVMBinary
 var holderUnitActiveFn = session.HolderUnitActive
 var dialSessionVMFn = session.DialVM
 var nativeSessionTransportFn = spaceenv.Native
-var holderStartupTimeout = 10 * time.Second
+
+var ownedHolderStartupTimeout = 2 * time.Minute
 
 type preparedSessionBinaryKey struct{}
 type controllerViewKey struct{}
@@ -766,23 +767,43 @@ func sessionSummaryLine(s sessionStatus, name string) string {
 
 // waitForAttachSocket waits for a freshly started holder to bring up
 // its attach socket, failing fast when the unit died on startup.
-func waitForAttachSocket(ctx context.Context, c *container.Client, name string) error {
-	deadline := time.Now().Add(holderStartupTimeout)
-	for {
+func waitForAttachSocket(ctx context.Context, c *container.Client, name string) (err error) {
+	if ctx.Value(controllerOwnedSetupKey{}) == true {
+		// An authorized attach setup can outlive its client while it holds
+		// the operation guard. A silent holder must release that wait.
+		timeout := ownedHolderStartupTimeout
+		expired := fmt.Errorf("session holder for %s did not open its attach socket within %s", name, timeout)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeoutCause(ctx, timeout, expired)
+		defer func() {
+			if errors.Is(err, context.DeadlineExceeded) && context.Cause(ctx) == expired {
+				err = expired
+			}
+			cancel()
+		}()
+	}
+	for ctx.Err() == nil {
 		if c.Shell(ctx, "sudo", "test", "-S", session.SocketPath(name)) == nil {
-			return nil
+			return ctx.Err()
+		}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if !session.HolderUnitActive(ctx, c, name) {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			// Directive 61: the holder's own refusal names the reason.
-			if r, ok := session.ReadVMRefusal(ctx, c, name); ok && r.Reason == session.RefusalNoMkfifo {
+			r, refused := session.ReadVMRefusal(ctx, c, name)
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if refused && r.Reason == session.RefusalNoMkfifo {
 				_ = c.Shell(ctx, "sudo", "rm", "-f", session.RefusalPath(name))
 				return asUserError(fmt.Errorf("box %s's image has no mkfifo (install coreutils in the image); a session cannot be started in it", name))
 			}
 			return fmt.Errorf("session holder for %s exited during startup (unit %s; logs: `%s` in the space VM)",
 				name, session.UnitName(name), vmservice.LogHint(c, session.UnitName(name)))
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("session holder for %s did not open its attach socket within %s", name, holderStartupTimeout)
 		}
 		select {
 		case <-ctx.Done():
@@ -790,6 +811,7 @@ func waitForAttachSocket(ctx context.Context, c *container.Client, name string) 
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
+	return ctx.Err()
 }
 
 // Identity is captured at launch. Reattaching cannot change a running process's

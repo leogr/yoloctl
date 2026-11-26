@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/config"
 	"github.com/leogr/yoloctl/internal/controller"
@@ -402,11 +401,8 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 	}
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
-	if op, ok := controllerOperations[req.Method]; ok && !op.Mutates && req.Method != "box.logs" {
-		var stop context.CancelFunc
-		ctx, stop = context.WithTimeout(ctx, 30*time.Second)
-		defer stop()
-	}
+	op, known := controllerOperations[req.Method]
+	ordinaryRead := known && !op.Mutates && req.Method != "box.logs"
 	if !target.Operator {
 		prefs, err := config.LoadTUI()
 		if err != nil {
@@ -435,25 +431,45 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 		req.View = true
 		streams.View = view
 	}
-	signals := make(chan int, 4)
-	streams.Signals = signals
-	stopSignals := forwardCommandSignals(ctx, signals)
-	defer stopSignals()
+	if !ordinaryRead {
+		signals := make(chan int, 4)
+		streams.Signals = signals
+		stopSignals := forwardCommandSignals(ctx, signals)
+		defer stopSignals()
+	}
 	if req.Method == "account.secret.set" {
 		streams.In = nil // already captured locally; no terminal or second read
 	}
-	if input, ok := streams.In.(*os.File); ok && term.IsTerminal(int(input.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+	input, ok := streams.In.(*os.File)
+	localTerminal := ok && term.IsTerminal(int(input.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+	if localTerminal {
 		req.Terminal = true
 		cols, rows, err := term.GetSize(int(input.Fd()))
 		if err != nil {
 			return err
 		}
 		req.Cols, req.Rows = uint16(cols), uint16(rows)
-		old, err := term.MakeRaw(int(input.Fd()))
-		if err != nil {
-			return err
+	}
+	if ordinaryRead {
+		streams.In = nil
+	}
+	if localTerminal {
+		fd := int(input.Fd())
+		if ordinaryRead {
+			// A read has no interactive input, so keep Ctrl+C local while
+			// passing the worker PTY's output and resize messages through.
+			restore, err := termio.MakeRawWithSignals(fd)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = restore() }()
+		} else {
+			old, err := term.MakeRaw(fd)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = term.Restore(fd, old) }()
 		}
-		defer func() { _ = term.Restore(int(input.Fd()), old) }()
 		// MakeRaw disables the terminal's LF -> CRLF output processing too.
 		// Preparation/CLI diagnostics are plain text; session stdout and the
 		// private view already carry their own terminal bytes and must bypass
@@ -472,12 +488,14 @@ func callControllerTerminal(cmd *cobra.Command, target controllerTarget, req con
 				}
 			}
 		}
-		reader, err := cancelreader.NewReader(input)
-		if err != nil {
-			return err
+		if !ordinaryRead {
+			reader, err := cancelreader.NewReader(input)
+			if err != nil {
+				return err
+			}
+			defer func() { reader.Cancel(); _ = reader.Close() }()
+			streams.In = reader
 		}
-		defer func() { reader.Cancel(); _ = reader.Close() }()
-		streams.In = reader
 		sizes := make(chan controller.Size, 1)
 		streams.Resize = sizes
 		winch := make(chan os.Signal, 1)

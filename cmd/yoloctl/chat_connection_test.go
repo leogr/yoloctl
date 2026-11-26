@@ -168,7 +168,7 @@ func TestChatPinnedConnectionRejectsReplacementAndBoundsExec(t *testing.T) {
 	for _, change := range []string{"container", "declaration", "room", "holder", "stall", "channel-stall"} {
 		t.Run(change, func(t *testing.T) {
 			f := newChatConnectionFixture(t)
-			conn, err := openManagedChatConnectionWith(t.Context(), "work", f.store, f.ops)
+			conn, err := openManagedChatConnectionWith(t.Context(), "work", f.store, f.ops, managedChatConnectionTimeout)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -214,7 +214,7 @@ func TestHealthyChatStreamSetupBypassesExclusiveLock(t *testing.T) {
 	t.Cleanup(func() { nativeChatStoreFn, openManagedChatConnectionFn = oldStore, oldOpen })
 	nativeChatStoreFn = func() (managedchat.Store, error) { return f.store, nil }
 	openManagedChatConnectionFn = func(ctx context.Context, space string, store managedchat.Store) (*managedChatConnection, error) {
-		return openManagedChatConnectionWith(ctx, space, store, f.ops)
+		return openManagedChatConnectionWith(ctx, space, store, f.ops, 0)
 	}
 	unlock, err := spacelock.Acquire(t.Context(), "work", true)
 	if err != nil {
@@ -237,5 +237,42 @@ func TestHealthyChatStreamSetupBypassesExclusiveLock(t *testing.T) {
 	}
 	if effects != 1 || released != 1 || f.dials.Load() != 1 || f.commands.Load() != 2 || !bytes.Contains(out.Bytes(), []byte(`"managed-room"`)) {
 		t.Fatal("stream bypassed proof or redialed", effects, released, f.dials.Load(), f.commands.Load(), out.String())
+	}
+}
+
+func TestChatStreamConnectionUsesCallerDeadline(t *testing.T) {
+	for _, budget := range []time.Duration{0, time.Second, time.Minute} {
+		t.Run(budget.String(), func(t *testing.T) {
+			fixture := newChatConnectionFixture(t)
+			ctx := context.Background()
+			if budget > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, budget)
+				defer cancel()
+			}
+			want, wantOK := ctx.Deadline()
+			check := func(ctx context.Context) {
+				if got, ok := ctx.Deadline(); ok != wantOK || !got.Equal(want) {
+					t.Fatalf("setup deadline = %v, %t, want %v, %t", got, ok, want, wantOK)
+				}
+			}
+			control, dial := fixture.ops.control, fixture.ops.dial
+			fixture.ops.control = func(ctx context.Context, room *managedchat.Room, cfg *agentbox.Config) (managedchat.Control, *container.Details, error) {
+				check(ctx)
+				return control(ctx, room, cfg)
+			}
+			fixture.ops.dial = func(ctx context.Context, cfg *agentbox.Config, details *container.Details) (net.Conn, error) {
+				check(ctx)
+				return dial(ctx, cfg, details)
+			}
+			conn, err := openManagedChatConnectionWith(ctx, "work", fixture.store, fixture.ops, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = conn.Close() }()
+			if err := conn.Verify(ctx); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

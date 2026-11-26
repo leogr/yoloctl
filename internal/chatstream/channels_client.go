@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+const (
+	viewRequestTimeout = 2 * time.Minute
+	viewPartialTimeout = time.Minute
+)
+
 type channelState struct {
 	adapter       *driver
 	membership    string
@@ -34,15 +39,16 @@ type pendingChannelAction struct {
 // channelDriver shares the existing logical AIRC decoder for each channel,
 // while owning exactly one wire connection, cursor and send/control slot.
 type channelDriver struct {
-	wire        *driver
-	catalog     Header // last accepted desired metadata; wire.header.Nick is live
-	channels    map[string]*channelState
-	emit        func(Event)
-	control     *pendingChannelAction
-	history     *channelHistory
-	queue       []*channelHistory
-	batchOwner  map[string]string
-	historyLost bool
+	wire           *driver
+	catalog        Header // last accepted desired metadata; wire.header.Nick is live
+	channels       map[string]*channelState
+	emit           func(Event)
+	control        *pendingChannelAction
+	history        *channelHistory
+	queue          []*channelHistory
+	batchOwner     map[string]string
+	historyLost    bool
+	partialTimeout time.Duration
 	// origin is the room generation this connection opened at; the relay
 	// refuses names deleted after it, and the driver mirrors that before Write.
 	origin            uint64
@@ -56,6 +62,16 @@ type channelDriver struct {
 // cause a reconnect/replay. Every operation captures its target and caller ID.
 func RunChannels(ctx context.Context, in io.ReadCloser, out io.WriteCloser, outgoing <-chan Send, older <-chan HistoryRequest, actions <-chan Action, catalogs <-chan Catalog, emit func(Event)) error {
 	return newChannelDriver(in, out, emit).run(ctx, outgoing, older, actions, catalogs)
+}
+
+// RunViewChannels gives pending requests a fail-safe without limiting the
+// lifetime of an idle interactive view. Commands use RunChannels instead.
+func RunViewChannels(ctx context.Context, in io.ReadCloser, out io.WriteCloser, outgoing <-chan Send, older <-chan HistoryRequest, actions <-chan Action, catalogs <-chan Catalog, emit func(Event)) error {
+	d := newChannelDriver(in, out, emit)
+	d.wire.replyTimeout = viewRequestTimeout
+	d.partialTimeout = viewPartialTimeout
+	d.wire.controlDeadline = d.controlDeadline
+	return d.run(ctx, outgoing, older, actions, catalogs)
 }
 
 func newChannelDriver(in io.ReadCloser, out io.WriteCloser, emit func(Event)) *channelDriver {
@@ -72,11 +88,8 @@ func (d *channelDriver) run(ctx context.Context, outgoing <-chan Send, older <-c
 		d.endPending(errors.New("connection ended before confirmation; inspect state before another action"))
 		emit(Event{Kind: "connection", Err: err})
 	}()
-	timeout := streamReplyTimeout // read once, before any callback can run
-	initial := time.AfterFunc(timeout, func() {
-		d.wire.closeFor(fmt.Sprintf("sent no room header and client handshake within %v", timeout), closeStream)
-	})
-	defer initial.Stop()
+	stopInitial := d.wire.watchReply("sent no room header and client handshake")
+	defer stopInitial()
 	if err := d.wire.frame(&d.wire.header); err != nil {
 		return err
 	}
@@ -101,7 +114,7 @@ func (d *channelDriver) run(ctx context.Context, outgoing <-chan Send, older <-c
 	if ready.Event != "ready" || ready.Version != 2 || !validReference(ready.Epoch, 80) || ready.Account != h.SelfAccount || ready.Nick != h.Nick || json.Unmarshal(ready.Multiline, &limits) != nil || limits.MaxBytes <= 0 || limits.MaxLines <= 0 {
 		return errors.New("AIRC did not establish the expected managed JSONL v2 identity")
 	}
-	initial.Stop()
+	stopInitial()
 	d.wire.epoch = ready.Epoch
 	d.origin = h.Generation
 	d.wire.allowedChannel = func(channel string) bool { return d.channels[channel] != nil && !d.channels[channel].deleted }
@@ -111,7 +124,7 @@ func (d *channelDriver) run(ctx context.Context, outgoing <-chan Send, older <-c
 	// Only #space is configured for startup; queued self JOIN/bootstrap must
 	// still be consumed before asserting membership or query readiness.
 	d.channels[h.Channel].membership = "unknown"
-	d.channels[h.Channel].until = time.Now().Add(15 * time.Second)
+	d.channels[h.Channel].until = deadlineAfter(d.wire.replyTimeout)
 	limits.MaxBytes = min(limits.MaxBytes, MaxMessageBytes)
 	emit(Event{Kind: "connection", Connected: true, Limits: limits, Attachments: d.wire.header.Attachments})
 	d.availabilityKnown = true
@@ -283,9 +296,23 @@ func (d *channelDriver) endPending(err error) {
 	}
 }
 
+func deadlineAfter(timeout time.Duration) time.Time {
+	if timeout == 0 {
+		return time.Time{}
+	}
+	return time.Now().Add(timeout)
+}
+
+func (d *channelDriver) controlDeadline() time.Time {
+	if d.control != nil {
+		return d.control.until
+	}
+	return time.Time{}
+}
+
 func (d *channelDriver) deadlines() error {
 	now := time.Now()
-	if d.control != nil && now.After(d.control.until) {
+	if d.control != nil && !d.control.until.IsZero() && now.After(d.control.until) {
 		return errors.New("channel action acknowledgment timed out; outcome uncertain")
 	}
 	for name, channel := range d.channels {
@@ -301,7 +328,7 @@ func (d *channelDriver) deadlines() error {
 		// Missing 366 never makes a topic query eligible. Known membership may
 		// remain, but this channel's topic/roster evidence stays unavailable.
 	}
-	if d.history != nil && now.After(d.history.until) {
+	if d.history != nil && !d.history.until.IsZero() && now.After(d.history.until) {
 		d.historyGap(errors.New("history response timed out; continuity is unknown"))
 	}
 	return nil

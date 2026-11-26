@@ -19,7 +19,9 @@ import (
 
 const managedChatConnectionTimeout = 5 * time.Second
 
-var openManagedChatConnectionFn = openManagedChatConnection
+var openManagedChatConnectionFn = func(ctx context.Context, space string, store managedchat.Store) (*managedChatConnection, error) {
+	return openManagedChatConnectionWithTimeout(ctx, space, store, 0)
+}
 
 // A connection pins one verified OpenShell peer. Neither feature probes nor
 // later client commands redial a mutable box-name socket.
@@ -33,6 +35,7 @@ type managedChatConnection struct {
 	live                     map[string]managedchat.Connections // last verified status, per AIRC account
 	stop                     func() bool
 	ops                      managedChatConnectionOps
+	probeTimeout             time.Duration
 }
 
 type managedChatConnectionOps struct {
@@ -43,13 +46,24 @@ type managedChatConnectionOps struct {
 }
 
 func openManagedChatConnection(ctx context.Context, space string, store managedchat.Store) (*managedChatConnection, error) {
-	return openManagedChatConnectionWith(ctx, space, store, managedChatConnectionOps{
-		load: agentbox.Load, control: managedServerControl, dial: dialManagedChatPeer, active: holderUnitActiveFn,
-	})
+	return openManagedChatConnectionWithTimeout(ctx, space, store, managedChatConnectionTimeout)
 }
 
-func openManagedChatConnectionWith(ctx context.Context, space string, store managedchat.Store, ops managedChatConnectionOps) (*managedChatConnection, error) {
-	probe, cancel := context.WithTimeout(ctx, managedChatConnectionTimeout)
+func openManagedChatConnectionWithTimeout(ctx context.Context, space string, store managedchat.Store, timeout time.Duration) (*managedChatConnection, error) {
+	return openManagedChatConnectionWith(ctx, space, store, managedChatConnectionOps{
+		load: agentbox.Load, control: managedServerControl, dial: dialManagedChatPeer, active: holderUnitActiveFn,
+	}, timeout)
+}
+
+func managedChatProbeContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout == 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+func openManagedChatConnectionWith(ctx context.Context, space string, store managedchat.Store, ops managedChatConnectionOps, timeout time.Duration) (*managedChatConnection, error) {
+	probe, cancel := managedChatProbeContext(ctx, timeout)
 	defer cancel()
 	room, err := store.ReadManifestSnapshot()
 	if err != nil {
@@ -67,7 +81,7 @@ func openManagedChatConnectionWith(ctx context.Context, space string, store mana
 	if err != nil {
 		return nil, err
 	}
-	applied, err := control.Call(probe, "status")
+	applied, err := control.CallWithContextDeadline(probe, "status")
 	if err != nil {
 		return nil, err
 	}
@@ -78,12 +92,12 @@ func openManagedChatConnectionWith(ctx context.Context, space string, store mana
 	if err != nil {
 		return nil, err
 	}
-	client, err := sshtransport.Connect(probe, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()})
+	client, err := sshtransport.ConnectWithContextDeadline(probe, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()})
 	if err != nil {
 		return nil, err
 	}
 	result := &managedChatConnection{Room: room, Config: cfg, store: store, client: client,
-		containerID: details.ID, incarnation: details.Labels[managedchat.IncarnationLabel], applied: applied, ops: ops}
+		containerID: details.ID, incarnation: details.Labels[managedchat.IncarnationLabel], applied: applied, ops: ops, probeTimeout: timeout}
 	result.stop = context.AfterFunc(ctx, func() { _ = client.Close() })
 	if err := result.Verify(probe); err != nil {
 		_ = result.Close()
@@ -114,7 +128,7 @@ func dialManagedChatPeer(ctx context.Context, cfg *agentbox.Config, details *con
 // Verify detects native or runtime replacement around setup/probing. A later
 // lifecycle stop can disconnect this connection, but cannot redirect it.
 func (c *managedChatConnection) Verify(ctx context.Context) error {
-	probe, cancel := context.WithTimeout(ctx, managedChatConnectionTimeout)
+	probe, cancel := managedChatProbeContext(ctx, c.probeTimeout)
 	defer cancel()
 	room, err := c.store.ReadManifestSnapshot()
 	if err != nil {
@@ -143,7 +157,7 @@ func (c *managedChatConnection) Verify(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	applied, err := control.Call(probe, "status")
+	applied, err := control.CallWithContextDeadline(probe, "status")
 	if err != nil {
 		return err
 	}

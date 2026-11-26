@@ -84,7 +84,7 @@ notice's existing once-per-attachment rule are unchanged.
 
 1. <a id="source-1"></a> [CLI logging helpers](../../cmd/yoloctl/cli_logging.go#L17) — `cliLog`, `renderLoggedCLIError`, `cliOperation`, `cliFinishOutcome`, `cliRoutedOutcome`, `wrapHostLogCommand`, `suspendCLISteps`.
 2. <a id="source-2"></a> [Reconcile output](../../cmd/yoloctl/agentbox_reconcile.go#L209) — `printDryRun`, `printReconcileResult`; account.go command results; internal/openshell/helper_pins.go `existingHelperNotice`.
-3. <a id="source-3"></a> [Controller routing](../../cmd/yoloctl/controller_client.go#L115) — `routeControllerCommands`, `reportClientDetached`; internal/controller/client.go `ExitError.State`, `OutcomeRendered`.
+3. <a id="source-3"></a> [Controller routing](../../cmd/yoloctl/controller_client.go#L114) — `routeControllerCommands`, `reportClientDetached`; internal/controller/client.go `ExitError.State`, `OutcomeRendered`.
 4. <a id="source-4"></a> [CLI regressions](../../cmd/yoloctl/cli_logging_test.go#L47) — finalization, error identity/status, uncertainty, sink rejection, JSON/raw command routing and warning separation.
 5. <a id="source-5"></a> [Host lifecycle](../../cmd/yoloctl/controller_lifecycle.go#L71) — `hostControllerLifecycle`, `createControllerSpace`; controller_deploy.go `startControllerSpaceImpl`, `stopControllerSpace`; space_archive.go export/import wrappers.
 6. <a id="source-6"></a> [Input boundary](../../cmd/yoloctl/agent.go#L322) — `promptYesNo`; agentbox_reconcile.go `runEditor`, session_client.go `attachToSession`, controller_mounts.go `controllerSpaceShell`, install_migration.go `confirmInstall`.

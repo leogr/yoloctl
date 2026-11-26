@@ -83,6 +83,8 @@ func callHostController(ctx context.Context, boot *spaceconfig.Bootstrap, req co
 	return controller.Call(ctx, conn, hello, req, streams)
 }
 
+var controllerSpaceLookup = findSpaceInstance
+
 func checkControllerSpace(ctx context.Context, space string) (*spaceconfig.Bootstrap, error) {
 	boot, err := spaceconfig.LoadBootstrap(space)
 	if err != nil {
@@ -98,9 +100,7 @@ func checkControllerSpace(ctx context.Context, space string) (*spaceconfig.Boots
 	if boot.Bundle != identity {
 		return nil, asUserError(fmt.Errorf("space %s selects controller bundle %s; this CLI is %s; use the selected build, run yoloctl space upgrade %s, or select this controller with yoloctl space start %s --update-controller", space, boot.Bundle, identity, space, space))
 	}
-	probe, cancel := context.WithTimeout(ctx, vmhost.GuestProbeTimeout)
-	defer cancel()
-	inst, found, err := findSpaceInstance(probe, space)
+	inst, found, err := controllerSpaceLookup(ctx, space)
 	if err != nil {
 		return nil, err
 	}

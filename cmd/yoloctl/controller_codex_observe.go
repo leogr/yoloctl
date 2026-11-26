@@ -31,14 +31,14 @@ import (
 // maintenance it runs only on an idle, certain controller and yields to every
 // admitted mutation. It holds no box lock: a read of a box being replaced just
 // fails, and the writer appends only to an existing launch generation.
-const (
-	codexObserveInterval = time.Minute
-	codexObserveRun      = 30 * time.Second
-)
+const codexObserveInterval = time.Minute
 
-// codexObserveBoxBudget bounds one box's read, connection included; the
-// writer bounds its own daemon read to 500 ms inside it.
-var codexObserveBoxBudget = 3 * time.Second
+// Target selection and the subsequent SSH read have distinct budgets. The
+// writer also bounds its own daemon read to 500 ms inside the SSH operation.
+var (
+	codexObserveBoxBudget     = 3 * time.Second
+	codexObserveSSHReadBudget = 10 * time.Second
+)
 
 func startControllerCodexObserve(parent context.Context, server *controller.Server) func() {
 	return scheduleCodexObserve(parent, server, runCodexObserveProcess, codexObserveInterval, logging.L())
@@ -83,11 +83,7 @@ func scheduleCodexObserve(parent context.Context, server *controller.Server, run
 			default:
 			}
 			last = time.Now()
-			_, err := server.RunMaintenance(ctx, func(ctx context.Context) error {
-				ctx, cancel := context.WithTimeout(ctx, codexObserveRun)
-				defer cancel()
-				return run(ctx)
-			})
+			_, err := server.RunMaintenance(ctx, run)
 			if err != nil && ctx.Err() == nil && !errors.Is(err, context.Canceled) {
 				log.Warn("Codex observation deferred", "actor", logging.Controller, "err", err)
 			}
@@ -140,7 +136,7 @@ func readCodexTargets(ctx context.Context, space string, targets []codexObserveT
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		boxCtx, cancel := context.WithTimeout(ctx, codexObserveBoxBudget)
+		boxCtx, cancel := context.WithTimeout(ctx, codexObserveSSHReadBudget)
 		_ = codexObserveExec(boxCtx, space, t.box, []string{features.AgentObserveCodexQuery, strconv.FormatUint(t.gen, 10), t.thread})
 		cancel()
 	}
@@ -221,6 +217,6 @@ var codexObserveExec = func(ctx context.Context, space, box string, argv []strin
 		return err
 	}
 	defer func() { _ = null.Close() }()
-	return sshtransport.Run(ctx, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()},
+	return sshtransport.RunWithContextDeadline(ctx, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()},
 		remoteCommandString(argv), false, null, io.Discard, io.Discard)
 }

@@ -113,7 +113,7 @@ continues to come from the controller grant. [17](#source-17)
 5. <a id="source-5"></a> [internal/controller/server.go](../../internal/controller/server.go#L249) — `ServeConn`: trusted principal, request admission and execution cancellation.
 6. <a id="source-6"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L168) — operator mounts and incarnation labels.
 7. <a id="source-7"></a> [internal/operator/endpoint.go](../../internal/operator/endpoint.go#L58) — registration lifecycle and endpoint provisioning.
-8. <a id="source-8"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L96) — shared frontend routing and cross-space copy.
+8. <a id="source-8"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L95) — shared frontend routing and cross-space copy.
 9. <a id="source-9"></a> [assets/embed.go](../../assets/embed.go#L13) — embedded BoxOperatorSkill.
 10. <a id="source-10"></a> [OpenAI skills documentation](https://learn.chatgpt.com/docs/build-skills) — administrator scope `/etc/codex/skills`, consulted 2026-09-30.
 11. <a id="source-11"></a> [Claude Code skills documentation](https://code.claude.com/docs/en/skills) — managed Linux skills path, consulted 2026-09-30.
@@ -137,4 +137,4 @@ continues to come from the controller grant. [17](#source-17)
 
 25. <a id="source-25"></a> [internal/controller/holds.go](../../internal/controller/holds.go#L1) — `heldError`, `loadHolds` and dependency intersections.
 
-26. <a id="source-26"></a> [Controller entry](../../cmd/yoloctl/controller_internal.go#L139) — `runControllerInternal`, `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle` and `prepareRuntimeStorage`.
+26. <a id="source-26"></a> [Controller entry](../../cmd/yoloctl/controller_internal.go#L140) — `runControllerInternal`, `loadControllerActionRuntime`; internal/controller/runtime.go:`PrepareRuntimeForLifecycle` and `prepareRuntimeStorage`.

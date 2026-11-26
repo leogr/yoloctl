@@ -81,7 +81,7 @@ No live VM calibration is recorded here.
 
 ## Sources
 
-1. <a id="source-1"></a> [holder.go](../../internal/session/holder.go#L239-L244) — PTY read count; input count at L550; counters at L398-L403.
+1. <a id="source-1"></a> [holder.go](../../internal/session/holder.go#L236-L241) — PTY read count; input count at L550; counters at L398-L403.
 2. <a id="source-2"></a> [stats.go](../../internal/session/stats.go#L18-L119) — `Stats`, `serveStats`, `sessionDigest`, `ReadStats`, `readStats`.
 3. <a id="source-3"></a> [holder_view.go](../../internal/session/holder_view.go#L241-L244) — stats admission branch.
 4. <a id="source-4"></a> [protocol.go](../../internal/session/protocol.go#L65-L67) — `frameStats`.

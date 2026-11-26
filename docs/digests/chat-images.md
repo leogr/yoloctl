@@ -77,7 +77,7 @@ authority, AIRC HTTP interoperability or provider image consumption.
 7. <a id="source-7"></a> [Protocol regressions](../../cmd/yoloctl/chat_image_protocol_test.go#L46) — metadata, framing, identity and reply validation.
 8. <a id="source-8"></a> [Receipt boundary fixture](../../cmd/yoloctl/chat_image_receipt_test.go#L21) — `TestChatImageReceiptSeparatesPreEffectCancellationFromPossiblePOST`.
 9. <a id="source-9"></a> [Operation registration](../../cmd/yoloctl/controller_internal.go#L40) — `controllerOperations`.
-10. <a id="source-10"></a> [Stream mapping](../../internal/chatstream/client.go#L656) — authenticated message adaptation.
+10. <a id="source-10"></a> [Stream mapping](../../internal/chatstream/client.go#L667) — authenticated message adaptation.
 11. <a id="source-11"></a> [Host regressions](../../cmd/yoloctl/chat_image_host_test.go#L33) — clipboard authority, stale drafts, bounds, outcome correlation and no replay.
 12. <a id="source-12"></a> [Upload regressions](../../cmd/yoloctl/chat_image_runtime_test.go#L36) — fixed argv, preflight rejection, bounded outcomes and effect gate.
 13. <a id="source-13"></a> [Metadata regressions](../../internal/chatstream/artifact_test.go#L18) — reserved tags and replay.

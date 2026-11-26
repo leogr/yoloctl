@@ -1,6 +1,7 @@
 # Codex refresh read
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Attempt budgets re-read at `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes.
 
 [FACT] The controller also reads each Codex box's daemon while someone looks.
 - **Trigger:** a finished `box.inventory` or `box.list` read wakes a
@@ -18,9 +19,11 @@ Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying change
   fold's read gets a `box session` command's live-read budget, ended by the
   box's deadline when that comes first and by the worker's cancellation. [1](#source-1) [4](#source-4)
   [5](#source-5)
-- **Read:** one box at a time within 3 s, it runs
-  `agent-observe-codex-query GEN THREAD` as the sandbox user through the
-  confined SSH endpoint `box exec` uses, with no receipt and no box lock.
+- **Read:** one box at a time, it runs `agent-observe-codex-query GEN THREAD`
+  as the sandbox user through the confined SSH endpoint `box exec` uses.
+  Each 10 s attempt covers the connection and reply. A silent box is skipped.
+  The pass continues to later boxes and yields to mutations. There is no
+  overall time limit. The read creates no receipt and holds no box lock.
 - **Writer:** the generation and thread come as validated argv (a decimal
   generation, a lowercase UUID); anything else exits 2. The read keeps the peer
   binding and the CURRENT-only rule and appends a `query` line with the state,

@@ -127,6 +127,7 @@ var controllerOperations = map[string]controller.Operation{
 type controllerReleaseKey struct{}
 type controllerSessionKey struct{}
 type controllerRequestKey struct{}
+type controllerOwnedSetupKey struct{}
 
 // controllerRequestID is the controller request this worker serves, or "".
 func controllerRequestID(ctx context.Context) string {
@@ -590,6 +591,9 @@ func runControllerWorker(ctx context.Context) error {
 	state.imagesEnabled = work.Request.Method != "box.restart"
 	state.probeEnabled = npmProbeMethod(work.Request.Method) && (len(work.Request.Flags["no-autoupdate"]) == 0 || work.Request.Flags["no-autoupdate"][0] != "true")
 	operation := controllerOperations[work.Request.Method]
+	if operation.OwnedSetup {
+		ctx = context.WithValue(ctx, controllerOwnedSetupKey{}, true)
+	}
 	if operation.EffectGated {
 		checkpoints.Gate()
 		ctx = withWorkerNativeIncarnation(ctx, operation, checkpoints)

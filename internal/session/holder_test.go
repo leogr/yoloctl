@@ -933,3 +933,38 @@ func TestHolderCancellationInterruptsSilentSSHHandshake(t *testing.T) {
 		t.Fatalf("handshake failure published an agent marker: %v", err)
 	}
 }
+
+func TestHolderCancellationInterruptsInitialUnixDial(t *testing.T) {
+	opts, _ := testPaths(t)
+	original := dialHolderSandbox
+	t.Cleanup(func() { dialHolderSandbox = original })
+	entered := make(chan [2]string, 1)
+	dialHolderSandbox = func(ctx context.Context, network, address string) (net.Conn, error) {
+		entered <- [2]string{network, address}
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	result := runHolderAsync(ctx, opts)
+	select {
+	case got := <-entered:
+		if got != [2]string{"unix", opts.SSHSocket} {
+			t.Fatalf("unexpected sandbox dial: %v", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("holder did not start its sandbox dial")
+	}
+	cancel()
+	select {
+	case got := <-result:
+		if !errors.Is(got.err, context.Canceled) || !strings.Contains(got.err.Error(), "dial sandbox socket") {
+			t.Fatalf("dial cancellation: %v", got.err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("holder ignored cancellation during its initial dial")
+	}
+	if _, err := os.Stat(opts.MarkerPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("cancelled dial published an agent marker: %v", err)
+	}
+}

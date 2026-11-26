@@ -1,6 +1,7 @@
 # Managed channel catalog and stream
 
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Pre-JOIN read lifetime re-verified at `76bcf960c0d8d07faae06258f1fb1088bef24bdd` and accompanying changes.
+Caller and request deadlines re-read at `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes.
 
 [FACT] `chat channel list/create/add/remove` use finite typed controller requests,
 ordinary admission/receipts and the existing verified host or operator principal.
@@ -74,12 +75,15 @@ SSH peer without that lock. AIRC separately
 enforces loaded ACLs; desired state is not applied authority. Read/quit take no
 controller lock. [10](#source-10) [11](#source-11) [18](#source-18)
 
-[FACT] `RunChannels` owns one JSONL v2 stream/cursor, one pending send/control
-slot and serialized history, preserving caller IDs/channels. A reference
+[FACT] The driver owns one JSONL v2 stream/cursor, one pending send/control
+slot and serialized history, preserving caller IDs/channels. Command-owned
+requests follow their command context. The open view gives startup membership
+and controls a two-minute fail-safe. A missing JOIN bootstrap, WHO or history
+completion gives a gap after one minute and live events continue. A reference
 lookup uses the same serialized history path with a one-record AROUND request
 and a separate completion outside transcript paging. Authentic self
 JOIN confirms membership then queues history. Topic queries require matching
-server/recipient/channel 366 within ten seconds. Late setup cannot clear
+server/recipient/channel 366 while bootstrap is pending. Late setup cannot clear
 quarantine or overwrite newer TOPIC. Set/clear requires exact self-prefix,
 channel and text. KICK never autojoins; a KICK during an action pending in that
 channel finishes it once as uncertain without ending the stream. Gaps
@@ -130,9 +134,9 @@ Separate opt-in tests against real AIRC binaries are summarized in
 7. <a id="source-7"></a> [Archive regression](../../internal/spacearchive/chat_channels_test.go#L16) — independent credentials/ACLs and recovery.
 8. <a id="source-8"></a> [Reload proof](../../internal/managedchat/channel_control.go#L9) — partial acknowledgment and incarnation checks.
 9. <a id="source-9"></a> [Controller regressions](../../cmd/yoloctl/chat_channels_test.go#L16) — requests, selectors and one-reload proof.
-10. <a id="source-10"></a> [Relay](../../cmd/yoloctl/chat_stream.go#L88) — feature probe and per-operation authorization.
+10. <a id="source-10"></a> [Relay](../../cmd/yoloctl/chat_stream.go#L86) — feature probe and per-operation authorization.
 11. <a id="source-11"></a> [Protocol](../../internal/chatstream/protocol.go#L104) — request decoding, `FilterChannels`.
-12. <a id="source-12"></a> [Driver](../../internal/chatstream/channels_client.go#L52) — `RunChannels`, deadlines and gaps; `run` keeps the saved nickname in its catalog (L81-L86).
+12. <a id="source-12"></a> [Driver](../../internal/chatstream/channels_client.go#L61) — `RunChannels`, `RunViewChannels`, pending requests, deadlines and gaps. `run` keeps the saved nickname in its catalog.
 13. <a id="source-13"></a> [Controls](../../internal/chatstream/channel_events.go#L30) — actions, membership and topic evidence.
 14. <a id="source-14"></a> [Refresh](../../internal/chatstream/channel_catalog.go#L95) — `receiveCatalog`, `refreshCatalog`.
 15. <a id="source-15"></a> [Stream regressions](../../internal/chatstream/channels_test.go#L46) — topic/control/history/ACL.
@@ -144,7 +148,7 @@ Separate opt-in tests against real AIRC binaries are summarized in
 21. <a id="source-21"></a> [Host admission](../../cmd/yoloctl/chat_view.go#L672-L708) — `control` reads and queues JOIN on the captured link.
 22. <a id="source-22"></a> [Wire fixture](../../cmd/yoloctl/chat_topic_wire_test.go#L26) — JOIN after opening and confirmed send.
 23. <a id="source-23"></a> [Admission tests](../../cmd/yoloctl/chat_join_admission_test.go#L13) — refresh, link and codes.
-24. <a id="source-24"></a> [Connection capability](../../cmd/yoloctl/chat_stream.go#L52) — the confined-client feature probe sets attachment support independently of room metadata.
+24. <a id="source-24"></a> [Connection capability](../../cmd/yoloctl/chat_stream.go#L50) — the confined-client feature probe sets attachment support independently of room metadata.
 25. <a id="source-25"></a> [Refresh send regression](../../internal/chatstream/catalog_attachment_send_test.go#L15) — image send, filter and echo through the real exchange after a newer catalog.
 
 26. <a id="source-26"></a> [Read attempts](../../cmd/yoloctl/chat_observation.go#L28-L129) — `observeManagedChatRead`, `observeManagedChatCatalog`, binding and strict attempt.
@@ -157,4 +161,4 @@ Separate opt-in tests against real AIRC binaries are summarized in
 31. <a id="source-31"></a> [Driver catalog](../../internal/chatstream/channel_catalog.go#L110) — `refreshCatalog`, runtime-unobserved normalization.
 32. <a id="source-32"></a> [Operator authority](../../cmd/yoloctl/controller_operator.go#L28) — `operatorRuntime`, `checkOperatorPrincipal`.
 
-33. <a id="source-33"></a> [Startup catalog](../../internal/chatstream/channels_client.go#L112) — header projection explicitly carries no runtime observation.
+33. <a id="source-33"></a> [Startup catalog](../../internal/chatstream/channels_client.go#L125) — header projection explicitly carries no runtime observation.

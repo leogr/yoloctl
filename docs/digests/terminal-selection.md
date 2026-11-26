@@ -90,8 +90,8 @@ agent preferences still win. [12](#source-12) [13](#source-13) [14](#source-14)
 12. <a id="source-12"></a> [Codex local_settings.rs at rust-v0.162.1](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/tui/src/local_settings.rs#L200) — automatic copy preferences.
 13. <a id="source-13"></a> [Codex terminal detection at rust-v0.162.1](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/terminal-detection/src/lib.rs#L248) — terminal environment detection.
 14. <a id="source-14"></a> [identity.go](../../internal/termio/identity.go#L5) — bounded metadata and confined child argv.
-15. <a id="source-15"></a> [controller_client.go](../../cmd/yoloctl/controller_client.go#L351) — host request metadata.
-16. <a id="source-16"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L378) — holder argv and `sessionTerminalIdentity`.
+15. <a id="source-15"></a> [controller_client.go](../../cmd/yoloctl/controller_client.go#L350) — host request metadata.
+16. <a id="source-16"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L379) — holder argv and `sessionTerminalIdentity`.
 17. <a id="source-17"></a> [controller_view_test.go](../../cmd/yoloctl/controller_view_test.go#L98) — wire preservation and control rejection.
 18. <a id="source-18"></a> [identity_test.go](../../internal/termio/identity_test.go#L10) — literal argv execution.
 19. <a id="source-19"></a> [TUI panes](tui-panes.md) — selection kept inside its pane in a divided tab.

@@ -136,7 +136,7 @@ func TestChatServerTemporaryDirectoryIsDeploymentDrift(t *testing.T) {
 		}
 		return control, legacy, agentbox.VerifyChatRuntime(c, legacy)
 	}
-	conn, err := openManagedChatConnectionWith(t.Context(), "work", s, f.ops)
+	conn, err := openManagedChatConnectionWith(t.Context(), "work", s, f.ops, managedChatConnectionTimeout)
 	if err != nil {
 		t.Fatal("the older server refused a connection:", err)
 	}

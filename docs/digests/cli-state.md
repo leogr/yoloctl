@@ -122,7 +122,7 @@ adding a new command. [3](#source-3) [11](#source-11)
 9. <a id="source-9"></a> [internal/tui/yoloctlcli/complete.go](../../internal/tui/yoloctlcli/complete.go#L1-L100) — `Complete` and completion result parsing.
 10. <a id="source-10"></a> [internal/tui/palette/palette.go](../../internal/tui/palette/palette.go#L95-L129) — `Submit` through `CompletionInput`.
 11. <a id="source-11"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L29) — native mutation guard.
-12. <a id="source-12"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L96) — public execution routing.
+12. <a id="source-12"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L95) — public execution routing.
 13. <a id="source-13"></a> [cmd/yoloctl/controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L82) — running/build checks.
 14. <a id="source-14"></a> [cmd/yoloctl/controller_views.go](../../cmd/yoloctl/controller_views.go#L52) — aggregation and space metadata views.
 15. <a id="source-15"></a> [cmd/yoloctl/controller_completion.go](../../cmd/yoloctl/controller_completion.go#L34) — completion routing.

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
@@ -255,9 +256,9 @@ func TestCodexObserveFoldIsCanceledWithItsWorker(t *testing.T) {
 // A box that does not answer within its budget is abandoned, and the run
 // moves on to the next one.
 func TestCodexObserveBoundsEachBox(t *testing.T) {
-	saved, savedBudget := codexObserveExec, codexObserveBoxBudget
-	t.Cleanup(func() { codexObserveExec, codexObserveBoxBudget = saved, savedBudget })
-	codexObserveBoxBudget = 50 * time.Millisecond
+	saved, savedBudget := codexObserveExec, codexObserveSSHReadBudget
+	t.Cleanup(func() { codexObserveExec, codexObserveSSHReadBudget = saved, savedBudget })
+	codexObserveSSHReadBudget = 50 * time.Millisecond
 	var read []string
 	codexObserveExec = func(ctx context.Context, _, box string, _ []string) error {
 		if box == "silent" {
@@ -275,4 +276,25 @@ func TestCodexObserveBoundsEachBox(t *testing.T) {
 	if elapsed := time.Since(begin); elapsed > time.Second || !slices.Equal(read, []string{"next"}) {
 		t.Fatalf("a silent box held the read for %v; read %v", elapsed, read)
 	}
+}
+
+func TestCodexObserveAllowsSlowResponsiveBox(t *testing.T) {
+	saved := codexObserveExec
+	t.Cleanup(func() { codexObserveExec = saved })
+	synctest.Test(t, func(t *testing.T) {
+		completed := false
+		codexObserveExec = func(ctx context.Context, _, _ string, _ []string) error {
+			select {
+			case <-time.After(5 * time.Second):
+				completed = true
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		err := readCodexTargets(t.Context(), "work", []codexObserveTarget{{box: "slow", gen: 1, thread: "4f9a2c1e-8b3d-4e7a-9c5f-1d2e3f4a5b6c"}})
+		if err != nil || !completed {
+			t.Fatalf("slow box completed %t: %v", completed, err)
+		}
+	})
 }

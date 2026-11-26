@@ -84,7 +84,7 @@ confinement or AIRC connection proof.
 4. <a id="source-4"></a> [Participation](../../cmd/yoloctl/chat_participation.go#L84) — dispatcher, `resolveChatParticipant`, server proof and `executeChatParticipation`.
 5. <a id="source-5"></a> [Protected target](../../cmd/yoloctl/chat_operator_server.go#L32) — `operatorManagedServerTarget`, `protectedManagedServerTarget`.
 6. <a id="source-6"></a> [Native admission](../../cmd/yoloctl/space_operation.go#L30) — `registerSpaceOperations`.
-7. <a id="source-7"></a> [Attachment](../../cmd/yoloctl/session_client.go#L47) — `prepareAutoAttach`, `selectSessionTransport`, `ensureAndAttachSession`.
+7. <a id="source-7"></a> [Attachment](../../cmd/yoloctl/session_client.go#L48) — `prepareAutoAttach`, `selectSessionTransport`, `ensureAndAttachSession`.
 8. <a id="source-8"></a> [Rebuild](../../cmd/yoloctl/agentbox_reconcile.go#L162) — `runRebuild`.
 9. <a id="source-9"></a> [Installed guidance](../../assets/embed.go#L13) — `BoxOperatorSkill` embeds the managed chat workflow and independent peer-session rule.
 10. <a id="source-10"></a> [Authority tests](../../cmd/yoloctl/chat_operator_test.go#L18) — allowlist, scope, first human identity and self-recreation preflight.

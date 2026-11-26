@@ -119,7 +119,7 @@ func (d *channelDriver) action(action Action) error {
 	if _, err := decodeChannelRequest(raw, func(name string) bool { return d.channels[name] != nil }, false); err != nil {
 		return refuse(err.Error())
 	}
-	d.control = &pendingChannelAction{Action: action, until: time.Now().Add(20 * time.Second)}
+	d.control = &pendingChannelAction{Action: action, until: deadlineAfter(d.wire.replyTimeout)}
 	reply, err := d.wire.exchange(request)
 	if err != nil {
 		return err
@@ -272,7 +272,7 @@ func (d *channelDriver) membershipEvent(name string, channel *channelState, r re
 	state := ""
 	if r.Command == "JOIN" && d.selfPrefix(r.Prefix) {
 		channel.membership, channel.bootstrap, channel.bootstrapAt = "joined", "pending", r.Cursor
-		channel.until = time.Now().Add(10 * time.Second)
+		channel.until = deadlineAfter(d.partialTimeout)
 		channel.topicNewer, channel.rosterInvalid = false, false
 		d.initialHistory(name)
 		state = "joined"

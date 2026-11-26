@@ -1,6 +1,7 @@
 # Managed sessions, attachment, and replay
 
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; default title `1d265df3` and accompanying changes; companion linking at `d7dda62e` and accompanying changes; re-read cited sources when changing behavior.
+Caller and request deadlines re-read at `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes.
 
 [FACT] `make build` produces the host CLI and static Linux amd64/arm64 companions.
 Native and Darwin host targets link the companions' SHA-256 values as runtime
@@ -31,10 +32,14 @@ uses a locally generated path, never parsed remote stdout. The holder still runs
 admission. Native workers reuse that verified executable for holders. Ordinary
 attach requires a matching controller even when a holder already lives; it does
 not install a local companion or automatically upgrade the controller.
-[5](#source-5) [14](#source-14)
+The holder socket wait follows the worker context. Controller-owned attach
+setup has a two-minute fail-safe while waiting for that socket.
+[5](#source-5) [14](#source-14) [29](#source-29)
 
 [FACT] A VM-side holder owns the agent's sandbox SSH connection and PTY.
-Controller workers connect directly to the holder's local Unix socket;
+The independent unit has one two-minute budget for the initial dial and login.
+Unit cancellation interrupts both. Session traffic follows the normal holder
+lifecycle after login. Controller workers connect directly to the holder's local Unix socket;
 closing one client closes that transport, not the holder's SSH child. The
 holder runs as an independent guest service with a fixed per-box name, which
 also prevents concurrent starts. Lima uses a transient systemd unit; Firecracker
@@ -101,9 +106,9 @@ echo-independent readiness and preserved shell state.
 
 1. <a id="source-1"></a> [internal/session/view.go](../../internal/session/view.go#L147) — `attachView`.
 2. <a id="source-2"></a> [internal/session/dial.go](../../internal/session/dial.go#L21) — `DialVM`.
-3. <a id="source-3"></a> [internal/session/holder.go](../../internal/session/holder.go#L76-L290) — `RunHolder`, initial title before output/admission.
+3. <a id="source-3"></a> [internal/session/holder.go](../../internal/session/holder.go#L98-L287) — `RunHolder`, initial title before output/admission.
 4. <a id="source-4"></a> [internal/session/session.go](../../internal/session/session.go#L1-L107) — socket/state layout and ring/keepalive defaults.
-5. <a id="source-5"></a> [cmd/yoloctl/session_client.go](../../cmd/yoloctl/session_client.go#L42) — holder setup, tuning and finishAttach.
+5. <a id="source-5"></a> [cmd/yoloctl/session_client.go](../../cmd/yoloctl/session_client.go#L43) — holder setup, tuning and finishAttach.
 6. <a id="source-6"></a> [internal/session/protocol.go](../../internal/session/protocol.go#L25) — frame types, `readFrame`, `writeFrame`.
 7. <a id="source-7"></a> [internal/session/title.go](../../internal/session/title.go#L1-L308) — `titleRewriter`, `InitialTitle`, `ExpandBoxTitleTemplate`.
 8. <a id="source-8"></a> [scripts/smoke/native-large-append.py](../../scripts/smoke/native-large-append.py#L1-L86) — `record`, `verify`, `append_batch`, `main`.
@@ -128,3 +133,5 @@ echo-independent readiness and preserved shell state.
 27. <a id="source-27"></a> [supervisor](../../internal/vmguest/units_linux.go#L1) — holder exclusion, cleanup and no automatic restart.
 
 28. <a id="source-28"></a> [Guest artifact selection](../../internal/guestbinary/binary.go#L1) — linked hashes, `Resolve`, `LinuxExecutable`, shared by boot-image preparation and session deployment.
+
+29. <a id="source-29"></a> [Holder socket wait](../../cmd/yoloctl/session_client.go#L770) — `waitForAttachSocket`, `startSessionHolder`.

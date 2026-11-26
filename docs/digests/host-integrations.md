@@ -89,7 +89,7 @@ OAuth need separate acceptance; macOS decoding tests are synthetic.
 2. <a id="source-2"></a> [view.go](../../internal/session/view.go#L147) — private admission/delivery.
 3. <a id="source-3"></a> [host_actions.go](../../internal/tui/host_actions.go#L22) — prompts, approval and ordered image key ownership.
 4. <a id="source-4"></a> [host_bridge.go](../../internal/session/host_bridge.go#L36) — startBrowserBridge and browserLaunch.
-5. <a id="source-5"></a> [holder.go](../../internal/session/holder.go#L153) — optional integration setup.
+5. <a id="source-5"></a> [holder.go](../../internal/session/holder.go#L158) — optional integration setup.
 6. <a id="source-6"></a> [host.go](../../internal/hostintegration/host.go#L22) — validators, desktop dispatch, bounds and deadlines.
 7. <a id="source-7"></a> [tui.go](../../internal/config/tui.go#L217) — policies and commented defaults.
 8. <a id="source-8"></a> [input.go](../../internal/tui/term/input.go#L60) — Transform reserves ordered input.

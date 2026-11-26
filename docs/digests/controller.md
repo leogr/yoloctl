@@ -1,6 +1,7 @@
 # VM controller, transport and recovery
 
 Verification: `272abb082790962572505495756706d40d73f06c` and accompanying N1/N2 changes; acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes; re-read cited sources when changing behavior. Exec-preflight re-read at `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes.
+Caller and request deadlines re-read at `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes.
 
 Catalog load reuse verified on `5a4b9acf13bce7f18501300ad49117613ee08a91` and accompanying changes.
 
@@ -9,7 +10,9 @@ operations to one root controller inside the selected VM. Host clients use a
 fixed adapter SSH bridge to its private admin socket; operator clients use their
 provisioned Unix endpoint. Workers execute the same services locally, scoped by
 a fixed root-owned context. There is no host controller daemon or generic
-shell/filesystem RPC. [1](#source-1) [2](#source-2) [3](#source-3)
+shell/filesystem RPC. Ordinary routed reads and the selected VM lookup follow
+the command context. The local terminal stays interruptible before controller
+hello and during the read. [1](#source-1) [2](#source-2) [3](#source-3) [42](#source-42) [43](#source-43)
 
 [FACT] The host stores schema-3 boot authority; defaults, box/account declarations
 and secrets live in private `config/` directories on the existing ext4 data
@@ -154,7 +157,7 @@ this test seam does not change server authorization. [19](#source-19)
 17. <a id="source-17"></a> [internal/controller/client.go](../../internal/controller/client.go#L47) — Call, methodHasInput.
 18. <a id="source-18"></a> [internal/controller/transport.go](../../internal/controller/transport.go#L39) — bounded graceful commandTransport.Close; subprocess regressions in transport_test.go.
 19. <a id="source-19"></a> [cmd/yoloctl/controller_client_test.go](../../cmd/yoloctl/controller_client_test.go#L12) — stubOperatorClient and frontend guard/routing regressions; host-offline fixture in controller_test.go.
-20. <a id="source-20"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L35) — loadOperatorClient and selectControllerTarget; production metadata loader unchanged.
+20. <a id="source-20"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L34) — loadOperatorClient and selectControllerTarget; production metadata loader unchanged.
 
 21. <a id="source-21"></a> [Managed view transport](session-views.md) — request validation, descriptors, protocol framing and transport tests.
 
@@ -185,3 +188,6 @@ this test seam does not change server authorization. [19](#source-19)
 39. <a id="source-39"></a> [Capability consumers](../../internal/capabilities/capabilities.go#L451-L540) — `CatalogNetworkBinaries`, `EffectiveSet.Add`, `Capabilities`, `Effective`; reader check in `cmd/yoloctl/catalog_snapshot_consumers_test.go`.
 40. <a id="source-40"></a> [Feature install planning](../../internal/features/features.go#L463-L493) — `InstallPlan`, using the snapshot loader from `internal/features/user.go`.
 41. <a id="source-41"></a> [Helper input audit](../../scripts/check-helper-inputs.py#L37-L76) — compares the compiled identity and actual Linux amd64/arm64 production inputs against Go's selected packages.
+
+42. <a id="source-42"></a> [Routed read](../../cmd/yoloctl/controller_client.go#L352) — `callControllerTerminal`.
+43. <a id="source-43"></a> [VM lookup](../../cmd/yoloctl/controller_deploy.go#L88) — `checkControllerSpace`.

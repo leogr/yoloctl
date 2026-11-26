@@ -111,7 +111,7 @@ holder view are unaffected. [24](#source-24)
 
 ## Sources
 
-1. <a id="source-1"></a> [controller_client.go](../../cmd/yoloctl/controller_client.go#L318) — `callControllerTerminal`, recursive frontend guard and request routing.
+1. <a id="source-1"></a> [controller_client.go](../../cmd/yoloctl/controller_client.go#L317) — `callControllerTerminal`, recursive frontend guard and request routing.
 2. <a id="source-2"></a> [attach.go](../../internal/tui/attach.go#L18) — `RunAttached`, standalone input; detach in `attachedKey` (L59), `isStandaloneDetachKey`/`isStandaloneCloseKey` (L102–L124); shared model in `tui.go`.
 3. <a id="source-3"></a> [attach_test.go](../../internal/tui/attach_test.go#L11) — standalone PTY key/mouse and notice regressions; `TestStandaloneTmuxStyleDetachKeys` (L59), `TestStandaloneDoubledCustomPrefixStillForwards` (L110).
 4. <a id="source-4"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L116) — shared attach help and `addPassthroughFlag`.

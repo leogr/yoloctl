@@ -56,10 +56,10 @@ recheck the exact installed agent before diagnosing those failures.
 
 1. <a id="source-1"></a> [internal/termio/osc52.go](../../internal/termio/osc52.go#L46-L64) — `EvaluateOSC52`.
 2. <a id="source-2"></a> [internal/config/tui.go](../../internal/config/tui.go#L217) — `ClipboardEnabled` and deny-only legacy opt-outs.
-3. <a id="source-3"></a> [cmd/yoloctl/session_client.go](../../cmd/yoloctl/session_client.go#L42) — `attachToSession`.
+3. <a id="source-3"></a> [cmd/yoloctl/session_client.go](../../cmd/yoloctl/session_client.go#L43) — `attachToSession`.
 4. <a id="source-4"></a> [internal/termio/osc52.go](../../internal/termio/osc52.go#L1-L295) — `OSC52Scanner`, `EvaluateOSC52`, `OSC52Filter`.
 5. <a id="source-5"></a> [internal/tui/term/term_test.go](../../internal/tui/term/term_test.go#L17-L60) — `TestOSC52InterceptedBeforeCore` through `TestOSC52InterceptorDoesNotHoldUTF8Prompt`.
-6. <a id="source-6"></a> [internal/session/holder.go](../../internal/session/holder.go#L388) — `broadcast` and separate clipboard events.
+6. <a id="source-6"></a> [internal/session/holder.go](../../internal/session/holder.go#L385) — `broadcast` and separate clipboard events.
 7. <a id="source-7"></a> [internal/tui/terminal_keys.go](../../internal/tui/terminal_keys.go#L38) — `childKey`, `kittyKey`.
 8. <a id="source-8"></a> [internal/session/protocol.go](../../internal/session/protocol.go#L1-L132) — frame types, `readFrame`, `writeFrame`.
 9. <a id="source-9"></a> [Codex clipboard_paste.rs](https://github.com/openai/codex/blob/rust-v0.158.0/codex-rs/tui/src/clipboard_paste.rs#L49-L270) — `paste_image_as_png`, `paste_image_to_temp_png`, `normalize_pasted_path`; pinned release source.

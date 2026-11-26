@@ -160,7 +160,7 @@ func TestChatStreamUsesTheSavedNickAndRefusesAHeldOneBeforeEffects(t *testing.T)
 	t.Cleanup(func() { nativeChatStoreFn, openManagedChatConnectionFn = oldStore, oldOpen })
 	nativeChatStoreFn = func() (managedchat.Store, error) { return f.store, nil }
 	openManagedChatConnectionFn = func(ctx context.Context, space string, store managedchat.Store) (*managedChatConnection, error) {
-		return openManagedChatConnectionWith(ctx, space, store, f.ops)
+		return openManagedChatConnectionWith(ctx, space, store, f.ops, 0)
 	}
 	nicks, err := managedchat.RoomNicknames(f.room)
 	if err != nil {

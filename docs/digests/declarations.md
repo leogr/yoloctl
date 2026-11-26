@@ -102,13 +102,13 @@ rejected. This does not delete native state or change credential import.
 5. <a id="source-5"></a> [internal/lima/template.go](../../internal/lima/template.go#L31) — template boot settings, Lima-selected backend/architecture.
 6. <a id="source-6"></a> [internal/agentbox/agentbox.go](../../internal/agentbox/agentbox.go#L54) — box schema and validation.
 7. <a id="source-7"></a> [cmd/yoloctl/context.go](../../cmd/yoloctl/context.go#L14) — shared space selection.
-8. <a id="source-8"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L40) — host/operator target and path selection, copy snapshots.
+8. <a id="source-8"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L39) — host/operator target and path selection, copy snapshots.
 9. <a id="source-9"></a> [internal/agentbox/workdir.go](../../internal/agentbox/workdir.go#L26) — workdir identity and canonicalization.
 10. <a id="source-10"></a> [cmd/yoloctl/space.go](../../cmd/yoloctl/space.go#L725) — grant classification and live bind checks.
 11. <a id="source-11"></a> [cmd/yoloctl/space_lifecycle.go](../../cmd/yoloctl/space_lifecycle.go#L20) — protected root rejection.
 12. <a id="source-12"></a> [cmd/yoloctl/agentbox_copy.go](../../cmd/yoloctl/agentbox_copy.go#L24) — copy merge and destination validation.
 13. <a id="source-13"></a> [internal/agentprofile/profile.go](../../internal/agentprofile/profile.go#L53) — adapter schema and lookup.
-14. <a id="source-14"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L201) — `expandControllerPaths` validates and canonicalizes host path flags.
+14. <a id="source-14"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L200) — `expandControllerPaths` validates and canonicalizes host path flags.
 15. <a id="source-15"></a> [cmd/yoloctl/agentbox.go](../../cmd/yoloctl/agentbox.go#L1771) — `rejectAccountRootBinds` checks the native worker's path namespace.
 16. <a id="source-16"></a> [cmd/yoloctl/controller_client_test.go](../../cmd/yoloctl/controller_client_test.go#L18) — host alias, disk identity, project-path and pre-dispatch command regressions.
 17. <a id="source-17"></a> [resolved_image.go](../../internal/agentbox/resolved_image.go#L12) — image validation at resolution.

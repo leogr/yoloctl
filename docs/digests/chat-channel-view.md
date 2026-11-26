@@ -139,6 +139,6 @@ view confirmation. [2](#source-2) [7](#source-7) [8](#source-8)
 20. <a id="source-20"></a> [UI regressions](../../internal/chatui/catalog_unobserved_test.go#L8) — unobserved transitions and refresh ownership.
 21. <a id="source-21"></a> [Driver regression](../../internal/chatstream/catalog_unobserved_test.go#L5) — removal of applied/pending claims while preserving local read identity.
 
-22. <a id="source-22"></a> [Startup header projection](../../internal/chatstream/channels_client.go#L112) — initial catalog is unobserved, with no applied/pending claim.
+22. <a id="source-22"></a> [Startup header projection](../../internal/chatstream/channels_client.go#L125) — initial catalog is unobserved, with no applied/pending claim.
 
 23. <a id="source-23"></a> [Human selection regressions](../../internal/chatui/channel_select_test.go#L1) — picker keyboard/mouse, rail, Alt navigation, propagated commands, current unjoined view, drafts, duplicate activation, refusal/uncertainty, explicit part and background exclusion. Agent AIRC paths are unchanged; these are fake-callback UI checks, not live server qualification.

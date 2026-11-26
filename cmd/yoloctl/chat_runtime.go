@@ -710,7 +710,7 @@ func runManagedChatExec(ctx context.Context, cfg *agentbox.Config, argv []string
 		}
 		defer func() { _ = in.Close() }()
 	}
-	return sshtransport.Run(ctx, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()}, remoteCommandString(argv), false, in, out, notice)
+	return sshtransport.RunWithContextDeadline(ctx, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()}, remoteCommandString(argv), false, in, out, notice)
 }
 
 // newChatRuntimeClient keeps lifecycle output separate from the structured

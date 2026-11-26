@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"time"
 )
 
 func (d *channelDriver) availabilityAction(action Action) error {
@@ -45,7 +44,7 @@ func (d *channelDriver) availabilityAction(action Action) error {
 		return refuse(err.Error())
 	}
 
-	d.control = &pendingChannelAction{Action: action, until: time.Now().Add(20 * time.Second), after: d.latest}
+	d.control = &pendingChannelAction{Action: action, until: deadlineAfter(d.wire.replyTimeout), after: d.latest}
 	reply, err := d.wire.exchange(request)
 	if err != nil {
 		return err

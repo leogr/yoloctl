@@ -74,9 +74,9 @@ refusal on older servers. None of these proves a VM or live room.
 6. <a id="source-6"></a> [Apply](../../cmd/yoloctl/chat_channels_runtime.go#L197-L262) — `mutateChatChannels`, `applyChatChannelProof`.
 7. <a id="source-7"></a> [Rendering](../../internal/managedchat/render.go#L76-L156) — `removed_channels`, `Bootstrap.DeletedChannels`; filled at L288.
 8. <a id="source-8"></a> [Stream header](../../internal/chatstream/protocol.go#L36-L64) — `RoomHeader`; catalog reads in `chatChannelCatalog` (chat_channels.go L243).
-9. <a id="source-9"></a> [Relay](../../cmd/yoloctl/chat_stream.go#L85-L164) — `chatStreamOrigin`, `authorizeChatStreamChannel`.
+9. <a id="source-9"></a> [Relay](../../cmd/yoloctl/chat_stream.go#L83-L162) — `chatStreamOrigin`, `authorizeChatStreamChannel`.
 10. <a id="source-10"></a> [Catalog](../../internal/chatstream/channel_catalog.go#L30-L174) — header ledger validation, `refreshCatalog`, `markDeleted`.
-11. <a id="source-11"></a> [Driver](../../internal/chatstream/channels_client.go#L14-L239) — `deleted`, `origin`, `send`; history refusal in channel_history.go.
+11. <a id="source-11"></a> [Driver](../../internal/chatstream/channels_client.go#L19-L252) — `deleted`, `origin`, `send`; history refusal in channel_history.go.
 12. <a id="source-12"></a> [Controls](../../internal/chatstream/channel_events.go#L30-L310) — deleted refusals; `membershipEvent` finishes a pending action uncertain on a self-KICK.
 13. <a id="source-13"></a> [View](../../internal/chatui/channels.go#L60-L543) — `deleted`, `canSend`, `membershipChanged`, `control`.
 14. <a id="source-14"></a> [Composer](../../internal/chatui/model.go#L1269-L1317) — read-only send; paging in `historyPage` at L567.

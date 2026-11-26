@@ -1,6 +1,7 @@
 # Managed chat human stream
 
 Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Caller and request deadlines re-read at `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes.
 
 [FACT] `chat.stream` pins one confined SSH peer, verifies exact container,
 declaration (excluding its runtime chat projection), binds and applied
@@ -34,12 +35,14 @@ Epoch changes, gaps, partial frames and disconnects remain explicit, with no
 reconnect/resend. Clipboard/link callbacks require a user action and existing
 host policy. [5](#source-5) [6](#source-6) [7](#source-7) [8](#source-8)
 
-[FACT] Stream failures distinguish EOF, malformed frames, local deadlines and
-transport errors. A failed worker's last 2 KiB of stderr accompanies its exit
-error as sanitized single-line text; receipt and retry behavior is unchanged.
-The input filter reads a pollable duplicate of inherited worker stdin, so an
-early client exit can close and join it while the host keeps stdin open,
-preserving the client error instead of waiting for the handshake deadline.
+[FACT] Stream setup and export use the caller's context. The open view gives
+pending requests, including header and ready, a two-minute fail-safe. A stalled
+wire exchange honors an earlier control deadline. Missing roster or history
+completions produce a gap while the live connection continues. Stream errors
+separate EOF, malformed frames, local closure and transport failures. The
+last 2 KiB of worker stderr appears as sanitized single-line text. The filter
+can close and join its pollable stdin copy on client exit, preserving the
+client error while the host keeps stdin open.
 A filter refusal is published before the client sees its EOF, so a client
 exiting cleanly on that EOF still reports the refusal.
 [9](#source-9) [10](#source-10) [11](#source-11)
@@ -54,8 +57,8 @@ malformed or uncorrelated replies, and peer errors that only repeat the local
 check's text. Nothing is retried. Synthetic-peer regressions inject the former
 attachment-capability mismatch into the real channel loop. [12](#source-12) [13](#source-13)
 
-[FACT] Human away/back uses the existing serialized control slot with a 20-second
-confirmation deadline. Strict decoding permits only ID/op and the away reason
+[FACT] Human away/back uses the serialized control slot with the view's
+request fail-safe. Strict decoding permits only ID/op and the away reason
 (1–200 UTF-8 bytes without CR/LF/NUL); it does not acquire a channel grant.
 Queue acceptance is not confirmation: only the current server/recipient's 306
 or 305 after the pre-submission cursor fence settles its matching action.
@@ -67,15 +70,15 @@ never every connection of the account. [14](#source-14)
 
 1. <a id="source-1"></a> [Nickname take-over and launcher](../../internal/chatstream/connection.go#L11-L47) — `ErrNickHeld`, `ErrTakenOver`, `NickHeldEvent`, `TakeOverFlag`, `ClientArgv`; embedded client_config.py (`derive`, `main`, `TemporaryFile` unlinks before writes); `runControllerChatStream` refusal at chat_stream.go L53–L65 and `chatStreamTakeOver` L91–L100; `managedChatConnection.Connected` in chat_connection.go L166–L174; driver mapping in channels_client.go `run` L78, channel_events.go `record` L172 and client.go `exchange` L331–L370; host `chatSession.start`/`takeOver` in chat_view.go L266–L396 and chatui `nickHeld`/`overlayTakeOver`.
 2. <a id="source-2"></a> [Take-over regressions](../../internal/chatstream/airc_views_integration_test.go#L14) — opt-in real-AIRC `TestRealAIRCHumanViewTakeOver` (NICK_HELD leaves the holder, take-over ends it as `ErrTakenOver` with peer QUIT, another account's 433); takeover_test.go (nick-held frame, ERROR and closed-event mapping); launcher tests in connection_test.go, including `TestClientLauncherEnablesRegainOnlyForTakeOver` and `TestClientLauncherWithoutOTmpfile`; `TestChatStreamUsesTheSavedNickAndRefusesAHeldOneBeforeEffects` in cmd/yoloctl/chat_stream_test.go; `TestNickHeldAsksToTakeOverOrClose` in internal/chatui/takeover_test.go.
-3. <a id="source-3"></a> [Pinned connection](../../cmd/yoloctl/chat_connection.go#L44) — peer verification and cancellation.
+3. <a id="source-3"></a> [Pinned connection](../../cmd/yoloctl/chat_connection.go#L47) — peer verification and cancellation.
 4. <a id="source-4"></a> [OpenShell v0.0.72](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-process/src/ssh.rs#L53) — `ssh_server_init`.
 5. <a id="source-5"></a> [Controller stream](../../cmd/yoloctl/chat_stream.go#L18) — setup and relay.
-6. <a id="source-6"></a> [JSONL adapter](../../internal/chatstream/client.go#L158) — `Run`, receipt/echo correlation.
+6. <a id="source-6"></a> [JSONL adapter](../../internal/chatstream/client.go#L160) — `Run`, receipt/echo correlation.
 7. <a id="source-7"></a> [Stream allowlist](../../internal/chatstream/protocol.go#L101) — `DecodeRequest`, `Filter`.
 8. <a id="source-8"></a> [Host view](../../cmd/yoloctl/chat_view.go#L30) — `runChatView`.
 9. <a id="source-9"></a> [Stream diagnostics](../../cmd/yoloctl/chat_stream_stderr.go#L20) — `callChatStream`, bounded `stderrTail`; real controller transport regression in `chat_stream_stderr_test.go`.
-10. <a id="source-10"></a> [Frame failures](../../internal/chatstream/client.go#L289-L319) — `closeFor`, `frameError`; deadline and malformed-input regressions in `stream_diag_test.go`.
-11. <a id="source-11"></a> [Relay input cleanup](../../cmd/yoloctl/chat_stream.go#L89) — `relayManagedChatWithExec`, `chatFilterInput`; `TestChatRelayExitDoesNotWaitForStdin` in cmd/yoloctl/chat_stream_test.go keeps inherited blocking stdin open with empty or partial input while the client succeeds or fails; `TestChatRelayPreservesFilterFailure` retains a filter refusal; `TestChatRelayReportsRefusalBeforeClientEOF` covers a client that exits cleanly on the refusal's EOF.
-12. <a id="source-12"></a> [Pre-write refusal](../../internal/chatstream/client.go#L322-L413) — `localRejection`, `exchange`, `driver.send`.
+10. <a id="source-10"></a> [Frame failures](../../internal/chatstream/client.go#L303-L333) — `closeFor`, `frameError`; deadline and malformed-input regressions in `stream_diag_test.go`.
+11. <a id="source-11"></a> [Relay input cleanup](../../cmd/yoloctl/chat_stream.go#L87) — `relayManagedChatWithExec`, `chatFilterInput`; `TestChatRelayExitDoesNotWaitForStdin` in cmd/yoloctl/chat_stream_test.go keeps inherited blocking stdin open with empty or partial input while the client succeeds or fails; `TestChatRelayPreservesFilterFailure` retains a filter refusal; `TestChatRelayReportsRefusalBeforeClientEOF` covers a client that exits cleanly on the refusal's EOF.
+12. <a id="source-12"></a> [Pre-write refusal](../../internal/chatstream/client.go#L336-L424) — `localRejection`, `exchange`, `driver.send`.
 13. <a id="source-13"></a> [Refusal regressions](../../internal/chatstream/local_rejection_test.go#L131-L295) — `TestChannelsPreWriteRejectionKeepsTheStream` runs `channelDriver.run` with a synthetic peer; `TestChannelsWrittenSendFailuresStayUncertain`.
 14. <a id="source-14"></a> [Availability controls](../../internal/chatstream/availability.go#L1) — `availabilityAction`, `availabilityNumeric`, `patchSelfMembers`; protocol.go `decodeChannelRequest`/`FilterChannels`; `TestRealAIRCHumanAvailability` in airc_availability_integration_test.go exercises the managed filter with pinned binaries.

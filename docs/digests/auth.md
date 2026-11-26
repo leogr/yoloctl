@@ -90,7 +90,7 @@ selects a home-relative host import directory; custom XDG roots use --file. [14]
 7. <a id="source-7"></a> [cmd/yoloctl/account.go](../../cmd/yoloctl/account.go#L210) — show, edit, deletion, secret commands.
 8. <a id="source-8"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L214) — account-reference drift.
 9. <a id="source-9"></a> [cmd/yoloctl/controller_documents.go](../../cmd/yoloctl/controller_documents.go#L231) — native import and profile digest validation.
-10. <a id="source-10"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L182) — caller secret capture and local editor.
+10. <a id="source-10"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L181) — caller secret capture and local editor.
 
 11. <a id="source-11"></a> [Gemini adapter](gemini.md) — shipped profile and upstream auth selection.
 
