@@ -1,14 +1,16 @@
 # Expanding a running step
 
-Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes. Step ordering re-read at `0a1e47d47001eab39274faf83f3af36419b04f2b` and accompanying changes.
+Verification: `dc857939b14bace057ca9c009367a0672facbaa3` and accompanying changes; step writer on `e82157be32474cbcb252aaf143c81494edb67c04` and accompanying changes. Step ordering re-read at `0a1e47d47001eab39274faf83f3af36419b04f2b` and accompanying changes.
 
 [FACT] Every command a TUI pane starts gets one more private inherited
 socket, named by `YOLOCTL_TUI_STEP_FD`. It runs TUI→command and carries
 only a click's row offset from the pane's cursor row, one decimal per line,
 from 0 down to -4096. No terminal input, mouse mode or command line travels
 on it. A malformed line ends the reader. A session that was not given the
-channel drops the name from its child's environment. The TUI writes with
-the image channel's one-second send bound. [1](#source-1) [2](#source-2)
+channel drops the name from its child's environment. The TUI queues a click
+(8 at most; more are dropped) for the pane's own step writer, separate from
+its image writer, so the event loop never waits; a write has a 2-minute
+fail-safe. [1](#source-1) [2](#source-2)
 
 [FACT] The TUI sends a click only for a plain left press and release on the
 same cell, with no modifier, in a running pane at its live screen (scrollback
@@ -44,7 +46,7 @@ maintenance retention. Image builds get no durable-output pointer. [5](#source-5
 
 1. <a id="source-1"></a> [Channel](../../internal/termio/stepclick.go#L1) — `StepClickFDEnv`, `TakeInheritedStepClicks`, `WriteStepClick`, `ReadStepClicks`; stepclick_test.go.
 
-2. <a id="source-2"></a> [Pane sessions](../../internal/tui/term/session.go#L1) — `Options.StepClicks`, `SendStepClick`; tui.go `startPane`.
+2. <a id="source-2"></a> [Pane sessions](../../internal/tui/term/session.go#L1) — `Options.StepClicks`, `SendStepClick`, `QueueStepClick`, `writeQueued`; tui.go `startPane`; tui/channel_writers_test.go.
 
 3. <a id="source-3"></a> [Click routing](../../internal/tui/mouse.go#L1) — `stepClick`, `mouseOwner.press`; step_click_test.go.
 

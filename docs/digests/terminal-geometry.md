@@ -83,6 +83,6 @@ behavior or current macOS support. [2](#source-2) [7](#source-7) [10](#source-10
 17. <a id="source-17"></a> [ultraviolet.patch](../../third_party/ultraviolet.patch#L35) — signed decoder.
 18. <a id="source-18"></a> [host_mouse_decoder_test.go](../../internal/tui/host_mouse_decoder_test.go#L17) — signed/fragmented host input.
 19. <a id="source-19"></a> [native.patch](../../internal/terminal/wasm/native.patch#L5-L24) — native report admission option.
-20. <a id="source-20"></a> [session.go](../../internal/tui/term/session.go#L306) — `ResizeGeometry` after the child's exit; `TestResizeWhileTheSessionCompletesIsLocal` in geometry_test.go.
+20. <a id="source-20"></a> [session.go](../../internal/tui/term/session.go#L344) — `ResizeGeometry` after the child's exit; `TestResizeWhileTheSessionCompletesIsLocal` in geometry_test.go.
 21. <a id="source-21"></a> [view.go](../../internal/session/view.go#L242) — bounded local resize failure publication and read-error precedence in `attachView`.
 22. <a id="source-22"></a> [attach_geometry_test.go](../../internal/session/attach_geometry_test.go#L98) — local holder/protocol geometry and result controls in both attachment modes.

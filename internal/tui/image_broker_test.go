@@ -121,12 +121,12 @@ func TestBrokerReleasesOnExitAndBoundsItsInbox(t *testing.T) {
 func TestBrokerResendsADroppedCapability(t *testing.T) {
 	m, s := brokerModel(t)
 	m.imageHost.state = imageSupported
-	m.images.outbox = make(chan imageMsg) // no room: every send is dropped
+	m.images.queue = func(*term.Session, chatimage.Frame) bool { return false } // every send is dropped
 	_, _ = m.Update(wakeMsg{})
 	if m.images.told[s] != 0 {
 		t.Fatal("dropped capability counted as told")
 	}
-	m.images.outbox = nil // the next send starts a working sender
+	m.images.queue = nil // the pane's own writer again
 	_, _ = m.Update(wakeMsg{})
 	if m.images.told[s] != m.images.advertised.generation {
 		t.Fatal("capability not resent")
@@ -134,11 +134,11 @@ func TestBrokerResendsADroppedCapability(t *testing.T) {
 	pump(t, m, s, func() bool { return strings.Contains(s.GridText(), `"op":"capability"`) })
 }
 
-// A pane that stops reading costs one write deadline, then its channel is
-// closed so later frames fail at once (review step 6 condition 1).
+// A pane that stops reading costs one write bound (1 s here, 2 minutes in
+// use), then its channel is closed so later frames fail at once.
 func TestBrokerClosesAChannelAfterAFailedSend(t *testing.T) {
 	m := newTestModel(t, 80, 8)
-	s, err := term.Start(term.Options{Rows: 4, Cols: 80,
+	s, err := term.Start(term.Options{Rows: 4, Cols: 80, ChannelWriteBound: time.Second,
 		Argv: []string{"sleep", "30"}, OnImage: m.imageHandler()}) // never reads
 	if err != nil {
 		t.Fatal(err)

@@ -102,7 +102,7 @@ or native application parity. [12](#source-12)
 6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L1643) — `View`, `hostCursor`, `runningCursor`.
 7. <a id="source-7"></a> [input.go](../../internal/tui/term/input.go#L11) — queue bounds, prepared input, failures, close.
 8. <a id="source-8"></a> [pty_test.go](../../internal/tui/term/pty_test.go#L1-L52) — PTY close with blocked I/O, retained slave.
-9. <a id="source-9"></a> [session.go](../../internal/tui/term/session.go#L66) — `Start`, pumps, reset/banner, `Wait`, `Close`.
+9. <a id="source-9"></a> [session.go](../../internal/tui/term/session.go#L69) — `Start`, pumps, reset/banner, `Wait`, `Close`.
 10. <a id="source-10"></a> [console.go](../../internal/tui/term/console.go#L15-L274) — direct-child completion, ordered reuse, `Kill`, `Close`.
 11. <a id="source-11"></a> [reset.go](../../internal/termio/reset.go#L1-L49) — `SessionEndResetInPlace`, `SessionEndResetHost`.
 12. <a id="source-12"></a> [fidelity_test.go](../../internal/tui/term/fidelity_test.go#L1-L128) — strict harness, JSON/source map, fragmented writes.

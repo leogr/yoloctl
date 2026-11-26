@@ -60,7 +60,7 @@ session screen checkpoints. [6](#source-6) [9](#source-9) [11](#source-11)
 4. <a id="source-4"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L294-L409) — tracked references, hold release and hyperlink row formatting; native callbacks and defaults precede these exports.
 5. <a id="source-5"></a> [frame_test.go](../../internal/terminal/frame_test.go#L1-L91) — anchor eviction, reflow, reset, alternate screen, trimming and cursor styles.
 6. <a id="source-6"></a> [frame_test.go](../../internal/tui/term/frame_test.go#L1-L148) — hold boundaries, silent timeout, styles/links and concurrent grid/cursor regressions.
-7. <a id="source-7"></a> [session.go](../../internal/tui/term/session.go#L187) — release of a hold on session completion.
+7. <a id="source-7"></a> [session.go](../../internal/tui/term/session.go#L195) — release of a hold on session completion.
 8. <a id="source-8"></a> [modes.go](../../internal/tui/term/modes.go#L20-L44) — `UpdateFocus` and mode gating.
 9. <a id="source-9"></a> [terminal.go](../../internal/terminal/terminal.go#L51-L83) — event storage.
 10. <a id="source-10"></a> [tui.go](../../internal/tui/tui.go#L1507) — `View`, overlay padding and cursor placement.

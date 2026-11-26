@@ -153,5 +153,5 @@ uses `YOLOCTL_TUI_DEBUG` and `YOLOCTL_TUI_DEBUG_LOG`. [11](#source-11)
 28. <a id="source-28"></a> [palette_quit_test.go](../../internal/tui/palette_quit_test.go#L9-L26) — empty/nonempty idle-palette draft quit regression.
 29. <a id="source-29"></a> [Palette arrow routing](../../internal/tui/pane_prefix.go#L138) — notice precedence before the palette handles modified arrows.
 30. <a id="source-30"></a> [Host arrow regression](../../internal/tui/palette_arrows_test.go#L10) — wire sequences with and without notice focus.
-31. <a id="source-31"></a> [session.go](../../internal/tui/term/session.go#L375-L442) — `pump` joins the private stream before `writeExitBanner` uses its retained error.
+31. <a id="source-31"></a> [session.go](../../internal/tui/term/session.go#L413-L480) — `pump` joins the private stream before `writeExitBanner` uses its retained error.
 32. <a id="source-32"></a> [tui.go](../../internal/tui/tui.go#L1275-L1314) — `reportViewErrors` routes private attachment diagnostics.

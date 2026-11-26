@@ -1,6 +1,6 @@
 # Chat image previews (host boundary)
 
-Verification: `e1f1d5e998638a327cbce30e2a9bca11ea9ee387` and accompanying changes; image channel on `09260f88375983bd8b64cdeb08e88e1e2709415f` and accompanying changes; host probe on `9db70c2a200005f0afdd9156e802f65974a56e72` and accompanying changes; broker on `39eb0a8673de8270a8b0a91d90b3400937549f2a` and accompanying changes; broker conditions and channel identity on `4c2527aa7013f10159edf27819bb572d1ce11be9` and accompanying changes; fetch on `b3b2cf92659f79545ec4cc8d405d5f1b0a3c122e` and accompanying changes; images seam on `0c095e355ee1cd3de4aeb62b9c2d1d9373230d3f` and accompanying changes.
+Verification: `e1f1d5e998638a327cbce30e2a9bca11ea9ee387` and accompanying changes; image channel on `09260f88375983bd8b64cdeb08e88e1e2709415f` and accompanying changes; host probe on `9db70c2a200005f0afdd9156e802f65974a56e72` and accompanying changes; broker on `39eb0a8673de8270a8b0a91d90b3400937549f2a` and accompanying changes; broker conditions and channel identity on `4c2527aa7013f10159edf27819bb572d1ce11be9` and accompanying changes; fetch on `b3b2cf92659f79545ec4cc8d405d5f1b0a3c122e` and accompanying changes; images seam on `0c095e355ee1cd3de4aeb62b9c2d1d9373230d3f` and accompanying changes; per-pane writers on `e82157be32474cbcb252aaf143c81494edb67c04` and accompanying changes.
 
 [FACT] Previews use Kitty Unicode placeholder cells: U+10EEEE with a row and a
 column diacritic, drawn in a 24-bit foreground colour that is the image ID.
@@ -50,10 +50,12 @@ counts, and a cell measurement re-checks the probe as soon as it arrives.
 
 [FACT] The TUI gives the channel only to native chat panes, and only while
 `seams.images` (default on, read when the TUI starts) allows previews. Their frames
-wait in a 16-frame inbox until the event loop drains it; frames to panes
-leave through a 64-frame outbox written in order by one sender goroutine with
-a 1 s write deadline; overflow is dropped and the pane keeps its chip, and a
-failed write closes that pane's channel so it cannot delay the others. The
+wait in a 16-frame inbox until the event loop drains it; frames to a pane
+wait in that pane's own 64-frame queue, written in order by its own writer
+with a 2-minute fail-safe per write, so a pane that stops reading (a chat
+stopped with Ctrl+Z, say) holds only itself and keeps its previews when it
+reads again; overflow is dropped and the pane keeps its chip, and a failed
+write closes that pane's channel. The
 first chat pane starts the probe; each live pane is sent the capability once
 per generation (counted only when the frame was queued), which changes when support changes. Preview requests wait
 (at most 8) for the probe, then get `stale` for an old generation,
@@ -73,7 +75,7 @@ characters (copy maps them to chips, see the terminal selection digest).
 2. <a id="source-2"></a> [frames.go](../../internal/tui/frames.go#L40-L109) — `consoleDisplayFrame`, `sessionFrame`, `filterImages`; `View` captures in tui.go.
 3. <a id="source-3"></a> [image_filter_test.go](../../internal/tui/image_filter_test.go#L1) — owner, forging pane, console, composed view, release and a placeholder title; `emulator.Title` and the browser popup URL use `NeutralizeText`.
 4. <a id="source-4"></a> [protocol.go](../../internal/chatimage/protocol.go#L1-L285) — `Frame`, `Validate`, `Conn.Send`/`Receive`, `ChannelPair`, `InheritedChannel`; tests in protocol_test.go.
-5. <a id="source-5"></a> [session.go](../../internal/tui/term/session.go#L89) — `Options.OnImage`, channel setup in `Start`, reader, close in `pump`, `SendImage`; image_channel_test.go with a real child.
+5. <a id="source-5"></a> [session.go](../../internal/tui/term/session.go#L640-L672) — `Options.OnImage`, channel setup in `Start`, reader, close in `pump`, `SendImage`, `QueueImage` and the per-pane writer; image_channel_test.go with a real child.
 6. <a id="source-6"></a> [detect.go](../../internal/chatimage/detect.go#L1) — `ParseTerminalVersion`, `Terminal.Supported`, `Probe`; ids.go `IDs`; detect_test.go.
 7. <a id="source-7"></a> [image_probe.go](../../internal/tui/image_probe.go#L1) — `startImageProbe`, `imageProbeMsg`, `checkImageProbe`, `imagesSupported`; image_probe_test.go.
 8. <a id="source-8"></a> [host_geometry.go](../../internal/tui/host_geometry.go#L39) — `acceptHostCellSize` re-checks the probe.

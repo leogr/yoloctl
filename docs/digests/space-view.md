@@ -127,7 +127,7 @@ and local PTYs; they do not establish live-VM or proxy-confined chat coverage.
 16. <a id="source-16"></a> [canvas.go](../../internal/tui/spaceview/canvas.go#L1) — cell canvas and fitting.
 17. <a id="source-17"></a> [model.go](../../internal/tui/spaceview/model.go#L528-L638) — `mouse`, `activateBox`, `attach`.
 18. <a id="source-18"></a> [tab_requests.go](../../internal/tui/tab_requests.go#L17-L43) — request handler and validation.
-19. <a id="source-19"></a> [session.go](../../internal/tui/term/session.go#L106) — request channel for a tab child.
+19. <a id="source-19"></a> [session.go](../../internal/tui/term/session.go#L114) — request channel for a tab child.
 20. <a id="source-20"></a> [tabrequest.go](../../internal/termio/tabrequest.go#L16-L69) — request wire format.
 21. <a id="source-21"></a> [popup.go](../../internal/tui/spaceview/popup.go#L65) — popup loading and JSON decoders.
 22. <a id="source-22"></a> [telemetry_test.go](../../internal/spacetelemetry/telemetry_test.go#L1) — parser, room and collector tests.

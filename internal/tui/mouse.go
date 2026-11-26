@@ -478,6 +478,6 @@ func (m *model) stepClick(owner mouseOwner, mo tea.Mouse) {
 	}
 	owner = m.paneOwner(p, owner.selection)
 	if offset := (mo.Y - owner.row0) - f.Cursor.Y; offset <= 0 {
-		_ = p.Session.SendStepClick(offset)
+		p.Session.QueueStepClick(offset) // a full queue drops the click
 	}
 }

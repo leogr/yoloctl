@@ -15,13 +15,12 @@ import (
 )
 
 // Bounds of the preview broker's queues. Image control frames from chat
-// panes wait in imageInbox until the event loop drains them; frames to chat
-// panes wait in the outbox for one sender goroutine that writes them in
-// order with a per-write deadline. Overflowing frames are dropped: a child
-// gets no answer and keeps its chip.
+// panes wait in imageInbox until the event loop drains them; frames to a chat
+// pane wait in that pane's own queue for its writer (term.Session.QueueImage),
+// so a pane that stops reading holds only itself. Overflowing frames are
+// dropped: a child gets no answer and keeps its chip.
 const (
-	imageInboxCap  = 16
-	imageOutboxCap = 64
+	imageInboxCap = 16
 	// Preview requests held while the host terminal is probed.
 	imagePendingCap = 8
 )
@@ -54,7 +53,9 @@ type imageBroker struct {
 	mu      sync.Mutex
 	inbox   []imageMsg
 	pending []imageMsg // preview requests waiting for the probe
-	outbox  chan imageMsg
+	// queue hands a frame to a pane's writer; nil means
+	// (*term.Session).QueueImage. A seam for tests.
+	queue func(*term.Session, chatimage.Frame) bool
 	// advertised is the current capability; told is the generation each
 	// chat pane was last sent.
 	advertised struct {
@@ -87,28 +88,12 @@ func (m *model) imageHandlerFor(space string) func(*term.Session, chatimage.Fram
 }
 
 // sendImage queues a host frame for a chat pane without blocking the event
-// loop. The single sender keeps per-pane order.
+// loop; the pane's own writer keeps its order.
 func (m *model) sendImage(s *term.Session, f chatimage.Frame) (queued bool) {
-	b := &m.images
-	if b.outbox == nil {
-		b.outbox = make(chan imageMsg, imageOutboxCap)
-		go func(out <-chan imageMsg) {
-			for msg := range out {
-				if err := msg.session.SendImage(msg.frame); err != nil {
-					// A failed or timed-out write may have left half a frame:
-					// the channel is unusable, and later frames to this pane
-					// must not wait in front of the others.
-					msg.session.CloseImageChannel()
-				}
-			}
-		}(b.outbox)
+	if q := m.images.queue; q != nil {
+		return q(s, f)
 	}
-	select {
-	case b.outbox <- imageMsg{session: s, frame: f}:
-		return true
-	default: // full: the pane keeps its chip
-		return false
-	}
+	return s.QueueImage(f)
 }
 
 func (m *model) capabilityFrame() chatimage.Frame {

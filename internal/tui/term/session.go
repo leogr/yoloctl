@@ -62,6 +62,9 @@ type Options struct {
 	// (termio.StepClickFDEnv): the TUI writes a click on the child's steps
 	// block there, never into its input.
 	StepClicks bool
+	// ChannelWriteBound bounds one image or step-click write to a child that
+	// stopped reading; 0 means channelWriteFailSafe. For tests.
+	ChannelWriteBound time.Duration
 	// ImageCopy marks a native chat session: copying its local selection maps
 	// preview image cells back to attachment chips instead of exporting the
 	// placeholder characters. Other sessions copy plain native text.
@@ -98,6 +101,11 @@ type Session struct {
 	stepFile    *os.File
 	imageConn   *chatimage.Conn
 	imageFile   *os.File
+	// Each private channel has its own queue and writer, so a child that
+	// stops reading one holds neither the other nor other panes.
+	writeBound  time.Duration
+	imageQueue  chan chatimage.Frame
+	stepQueue   chan int
 	requestDone chan struct{}
 	resumeMu    sync.Mutex
 	resume      *termio.TabRequest
@@ -230,17 +238,33 @@ func Start(opts Options) (*Session, error) {
 	emu.input.setTarget(writer)
 	s := &Session{
 		// Replies and user input enter the same ordered PTY queue.
-		emulator:  emu,
-		ptmx:      ptmx,
-		cmd:       cmd,
-		writer:    writer,
-		onBrowser: opts.OnBrowser,
-		endHint:   opts.EndHint,
-		imageCopy: opts.ImageCopy,
-		release:   releaseSlave,
-		done:      make(chan struct{}),
-		exited:    make(chan struct{}),
-		stepFile:  stepParent,
+		emulator:   emu,
+		ptmx:       ptmx,
+		cmd:        cmd,
+		writer:     writer,
+		onBrowser:  opts.OnBrowser,
+		endHint:    opts.EndHint,
+		imageCopy:  opts.ImageCopy,
+		release:    releaseSlave,
+		done:       make(chan struct{}),
+		exited:     make(chan struct{}),
+		stepFile:   stepParent,
+		writeBound: opts.ChannelWriteBound,
+	}
+	if s.writeBound <= 0 {
+		s.writeBound = channelWriteFailSafe
+	}
+	if stepParent != nil {
+		s.stepQueue = make(chan int, stepQueueCap)
+		go s.writeQueued(func() bool {
+			select {
+			case offset := <-s.stepQueue:
+				_ = s.SendStepClick(offset) // a click that cannot be written is dropped
+				return true
+			case <-s.done:
+				return false
+			}
+		})
 	}
 	if requestParent != nil {
 		s.requestFile = requestParent
@@ -274,6 +298,20 @@ func Start(opts Options) (*Session, error) {
 	if imageParent != nil {
 		s.imageConn = chatimage.NewConn(imageParent, true)
 		s.imageFile = imageParent
+		s.imageQueue = make(chan chatimage.Frame, imageQueueCap)
+		go s.writeQueued(func() bool {
+			select {
+			case f := <-s.imageQueue:
+				if err := s.SendImage(f); err != nil {
+					// A failed or timed-out write may have left half a
+					// frame: the channel is unusable, later frames fail.
+					s.CloseImageChannel()
+				}
+				return true
+			case <-s.done:
+				return false
+			}
+		})
 		go func() {
 			defer func() { _ = s.imageConn.Close() }()
 			for {
@@ -603,9 +641,45 @@ func (s *Session) SendImage(f chatimage.Frame) error {
 	if s.imageConn == nil {
 		return errors.New("term: session has no image channel")
 	}
-	// A child that stops reading must not hold the sender.
-	_ = s.imageFile.SetWriteDeadline(time.Now().Add(imageSendTimeout))
+	// A child that stops reading holds this pane's image writer only, up to
+	// the bound.
+	_ = s.imageFile.SetWriteDeadline(time.Now().Add(s.writeBound))
 	return s.imageConn.Send(f)
+}
+
+// QueueImage queues a frame for the session's image writer without waiting;
+// false when the session has no image channel or the queue is full (the
+// pane keeps its chip).
+func (s *Session) QueueImage(f chatimage.Frame) bool {
+	if s.imageQueue == nil {
+		return false
+	}
+	select {
+	case s.imageQueue <- f:
+		return true
+	default:
+		return false
+	}
+}
+
+// QueueStepClick queues a step click for the session's step writer without
+// waiting; a full queue drops it.
+func (s *Session) QueueStepClick(offset int) bool {
+	if s.stepQueue == nil {
+		return false
+	}
+	select {
+	case s.stepQueue <- offset:
+		return true
+	default:
+		return false
+	}
+}
+
+// writeQueued runs one channel writer until next reports the session ended.
+func (s *Session) writeQueued(next func() bool) {
+	for next() {
+	}
 }
 
 // CloseImageChannel closes the session's image channel (the session goes on);
@@ -623,14 +697,22 @@ func (s *Session) SendStepClick(offset int) error {
 	if s.stepFile == nil {
 		return errors.New("term: session has no step click channel")
 	}
-	// The image channel's send bound: only a child that stopped reading
-	// with a full socket buffer reaches it.
-	_ = s.stepFile.SetWriteDeadline(time.Now().Add(imageSendTimeout))
+	// Only a child that stopped reading with a full socket buffer reaches
+	// the bound; the queue in front of it keeps the event loop free.
+	_ = s.stepFile.SetWriteDeadline(time.Now().Add(s.writeBound))
 	return termio.WriteStepClick(s.stepFile, offset)
 }
 
 // HasImageChannel reports whether the session was given an image channel.
 func (s *Session) HasImageChannel() bool { return s.imageConn != nil }
 
-// imageSendTimeout bounds one image control write.
-const imageSendTimeout = time.Second
+// channelWriteFailSafe bounds one image or step-click write when nothing else
+// ends it (the sweep's 2-minute fail-safe): a child stopped briefly, for
+// example with Ctrl+Z, keeps its channels.
+const channelWriteFailSafe = 2 * time.Minute
+
+// Queue bounds of a session's private channel writers: overflow is dropped.
+const (
+	imageQueueCap = 64
+	stepQueueCap  = 8
+)
