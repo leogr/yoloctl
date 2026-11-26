@@ -19,8 +19,10 @@ and secrets live in private `config/` directories on the existing ext4 data
 disk. Runtime loading verifies the selected executable, disk UUID/marker/live
 bind and directory ownership without preparing or repairing storage. Explicit
 deployment/import owns bind preparation. Native declaration I/O is bounded, no-follow and
-restricted to that store. Read-only storage verification bounds output capture and
-pipe settlement; incomplete output supplies no identity. [31](#source-31)
+restricted to that store. Read-only storage verification bounds output capture. The
+controller's own checks end within a two-minute fail-safe; a direct host check
+(space recreate) follows its caller, with a two-minute bound only on the output
+drain after the helper exits. Incomplete output supplies no identity. [31](#source-31)
 Writes flush the file, rename, then flush its parent;
 post-replacement flush failure reports an uncertain commit. Native deletion
 also flushes its directory. Host shares carry no declaration lock or write.
@@ -140,7 +142,7 @@ this test seam does not change server authorization. [19](#source-19)
 
 1. <a id="source-1"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L30) — newClientRootCmd.
 2. <a id="source-2"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L40) — controllerOperations, runControllerWorker, controllerCommandArgs.
-3. <a id="source-3"></a> [internal/controller/runtime.go](../../internal/controller/runtime.go#L18) — `LoadRuntime`, `VerifyRuntimeStorage`, `PrepareRuntimeForLifecycle`, `PrivateDir`.
+3. <a id="source-3"></a> [internal/controller/runtime.go](../../internal/controller/runtime.go#L17) — `LoadRuntime`, `VerifyRuntimeStorage`, `PrepareRuntimeForLifecycle`, `PrivateDir`.
 4. <a id="source-4"></a> [internal/spaceconfig/bootstrap.go](../../internal/spaceconfig/bootstrap.go#L24) — Bootstrap, Settings.
 5. <a id="source-5"></a> [internal/manifestio/io.go](../../internal/manifestio/io.go#L26) — Read, Write, Remove.
 6. <a id="source-6"></a> [internal/safepath/safepath.go](../../internal/safepath/safepath.go#L159) — WriteFile, ReadFileInfo, RemoveFile.
@@ -172,7 +174,7 @@ this test seam does not change server authorization. [19](#source-19)
 29. <a id="source-29"></a> [Mandatory ownership](../../internal/controller/worker_private_input_linux.go#L120) — raw full-pair eligibility and unknown handles untouched.
 30. <a id="source-30"></a> [Canonical payload](../../internal/controller/worker_private_input.go#L33) — exact closed typed worker decoding.
 
-31. <a id="source-31"></a> [Storage verification transport](../../internal/accountstate/verify.go#L44) — verify-only bounded output/pipe settlement and closed UUID response; other account actions keep their existing path.
+31. <a id="source-31"></a> [Storage verification transport](../../internal/accountstate/verify.go#L53) — verify-only bounded output/pipe settlement and closed UUID response; other account actions keep their existing path.
 
 32. <a id="source-32"></a> [Physical checkpoint owner](../../internal/workercheckpoint/channel.go#L97) — sole original File, closed operations, cancellation admission and complete-reply preservation; transport possession supplies no VM/SDK grant.
 

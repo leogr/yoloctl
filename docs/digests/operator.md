@@ -111,7 +111,7 @@ continues to come from the controller grant. [17](#source-17)
 3. <a id="source-3"></a> [cmd/yoloctl/controller_test.go](../../cmd/yoloctl/controller_test.go#L184) — CLI fidelity, authority and path tests.
 4. <a id="source-4"></a> [cmd/yoloctl/controller_operator.go](../../cmd/yoloctl/controller_operator.go#L28) — authorization, provisioning support, warnings and path translation.
 5. <a id="source-5"></a> [internal/controller/server.go](../../internal/controller/server.go#L249) — `ServeConn`: trusted principal, request admission and execution cancellation.
-6. <a id="source-6"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L168) — operator mounts and incarnation labels.
+6. <a id="source-6"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L170) — operator mounts and incarnation labels.
 7. <a id="source-7"></a> [internal/operator/endpoint.go](../../internal/operator/endpoint.go#L58) — registration lifecycle and endpoint provisioning.
 8. <a id="source-8"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L95) — shared frontend routing and cross-space copy.
 9. <a id="source-9"></a> [assets/embed.go](../../assets/embed.go#L13) — embedded BoxOperatorSkill.

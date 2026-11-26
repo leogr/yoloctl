@@ -134,4 +134,4 @@ echo-independent readiness and preserved shell state.
 
 28. <a id="source-28"></a> [Guest artifact selection](../../internal/guestbinary/binary.go#L1) — linked hashes, `Resolve`, `LinuxExecutable`, shared by boot-image preparation and session deployment.
 
-29. <a id="source-29"></a> [Holder socket wait](../../cmd/yoloctl/session_client.go#L770) — `waitForAttachSocket`, `startSessionHolder`.
+29. <a id="source-29"></a> [Holder socket wait](../../cmd/yoloctl/session_client.go#L772) — `waitForAttachSocket`, `startSessionHolder`.

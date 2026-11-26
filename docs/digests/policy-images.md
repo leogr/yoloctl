@@ -73,7 +73,7 @@ hosts gain no grant. Existing ancestor matching remains unchanged. [18](#source-
 1. <a id="source-1"></a> [internal/agentbox/compose.go](../../internal/agentbox/compose.go#L40-L278) — `ComposePolicy` through `compilePolicy`, including `AgentNpmPackage`.
 2. <a id="source-2"></a> [internal/features/features.go](../../internal/features/features.go#L1-L141) — `Feature`, builtin install and capability declarations.
 3. <a id="source-3"></a> [internal/agentbox/compose.go](../../internal/agentbox/compose.go#L302-L383) — `lintReadWriteDevSymlink` through `lintHostPattern`.
-4. <a id="source-4"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L330) — runtime options, bind mounts and environment.
+4. <a id="source-4"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L332) — runtime options, bind mounts and environment.
 5. <a id="source-5"></a> [assets/containers/agentbox/yoloctl-entrypoint.sh](../../assets/containers/agentbox/yoloctl-entrypoint.sh#L26) — GID-zero guard and identity alignment.
 
 6. <a id="source-6"></a> [assets/embed.go](../../assets/embed.go#L1) — embedded assets; the v0.0.72 `SandboxVersion` pins and legacy Rego embed are removed by the retirement (tree `3cc5e841`), the native runtime, its Rego and the generated qualification selection are embedded through `internal/nativeartifacts` (`embedded/selection/`, git-ignored, written by `make build`); `assets/native_openshell.go` keeps an empty default; `assets/sandbox/sandbox-policy.rego` stays only as a test fixture.

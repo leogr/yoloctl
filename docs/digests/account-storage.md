@@ -80,6 +80,6 @@ account disk's preservation contract does not cover it. [9](#source-9)
 
 13. <a id="source-13"></a> [Firecracker disks](../../internal/firecracker/disk_linux.go#L1) — `AccountDiskBlank`, `blank`, `formatDisk`.
 
-14. <a id="source-14"></a> [internal/controller/runtime.go](../../internal/controller/runtime.go#L19) — `LoadRuntime`, `VerifyRuntimeStorage`, `PrepareRuntimeForLifecycle`; `runControllerInternal` selects preparation only for `serve` at its shared loader; deployController and restoreNativeSpace retain their explicit preparation paths. Runtime and guest helper tests cover sequencing, absent/present binds and refused identities.
+14. <a id="source-14"></a> [internal/controller/runtime.go](../../internal/controller/runtime.go#L18) — `LoadRuntime`, `VerifyRuntimeStorage`, `PrepareRuntimeForLifecycle`; `runControllerInternal` selects preparation only for `serve` at its shared loader; deployController and restoreNativeSpace retain their explicit preparation paths. Runtime and guest helper tests cover sequencing, absent/present binds and refused identities.
 
 15. <a id="source-15"></a> [Claude profile relocation](claude-auth.md) — launch paths, native helper, import and manual-exec boundary.

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/container"
 )
@@ -64,8 +65,8 @@ func TestNativeStopPreservesActualEngineAcknowledgementAndNeverReadsAfterFailure
 			checks := 0
 			err := completeNativeRuntimeStop(t.Context(), func(ctx context.Context) error { return client.Stop(ctx, id) }, func(ctx context.Context) error {
 				checks++
-				if _, ok := ctx.Deadline(); !ok {
-					t.Fatal("post-stop proof unbounded")
+				if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) < time.Minute {
+					t.Fatal("post-stop proof unbounded or bounded under a minute")
 				}
 				return os.Remove(endpoint)
 			})
@@ -165,5 +166,26 @@ case "$*" in *"sudo nerdctl ps -a --format json --filter label=yoloctl.agentbox=
 	commands, err := os.ReadFile(log)
 	if err != nil || string(commands) != "shell yolo-fixture -- sudo nerdctl ps -a --format json --filter label=yoloctl.agentbox=coder\n" {
 		t.Fatal("absent preflight started another operation", string(commands), err)
+	}
+}
+
+// The post-stop check is detached on purpose: the caller's cancellation does
+// not end it, and its fail-safe does, reporting uncertain effects.
+func TestNativeStopPostAckCheckOutlivesCallerUntilFailSafe(t *testing.T) {
+	previous := stopCheckFailSafe
+	stopCheckFailSafe = 300 * time.Millisecond
+	t.Cleanup(func() { stopCheckFailSafe = previous })
+	ctx, cancel := context.WithCancel(t.Context())
+	start := time.Now()
+	err := completeNativeRuntimeStop(ctx, func(context.Context) error { cancel(); return nil }, func(check context.Context) error {
+		<-check.Done()
+		return check.Err()
+	})
+	var uncertain *NativeEffectsUncertain
+	if !errors.As(err, &uncertain) || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("silent post-stop check did not end as uncertain at its fail-safe", err)
+	}
+	if elapsed := time.Since(start); elapsed < stopCheckFailSafe || elapsed > 3*time.Second {
+		t.Fatal("post-stop check followed the caller or outlived its fail-safe", elapsed)
 	}
 }

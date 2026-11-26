@@ -198,7 +198,7 @@ func TestChatOperatorAttachmentSelectionReleasesBeforeStreaming(t *testing.T) {
 	dialSessionVMFn = func(ctx context.Context, _, _ string) (io.ReadWriteCloser, error) {
 		setupCtx = ctx
 		deadline, bounded := ctx.Deadline()
-		if released || !bounded || time.Until(deadline) > operatorTargetSetupTimeout {
+		if released || !bounded || time.Until(deadline) > attachSetupFailSafe || time.Until(deadline) < time.Minute {
 			t.Fatal("native target selection needs a bounded context under its setup lock")
 		}
 		return selected, nil
@@ -238,7 +238,7 @@ func TestChatNativeAdminAttachmentSelectsTargetBeforeNameCanBeReused(t *testing.
 	})
 	dialSessionVMFn = func(ctx context.Context, _, _ string) (io.ReadWriteCloser, error) {
 		deadline, bounded := ctx.Deadline()
-		if released || !bounded || time.Until(deadline) > operatorTargetSetupTimeout {
+		if released || !bounded || time.Until(deadline) > attachSetupFailSafe || time.Until(deadline) < time.Minute {
 			t.Fatal("native admin selected a mutable name outside bounded setup")
 		}
 		return target, nil

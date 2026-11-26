@@ -8,7 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -106,8 +108,11 @@ func TestHolderInventoryCaptureCannotBypassWriteWithIOCopy(t *testing.T) {
 func TestHolderInventoryActualCaptureBoundsBothCommandBuilders(t *testing.T) {
 	// The real Lima and native-RPC command builders share this capture. A local
 	// limactl fixture supplies their bytes; no VM or init daemon is contacted.
+	previous := InventoryFailSafe
+	InventoryFailSafe = 500 * time.Millisecond
+	t.Cleanup(func() { InventoryFailSafe = previous })
 	for _, native := range []bool{false, true} {
-		for _, mode := range []string{"valid", "overflow", "unfinished"} {
+		for _, mode := range []string{"valid", "overflow", "unfinished", "held-pipe"} {
 			t.Run(map[bool]string{false: "Lima", true: "init RPC"}[native]+"/"+mode, func(t *testing.T) {
 				t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 				dir := t.TempDir()
@@ -125,14 +130,38 @@ case "$YOLOCTL_TEST_HOLDER_MODE" in
  valid) printf '%s\n' yoloctl-session-coder.service;;
  overflow) exec python3 -c 'import sys; sys.stdout.write("x" * 1048577)' ;;
  unfinished) printf '%s\n' 'yoloctl-session-coder.service loaded inactive dead'; exec sleep 30;;
+ held-pipe) (exec 2>/dev/null; sleep 30) & echo $! > "$YOLOCTL_TEST_HOLDER_INPUT.holder"; printf '%s\n' yoloctl-session-coder.service; echo $$ > "$YOLOCTL_TEST_HOLDER_INPUT.leader";;
  *) exit 98;;
 esac
 `
 				if err := os.WriteFile(filepath.Join(dir, "limactl"), []byte(script), 0o755); err != nil {
 					t.Fatal(err)
 				}
+				t.Cleanup(func() {
+					if raw, err := os.ReadFile(input + ".holder"); err == nil {
+						if pid, err := strconv.Atoi(strings.TrimSpace(string(raw))); err == nil {
+							_ = syscall.Kill(pid, syscall.SIGKILL)
+						}
+					}
+				})
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				if mode == "held-pipe" {
+					// The caller cancels after the command is observed to have
+					// exited while a descendant still holds stdout.
+					go func() {
+						for ctx.Err() == nil {
+							raw, err := os.ReadFile(input + ".leader")
+							if pid, convErr := strconv.Atoi(strings.TrimSpace(string(raw))); err == nil && convErr == nil && pid > 0 && syscall.Kill(pid, 0) == syscall.ESRCH {
+								cancel()
+								return
+							}
+							time.Sleep(5 * time.Millisecond)
+						}
+					}()
+				}
 				started := time.Now()
-				raw, err := readHolderInventory(t.Context(), container.New("fixture"), native)
+				raw, err := readHolderInventory(ctx, container.New("fixture"), native)
 				if native {
 					request, readErr := os.ReadFile(input)
 					if readErr != nil || !strings.Contains(string(request), `"action":"inventory"`) || !strings.Contains(string(request), `"name":"yoloctl-session-"`) {
@@ -149,8 +178,12 @@ esac
 						t.Fatalf("overflow became partial/absence proof: %d bytes %v", len(raw), err)
 					}
 				case "unfinished":
-					if !errors.Is(err, context.DeadlineExceeded) || raw != "" || time.Since(started) > serviceInventoryReadTimeout+2*time.Second {
+					if !errors.Is(err, context.DeadlineExceeded) || raw != "" || time.Since(started) > InventoryFailSafe+2*time.Second {
 						t.Fatalf("unfinished response not bounded/refused: %q %v after %v", raw, err, time.Since(started))
+					}
+				case "held-pipe":
+					if !errors.Is(err, context.Canceled) || raw != "" || time.Since(started) > 2*time.Second {
+						t.Fatalf("held pipe outlived the caller or returned a partial inventory: %q %v after %v", raw, err, time.Since(started))
 					}
 				}
 			})

@@ -18,11 +18,12 @@ import (
 
 var operatorManagedServerTargetFn = operatorManagedServerTarget
 
-const operatorTargetSetupTimeout = 10 * time.Second
+// attachSetupFailSafe ends a setup step reachable from box attach when nothing
+// else does: attach's owned setup can outlive its client. A client ends the
+// step earlier. Tests shorten it.
+var attachSetupFailSafe = 2 * time.Minute
 
 var dialOperatorSSH = func(ctx context.Context, name string) (net.Conn, error) {
-	ctx, cancel := context.WithTimeout(ctx, operatorTargetSetupTimeout)
-	defer cancel()
 	return (&net.Dialer{}).DialContext(ctx, "unix", sandbox.SocketHostPath(name))
 }
 
@@ -41,7 +42,7 @@ func operatorManagedServerTarget(ctx context.Context, space, name string) (bool,
 	if err := spaceenv.RequireSpace(space); err != nil {
 		return false, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, operatorTargetSetupTimeout)
+	ctx, cancel := context.WithTimeout(ctx, attachSetupFailSafe)
 	defer cancel()
 	if err := checkOperatorPrincipal(ctx, p); err != nil {
 		return false, err

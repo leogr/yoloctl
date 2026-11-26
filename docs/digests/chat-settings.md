@@ -109,7 +109,7 @@ confinement, actual UID/cgroup verification, UI reconnection or tab routing.
 15. <a id="source-15"></a> [Header regression](../../internal/chatstream/settings_test.go#L9).
 16. <a id="source-16"></a> [Attachment regressions](../../cmd/yoloctl/chat_attach_test.go#L25).
 17. <a id="source-17"></a> [Server preparation](../../internal/agentbox/chat.go#L62) — shared `VerifyChatServerPublication` invariant.
-18. <a id="source-18"></a> [Fresh holder launch](../../cmd/yoloctl/session_client.go#L414) — publication verification even when the container is running.
+18. <a id="source-18"></a> [Fresh holder launch](../../cmd/yoloctl/session_client.go#L416) — publication verification even when the container is running.
 19. <a id="source-19"></a> [Holder revival regression](../../cmd/yoloctl/chat_session_publication_test.go#L27) — actual session path with isolated native files and inert service-command spies.
 20. <a id="source-20"></a> [Locked transport selection](../../cmd/yoloctl/session_client.go#L76) — `selectSessionTransport`.
 21. <a id="source-21"></a> [Release failure regressions](../../cmd/yoloctl/chat_operator_server_test.go#L332) — selection/attachment/exec close connected transports before streaming on release errors.

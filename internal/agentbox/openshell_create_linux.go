@@ -428,7 +428,7 @@ func waitNativeCreatedSSH(ctx context.Context, directory *os.File, authorizedKey
 	if err != nil || key.Type() != ssh.KeyAlgoED25519 {
 		return errors.New("native readiness lacks its prepared SSH key")
 	}
-	ctx, cancel := context.WithTimeout(ctx, SandboxSocketTimeout)
+	ctx, cancel := context.WithTimeout(ctx, SandboxReadyFailSafe)
 	defer cancel()
 	for {
 		if err := ctx.Err(); err != nil {

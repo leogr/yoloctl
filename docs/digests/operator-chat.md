@@ -57,8 +57,9 @@ service commands remain available. [5](#source-5)
 the unlocked live-holder shortcut. Execution/attachment guards run before
 session revival and actual socket selection, and setup is released only after
 the target socket is connected. Native socket selection, including human
-attachments, has a ten-second bound independent of the subsequent stream
-lifetime. Release failures close selected attachment/exec transports before
+attachments, ends with its caller or a two-minute fail-safe, because box attach's
+owned setup can outlive its client; the bound is independent of the subsequent
+stream lifetime. Release failures close selected attachment/exec transports before
 streaming; exec setup does not synchronize roles. Finite lifecycle suppresses
 incidental server attachment with a diagnostic; explicit exec/attach/box-use/run
 still rejects.
@@ -82,7 +83,7 @@ confinement or AIRC connection proof.
 2. <a id="source-2"></a> [Operator preflight](../../cmd/yoloctl/chat_operator.go#L43) — `checkOperatorChatRuntime`, `validateOperatorChatRuntime`.
 3. <a id="source-3"></a> [Runtime membership](../../cmd/yoloctl/chat_runtime.go#L39) — `runControllerChatRuntime`, enrollment/apply/recreate.
 4. <a id="source-4"></a> [Participation](../../cmd/yoloctl/chat_participation.go#L84) — dispatcher, `resolveChatParticipant`, server proof and `executeChatParticipation`.
-5. <a id="source-5"></a> [Protected target](../../cmd/yoloctl/chat_operator_server.go#L32) — `operatorManagedServerTarget`, `protectedManagedServerTarget`.
+5. <a id="source-5"></a> [Protected target](../../cmd/yoloctl/chat_operator_server.go#L33) — `operatorManagedServerTarget`, `protectedManagedServerTarget`.
 6. <a id="source-6"></a> [Native admission](../../cmd/yoloctl/space_operation.go#L30) — `registerSpaceOperations`.
 7. <a id="source-7"></a> [Attachment](../../cmd/yoloctl/session_client.go#L48) — `prepareAutoAttach`, `selectSessionTransport`, `ensureAndAttachSession`.
 8. <a id="source-8"></a> [Rebuild](../../cmd/yoloctl/agentbox_reconcile.go#L162) — `runRebuild`.

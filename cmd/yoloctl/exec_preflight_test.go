@@ -17,8 +17,12 @@ import (
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 )
 
+// execInventoryContexts records the contexts the stubbed exec inventory saw.
+var execInventoryContexts []context.Context
+
 func stubExecInventory(t *testing.T, declared bool, status, spaceStatus string, listErr error) {
 	t.Helper()
+	execInventoryContexts = nil
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	saveSpaceForTest(t, "work", "/tmp/def")
 	if declared {
@@ -32,9 +36,7 @@ func stubExecInventory(t *testing.T, declared bool, status, spaceStatus string, 
 				return []vmhost.Instance{{Name: "work", Status: spaceStatus}}, nil
 			},
 			ListContainers: func(ctx context.Context, _ string) ([]container.Container, error) {
-				if _, ok := ctx.Deadline(); !ok {
-					t.Error("exec inventory is unbounded")
-				}
+				execInventoryContexts = append(execInventoryContexts, ctx)
 				if listErr != nil {
 					return nil, listErr
 				}
@@ -190,5 +192,34 @@ func TestExecHostMissingBoxRefusesBeforeProxy(t *testing.T) {
 	err := execInAgentboxInteractive(ctx, "work", "peer", []string{"true"})
 	if err == nil || !strings.Contains(err.Error(), `box "peer" does not exist in space "work"`) || permitted {
 		t.Fatal("host exec bypassed preflight", err, permitted)
+	}
+}
+
+// The exec preflight inventory follows its caller: without a caller deadline
+// it adds none of its own, and a caller deadline reaches it unchanged.
+func TestExecPreflightInventoryFollowsItsCaller(t *testing.T) {
+	stubExecInventory(t, true, "running", "Running", nil)
+	if err := preflightBoxExec(t.Context(), "work", "peer"); err != nil {
+		t.Fatal(err)
+	}
+	if len(execInventoryContexts) == 0 {
+		t.Fatal("exec preflight did not read the inventory")
+	}
+	for _, ctx := range execInventoryContexts {
+		if deadline, ok := ctx.Deadline(); ok {
+			t.Fatal("exec inventory added its own deadline", time.Until(deadline))
+		}
+	}
+	execInventoryContexts = nil
+	caller, cancel := context.WithTimeout(t.Context(), time.Hour)
+	defer cancel()
+	want, _ := caller.Deadline()
+	if err := preflightBoxExec(caller, "work", "peer"); err != nil {
+		t.Fatal(err)
+	}
+	for _, ctx := range execInventoryContexts {
+		if deadline, ok := ctx.Deadline(); !ok || !deadline.Equal(want) {
+			t.Fatal("exec inventory replaced its caller's deadline", deadline, want)
+		}
 	}
 }

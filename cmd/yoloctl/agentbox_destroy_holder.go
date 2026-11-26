@@ -14,6 +14,10 @@ import (
 	"github.com/leogr/yoloctl/internal/vmservice"
 )
 
+// holderWithdrawalFailSafe ends the detached wait for a stopped holder's
+// service to leave the inventory; nothing else can end it. Tests shorten it.
+var holderWithdrawalFailSafe = 2 * time.Minute
+
 // withdrawNativeHolder runs only after the native lifecycle caller has
 // qualified the actual runtime under the controller's mutation admission. It
 // preserves real service-stop replies, including on Lima, and never uses a
@@ -56,7 +60,7 @@ func withdrawNativeHolderWith(ctx context.Context, unit string, inventory func(c
 	if err := stop(ctx, unit); err != nil {
 		return &agentbox.NativeEffectsUncertain{Cause: fmt.Errorf("native holder withdrawal was not acknowledged; no retry: %w", err)}
 	}
-	finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	finish, cancel := context.WithTimeout(context.WithoutCancel(ctx), holderWithdrawalFailSafe)
 	defer cancel()
 	for {
 		current, err := inventory(finish)

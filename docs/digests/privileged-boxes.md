@@ -152,7 +152,7 @@ were not run. [28](#source-28)
 1. <a id="source-1"></a> [internal/capabilities/capabilities.go](../../internal/capabilities/capabilities.go#L132-L140) — `RetiredPrivilegedCapability`, `ErrRetiredPrivileged`; `Lookup` at L375 (refusal at L384); custom-name refusals in `user.go` at L192 and L334.
 2. <a id="source-2"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L22-L52) — `PrivilegedAuthority`, `PrivilegedOperatorAccess` and `RuntimeFeatures`.
 3. <a id="source-3"></a> [internal/features/privileged.go](../../internal/features/privileged.go#L5-L61) — internal installer and its identity note.
-4. <a id="source-4"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L436-L487) — privileged launch; creation check at L263.
+4. <a id="source-4"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L438-L489) — privileged launch; creation check at L263.
 5. <a id="source-5"></a> [internal/container/container.go](../../internal/container/container.go#L86-L122) — run option; inspected record at L546.
 6. <a id="source-6"></a> [nerdctl v2.4.2 run_security_linux.go](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/cmd/container/run_security_linux.go#L43-L48) — spec options; `dockercompat.go#L690` and `create.go#L999` record it and reserve its label.
 7. <a id="source-7"></a> [internal/agentbox/privileged.go](../../internal/agentbox/privileged.go#L148-L199) — binary verification.

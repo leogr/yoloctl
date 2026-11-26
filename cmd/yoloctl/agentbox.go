@@ -2235,7 +2235,7 @@ func startExistingAgentboxContainerPrepared(ctx context.Context, c *container.Cl
 	if err := c.Start(ctx, details.ID); err != nil {
 		return err
 	}
-	return agentbox.WaitForSandboxSocket(ctx, c.Env(), name, agentbox.SandboxSocketTimeout)
+	return agentbox.WaitForSandboxSocket(ctx, c.Env(), name, agentbox.SandboxReadyFailSafe)
 }
 
 // warnPostAutoupdateFailure nudges the user when the agent exits with an

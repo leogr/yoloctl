@@ -3,11 +3,16 @@ package accountstate
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/leogr/yoloctl/internal/execpipe"
 )
 
 // Ordinary selected-command project fixtures; no VM, sandbox or storage probe.
@@ -33,9 +38,13 @@ func selectedAccountVerification(t *testing.T, ctx context.Context, script strin
 		if space != "fixture" || len(args) != 4 || args[0] != "sudo" || args[1] != "python3" || args[2] != "-c" || args[3] != guestScript {
 			t.Fatal("verification changed selected adapter/command")
 		}
+		// The verifier runs under its caller's context: a direct host call
+		// (space recreate) has its person present. The controller bounds its
+		// own calls end to end; only the post-exit drain has a bound here.
 		deadline, ok := selected.Deadline()
-		if !ok || time.Until(deadline) > accountVerificationBudget {
-			t.Fatal("actual verify branch omitted deadline")
+		want, wantOK := ctx.Deadline()
+		if ok != wantOK || !deadline.Equal(want) {
+			t.Fatal("actual verify branch changed its caller's deadline")
 		}
 		return accountVerificationCommand(t, selected, script)
 	}
@@ -74,22 +83,72 @@ func TestAccountVerificationOriginalReplyAndCommandFailure(t *testing.T) {
 		})
 	}
 }
-func TestAccountVerificationInheritedPipesSettleWithoutIdentity(t *testing.T) {
+
+// leaderExited calls then after the fixture's leader has written its pid to
+// mark as its last act and that process is gone.
+func leaderExited(mark string, then func()) {
+	go func() {
+		for {
+			raw, err := os.ReadFile(mark)
+			if pid, convErr := strconv.Atoi(strings.TrimSpace(string(raw))); err == nil && convErr == nil && pid > 0 {
+				if syscall.Kill(pid, 0) == syscall.ESRCH {
+					then()
+					return
+				}
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+}
+
+// A descendant that keeps stdout or stderr open after the verifier exits holds
+// the drain only until the caller's cancellation or deadline, or the drain
+// fail-safe when the caller has none, and the reply already read is never
+// returned as an identity.
+func TestAccountVerificationHeldPipeAfterExitGivesNoIdentity(t *testing.T) {
 	for _, stream := range []string{"stdout", "stderr"} {
-		t.Run(stream, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
-			defer cancel()
-			holder := `(exec 2>/dev/null;sleep 30) &`
-			if stream == "stderr" {
-				holder = `(exec >/dev/null;sleep 30) &`
-			}
-			script := holder + ` printf '{"uuid":"original-uuid"}\n'`
-			start := time.Now()
-			got, err := selectedAccountVerification(t, ctx, script)
-			if !errors.Is(err, exec.ErrWaitDelay) || got.UUID != "" || time.Since(start) > 3*time.Second {
-				t.Fatal("unsettled/incomplete pipe returned identity", got, err, time.Since(start))
-			}
-		})
+		for _, end := range []string{"cancel", "deadline", "drain"} {
+			t.Run(stream+"/"+end, func(t *testing.T) {
+				mark := filepath.Join(t.TempDir(), "leader")
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				switch end {
+				case "cancel":
+					leaderExited(mark, cancel)
+				case "deadline":
+					var stop context.CancelFunc
+					ctx, stop = context.WithTimeout(ctx, 500*time.Millisecond)
+					defer stop()
+				case "drain":
+					previous := accountVerificationDrainFailSafe
+					accountVerificationDrainFailSafe = 300 * time.Millisecond
+					t.Cleanup(func() { accountVerificationDrainFailSafe = previous })
+				}
+				holder := `(exec 2>/dev/null;sleep 30) &`
+				if stream == "stderr" {
+					holder = `(exec >/dev/null;sleep 30) &`
+				}
+				script := holder + ` printf '{"uuid":"original-uuid"}\n'; echo $$ > ` + strconv.Quote(mark)
+				start := time.Now()
+				got, err := selectedAccountVerification(t, ctx, script)
+				want := map[string]error{"cancel": context.Canceled, "deadline": context.DeadlineExceeded, "drain": execpipe.ErrOutputHeld}[end]
+				if !errors.Is(err, want) || got.UUID != "" || time.Since(start) > 3*time.Second {
+					t.Fatal("held pipe outlived its bound or returned identity", got, err, time.Since(start))
+				}
+			})
+		}
+	}
+}
+
+// The drain fail-safe starts when the verifier exits: a healthy verifier that
+// runs longer than it still supplies the complete identity.
+func TestAccountVerificationSlowValidReplyOutlivesDrainBound(t *testing.T) {
+	previous := accountVerificationDrainFailSafe
+	accountVerificationDrainFailSafe = 100 * time.Millisecond
+	t.Cleanup(func() { accountVerificationDrainFailSafe = previous })
+	got, err := selectedAccountVerification(t, t.Context(), `sleep 0.5; printf '{"uuid":"original-uuid"}\n'`)
+	if err != nil || got.UUID != "original-uuid" {
+		t.Fatal("slow valid verification lost its identity", got, err)
 	}
 }
 func TestAccountVerificationCancellationRetainsOriginalCause(t *testing.T) {

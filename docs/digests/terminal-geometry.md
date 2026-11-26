@@ -75,7 +75,7 @@ behavior or current macOS support. [2](#source-2) [7](#source-7) [10](#source-10
 9. <a id="source-9"></a> [mouse.go](../../internal/terminal/mouse.go#L58) — measured input and scaling.
 10. <a id="source-10"></a> [mouse_pixels_test.go](../../internal/tui/mouse_pixels_test.go#L17) — PTY and real-loop negotiation.
 11. <a id="source-11"></a> [bridge.zig](../../internal/terminal/wasm/bridge.zig#L532) — already-routed pixel encoding.
-12. <a id="source-12"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L138) — cell-only compatibility resize.
+12. <a id="source-12"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L140) — cell-only compatibility resize.
 13. <a id="source-13"></a> [geometry.go](../../internal/terminal/geometry.go#L8) — bounds and native resize.
 14. <a id="source-14"></a> [geometry_test.go](../../internal/terminal/geometry_test.go#L9) — native query/snapshot contracts.
 15. <a id="source-15"></a> [pty.go](../../internal/tui/term/pty.go#L127) — bounded kernel pixels.

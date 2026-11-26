@@ -50,10 +50,12 @@ const (
 	LabelEnvKeys = "yoloctl.env_keys"
 )
 
-// SandboxSocketTimeout is how long Create / Recreate / Restart (and
-// the cmd-side post-start guard for existing containers) wait for
-// openshell-sandbox's SSH endpoint to answer before giving up.
-const SandboxSocketTimeout = 30 * time.Second
+// SandboxReadyFailSafe ends the wait of Create / Recreate / Restart (and
+// the cmd-side post-start guard for existing containers) for
+// openshell-sandbox's SSH endpoint when nothing else does. A client ends the
+// wait earlier, as does the box's exit; box attach's owned setup can outlive
+// its client, and there this is the only bound.
+const SandboxReadyFailSafe = 2 * time.Minute
 
 // LiveInspector implements StateInspector against a real Lima VM via
 // internal/container + internal/port. Each Inspect call issues:
@@ -388,7 +390,7 @@ func (a LiveApplier) Create(ctx context.Context, c *Config, policy []byte) error
 	if err := operator.RemoveBox(c.Name, endpoint.Incarnation); err != nil {
 		return fmt.Errorf("retire old operator endpoints: %w", err)
 	}
-	if err := WaitForSandboxSocket(ctx, c.Space, c.Name, SandboxSocketTimeout); err != nil {
+	if err := WaitForSandboxSocket(ctx, c.Space, c.Name, SandboxReadyFailSafe); err != nil {
 		return err
 	}
 	return a.applyPortForwards(ctx, c, c.Ports)

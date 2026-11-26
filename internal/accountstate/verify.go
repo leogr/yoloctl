@@ -10,9 +10,17 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/leogr/yoloctl/internal/execpipe"
 )
 
-const accountVerificationBudget = 5 * time.Second
+// accountVerificationDrainFailSafe ends the wait for output after the
+// verifier has exited, when a descendant keeps a pipe open and nothing else
+// ends it (a host space recreate whose caller has no deadline). It starts at
+// the exit, so a slow but healthy verifier runs as long as its caller allows;
+// the controller bounds its own verifications end to end. Tests shorten it.
+var accountVerificationDrainFailSafe = 2 * time.Minute
+
 const accountVerificationStdout = 4096
 const accountVerificationStderr = 64 << 10
 
@@ -39,7 +47,8 @@ func (w *accountVerificationCapture) Bytes() []byte  { return w.contents.Bytes()
 func (w *accountVerificationCapture) String() string { return w.contents.String() }
 
 // Only the read-only verify action uses this transport. Bound capture BEFORE
-// growth and settle inherited stdout/stderr even if the original helper exits.
+// growth. The caller's context also ends the drain of stdout/stderr when the
+// helper exits but a descendant keeps them open.
 // A command/cancel/pipe/overflow error never yields a partial storage identity.
 func runAccountVerification(ctx context.Context, cmd *exec.Cmd) (Result, error) {
 	var zero Result
@@ -51,9 +60,7 @@ func runAccountVerification(ctx context.Context, cmd *exec.Cmd) (Result, error) 
 	}
 	stdout := accountVerificationCapture{limit: accountVerificationStdout}
 	stderr := accountVerificationCapture{limit: accountVerificationStderr}
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	cmd.WaitDelay = time.Second
-	err := cmd.Run()
+	err := execpipe.Run(ctx, cmd, accountVerificationDrainFailSafe, &stdout, &stderr)
 	if stdout.overflow || stderr.overflow {
 		err = errors.Join(err, errAccountVerificationOverflow)
 	}

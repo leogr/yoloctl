@@ -12,9 +12,7 @@ import (
 // transport. Inventory depth deliberately omits session probes: exec needs a
 // running container, not an agent session, and must not dial to discover absence.
 func preflightBoxExec(ctx context.Context, space, name string) error {
-	probe, cancel := context.WithTimeout(ctx, operatorTargetSetupTimeout)
-	defer cancel()
-	box, err := newBoxStateResolver().ResolveOne(probe, space, name, boxstate.RuntimeInventory)
+	box, err := newBoxStateResolver().ResolveOne(ctx, space, name, boxstate.RuntimeInventory)
 	if err != nil {
 		return fmt.Errorf("cannot check box %q in space %q before exec: %w", name, space, err)
 	}

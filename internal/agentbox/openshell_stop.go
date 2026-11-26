@@ -82,6 +82,11 @@ func stopInspectedRuntime(ctx context.Context, details *container.Details, nativ
 	return legacy(ctx)
 }
 
+// stopCheckFailSafe ends a check after an acknowledged stop. The check is
+// detached from its caller on purpose, so it finishes after Ctrl+C too; this
+// is its only bound. Tests shorten it.
+var stopCheckFailSafe = 2 * time.Minute
+
 // A failed engine reply is never settled with later state or a second stop.
 // After its ACK, a bounded same-admission verifier can confirm inactive state
 // and remove only its protected endpoint. Cancellation retains context values.
@@ -95,7 +100,7 @@ func completeNativeRuntimeStop(ctx context.Context, stop, verify func(context.Co
 	if err := stop(ctx); err != nil {
 		return &NativeEffectsUncertain{Cause: fmt.Errorf("native container stop was not acknowledged; do not retry automatically: %w", err)}
 	}
-	check, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	check, cancel := context.WithTimeout(context.WithoutCancel(ctx), stopCheckFailSafe)
 	defer cancel()
 	if err := verify(check); err != nil {
 		return &NativeEffectsUncertain{Cause: fmt.Errorf("acknowledged native stop cleanup remains unproved: %w", err)}
@@ -132,7 +137,7 @@ func completeNativeStopEndpoint(ctx context.Context, inactive, endpoint func(con
 	if inactive == nil || endpoint == nil {
 		return errors.New("native Stop endpoint completion lacks its pure ownership checks")
 	}
-	check, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	check, cancel := context.WithTimeout(context.WithoutCancel(ctx), stopCheckFailSafe)
 	defer cancel()
 	if err := inactive(check); err != nil {
 		return &NativeEffectsUncertain{Cause: fmt.Errorf("acknowledged native namespace Stop inactivity remains unproved: %w", err)}

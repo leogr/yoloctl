@@ -75,7 +75,7 @@ unit tests alone do not validate either backend's kernel enforcement.
 5. <a id="source-5"></a> [container/container.go](../../internal/container/container.go#L75) — managed run placement, pool preflight and resource inspection.
 6. <a id="source-6"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L985) — create CPU/memory defaults.
 7. <a id="source-7"></a> [agentbox/diff.go](../../internal/agentbox/diff.go#L213) — normalized limits and pool-version drift.
-8. <a id="source-8"></a> [agentbox/live.go](../../internal/agentbox/live.go#L338) — create-time pool membership label.
+8. <a id="source-8"></a> [agentbox/live.go](../../internal/agentbox/live.go#L340) — create-time pool membership label.
 9. <a id="source-9"></a> [managed_applier.go](../../cmd/yoloctl/managed_applier.go#L36) — preflight before session teardown.
 10. <a id="source-10"></a> [container/memory.go](../../internal/container/memory.go#L16) — bounded aggregate counter reads.
 11. <a id="source-11"></a> [agentbox_inspect.go](../../cmd/yoloctl/agentbox_inspect.go#L436) — JSON and human diagnostics.

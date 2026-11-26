@@ -5,17 +5,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"os/exec"
 	"time"
 
 	"github.com/leogr/yoloctl/internal/container"
+	"github.com/leogr/yoloctl/internal/execpipe"
 	"github.com/leogr/yoloctl/internal/vm"
 	"github.com/leogr/yoloctl/internal/vmwire"
 )
 
 const serviceInventoryMaxBytes = 1 << 20
-const serviceInventoryReadTimeout = 5 * time.Second
+
+// InventoryFailSafe ends an inventory read that nothing else ends: it
+// is reached from box attach's owned setup, which can outlive its client, and
+// from detached post-stop checks. A client ends it earlier. Tests shorten it.
+var InventoryFailSafe = 2 * time.Minute
 
 var errServiceInventoryOverflow = errors.New("service inventory exceeds capture bound")
 
@@ -47,7 +51,7 @@ func (w *serviceInventoryCapture) Write(p []byte) (int, error) {
 // Both selected service-manager commands use this bounded capture. This
 // private read path changes no Stop semantics or legacy request transport.
 func readServiceInventory(ctx context.Context, c *container.Client, native bool, prefix string, patterns ...string) (string, error) {
-	read, cancel := context.WithTimeout(ctx, serviceInventoryReadTimeout)
+	read, cancel := context.WithTimeout(ctx, InventoryFailSafe)
 	defer cancel()
 	var cmd *exec.Cmd
 	if native {
@@ -62,11 +66,9 @@ func readServiceInventory(ctx context.Context, c *container.Client, native bool,
 		cmd = vm.ShellCommand(read, c.Env(), args...)
 	}
 	output := &serviceInventoryCapture{data: make([]byte, 0, serviceInventoryMaxBytes), cancel: cancel}
-	cmd.Stdout = output
-	cmd.Stderr = io.Discard
-	// Bound pipe drain too if an exited command leaves a descendant holding it.
-	cmd.WaitDelay = time.Second
-	err := cmd.Run()
+	// The read owns stdout, so the caller's cancellation and the fail-safe also
+	// end the drain when an exited command leaves a descendant holding it.
+	err := execpipe.Run(read, cmd, 0, output, nil)
 	if output.overflow {
 		err = errors.Join(err, errServiceInventoryOverflow)
 	}

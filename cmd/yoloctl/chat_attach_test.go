@@ -203,7 +203,7 @@ func TestChatAttachGuardedSelectionPinsValidatedIdentity(t *testing.T) {
 	dialSessionVMFn = func(ctx context.Context, space, name string) (io.ReadWriteCloser, error) {
 		selected = true
 		deadline, bounded := ctx.Deadline()
-		if released || !bounded || time.Until(deadline) > operatorTargetSetupTimeout || space != cfg.Space || name != m.Name {
+		if released || !bounded || time.Until(deadline) > attachSetupFailSafe || time.Until(deadline) < time.Minute || space != cfg.Space || name != m.Name {
 			t.Fatal("guarded target selection escaped bounded setup", released, space, name)
 		}
 		if err := validateChatAttachCommand(cmd, space, []string{name}); err != nil {

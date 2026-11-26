@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/container"
@@ -140,4 +141,45 @@ esac
 			}
 		})
 	}
+}
+
+// After the acknowledged stop the inventory polls are detached: each sees a
+// fail-safe at least a minute away, the caller's cancellation does not end
+// them, and a holder that stays listed ends as uncertain at the fail-safe.
+func TestNativeDestroyHolderPostStopPollsUseFailSafe(t *testing.T) {
+	unit := session.UnitName("coder")
+	t.Run("default bound", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		stopped := false
+		err := withdrawNativeHolderWith(ctx, unit, func(check context.Context) ([]string, error) {
+			if !stopped {
+				return []string{unit}, nil
+			}
+			if deadline, ok := check.Deadline(); !ok || time.Until(deadline) < time.Minute || check.Err() != nil {
+				t.Error("post-stop poll unbounded, bounded under a minute, or ended with its caller")
+			}
+			return nil, nil
+		}, func(context.Context, string) error { stopped = true; cancel(); return nil })
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("retained", func(t *testing.T) {
+		previous := holderWithdrawalFailSafe
+		holderWithdrawalFailSafe = 300 * time.Millisecond
+		t.Cleanup(func() { holderWithdrawalFailSafe = previous })
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		start := time.Now()
+		err := withdrawNativeHolderWith(ctx, unit, func(context.Context) ([]string, error) { return []string{unit}, nil },
+			func(context.Context, string) error { cancel(); return nil })
+		var uncertain *agentbox.NativeEffectsUncertain
+		if !errors.As(err, &uncertain) || !strings.Contains(err.Error(), "retained service") {
+			t.Fatal("retained holder did not end as uncertain at its fail-safe", err)
+		}
+		if elapsed := time.Since(start); elapsed < holderWithdrawalFailSafe || elapsed > 3*time.Second {
+			t.Fatal("post-stop polls followed the caller or outlived the fail-safe", elapsed)
+		}
+	})
 }

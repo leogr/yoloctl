@@ -102,7 +102,7 @@ available with its own launch and authentication conventions.
 15. <a id="source-15"></a> [Gemini v0.62.0 Clearcut logger](https://github.com/google-gemini/gemini-cli/blob/v0.62.0/packages/core/src/telemetry/clearcut-logger/clearcut-logger.ts#L247) — creation gate, endpoint, flushes and retries.
 16. <a id="source-16"></a> [Gemini v0.62.0 env auth](https://github.com/google-gemini/gemini-cli/blob/v0.62.0/packages/core/src/core/contentGenerator.ts#L80) — `getAuthTypeFromEnv`.
 17. <a id="source-17"></a> [cmd/yoloctl/run.go](../../cmd/yoloctl/run.go#L95) — explicit confined exec command.
-18. <a id="source-18"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L424) — container environment rendering.
+18. <a id="source-18"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L426) — container environment rendering.
 19. <a id="source-19"></a> [OpenShell v0.0.72 SSH](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-process/src/ssh.rs#L690) — `apply_child_env` clears inherited variables.
 20. <a id="source-20"></a> [internal/agentbox/secret_injection.go](../../internal/agentbox/secret_injection.go#L44) — declared account secrets only.
 

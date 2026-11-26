@@ -23,8 +23,10 @@ func TestRuntimeStorageEntryUsesOnlyBoundedReadOnlyVerification(t *testing.T) {
 				if req.Action != "verify" || space != c.Space || disk != c.DiskID || uuid != c.DiskUUID || uid != c.UID || gid != c.GID {
 					t.Fatal("runtime entry attempted preparation or changed identity", req)
 				}
-				if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > 5*time.Second {
-					t.Fatal("native verification is unbounded")
+				// The controller's own check has no client: it is bounded end to
+				// end by its fail-safe, which is at least a minute.
+				if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) < time.Minute || time.Until(deadline) > runtimeStorageFailSafe {
+					t.Fatal("native verification is not bounded by its fail-safe")
 				}
 				if failure != "" {
 					return accountstate.Result{}, errors.New(failure)

@@ -118,11 +118,6 @@ func ExecuteForDisk(ctx context.Context, space, id, uuid string, uid, gid int, r
 	if err != nil {
 		return result, err
 	}
-	if req.Action == "verify" {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, accountVerificationBudget)
-		defer cancel()
-	}
 	cmd := accountStateCommand(ctx, space, "sudo", "python3", "-c", guestScript)
 	cmd.Stdin = bytes.NewReader(body)
 	if req.Action == "verify" {

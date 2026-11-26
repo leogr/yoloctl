@@ -81,10 +81,12 @@ func selectSessionTransport(ctx context.Context, space, name string) (io.ReadWri
 	dialCtx := ctx
 	cancel := func() {}
 	if nativeSessionTransportFn() {
-		// Every native selection uses a short-lived dial context, including
-		// guarded human attachments that hold the space lock. The host bridge
-		// subprocess needs the parent context for its entire stream.
-		dialCtx, cancel = context.WithTimeout(ctx, operatorTargetSetupTimeout)
+		// Every native selection uses its own dial context, including guarded
+		// human attachments that hold the space lock: attach's owned setup can
+		// outlive its client, so the fail-safe ends a dial nothing else ends.
+		// The host bridge subprocess needs the parent context for its entire
+		// stream.
+		dialCtx, cancel = context.WithTimeout(ctx, attachSetupFailSafe)
 	}
 	transport, err := dialSessionVMFn(dialCtx, space, name)
 	cancel()

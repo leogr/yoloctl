@@ -35,7 +35,8 @@ except OSError:
 // WaitForSandboxSocket waits for the supervisor to accept a connection and
 // return its SSH greeting. Shared by create, recreate, restart (including
 // policy rollback), and start of an existing container. Both an unresponsive
-// listener and a stuck Lima invocation are bounded by the caller's deadline.
+// listener and a stuck Lima invocation end with the caller's context or the
+// given fail-safe; each probe keeps its own per-try limit and is retried.
 func WaitForSandboxSocket(ctx context.Context, space, name string, timeout time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

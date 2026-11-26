@@ -93,8 +93,8 @@ controller. Test existence proves no live pass; bridge plaintext proves no remot
 3. <a id="source-3"></a> [Source pin](../../internal/features/airc-source/manifest.json#L1) — public repository, release tag, source commit and per-architecture archive URL/SHA-256.
 4. <a id="source-4"></a> [internal/agentboximage/composed.go](../../internal/agentboximage/composed.go#L45) — recipe identity.
 5. <a id="source-5"></a> [internal/agentbox/agentbox.go](../../internal/agentbox/agentbox.go#L105) — `SessionCommand`; `Config.Validate` at L504.
-6. <a id="source-6"></a> [cmd/yoloctl/session_client.go](../../cmd/yoloctl/session_client.go#L327) — `ensureAgentSession`; `resolveSessionArgv` at L537.
-7. <a id="source-7"></a> [cmd/yoloctl/session_client.go](../../cmd/yoloctl/session_client.go#L538) — `resolveSessionArgv` for agentless commands and login-shell fallback.
+6. <a id="source-6"></a> [cmd/yoloctl/session_client.go](../../cmd/yoloctl/session_client.go#L329) — `ensureAgentSession`; `resolveSessionArgv` at L537.
+7. <a id="source-7"></a> [cmd/yoloctl/session_client.go](../../cmd/yoloctl/session_client.go#L540) — `resolveSessionArgv` for agentless commands and login-shell fallback.
 8. <a id="source-8"></a> [cmd/yoloctl/agentbox_reconcile.go](../../cmd/yoloctl/agentbox_reconcile.go#L596) — `runSet` command replacement.
 9. <a id="source-9"></a> [cmd/yoloctl/airc_test.go](../../cmd/yoloctl/airc_test.go#L13) — persistence, copy, set/clear and inspect regressions.
 10. <a id="source-10"></a> [scripts/smoke/airc-runtime.py](../../scripts/smoke/airc-runtime.py#L74) — direct `aircd` and real-client driver; `shared_msgid`/`confirmed` at L51–L65 check named-client references.

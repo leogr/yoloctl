@@ -120,17 +120,15 @@ func execInAgentboxInteractive(ctx context.Context, env, agentbox string, cmdArg
 	if err != nil {
 		return fmt.Errorf("cannot connect to box %q in space %q; command was not started: %w", agentbox, env, err)
 	}
-	client, err := sshtransport.Connect(ctx, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()})
+	client, err := sshtransport.ConnectWithContextDeadline(ctx, conn, &ssh.ClientConfig{User: "sandbox", HostKeyCallback: ssh.InsecureIgnoreHostKey()})
 	if err != nil {
 		return fmt.Errorf("cannot establish an SSH connection to box %q in space %q; command was not started: %w", agentbox, env, err)
 	}
 	defer func() { _ = client.Close() }()
-	// Keep channel/PTY preparation bounded while setup is still held. The
-	// deadline is removed before command permission, never applied to the run.
-	deadline := time.Now().Add(operatorTargetSetupTimeout)
-	if parentDeadline, ok := ctx.Deadline(); ok && parentDeadline.Before(deadline) {
-		deadline = parentDeadline
-	}
+	// Channel/PTY preparation follows the caller's deadline while setup is
+	// still held; cancellation closes the client. The deadline is removed
+	// before command permission, never applied to the run.
+	deadline, _ := ctx.Deadline()
 	if err := conn.SetDeadline(deadline); err != nil {
 		return fmt.Errorf("cannot prepare SSH connection to box %q in space %q; command was not started: %w", agentbox, env, err)
 	}

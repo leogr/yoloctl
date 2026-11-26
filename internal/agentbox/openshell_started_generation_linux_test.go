@@ -155,7 +155,7 @@ func TestNativeStartedGenerationNamespaceCompletionRetainsPostACKContext(t *test
 	check := func(c context.Context) error {
 		checks++
 		deadline, ok := c.Deadline()
-		if c.Err() != nil || c.Value(nativeStopContextKey{}) != "admitted" || !ok || time.Until(deadline) <= 0 || time.Until(deadline) > 5*time.Second {
+		if c.Err() != nil || c.Value(nativeStopContextKey{}) != "admitted" || !ok || time.Until(deadline) < time.Minute || time.Until(deadline) > stopCheckFailSafe {
 			t.Fatal("post-ACK namespace completion lost bounded admission context")
 		}
 		return nil

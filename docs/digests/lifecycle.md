@@ -113,9 +113,9 @@ physical power loss.
 ## Sources
 
 1. <a id="source-1"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L163) — Diff and recreateReason.
-2. <a id="source-2"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L66) — `Inspect` and `liveWorkdirMount`, lines 66–211.
+2. <a id="source-2"></a> [internal/agentbox/live.go](../../internal/agentbox/live.go#L68) — `Inspect` and `liveWorkdirMount`, lines 66–211.
 3. <a id="source-3"></a> [cmd/yoloctl/managed_applier.go](../../cmd/yoloctl/managed_applier.go#L23) — managed session cleanup.
-4. <a id="source-4"></a> [internal/agentbox/readiness.go](../../internal/agentbox/readiness.go#L39) — SSH readiness and container exit probe.
+4. <a id="source-4"></a> [internal/agentbox/readiness.go](../../internal/agentbox/readiness.go#L40) — SSH readiness and container exit probe.
 5. <a id="source-5"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L29) — native setup locks and streaming release.
 6. <a id="source-6"></a> [internal/spacelock/lock.go](../../internal/spacelock/lock.go#L16) — stable lock, wait notification and cancellation.
 7. <a id="source-7"></a> [Controller evidence](controller.md) — transport, editor revisions, receipt recovery and drain.

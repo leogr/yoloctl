@@ -7,8 +7,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/boxstate"
@@ -16,6 +19,7 @@ import (
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/port"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
+	"github.com/leogr/yoloctl/internal/vmservice"
 )
 
 type preparedStartFixture struct {
@@ -264,5 +268,94 @@ func TestNativeStartExplicitCallerLaunchesSavedPolicyThenReconcilesWithoutRestar
 				t.Fatal("explicit caller skipped its desired reconciliation", err, inspector.calls)
 			}
 		})
+	}
+}
+
+// An attach to an already stopped native box: the qualification inventory
+// completes, the forward-withdrawal inventory is never answered and no client
+// remains to cancel it (attach's owned setup). Its fail-safe ends the read,
+// nothing is started, and the attach returns, so the caller's space lock is
+// released for the next operation.
+func TestNativeAttachToStoppedBoxEndsSilentWithdrawalInventoryAtFailSafe(t *testing.T) {
+	f := newIdentityFixture(t)
+	cfg := claudeBox()
+	cfg.SchemaVersion = agentbox.SchemaVersion
+	cfg.Image = defaultAgentboxImage
+	cfg.Workdir = agentbox.NewEphemeralWorkdir(cfg.Name)
+	if err := cfg.Save(); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	t.Setenv("LIMA_HOME", t.TempDir())
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("ATTACH_TEST_FIXTURE", bin)
+	script := `#!/bin/sh
+printf '%s\n' "$*" >> "$ATTACH_TEST_FIXTURE/calls"
+case "$*" in
+ *'systemctl list-units'*)
+  if [ -e "$ATTACH_TEST_FIXTURE/qualified" ]; then sleep 30 & echo $! > "$ATTACH_TEST_FIXTURE/silent"; wait; fi
+  : > "$ATTACH_TEST_FIXTURE/qualified";;
+ *) exit 42;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(bin, "limactl"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if raw, err := os.ReadFile(filepath.Join(bin, "silent")); err == nil {
+			if pid, err := strconv.Atoi(strings.TrimSpace(string(raw))); err == nil {
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			}
+		}
+	})
+	previousResolver := newBoxStateResolver
+	t.Cleanup(func() { newBoxStateResolver = previousResolver })
+	newBoxStateResolver = func() boxstate.Resolver {
+		return boxstate.Resolver{
+			ListSpaces: func(context.Context) ([]vmhost.Instance, error) {
+				return []vmhost.Instance{{Name: cfg.Space, Status: "Running"}}, nil
+			},
+			ListContainers: func(context.Context, string) ([]container.Container, error) {
+				return []container.Container{{Name: cfg.Name, Status: "Exited (0)"}}, nil
+			},
+			ProbeSession: func(context.Context, string, string, bool) boxstate.SessionInfo {
+				return boxstate.SessionInfo{State: boxstate.SessionNone}
+			},
+			InspectActual: func(context.Context, *agentbox.Config) (agentbox.ActualState, error) {
+				return agentbox.ActualState{Exists: true, Image: "fixture", PolicyContent: []byte("policy"), ReadOnlyWD: !cfg.WorkdirWritable(), Account: cfg.Account, Runtime: agentbox.RuntimeEvidence{Mode: agentbox.RuntimeModeConfined}}, nil
+			},
+			ComposePolicy: func(*agentbox.Config) ([]byte, error) { return []byte("policy"), nil },
+			ResolvedImage: func(*agentbox.Config) (string, bool, error) { return "fixture", true, nil },
+		}
+	}
+	previousFailSafe := vmservice.InventoryFailSafe
+	vmservice.InventoryFailSafe = 300 * time.Millisecond
+	t.Cleanup(func() { vmservice.InventoryFailSafe = previousFailSafe })
+	previousPrepare := prepareNativeExistingStart
+	t.Cleanup(func() { prepareNativeExistingStart = previousPrepare })
+	client := container.New(cfg.Space)
+	prepared := &preparedStartFixture{}
+	launches := 0
+	prepared.start = func() error { launches++; return nil }
+	prepareNativeExistingStart = func(ctx context.Context, _ *container.Client, _ *agentbox.Config, observed bool) (nativePreparedStart, bool, error) {
+		// The qualification inventory is a separate, answered read.
+		if _, err := port.Inventory(ctx, client, cfg.Name); err != nil {
+			t.Fatal("qualification inventory failed", err)
+		}
+		return prepared, true, nil
+	}
+	starts := len(f.starts)
+	start := time.Now()
+	_, err := ensureAgentSession(held(t.Context()), client, cfg.Space, cfg.Name, io.Discard, true, nil, sessionStartOptions{})
+	elapsed := time.Since(start)
+	if !errors.Is(err, context.DeadlineExceeded) || launches != 0 || len(f.starts) != starts {
+		t.Fatal("silent withdrawal inventory did not end the attach before any start", err, launches, len(f.starts)-starts)
+	}
+	if elapsed < vmservice.InventoryFailSafe || elapsed > 5*time.Second {
+		t.Fatal("withdrawal inventory followed something other than its fail-safe", elapsed)
+	}
+	raw, _ := os.ReadFile(filepath.Join(bin, "calls"))
+	if strings.Count(string(raw), "systemctl list-units") != 2 || strings.Contains(string(raw), "nerdctl start") || strings.Contains(string(raw), "systemd-run") {
+		t.Fatal("attach reached the engine or a session after the silent inventory", string(raw))
 	}
 }

@@ -68,6 +68,11 @@ func configureRuntime() error {
 
 var executeRuntimeDisk = accountstate.ExecuteForDisk
 
+// runtimeStorageFailSafe bounds the controller's own storage check end to end,
+// output drain included: controller startup, the recovery verifier and the
+// worker source lease run it without a client. Tests shorten it.
+var runtimeStorageFailSafe = 2 * time.Minute
+
 // VerifyRuntimeStorage rechecks the current filesystem UUID, ownership marker
 // and live account-state bind without creating directories or mounting them.
 // The helper runs in a bounded child process, including at degraded retries.
@@ -79,7 +84,7 @@ func verifyRuntimeStorage(ctx context.Context, c *spaceenv.Context) error {
 	if c == nil {
 		return errors.New("native runtime context is unavailable")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, runtimeStorageFailSafe)
 	defer cancel()
 	result, err := executeRuntimeDisk(ctx, c.Space, c.DiskID, c.DiskUUID, c.UID, c.GID, accountstate.Request{Action: "verify"})
 	if err != nil {

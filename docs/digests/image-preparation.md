@@ -149,7 +149,7 @@ not retry. Lost application replies retain the normal fence contract.
 32. <a id="source-32"></a> [image_frontend_test.go](../../internal/controller/image_frontend_test.go#L62) — `TestImageNamedContextsPreserveDockerfileStageInstructions`, actual frontend graph with synthetic metadata and production policy.
 33. <a id="source-33"></a> [box_edit_native_warm_test.go](../../cmd/yoloctl/box_edit_native_warm_test.go#L1) — `TestNativeBoxEditPreEffectCheckRetainsWhatReconcileRequires`, `TestBoxMutationPreEffectChecksUseTheCreationMode`; call sites in `controller_documents.go` (edit apply) and `agentbox_reconcile.go` (`runSet`, `mutateAndReconcile`) on main `1d265df3` and accompanying changes.
 
-34. <a id="source-34"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L404) — `ensureAgentSession` missing-container warm context.
+34. <a id="source-34"></a> [session_client.go](../../cmd/yoloctl/session_client.go#L406) — `ensureAgentSession` missing-container warm context.
 35. <a id="source-35"></a> [session_native_image_test.go](../../cmd/yoloctl/session_native_image_test.go#L27) — `TestMissingSessionRetainsExistingImageBeforeApply`.
 36. <a id="source-36"></a> [controller_native_images_test.go](../../cmd/yoloctl/controller_native_images_test.go#L351) — creation-mode and post-effect rejection controls.
 
