@@ -45,4 +45,4 @@ exercise archive delivery. The smoke also checks local refusal of a newer
 4. <a id="source-4"></a> [Symlink cross-check](../../internal/features/symlink_test.go#L1) — `TestNoCapabilityGrantsAFeatureSymlink`, `TestGoFeatureKeepsItsToolchainAndGrantsTheRealBinary`.
 5. <a id="source-5"></a> [Go smoke](../../scripts/smoke/go-modules.sh#L1) — module download, local toolchain and attributed denial.
 6. <a id="source-6"></a> [Policy drift](../../internal/agentbox/diff.go#L97) — byte-equal policy comparison restarts on change.
-7. <a id="source-7"></a> [Pinned binary attribution](../../third_party/openshell/sandbox-policy-0.1.6.rego#L144-L172) — exact executable and ancestor matching.
+7. <a id="source-7"></a> [Pinned binary attribution](../../third_party/openshell/sandbox-policy-0.1.10.rego#L144-L172) — exact executable and ancestor matching.
