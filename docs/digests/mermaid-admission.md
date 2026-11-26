@@ -3,7 +3,7 @@
 Verification: `9829771d01bcb3ca14f7ec99e8b064f6ac77d4ba` and accompanying changes.
 
 [FACT] `admit.Check` decides whether a fence may be drawn and never rewrites it:
-the renderer gets the original source. It accepts `graph|flowchart` with TD,
+the worker gets the original source. It accepts `graph|flowchart` with TD,
 TB or LR (RL/BT refused) and `sequenceDiagram`; every non-blank, non-`%%` line
 must be recognized, otherwise the fence is refused with `line N: reason`. A
 header-less fence (only `;`, blanks or comments) is an empty diagram. Besides

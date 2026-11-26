@@ -1,5 +1,5 @@
 // Package admit decides whether a Mermaid fence may be drawn. It validates
-// only: the renderer always receives the original source, never a rewrite.
+// only: the worker gets the original source and alone adds width stand-ins.
 // Every line must be recognized; anything else rejects the whole fence with a
 // short reason that the view shows next to the source.
 //

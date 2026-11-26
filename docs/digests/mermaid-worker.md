@@ -5,6 +5,9 @@ Verification: `b868ea74f8d99085022bed5f53ef34ecfe3ac740` and accompanying change
 Width reporting verified on `b44aebcad9b93b2efaee1db48e34cb2f5982d4df`
 and accompanying changes.
 
+Cluster stand-ins verified on `eace98ecbb1991693f7b8629d8bc6d95452b3cad`
+and accompanying changes.
+
 [FACT] `yoloctl __mermaid-worker` is dispatched before any CLI, controller or
 terminal initialization. Outside the host CLI context (a controller context,
 its context file, or an agent box) it exits 2 before reading anything;
@@ -25,6 +28,22 @@ UTF-8 without controls (TAB and CR included), at most 120 rows (else
 method. A dense flowchart (K25) ends as a timeout at the real limits and as a
 renderer failure under a 16 MiB test ceiling. [2](#source-2) [3](#source-3)
 [5](#source-5) [6](#source-6)
+
+[FACT] The pinned renderer sizes text by whole Unicode sequences but writes
+its grid one character at a time, so a cluster of several characters would
+take other cells than the view draws: 🛠️ (base + VS16) is sized as two cells
+and written into one, 👍🏽 is sized as two and written into four. Before each
+render the worker replaces each such cluster that has a width in the view's
+method with stand-ins the renderer measures and writes at that width: one cell
+from Supplementary Private Use Area-A, two from CJK Extension B, several for a
+wider wcwidth cluster. A cluster holding an ASCII character other than a
+leading digit (keycaps such as 1️⃣) stays, so syntax such as `:`, `[` or the
+`x` link end joined by a mark reaches the parser; a cluster also stays if a
+range runs out, and source
+characters from those ranges are never stand-ins. Single characters pass
+unchanged. The clusters replace their stand-ins before the drawing checks; a
+run the renderer split or cut is a renderer failure, so the source shows.
+[2](#source-2) [7](#source-7)
 
 [FACT] `Client` starts one worker lazily (minimal environment, own process
 group, 1 s wait delay, discarded stderr), only on the host. Requests are
@@ -55,3 +74,4 @@ Under `-race` the tests that assert the real 2 s/4 s limits are skipped.
 4. <a id="source-4"></a> [Client and cache](../../internal/mermaid/client.go#L147) — `Render`, `exchange`, `startLocked` (L82), `onHost`; cache.go `resultCache` (L36).
 5. <a id="source-5"></a> [Regressions](../../internal/mermaid/client_test.go#L1) — client cache/timeout/busy/hung-worker/protocol/host/too-tall/LRU and cancel-without-throttle tests; worker_test.go controlled trap, real-limit timeout, deadline and output bounds.
 6. <a id="source-6"></a> [Renderer width result](../../third_party/mermaid-text/patches/10-fit-strict-width-with-blank-margin.patch#L26) — `fit_strict_width`; internal/mermaid/half_width_test.go checks the embedded worker at follow pane widths.
+7. <a id="source-7"></a> [Cluster stand-ins](../../internal/mermaid/standins.go#L1) — `standsIn`, `withStandIns`, `restoreStandIns`; cluster_width_test.go checks the real worker in both methods for VS16, keycap, ZWJ, skin-tone, wide, flag, CJK and accent labels, the screenshot flowchart, a mark after `:`, `--x` and `--o`, and a 👍🏽 run wrapped at 17 columns.

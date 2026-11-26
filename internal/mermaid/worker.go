@@ -84,10 +84,11 @@ func render(ctx context.Context, runtime wazero.Runtime, compiled wazero.Compile
 	defer cancel()
 	out := boundedBuffer{limit: limits.stdout}
 	diagnostic := boundedBuffer{limit: 4096}
+	source, standIns := withStandIns(req.Source, method)
 	// No preopens, environment, filesystem, sockets or inherited host handles.
 	module, err := runtime.InstantiateModule(ctx, compiled, wazero.NewModuleConfig().
 		WithName("").WithArgs("mermaid", strconv.Itoa(req.Width)).
-		WithStdin(strings.NewReader(req.Source)).WithStdout(&out).WithStderr(&diagnostic))
+		WithStdin(strings.NewReader(source)).WithStdout(&out).WithStderr(&diagnostic))
 	if module != nil {
 		defer func() { _ = module.Close(ctx) }()
 	}
@@ -114,5 +115,9 @@ func render(ctx context.Context, runtime wazero.Runtime, compiled wazero.Compile
 		// A trap (even at the memory ceiling) does not prove an allocation failure.
 		return Result{Status: Failed}
 	}
-	return verifyDrawing(out.String(), req.Width, method)
+	drawing, whole := restoreStandIns(out.String(), standIns)
+	if !whole {
+		return Result{Status: Failed}
+	}
+	return verifyDrawing(drawing, req.Width, method)
 }
