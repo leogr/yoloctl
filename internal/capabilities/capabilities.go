@@ -284,15 +284,15 @@ var registry = map[string]Capability{
 	},
 	"network.go-modules": {
 		Name:        "network.go-modules",
-		Description: "Go module proxy + checksum DB, restricted to go",
+		Description: "Go module proxy, redirected archives and checksum database, scoped to Go",
 		Network: []NetworkGrant{{
 			PolicyName: "go-modules",
 			Endpoints: []Endpoint{
 				{Host: "proxy.golang.org", Ports: []int{443}},
+				{Host: "storage.googleapis.com", Ports: []int{443}},
 				{Host: "sum.golang.org", Ports: []int{443}},
 			},
-			// OpenShell attributes egress to the resolved executable, so this
-			// names the go feature's real binary, never its PATH symlink.
+			// Egress attribution uses the Go feature's resolved executable path.
 			Binaries: []string{"/usr/local/go/bin/go"},
 		}},
 	},

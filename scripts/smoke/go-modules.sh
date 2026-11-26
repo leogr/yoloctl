@@ -64,7 +64,10 @@ import (
 func main() { fmt.Println("terminal:", term.IsTerminal(0)) }
 GO
 go get golang.org/x/term@latest
+# This pinned version has been observed redirecting its archive to Cloud Storage.
+GOPROXY=https://proxy.golang.org go get github.com/pierrec/lz4/v4@v4.1.26
 grep -q '^golang.org/x/term ' go.sum
+grep -q '^github\.com/pierrec/lz4/v4 v4\.1\.26 h1:' go.sum
 go mod verify
 go build -o smoke .
 ./smoke </dev/null | grep -q '^terminal: false$'

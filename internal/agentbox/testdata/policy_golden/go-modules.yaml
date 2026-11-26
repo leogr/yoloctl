@@ -33,6 +33,9 @@ network_policies:
             - host: proxy.golang.org
               ports:
                 - 443
+            - host: storage.googleapis.com
+              ports:
+                - 443
             - host: sum.golang.org
               ports:
                 - 443

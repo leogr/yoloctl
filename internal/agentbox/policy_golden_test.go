@@ -213,7 +213,7 @@ func TestPolicyBinaryAttribution(t *testing.T) {
 			feature:      "go",
 			policyName:   "go-modules",
 			wantBinaries: []string{"/usr/local/go/bin/go"},
-			wantHosts:    []string{"proxy.golang.org", "sum.golang.org"},
+			wantHosts:    []string{"proxy.golang.org", "storage.googleapis.com", "sum.golang.org"},
 		},
 		{
 			feature:    "npm",
