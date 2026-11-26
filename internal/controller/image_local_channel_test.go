@@ -103,3 +103,27 @@ func TestLocalImageCheckpointFollowsCallerContext(t *testing.T) {
 		t.Fatal("cancelled local read did not return")
 	}
 }
+
+// In an owned setup the resolve-local read has one fail-safe (the setup
+// outlives its viewer); otherwise it follows the worker context unchanged.
+func TestLocalImageCheckpointOwnedSetupHasFailSafe(t *testing.T) {
+	old := controllerFailSafe
+	controllerFailSafe = 200 * time.Millisecond
+	t.Cleanup(func() { controllerFailSafe = old })
+	blocked := localResolverFixture{read: func(ctx context.Context, ref string) (imagejob.LocalTarget, string, error) {
+		<-ctx.Done()
+		return imagejob.LocalTarget{}, "", ctx.Err()
+	}}
+	read, done := localImageCheckpointContext(t.Context(), true)
+	start := time.Now()
+	_, err := resolveLocalImageCheckpoint(read, blocked, ImageRequest{Action: "resolve-local", Reference: "custom/image:one"})
+	done()
+	if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 10*time.Second {
+		t.Fatal("owned-setup local read did not end at its fail-safe", err, time.Since(start))
+	}
+	plain, release := localImageCheckpointContext(t.Context(), false)
+	defer release()
+	if _, bounded := plain.Deadline(); bounded {
+		t.Fatal("an ordinary local read gained a fixed bound")
+	}
+}

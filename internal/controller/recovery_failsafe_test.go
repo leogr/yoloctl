@@ -229,3 +229,17 @@ func TestVerifierOversizedResultEndsTheWriterAndReleasesItsLock(t *testing.T) {
 		t.Fatal("the verifier's lock was still held after it returned", err)
 	}
 }
+
+// A resume after a drain starts a recovery pass: a check the drain cancelled
+// before it began recorded nothing, and its backoff retry fell inside the drain.
+func TestResumeAfterDrainWakesRecovery(t *testing.T) {
+	s := &Server{draining: true, recoveryWake: make(chan struct{}, 1)}
+	if err := s.Resume(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-s.recoveryWake:
+	default:
+		t.Fatal("resume did not wake recovery")
+	}
+}

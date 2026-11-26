@@ -58,7 +58,7 @@ from the moment it holds the exclusive space lock; its lock wait follows the pas
 which has no budget of its own and ends with the controller or when drain cancels
 and waits. A pass cancelled while the verifier still waits for the lock records
 nothing, so the record stays eligible; a verifier that ends by itself before the
-lock is recorded once. A storage identity check has the same fail-safe. Storage
+lock is recorded once. A resume after a drain starts a new pass. A storage identity check has the same fail-safe. Storage
 repair retains its existing backoff.
 [11](#source-11) [12](#source-12) [18](#source-18)
 

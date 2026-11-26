@@ -190,6 +190,9 @@ func (s *Server) Resume() error {
 	}
 	s.draining = false
 	_ = s.refreshRecovery()
+	// A check a drain cancelled before it started recorded nothing; its retry
+	// fell inside the drain. Start a pass now so it is not left unclosed.
+	s.wakeRecovery()
 	return nil
 }
 
@@ -785,7 +788,9 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			s.mu.Unlock()
 			return ImageReply{}, err
 		case "resolve-local":
-			return resolveLocalImageCheckpoint(ctx, s.Images.backend, r)
+			read, done := localImageCheckpointContext(ctx, operation.OwnedSetup)
+			defer done()
+			return resolveLocalImageCheckpoint(read, s.Images.backend, r)
 		case "resolve":
 			resolve := service.Resolve
 			if r.Remote {
