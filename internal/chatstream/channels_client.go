@@ -182,6 +182,11 @@ func (d *channelDriver) addChannel(name, membership string) {
 				}
 				return
 			}
+			if h := d.history; h != nil && h.Window && h.Channel == name && h.batch != "" && event.historyBatch == h.batch {
+				// A window page reaches the view whole, once its batch closes.
+				h.rows = append(h.rows, event.Message)
+				return
+			}
 		}
 		if event.Kind == "history-page" && d.history != nil && d.history.Channel == name {
 			event.ID = d.history.ID

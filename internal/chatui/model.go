@@ -216,6 +216,10 @@ type Options struct {
 	LoadOlder func(HistoryRequest) tea.Cmd
 	// LookupReference asks the same stream for one exact retained record.
 	LookupReference func(HistoryRequest) tea.Cmd
+	// LoadWindow asks the same stream for a window page (HistoryRequest
+	// with Window: around a message, or after or before one); the caller
+	// answers with one WindowPageMsg once the page's batch closed.
+	LoadWindow func(HistoryRequest) tea.Cmd
 	// Control runs one channel or connection-availability action and answers with
 	// ControlMsg; membership and topic changes arrive as their own messages.
 	Control func(Action) tea.Cmd
@@ -293,8 +297,12 @@ type Model struct {
 	catalogInfo       map[string]ChannelInfo
 	pending           *pendingAction
 	reference         *referenceLookup
-	lastRefresh       time.Time
-	opts              Options
+	// back is where Esc returns after jumps to messages, newest last;
+	// backSeq numbers its entries.
+	back        []backEntry
+	backSeq     uint64
+	lastRefresh time.Time
+	opts        Options
 	// previewCap is the host's image capability; preview is the pane's one
 	// requested or shown image; previewSeq numbers requests.
 	previewCap PreviewCapabilityMsg
@@ -456,6 +464,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	_, cmd := m.update(msg)
 	cmd = tea.Batch(previewCmd, cmd)
+	if v := m.cur; v.win == nil && v.follow {
+		// The reader is at the latest messages again, by whatever means:
+		// a later Esc must not jump to an old place.
+		m.dropBack()
+	}
 	switch msg.(type) {
 	case AvailabilityMsg, MembersMsg, IncomingMsg, DeliveryMsg, CatalogMsg, SessionMsg, ConnectionMsg, GapMsg, MembershipMsg:
 		m.reconcile()
@@ -564,17 +577,25 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.refreshForUnknown(accounts...)
 	case HistoryPageMsg:
-		m.within(msg.Channel, func() { m.historyPage(msg) })
+		m.within(msg.Channel, func() { m.onLive(func() { m.historyPage(msg) }) })
 	case ReferenceLookupMsg:
 		return m, m.referenceResult(msg)
+	case WindowPageMsg:
+		m.windowPage(msg)
 	case IncomingMsg:
 		if m.deletedView(msg.Message.Channel) {
 			break
 		}
 		m.within(msg.Message.Channel, func() {
-			m.captureAnchor()
-			m.incoming(msg.Message)
-			m.published(msg.Message)
+			m.onLive(func() {
+				m.captureAnchor()
+				m.incoming(msg.Message)
+				m.published(msg.Message)
+			})
+			if m.win != nil && !msg.Message.Replay {
+				m.win.end = false // something newer exists again
+			}
+			m.trimAggregate()
 			m.touch()
 		})
 		if !msg.Message.Replay {
@@ -586,8 +607,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			channel = m.inflightChannel
 		}
 		m.within(channel, func() {
-			m.captureAnchor()
-			m.delivery(msg)
+			m.onLive(func() {
+				m.captureAnchor()
+				m.delivery(msg)
+			})
 			m.touch()
 		})
 	case ConnectionMsg:
@@ -640,6 +663,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 	case SessionMsg:
 		m.clearReference()
+		m.dropBack()
 		m.opts.Nick = msg.Nick
 		if msg.Identities != nil {
 			m.opts.Identities = msg.Identities
@@ -716,6 +740,7 @@ func (m *Model) runPending(cmd tea.Cmd) tea.Cmd {
 func (m *Model) connection(msg ConnectionMsg) {
 	m.captureAnchor()
 	m.clearReference()
+	m.dropBack() // positions read before a new stream may not mean the same
 	m.connected = msg.Connected
 	m.ownState, m.ownReason = "unknown", ""
 	if msg.Connected {
@@ -736,7 +761,12 @@ func (m *Model) connection(msg ConnectionMsg) {
 			// Unknown until the next stream lists the room again.
 			m.members = nil
 			if m.reconnecting && msg.Err == nil {
-				m.loadingOlder, m.historyEnd = false, false
+				m.onLive(func() { m.loadingOlder, m.historyEnd = false, false })
+			}
+			if m.win != nil {
+				// A window stays like any reading position; its pending
+				// page is lost with the stream.
+				m.win.edge, m.win.end = nil, false
 			}
 		}
 		m.touch()
@@ -758,7 +788,9 @@ func (m *Model) connection(msg ConnectionMsg) {
 	uncertain := m.inflight != ""
 	if uncertain {
 		m.within(m.inflightChannel, func() {
-			m.delivery(DeliveryMsg{ID: m.inflight, State: Uncertain, Err: errors.New("connection lost; delivery must be inspected")})
+			m.onLive(func() {
+				m.delivery(DeliveryMsg{ID: m.inflight, State: Uncertain, Err: errors.New("connection lost; delivery must be inspected")})
+			})
 		})
 	}
 	m.lostImage()
@@ -913,7 +945,7 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		return m.cycle(1)
 	case "alt+1", "alt+2", "alt+3", "alt+4", "alt+5", "alt+6", "alt+7", "alt+8", "alt+9":
 		if i := int(key[len(key)-1] - '1'); i < len(m.order) {
-			return m.selectChannel(m.order[i])
+			return m.chooseChannel(m.order[i])
 		}
 		return nil
 	case "ctrl+s":
@@ -922,8 +954,7 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	case "pgup":
 		return m.scrollUp(m.page())
 	case "pgdown":
-		m.moveScroll(m.page())
-		return nil
+		return m.scrollDown(m.page())
 	case "alt+pgup", "shift+pgup":
 		m.scrollRoster(-max(m.layout.rosterPage, 1))
 		return nil
@@ -933,8 +964,7 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	case "ctrl+up":
 		return m.scrollUp(1)
 	case "ctrl+down":
-		m.moveScroll(1)
-		return nil
+		return m.scrollDown(1)
 	case "alt+end":
 		m.jumpToLatest()
 		return nil
@@ -1019,7 +1049,9 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 			m.say(levelInfo, "No collapsed paste beside the cursor")
 		}
 	case "esc":
-		m.escape()
+		cmd := m.escape()
+		m.refreshSuggest()
+		return cmd
 	default:
 		if k.Mod&(tea.ModCtrl|tea.ModAlt|tea.ModSuper) == 0 && k.Text != "" {
 			m.edit(e.insert(k.Text))
@@ -1029,14 +1061,21 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// escape steps back one level: highlight, the jump back to the latest
-// messages, reply, then selection; any notice clears. The jump keeps the
-// draft, reply and selection.
-func (m *Model) escape() {
+// escape steps back one level: a message being opened, highlight, back to
+// where a jump to a message started, the jump back to the latest messages,
+// reply, then selection; any notice clears. The jump keeps the draft, reply
+// and selection.
+func (m *Model) escape() tea.Cmd {
 	switch {
+	case m.reference != nil:
+		m.clearReference() // nothing of it was applied
 	case m.sel != nil:
 		// The pick stays; Enter returns to the first action, Reply.
 		m.sel, m.actionIndex = nil, 0
+	case len(m.back) > 0:
+		m.clearNotice()
+		cmd, _ := m.goBack()
+		return cmd
 	case m.behindLatest():
 		m.jumpToLatest()
 	case m.replyTo != "":
@@ -1047,6 +1086,7 @@ func (m *Model) escape() {
 		m.touch()
 	}
 	m.clearNotice()
+	return nil
 }
 
 // suggestKey routes keys while the suggestion popup is open. Enter accepts
@@ -1101,8 +1141,19 @@ func (m *Model) messageFocusKey(key string) (tea.Cmd, bool) {
 			return m.runAction(actions[m.actionIndex].id), true
 		}
 	case "esc":
-		m.focus, m.picked = focusComposer, false
-		m.clearNotice()
+		switch {
+		case m.reference != nil:
+			m.clearReference()
+		case m.sel != nil && len(m.back) > 0:
+			m.sel, m.actionIndex = nil, 0 // the highlight gets its own Esc before going back
+		case len(m.back) > 0:
+			m.clearNotice()
+			cmd, _ := m.goBack()
+			return cmd, true
+		default:
+			m.focus, m.picked = focusComposer, false
+			m.clearNotice()
+		}
 		m.touch()
 	default:
 		return nil, false
@@ -1388,6 +1439,8 @@ func (m *Model) sendDraft() tea.Cmd {
 	out := Outgoing{ID: rand.Text(), Channel: m.name, Text: text, ReplyTo: m.replyTo}
 	m.inflight, m.inflightChannel, m.sentText, m.sentRevision = out.ID, m.name, out.Text, e.revision
 	m.sentDraft, m.sentEnd, m.sentReplyRevision = e.text, end, m.replyRevision
+	m.clearReference() // nor may a jump still being fetched take it away again
+	m.endWindow()      // a sent message shows at the latest, in the live list
 	m.follow, m.anchor, m.picked = true, nil, false
 	m.append(Message{ClientID: out.ID, Channel: m.name, Nick: m.opts.Nick, Text: out.Text, ReplyTo: out.ReplyTo, Time: time.Now(), Delivery: Pending})
 	m.clearNotice()
@@ -1581,6 +1634,12 @@ func (m *Model) incoming(msg Message) {
 func (m *Model) scrollUp(rows int) tea.Cmd {
 	atTop := !m.follow && m.scroll == 0 || m.lastRows <= m.lastBodyHeight
 	m.moveScroll(-rows)
+	if m.win != nil {
+		if atTop {
+			return m.windowEdge(false)
+		}
+		return nil
+	}
 	if atTop && m.historyEnd {
 		m.say(levelInfo, "Beginning of retained history")
 	}
@@ -1682,27 +1741,42 @@ func (m *Model) append(msg Message) {
 func (m *Model) evict(i int) {
 	evicted := messageKey(m.messages[i])
 	m.touch()
-	delete(m.bodyCache, evicted)
-	delete(m.tableRows, evicted)
 	m.messages = slices.Delete(m.messages, i, i+1)
+	if !m.heldBeside(evicted) {
+		// A copy in the other list (window or live) still shows it.
+		delete(m.bodyCache, evicted)
+		delete(m.tableRows, evicted)
+	}
 	if i < m.olderAt {
 		m.olderAt--
 	}
 	if i == m.selected && m.picked {
-		// Its actions must not move to a neighbour.
-		m.picked, m.focus = false, focusComposer
+		// Its actions must not move to a neighbour. Keyboard focus belongs
+		// to the list on screen: a hidden list's pick goes quietly.
+		m.picked = false
+		if m.showsList() {
+			m.focus = focusComposer
+		}
 	}
-	m.selected = max(m.selected-1, 0)
+	if m.selected >= i {
+		m.selected = max(m.selected-1, 0)
+	}
 	if m.anchor == nil || m.anchor.key == evicted {
 		m.anchor = nil
 		m.scroll = 0
 	}
 	if m.sel != nil && (m.sel.anchor.key == evicted || m.sel.focus.key == evicted) {
 		m.sel = nil
-		if m.isCurrent() {
+		if m.showsList() {
 			m.drag.active = false
 		}
 	}
+}
+
+// showsList reports whether the list in use is the one on screen: the
+// visible channel's, not a list set aside behind its window.
+func (m *Model) showsList() bool {
+	return m.isCurrent() && (m.win == nil || !m.win.swapped)
 }
 
 // olderFits reports whether an older message fits the display bounds.
@@ -1785,12 +1859,15 @@ func (m *Model) clearInfo() {
 // behindLatest reports whether the reader is away from the live tail with
 // something to return to: the condition for the jump to the latest messages.
 func (m *Model) behindLatest() bool {
-	return !m.follow && (m.unread > 0 || m.scrolledBack())
+	return m.win != nil || !m.follow && (m.unread > 0 || m.scrolledBack())
 }
 
 // jumpToLatest returns to the live tail, from a click on the jump, Alt+End
 // or Esc. It changes only the reading position: the draft, reply, staged
 // images and a picked message stay.
 func (m *Model) jumpToLatest() {
+	m.clearReference() // a jump still being fetched must not take the reader away again
+	m.endWindow()
 	m.follow, m.unread, m.unreadMentions, m.anchor = true, 0, 0, nil
+	m.dropBack()
 }

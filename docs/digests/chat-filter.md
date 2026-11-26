@@ -1,6 +1,6 @@
 # Native chat message filter and mention identities
 
-Verification: `d9aec4ac854ffd5b4f60a93817b8c5afce10847d` and accompanying changes.
+Verification: `d9aec4ac854ffd5b4f60a93817b8c5afce10847d` and accompanying changes; jump clicks re-read at `0398f1f6638de276139c93675958ecade7782073` and accompanying changes.
 
 [FACT] One resolver names who an `@token` means, case-folded, with the
 existing mention boundaries (an `@` not after a nickname byte, then nickname
@@ -78,7 +78,7 @@ channel's rows, so evidence from a hidden channel updates the visible filter
 and self marks on the next frame; a filtered view's pick that is no longer
 shown ends rather than moving to a neighbour. Ctrl+R and the other actions'
 implicit latest target, Alt+↑/↓ and a drag copy skip hidden messages. A reply
-label or reference click on a loaded hidden message clears the filter, then
+label or reference click on a hidden message clears the filter, then
 selects that ID. [1](#source-1) [5](#source-5) [10](#source-10) [12](#source-12)
 
 [FACT] Focused fixture regressions cover sender or mention matching and its
@@ -102,12 +102,12 @@ both aliases and not counting a mention of the human's other alias. [13](#source
 3. <a id="source-3"></a> [Host identities](../../cmd/yoloctl/chat_view.go#L28-L156) — `runChatView` supplies `Options.Nick` from `openChatHeader`'s saved nick; `chatIdentities` carries the saved `Nick`; `Identity.Nick` in chatui/model.go.
 4. <a id="source-4"></a> [Suggestions](../../internal/chatui/suggest.go#L61-L242) — `refreshSuggest`, `refreshOpenSuggest`, `accountAway`, `joinDetail`; `complete` and mention actions in model.go. `TestMentionsUseTheSavedNickPerAccount` (filter_test.go L440–487) checks name-prefix matching without displaying the name; nickname_display_test.go `TestIdentityRefreshKeepsSuggestionSelection`, `TestCatalogRefreshTracksSelectedAccountWhenRowsMove` and `TestCatalogRefreshClampsMissingSuggestion` cover selection retention and fallback.
 5. <a id="source-5"></a> [Mouse actions](../../internal/chatui/mouse.go#L205-L350) — `clickHit` (`hitFilter`), `activate` (`actFilter`), `showMessage`, `mentionCard`.
-6. <a id="source-6"></a> [Cards and picker](../../internal/chatui/overlay.go#L386-L451) — `cardActions`, `cardAction`; `overlayFilter` in `overlayActivate` and `overlayLines`; `cardRows` shows the saved nick and a connection alias; `savedNick` serves Settings and `saveNick`.
+6. <a id="source-6"></a> [Cards and picker](../../internal/chatui/overlay.go#L384-L449) — `cardActions`, `cardAction`; `overlayFilter` in `overlayActivate` and `overlayLines`; `cardRows` shows the saved nick and a connection alias; `savedNick` serves Settings and `saveNick`.
 7. <a id="source-7"></a> [Transcript marks](../../internal/chatui/transcript.go#L132-L364) — `body` keyed by `selfNames`, `transcript`; unread mentions in model.go `incoming`.
 8. <a id="source-8"></a> [Divider](../../internal/chatui/view.go#L406-L501) — `composerDivider`, `withChip`.
-9. <a id="source-9"></a> [Channel state](../../internal/chatui/channels.go#L58-L60) — `channelView.filter`.
-10. <a id="source-10"></a> [Model paths](../../internal/chatui/model.go#L567-L1629) — `historyPage`, `slashCommand`, `incoming`, `selectedMessage`, `selectMessage`.
-11. <a id="source-11"></a> [Notices](../../internal/chatui/presence.go#L204-L215) — `presenceRows` keeps transport notices.
+9. <a id="source-9"></a> [Channel state](../../internal/chatui/channels.go#L68-L70) — `channelView.filter`.
+10. <a id="source-10"></a> [Model paths](../../internal/chatui/model.go#L685-L1824) — `historyPage`, `slashCommand`, `incoming`, `selectedMessage`, `selectMessage`.
+11. <a id="source-11"></a> [Notices](../../internal/chatui/presence.go#L210-L224) — `presenceRows` keeps transport notices.
 12. <a id="source-12"></a> [Selection](../../internal/chatui/selection.go#L69-L124) — `selectedText` skips hidden messages.
 13. <a id="source-13"></a> [Filter regressions](../../internal/chatui/filter_test.go#L87-L844) — twenty-three focused tests, `TestForMeShowsRepliesUnderMyMessages` through `TestFilterWordingNamesReplies` for replies; `TestOverlayControlsReceiveClicksAndHover` and `TestChatHeaderSharesDashboardStyle` keep card and band behavior.
 14. <a id="source-14"></a> [Host identity regression](../../cmd/yoloctl/chat_view_test.go#L34-L49) — `TestChatIdentitiesComeFromTheTrustedMap` asserts the saved nick.

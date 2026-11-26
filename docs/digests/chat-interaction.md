@@ -87,7 +87,7 @@ the jump, padding and TUI guards. [5](#source-5) [4](#source-4)
 
 1. <a id="source-1"></a> [View layout](../../internal/chatui/view.go#L75) — `View`, `place`, `topBar`, `composerDivider`, `composerStatus`, `inputRow`, `statusRow`, `footer`.
 2. <a id="source-2"></a> [Suggestions](../../internal/chatui/suggest.go#L31-L230) — `commands`, `refreshSuggest`, `refreshOpenSuggest`, `acceptSuggestion`.
-3. <a id="source-3"></a> [Keys and actions](../../internal/chatui/model.go#L736) — `key`, `escape`, `runAction`, `append`, `pick`, `jumpToLatest`.
+3. <a id="source-3"></a> [Keys and actions](../../internal/chatui/model.go#L761) — `key`, `escape`, `runAction`, `append`, `pick`, `jumpToLatest`.
 4. <a id="source-4"></a> [TUI requests](../../internal/tui/tab_requests.go#L1) — `tabRequestHandler`, `handleTabRequest`; `tab_requests_test.go`.
 5. <a id="source-5"></a> [Interaction regressions](../../internal/chatui/polish_test.go#L1) — selection, attach, reconnect, presence, scroll.
 6. <a id="source-6"></a> [Host view regressions](../../cmd/yoloctl/chat_view_test.go#L1) — identities, agents, guarded request.
@@ -96,10 +96,10 @@ the jump, padding and TUI guards. [5](#source-5) [4](#source-4)
 9. <a id="source-9"></a> [UI regressions](../../internal/chatui/ui_package_test.go#L71) — actions, jump, padding, lookups.
 10. <a id="source-10"></a> [Lookup regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L173) — bound and recheck.
 11. <a id="source-11"></a> [First-row regression](../../internal/chatui/first_row_test.go#L82) — `TestChatFirstRowIsBlackInEveryState`; `topBar`, `View`, `linkPromptView` (link_prompt.go L43) and spaceview `FirstRow` (theme.go L79-L93).
-12. <a id="source-12"></a> [Copy button](../../internal/chatui/model.go#L1060) — `copyCode`, `activate` (`actCopyCode`) in mouse.go, the `hoverHint` case in hover.go; `codeblock_test.go`.
+12. <a id="source-12"></a> [Copy button](../../internal/chatui/model.go#L1100) — `copyCode`, `activate` (`actCopyCode`) in mouse.go, the `hoverHint` case in hover.go; `codeblock_test.go`.
 13. <a id="source-13"></a> [Drag pick](../../internal/chatui/selection_focus_test.go#L1-L168) — `mouseDown` sets `dragState.pick`, `mouseMove` picks at the first motion (mouse.go); six regressions.
 
-14. <a id="source-14"></a> [Human channel selection](../../internal/chatui/channels.go#L218) — `selectChannel` and `cycle`; user routes in model.go, mouse.go and overlay.go; `channel_select_test.go` exercises commands and membership results.
+14. <a id="source-14"></a> [Human channel selection](../../internal/chatui/channels.go#L228) — `selectChannel` and `cycle`; user routes in model.go, mouse.go and overlay.go; `channel_select_test.go` exercises commands and membership results.
 
 15. <a id="source-15"></a> [Reopen action](../../internal/chatui/reopen.go#L10) — `reopenOffered`, `reopen`, `reopenKey`, `reopenFooter`; `key`/`connection` in model.go, `footer` in view.go and `activate` in mouse.go; focused regressions in `reopen_test.go`.
 16. <a id="source-16"></a> [Existing stream owner](../../cmd/yoloctl/chat_view.go#L374) — `reconnect`.

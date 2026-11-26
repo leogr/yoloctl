@@ -11,38 +11,48 @@ import (
 	"github.com/leogr/yoloctl/internal/markdownview"
 )
 
-// channelView is one channel's view: its draft and reply, messages and
-// rendering caches, reading position and selection, older-history cursor,
-// roster, notices, topic, unread counts and membership. The Model embeds the
-// visible view; events for another channel update that channel's view
-// without changing what is shown.
-type channelView struct {
-	name           string
-	editor         editor
+// messageList is one list of messages a channel shows, with what belongs to
+// it: selection, reading position, text highlight, older-history cursor and
+// last layout. A channel shows its live list, or a window of older history in
+// its place (window.go); each moves with its own state.
+type messageList struct {
 	messages       []Message
-	replyTo        string
-	replyRevision  uint64
 	selected       int
 	picked         bool
 	actionIndex    int
 	follow         bool
 	scroll         int
-	unread         int
-	unreadMentions int
 	lastRows       int
-	lastBodyHeight int
-	lastTextWidth  int
 	anchor         *viewAnchor
 	lastTranscript []transcriptRow
-	bodyCache      map[string]cachedBody
-	tableRows      map[string]map[markdownview.TableRowID]bool
-	members        []Member
 	loadingOlder   bool
 	olderRequest   string
 	historyEnd     bool
 	olderAt        int
 	olderSkipped   int
 	sel            *selection
+}
+
+// channelView is one channel's view: its draft and reply, the message list
+// it shows (and a live list set aside behind a window), rendering caches,
+// roster, notices, topic, unread counts and membership. The Model embeds the
+// visible view; events for another channel update that channel's view
+// without changing what is shown.
+type channelView struct {
+	name string
+	messageList
+	// win is the window shown instead of the live list, if any.
+	win            *window
+	editor         editor
+	replyTo        string
+	replyRevision  uint64
+	unread         int
+	unreadMentions int
+	lastBodyHeight int
+	lastTextWidth  int
+	bodyCache      map[string]cachedBody
+	tableRows      map[string]map[markdownview.TableRowID]bool
+	members        []Member
 	joinedAt       time.Time
 	presence       []presenceEvent
 	topic, topicBy string
@@ -80,7 +90,7 @@ type channelView struct {
 }
 
 func newChannelView(name string, limit int) *channelView {
-	return &channelView{name: name, editor: editor{limit: limit}, selected: -1, follow: true, bodyCache: map[string]cachedBody{}}
+	return &channelView{name: name, messageList: messageList{selected: -1, follow: true}, editor: editor{limit: limit}, bodyCache: map[string]cachedBody{}}
 }
 
 // Bounds across all channels; each channel keeps its own display bounds.
@@ -221,6 +231,13 @@ func (m *Model) switchTo(name string) {
 	m.say(levelInfo, "Now in "+v.name+m.membershipNote())
 }
 
+// chooseChannel is the person choosing a channel by hand: the places a jump
+// to a message left are not where Esc returns any more.
+func (m *Model) chooseChannel(name string) tea.Cmd {
+	m.dropBack()
+	return m.selectChannel(name)
+}
+
 // selectChannel is a deliberate selection in the human host chat view.
 // It uses the ordinary typed join/admission path; catalog events and join
 // completion keep using switchTo, which never starts a channel action.
@@ -277,7 +294,7 @@ func (m *Model) cycle(delta int) tea.Cmd {
 		for step := 1; step < n; step++ {
 			name := m.order[((at+delta*step)%n+n)%n]
 			if !unreadOnly || m.views[name].unread > 0 {
-				return m.selectChannel(name)
+				return m.chooseChannel(name)
 			}
 		}
 	}
@@ -377,6 +394,10 @@ const (
 // HistoryRequest asks for an older page or one exact record in a channel.
 type HistoryRequest struct {
 	ID, Channel, Before, Lookup string
+	// Window asks for a whole page for a window (WindowPageMsg): around
+	// Around, after After or before Before.
+	Around, After string
+	Window        bool
 }
 
 func (m *Model) catalog(msg CatalogMsg) {
@@ -511,8 +532,8 @@ func (m *Model) showJoined(channel string) {
 	m.joinSwitch = joinSwitch{}
 	if m.name == js.from {
 		m.switchTo(channel)
-		if js.ref != "" && strings.EqualFold(m.name, channel) {
-			m.selectLoaded(js.ref)
+		if js.ref != "" && strings.EqualFold(m.name, channel) && m.selectHeld(js.ref) && js.back != nil {
+			m.pushBack(*js.back)
 		}
 	}
 }
@@ -521,7 +542,10 @@ func (m *Model) showJoined(channel string) {
 // the view follows the confirmation whichever report arrives first. ref is a
 // message a reference click asked to show once this join switches; it lives
 // and ends with the join intent.
-type joinSwitch struct{ id, from, channel, ref string }
+type joinSwitch struct {
+	id, from, channel, ref string
+	back                   *backEntry // where the jump to ref started
+}
 
 // controlReady reports whether a channel action may start now. One send
 // or action is outstanding at a time, and an uncertain action blocks the
@@ -775,39 +799,72 @@ func (m *Model) channelCommand(text string, fields []string) (tea.Cmd, bool) {
 // and an unresolved send are never dropped; trimmed channels show where
 // older history stops.
 func (m *Model) trimAggregate() {
+	if m.win != nil && m.win.swapped {
+		return // the live event's caller trims once the lists are back
+	}
+	size := func(v *channelView) int {
+		n := 0
+		for _, list := range v.lists() {
+			n += len(list)
+		}
+		return n
+	}
 	for {
 		messages, bytes, lines := 0, 0, 0
 		for _, v := range m.views {
-			messages += len(v.messages)
-			for _, msg := range v.messages {
-				bytes += len(msg.Text)
-				lines += logicalLines(msg.Text)
+			for _, list := range v.lists() {
+				messages += len(list)
+				for _, msg := range list {
+					bytes += len(msg.Text)
+					lines += logicalLines(msg.Text)
+				}
 			}
 		}
 		if messages <= maxTotalMessages && bytes <= maxTotalBytes && lines <= maxTotalLines {
 			return
 		}
-		var victim *channelView
+		var victims []*channelView
 		for _, name := range m.order {
-			v := m.views[name]
-			if len(v.messages) > 1 && v != m.cur && (victim == nil || len(v.messages) > len(victim.messages)) {
-				victim = v
+			if v := m.views[name]; v != m.cur {
+				victims = append(victims, v)
 			}
 		}
-		if victim == nil {
-			victim = m.cur
-			if len(victim.messages) <= 1 {
-				return
+		slices.SortStableFunc(victims, func(a, b *channelView) int { return size(b) - size(a) })
+		trimmed := false
+		for _, v := range append(victims, m.cur) {
+			m.within(v.name, func() { trimmed = m.trimOne() })
+			if trimmed {
+				break
 			}
 		}
-		m.within(victim.name, func() {
-			i := 0
-			if m.messages[0].ClientID == m.inflight && m.inflight != "" {
-				i = 1
-			}
-			m.evict(i)
-			m.historyEnd = true
-			m.olderSkipped++
-		})
+		if !trimmed {
+			return
+		}
 	}
+}
+
+// trimOne drops one displayed message of this channel for the whole-view
+// bounds: the live list's oldest first (behind a window it is not on
+// screen), else a window row off screen. It reports false when nothing may
+// go: an unresolved send stays in its live list.
+func (m *Model) trimOne() bool {
+	trimmed := false
+	m.onLive(func() {
+		if len(m.messages) <= 1 {
+			return
+		}
+		i := 0
+		if m.messages[0].ClientID == m.inflight && m.inflight != "" {
+			i = 1
+		}
+		m.evict(i)
+		m.historyEnd = true
+		m.olderSkipped++
+		trimmed = true
+	})
+	if trimmed || m.win == nil {
+		return trimmed
+	}
+	m.captureAnchor()
+	return m.windowEvictOne(m.visibleKeys())
 }

@@ -90,7 +90,7 @@ func runChatView(cmd *cobra.Command, _ []string) error {
 	} else {
 		previews.configure(s, &opts)
 	}
-	opts.LoadOlder, opts.LookupReference = s.loadHistory, s.loadHistory
+	opts.LoadOlder, opts.LookupReference, opts.LoadWindow = s.loadHistory, s.loadHistory, s.loadHistory
 	opts.Send = s.send
 	opts.Copy = func(text string) tea.Cmd {
 		sequence, notice := termio.EvaluateOSC52(termio.OSC52{Selection: "c", Payload: base64.StdEncoding.EncodeToString([]byte(text))}, prefs.ClipboardEnabled())
@@ -636,7 +636,7 @@ func (s *chatSession) refreshLoop() {
 
 func (s *chatSession) loadHistory(r chatui.HistoryRequest) tea.Cmd {
 	l := s.current()
-	request := chatstream.HistoryRequest{ID: r.ID, Channel: r.Channel, Before: r.Before, Lookup: r.Lookup}
+	request := chatstream.HistoryRequest{ID: r.ID, Channel: r.Channel, Before: r.Before, Lookup: r.Lookup, Around: r.Around, After: r.After, Window: r.Window}
 	return func() tea.Msg {
 		if l == nil {
 			return chatHistoryUnsent(request, errors.New("no chat connection is available"))
@@ -654,6 +654,9 @@ func (s *chatSession) loadHistory(r chatui.HistoryRequest) tea.Cmd {
 }
 
 func chatHistoryUnsent(r chatstream.HistoryRequest, err error) tea.Msg {
+	if r.Window {
+		return chatui.WindowPageMsg{Channel: r.Channel, ID: r.ID, Err: err}
+	}
 	if r.Lookup != "" {
 		return chatui.ReferenceLookupMsg{Channel: r.Channel, ID: r.ID, Err: err}
 	}
@@ -889,21 +892,18 @@ func chatViewEvent(e chatstream.Event) tea.Msg {
 			d.Refusal = &chatui.AttachmentRefusal{Reason: r.Reason, Index: r.Index, MessageID: r.MessageID}
 		}
 		return d
+	case "history-window":
+		page := make([]chatui.Message, 0, len(e.Messages))
+		for _, m := range e.Messages {
+			page = append(page, chatViewMessage(m, e.Channel))
+		}
+		return chatui.WindowPageMsg{Channel: e.Channel, ID: e.ID, Messages: page, Err: e.Err}
 	case "message":
-		m := e.Message
 		channel := e.Channel
 		if channel == "" {
-			channel = m.Channel
+			channel = e.Message.Channel
 		}
-		var artifact *chatui.ArtifactRef
-		if a := m.Artifact; a != nil { // only from validated reserved tags
-			artifact = &chatui.ArtifactRef{ID: a.ID, Name: a.Name, SHA256: a.SHA256, Bytes: a.Bytes}
-		}
-		var attachments []chatui.AttachmentRef
-		for _, a := range m.Attachments { // only from validated reserved tags
-			attachments = append(attachments, chatui.AttachmentRef{ArtifactRef: chatui.ArtifactRef{ID: a.ID, Name: a.Name, SHA256: a.SHA256, Bytes: a.Bytes}, At: a.At})
-		}
-		return chatui.IncomingMsg{Message: chatui.Message{ID: m.ID, ClientID: m.ClientID, Channel: channel, Account: m.Account, Nick: m.Nick, Text: m.Text, ReplyTo: m.ReplyTo, Time: m.Time, Replay: m.Replay, Older: m.Older, Delivery: chatui.Confirmed, Artifact: artifact, Attachments: attachments}}
+		return chatui.IncomingMsg{Message: chatViewMessage(e.Message, channel)}
 	case "topic":
 		return chatui.TopicMsg{Channel: e.Channel, Text: e.Topic, By: e.TopicBy, Live: e.TopicLive, Unknown: e.State == "unknown"}
 	case "gap":
@@ -948,4 +948,18 @@ func configureChatDiagrams(opts *chatui.Options, enabled, onHost bool) func() {
 	client := mermaid.Default()
 	opts.Mermaid = client
 	return client.Close
+}
+
+// chatViewMessage is a stream message as the view shows it: live rows and
+// window pages alike, with replies, the artifact and attachments.
+func chatViewMessage(m chatstream.Message, channel string) chatui.Message {
+	var artifact *chatui.ArtifactRef
+	if a := m.Artifact; a != nil { // only from validated reserved tags
+		artifact = &chatui.ArtifactRef{ID: a.ID, Name: a.Name, SHA256: a.SHA256, Bytes: a.Bytes}
+	}
+	var attachments []chatui.AttachmentRef
+	for _, a := range m.Attachments { // only from validated reserved tags
+		attachments = append(attachments, chatui.AttachmentRef{ArtifactRef: chatui.ArtifactRef{ID: a.ID, Name: a.Name, SHA256: a.SHA256, Bytes: a.Bytes}, At: a.At})
+	}
+	return chatui.Message{ID: m.ID, ClientID: m.ClientID, Channel: channel, Account: m.Account, Nick: m.Nick, Text: m.Text, ReplyTo: m.ReplyTo, Time: m.Time, Replay: m.Replay, Older: m.Older, Delivery: chatui.Confirmed, Artifact: artifact, Attachments: attachments}
 }

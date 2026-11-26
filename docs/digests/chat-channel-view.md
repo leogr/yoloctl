@@ -115,12 +115,12 @@ view confirmation. [2](#source-2) [7](#source-7) [8](#source-8)
 
 ## Sources
 
-1. <a id="source-1"></a> [Channel views](../../internal/chatui/channels.go#L18) — `channelView`, `within`, `switchTo`, `selectChannel`, `cycle`, `refreshForUnknown`, `catalog`, `membershipChanged`, `showJoined`, `control`, `controlDone`, `unjoined`, `channelCommand`, `trimAggregate`.
+1. <a id="source-1"></a> [Channel views](../../internal/chatui/channels.go#L41) — `channelView`, `within`, `switchTo`, `selectChannel`, `cycle`, `refreshForUnknown`, `catalog`, `membershipChanged`, `showJoined`, `control`, `controlDone`, `unjoined`, `channelCommand`, `trimAggregate`.
 2. <a id="source-2"></a> [Channel regressions](../../internal/chatui/channels_test.go#L26-L273) — drafts, sends, membership, commands, catalog, trimming, identities.
-3. <a id="source-3"></a> [Submit and routing](../../internal/chatui/model.go#L385-L1323) — `Update`, `submit`, `slashCommand`.
+3. <a id="source-3"></a> [Submit and routing](../../internal/chatui/model.go#L393-L1374) — `Update`, `submit`, `slashCommand`.
 4. <a id="source-4"></a> [Channel rail](../../internal/chatui/roster.go#L63) — `channelRail`.
-5. <a id="source-5"></a> [Channel picker](../../internal/chatui/overlay.go#L729) — `channelPickerRows`.
-6. <a id="source-6"></a> [Host channel view](../../cmd/yoloctl/chat_view.go#L215-L705) — link lifetime, `adoptCatalogFor`, `refreshCatalogRead`, `refreshLoop` and `control`.
+5. <a id="source-5"></a> [Channel picker](../../internal/chatui/overlay.go#L723) — `channelPickerRows`.
+6. <a id="source-6"></a> [Host channel view](../../cmd/yoloctl/chat_view.go#L215-L708) — link lifetime, `adoptCatalogFor`, `refreshCatalogRead`, `refreshLoop` and `control`.
 7. <a id="source-7"></a> [Host regressions](../../cmd/yoloctl/chat_view_test.go#L133-L196) — catalog identities/members and channel events.
 8. <a id="source-8"></a> [Topic wire regression](../../cmd/yoloctl/chat_topic_wire_test.go#L26) — `TestChatTopicCommandsReachWireThroughHostAndRelay`.
 9. <a id="source-9"></a> [Driver actions](../../internal/chatstream/channel_events.go#L24) — `action` refuses a topic field outside `topic-set` and encodes `topic-clear` as empty text.
@@ -132,10 +132,10 @@ view confirmation. [2](#source-2) [7](#source-7) [8](#source-8)
 14. <a id="source-14"></a> [Recovery tests](../../internal/chatui/refresh_test.go#L19) — ownership, draft retention, ordering, links and hidden channels.
 
 15. <a id="source-15"></a> [Mode and DTO](../../cmd/yoloctl/chat_catalog.go#L74) — fixed desired/observed mode, desired DTO and captured diagnostics.
-16. <a id="source-16"></a> [Rendering](../../internal/chatui/overlay.go#L762) — unobserved output and separate observed-pending wording.
+16. <a id="source-16"></a> [Rendering](../../internal/chatui/overlay.go#L756) — unobserved output and separate observed-pending wording.
 17. <a id="source-17"></a> [View wiring](../../cmd/yoloctl/chat_view.go#L30) — default/single/observed refresh and pre-JOIN route, local correlation and errors.
 18. <a id="source-18"></a> [Desired-read tests](../../cmd/yoloctl/chat_catalog_test.go#L42) — mode routing, coalescing, finite framing and stale-action refusal.
-19. <a id="source-19"></a> [UI discriminator](../../internal/chatui/channels.go#L266) — `CatalogMsg`, `catalog`, clearing stale applied proof.
+19. <a id="source-19"></a> [UI discriminator](../../internal/chatui/channels.go#L283) — `CatalogMsg`, `catalog`, clearing stale applied proof.
 20. <a id="source-20"></a> [UI regressions](../../internal/chatui/catalog_unobserved_test.go#L8) — unobserved transitions and refresh ownership.
 21. <a id="source-21"></a> [Driver regression](../../internal/chatstream/catalog_unobserved_test.go#L5) — removal of applied/pending claims while preserving local read identity.
 

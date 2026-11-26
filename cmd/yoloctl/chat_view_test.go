@@ -218,6 +218,37 @@ func TestReferenceLookupKeepsItsRequestOnTheCapturedLink(t *testing.T) {
 	}
 }
 
+// A window request keeps its fields on the captured link, settles as a
+// window page when the link has ended, and its page converts every row the
+// way a live message does.
+func TestWindowPageRequestAndConversion(t *testing.T) {
+	link := &chatLink{older: make(chan chatstream.HistoryRequest, 1)}
+	s := &chatSession{link: link}
+	request := chatui.HistoryRequest{ID: "page", Channel: "#space", Around: "target", Window: true}
+	if msg := s.loadHistory(request)(); msg != nil {
+		t.Fatalf("queue: %#v", msg)
+	}
+	if got := <-link.older; got.ID != request.ID || got.Around != "target" || !got.Window || got.Lookup != "" || got.Before != "" || got.After != "" {
+		t.Fatalf("changed window request: %+v", got)
+	}
+	stale := s.loadHistory(request)
+	link.close()
+	if result, ok := stale().(chatui.WindowPageMsg); !ok || result.ID != request.ID || result.Channel != "#space" || result.Err == nil {
+		t.Fatal("a window request on a closed link did not settle as a failed page")
+	}
+	msg := chatViewEvent(chatstream.Event{Kind: "history-window", ID: "page", Channel: "#space", Messages: []chatstream.Message{
+		{ID: "target", Account: "peer", Nick: "peer", Text: "the target", ReplyTo: "before", Replay: true,
+			Attachments: []chatstream.Attachment{{Artifact: chatstream.Artifact{ID: "a1", Name: "shot.png", SHA256: "abc", Bytes: 3}}}},
+	}})
+	page, ok := msg.(chatui.WindowPageMsg)
+	if !ok || page.ID != "page" || len(page.Messages) != 1 {
+		t.Fatalf("window event: %#v", msg)
+	}
+	if got := page.Messages[0]; got.ID != "target" || got.Channel != "#space" || got.ReplyTo != "before" || got.Delivery != chatui.Confirmed || len(got.Attachments) != 1 || got.Attachments[0].Name != "shot.png" {
+		t.Fatalf("page row: %+v", got)
+	}
+}
+
 // Requests the ended stream never read come back as not sent, so a queued
 // message is rejected (draft kept) instead of staying uncertain forever.
 func TestEndedStreamReportsUnreadRequestsAsNotSent(t *testing.T) {

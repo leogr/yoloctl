@@ -201,9 +201,11 @@ The card's State row shows the agent's reported state, or the box's activity
 when it reported none; the panel tags a name only for a wait or an API error
 (`⏳ needs permission`, `⚠ API error`) [31](#source-31). Copy reference puts a message's shared `m:`
 reference on the clipboard; a click on one, or on `msgid:` and the full ID,
-shows a loaded message (switching channels when needed). For an unloaded
-message it searches the joined channels and opens a read-only quote if found.
-An `@N` number is plain text [24](#source-24). A reference to a message
+goes to its message in its channel and highlights it, also when the message is
+older than the ones shown: it is fetched from the joined channels' history and
+shown in context in place of the latest ones until the reader returns. Esc goes
+back to where the click was [61](#source-61). An `@N` number is
+plain text [24](#source-24). A reference to a message
 loaded in the same channel shows in its place as `↗ author: text…` (from another
 open channel `↗ #channel · author: text…`), still
 copied and quoted as the reference [24](#source-24). Mentions resolve by account: suggestions insert a
@@ -512,3 +514,4 @@ state remains visible even when event verbosity hides alerts. [51](#source-51)
 58. <a id="source-58"></a> [Native chat composer](../digests/chat-composer.md).
 59. <a id="source-59"></a> [Native chat message display](../digests/chat-display.md).
 60. <a id="source-60"></a> [Terminal core compile cache](../digests/terminal-core-cache.md).
+61. <a id="source-61"></a> [Chat jumps to messages](../digests/chat-jumps.md).

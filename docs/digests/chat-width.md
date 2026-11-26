@@ -60,7 +60,7 @@ plain text-presentation ⏸ remains a separate host-observation boundary.
 
 ## Sources
 
-1. <a id="source-1"></a> [Model method and reports](../../internal/chatui/model.go#L270-L274) — `widthMethod`; `update` mode predicate at L420-L425.
+1. <a id="source-1"></a> [Model method and reports](../../internal/chatui/model.go#L274-L278) — `widthMethod`; `update` mode predicate at L420-L425.
 2. <a id="source-2"></a> [TUI predicate](../../internal/tui/tui.go#L934-L941); pins in `go.mod:L13-L16`.
 3. <a id="source-3"></a> [Row geometry](../../internal/markdownview/rows.go#L36) — `Paint`, `RunsWidth`, `WrapRanges`, `HitRun`, `ActionAt`.
 4. <a id="source-4"></a> [Shared bodies/tables](../../internal/markdownview/body.go#L101) — `parseLines`, `TableLines`, `FitTable`; shared render.go owns tab mapping; chat render.go and editor.go retain draft geometry.

@@ -281,7 +281,9 @@ func (m *Model) moveScroll(delta int) {
 		m.scroll = max(m.lastRows-m.lastBodyHeight, 0)
 	}
 	m.scroll = min(max(m.scroll+delta, 0), max(m.lastRows-m.lastBodyHeight, 0))
-	m.follow = m.scroll == max(m.lastRows-m.lastBodyHeight, 0)
+	// A window's bottom is not the live tail: the reader stays behind the
+	// latest, with unread kept, until the window gives way (window.go).
+	m.follow = m.win == nil && m.scroll == max(m.lastRows-m.lastBodyHeight, 0)
 	m.diagrams.moves++ // a new screen for diagram counts
 	m.anchor = nil
 	if m.follow {

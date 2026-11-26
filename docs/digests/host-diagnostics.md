@@ -84,7 +84,7 @@ exact debug bytes. These are not native macOS/Lima/TUI qualification.
 10. <a id="source-10"></a> [Explicit streaming](../../internal/lima/stderr.go#L68-L146) — caller-owned application stderr.
 11. <a id="source-11"></a> [Log-view command](../../cmd/yoloctl/space.go#L53-L87) — `newSpaceLogsCmd`.
 12. <a id="source-12"></a> [Catalog regressions](../../cmd/yoloctl/chat_catalog_diagnostics_test.go#L38-L116) — real controller frames and private concurrent tails.
-13. <a id="source-13"></a> [Chat callbacks](../../cmd/yoloctl/chat_view.go#L86-L700) — nickname, participant polling (`agentsLoop`) and attach (`resolveAttach`); setup/reconnect use `openChatHeader` in `chat_open.go:38`.
+13. <a id="source-13"></a> [Chat callbacks](../../cmd/yoloctl/chat_view.go#L86-L703) — nickname, participant polling (`agentsLoop`) and attach (`resolveAttach`); setup/reconnect use `openChatHeader` in `chat_open.go:38`.
 14. <a id="source-14"></a> [Lima v2.2.1 instance enumeration](https://github.com/lima-vm/lima/blob/v2.2.1/pkg/store/store.go#L47-L70) — directory-only, dot/underscore exclusions.
 15. <a id="source-15"></a> [Stop regression](../../cmd/yoloctl/lima_log_failure_stop_test.go#L1-L56) — `stopSpaceRuntime` with a planted log; `RecordSpaceDiagnostics` callers in `chat_stream_stderr.go` and `space_view.go`.
 

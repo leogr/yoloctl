@@ -70,12 +70,12 @@ never every connection of the account. [14](#source-14)
 3. <a id="source-3"></a> [Pinned connection](../../cmd/yoloctl/chat_connection.go#L44) — peer verification and cancellation.
 4. <a id="source-4"></a> [OpenShell v0.0.72](https://github.com/NVIDIA/OpenShell/blob/v0.0.72/crates/openshell-supervisor-process/src/ssh.rs#L53) — `ssh_server_init`.
 5. <a id="source-5"></a> [Controller stream](../../cmd/yoloctl/chat_stream.go#L18) — setup and relay.
-6. <a id="source-6"></a> [JSONL adapter](../../internal/chatstream/client.go#L156) — `Run`, receipt/echo correlation.
+6. <a id="source-6"></a> [JSONL adapter](../../internal/chatstream/client.go#L158) — `Run`, receipt/echo correlation.
 7. <a id="source-7"></a> [Stream allowlist](../../internal/chatstream/protocol.go#L101) — `DecodeRequest`, `Filter`.
 8. <a id="source-8"></a> [Host view](../../cmd/yoloctl/chat_view.go#L30) — `runChatView`.
 9. <a id="source-9"></a> [Stream diagnostics](../../cmd/yoloctl/chat_stream_stderr.go#L20) — `callChatStream`, bounded `stderrTail`; real controller transport regression in `chat_stream_stderr_test.go`.
-10. <a id="source-10"></a> [Frame failures](../../internal/chatstream/client.go#L287-L317) — `closeFor`, `frameError`; deadline and malformed-input regressions in `stream_diag_test.go`.
+10. <a id="source-10"></a> [Frame failures](../../internal/chatstream/client.go#L289-L319) — `closeFor`, `frameError`; deadline and malformed-input regressions in `stream_diag_test.go`.
 11. <a id="source-11"></a> [Relay input cleanup](../../cmd/yoloctl/chat_stream.go#L89) — `relayManagedChatWithExec`, `chatFilterInput`; `TestChatRelayExitDoesNotWaitForStdin` in cmd/yoloctl/chat_stream_test.go keeps inherited blocking stdin open with empty or partial input while the client succeeds or fails; `TestChatRelayPreservesFilterFailure` retains a filter refusal; `TestChatRelayReportsRefusalBeforeClientEOF` covers a client that exits cleanly on the refusal's EOF.
-12. <a id="source-12"></a> [Pre-write refusal](../../internal/chatstream/client.go#L320-L411) — `localRejection`, `exchange`, `driver.send`.
+12. <a id="source-12"></a> [Pre-write refusal](../../internal/chatstream/client.go#L322-L413) — `localRejection`, `exchange`, `driver.send`.
 13. <a id="source-13"></a> [Refusal regressions](../../internal/chatstream/local_rejection_test.go#L131-L295) — `TestChannelsPreWriteRejectionKeepsTheStream` runs `channelDriver.run` with a synthetic peer; `TestChannelsWrittenSendFailuresStayUncertain`.
 14. <a id="source-14"></a> [Availability controls](../../internal/chatstream/availability.go#L1) — `availabilityAction`, `availabilityNumeric`, `patchSelfMembers`; protocol.go `decodeChannelRequest`/`FilterChannels`; `TestRealAIRCHumanAvailability` in airc_availability_integration_test.go exercises the managed filter with pinned binaries.

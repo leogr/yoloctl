@@ -22,7 +22,6 @@ const (
 	overlayChannels
 	overlayFilter
 	overlayTakeOver
-	overlayReference
 )
 
 // overlayState is the one modal panel drawn over the transcript. While it
@@ -39,7 +38,6 @@ type overlayState struct {
 	who    who
 	member *Member
 	target AttachTarget
-	quote  Message // reference lookup result, outside transcript history
 	// filter: the picker's rows, fixed while it is open, and the selection
 	// Enter applies
 	choices      []filterChoice
@@ -50,7 +48,7 @@ type overlayState struct {
 func (m *Model) openOverlay(o overlayState) {
 	if m.reference != nil {
 		m.clearReference()
-		m.say(levelInfo, "Message lookup canceled")
+		m.say(levelInfo, "Stopped opening that message")
 	}
 	m.overlay = &o
 	m.suggest = nil
@@ -122,7 +120,7 @@ var helpSections = []struct {
 		{"Alt+Y  Ctrl+Shift+C", "Copy the selected message's original text"},
 		{"Alt+C", "Copy its first fenced code block"},
 		{"Ctrl+O  click a link", "Open a web link with the host browser policy (seams.browser)"},
-		{"Copy reference  m:…", "Copies the selected message's shared reference. Click a reference to jump to a loaded message or look it up in joined channels and read it in a quote panel. Page Up still loads older pages. msgid: and the full ID work the same. Loaded targets show as ↗ author: text… or ↗ #channel · author: text…. Copy and Quote keep the reference."},
+		{"Copy reference  m:…", "Copies the selected message's shared reference. Click a reference to go to its message in its channel, highlighted, also when it is older than the messages shown; Esc goes back to where you clicked. msgid: and the full ID work the same. Loaded targets show as ↗ author: text… or ↗ #channel · author: text…. Copy and Quote keep the reference."},
 	}},
 	{"Selecting text", [][2]string{
 		{"Drag", "Select message text; it also selects the message where it starts, so Enter quotes it. Releasing copies it. Names, times, gutters and the participants panel are never copied. Wrapped lines rejoin and messages are separated by a blank line."},
@@ -271,14 +269,14 @@ func (m *Model) overlayKey(k tea.KeyPressMsg) tea.Cmd {
 func (m *Model) overlayActivate(button int) tea.Cmd {
 	o := m.overlay
 	switch o.kind {
-	case overlayHelp, overlayReference:
+	case overlayHelp:
 		m.overlay = nil
 	case overlaySettings:
 		return m.activateSetting(m.settingRows()[o.index].id)
 	case overlayChannels:
 		m.overlay = nil
 		if o.index < len(m.order) {
-			return m.selectChannel(m.order[o.index])
+			return m.chooseChannel(m.order[o.index])
 		}
 	case overlayFilter:
 		m.overlay = nil
@@ -487,10 +485,6 @@ func (m *Model) overlayLines(base []string, width int) []string {
 	case overlayHelp:
 		title = "Help"
 		rows = m.helpRows(inner)
-		hint = "↑↓ PgUp PgDn scroll · Esc closes"
-	case overlayReference:
-		title = "Message from " + o.quote.Channel
-		rows = m.referenceRows(o.quote, inner)
 		hint = "↑↓ PgUp PgDn scroll · Esc closes"
 	case overlaySettings:
 		title = "Settings"

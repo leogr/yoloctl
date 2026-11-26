@@ -130,7 +130,13 @@ func (m *Model) observeMembers(next []Member) {
 	}
 }
 
+// addPresence records a live notice. It belongs to the live list, also
+// while a window of older history shows in its place.
 func (m *Model) addPresence(kind presenceKind, name string) {
+	m.onLive(func() { m.addLivePresence(kind, name) })
+}
+
+func (m *Model) addLivePresence(kind presenceKind, name string) {
 	after := ""
 	if n := len(m.messages); n > 0 {
 		after = messageKey(m.messages[n-1])
@@ -206,6 +212,9 @@ func (ev presenceEvent) text() (string, string) {
 // Each is one row; guidance wraps within width, each continuation anchored
 // by its byte offset. A message filter keeps only transport notices.
 func (m *Model) presenceRows(key string, lines int, indent []run, width int) []transcriptRow {
+	if m.win != nil && !m.win.swapped {
+		return nil // live notices are not drawn beside older history
+	}
 	t := m.theme
 	var rows []transcriptRow
 	n := 0

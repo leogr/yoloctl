@@ -322,6 +322,53 @@ func TestRealAIRCReferenceHistoryLookup(t *testing.T) {
 	}
 }
 
+// Window pages against the pinned server: AROUND holds the target with its
+// neighbours, AFTER and BEFORE exclude their anchor; each page arrives whole.
+func TestRealAIRCWindowPages(t *testing.T) {
+	f := newRealChannelFixture(t)
+	h := f.human()
+	h.next(t, "initial #space history", func(e Event) bool { return e.Channel == "#space" && e.Kind == "history-latest" && e.Err == nil })
+	var ids []string
+	for _, text := range []string{"first", "second", "third"} {
+		sent := h.deliver(t, "#space", text)
+		if sent.State != "confirmed" || sent.MessageID == "" {
+			t.Fatalf("send: %+v", sent)
+		}
+		h.next(t, "live "+text, func(e Event) bool { return e.Kind == "message" && e.Message.ID == sent.MessageID })
+		ids = append(ids, sent.MessageID)
+	}
+	page := func(r HistoryRequest) []string {
+		t.Helper()
+		h.older <- r
+		e := h.next(t, "window page "+r.ID, func(e Event) bool {
+			if e.Kind == "history-page" || e.Kind == "message" {
+				t.Fatalf("a window page entered the transcript or page stream: %+v", e)
+			}
+			return e.Kind == "history-window"
+		})
+		if e.Err != nil || e.ID != r.ID || e.Channel != "#space" {
+			t.Fatalf("window page %s: %+v", r.ID, e)
+		}
+		var got []string
+		for _, m := range e.Messages {
+			got = append(got, m.ID)
+		}
+		return got
+	}
+	if got := page(HistoryRequest{ID: "around", Channel: "#space", Around: ids[1], Window: true}); !slices.Contains(got, ids[0]) || !slices.Contains(got, ids[1]) || !slices.Contains(got, ids[2]) {
+		t.Fatalf("around: %v, want %v", got, ids)
+	}
+	if got := page(HistoryRequest{ID: "after", Channel: "#space", After: ids[0], Window: true}); !slices.Equal(got, ids[1:]) {
+		t.Fatalf("after: %v, want %v", got, ids[1:])
+	}
+	if got := page(HistoryRequest{ID: "before", Channel: "#space", Before: ids[2], Window: true}); len(got) < 2 || !slices.Equal(got[len(got)-2:], ids[:2]) {
+		t.Fatalf("before: %v, want it to end with %v", got, ids[:2])
+	}
+	if got := page(HistoryRequest{ID: "newest", Channel: "#space", After: ids[2], Window: true}); len(got) != 0 {
+		t.Fatalf("after the newest: %v", got)
+	}
+}
+
 func TestRealAIRCRunChannelsTopicHistoryAndACLRemoval(t *testing.T) {
 	f := newRealChannelFixture(t)
 	p := f.peer("#space", "#build")

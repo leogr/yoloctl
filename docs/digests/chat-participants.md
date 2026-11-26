@@ -1,6 +1,6 @@
 # Native chat participants, settings and attachment
 
-Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; reconnect re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; collapsible lists re-read at `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `6e7df48d9682ee224e6a013066f45a710eae6f4b` and accompanying changes; reconnect re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`; collapsible lists re-read at `e05d46a47654617a90ab791905dafbf7f8a9b000` and accompanying changes; reference clicks re-read at `0398f1f6638de276139c93675958ecade7782073` and accompanying changes; re-read cited sources when changing behavior.
 
 [FACT] Participants sort operators, voiced, then others, case-folded; observed
 `@`/`+` modes, never inferred, precede names. The panel opens from 80 columns
@@ -57,8 +57,8 @@ lookup runs at a time and stale answers open nothing; the host bounds
 `chat.attach-target` ([lock-free](chat-settings.md), member ID only) to 10 s and
 refuses it after a membership change. A running match attaches, a stopped one
 asks first, a deleted, replaced or revoked member explains itself. Mentions open
-only the card of the account they name ([identities](chat-filter.md)); shared `m:` or `msgid:` references and reply labels select loaded messages or look up an unloaded one
-([references](chat-references.md)). Attachment carries room, member and box IDs. Native `chat` tabs may send the TUI only complete guarded requests
+only the card of the account they name ([identities](chat-filter.md)); shared `m:` or `msgid:` references and reply labels go to their message, fetching it when the chat does not hold it
+([references](chat-references.md), [jumps](chat-jumps.md)). Attachment carries room, member and box IDs. Native `chat` tabs may send the TUI only complete guarded requests
 (32-hex identities, valid names), `space view` tabs only plain ones; tabs are
 reused only for identical guarded argv. A plain terminal runs the same guarded
 `box attach`, then resumes. [4](#source-4) [5](#source-5) [6](#source-6)
@@ -77,8 +77,8 @@ lock. [5](#source-5) [13](#source-13) [14](#source-14)
 
 1. <a id="source-1"></a> [Participants](../../internal/chatui/roster.go#L17) — `sortedMembers`, `participantRows`, `scrollRoster`, `rosterShown`, `memberCard`; wheel routing `inRoster` in mouse.go, page keys in model.go `key`.
 2. <a id="source-2"></a> [Presence notices](../../internal/chatui/presence.go#L42) — `observeMembers`, `addPresence`, `presenceRows`.
-3. <a id="source-3"></a> [Keys and actions](../../internal/chatui/model.go#L736) — `key`, `escape`, `runAction`, `append`, `pick`, `jumpToLatest`.
-4. <a id="source-4"></a> [Overlays](../../internal/chatui/overlay.go#L386) — `savedNick`, `saveNick`, cards, `requestAttach`, `attachDone`, `attachResolved`; help/settings in the same file.
+3. <a id="source-3"></a> [Keys and actions](../../internal/chatui/model.go#L761) — `key`, `escape`, `runAction`, `append`, `pick`, `jumpToLatest`.
+4. <a id="source-4"></a> [Overlays](../../internal/chatui/overlay.go#L384) — `savedNick`, `saveNick`, cards, `requestAttach`, `attachDone`, `attachResolved`; help/settings in the same file.
 5. <a id="source-5"></a> [Host chat view](../../cmd/yoloctl/chat_view.go#L375) — `reconnect`, `loadAgents`, `resolveAttachWith`, `chatAttacher`.
 6. <a id="source-6"></a> [Tab requests](../../internal/termio/tabrequest.go#L12-L80) — chat guard fields, `ValidateChat`, `ChatAttachArgs`.
 7. <a id="source-7"></a> [TUI requests](../../internal/tui/tab_requests.go#L1) — `tabRequestHandler`, `handleTabRequest`; `tab_requests_test.go`.
@@ -89,7 +89,7 @@ lock. [5](#source-5) [13](#source-13) [14](#source-14)
 12. <a id="source-12"></a> [Lookup regressions](../../cmd/yoloctl/chat_participant_runtime_test.go#L173) — bound and recheck.
 13. <a id="source-13"></a> [Attach lock wait](../../internal/spacelock/lock.go#L21-L64) — `AcquireWithWait`; the notice in cmd/yoloctl/space_operation.go L217-L224; the lookup in `callChatAttachTarget` (chat.go L110) and `resolveAttach`/`resolveAttachWith` (chat_view.go L650–L694).
 14. <a id="source-14"></a> [Opt-in live lookup](../../cmd/yoloctl/chat_attach_lock_live_test.go#L54) — `TestLiveChatAttachTargetAnswersWhileSpaceLockIsHeld`; run recipe in scripts/smoke/README.md.
-15. <a id="source-15"></a> [Nickname refresh](../../internal/chatui/overlay.go#L70-L80) — `refreshParticipantLabels` and suggest.go `refreshOpenSuggest` (L161–189), called by `SessionMsg` (model.go L559–575) and `catalog` (channels.go L358–370); `TestNicknameSaveReconnectRefreshesOpenLabels` and `TestCatalogRenameRefreshesOpenCardAndSuggestions` in nickname_display_test.go; retained names in presence.go `observeMembers`/`addPresence` (L42–145); the host reconnect in cmd/yoloctl/chat_view.go `reconnect` and chat_open.go `inspectOrEnsureChat`.
+15. <a id="source-15"></a> [Nickname refresh](../../internal/chatui/overlay.go#L68-L78) — `refreshParticipantLabels` and suggest.go `refreshOpenSuggest` (L161–189), called by `SessionMsg` (model.go L559–575) and `catalog` (channels.go L358–370); `TestNicknameSaveReconnectRefreshesOpenLabels` and `TestCatalogRenameRefreshesOpenCardAndSuggestions` in nickname_display_test.go; retained names in presence.go `observeMembers`/`addPresence` (L42–145); the host reconnect in cmd/yoloctl/chat_view.go `reconnect` and chat_open.go `inspectOrEnsureChat`.
 16. <a id="source-16"></a> [Scrolling regressions](../../internal/chatui/participants_scroll_test.go#L1) — `TestParticipantsScrollInsteadOfShrinking`, `TestParticipantsFitWithoutScrolling`, `TestParticipantsTinyPanelWithChannelRail`, `TestParticipantsPageKeysNeverSkip`: many participants at small heights, side panel and overlay, rail-squeezed panels, gap-free paging.
 
 17. <a id="source-17"></a> [Channel layout](../../internal/chatui/view.go#L79) — `View`, `compactChannels`; `channels_narrow_test.go` — width, clicks, overlay and minimum-height coverage.

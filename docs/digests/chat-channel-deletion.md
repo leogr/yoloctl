@@ -76,13 +76,13 @@ refusal on older servers. None of these proves a VM or live room.
 8. <a id="source-8"></a> [Stream header](../../internal/chatstream/protocol.go#L36-L64) — `RoomHeader`; catalog reads in `chatChannelCatalog` (chat_channels.go L255).
 9. <a id="source-9"></a> [Relay](../../cmd/yoloctl/chat_stream.go#L85-L164) — `chatStreamOrigin`, `authorizeChatStreamChannel`.
 10. <a id="source-10"></a> [Catalog](../../internal/chatstream/channel_catalog.go#L30-L174) — header ledger validation, `refreshCatalog`, `markDeleted`.
-11. <a id="source-11"></a> [Driver](../../internal/chatstream/channels_client.go#L14-L234) — `deleted`, `origin`, `send`; history refusal in channel_history.go.
+11. <a id="source-11"></a> [Driver](../../internal/chatstream/channels_client.go#L14-L239) — `deleted`, `origin`, `send`; history refusal in channel_history.go.
 12. <a id="source-12"></a> [Controls](../../internal/chatstream/channel_events.go#L30-L310) — deleted refusals; `membershipEvent` finishes a pending action uncertain on a self-KICK.
-13. <a id="source-13"></a> [View](../../internal/chatui/channels.go#L50-L522) — `deleted`, `canSend`, `membershipChanged`, `control`.
-14. <a id="source-14"></a> [Composer](../../internal/chatui/model.go#L1217-L1265) — read-only send; paging in `historyPage` at L567.
+13. <a id="source-13"></a> [View](../../internal/chatui/channels.go#L60-L543) — `deleted`, `canSend`, `membershipChanged`, `control`.
+14. <a id="source-14"></a> [Composer](../../internal/chatui/model.go#L1268-L1316) — read-only send; paging in `historyPage` at L567.
 15. <a id="source-15"></a> [Controller regressions](../../cmd/yoloctl/chat_channel_delete_test.go#L1-L286) — request/CLI, feature gate, one reload, lost acknowledgment, create gate, relay, view catalog identity.
 16. <a id="source-16"></a> [Native regressions](../../internal/managedchat/channel_delete_test.go#L1-L197) — mutation, ledger bounds, rendering and import.
 17. <a id="source-17"></a> [Driver regressions](../../internal/chatstream/channel_delete_test.go#L1-L281) — explicit removal, refusals before Write, pending outcomes, header records, KICK before/after the catalog.
 18. <a id="source-18"></a> [View regression](../../internal/chatui/channel_deleted_test.go#L1-L122) — read-only deleted view, including a deletion missed while disconnected.
 19. <a id="source-19"></a> [Real AIRC](../../internal/managedchat/airc_channel_integration_test.go#L349-L420) — opt-in deletion, restart and recreation; skipped on older servers.
-20. <a id="source-20"></a> [Host catalog](../../cmd/yoloctl/chat_view.go#L817-L834) — `chatCatalog` passes channel IDs and ledger IDs; view binding in `bindIdentities` (chatui/channels.go).
+20. <a id="source-20"></a> [Host catalog](../../cmd/yoloctl/chat_view.go#L820-L837) — `chatCatalog` passes channel IDs and ledger IDs; view binding in `bindIdentities` (chatui/channels.go).

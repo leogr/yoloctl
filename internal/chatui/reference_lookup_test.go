@@ -23,10 +23,11 @@ func referenceLookupModel(t *testing.T) (*Model, *[]HistoryRequest) {
 		requests = append(requests, r)
 		return nil
 	}
+	m.opts.LoadWindow = m.opts.LookupReference
 	return m, &requests
 }
 
-func TestUnloadedReferenceQuotesExactMatchAcrossJoinedChannels(t *testing.T) {
+func TestUnloadedReferenceJumpsAcrossJoinedChannels(t *testing.T) {
 	m, calls := referenceLookupModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	m.Update(IncomingMsg{Message: Message{ID: "referrer", Channel: m.name, Nick: "peer", Text: "selected text and " + sharedMissing}})
@@ -50,7 +51,7 @@ func TestUnloadedReferenceQuotesExactMatchAcrossJoinedChannels(t *testing.T) {
 	if len(*calls) != 0 {
 		t.Fatal("hover made a request")
 	}
-	scroll, anchor := m.scroll, m.anchor
+	scroll := m.scroll
 	clickCell(m, cells[0])
 	if len(*calls) != 1 || (*calls)[0].Channel != "#yolo-skill" || (*calls)[0].Lookup != refMissing {
 		t.Fatalf("first request: %+v", *calls)
@@ -66,21 +67,32 @@ func TestUnloadedReferenceQuotesExactMatchAcrossJoinedChannels(t *testing.T) {
 		t.Fatalf("second request: %+v", *calls)
 	}
 	m.Update(ReferenceLookupMsg{ID: id, Channel: "#space", Message: Message{
-		ID: refMissing, Channel: "#space", Nick: "reader", Text: "older exact message\n\x1b]52;c;inert\a",
+		ID: refMissing, Channel: "#space", Nick: "reader", Text: "older exact message",
 	}})
-	if len(*calls) != 2 || m.overlay == nil || m.overlay.kind != overlayReference {
-		t.Fatalf("a hit should open the quote and end the search: %+v", *calls)
+	if len(*calls) != 3 || !(*calls)[2].Window || (*calls)[2].Around != refMissing || (*calls)[2].Channel != "#space" {
+		t.Fatalf("a hit should ask for the page around it: %+v", *calls)
+	}
+	page := (*calls)[2]
+	if m.overlay != nil || m.name != "#yolo-skill" || m.scroll != scroll || m.sel == nil {
+		t.Fatal("the source view changed before the page arrived")
+	}
+	m.Update(WindowPageMsg{ID: page.ID, Channel: "#space", Messages: []Message{
+		{ID: "before-target", Channel: "#space", Nick: "reader", Text: "the message before"},
+		{ID: refMissing, Channel: "#space", Nick: "reader", Text: "older exact message\n\x1b]52;c;inert\a"},
+	}})
+	if m.overlay != nil || m.name != "#space" || !m.picked || m.messages[m.selected].ID != refMissing || len(*calls) != 3 {
+		t.Fatalf("the page should show #space at the target: %q", m.name)
 	}
 	rendered := view(m)
-	if !strings.Contains(rendered, "Message from #space") || !strings.Contains(rendered, "older exact message") ||
-		strings.Contains(m.View().Content, "\x1b]52;") {
-		t.Fatalf("missing or unsafe rendered quote:\n%s", rendered)
+	if strings.Contains(rendered, "Message from") || !strings.Contains(rendered, "older exact message") ||
+		!strings.Contains(rendered, "the message before") || strings.Contains(m.View().Content, "\x1b]52;") {
+		t.Fatalf("missing or unsafe jump:\n%s", rendered)
 	}
 	press(m, tea.KeyEscape, 0)
 	if m.overlay != nil || m.name != "#yolo-skill" || m.Draft() != "draft to preserve" ||
-		m.follow || !m.picked || m.selected != 0 || m.scroll != scroll || m.anchor != anchor ||
-		len(m.messages) != 1 || len(m.views["#space"].messages) != 0 || m.loadingOlder || m.historyEnd || m.unread != 0 {
-		t.Fatal("lookup altered the source channel or its paging state")
+		m.follow || !m.picked || m.selected != 0 ||
+		len(m.messages) != 1 || m.loadingOlder || m.historyEnd || m.unread != 0 {
+		t.Fatal("Esc did not return to the source channel as it was")
 	}
 	if m.sel == nil {
 		t.Fatal("lookup discarded the source highlight")
@@ -115,7 +127,7 @@ func TestReferenceSearchCancelsWhenChannelPickerOpens(t *testing.T) {
 		t.Fatal("a canceled result advanced the lookup or displaced the picker")
 	}
 	press(m, tea.KeyEscape, 0)
-	if m.overlay != nil || strings.Contains(m.notice, "Looking up") {
+	if m.overlay != nil || strings.Contains(m.notice, noticeOpening) {
 		t.Fatalf("picker left stale progress: %q", m.notice)
 	}
 }
@@ -128,12 +140,12 @@ func TestReferenceSearchMissesOnlyAcrossCapturedChannels(t *testing.T) {
 		if len(*calls) != i+1 || (*calls)[i].Channel != name {
 			t.Fatalf("query %d: %+v", i, *calls)
 		}
-		if strings.Contains(m.notice, "no longer retained") {
+		if strings.Contains(m.notice, noticeMissing) {
 			t.Fatal("claimed absence before all misses")
 		}
 		m.Update(ReferenceLookupMsg{ID: (*calls)[i].ID, Channel: name})
 	}
-	if len(*calls) != 3 || m.overlay != nil || !strings.Contains(m.notice, "no longer retained in the joined channels") {
+	if len(*calls) != 3 || m.overlay != nil || !strings.Contains(m.notice, noticeMissing) {
 		t.Fatalf("all misses: %+v, %q", *calls, m.notice)
 	}
 }
@@ -173,7 +185,7 @@ func TestReferenceSearchStopsOnFailureOrInvalidatedSource(t *testing.T) {
 			r := (*calls)[0]
 			test.end(m, r)
 			m.Update(ReferenceLookupMsg{ID: r.ID, Channel: r.Channel, Message: Message{ID: refMissing, Channel: r.Channel}})
-			if len(*calls) != 1 || m.reference != nil || m.overlay != nil || strings.Contains(m.notice, "no longer retained") {
+			if len(*calls) != 1 || m.reference != nil || m.overlay != nil || strings.Contains(m.notice, noticeMissing) {
 				t.Fatalf("failed lookup leaked or claimed absence: %+v, %q", *calls, m.notice)
 			}
 		})

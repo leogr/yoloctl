@@ -201,7 +201,7 @@ func (d *channelDriver) record(r record) error {
 	name := eventChannel(r)
 	channel := d.channels[name]
 	if channel == nil {
-		if h := d.history; h != nil && h.Lookup != "" && h.batch != "" && r.Tags["batch"] == h.batch {
+		if h := d.history; h != nil && (h.Lookup != "" || h.Window) && h.batch != "" && r.Tags["batch"] == h.batch {
 			return errors.New("history lookup child escaped its channel")
 		}
 		if d.selfPrefix(r.Prefix) && r.Command == "JOIN" {
@@ -217,7 +217,7 @@ func (d *channelDriver) record(r record) error {
 		if owner != name || r.Command != "PRIVMSG" && r.Command != "NOTICE" {
 			return errors.New("history child escaped its channel/batch")
 		}
-		if h := d.history; h != nil && h.Lookup != "" && h.batch == batch &&
+		if h := d.history; h != nil && (h.Lookup != "" || h.Window) && h.batch == batch &&
 			(len(r.Params) != 2 || !validReference(r.Tags["msgid"], 128)) {
 			return errors.New("AIRC history lookup returned a malformed message")
 		}

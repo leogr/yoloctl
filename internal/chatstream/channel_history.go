@@ -16,6 +16,7 @@ type channelHistory struct {
 	until  time.Time
 	found  Message
 	wrong  bool
+	rows   []Message // a window page, collected until its batch closes
 }
 
 // emitLatest reports how a channel's initial LATEST page ended: Err is nil
@@ -34,12 +35,16 @@ func (d *channelDriver) requestHistory(request HistoryRequest, latest bool) {
 		d.failHistory(pending, errChannelDeleted)
 		return
 	}
-	anchor := request.Before
-	if request.Lookup != "" && request.Before == "" {
-		anchor = request.Lookup
+	anchor, anchors := "", 0
+	for _, a := range []string{request.Before, request.Lookup, request.Around, request.After} {
+		if a != "" {
+			anchor, anchors = a, anchors+1
+		}
 	}
+	window := request.Around != "" || request.After != ""
 	if channel == nil || channel.membership != "joined" || d.historyLost || !validReference(request.ID, 80) ||
-		(!latest && !validReference(anchor, 128)) || (request.Before != "" && request.Lookup != "") ||
+		(!latest && !validReference(anchor, 128)) || anchors > 1 ||
+		window && !request.Window || request.Window && request.Lookup != "" ||
 		len(d.queue) >= managedchat.MaxChannels {
 		refused()
 		return
@@ -64,6 +69,10 @@ func (h *channelHistory) wireRequest() Request {
 		r.Direction, r.Reference, r.Limit = "LATEST", "*", 20
 	case h.Lookup != "":
 		r.Direction, r.Reference, r.Limit = "AROUND", "msgid="+h.Lookup, 1
+	case h.Around != "":
+		r.Direction, r.Reference, r.Limit = "AROUND", "msgid="+h.Around, 50
+	case h.After != "":
+		r.Direction, r.Reference, r.Limit = "AFTER", "msgid="+h.After, 50
 	default:
 		r.Direction, r.Reference, r.Limit = "BEFORE", "msgid="+h.Before, 50
 	}
@@ -118,7 +127,7 @@ func (d *channelDriver) advance() error {
 		return nil
 	}
 	channel.adapter.initialHistory = history.latest
-	if !history.latest && history.Lookup == "" {
+	if !history.latest && history.Lookup == "" && !history.Window {
 		channel.adapter.olderRequests = 1
 	}
 	return nil
@@ -129,12 +138,14 @@ func (d *channelDriver) initialHistory(channel string) {
 }
 
 func (d *channelDriver) failHistory(request *channelHistory, err error) {
-	if err == nil && (request.latest || request.Lookup != "") {
+	if err == nil && (request.latest || request.Lookup != "" || request.Window) {
 		err = errors.New("history request ended without its batch; continuity is unknown")
 	}
 	switch {
 	case request.latest:
 		d.emitLatest(request.Channel, request.ID, err)
+	case request.Window:
+		d.emit(Event{Kind: "history-window", Channel: request.Channel, ID: request.ID, Err: err})
 	case request.Lookup != "":
 		d.emit(Event{Kind: "history-lookup", Channel: request.Channel, ID: request.ID, Err: err})
 	default:
@@ -158,8 +169,10 @@ func (d *channelDriver) finishHistory(success bool, err error) {
 		} else {
 			d.emit(Event{Kind: "history-lookup", Channel: request.Channel, ID: request.ID, Message: request.found})
 		}
+	case request.Window:
+		d.emit(Event{Kind: "history-window", Channel: request.Channel, ID: request.ID, Messages: request.rows})
 	}
-	if err != nil && request.Lookup == "" {
+	if err != nil && request.Lookup == "" && !request.Window {
 		d.emit(Event{Kind: "gap", Channel: request.Channel, Err: err})
 	}
 	if channel := d.channels[request.Channel]; channel != nil {
@@ -169,7 +182,7 @@ func (d *channelDriver) finishHistory(success bool, err error) {
 }
 
 func (d *channelDriver) historyGap(err error) {
-	if d.history != nil && d.history.Lookup != "" {
+	if d.history != nil && (d.history.Lookup != "" || d.history.Window) {
 		d.finishHistory(false, err)
 	} else {
 		d.finishHistory(false, nil)
@@ -218,12 +231,18 @@ func (d *channelDriver) historyRecord(r record) (bool, error) {
 		if d.history == nil || r.Params[2] != d.history.Channel {
 			return true, errors.New("history failure targets another request/channel")
 		}
-		if d.history.Lookup != "" {
+		if d.history.Lookup != "" || d.history.Window {
 			if d.history.batch != "" {
 				return true, errors.New("AIRC refused a history lookup inside its batch")
 			}
-			if r.Params[1] == "HISTORY_LOST" {
-				d.finishHistory(true, nil)
+			switch {
+			case r.Params[1] != "HISTORY_LOST":
+			case d.history.Lookup != "" || d.history.Around != "":
+				d.finishHistory(true, nil) // the message itself is gone: a definite miss
+				return true, nil
+			default:
+				// An edge page's anchor is gone: nothing is known of either side.
+				d.finishHistory(false, errors.New("the message this page continues from is no longer retained"))
 				return true, nil
 			}
 		}

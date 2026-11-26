@@ -272,7 +272,7 @@ func TestMessageReferencesNavigateToLoadedMessages(t *testing.T) {
 	scroll := m.scroll
 	clickCell(m, missing[0])
 	m.View()
-	if !m.picked || m.selected != 0 || m.follow || m.scroll != scroll || !strings.Contains(m.notice, "history lookup requires") {
+	if !m.picked || m.selected != 0 || m.follow || m.scroll != scroll || !strings.Contains(m.notice, "isn't in this chat view") {
 		t.Fatalf("a missing target moved the view: selected=%d scroll=%d/%d notice=%q", m.selected, m.scroll, scroll, m.notice)
 	}
 }
@@ -290,7 +290,7 @@ func TestReplyLabelsStillNavigate(t *testing.T) {
 		t.Fatalf("reply labels: %v", replies)
 	}
 	clickCell(m, replies[1])
-	if m.picked || !strings.Contains(m.notice, "not loaded in any open channel") {
+	if m.picked || !strings.Contains(m.notice, "isn't in this chat view") {
 		t.Fatalf("an unloaded reply target: picked=%v notice=%q", m.picked, m.notice)
 	}
 	clickCell(m, replies[0])

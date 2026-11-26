@@ -69,6 +69,8 @@ func (m *Model) sendStaged() tea.Cmd {
 	m.inflight, m.inflightChannel, m.sentText, m.sentRevision = out.ID, m.name, out.Text, e.revision
 	m.sentDraft, m.sentEnd, m.sentReplyRevision = e.text, len(e.text), m.replyRevision
 	m.sentImages = d.images
+	m.clearReference() // a jump still being fetched must not take it away again
+	m.endWindow()      // a sent message shows at the latest, in the live list
 	m.follow, m.anchor, m.picked = true, nil, false
 	local := Message{ClientID: out.ID, Channel: m.name, Nick: m.opts.Nick, Text: out.Text, ReplyTo: out.ReplyTo, Time: time.Now(), Delivery: Pending}
 	for i, img := range d.images {

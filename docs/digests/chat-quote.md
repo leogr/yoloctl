@@ -85,9 +85,9 @@ They use fake callbacks, not a live room. [7](#source-7) [8](#source-8) [9](#sou
 
 1. <a id="source-1"></a> [Chat Quote](../../internal/chatui/quote.go#L12) — refusal notices, `quoteTarget`, `quoteSource`, `quoteSpans`, `quoteBlock`, `quoteSelection`, `insertQuote`; pure mapping delegates to markdownview.
 2. <a id="source-2"></a> [Footer](../../internal/chatui/view.go#L645-L730) — `noticeRuns`, `quoteChip`, highlight hints.
-3. <a id="source-3"></a> [Keys and actions](../../internal/chatui/model.go#L725-L1152) — `quoteKey`, `messageActions`, `runAction` (`quote`); `clickHit` in mouse.go.
+3. <a id="source-3"></a> [Keys and actions](../../internal/chatui/model.go#L750-L1203) — `quoteKey`, `messageActions`, `runAction` (`quote`); `clickHit` in mouse.go.
 4. <a id="source-4"></a> [Mouse mode](../../internal/chatui/view.go#L215) — all-motion reporting; `selectionTarget` (internal/tui/selection.go L53-L64) selects locally only when a live tab tracks no mouse.
-5. <a id="source-5"></a> [Help](../../internal/chatui/overlay.go#L109-L124) — Messages and Selecting text rows.
+5. <a id="source-5"></a> [Help](../../internal/chatui/overlay.go#L107-L122) — Messages and Selecting text rows.
 6. <a id="source-6"></a> [Shared line builders](../../internal/markdownview/body.go#L101) — `parseLines`, `TableLines`, `TableCells`; shared inline.go owns `InlineMarkdownMap`, quote.go owns `SourceMap`, `TableText` and fences, selection.go owns `SourceSelection.Exact`; chat selection.go retains `selectedParts`.
 7. <a id="source-7"></a> [Quote regressions](../../internal/chatui/quote_test.go#L1-L435) — nine tests, `TestQuoteInsertsTheSourceAndReplies` through `TestQuoteEveryHighlightIsExactOrRefused`; `TestTableSpacersCopyNothing` in table_spacing_test.go (L151-L219).
 8. <a id="source-8"></a> [Table Quote regressions](../../internal/chatui/quote_table_test.go#L1-L383) — eight table tests; markdown_improvements_test.go covers list drag/Quote, autolink and rule Quote.

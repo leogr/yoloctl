@@ -49,7 +49,7 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		case tea.MouseWheelUp:
 			cmd = m.scrollUp(1)
 		case tea.MouseWheelDown:
-			m.moveScroll(1)
+			cmd = m.scrollDown(1)
 		}
 		// The transcript moved under a still pointer.
 		m.hover = m.hoverAt(mo.X, mo.Y)
@@ -265,7 +265,7 @@ func (m *Model) clickHit(h hit, mo tea.Mouse) tea.Cmd {
 		}
 	case hitChannel:
 		if h.item < len(m.order) {
-			return m.selectChannel(m.order[h.item])
+			return m.chooseChannel(m.order[h.item])
 		}
 	case hitPanelHead:
 		m.toggleList(h.id)
@@ -364,11 +364,16 @@ func (m *Model) activate(act action) tea.Cmd {
 	return nil
 }
 
-// showMessage navigates to a loaded message or looks up its exact ID.
+// showMessage goes to message id in its channel and highlights it: where
+// the chat holds it (the shown list, the live list behind a window, then the
+// other open channels), else through the server's history. The view it left
+// becomes the place Esc returns to.
 func (m *Model) showMessage(id string) tea.Cmd {
-	if m.selectLoaded(id) {
+	origin := m.snapshot()
+	if m.selectHeld(id) {
 		m.sel = nil
 		m.clearReference()
+		m.pushBack(origin)
 		return nil
 	}
 	// A message loaded in another open channel: select that channel the
@@ -380,16 +385,31 @@ func (m *Model) showMessage(id string) tea.Cmd {
 		cmd := m.selectChannel(name)
 		switch {
 		case m.name == name:
-			m.selectLoaded(id)
+			if m.selectHeld(id) {
+				m.pushBack(origin)
+			}
 		case m.joinSwitch.id != "" && strings.EqualFold(m.joinSwitch.channel, name):
 			// The message is shown only by that join's own switch: a refused,
 			// uncertain, superseded or reset join, or a move elsewhere before
 			// it confirms, drops it with the join intent.
-			m.joinSwitch.ref = id
+			m.joinSwitch.ref, m.joinSwitch.back = id, &origin
 		}
 		return cmd
 	}
 	return m.lookupReference(id)
+}
+
+// selectHeld selects message id in the visible channel: in the list shown,
+// or in the live list behind a window, which then ends.
+func (m *Model) selectHeld(id string) bool {
+	if m.selectLoaded(id) {
+		return true
+	}
+	if m.win == nil || !slices.ContainsFunc(m.win.live.messages, func(msg Message) bool { return msg.ID == id }) {
+		return false
+	}
+	m.endWindow()
+	return m.selectLoaded(id)
 }
 
 // selectLoaded selects message id when it is loaded in the visible channel.
@@ -410,17 +430,13 @@ func (m *Model) selectLoaded(id string) bool {
 	return false
 }
 
-// channelHolding names another open channel where message id is loaded.
-// Only channels this client already shows can hold one, so nothing beyond
-// existing membership and history becomes readable.
+// channelHolding names another open channel where message id is loaded, in
+// either of its lists. Only channels this client already shows can hold
+// one, so nothing beyond existing membership and history becomes readable.
 func (m *Model) channelHolding(id string) (string, bool) {
 	for _, name := range m.order {
-		if v := m.views[name]; v != nil && v != m.cur {
-			for i := range v.messages {
-				if v.messages[i].ID == id {
-					return name, true
-				}
-			}
+		if v := m.views[name]; v != nil && v != m.cur && v.holds(id) {
+			return name, true
 		}
 	}
 	return "", false

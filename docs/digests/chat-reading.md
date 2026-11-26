@@ -34,7 +34,7 @@ returns to the live tail. [1](#source-1)
 ## Sources
 
 1. <a id="source-1"></a> [View layout](../../internal/chatui/view.go#L75) — `View`, `place`, `topBar`, `composerDivider`, `composerStatus`, `inputRow`, `statusRow`, `footer`.
-2. <a id="source-2"></a> [Keys and actions](../../internal/chatui/model.go#L736) — `key`, `escape`, `runAction`, `append`, `pick`, `jumpToLatest`.
+2. <a id="source-2"></a> [Keys and actions](../../internal/chatui/model.go#L761) — `key`, `escape`, `runAction`, `append`, `pick`, `jumpToLatest`.
 3. <a id="source-3"></a> [Selection](../../internal/chatui/selection.go#L14) — `selPoint`, `selectedText`, `pointAt`, `copySelection`.
 4. <a id="source-4"></a> [Mouse routing](../../internal/chatui/mouse.go#L15) — `mouseDown`, `mouseMove`, `dragStep`, `mouseUp`.
 5. <a id="source-5"></a> [Shared copy text](../../internal/markdownview/body.go#L67) — `DisplayLine.CopyText`; shared rows.go owns `HitRun`; chat selection.go owns message/gesture routing.

@@ -2,7 +2,13 @@ package chatstream
 
 // HistoryRequest captures the channel and caller ID for one serialized history
 // request. Before pages older history. Lookup asks for one exact message ID.
-type HistoryRequest struct{ ID, Channel, Before, Lookup string }
+// Window asks for one page delivered whole when its batch closes (a
+// "history-window" event), around Around, after After or before Before.
+type HistoryRequest struct {
+	ID, Channel, Before, Lookup string
+	Around, After               string
+	Window                      bool
+}
 
 // Action is a bounded human operation, never an arbitrary IRC command. Kind is
 // join, part, topic-read, topic-set, topic-clear, away or back. Only topic-set

@@ -59,7 +59,7 @@ type Event struct {
 	Topic, TopicBy       string
 	AwayReason           string
 	TopicLive            bool
-	Kind                 string // connection, availability, message, delivery, gap, members, history-page, history-latest
+	Kind                 string // connection, availability, message, delivery, gap, members, history-page, history-latest, history-lookup, history-window
 	Message              Message
 	ID, MessageID, State string
 	// Code is a machine-readable control refusal, independent of display text.
@@ -72,6 +72,8 @@ type Event struct {
 	Connected   bool
 	Limits      Limits
 	Members     []Member
+	// Messages is a history-window page, oldest first.
+	Messages []Message
 	// Count of messages in a finished older page; 0 = no older history,
 	// -1 = the request was refused.
 	Count int

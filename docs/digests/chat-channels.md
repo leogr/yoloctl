@@ -136,12 +136,12 @@ Separate opt-in tests against real AIRC binaries are summarized in
 13. <a id="source-13"></a> [Controls](../../internal/chatstream/channel_events.go#L30) — actions, membership and topic evidence.
 14. <a id="source-14"></a> [Refresh](../../internal/chatstream/channel_catalog.go#L95) — `receiveCatalog`, `refreshCatalog`.
 15. <a id="source-15"></a> [Stream regressions](../../internal/chatstream/channels_test.go#L46) — topic/control/history/ACL.
-16. <a id="source-16"></a> [History](../../internal/chatstream/channel_history.go#L27) — page and reference lookup queue/correlation.
+16. <a id="source-16"></a> [History](../../internal/chatstream/channel_history.go#L28) — page and reference lookup queue/correlation.
 17. <a id="source-17"></a> [Open-stream regression](../../internal/chatstream/channels_loop_test.go#L139) — identity refresh.
 18. <a id="source-18"></a> [Native snapshot](../../internal/managedchat/store.go#L61) — `ReadManifestSnapshot`, shared private manifest reader; mutation callers retain locks.
 19. <a id="source-19"></a> [Host shape regression](../../cmd/yoloctl/chat_catalog_refresh_test.go#L18) — actual builders, JSON and `RunChannels` for legacy/schema-2 catalog generations and a nickname preference saved after the stream connected.
 20. <a id="source-20"></a> [Admission regressions](../../internal/chatstream/channel_admission_test.go#L10) — No MOTD, catalog ordering/conflicts, create-first and real refusal correlation.
-21. <a id="source-21"></a> [Host admission](../../cmd/yoloctl/chat_view.go#L669-L705) — `control` reads and queues JOIN on the captured link.
+21. <a id="source-21"></a> [Host admission](../../cmd/yoloctl/chat_view.go#L672-L708) — `control` reads and queues JOIN on the captured link.
 22. <a id="source-22"></a> [Wire fixture](../../cmd/yoloctl/chat_topic_wire_test.go#L26) — JOIN after opening and confirmed send.
 23. <a id="source-23"></a> [Admission tests](../../cmd/yoloctl/chat_join_admission_test.go#L13) — refresh, link and codes.
 24. <a id="source-24"></a> [Connection capability](../../cmd/yoloctl/chat_stream.go#L52) — the confined-client feature probe sets attachment support independently of room metadata.
