@@ -426,3 +426,77 @@ func TestBoxUseSentWaitsForHolderAcceptance(t *testing.T) {
 		})
 	}
 }
+
+// The receipt drain after the frontend exits waits for a receipt later than
+// the 5 s it used to allow, and a missing one gives the unknown outcome at the
+// fail-safe: one call, cancelled, never replayed.
+func TestBoxUseReceiptDrainUsesOneFailSafe(t *testing.T) {
+	vt, err := terminal.New(2, 20, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = vt.Close() }()
+	_, _ = vt.Write([]byte("FINAL_SCREEN"))
+	snapshot, err := vt.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(t *testing.T, receipt func(context.Context) error) (string, int, error) {
+		cmd := newAgentboxAttachCmd()
+		cmd.SetContext(t.Context())
+		input, writer := io.Pipe()
+		defer func() { _ = input.Close(); _ = writer.Close() }()
+		cmd.SetIn(input)
+		var output bytes.Buffer
+		cmd.SetOut(&output)
+		cmd.SetErr(io.Discard)
+		calls := 0
+		target := controllerTarget{Operator: true, Call: func(ctx context.Context, _ controller.Request, streams controller.ClientIO) error {
+			calls++
+			if err := boxUseBootstrap(streams.View, snapshot); err != nil {
+				return err
+			}
+			if err := boxUsePacket(streams.View, 'e', []byte{0, 0, 0, 7}); err != nil {
+				return err
+			}
+			return receipt(ctx)
+		}}
+		err := callControllerBoxUse(cmd, target, controller.Request{ID: "drain", Method: "box.attach"})
+		return output.String(), calls, err
+	}
+	t.Run("late receipt", func(t *testing.T) {
+		output, calls, err := run(t, func(ctx context.Context) error {
+			select {
+			case <-time.After(5500 * time.Millisecond):
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		})
+		if classifyError(err) != 7 || !strings.Contains(output, `"status":7`) || calls != 1 {
+			t.Fatalf("late receipt lost the session's exit: err=%v calls=%d output=%s", err, calls, output)
+		}
+	})
+	t.Run("missing receipt", func(t *testing.T) {
+		old := boxUseReceiptFailSafe
+		boxUseReceiptFailSafe = 300 * time.Millisecond
+		t.Cleanup(func() { boxUseReceiptFailSafe = old })
+		cancelled := make(chan struct{})
+		// The real Call reports a cancelled connection as an unknown outcome
+		// (internal/controller/client.go), which the drain returns as is.
+		_, calls, err := run(t, func(ctx context.Context) error {
+			<-ctx.Done()
+			close(cancelled)
+			return &controller.OutcomeUnknown{ID: "drain", Cause: ctx.Err()}
+		})
+		var unknown *controller.OutcomeUnknown
+		if !errors.As(err, &unknown) || unknown.ID != "drain" || calls != 1 {
+			t.Fatalf("missing receipt = %v, calls = %d", err, calls)
+		}
+		select {
+		case <-cancelled:
+		default:
+			t.Fatal("the drained call was not cancelled at the fail-safe")
+		}
+	})
+}

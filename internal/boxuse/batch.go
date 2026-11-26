@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"time"
 	"unicode/utf8"
 )
 
@@ -79,7 +78,8 @@ func ReadBatch(input io.Reader) (Batch, error) {
 // Run executes requests one at a time through the ordinary managed frontend.
 // attach must honor cancellation and close its streams on return. All ready,
 // result, peer and terminal records are preserved on output. Input is never
-// retried. The existing attach callback owns its controller receipt cleanup.
+// retried. The existing attach callback owns its controller receipt cleanup
+// and its one fail-safe; Run waits for it.
 func (b Batch) Run(ctx context.Context, output io.Writer, attach func(context.Context, io.Reader, io.Writer) error) error {
 	if len(b.requests) == 0 {
 		return errors.New("box-use batch is empty")
@@ -106,16 +106,11 @@ func (b Batch) Run(ctx context.Context, output io.Writer, attach func(context.Co
 		cancel()
 		_ = receive.Close()
 	}
-	select {
-	case attachErr := <-done:
-		if err == nil && attachErr != nil {
-			return fmt.Errorf("box-use attachment receipt/cleanup failed; printed per-action results remain valid: %w", attachErr)
-		}
-		return errors.Join(err, attachErr)
-	case <-time.After(8 * time.Second):
-		cancel()
-		return errors.Join(err, errors.New("box-use attachment receipt/cleanup timed out; printed per-action results remain valid; attachment completion is unknown; inspect before retrying"))
+	attachErr := <-done
+	if err == nil && attachErr != nil {
+		return fmt.Errorf("box-use attachment receipt/cleanup failed; printed per-action results remain valid: %w", attachErr)
 	}
+	return errors.Join(err, attachErr)
 }
 
 func (b Batch) exchange(ctx context.Context, receive io.Reader, send *io.PipeWriter, output io.Writer) error {

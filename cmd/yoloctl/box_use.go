@@ -18,6 +18,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// boxUseReceiptFailSafe bounds the box-use receipt drain after the frontend
+// exits: the drain is detached from the frontend's cancellation, so nothing
+// else can end this one wait.
+var boxUseReceiptFailSafe = 2 * time.Minute
+
 // closingView initiates graceful worker detach before closing the frontend end.
 // The controller keeps draining final view bytes to obtain its operation receipt.
 type closingView struct {
@@ -107,8 +112,9 @@ func callControllerBoxUse(cmd *cobra.Command, target controllerTarget, req contr
 	signals := make(chan int, 1)
 	var detaching atomic.Bool
 	view := &closingView{ReadWriteCloser: local, detaching: &detaching, signals: signals}
-	// Finish the receipt even when the caller cancels its frontend. Cleanup is
-	// bounded below; failure remains explicit and is never replayed.
+	// Finish the receipt even when the caller cancels its frontend. The drain
+	// after the frontend exits has one fail-safe; failure remains explicit and
+	// is never replayed.
 	ctx, cancel := context.WithCancel(context.WithoutCancel(cmd.Context()))
 	defer cancel()
 	frontendInput := cmd.InOrStdin()
@@ -139,7 +145,7 @@ func callControllerBoxUse(cmd *cobra.Command, target controllerTarget, req contr
 	var remoteErr error
 	select {
 	case remoteErr = <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(boxUseReceiptFailSafe):
 		cancel()
 		select {
 		case remoteErr = <-done:

@@ -26,8 +26,10 @@ forms open a palette tab. [14](#source-14) [17](#source-17)
 or emit a baseline screen first. Explicit batch `since` retains wire semantics;
 revisions cannot be reused across attachments. Timeouts still return the current
 screen. The overall deadline defaults to two minutes (1s–10m), including startup
-but excluding bounded receipt cleanup, whose timeout preserves per-action
-results. [14](#source-14) [15](#source-15) [16](#source-16) [19](#source-19)
+but excluding the receipt drain after the frontend exits. That drain is detached
+from the frontend's cancellation and has one two-minute fail-safe; its expiry is
+an explicit unknown outcome that preserves per-action results, and the batch waits
+for it without a bound of its own. [2](#source-2) [14](#source-14) [15](#source-15) [16](#source-16) [19](#source-19)
 
 [FACT] The interface is JSON Lines over persistent stdin/stdout pipes. An initial
 `ready` record identifies interface version 1, the session incarnation and this
@@ -91,7 +93,7 @@ success nor graphical parity. [2](#source-2) [7](#source-7)
 ## Sources
 
 1. <a id="source-1"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L116) — `newAgentboxAttachCmd`, help and mutual exclusion.
-2. <a id="source-2"></a> [box_use.go](../../cmd/yoloctl/box_use.go#L61) — `boxUseInput`, `isNullDevice`, `callControllerBoxUse`, private channel and receipt cleanup.
+2. <a id="source-2"></a> [box_use.go](../../cmd/yoloctl/box_use.go#L66) — `boxUseInput`, `isNullDevice`, `callControllerBoxUse`, private channel and receipt cleanup.
 3. <a id="source-3"></a> [frontend.go](../../internal/boxuse/frontend.go#L18) — request/response types, `parseRequest`, `Run` input acceptance, history.
 4. <a id="source-4"></a> [state.go](../../internal/boxuse/state.go#L19) — bounds, `apply`, `observe`, `wait`, `awaitInput`, `encode`.
 5. <a id="source-5"></a> [view.go](../../internal/session/view.go#L38) — `InputActivity` framing and decoder.
@@ -104,7 +106,7 @@ success nor graphical parity. [2](#source-2) [7](#source-7)
 12. <a id="source-12"></a> [state_test.go](../../internal/boxuse/state_test.go#L45) — observations, redraws, holds, waits, acceptance, input and bounds.
 13. <a id="source-13"></a> [test_box_use.py](../../scripts/test_box_use.py#L18) — local driver framing and failure checks.
 14. <a id="source-14"></a> [box_use_cli.go](../../cmd/yoloctl/box_use_cli.go#L21) — CLI, validation, delegation and completion.
-15. <a id="source-15"></a> [batch.go](../../internal/boxuse/batch.go#L31) — `ReadBatch`, `Batch.Run`, `exchange`.
+15. <a id="source-15"></a> [batch.go](../../internal/boxuse/batch.go#L30) — `ReadBatch`, `Batch.Run`, `exchange`.
 16. <a id="source-16"></a> [batch_test.go](../../internal/boxuse/batch_test.go#L16) — bounds, failures, cleanup and local revisions.
 17. <a id="source-17"></a> [tui.go](../../internal/tui/tui.go#L594) — `boxUseReadsStdin`.
 18. <a id="source-18"></a> [input.go](../../internal/boxuse/input.go#L21) — `validateInput`.

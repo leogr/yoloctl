@@ -227,3 +227,55 @@ func TestBatchWaitUsesOnlyThisAttachmentsRevision(t *testing.T) {
 		}
 	}
 }
+
+// The attach callback owns its receipt drain and its fail-safe. Run waits for
+// it: a receipt arriving later than the 8 s Run used to allow keeps the batch
+// successful, and Run never cancels the attachment on its own.
+func TestBatchWaitsForALateAttachmentReceipt(t *testing.T) {
+	t.Parallel()
+	batch := testBatch(t, `{"id":"d","op":"detach"}`)
+	start := time.Now()
+	err := batch.Run(t.Context(), io.Discard, func(ctx context.Context, in io.Reader, out io.Writer) error {
+		_, _ = io.WriteString(out, "{\"type\":\"ready\",\"version\":1,\"session\":\"s\",\"client\":\"c\"}\n")
+		var request request
+		if err := json.NewDecoder(in).Decode(&request); err != nil {
+			return err
+		}
+		_, _ = io.WriteString(out, "{\"id\":\"d\",\"type\":\"detached\"}\n")
+		select {
+		case <-time.After(8500 * time.Millisecond):
+			return nil
+		case <-ctx.Done():
+			return fmt.Errorf("Run cancelled a running attachment: %w", ctx.Err())
+		}
+	})
+	if err != nil {
+		t.Fatalf("a late but complete receipt failed the batch: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed < 8500*time.Millisecond {
+		t.Fatalf("Run returned before its attachment finished (%v)", elapsed)
+	}
+}
+
+// The caller's cancellation still reaches the attachment, whose own drain
+// then reports the outcome; Run returns that result.
+func TestBatchPassesCallerCancellationToTheAttachment(t *testing.T) {
+	batch := testBatch(t, `{"id":"d","op":"detach"}`)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	unknown := errors.New("fixture outcome unknown")
+	err := batch.Run(ctx, io.Discard, func(ctx context.Context, in io.Reader, out io.Writer) error {
+		_, _ = io.WriteString(out, "{\"type\":\"ready\",\"version\":1,\"session\":\"s\",\"client\":\"c\"}\n")
+		var request request
+		if err := json.NewDecoder(in).Decode(&request); err != nil {
+			return err
+		}
+		_, _ = io.WriteString(out, "{\"id\":\"d\",\"type\":\"detached\"}\n")
+		cancel()
+		<-ctx.Done()
+		return unknown
+	})
+	if !errors.Is(err, unknown) {
+		t.Fatalf("lost the attachment's own outcome after cancellation: %v", err)
+	}
+}
