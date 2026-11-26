@@ -77,7 +77,7 @@ lock. [5](#source-5) [13](#source-13) [14](#source-14)
 
 1. <a id="source-1"></a> [Participants](../../internal/chatui/roster.go#L17) — `sortedMembers`, `participantRows`, `scrollRoster`, `rosterShown`, `memberCard`; wheel routing `inRoster` in mouse.go, page keys in model.go `key`.
 2. <a id="source-2"></a> [Presence notices](../../internal/chatui/presence.go#L42) — `observeMembers`, `addPresence`, `presenceRows`.
-3. <a id="source-3"></a> [Keys and actions](../../internal/chatui/model.go#L761) — `key`, `escape`, `runAction`, `append`, `pick`, `jumpToLatest`.
+3. <a id="source-3"></a> [Keys and actions](../../internal/chatui/model.go#L762) — `key`, `escape`, `runAction`, `append`, `pick`, `jumpToLatest`.
 4. <a id="source-4"></a> [Overlays](../../internal/chatui/overlay.go#L384) — `savedNick`, `saveNick`, cards, `requestAttach`, `attachDone`, `attachResolved`; help/settings in the same file.
 5. <a id="source-5"></a> [Host chat view](../../cmd/yoloctl/chat_view.go#L375) — `reconnect`, `loadAgents`, `resolveAttachWith`, `chatAttacher`.
 6. <a id="source-6"></a> [Tab requests](../../internal/termio/tabrequest.go#L12-L80) — chat guard fields, `ValidateChat`, `ChatAttachArgs`.

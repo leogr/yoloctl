@@ -25,7 +25,7 @@ const (
 	// limit: chat and follow inputs are far smaller).
 	maxRequest  = 1 << 20
 	maxResponse = MaxDrawing + 4096
-	protocol    = 1
+	protocol    = 2
 )
 
 type Status string
@@ -40,6 +40,7 @@ const (
 	Busy        Status = "busy"
 	Unavailable Status = "unavailable"
 	Internal    Status = "internal"
+	canceled    Status = "canceled" // private terminal reply to a cancel frame
 )
 
 // Result contains display data only; it never carries source paths or raw diagnostics.
@@ -78,12 +79,15 @@ type request struct {
 	Width    int    `json:"width"`
 	Method   string `json:"method"`
 	Source   string `json:"source"`
+	ID       uint64 `json:"id"`
+	Cancel   bool   `json:"cancel,omitempty"`
 }
 
 type response struct {
 	Version  int    `json:"v"`
 	Artifact string `json:"artifact"`
 	Result   Result `json:"result"`
+	ID       uint64 `json:"id"`
 }
 
 var moduleHash = sync.OnceValue(func() string {
@@ -125,9 +129,14 @@ func validSource(source string) bool {
 }
 
 func (r request) valid() bool {
+	if r.Version != protocol || r.Artifact != moduleHash() || r.ID == 0 {
+		return false
+	}
+	if r.Cancel {
+		return r.Width == 0 && r.Method == "" && r.Source == ""
+	}
 	_, method := widthMethod(r.Method)
-	return r.Version == protocol && r.Artifact == moduleHash() &&
-		r.Width > 0 && r.Width <= 4096 && method && validSource(r.Source)
+	return r.Width > 0 && r.Width <= 4096 && method && validSource(r.Source)
 }
 
 var errFrameSize = errors.New("invalid mermaid frame size")
@@ -214,7 +223,7 @@ func (r Result) valid(width int, method ansi.Method) bool {
 		return verifyDrawing(strings.Join(r.Lines, "\n"), width, method).Status == OK
 	case TooWide:
 		return len(r.Lines) == 0 && r.NeedCols > width && r.NeedCols <= MaxDrawing*2
-	case ParseError, Timeout, Failed, TooTall:
+	case ParseError, Timeout, Failed, TooTall, canceled:
 		return len(r.Lines) == 0 && r.NeedCols == 0
 	default:
 		return false

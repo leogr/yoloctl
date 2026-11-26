@@ -19,14 +19,7 @@ func applyWork(t *testing.T, m *Model, cmd tea.Cmd) {
 	if cmd == nil {
 		t.Fatal("missing work command")
 	}
-	message := cmd()
-	if _, ok := message.(resultMsg); !ok {
-		t.Fatalf("unexpected work result %T", message)
-	}
-	_, next := m.Update(message)
-	if next != nil {
-		applyWork(t, m, next)
-	}
+	drive(t, m, cmd)
 }
 func fileModel(t *testing.T, text string, format Format) (*Model, string) {
 	t.Helper()

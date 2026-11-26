@@ -196,9 +196,8 @@ func TestFollowRefreshViewIsOneLayoutWithFinalAdmissions(t *testing.T) {
 		return out
 	}}
 	oneLayout := func() *rendered {
-		draw := drawing{renderer: m.opts.Mermaid, reuse: &m.view.drawn}
-		view := renderFileTables(context.Background(), m.raw, false, false, Markdown, m.width, m.method, m.theme, draw, nil, linkview.Policy(m.admissions, string(m.raw)))
-		view.gen = m.view.gen
+		draw := drawing{renderer: m.opts.Mermaid, attempts: m.diagramAttempts, now: m.now}
+		view := renderFileTables(m.raw, false, false, Markdown, m.width, m.method, m.theme, draw, nil, linkview.Policy(m.admissions, string(m.raw)))
 		return view
 	}
 	local := func(destination string) bool {

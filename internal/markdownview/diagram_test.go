@@ -20,6 +20,24 @@ func diagramOptions(lookups *[]string, d Diagram) ParseOptions {
 	return options
 }
 
+func TestPendingMermaidKeepsSourceCopyControl(t *testing.T) {
+	var lookups []string
+	options := diagramOptions(&lookups, Diagram{Note: "mermaid: drawing…", Pending: true})
+	options.MapSource = true
+	text := "before\n```mermaid\n" + diagramSource + "```\nafter"
+	doc := Parse(text, options)
+	var got []string
+	for _, line := range doc.Lines {
+		got = append(got, line.Text)
+	}
+	if want := []string{"before", "mermaid", "", "mermaid: drawing…", "after"}; !slices.Equal(got, want) {
+		t.Fatalf("pending lines %q, want %q", got, want)
+	}
+	if doc.Lines[1].Block != diagramSource || !doc.Lines[3].Decor || len(doc.Sources) != len(doc.Lines) {
+		t.Fatal("pending fence lost its copy control, note styling or source map")
+	}
+}
+
 func TestMermaidFenceShowsItsDrawingAsCodeRows(t *testing.T) {
 	var lookups []string
 	options := diagramOptions(&lookups, Diagram{Lines: drawingRows})

@@ -346,7 +346,12 @@ func parseLines(wm ansi.Method, text string, source bool, theme spaceview.Theme,
 					if diagrams != nil && IsMermaid(out[opener].Text) {
 						if d, ok := diagrams(out[opener].Block); ok {
 							note = d.Note
-							if len(d.Lines) > 0 {
+							if d.Pending {
+								out = out[:opener+1]
+								if srcs != nil {
+									*srcs = (*srcs)[:openerSrcs]
+								}
+							} else if len(d.Lines) > 0 {
 								out = drawDiagram(out, opener, fences, d.Lines, theme, srcs, openerSrcs, at)
 							}
 						}

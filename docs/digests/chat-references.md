@@ -80,7 +80,7 @@ navigation.
 1. <a id="source-1"></a> [Body tokens](../../internal/chatui/body.go#L16) — `decorateTokens`, `refPrefix`, `compactRef`, `refID`, `msgidPrefix`, `messageID`, `nickByte`; shared `Linked` prevents overriding link targets.
 2. <a id="source-2"></a> [Navigation](../../internal/chatui/mouse.go#L334-L443) — `activate`, `showMessage`, `selectLoaded`, `channelHolding`; channels.go `joinSwitch.ref` carries a deferred message with its join and `showJoined` shows it, `selectChannel` owns join admission.
 3. <a id="source-3"></a> [Hover hints](../../internal/chatui/hover.go#L213-L214) — `actRef`; kinds in rows.go L15–L23.
-4. <a id="source-4"></a> [Copy reference](../../internal/chatui/model.go#L1034-L1204) — `messageActions`, `runAction`; Help row in overlay.go L106.
+4. <a id="source-4"></a> [Copy reference](../../internal/chatui/model.go#L1035-L1205) — `messageActions`, `runAction`; Help row in overlay.go L106.
 5. <a id="source-5"></a> [Regressions](../../internal/chatui/reference_test.go#L22-L459) — `TestReferencesReachOtherOpenChannels`, `TestCrossChannelReferenceJoinsLeftChannel`, `TestCrossChannelReferenceEndsWithItsJoin`; shared vectors and unused bits, tokens, inert numbers, wrapped and missing targets, reply labels, copy, channels and deletion.
 6. <a id="source-6"></a> [Nickname grammar](../../internal/managedchat/settings.go#L8-L20) — `ValidateNickname`; mirrored by `validNick` in chatui/overlay.go.
 7. <a id="source-7"></a> [Packaged AIRC references](https://github.com/leogr/airc/blob/8a03beadfa18dfcc958711652547e1acdc3569c8/skills/airc/SKILL.md#L188-L196) — shared references, refused `@N`, full msgids; codec and saved-record presentation in `src/agent_session/reference.rs` and `state.rs` L319–593.

@@ -21,14 +21,15 @@ import (
 // it drew from its cache at once. Tests with a render cost use synctest so
 // rendering and the refresh deadline share one clock.
 type fakeRenderer struct {
-	mu     sync.Mutex
-	cost   time.Duration
-	busy   bool
-	cached map[string]bool
-	rows   int // drawing rows; 0 means one
-	calls  []string
-	widths []int
-	fresh  int // renders that were not answered from the cache
+	mu         sync.Mutex
+	cost       time.Duration
+	busy       bool
+	busySource string
+	cached     map[string]bool
+	rows       int // drawing rows; 0 means one
+	calls      []string
+	widths     []int
+	fresh      int // renders that were not answered from the cache
 }
 
 func (f *fakeRenderer) Render(ctx context.Context, source string, width int, _ ansi.Method) mermaid.Result {
@@ -50,7 +51,7 @@ func (f *fakeRenderer) Render(ctx context.Context, source string, width int, _ a
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.busy {
+	if f.busy || f.busySource != "" && strings.Contains(source, f.busySource) {
 		return mermaid.Result{Status: mermaid.Busy}
 	}
 	if f.cached == nil {
@@ -58,6 +59,15 @@ func (f *fakeRenderer) Render(ctx context.Context, source string, width int, _ a
 	}
 	f.cached[source] = true
 	return mermaid.Result{Status: mermaid.OK, Lines: f.drawing(source)}
+}
+
+func (f *fakeRenderer) Lookup(source string, _ int, _ ansi.Method) (mermaid.Result, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.cached[source] {
+		return mermaid.Result{}, false
+	}
+	return mermaid.Result{Status: mermaid.OK, Lines: f.drawing(source)}, true
 }
 
 func (f *fakeRenderer) freshRenders() int { f.mu.Lock(); defer f.mu.Unlock(); return f.fresh }
@@ -105,11 +115,14 @@ func TestDrawAdmitsCountsAndDeduplicatesFences(t *testing.T) {
 	// drawing exists: the limit counts fences, the work distinct sources.
 	sources = append([]string{sources[0]}, sources...)
 	sources = append(sources, sources[0], "classDiagram\n A <|-- B\n")
-	d := drawing{renderer: r, now: time.Now, budget: drawBudget}
-	got := d.draw(t.Context(), sources, 80, ansi.GraphemeWidth)
-	out := got.diagrams
-	if got.undrawn != 0 || got.retry != 0 || len(r.calls) != maxDiagrams-1 {
-		t.Fatalf("undrawn %d retry %d, %d renders", got.undrawn, got.retry, len(r.calls))
+	var text strings.Builder
+	for _, source := range sources {
+		fmt.Fprintf(&text, "```mermaid\n%s```\n", source)
+	}
+	m := mermaidModel(t, text.String(), r)
+	out := m.view.drawn.diagrams
+	if len(r.calls) != maxDiagrams-1 {
+		t.Fatalf("%d renders, want %d", len(r.calls), maxDiagrams-1)
 	}
 	for _, w := range r.widths {
 		if w != markdownview.DiagramWidth(80) {
@@ -131,98 +144,93 @@ func TestDrawAdmitsCountsAndDeduplicatesFences(t *testing.T) {
 	}
 }
 
-func TestFollowContinuesUndrawnFencesWhileItProgresses(t *testing.T) {
+func TestFollowShowsSourceAtOriginalDeadlineAcrossAppends(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		r := &fakeRenderer{cost: 3 * time.Second}
-		var text strings.Builder
-		for n := range 5 {
-			text.WriteString(fence(n))
-		}
-		// Each refresh shows the document after 5 s: one 3 s render, and the
-		// next still drawing; continuations wait for it and draw the rest
-		// without any read, each source rendered once.
-		m := mermaidModel(t, text.String(), r)
-		rows, notes := drawn(m)
-		if len(rows) != 5 || len(notes) != 0 || m.view.undrawn != 0 {
-			t.Fatalf("rows %q notes %q", rows, notes)
-		}
-		if r.freshRenders() != 5 {
-			t.Fatalf("%d renders for 5 sources: %q", r.freshRenders(), r.calls)
-		}
-	})
-}
-
-func TestDrawKeepsTheRefreshWithinItsTotalBudget(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		start := time.Now()
-		r := &fakeRenderer{cost: 3 * time.Second}
-		d := drawing{renderer: r, now: time.Now, budget: drawBudget}
-		got := d.draw(t.Context(), []string{"flowchart LR\na-->b", "flowchart LR\nc-->d", "flowchart LR\ne-->f"}, 80, ansi.GraphemeWidth)
-		if elapsed := time.Since(start); elapsed != drawBudget {
-			t.Fatalf("refresh took %s, budget %s", elapsed, drawBudget)
-		}
-		if len(got.diagrams[0].Lines) != 1 || got.undrawn != 2 || got.diagrams[1].Note != noteDrawing || got.diagrams[2].Note != noteDrawing || len(r.calls) != 2 {
-			t.Fatalf("%+v, %d renders", got, len(r.calls))
-		}
-	})
-}
-
-// A diagram that draws longer than a refresh (6 s here, under the renderer's
-// 20 s) shows its source at 5 s and its drawing when the render ends: the
-// render is not cut at the budget, and no continuation starts it again.
-func TestFollowDrawsARenderThatOutlastsTheRefresh(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		r := &fakeRenderer{cost: 6 * time.Second}
+		r := &fakeRenderer{cost: 8 * time.Second}
 		path := fixtureDir(t) + "/doc.md"
-		writeFixture(t, path, []byte(fence(1)+fence(2)+fence(3)))
-		m := New(context.Background(), Options{Reader: HostReader{Path: path}, Path: path, Format: Markdown, Mermaid: r})
+		text := "initial prose\n" + fence(1) + fence(22)
+		writeFixture(t, path, []byte(text))
+		m := New(t.Context(), Options{Reader: HostReader{Path: path}, Path: path, Format: Markdown, Mermaid: r})
 		t.Cleanup(m.Close)
-		_, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+		d := newViewDriver(m)
 		start := time.Now()
-		msg, ok := cmd().(resultMsg)
-		if !ok || time.Since(start) != drawBudget {
-			t.Fatalf("first view after %s, want %s", time.Since(start), drawBudget)
+		_, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+		d.start(cmd)
+		d.ready()
+		if time.Since(start) != 0 || !strings.Contains(m.view.text, "initial prose") || !m.view.drawn.diagrams[0].Pending {
+			t.Fatal("first prose waited for the drawing")
 		}
-		_, next := m.Update(msg)
-		if rows, notes := drawn(m); len(rows) != 0 || strings.Join(notes, "|") != strings.Join([]string{noteDrawing, noteDrawing, noteDrawing}, "|") {
-			t.Fatalf("first view: rows %q notes %q", rows, notes)
+		for i := 1; i <= 8; i++ {
+			time.Sleep(time.Second)
+			added := fmt.Sprintf("append %d", i)
+			text += added + "\n"
+			writeFixture(t, path, []byte(text))
+			d.start(m.work(true, false))
+			d.ready()
+			if !strings.Contains(m.view.text, added) {
+				t.Fatalf("append %d was not displayed", i)
+			}
+			for j, card := range m.view.drawn.diagrams {
+				if card.Pending != (i < 5) {
+					t.Fatalf("second %d, fence %d: %+v", i, j, card)
+				}
+			}
+			if want := 1 + i/8; r.freshRenders() != want {
+				t.Fatalf("second %d: renders=%d, want %d", i, r.freshRenders(), want)
+			}
 		}
-		applyWork(t, m, next)
-		if rows, notes := drawn(m); len(rows) != 3 || len(notes) != 0 || r.freshRenders() != 3 {
-			t.Fatalf("rows %q notes %q renders %d", rows, notes, r.freshRenders())
+		if rows, _ := drawn(m); len(rows) != 1 || rows[0] != "drawn n1" {
+			t.Fatalf("latest document: drawings %q", rows)
 		}
 	})
 }
 
-// A render longer than two refreshes keeps its continuations going: one that
-// draws nothing new while the render runs does not stop the chain.
-func TestFollowWaitsForARenderLongerThanTwoRefreshes(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		r := &fakeRenderer{cost: 12 * time.Second}
-		m := mermaidModel(t, fence(1), r)
-		if rows, notes := drawn(m); len(rows) != 1 || len(notes) != 0 || r.freshRenders() != 1 {
-			t.Fatalf("rows %q notes %q renders %d", rows, notes, r.freshRenders())
-		}
-	})
-}
-
-// A continuation that makes no progress, with nothing still drawing, stops
-// the chain and says so; r starts afresh.
-func TestDrawStallsOnlyWithoutProgressOrARunningRender(t *testing.T) {
-	r := &fakeRenderer{}
-	ended, cancel := context.WithCancel(context.Background())
-	cancel()
-	d := drawing{renderer: r, now: time.Now, budget: drawBudget, before: 1}
-	got := d.draw(ended, []string{"flowchart LR\na-->b"}, 80, ansi.GraphemeWidth)
-	if got.undrawn != 1 || got.inflight || got.diagrams[0].Note != noteStalled {
-		t.Fatalf("%+v", got)
+func TestFollowSmallestBusyAdvancesQueue(t *testing.T) {
+	r := &fakeRenderer{busySource: "n1 -->"}
+	m := mermaidModel(t, fence(22)+fence(1), r)
+	rows, notes := drawn(m)
+	if len(r.calls) != 2 || !strings.Contains(r.calls[0], "n1 -->") ||
+		len(rows) != 1 || rows[0] != "drawn n22" || strings.Join(notes, "") != "mermaid: not drawn (renderer busy)" {
+		t.Fatalf("calls=%q rows=%q notes=%q", r.calls, rows, notes)
 	}
+	applyWork(t, m, m.work(true, false))
+	if len(r.calls) != 2 {
+		t.Fatalf("poll retried the busy fence: %q", r.calls)
+	}
+	r.busySource = ""
+	applyWork(t, m, key(m, 'r', 0))
+	if rows, _ := drawn(m); len(r.calls) != 3 || len(rows) != 2 {
+		t.Fatalf("explicit retry: calls=%q rows=%q", r.calls, rows)
+	}
+}
+
+func TestFollowResizeRejectsStaleDiagramReply(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		r := &fakeRenderer{cost: 6 * time.Second}
-		d := drawing{renderer: r, now: time.Now, budget: drawBudget, before: 1}
-		got := d.draw(t.Context(), []string{"flowchart LR\na-->b"}, 80, ansi.GraphemeWidth)
-		if got.undrawn != 1 || !got.inflight || got.diagrams[0].Note != noteDrawing {
-			t.Fatalf("a running render is progress: %+v", got)
+		r := &fakeRenderer{cost: 8 * time.Second}
+		path := fixtureDir(t) + "/doc.md"
+		writeFixture(t, path, []byte(fence(1)))
+		m := New(t.Context(), Options{Reader: HostReader{Path: path}, Format: Markdown, Mermaid: r})
+		t.Cleanup(m.Close)
+		d := newViewDriver(m)
+		_, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+		d.start(cmd)
+		d.ready()
+		old := m.diagramActive
+		_, cmd = m.Update(tea.WindowSizeMsg{Width: 100, Height: 12})
+		d.start(cmd)
+		d.ready()
+		replacement := m.diagramActive
+		if replacement == nil || replacement == old || replacement.key.width != markdownview.DiagramWidth(100) {
+			t.Fatalf("replacement = %+v", replacement)
+		}
+		m.Update(diagramDoneMsg{old, mermaid.Result{Status: mermaid.Busy}})
+		if m.diagramActive != replacement || m.view.drawn.diagrams[0].Note != noteDrawing {
+			t.Fatal("obsolete cancellation changed the replacement")
+		}
+		time.Sleep(8 * time.Second)
+		d.ready()
+		if rows, _ := drawn(m); len(rows) != 1 || r.freshRenders() != 2 {
+			t.Fatalf("rows=%q fresh=%d", rows, r.freshRenders())
 		}
 	})
 }
@@ -275,10 +283,9 @@ func TestFollowDrawingClearsASelectionItMoves(t *testing.T) {
 			t.Cleanup(m.Close)
 			r.cached = nil
 			_, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
-			// The first refresh draws fence 1 and leaves fence 2 for a continuation.
 			_, next := m.Update(cmd())
-			if m.view.undrawn != 1 || next == nil {
-				t.Fatalf("undrawn %d", m.view.undrawn)
+			if len(m.view.drawn.order) != 2 || next == nil {
+				t.Fatal("missing diagram jobs")
 			}
 			m.selection = &selection{anchor: point{c.line, 0}, focus: point{c.line, 2}}
 			applyWork(t, m, next)
@@ -298,10 +305,10 @@ func TestFollowAnchorSurvivesDrawingReplacement(t *testing.T) {
 	raw := []byte("head\n" + fence(1) + "TARGET\n" + strings.Repeat("tail\n", 30))
 	render := func(rows int) *rendered {
 		if rows < 0 {
-			return renderFile(context.Background(), raw, false, false, Markdown, 80, ansi.GraphemeWidth, theme, drawing{})
+			return renderFile(raw, false, false, Markdown, 80, ansi.GraphemeWidth, theme, drawing{})
 		}
-		r := &fakeRenderer{rows: rows}
-		return renderFile(context.Background(), raw, false, false, Markdown, 80, ansi.GraphemeWidth, theme, drawing{renderer: r, now: time.Now, budget: drawBudget})
+		r := &fakeRenderer{rows: rows, cached: map[string]bool{"flowchart LR\n n1 --> x\n": true}}
+		return renderFile(raw, false, false, Markdown, 80, ansi.GraphemeWidth, theme, drawing{renderer: r, now: time.Now})
 	}
 	at := func(v *rendered, text string) int {
 		for i, row := range v.rows {
@@ -338,5 +345,74 @@ func TestFollowAnchorSurvivesDrawingReplacement(t *testing.T) {
 	m.placeAnchor()
 	if got := m.view.doc.Lines[m.view.rows[m.top].Line].Text; got != "drawn n1" {
 		t.Fatalf("anchor inside the fence moved to %q", got)
+	}
+}
+
+func TestFollowShowsSourceWhenFallbackWakeIsDue(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		lateLayout bool
+	}{
+		{name: "late layout", lateLayout: true},
+		{name: "unchanged read before queued wake"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				r := &fakeRenderer{cost: 8 * time.Second}
+				path := fixtureDir(t) + "/doc.md"
+				writeFixture(t, path, []byte(fence(1)))
+				m := New(t.Context(), Options{Reader: HostReader{Path: path}, Format: Markdown, Mermaid: r})
+				t.Cleanup(m.Close)
+				d := newViewDriver(m)
+				_, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+				first := cmd().(resultMsg)
+				if !first.view.drawn.diagrams[0].Pending {
+					t.Fatal("fixture did not produce a placeholder")
+				}
+				if tc.lateLayout {
+					time.Sleep(drawBudget + time.Second)
+				}
+				_, cmd = m.Update(first)
+				d.start(cmd)
+				d.ready()
+
+				if !tc.lateLayout {
+					read := m.work(true, false)().(resultMsg)
+					if read.snapshot.Changed || read.view != nil || read.err != nil {
+						t.Fatalf("expected an unchanged read: %+v", read)
+					}
+					time.Sleep(drawBudget)
+					synctest.Wait()
+					select {
+					case queued := <-d.in:
+						if _, ok := queued.(diagramWakeMsg); !ok {
+							t.Fatalf("expected queued wake, got %T", queued)
+						}
+						_, cmd = m.Update(read)
+						d.start(cmd)
+						d.accept(queued)
+						d.ready()
+					default:
+						t.Fatal("fallback wake was not queued")
+					}
+				}
+
+				if m.diagramActive == nil || m.view.drawn.diagrams[0].Pending ||
+					!strings.Contains(ansi.Strip(m.View().Content), "n1 --> x") {
+					t.Fatal("fallback did not show the source while the render was pending")
+				}
+				exposed := m.view
+				d.start(m.work(true, false))
+				d.ready()
+				if m.view != exposed || m.diagramWake != nil {
+					t.Fatal("unchanged poll scheduled another layout or fallback after exposure")
+				}
+				time.Sleep(r.cost)
+				d.ready()
+				if rows, _ := drawn(m); len(rows) != 1 || r.freshRenders() != 1 {
+					t.Fatalf("drawings %q after %d renders", rows, r.freshRenders())
+				}
+			})
+		})
 	}
 }

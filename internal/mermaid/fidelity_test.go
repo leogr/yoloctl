@@ -64,7 +64,7 @@ func TestFidelityCorpusMatchesReviewedGoldens(t *testing.T) {
 		}
 		name := strings.TrimSuffix(filepath.Base(f), ".mmd")
 		for _, width := range fidelityWidths {
-			r := render(ctx, rt, compiled, request{protocol, moduleHash(), width, "grapheme", source}, ansi.GraphemeWidth, workerLimits{1024, 2 * time.Second, MaxDrawing})
+			r := render(ctx, rt, compiled, testRenderRequest(width, "grapheme", source), ansi.GraphemeWidth, workerLimits{1024, 2 * time.Second, MaxDrawing})
 			got := golden(r)
 			path := filepath.Join("testdata", "golden", fmt.Sprintf("%s.w%d.txt", name, width))
 			if *updateGoldens {

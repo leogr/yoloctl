@@ -37,6 +37,7 @@ type fenceRef struct {
 // change row heights cannot make it oscillate.
 type viewport struct {
 	width, height int
+	method        ansi.Method
 	follow        bool
 	moves         uint64 // user scrolls and message selections (diagramState.moves)
 	messages      int    // while following: new messages make a new screen
@@ -53,8 +54,6 @@ type diagramState struct {
 	// source and width: shown, not requested again until the next one.
 	transient map[diagramKey]mermaid.Result
 	at        viewport
-	epoch     uint64 // changes with at; a transient result of another is not kept
-	inflight  bool
 	moves     uint64 // counts the user's scrolls; layout changes never do
 }
 
@@ -65,11 +64,16 @@ type diagramKey struct {
 
 // diagramResultMsg is one rendering's outcome; the client cached it when it
 // is cacheable.
-type diagramResultMsg struct {
+type diagramJob struct {
 	channel string
-	epoch   uint64
 	key     diagramKey
-	result  mermaid.Result
+	method  ansi.Method
+	cancel  context.CancelFunc
+}
+
+type diagramResultMsg struct {
+	job    *diagramJob
+	result mermaid.Result
 }
 
 // diagramSettleMsg runs settleDiagrams again after it changed bodies.
@@ -207,28 +211,29 @@ func (s *diagramState) class(ref fenceRef) int8 {
 // are rebuilt (and settle runs again); otherwise the next missing eligible
 // drawing on the screen is requested, one at a time.
 func (m *Model) settleDiagrams() tea.Cmd {
-	if m.opts.Mermaid == nil || m.source || m.layout.transcriptWidth == 0 || m.lastBodyHeight == 0 {
+	if m.opts.Mermaid == nil || m.source || m.width < 20 || m.height < 7 || m.lastBodyHeight == 0 {
+		m.cancelDiagram()
 		return nil
 	}
-	tw, height := m.layout.transcriptWidth, m.lastBodyHeight
+	tw, height := m.transcriptWidth(), min(m.lastBodyHeight, m.height)
 	rows := m.buildTranscript(tw)
 	m.place(rows, height)
 	s := &m.diagrams
-	at := viewport{width: tw, height: height, follow: m.follow, moves: s.moves, filter: m.filter}
+	at := viewport{width: tw, height: height, method: m.widthMethod, follow: m.follow, moves: s.moves, filter: m.filter}
 	if m.follow {
 		at.messages = len(m.messages)
 	}
 	if s.eligible == nil || at != s.at {
-		s.at, s.epoch = at, s.epoch+1
+		if job := m.diagramActive; job != nil && (job.channel != m.name || job.method != m.widthMethod || job.key.width != markdownview.DiagramWidth(m.textWidth())) {
+			m.cancelDiagram()
+		}
+		s.at = at
 		s.transient = map[diagramKey]mermaid.Result{}
 		s.eligible, s.tooMany = nil, nil
 	}
 	s.eligible, s.tooMany = m.visibleFences(rows[min(m.scroll, len(rows)):min(m.scroll+height, len(rows))], s.eligible, s.tooMany)
 	if m.rebuildDiagramBodies() {
 		return func() tea.Msg { return diagramSettleMsg{} }
-	}
-	if s.inflight {
-		return nil
 	}
 	return m.requestDiagram(rows[min(m.scroll, len(rows)):min(m.scroll+height, len(rows))])
 }
@@ -375,9 +380,12 @@ func carryLine(old, next cachedBody, line, offset int) (int, int) {
 	return line, offset
 }
 
-// requestDiagram asks the renderer for the first pending eligible
-// occurrence on the visible rows.
+// requestDiagram picks the smallest pending source among the same eligible
+// occurrences. Screen order breaks ties and a current request keeps its slot.
 func (m *Model) requestDiagram(rows []transcriptRow) tea.Cmd {
+	var next diagramKey
+	active := m.diagramActive
+	wanted := false
 	for _, row := range rows {
 		ref, ok := m.fenceOf(row)
 		if !ok {
@@ -387,36 +395,61 @@ func (m *Model) requestDiagram(rows []transcriptRow) tea.Cmd {
 		if !body.pending[ref.occ] {
 			continue
 		}
-		s := &m.diagrams
-		s.inflight = true
 		key := diagramKey{body.fences[ref.occ], markdownview.DiagramWidth(body.drawWidth)}
-		renderer, method, channel, epoch, jobs := m.opts.Mermaid, m.widthMethod, m.name, s.epoch, m.linkJobs
-		render := func(ctx context.Context) tea.Msg {
-			return diagramResultMsg{channel: channel, epoch: epoch, key: key, result: renderer.Render(ctx, key.source, key.width, method)}
+		if active != nil && active.channel == m.name && active.key == key && active.method == m.widthMethod {
+			wanted = true
 		}
-		return func() tea.Msg {
-			// The view's context: a render queued when the view closes
-			// starts no worker.
-			if jobs == nil {
-				return render(context.Background())
-			}
-			return jobs.run(render)
+		if next.source == "" || len(key.source) < len(next.source) {
+			next = key
 		}
 	}
-	return nil
+	if wanted {
+		return nil
+	}
+	m.cancelDiagram()
+	if next.source == "" {
+		return nil
+	}
+	renderer, jobs := m.opts.Mermaid, m.linkJobs
+	parent := context.Background()
+	if jobs != nil {
+		parent = jobs.ctx
+	}
+	ctx, cancel := context.WithCancel(parent)
+	job := &diagramJob{m.name, next, m.widthMethod, cancel}
+	m.diagramActive = job
+	render := func(context.Context) tea.Msg {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return diagramResultMsg{job, renderer.Render(ctx, next.source, next.width, job.method)}
+	}
+	return func() tea.Msg {
+		if jobs == nil {
+			return render(ctx)
+		}
+		return jobs.run(render)
+	}
+}
+
+func (m *Model) cancelDiagram() {
+	if m.diagramActive != nil {
+		m.diagramActive.cancel()
+		m.diagramActive = nil
+	}
 }
 
 // diagramResult records one answer (the renderer cached a cacheable one);
 // settleDiagrams then rebuilds the bodies waiting for it and asks for the
 // next. A transient answer is shown until the viewport changes.
 func (m *Model) diagramResult(msg diagramResultMsg) {
-	m.within(msg.channel, func() {
-		s := &m.diagrams
-		s.inflight = false
-		if msg.epoch == s.epoch && msg.result.Transient() {
-			s.transient[msg.key] = msg.result
-		}
-	})
+	if msg.job == nil || m.diagramActive != msg.job || msg.job.channel != m.name {
+		return
+	}
+	m.cancelDiagram()
+	if msg.result.Transient() {
+		m.diagrams.transient[msg.job.key] = msg.result
+	}
 }
 
 // fenceSpan is the first and last display line of occurrence occ.

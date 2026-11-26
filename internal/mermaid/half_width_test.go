@@ -1,7 +1,6 @@
 package mermaid
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 	"testing"
@@ -21,30 +20,13 @@ B -->|no| D[Respond 405 with Allow GET]
 	method := ansi.GraphemeWidth
 	// The first pane supplies the same compact drawing before any translation.
 	panes := []int{62, 59, 60, 80}
-	var in, out bytes.Buffer
-	for _, pane := range panes {
-		width := markdownview.DiagramWidth(pane)
-		req := request{protocol, moduleHash(), width, methodName(method), source}
-		if err := writeFrame(&in, req, maxRequest); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := RunWorker(t.Context(), &in, &out); err != nil {
-		t.Fatal(err)
-	}
-
+	draw := testWorkerSession(t, workerLimits{1024, renderDeadline, MaxDrawing})
 	var unshifted []string
-	for _, pane := range panes {
+	for i, pane := range panes {
 		width := markdownview.DiagramWidth(pane)
-		data, err := readFrame(&out, maxResponse)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var reply response
-		if err := strictJSON(data, &reply); err != nil {
-			t.Fatal(err)
-		}
-		drawing := reply.Result
+		req := testRenderRequest(width, methodName(method), source)
+		req.ID = uint64(i + 1)
+		drawing := draw(req).Result
 		if width == unshiftedWidth {
 			unshifted = drawing.Lines
 		}
@@ -84,8 +66,5 @@ B -->|no| D[Respond 405 with Allow GET]
 				t.Fatalf("Markdown laid out %d drawing rows, worker returned %d", rows, len(drawing.Lines))
 			}
 		})
-	}
-	if out.Len() != 0 {
-		t.Fatal("extra reply bytes")
 	}
 }

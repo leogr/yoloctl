@@ -45,6 +45,7 @@ func (j *linkJobs) run(fn func(context.Context) tea.Msg) tea.Msg {
 	return fn(j.ctx)
 }
 func (m *Model) CloseLinks() {
+	m.cancelDiagram()
 	if m.linkJobs == nil {
 		return
 	}

@@ -46,6 +46,7 @@ type Client struct {
 	// generation changes at every Close: a start requested before a Close
 	// never creates a worker after it.
 	generation atomic.Uint64
+	requestID  atomic.Uint64
 
 	mu        sync.Mutex
 	proc      *workerProcess
@@ -154,6 +155,7 @@ func (c *Client) Close() {
 // Render returns a verified drawing or a reason to show the source. width is
 // the card's inner width; method is the view's width method.
 func (c *Client) Render(ctx context.Context, source string, width int, method ansi.Method) Result {
+	generation := c.generation.Load()
 	name := methodName(method)
 	if name == "" || width <= 0 || width > 4096 || !validSource(source) {
 		return Result{Status: Internal}
@@ -167,18 +169,31 @@ func (c *Client) Render(ctx context.Context, source string, width int, method an
 	case <-ctx.Done():
 		return Result{Status: Busy}
 	}
-	defer func() { <-c.slot }()
 	if r, ok := c.cache.get(key); ok { // filled while this request waited
+		<-c.slot
 		return r
 	}
 	if ctx.Err() != nil { // a closed view starts nothing
+		<-c.slot
 		return Result{Status: Busy}
 	}
-	r := c.exchange(ctx, request{protocol, moduleHash(), width, name, source}, c.now().Add(time.Duration(c.guard.Load())), method)
-	if r.cacheable() {
-		c.cache.put(key, r)
+	req := request{Version: protocol, Artifact: moduleHash(), Width: width, Method: name, Source: source, ID: c.requestID.Add(1)}
+	deadline := c.now().Add(time.Duration(c.guard.Load()))
+	done := make(chan Result, 1)
+	go func() {
+		r := c.exchange(ctx, req, deadline, method, generation)
+		if ctx.Err() == nil && r.cacheable() {
+			c.cache.put(key, r)
+		}
+		<-c.slot // only the settled exchange releases the slot
+		done <- r
+	}()
+	select {
+	case r := <-done:
+		return r
+	case <-ctx.Done():
+		return Result{Status: Busy}
 	}
-	return r
 }
 
 // Lookup returns the cached outcome of a rendering without rendering it:
@@ -204,11 +219,10 @@ var errProtocol = errors.New("mermaid worker broke the protocol")
 // Starting runs in the background: if it outlasts the deadline or ctx, the
 // request gives up and a late-started worker still becomes the client's
 // worker (owned, reused, ended by Close), never an orphan.
-func (c *Client) exchange(ctx context.Context, req request, deadline time.Time, method ansi.Method) Result {
+func (c *Client) exchange(ctx context.Context, req request, deadline time.Time, method ansi.Method, generation uint64) Result {
 	timer := time.NewTimer(max(deadline.Sub(c.now()), 0))
 	defer timer.Stop()
 	started := make(chan *workerProcess, 1)
-	generation := c.generation.Load()
 	var abandoned atomic.Bool // set when this request stops waiting
 	go func() {
 		c.mu.Lock()
@@ -217,7 +231,7 @@ func (c *Client) exchange(ctx context.Context, req request, deadline time.Time, 
 		// A start that has not begun when its request gave up, or that was
 		// requested before a Close, never begins. One already running when
 		// the request gives up completes and becomes the client's worker.
-		if !abandoned.Load() && c.generation.Load() == generation {
+		if !abandoned.Load() && ctx.Err() == nil && c.generation.Load() == generation {
 			p, ok = c.startLocked()
 		}
 		c.mu.Unlock()
@@ -239,36 +253,12 @@ func (c *Client) exchange(ctx context.Context, req request, deadline time.Time, 
 	if p == nil {
 		return Result{Status: Unavailable}
 	}
-	type reply struct {
-		resp response
-		err  error
+	if ctx.Err() != nil {
+		return Result{Status: Busy}
 	}
-	done := make(chan reply, 1)
-	go func() {
-		if err := writeFrame(p.stdin, req, maxRequest); err != nil {
-			done <- reply{err: err}
-			return
-		}
-		frame, err := readFrame(p.stdout, maxResponse)
-		var resp response
-		switch {
-		case errors.Is(err, errFrameSize):
-			err = errProtocol
-		case err == nil && strictJSON(frame, &resp) != nil:
-			err = errProtocol
-		}
-		done <- reply{resp, err}
-	}()
-	var got reply
-	canceled := false
-	select {
-	case got = <-done:
-	case <-timer.C:
-		got.err = errors.New("renderer did not answer within its guard")
-	case <-ctx.Done():
-		got.err, canceled = ctx.Err(), true
-	}
-	if got.err == nil && (got.resp.Version != protocol || got.resp.Artifact != req.Artifact || !got.resp.Result.valid(req.Width, method)) {
+	got, gaveUp := workerExchange(ctx, p, req, timer.C)
+	if got.err == nil && (got.resp.Version != protocol || got.resp.Artifact != req.Artifact ||
+		got.resp.ID != req.ID || !got.resp.Result.valid(req.Width, method) || got.resp.Result.Status == canceled && !gaveUp) {
 		got.err = errProtocol
 	}
 	if got.err != nil {
@@ -277,22 +267,79 @@ func (c *Client) exchange(ctx context.Context, req request, deadline time.Time, 
 		c.mu.Lock()
 		if c.proc == p {
 			c.killLocked()
-			if canceled {
-				// The caller gave up (a view's time budget, a close): not
-				// a worker failure, so no restart throttle follows.
-				c.crashed = false
-			}
 		}
 		c.mu.Unlock()
-		if canceled {
-			return Result{Status: Busy}
-		}
 		if errors.Is(got.err, errProtocol) {
 			return Result{Status: Internal}
 		}
 		return Result{Status: Unavailable}
 	}
+	if gaveUp || ctx.Err() != nil {
+		return Result{Status: Busy}
+	}
 	return got.resp.Result
+}
+
+type workerReply struct {
+	resp response
+	err  error
+}
+
+func writeWorkerRequest(p *workerProcess, req request) <-chan error {
+	done := make(chan error, 1)
+	go func() { done <- writeFrame(p.stdin, req, maxRequest) }()
+	return done
+}
+
+func readWorkerReply(p *workerProcess) <-chan workerReply {
+	done := make(chan workerReply, 1)
+	go func() {
+		frame, err := readFrame(p.stdout, maxResponse)
+		var resp response
+		if errors.Is(err, errFrameSize) || err == nil && strictJSON(frame, &resp) != nil {
+			err = errProtocol
+		}
+		done <- workerReply{resp, err}
+	}()
+	return done
+}
+
+// workerExchange serializes writes and drains the terminal reply before the
+// slot can pass to another request. A blocked write and a blocked reply are
+// both covered by the original exchange guard, even after cancellation.
+func workerExchange(ctx context.Context, p *workerProcess, req request, guard <-chan time.Time) (workerReply, bool) {
+	write := writeWorkerRequest(p, req)
+	var read <-chan workerReply
+	var got workerReply
+	var sent, gaveUp, cancelSent, replied bool
+	caller := ctx.Done()
+	for !replied || write != nil {
+		select {
+		case err := <-write:
+			if err != nil {
+				return workerReply{err: err}, gaveUp
+			}
+			write = nil
+			if !sent {
+				sent = true
+				read = readWorkerReply(p)
+			}
+		case got = <-read:
+			if got.err != nil {
+				return got, gaveUp
+			}
+			read, replied = nil, true
+		case <-caller:
+			caller, gaveUp = nil, true
+		case <-guard:
+			return workerReply{err: errors.New("renderer did not answer within its guard")}, gaveUp
+		}
+		if gaveUp && write == nil && !replied && !cancelSent {
+			cancelSent = true
+			write = writeWorkerRequest(p, request{Version: protocol, Artifact: req.Artifact, ID: req.ID, Cancel: true})
+		}
+	}
+	return got, gaveUp
 }
 
 // Transient reports an outcome that is not kept (busy, unavailable, a broken

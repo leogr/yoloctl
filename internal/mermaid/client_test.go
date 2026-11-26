@@ -16,9 +16,12 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 )
 
 const silentWorkerArgument = "__mermaid-test-silent-worker"
+const observedWorkerArgument = "__mermaid-test-observed-worker"
 
 // The test binary is its own worker when started with a worker argument.
 func TestMain(m *testing.M) {
@@ -28,9 +31,41 @@ func TestMain(m *testing.M) {
 			os.Exit(WorkerMain())
 		case silentWorkerArgument:
 			os.Exit(runSilentWorker())
+		case observedWorkerArgument:
+			os.Exit(runObservedWorker())
 		}
 	}
 	os.Exit(m.Run())
+}
+
+// The child uses the real module and reports entry to its render function on
+// a separate descriptor. Stdout still carries only the private worker frames.
+func runObservedWorker() int {
+	started := os.NewFile(3, "render-start")
+	defer func() { _ = started.Close() }()
+	ctx := context.Background()
+	rt := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfig().WithMemoryLimitPages(1024).WithCloseOnContextDone(true))
+	defer func() { _ = rt.Close(ctx) }()
+	if _, err := wasi_snapshot_preview1.Instantiate(ctx, rt); err != nil {
+		return 1
+	}
+	module, err := rt.CompileModule(ctx, artifact)
+	if err != nil {
+		return 1
+	}
+	err = serveWorker(ctx, os.Stdin, os.Stdout, func(ctx context.Context, req request) Result {
+		if req.Source == denseGraph() {
+			if _, err := started.Write([]byte{1}); err != nil {
+				return Result{Status: Failed}
+			}
+		}
+		method, _ := widthMethod(req.Method)
+		return render(ctx, rt, module, req, method, workerLimits{1024, renderDeadline, MaxDrawing})
+	})
+	if err != nil {
+		return 1
+	}
+	return 0
 }
 
 // runSilentWorker replies once to confirm a real start, then stays silent.
@@ -43,6 +78,7 @@ func runSilentWorker() int {
 	resp := response{
 		Version:  req.Version,
 		Artifact: req.Artifact,
+		ID:       req.ID,
 		Result:   Result{Status: OK, Lines: []string{"ready"}},
 	}
 	if err := writeFrame(os.Stdout, resp, maxResponse); err != nil {
@@ -398,7 +434,7 @@ func TestClientClassifiesMalformedRepliesAsInternal(t *testing.T) {
 // reads anything; the client's minimal environment is accepted.
 func TestWorkerEntryRefusesNonHostContexts(t *testing.T) {
 	var frame strings.Builder
-	if err := writeFrame(&frame, request{protocol, moduleHash(), 80, "grapheme", simple}, maxRequest); err != nil {
+	if err := writeFrame(&frame, testRenderRequest(80, "grapheme", simple), maxRequest); err != nil {
 		t.Fatal(err)
 	}
 	run := func(env ...string) (int, int) {
@@ -490,36 +526,109 @@ func warm(t *testing.T, c *Client, width int) {
 	}
 }
 
-// A caller that gives up while the worker renders (follow's refresh budget)
-// gets busy at once. The worker is replaced without the restart throttle.
-func TestClientCancelDuringRenderIsBusyAndNotThrottled(t *testing.T) {
-	c, starts, _ := testClient(t, silentWorker)
-	for n := range 3 {
-		p := warmSilentWorker(t, c, 80+n)
-		synctest.Test(t, func(t *testing.T) {
-			holdReply(t, p)
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			result := make(chan Result, 1)
-			go func() { result <- c.Render(ctx, simple, 80+n, ansi.GraphemeWidth) }()
+// Cancellation returns before a blocked write and cannot release the
+// slot while the old frame still owns the exchange.
+func TestClientCanceledPartialWriteKeepsSlotUntilGuard(t *testing.T) {
+	c, _, _ := testClient(t, silentWorker)
+	p := warmSilentWorker(t, c, 80)
+	synctest.Test(t, func(t *testing.T) {
+		input, writer := io.Pipe()
+		p.stdin = writer
+		t.Cleanup(func() { _ = input.Close() })
 
-			synctest.Wait()
-			select {
-			case got := <-result:
-				t.Fatalf("request %d returned before cancellation: %+v", n, got)
-			default:
-			}
-			start := time.Now()
-			cancel()
-			if got := <-result; got.Status != Busy || time.Since(start) != 0 {
-				t.Fatalf("request %d: %+v after %s, want busy immediately after cancellation", n, got, time.Since(start))
-			}
-		})
-		requireWorkerKilled(t, c, p)
-		if int(starts.Load()) != n+1 {
-			t.Fatalf("request %d: %d starts; a canceled render throttled the restart", n, starts.Load())
+		part := make(chan error, 1)
+		go func() {
+			_, err := io.ReadFull(input, make([]byte, 5))
+			part <- err
+		}()
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		result := make(chan Result, 1)
+		start := time.Now()
+		go func() { result <- c.Render(ctx, simple, 80, ansi.GraphemeWidth) }()
+		if err := <-part; err != nil {
+			t.Fatal(err)
 		}
+		cancel()
+		if got := <-result; got.Status != Busy || time.Since(start) != 0 {
+			t.Fatalf("cancellation: %+v after %s", got, time.Since(start))
+		}
+		synctest.Wait()
+		if len(c.slot) != 1 {
+			t.Fatal("caller cancellation released the blocked slot")
+		}
+		time.Sleep(time.Duration(c.guard.Load()))
+		synctest.Wait()
+		if len(c.slot) != 0 {
+			t.Fatal("guard did not release the blocked slot")
+		}
+	})
+	requireWorkerKilled(t, c, p)
+}
+
+func TestClientCooperativeCancelKeepsWorker(t *testing.T) {
+	started, signal, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer func() { _ = started.Close(); _ = signal.Close() }()
+	c, starts, _ := testClient(t, func() *exec.Cmd {
+		cmd := exec.Command(os.Args[0], observedWorkerArgument)
+		cmd.ExtraFiles = []*os.File{signal}
+		return cmd
+	})
+	start := time.Now()
+	warm(t, c, 80)
+	cold := time.Since(start)
+	c.mu.Lock()
+	p := c.proc
+	c.mu.Unlock()
+	if p == nil {
+		t.Fatal("no warmed worker")
+	}
+	_ = signal.Close()
+	seen := make(chan error, 1)
+	go func() {
+		_, err := io.ReadFull(started, make([]byte, 1))
+		seen <- err
+	}()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	dense := denseGraph()
+	result := make(chan Result, 1)
+	go func() { result <- c.Render(ctx, dense, 80, ansi.GraphemeWidth) }()
+	select {
+	case err := <-seen:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case got := <-result:
+		t.Fatalf("render returned before WASM began: %+v", got)
+	}
+	start = time.Now()
+	cancel()
+	if got := <-result; got.Status != Busy {
+		t.Fatalf("canceled caller received %+v", got)
+	}
+	caller := time.Since(start)
+	if got := c.Render(t.Context(), simple, 80, ansi.GraphemeWidth); got.Status != OK {
+		t.Fatalf("next draw: %+v", got)
+	}
+	settled := time.Since(start)
+	start = time.Now()
+	if got := c.Render(t.Context(), simple, 81, ansi.GraphemeWidth); got.Status != OK {
+		t.Fatalf("warm draw at new width: %+v", got)
+	}
+	c.mu.Lock()
+	same := c.proc == p
+	c.mu.Unlock()
+	if !same || starts.Load() != 1 {
+		t.Fatalf("cancel replaced the worker: same=%v starts=%d", same, starts.Load())
+	}
+	if _, ok := c.Lookup(dense, 80, ansi.GraphemeWidth); ok {
+		t.Fatal("canceled draw was cached")
+	}
+	t.Logf("cold draw=%s caller cancel=%s cancel plus next draw=%s warm draw=%s", cold, caller, settled, time.Since(start))
 }
 
 // Lookup answers from the cache only: a miss before rendering, the drawing

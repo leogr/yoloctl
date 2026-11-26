@@ -2,7 +2,6 @@ package followview
 
 import (
 	"context"
-	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -15,25 +14,56 @@ import (
 	"github.com/leogr/yoloctl/internal/markdownview"
 )
 
-// drive runs cmd and every command it batches, feeding each message back,
-// until no work is left.
+// viewDriver runs Tea commands concurrently and applies their messages on the
+// test goroutine, as the real event loop does.
+type viewDriver struct {
+	model   *Model
+	in      <-chan tea.Msg
+	out     chan<- tea.Msg
+	pending int
+}
+
+func newViewDriver(m *Model) *viewDriver {
+	messages := make(chan tea.Msg, 32)
+	return &viewDriver{model: m, in: messages, out: messages}
+}
+func (d *viewDriver) start(cmd tea.Cmd) {
+	if cmd != nil {
+		d.pending++
+		go func() { d.out <- cmd() }()
+	}
+}
+func (d *viewDriver) accept(msg tea.Msg) {
+	d.pending--
+	switch msg := msg.(type) {
+	case nil:
+	case tea.BatchMsg:
+		for _, cmd := range msg {
+			d.start(cmd)
+		}
+	default:
+		_, next := d.model.Update(msg)
+		d.start(next)
+	}
+}
+func (d *viewDriver) ready() {
+	for {
+		synctest.Wait()
+		select {
+		case msg := <-d.in:
+			d.accept(msg)
+		default:
+			return
+		}
+	}
+}
 func drive(t *testing.T, m *Model, cmd tea.Cmd) {
 	t.Helper()
-	if cmd == nil {
-		return
+	d := newViewDriver(m)
+	d.start(cmd)
+	for d.pending != 0 {
+		d.accept(<-d.in)
 	}
-	msg := cmd()
-	if v := reflect.ValueOf(msg); v.IsValid() && v.Kind() == reflect.Slice && v.Type().Elem() == reflect.TypeOf(tea.Cmd(nil)) {
-		for i := 0; i < v.Len(); i++ {
-			drive(t, m, v.Index(i).Interface().(tea.Cmd))
-		}
-		return
-	}
-	if msg == nil {
-		return
-	}
-	_, next := m.Update(msg)
-	drive(t, m, next)
 }
 
 // A slow diagram and a slow check of a visible link together still show the

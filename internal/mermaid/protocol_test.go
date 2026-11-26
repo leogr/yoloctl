@@ -25,7 +25,7 @@ func TestFrameRefusesLengthsBeforeReadingPayload(t *testing.T) {
 	}
 	var stream bytes.Buffer
 	for _, source := range []string{"flowchart LR\n A-->B", "sequenceDiagram\n A->>B: hi"} {
-		want := request{protocol, moduleHash(), 80, "grapheme", source}
+		want := testRenderRequest(80, "grapheme", source)
 		if err := writeFrame(&stream, want, maxRequest); err != nil {
 			t.Fatal(err)
 		}
@@ -48,7 +48,7 @@ func TestProtocolRefusesUntrustedContent(t *testing.T) {
 			t.Fatalf("accepted %q", p)
 		}
 	}
-	valid := request{protocol, moduleHash(), 80, "grapheme", "flowchart LR\n A-->B"}
+	valid := testRenderRequest(80, "grapheme", "flowchart LR\n A-->B")
 	if !valid.valid() {
 		t.Fatal("valid request rejected")
 	}

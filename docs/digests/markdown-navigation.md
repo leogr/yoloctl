@@ -67,11 +67,11 @@ is trimmed from the intent without moving the scan boundary. [10](#source-10)
 3. <a id="source-3"></a> [Linked readers](../../internal/followview/navigation.go#L17) — openBounded, HostProbe, VMReader.Probe; source.go HostReader.Read/VMReader.call and reader.py open_selected/probe.
 4. <a id="source-4"></a> [Follow actions](../../internal/followview/links.go#L16) — activateLink, browserKey, browserView; model.go work/Update/mouse/View.
 5. <a id="source-5"></a> [Pure link mapping](../../internal/markdownview/inline.go#L38) — InlineMarkdownMap; document.go ParseOptions.Links and body.go parseLines/TableLines; the adapter is described in source 8.
-6. <a id="source-6"></a> [Chat admission](../../internal/chatui/file_links.go#L58) — linkPolicy, settleFileLinks, receiveFileLinks, checkedFile; quote.go quoteSource/rendered and mouse.go mouseUp.
+6. <a id="source-6"></a> [Chat admission](../../internal/chatui/file_links.go#L59) — linkPolicy, settleFileLinks, receiveFileLinks, checkedFile; quote.go quoteSource/rendered and mouse.go mouseUp.
 7. <a id="source-7"></a> [Typed parent routing](../../internal/tui/tab_requests.go#L108) — handleFollowRequest, pinFollowSource, navigationForSource; termio/tabrequest.go strict request decoding and follow context/target validation.
 
 8. <a id="source-8"></a> [Admission adapter](../../internal/linkview/policy.go#L10) — Policy adapts already-admitted targets without coupling transport/path types to Markdown or TUI.
 
 9. <a id="source-9"></a> [Raw destination analysis](../../internal/markdownview/unsafe_links.go#L15) — UnsafeDestinations reuses the raw block/inline grammar and retains denial before Plain sanitization; linkview.Policy applies it to original native-view source.
 
-10. <a id="source-10"></a> [Bare URL scan](../../internal/markdownview/document.go#L108) — `URLAt` and `TestBareURLBoundaries`, verified at `4624036` and accompanying changes.
+10. <a id="source-10"></a> [Bare URL scan](../../internal/markdownview/document.go#L111) — `URLAt` and `TestBareURLBoundaries`, verified at `4624036` and accompanying changes.

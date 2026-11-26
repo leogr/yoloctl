@@ -32,7 +32,7 @@ func runtimeFlowDiagram(t *testing.T, width int) Result {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := render(ctx, rt, compiled, request{protocol, moduleHash(), width, "grapheme", string(raw)}, ansi.GraphemeWidth, workerLimits{1024, 2 * time.Second, MaxDrawing})
+	result := render(ctx, rt, compiled, testRenderRequest(width, "grapheme", string(raw)), ansi.GraphemeWidth, workerLimits{1024, 2 * time.Second, MaxDrawing})
 	if result.Status != OK {
 		t.Fatalf("runtime fixture: %+v", result)
 	}

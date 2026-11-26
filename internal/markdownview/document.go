@@ -45,6 +45,9 @@ type ParseOptions struct {
 type Diagram struct {
 	Lines []string
 	Note  string
+	// Pending hides the source rows during the view's drawing grace period.
+	// The fence's copy control keeps the original source.
+	Pending bool
 }
 
 // DiagramWidth is the inner width of a code card in a layout of width:

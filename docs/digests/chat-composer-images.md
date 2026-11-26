@@ -65,6 +65,6 @@ and publication need a host check. [6](#source-6) [7](#source-7)
 2. <a id="source-2"></a> [Image contract](../../internal/chatui/images.go#L1) — `ImageRequest`, `ImagePreparedMsg`, `ImageUpload`, `ImageUploadedMsg`, `ArtifactRef`; host wiring in `cmd/yoloctl/chat_image_host.go` (`configureChatImages`).
 3. <a id="source-3"></a> [Image folds](../../internal/chatui/editor.go#L23-L529) — `editState.remainder`, `fold`, `replace`, `remove`, `kill`, `restore`, `expandFold`, `insertImage`, `held`, `commit`, `forget`.
 4. <a id="source-4"></a> [Chips and clicks](../../internal/chatui/view.go#L594-L633) — `inputRow`; `chipLabel` in render.go, `hitFold` in mouse.go `clickHit`, `hoverHint` in hover.go.
-5. <a id="source-5"></a> [Ordered sends](../../internal/chatui/model.go#L343) — `Update` (settle and resume), `submit`, `sendDraft`, `slashCommand`, `delivery`.
+5. <a id="source-5"></a> [Ordered sends](../../internal/chatui/model.go#L344) — `Update` (settle and resume), `submit`, `sendDraft`, `slashCommand`, `delivery`.
 6. <a id="source-6"></a> [Image regressions](../../internal/chatui/attachments_test.go#L82) — reads, bounds, ordered parts, in-flight protection, edits mid-send, uncertainty, artifact chips.
 7. <a id="source-7"></a> [Composer regressions](../../internal/chatui/composer_test.go#L13) — inline order, undo/redo and cuts, per-channel drafts, remainder provenance, confirmed-part history boundaries.

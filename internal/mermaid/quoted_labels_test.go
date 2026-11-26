@@ -32,7 +32,7 @@ func drawAdmitted(t *testing.T) func(source string, width int) string {
 		if d := admit.Check(source); !d.Admitted() {
 			t.Fatalf("%q not admitted: %s", source, d.Reason)
 		}
-		r := render(ctx, rt, compiled, request{protocol, moduleHash(), width, "grapheme", source}, ansi.GraphemeWidth, workerLimits{1024, 2 * time.Second, MaxDrawing})
+		r := render(ctx, rt, compiled, testRenderRequest(width, "grapheme", source), ansi.GraphemeWidth, workerLimits{1024, 2 * time.Second, MaxDrawing})
 		if r.Status == Failed || r.Status == Timeout || r.Status == ParseError {
 			t.Fatalf("%q at %d: %s", source, width, r.Status)
 		}

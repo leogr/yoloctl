@@ -17,26 +17,12 @@ import (
 // renderAll draws each source at width with the real worker and method.
 func renderAll(t *testing.T, width int, method ansi.Method, sources ...string) []Result {
 	t.Helper()
-	var in, out bytes.Buffer
-	for _, source := range sources {
-		if err := writeFrame(&in, request{protocol, moduleHash(), width, methodName(method), source}, maxRequest); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := RunWorker(t.Context(), &in, &out); err != nil {
-		t.Fatal(err)
-	}
+	draw := testWorkerSession(t, workerLimits{1024, renderDeadline, MaxDrawing})
 	results := make([]Result, len(sources))
-	for i := range sources {
-		data, err := readFrame(&out, maxResponse)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var reply response
-		if err := strictJSON(data, &reply); err != nil {
-			t.Fatal(err)
-		}
-		results[i] = reply.Result
+	for i, source := range sources {
+		req := testRenderRequest(width, methodName(method), source)
+		req.ID = uint64(i + 1)
+		results[i] = draw(req).Result
 	}
 	return results
 }

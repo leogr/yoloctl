@@ -18,12 +18,13 @@ import (
 // fakeDiagrams caches what it renders like the client; rows sets the
 // drawing height and busy makes renders transient.
 type fakeDiagrams struct {
-	mu      sync.Mutex
-	cache   map[diagramKey]mermaid.Result
-	renders []diagramKey
-	ctxs    []context.Context
-	rows    int
-	busy    bool
+	mu         sync.Mutex
+	cache      map[diagramKey]mermaid.Result
+	renders    []diagramKey
+	ctxs       []context.Context
+	rows       int
+	busy       bool
+	busySource string
 }
 
 func (f *fakeDiagrams) Render(ctx context.Context, source string, width int, _ ansi.Method) mermaid.Result {
@@ -32,7 +33,7 @@ func (f *fakeDiagrams) Render(ctx context.Context, source string, width int, _ a
 	k := diagramKey{source, width}
 	f.renders = append(f.renders, k)
 	f.ctxs = append(f.ctxs, ctx)
-	if f.busy {
+	if f.busy || f.busySource != "" && strings.Contains(source, f.busySource) {
 		return mermaid.Result{Status: mermaid.Busy}
 	}
 	lines := []string{"drawn " + strings.Fields(source)[2]}
@@ -157,12 +158,16 @@ func TestChatRendersUnderTheViewContext(t *testing.T) {
 	m := diagramChat(t, f, 80, 24)
 	arriveText(m, "a", chatFence(1))
 	settle(t, m, nil)
-	if len(f.ctxs) != 1 || f.ctxs[0].Err() != nil {
-		t.Fatalf("renders %d", len(f.ctxs))
+	if len(f.ctxs) != 1 || f.ctxs[0].Err() == nil {
+		t.Fatalf("completed render did not release its context: %v", f.ctxs)
 	}
+	arriveText(m, "b", chatFence(2))
+	m.View()
+	_, pending := m.Update(diagramSettleMsg{})
 	m.CloseLinks()
-	if f.ctxs[0].Err() == nil {
-		t.Fatal("render context outlives the view")
+	settle(t, m, pending)
+	if f.count() != 1 {
+		t.Fatal("queued render started after close")
 	}
 }
 
@@ -266,16 +271,38 @@ func TestChatResizeRequestsTheNewWidth(t *testing.T) {
 	m.Update(diagramSettleMsg{}) // makes it eligible
 	m.View()
 	_, request := m.Update(diagramSettleMsg{})
-	if request == nil || !m.diagrams.inflight {
+	if request == nil || m.diagramActive == nil {
 		t.Fatal("no request")
 	}
 	_, resized := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24}) // while it renders
 	settle(t, m, tea.Batch(request, resized))
-	if f.count() != 2 || f.renders[1].width != markdownview.DiagramWidth(m.lastTextWidth) {
+	if f.count() != 1 || f.renders[0].width != markdownview.DiagramWidth(m.lastTextWidth) {
 		t.Fatalf("renders %+v", f.renders)
 	}
 	if drawings, _ := shownDiagrams(m); len(drawings) != 1 {
 		t.Fatalf("drawings %q", drawings)
+	}
+}
+
+func TestChatSmallestBusyAdvancesQueue(t *testing.T) {
+	f := &fakeDiagrams{busySource: "n1 -->"}
+	m := diagramChat(t, f, 100, 40)
+	arriveText(m, "a", chatFence(22)+"\n"+chatFence(1))
+	settle(t, m, nil)
+	drawn, notes := shownDiagrams(m)
+	if f.count() != 2 || !strings.Contains(f.renders[0].source, "n1 -->") ||
+		len(drawn) != 1 || drawn[0] != "drawn n22" || strings.Join(notes, "") != "mermaid: not drawn (renderer busy)" {
+		t.Fatalf("requests=%+v drawn=%q notes=%q", f.renders, drawn, notes)
+	}
+	settle(t, m, nil)
+	if f.count() != 2 {
+		t.Fatal("settling retried a busy fence")
+	}
+	f.busySource = ""
+	_, resized := m.Update(tea.WindowSizeMsg{Width: 100, Height: 41})
+	settle(t, m, resized)
+	if f.count() != 3 {
+		t.Fatalf("new screen did not retry once: %+v", f.renders)
 	}
 }
 

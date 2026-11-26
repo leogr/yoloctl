@@ -2,9 +2,9 @@ package followview
 
 import (
 	"context"
-	"sync"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/leogr/yoloctl/internal/markdownview"
@@ -12,65 +12,21 @@ import (
 	"github.com/leogr/yoloctl/internal/mermaid/admit"
 )
 
-// Renderer draws one Mermaid fence at a card's inner width (mermaid.Client).
-// A ctx that ends while it renders gets a transient result at once.
+// Renderer draws a fence at the card's inner width (mermaid.Client).
 type Renderer interface {
+	Lookup(source string, width int, method ansi.Method) (mermaid.Result, bool)
 	Render(ctx context.Context, source string, width int, method ansi.Method) mermaid.Result
 }
 
 const (
-	// drawBudget is how long one refresh waits for drawings before it shows
-	// the document (leogr D4 and the sweep rule: the source after 5 s). A
-	// render still running keeps going, up to the renderer's own limit, and a
-	// continuation shows its drawing.
-	drawBudget = 5 * time.Second
-	// maxDiagrams is the fences one refresh draws (leogr D4).
-	maxDiagrams = 20
-)
+	drawBudget  = 5 * time.Second // show a pending fence's source by this point
+	maxDiagrams = 20              // count admitted fence occurrences, including repeats
 
-// Notes shown after a mermaid fence that is not drawn.
-const (
 	noteDrawing = "mermaid: drawing…"
-	noteStalled = "mermaid: not drawn (refresh budget; r retries)"
 	noteTooMany = "mermaid: not drawn (too many diagrams)"
 	notePrefix  = "mermaid: not drawn ("
 	noteSuffix  = ")"
 )
-
-// drawing is how one render job draws mermaid fences.
-type drawing struct {
-	// reuse preserves the refresh outcome during link-only relayout.
-	reuse    *drawResult
-	renderer Renderer // nil: markdown.mermaid off, fences stay code cards
-	now      func() time.Time
-	budget   time.Duration // 0 means drawBudget
-	// before is the undrawn fences of the view a continuation continues
-	// (0 otherwise): one that leaves as many, with none still drawing, stops
-	// the chain.
-	before int
-	// renders holds the renders that outlast a refresh; nil starts them under
-	// the draw call's context, unshared.
-	renders *renderSet
-}
-
-// drawResult is a refresh's outcome for each closed mermaid fence, in source order.
-type drawResult struct {
-	diagrams []markdownview.Diagram
-	undrawn  int  // fences the budget left for a continuation
-	retry    int  // undrawn fences plus transient fallbacks: what r redraws
-	inflight bool // a render is still running: its continuation will show it
-}
-
-// renderSet holds the renders that outlast the refresh that started them. A
-// render keeps going up to the renderer's own limit, and a continuation waits
-// for it instead of starting another. The Model owns one for all its jobs.
-type renderSet struct {
-	// spawn runs a render in the background under the view's context; false
-	// once the view has closed.
-	spawn   func(func(context.Context)) bool
-	mu      sync.Mutex
-	running map[renderKey]*renderRun
-}
 
 type renderKey struct {
 	source string
@@ -78,121 +34,195 @@ type renderKey struct {
 	method ansi.Method
 }
 
-type renderRun struct {
-	done   chan struct{}
+type diagramAttempt struct {
+	fallback time.Time
+	result   mermaid.Result
+}
+
+type diagramJob struct {
+	key    renderKey
+	cancel context.CancelFunc
+}
+
+type diagramDoneMsg struct {
+	job    *diagramJob
 	result mermaid.Result
 }
 
-// start returns the running render of k, or starts one.
-func (s *renderSet) start(r Renderer, k renderKey) *renderRun {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if run, ok := s.running[k]; ok {
-		return run
-	}
-	run := &renderRun{done: make(chan struct{})}
-	if !s.spawn(func(ctx context.Context) {
-		run.result = r.Render(ctx, k.source, k.width, k.method)
-		s.mu.Lock()
-		delete(s.running, k)
-		s.mu.Unlock()
-		close(run.done)
-	}) {
-		run.result = mermaid.Result{Status: mermaid.Busy}
-		close(run.done)
-		return run
-	}
-	if s.running == nil {
-		s.running = map[renderKey]*renderRun{}
-	}
-	s.running[k] = run
-	return run
+type diagramWake struct {
+	at     time.Time
+	cancel context.CancelFunc
 }
 
-// draw decides every fence occurrence in source order: a refused one gets
-// the admission reason, admitted ones past maxDiagrams a note, and the others
-// a drawing or the renderer's reason. Each distinct source is rendered once.
-// The refresh waits for drawings only within budget: a render still running
-// at its end keeps going for a continuation, and later sources wait for one.
-// Fences left over are undrawn: "drawing…" for a continuation, or stalled
-// when this continuation made no progress and nothing is still drawing.
-func (d drawing) draw(ctx context.Context, sources []string, width int, method ansi.Method) drawResult {
-	if d.reuse != nil {
-		return *d.reuse
+type diagramWakeMsg struct{ wake *diagramWake }
+
+// drawing is an immutable diagram snapshot for the layout job. Layout can
+// consult the renderer cache, but only the model dispatches work.
+type drawing struct {
+	renderer Renderer
+	attempts map[renderKey]diagramAttempt
+	now      func() time.Time
+	fallback time.Time
+}
+
+type drawResult struct {
+	diagrams    []markdownview.Diagram // source occurrence order
+	attempts    map[renderKey]diagramAttempt
+	order       []renderKey // distinct, eligible keys in source order
+	hiddenUntil time.Time   // earliest fallback still hidden by this layout
+}
+
+func (d drawing) draw(sources []string, width int, method ansi.Method) drawResult {
+	out := drawResult{
+		diagrams: make([]markdownview.Diagram, len(sources)),
+		attempts: make(map[renderKey]diagramAttempt),
 	}
-	out := drawResult{diagrams: make([]markdownview.Diagram, len(sources))}
-	results := map[string]markdownview.Diagram{}
-	skipped, transient := map[string]bool{}, map[string]bool{}
-	var undrawn []int
 	admitted := 0
-	budget := d.budget
-	if budget <= 0 {
-		budget = drawBudget
-	}
-	deadline := d.now().Add(budget)
-	renders := d.renders
-	if renders == nil {
-		renders = &renderSet{spawn: func(fn func(context.Context)) bool { go fn(ctx); return true }}
-	}
 	for i, source := range sources {
 		if decision := admit.Check(source); !decision.Admitted() {
-			out.diagrams[i] = markdownview.Diagram{Note: notePrefix + decision.Reason + noteSuffix}
+			out.diagrams[i].Note = notePrefix + decision.Reason + noteSuffix
 			continue
 		}
 		if admitted++; admitted > maxDiagrams {
-			out.diagrams[i] = markdownview.Diagram{Note: noteTooMany}
+			out.diagrams[i].Note = noteTooMany
 			continue
 		}
-		if r, ok := results[source]; ok {
-			out.diagrams[i] = r
-			if transient[source] {
-				out.retry++
+		key := renderKey{source, markdownview.DiagramWidth(width), method}
+		attempt, seen := out.attempts[key]
+		if !seen {
+			attempt = d.attempts[key]
+			if attempt.fallback.IsZero() {
+				attempt.fallback = d.fallback
 			}
-			continue
+			if attempt.result.Status == "" {
+				if cached, ok := d.renderer.Lookup(key.source, key.width, key.method); ok {
+					attempt.result = cached
+				}
+			}
+			out.attempts[key] = attempt
+			out.order = append(out.order, key)
 		}
-		remaining := deadline.Sub(d.now())
-		if skipped[source] || ctx.Err() != nil || remaining <= 0 {
-			skipped[source] = true
-			undrawn = append(undrawn, i)
-			continue
+		switch attempt.result.Status {
+		case "":
+			pending := d.now().Before(attempt.fallback)
+			out.diagrams[i] = markdownview.Diagram{Note: noteDrawing, Pending: pending}
+			if pending && (out.hiddenUntil.IsZero() || attempt.fallback.Before(out.hiddenUntil)) {
+				out.hiddenUntil = attempt.fallback
+			}
+		case mermaid.OK:
+			out.diagrams[i].Lines = attempt.result.Lines
+		default:
+			out.diagrams[i].Note = notePrefix + attempt.result.Note() + noteSuffix
 		}
-		run := renders.start(d.renderer, renderKey{source, markdownview.DiagramWidth(width), method})
-		timer := time.NewTimer(remaining)
-		var result mermaid.Result
-		finished := false
-		select {
-		case <-run.done:
-			result, finished = run.result, true
-		case <-timer.C:
-		case <-ctx.Done():
-		}
-		timer.Stop()
-		if !finished {
-			// Still drawing at the budget (or the view closed): shown on a
-			// continuation, not attempted again here.
-			out.inflight = out.inflight || ctx.Err() == nil
-			skipped[source] = true
-			undrawn = append(undrawn, i)
-			continue
-		}
-		r := markdownview.Diagram{Lines: result.Lines}
-		if result.Status != mermaid.OK {
-			r = markdownview.Diagram{Note: notePrefix + result.Note() + noteSuffix}
-		}
-		if result.Transient() {
-			transient[source] = true
-			out.retry++
-		}
-		results[source], out.diagrams[i] = r, r
 	}
-	note := noteDrawing
-	if d.before > 0 && len(undrawn) >= d.before && !out.inflight {
-		note = noteStalled
-	}
-	for _, i := range undrawn {
-		out.diagrams[i] = markdownview.Diagram{Note: note}
-	}
-	out.undrawn = len(undrawn)
-	out.retry += len(undrawn)
 	return out
+}
+
+func (m *Model) resetDiagrams() {
+	m.cancelDiagram()
+	m.waitForDiagram(time.Time{})
+	m.diagramAttempts, m.diagramOrder = nil, nil
+}
+
+func (m *Model) cancelDiagram() {
+	if m.diagramActive != nil {
+		m.diagramActive.cancel()
+		m.diagramActive = nil
+	}
+}
+
+// acceptDiagrams keeps a still-wanted attempt across file snapshots. This
+// keeps both the original five-second point and a result that arrived while
+// the layout job was in progress.
+func (m *Model) acceptDiagrams(d drawResult) {
+	for key, attempt := range d.attempts {
+		if old, exists := m.diagramAttempts[key]; exists {
+			attempt.fallback = old.fallback
+			if old.result.Status != "" {
+				attempt.result = old.result
+			}
+			d.attempts[key] = attempt
+		}
+	}
+	m.diagramAttempts, m.diagramOrder = d.attempts, d.order
+	if m.diagramActive != nil {
+		if _, wanted := d.attempts[m.diagramActive.key]; !wanted {
+			m.cancelDiagram()
+		}
+	}
+}
+
+func (m *Model) retryDiagrams() bool {
+	retry := false
+	fallback := m.now().Add(drawBudget)
+	for key, attempt := range m.diagramAttempts {
+		if attempt.result.Status != "" && attempt.result.Transient() {
+			m.diagramAttempts[key] = diagramAttempt{fallback: fallback}
+			retry = true
+		}
+	}
+	return retry
+}
+
+func (m *Model) diagramCommands() tea.Cmd {
+	var next renderKey
+	for _, key := range m.diagramOrder {
+		attempt := m.diagramAttempts[key]
+		if attempt.result.Status != "" {
+			continue
+		}
+		if next.source == "" || len(key.source) < len(next.source) {
+			next = key
+		}
+	}
+	var fallback time.Time
+	if m.view != nil {
+		fallback = m.view.drawn.hiddenUntil
+	}
+	wake := m.waitForDiagram(fallback)
+	if m.diagramActive != nil || next.source == "" {
+		return wake
+	}
+	ctx, cancel := context.WithCancel(m.jobs.ctx)
+	job := &diagramJob{next, cancel}
+	m.diagramActive = job
+	jobs, renderer := m.jobs, m.opts.Mermaid
+	return tea.Batch(wake, func() tea.Msg {
+		return jobs.run(func(context.Context) tea.Msg {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return diagramDoneMsg{job, renderer.Render(ctx, next.source, next.width, next.method)}
+		})
+	})
+}
+
+// One owned timer wakes the view at the earliest pending source deadline.
+func (m *Model) waitForDiagram(at time.Time) tea.Cmd {
+	if wake := m.diagramWake; wake != nil {
+		if wake.at.Equal(at) {
+			return nil
+		}
+		wake.cancel()
+		m.diagramWake = nil
+	}
+	if at.IsZero() {
+		return nil
+	}
+	ctx, cancel := context.WithCancel(m.jobs.ctx)
+	wake := &diagramWake{at, cancel}
+	m.diagramWake = wake
+	jobs, now := m.jobs, m.now
+	return func() tea.Msg {
+		return jobs.run(func(context.Context) tea.Msg {
+			timer := time.NewTimer(max(0, at.Sub(now())))
+			defer timer.Stop()
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-timer.C:
+				return diagramWakeMsg{wake}
+			}
+		})
+	}
 }

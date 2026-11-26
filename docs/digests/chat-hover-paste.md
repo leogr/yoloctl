@@ -66,7 +66,7 @@ standalone views needs a host check. [8](#source-8) [9](#source-9)
 4. <a id="source-4"></a> [Overlay hits](../../internal/chatui/overlay.go#L404-L537) — `overlayLines`, `settingsView`.
 5. <a id="source-5"></a> [Folds in the editor](../../internal/chatui/editor.go#L23-L452) — `fold`, `stops`, `widen`, `shifted`, `replace`, `lineStart`, `word`, `wordStart`, `kill`, `restore`, `expandFold`, `foldPaste`.
 6. <a id="source-6"></a> [Composer layout](../../internal/chatui/render.go#L17) — `draftRow`, `stopAt`, `chipLabel`, `fitLabel`, `draftLayout`.
-7. <a id="source-7"></a> [Paste, keys and commands](../../internal/chatui/model.go#L375) — `tea.PasteMsg`, `alt+p`, `slashCommand`; `hitFold` in mouse.go `clickHit`; padding in view.go `View`.
+7. <a id="source-7"></a> [Paste, keys and commands](../../internal/chatui/model.go#L376) — `tea.PasteMsg`, `alt+p`, `slashCommand`; `hitFold` in mouse.go `clickHit`; padding in view.go `View`.
 8. <a id="source-8"></a> [Checkpoint regressions](../../internal/chatui/checkpoint_ui_test.go#L45) — mark, glyphs, hover, overlays, pastes and joins.
 9. <a id="source-9"></a> [Composer regressions](../../internal/chatui/composer_test.go#L139) — `TestComposerHasPaddingAboveThePrompt`; `TestComposerKeepsOneBlankRowBelowTheDraft` in ui_package_test.go.
 10. <a id="source-10"></a> [Participant line scrolling](../../internal/chatui/marquee.go#L146-L202) — `roleText`, `settleMarquee`, `marqueeAdvance`; the NoMotion hint in hover.go `hoverHint` L192.

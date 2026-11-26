@@ -285,6 +285,7 @@ type Model struct {
 	linksOpening  bool
 	linksObserved map[linkCacheKey]map[string]bool
 	linkEpoch     uint64
+	diagramActive *diagramJob
 	// channelView is the visible channel; within embeds another one while
 	// applying its events. Per-channel state lives there.
 	*channelView

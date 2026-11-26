@@ -1,9 +1,9 @@
 package mermaid
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -33,37 +33,26 @@ func TestWorkerFramedSessionSurvivesFailedDiagram(t *testing.T) {
 	// render works in a fresh module instance. The generous deadline keeps the
 	// timeout path out of this test.
 	limits := workerLimits{pages: 256, deadline: 30 * time.Second, stdout: MaxDrawing}
-	var in, out bytes.Buffer
-	for _, tc := range []struct {
+	draw := testWorkerSession(t, limits)
+	for i, tc := range []struct {
 		source string
 		width  int
+		want   Status
 	}{
-		{"flowchart LR\n A[Build]-->B[Test]", 80},
-		{"not a diagram", 80},
-		{"flowchart LR\n A[Build]-->B[Test]", 1},
-		{denseGraph(), 80},
-		{"sequenceDiagram\n participant A as Alice\n A->>B: Hello", 80},
+		{simple, 80, OK},
+		{"not a diagram", 80, ParseError},
+		{simple, 1, TooWide},
+		{denseGraph(), 80, Failed},
+		{"sequenceDiagram\n participant A as Alice\n A->>B: Hello", 80, OK},
 	} {
-		if err := writeFrame(&in, request{protocol, moduleHash(), tc.width, "grapheme", tc.source}, maxRequest); err != nil {
-			t.Fatal(err)
+		req := testRenderRequest(tc.width, "grapheme", tc.source)
+		req.ID = uint64(i + 1)
+		got := draw(req)
+		if got.Result.Status != tc.want || !got.Result.valid(tc.width, ansi.GraphemeWidth) {
+			t.Fatalf("reply %d: got %+v, want %s", i, got, tc.want)
 		}
 	}
-	if err := runWorker(t.Context(), &in, &out, limits); err != nil {
-		t.Fatal(err)
-	}
-	for i, want := range []Status{OK, ParseError, TooWide, Failed, OK} {
-		p, err := readFrame(&out, maxResponse)
-		var got response
-		if err != nil || strictJSON(p, &got) != nil || got.Version != protocol || got.Artifact != moduleHash() || got.Result.Status != want {
-			t.Fatalf("reply %d: err=%v got=%+v want=%s", i, err, got, want)
-		}
-		if !got.Result.valid(80, ansi.GraphemeWidth) && want != TooWide {
-			t.Fatalf("invalid reply: %+v", got)
-		}
-	}
-	if out.Len() != 0 {
-		t.Fatal("extra reply bytes")
-	}
+
 }
 
 // leogr's rule: a diagram may draw for 20 s; the view shows its source
@@ -75,26 +64,69 @@ func TestRenderDeadlineIsTwentySeconds(t *testing.T) {
 	}
 }
 
+func TestWorkerSettlesCancelBeforeNextRequest(t *testing.T) {
+	input, send := io.Pipe()
+	read, output := io.Pipe()
+	defer func() { _ = read.Close(); _ = send.Close() }()
+	entered, done := make(chan struct{}), make(chan error, 1)
+	go func() {
+		err := serveWorker(t.Context(), input, output, func(ctx context.Context, req request) Result {
+			if req.ID == 1 {
+				close(entered)
+				<-ctx.Done()
+			}
+			return Result{Status: OK, Lines: []string{"drawn"}}
+		})
+		_ = output.CloseWithError(err)
+		done <- err
+	}()
+	write := func(req request) {
+		t.Helper()
+		if err := writeFrame(send, req, maxRequest); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check := func(id uint64, status Status) {
+		t.Helper()
+		frame, err := readFrame(read, maxResponse)
+		var got response
+		if err != nil || strictJSON(frame, &got) != nil || got.ID != id || got.Result.Status != status {
+			t.Fatalf("reply %d: %v %+v, want %s", id, err, got, status)
+		}
+	}
+	req := testRenderRequest(80, "grapheme", simple)
+	write(req)
+	<-entered
+	stop := request{Version: protocol, Artifact: moduleHash(), ID: req.ID, Cancel: true}
+	write(stop)
+	check(1, canceled)
+	write(stop) // late cancel must consume no reply and leave the next ID alone
+	req.ID++
+	write(req)
+	check(2, OK)
+	if err := send.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 // At the real limits (64 MiB, 20 s) a compute-bound diagram ends at the
 // render deadline: an honest timeout, and the worker keeps serving.
 func TestWorkerRealLimitsTimeOutAComputeBoundDiagram(t *testing.T) {
 	skipUnderRace(t)
 	t.Parallel()
-	var in, out bytes.Buffer
-	for _, source := range []string{denseGraph(), "flowchart LR\n A[Build]-->B[Test]"} {
-		if err := writeFrame(&in, request{protocol, moduleHash(), 80, "grapheme", source}, maxRequest); err != nil {
-			t.Fatal(err)
-		}
-	}
 	start := time.Now()
-	if err := RunWorker(t.Context(), &in, &out); err != nil {
-		t.Fatal(err)
-	}
-	for i, want := range []Status{Timeout, OK} {
-		p, err := readFrame(&out, maxResponse)
-		var got response
-		if err != nil || strictJSON(p, &got) != nil || got.Result.Status != want {
-			t.Fatalf("reply %d: err=%v got=%+v want=%s", i, err, got, want)
+	draw := testWorkerSession(t, workerLimits{1024, renderDeadline, MaxDrawing})
+	for i, tc := range []struct {
+		source string
+		want   Status
+	}{{denseGraph(), Timeout}, {simple, OK}} {
+		req := testRenderRequest(80, "grapheme", tc.source)
+		req.ID = uint64(i + 1)
+		if got := draw(req); got.Result.Status != tc.want {
+			t.Fatalf("reply %d: got %+v, want %s", i, got, tc.want)
 		}
 	}
 	// Without a deadline this graph renders for more than two minutes
@@ -118,7 +150,7 @@ func TestWorkerRenderDeadlineAndOutputBound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := request{protocol, moduleHash(), 80, "grapheme", "flowchart LR\n A[Build]-->B[Test]"}
+	req := testRenderRequest(80, "grapheme", "flowchart LR\n A[Build]-->B[Test]")
 	for _, tc := range []struct {
 		name   string
 		limits workerLimits
@@ -139,5 +171,42 @@ func TestWorkerRenderDeadlineAndOutputBound(t *testing.T) {
 	cancel()
 	if got := render(canceled, rt, compiled, req, ansi.GraphemeWidth, workerLimits{1024, time.Second, MaxDrawing}); got.Status == OK || got.Status == Timeout {
 		t.Fatalf("cancellation: %+v", got)
+	}
+}
+
+func testRenderRequest(width int, method, source string) request {
+	return request{Version: protocol, Artifact: moduleHash(), Width: width, Method: method, Source: source, ID: 1}
+}
+
+// Use real request/reply ordering: the next frame is sent after the terminal
+// reply. The worker keeps one compiled module throughout the session.
+func testWorkerSession(t *testing.T, limits workerLimits) func(request) response {
+	t.Helper()
+	input, send := io.Pipe()
+	read, output := io.Pipe()
+	done := make(chan error, 1)
+	go func() {
+		err := runWorker(context.Background(), input, output, limits)
+		_ = output.CloseWithError(err)
+		done <- err
+	}()
+	t.Cleanup(func() {
+		_ = send.Close()
+		_ = read.Close()
+		if err := <-done; err != nil {
+			t.Error(err)
+		}
+	})
+	return func(req request) response {
+		t.Helper()
+		if err := writeFrame(send, req, maxRequest); err != nil {
+			t.Fatal(err)
+		}
+		frame, err := readFrame(read, maxResponse)
+		var got response
+		if err != nil || strictJSON(frame, &got) != nil || got.Version != protocol || got.Artifact != moduleHash() || got.ID != req.ID {
+			t.Fatalf("reply to %d: %v %+v", req.ID, err, got)
+		}
+		return got
 	}
 }

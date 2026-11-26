@@ -54,7 +54,6 @@ type Options struct {
 }
 
 type rendered struct {
-	gen      uint64
 	drawn    drawResult
 	doc      markdownview.Document
 	rows     []markdownview.BodyRow
@@ -65,9 +64,6 @@ type rendered struct {
 	refused  []markdownview.TableRowID
 	compact  map[int]bool
 	controls map[markdownview.TableRowID]bool
-	undrawn  int  // mermaid fences left for a continuation
-	retry    int  // mermaid fences r redraws: undrawn or a transient fallback
-	inflight bool // a mermaid render is still running for a continuation
 	// lines maps each display line to its source line (an index of starts)
 	// when mermaid drawings or notes changed the line count; nil when they
 	// are the same lines.
@@ -95,10 +91,10 @@ func (v *rendered) displayLine(line int) int {
 	return d
 }
 
-func renderFile(ctx context.Context, raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme, draw drawing) *rendered {
-	return renderFileTables(ctx, raw, large, source, format, width, method, theme, draw, nil)
+func renderFile(raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme, draw drawing) *rendered {
+	return renderFileTables(raw, large, source, format, width, method, theme, draw, nil)
 }
-func renderFileTables(ctx context.Context, raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme, draw drawing, opened map[followTableKey]bool, policies ...markdownview.LinkPolicy) *rendered {
+func renderFileTables(raw []byte, large, source bool, format Format, width int, method ansi.Method, theme spaceview.Theme, draw drawing, opened map[followTableKey]bool, policies ...markdownview.LinkPolicy) *rendered {
 	text := markdownview.Plain(string(raw))
 	isMarkdown := format == Markdown && !large
 	options := markdownview.ParseOptions{Method: method, Theme: theme, Source: source || !isMarkdown}
@@ -122,7 +118,7 @@ func renderFileTables(ctx context.Context, raw []byte, large, source bool, forma
 	doc := markdownview.Parse(text, options)
 	var result drawResult
 	if len(mermaidSources) > 0 {
-		result = draw.draw(ctx, mermaidSources, max(1, width), method)
+		result = draw.draw(mermaidSources, max(1, width), method)
 		// The parse meets the fences in the same order: each occurrence
 		// gets its own outcome.
 		next := 0
@@ -165,7 +161,7 @@ func renderFileTables(ctx context.Context, raw []byte, large, source bool, forma
 			starts = append(starts, i+1)
 		}
 	}
-	view := &rendered{drawn: result, doc: doc, rows: layout.Rows, starts: starts, text: text, markdown: isMarkdown, records: records, refused: layout.RefusedTableRows, compact: compact, controls: controls, undrawn: result.undrawn, retry: result.retry, inflight: result.inflight}
+	view := &rendered{drawn: result, doc: doc, rows: layout.Rows, starts: starts, text: text, markdown: isMarkdown, records: records, refused: layout.RefusedTableRows, compact: compact, controls: controls}
 	if doc.Sources != nil {
 		view.lines = make([]int, len(doc.Sources))
 		for d, ls := range doc.Sources {
@@ -235,10 +231,6 @@ type resultMsg struct {
 	// not wait for: it showed them inert at its publish point.
 	admitting <-chan filelink.Admissions
 	err       error
-	// continued: a continuation job (see continueDrawing) whose view had
-	// before undrawn fences.
-	continued bool
-	before    int
 }
 type CopyResultMsg struct{ Err error }
 type ActionResultMsg struct {
@@ -276,25 +268,25 @@ type Model struct {
 	source, following, busy, closed bool
 	gen                             uint64
 	pendingRead, pendingRender      bool
-	// pendingContinue makes the next render a continuation: it draws the
-	// mermaid fences the current view left undrawn.
-	pendingContinue bool
-	query           Query
-	snapshot        Snapshot
-	raw             []byte
-	view            *rendered
-	top             int
-	anchor          int64
-	stale, notice   string
-	selection       *selection
-	drag            bool
-	pressed         markdownview.Action
+	query                           Query
+	snapshot                        Snapshot
+	raw                             []byte
+	view                            *rendered
+	top                             int
+	anchor                          int64
+	stale, notice                   string
+	selection                       *selection
+	drag                            bool
+	pressed                         markdownview.Action
 	// pressX/pressY locate the press; moved records that the pointer
 	// left that cell, which makes the release a drag selection.
-	pressX, pressY int
-	moved          bool
-	now            func() time.Time // the refresh budget's clock
-	renders        *renderSet       // mermaid renders that outlast a refresh
+	pressX, pressY  int
+	moved           bool
+	now             func() time.Time // the refresh budget's clock
+	diagramAttempts map[renderKey]diagramAttempt
+	diagramOrder    []renderKey
+	diagramActive   *diagramJob
+	diagramWake     *diagramWake
 }
 
 // admissionsMsg carries link admissions that finished after their refresh
@@ -308,7 +300,7 @@ type admissionsMsg struct {
 
 func New(ctx context.Context, opts Options) *Model {
 	j := newJobs(ctx)
-	return &Model{opts: opts, jobs: j, renders: &renderSet{spawn: j.spawn}, dark: true, theme: spaceview.NewTheme(true, nil, nil), following: true, pendingRead: true, query: Query{Tail: true}, now: time.Now}
+	return &Model{opts: opts, jobs: j, dark: true, theme: spaceview.NewTheme(true, nil, nil), following: true, pendingRead: true, query: Query{Tail: true}, now: time.Now}
 }
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(tea.RequestBackgroundColor, m.poll(), m.work(false, false))
@@ -321,9 +313,6 @@ func (m *Model) work(read, render bool) tea.Cmd {
 	if m.closed {
 		return nil
 	}
-	if read || render {
-		m.pendingContinue = false // an explicit read or render starts afresh
-	}
 	m.pendingRead = m.pendingRead || read
 	m.pendingRender = m.pendingRender || render
 	if m.busy || m.width <= 0 || (!m.pendingRead && !m.pendingRender) {
@@ -331,15 +320,8 @@ func (m *Model) work(read, render bool) tea.Cmd {
 	}
 	m.busy = true
 	read, render = m.pendingRead || m.snapshot.Key == "", m.pendingRender
-	draw := drawing{renderer: m.opts.Mermaid, now: m.now, budget: drawBudget, renders: m.renders}
-	continued := m.pendingContinue && m.view != nil
-	if continued {
-		draw.before = m.view.undrawn
-	}
-	m.pendingRead, m.pendingRender, m.pendingContinue = false, false, false
-	if !read && !continued && m.view != nil && m.view.gen == m.gen {
-		draw.reuse = &m.view.drawn
-	}
+	draw := drawing{renderer: m.opts.Mermaid, now: m.now, attempts: maps.Clone(m.diagramAttempts)}
+	m.pendingRead, m.pendingRender = false, false
 	gen, q, raw, snapshot := m.gen, m.query, m.raw, m.snapshot
 	epoch := m.linkEpoch
 	// Workers render from their own snapshot. The update loop may receive a
@@ -358,7 +340,7 @@ func (m *Model) work(read, render bool) tea.Cmd {
 	}
 	return func() tea.Msg {
 		return m.jobs.run(func(ctx context.Context) tea.Msg {
-			result := resultMsg{gen: gen, read: read, snapshot: snapshot, raw: raw, continued: continued, before: draw.before, linkEpoch: epoch}
+			result := resultMsg{gen: gen, read: read, snapshot: snapshot, raw: raw, linkEpoch: epoch}
 			if read {
 				next, err := m.opts.Reader.Read(ctx, q)
 				result.err = err
@@ -367,8 +349,6 @@ func (m *Model) work(read, render bool) tea.Cmd {
 					if next.Changed {
 						result.raw = next.Data
 						render = true
-						// New content: its fences are not a continuation.
-						result.continued, draw.before = false, 0
 					}
 				}
 			}
@@ -382,11 +362,12 @@ func (m *Model) work(read, render bool) tea.Cmd {
 				// The view shows by its publish point even while links are
 				// still being checked; those stay inert until they are.
 				publishAt := m.now().Add(drawBudget)
+				draw.fallback = publishAt
 				if result.snapshot.Key != snapshot.Key {
 					clear(admissions)
 					clear(requested)
 				}
-				result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, draw, opened, linkview.Policy(admissions, string(result.raw)))
+				result.view = renderFileTables(result.raw, result.snapshot.Large, source, format, width, method, theme, draw, opened, linkview.Policy(admissions, string(result.raw)))
 				if m.opts.Navigation != nil && !source && format == Markdown && !result.snapshot.Large {
 					start := min(top, max(0, len(result.view.rows)-height))
 					if following {
@@ -412,19 +393,19 @@ func (m *Model) work(read, render bool) tea.Cmd {
 							}
 						}
 					}
+					// An older, still-wanted fence can be due before this
+					// refresh's link publish point.
+					for _, attempt := range result.view.drawn.attempts {
+						if attempt.result.Status == "" && attempt.fallback.Before(publishAt) {
+							publishAt = attempt.fallback
+						}
+					}
 					result.admissions, result.admitting = m.admit(ctx, result.linkBatch, publishAt)
-					// No new target: the links, bytes and drawings are those of
-					// the view just rendered, so it is already the final one.
-					if len(result.admissions) > 0 {
+					if len(result.admissions) > 0 || result.admitting != nil && len(result.view.drawn.attempts) != 0 {
 						maps.Copy(admissions, result.admissions)
-						finalDraw := draw
-						finalDraw.reuse = &result.view.drawn
-						result.view = renderFileTables(ctx, result.raw, result.snapshot.Large, source, format, width, method, theme, finalDraw, opened, linkview.Policy(admissions, string(result.raw)))
+						result.view = renderFileTables(result.raw, result.snapshot.Large, source, format, width, method, theme, draw, opened, linkview.Policy(admissions, string(result.raw)))
 					}
 				}
-			}
-			if result.view != nil {
-				result.view.gen = gen
 			}
 			return result
 		})
@@ -529,6 +510,9 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.captureAnchor()
+		if markdownview.DiagramWidth(max(1, msg.Width)) != markdownview.DiagramWidth(max(1, m.width)) {
+			m.resetDiagrams()
+		}
 		m.width, m.height = max(0, msg.Width), max(0, msg.Height)
 		m.gen++
 		return m, m.work(false, true)
@@ -540,6 +524,7 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.ModeReportMsg:
 		if msg.Mode == ansi.ModeUnicodeCore && (msg.Value == ansi.ModeReset || msg.Value == ansi.ModeSet || msg.Value == ansi.ModePermanentlySet) && m.method != ansi.GraphemeWidth {
 			m.captureAnchor()
+			m.resetDiagrams()
 			m.method = ansi.GraphemeWidth
 			m.clearSelection()
 			m.gen++
@@ -599,14 +584,24 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.placeAnchor()
 			}
-			// Mermaid fences left undrawn by the refresh budget: one
-			// render-only continuation on the retained bytes, repeated while
-			// each makes progress or a render is still drawing.
-			if msg.view.undrawn > 0 && (!msg.continued || msg.view.undrawn < msg.before || msg.view.inflight) {
-				m.pendingContinue, m.pendingRender = true, true
-			}
+			m.acceptDiagrams(msg.view.drawn)
 		}
-		return m, m.acceptLinkBatch(msg)
+		return m, tea.Batch(m.acceptLinkBatch(msg), m.diagramCommands())
+	case diagramDoneMsg:
+		if msg.job != m.diagramActive {
+			return m, nil
+		}
+		m.cancelDiagram()
+		attempt := m.diagramAttempts[msg.job.key]
+		attempt.result = msg.result
+		m.diagramAttempts[msg.job.key] = attempt
+		return m, tea.Batch(m.work(false, true), m.diagramCommands())
+	case diagramWakeMsg:
+		if msg.wake != m.diagramWake {
+			return m, nil
+		}
+		// Keep the wake valid until the displayed layout exposes the source.
+		return m, m.work(false, true)
 	case admissionsMsg:
 		if msg.epoch != m.linkEpoch || msg.key != m.snapshot.Key {
 			return m, nil
@@ -627,16 +622,18 @@ func (m *Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.jobs.cancelWork()
 			return m, tea.Quit
 		case "r":
+			render := m.retryDiagrams()
 			if m.opts.Navigation != nil {
 				m.resetLinkAdmissions()
-				m.gen++
-				return m, m.work(true, true)
+				render = true
 			}
-			// A read, and a render when mermaid fences are undrawn or fell
-			// back for a transient reason.
-			return m, m.work(true, m.view != nil && m.view.retry > 0)
+			if render {
+				m.gen++
+			}
+			return m, m.work(true, render)
 		case "ctrl+s":
 			m.captureAnchor()
+			m.resetDiagrams()
 			m.source = !m.source
 			m.clearSelection()
 			m.gen++

@@ -1,6 +1,6 @@
 # Mermaid drawings in Markdown views
 
-Verification: `b4a1c67f731092a5714834932418178d5483f31a` and accompanying changes; follow's publish point on `910bb54b2de768615ffda1dff1d11a236b77a04a` and accompanying changes.
+Verification: `b4a1c67f731092a5714834932418178d5483f31a` and accompanying changes. Independent publication and diagram scheduling verified on `032a18bd0874673d7fb61c33f3e6bef2b0d15c19` and accompanying changes.
 
 [FACT] `markdownview.Parse` takes an optional non-blocking `Diagrams` lookup,
 called (in rendered mode only) with the source of each closed fence whose info
@@ -8,8 +8,9 @@ string is exactly `mermaid`, case-insensitive. A drawing replaces that fence's
 code rows with its rows: card-styled Code lines tagged with the fence number,
 never highlighted or re-wrapped when requested at `DiagramWidth` (the layout
 width minus both card paddings). The opener keeps the fence source in `Block`
-for its copy control. A note (a fallback reason or `drawing…`) keeps the code
-rows and adds one dim italic Decor row after the closer, which is never copied.
+for its copy control. A note adds one dim italic Decor row after the closer and is omitted from
+copy. A pending diagram can suppress the code rows while keeping that note
+and the opener’s original-source copy control.
 Source mode, other fences and unclosed fences never call the lookup.
 [1](#source-1) [2](#source-2) [5](#source-5)
 
@@ -19,24 +20,20 @@ whole drawing (alone or with prose around it) is exact and quotes the fence
 source; a selection starting or ending inside the drawing is inexact.
 [3](#source-3) [5](#source-5)
 
-[FACT] `follow` draws in its background render job. A parse collects the
-closed mermaid fences; only a document that has some is drawn and parsed again
-with source maps, each fence occurrence getting its own outcome in order: a
-refused one `mermaid: not drawn (<admission reason>)`, admitted ones past the
-20th `too many diagrams` (repeated sources count too), the others a drawing at
-the card's inner width or the renderer's reason. Each distinct source renders
-once. A refresh waits for drawings and visible-link checks up to 5 s, then
-shows the document: fences still drawing show `mermaid: drawing…` while their
-render goes on, unchecked links stay inert until their check ends, and a
-render-only continuation on the retained bytes waits for those renders.
-Continuations repeat while each leaves fewer undrawn or one is still drawing;
-otherwise the chain stops with `not drawn (refresh budget; r retries)`. Changed content or another
-render request starts afresh; `r` also renders when fences are undrawn or fell
-back for a transient reason (busy, unavailable, internal). With drawings, a
-display-to-source line map keeps the paused reading position (a source byte) on
-its line; one inside a fence lands on its drawing's top. A new render whose
-lines differ at or above the selection's last line clears it.
-[4](#source-4) [6](#source-6)
+[FACT] Follow publishes Markdown with cached drawings independently of
+worker replies. It admits fences in source order, counts repeated occurrences
+toward the first 20, and gives later occurrences a reason note. Eligible
+cache misses first show a pending card. At the original five-second publish
+point, the source rows appear with `mermaid: drawing…`, even for queued
+fences. A late placeholder layout or unchanged read keeps an overdue wake
+pending until the installed view exposes the source. A still-wanted source,
+card width and width method keep the same
+attempt and deadline across file updates. The valid drawing or final reason
+arrives as a view event. Link checks keep their own publish path and
+unchecked links stay inert. A display-to-source map keeps a paused reading
+position across replacements. A changed row at or above the selection's last
+line clears it. A current transient reason can be retried with `r`.
+[4](#source-4) [6](#source-6) [11](#source-11)
 
 [FACT] `markdown.mermaid` in `tui.yaml` defaults on; `false` gives `follow` no
 renderer, so fences stay code cards with no note. `follow` uses the process
@@ -58,13 +55,18 @@ waiting for a drawing now cached, or showing an earlier screen's transient
 answer is rebuilt. Before that a paused view anchors its top row, and the
 rebuild carries a reading position over: a line outside the fences keeps its
 place among them, a fence's opener, closer or note stays that line, a content
-row its row. A highlight in a rebuilt body clears. One request runs at a time
-(`Render` off the UI goroutine, under the view's context), for the first pending fence on the screen at
-the body's card width; a result for an old width is not shown. Quote replays a
-body's outcomes, so a whole drawing quotes its fence. Image chips in the same
-message are placed into the lines parsed with drawings; when a chip falls back
-to the literal re-parse (in a table), that parse draws too, so the fence map
-matches the lines shown. [9](#source-9) [10](#source-10)
+row its row. A highlight in a rebuilt body clears. Pending chat fences show their source immediately. Quote replays a
+body's outcomes, so a whole drawing quotes its fence. Image chips and the literal table fallback both use the same drawing-aware
+parse and fence map. [9](#source-9) [10](#source-10)
+
+
+[FACT] Both views pick the shortest source among their eligible queued fences,
+with the original order breaking ties. An active render keeps the single
+client slot while it is still wanted. Superseded widths, removed fences and
+view closure cancel the work. A stale reply leaves the current attempt
+alone. Transient results advance the queue and stay visible until an explicit
+follow refresh or a new eligible chat screen. Smaller fences arriving after
+a current slow one begins can still wait for it. [4](#source-4) [9](#source-9)
 
 
 ## Sources
@@ -72,10 +74,11 @@ matches the lines shown. [9](#source-9) [10](#source-10)
 1. <a id="source-1"></a> [Parse options](../../internal/markdownview/document.go#L33) — `ParseOptions.Diagrams`, `Diagram`, `DiagramWidth`, `IsMermaid`.
 2. <a id="source-2"></a> [Drawing rows](../../internal/markdownview/body.go#L55) — `drawDiagram`, the fence-close branch and note row in `parseLines`.
 3. <a id="source-3"></a> [Quote mapping](../../internal/markdownview/quote.go#L183) — `LineSource.Diagram`, `LineStart`, `LineEnd`.
-4. <a id="source-4"></a> [Follow drawing](../../internal/followview/mermaid.go#L21) — `drawBudget`, `maxDiagrams`, `drawing.draw`, `renderSet`; `renderFile`, `admit`, `rendered.sourceLine`/`displayLine`, `captureAnchor`/`placeAnchor`, `work`, the continuation in `Model.Update` and `sameThrough` (model.go).
+4. <a id="source-4"></a> [Follow drawing](../../internal/followview/mermaid.go#L21) — `drawBudget`, eligibility, attempt lifetimes, fallback timer and queue.
 5. <a id="source-5"></a> [Hook regressions](../../internal/markdownview/diagram_test.go#L1) — drawing rows and width, fallback note, lookup scope, whole/partial Quote; `FuzzDiagramSourceMap`.
-6. <a id="source-6"></a> [Follow regressions](../../internal/followview/mermaid_test.go#L1) — occurrence limit and dedupe, total budget, continuation progress, no-progress stop and `r`, transient retry, anchor across replacement, no renderer, selection clearing.
+6. <a id="source-6"></a> [Follow regressions](../../internal/followview/mermaid_test.go#L1) — occurrence limit, source and draw timing across appends, late fallback delivery, unchanged poll before a wake, stale cancellation, transient retry, anchor and selection.
 7. <a id="source-7"></a> [Preference](../../internal/config/tui.go#L75) — `TUIMarkdown`, `MermaidEnabled`, template; `newFollowCmd` in cmd/yoloctl/follow.go; `TestHostFollowNeverResolvesASpaceOrVM` in follow_test.go.
 8. <a id="source-8"></a> [Chat wiring](../../cmd/yoloctl/chat_view.go#L1) — `configureChatDiagrams`; `TestChatDiagramsFollowPreferenceAndHost` in chat_browser_test.go; `Client.Lookup`, `OnHost` in internal/mermaid/client.go.
 9. <a id="source-9"></a> [Chat drawing](../../internal/chatui/mermaid.go#L1) — `diagramFor`, `parseDiagrams`, `fenceLines`, `settleDiagrams`, `visibleFences`, `rebuildDiagramBodies`, `holdReadingPosition`, `carryLine`, `requestDiagram`, `diagramResult`; `body` in transcript.go, `buildTranscript` in view.go, Quote lookups in quote.go.
 10. <a id="source-10"></a> [Chat regressions](../../internal/chatui/mermaid_test.go#L1) — drawing and Quote, twenty occurrences with repeats, scrolling across the boundary and inside a message, partly visible fence, tall drawings settle, resize while rendering, transient answer and height-only retry, reading position across drawings, no renderer; `FuzzCarryLine`.
+11. <a id="source-11"></a> [Follow publication](../../internal/followview/model.go#L312) — `work`, link admissions and result updates.

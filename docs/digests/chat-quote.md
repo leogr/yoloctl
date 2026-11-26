@@ -85,7 +85,7 @@ They use fake callbacks, not a live room. [7](#source-7) [8](#source-8) [9](#sou
 
 1. <a id="source-1"></a> [Chat Quote](../../internal/chatui/quote.go#L12) — refusal notices, `quoteTarget`, `quoteSource`, `quoteSpans`, `quoteBlock`, `quoteSelection`, `insertQuote`; pure mapping delegates to markdownview.
 2. <a id="source-2"></a> [Footer](../../internal/chatui/view.go#L645-L730) — `noticeRuns`, `quoteChip`, highlight hints.
-3. <a id="source-3"></a> [Keys and actions](../../internal/chatui/model.go#L750-L1204) — `quoteKey`, `messageActions`, `runAction` (`quote`); `clickHit` in mouse.go.
+3. <a id="source-3"></a> [Keys and actions](../../internal/chatui/model.go#L751-L1205) — `quoteKey`, `messageActions`, `runAction` (`quote`); `clickHit` in mouse.go.
 4. <a id="source-4"></a> [Mouse mode](../../internal/chatui/view.go#L215) — all-motion reporting; `selectionTarget` (internal/tui/selection.go L53-L64) selects locally only when a live tab tracks no mouse.
 5. <a id="source-5"></a> [Help](../../internal/chatui/overlay.go#L107-L122) — Messages and Selecting text rows.
 6. <a id="source-6"></a> [Shared line builders](../../internal/markdownview/body.go#L101) — `parseLines`, `TableLines`, `TableCells`; shared inline.go owns `InlineMarkdownMap`, quote.go owns `SourceMap`, `TableText` and fences, selection.go owns `SourceSelection.Exact`; chat selection.go retains `selectedParts`.

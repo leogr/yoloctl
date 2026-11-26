@@ -46,22 +46,108 @@ func runWorker(ctx context.Context, in io.Reader, out io.Writer, limits workerLi
 	if err != nil {
 		return err
 	}
+	return serveWorker(ctx, in, out, func(ctx context.Context, req request) Result {
+		method, _ := widthMethod(req.Method)
+		return render(ctx, runtime, compiled, req, method, limits)
+	})
+}
+
+type workerRequest struct {
+	request request
+	err     error
+}
+
+func readWorkerRequests(in io.Reader, done <-chan struct{}) <-chan workerRequest {
+	requests := make(chan workerRequest)
+	go func() {
+		defer close(requests)
+		for {
+			frame, err := readFrame(in, maxRequest)
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			var req request
+			if err == nil && (strictJSON(frame, &req) != nil || !req.valid()) {
+				err = errors.New("invalid Mermaid request")
+			}
+			select {
+			case requests <- workerRequest{req, err}:
+			case <-done:
+				return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	return requests
+}
+
+// serveWorker owns the active request, and is the only writer of replies.
+// The frame reader continues receiving cancellation while WASM runs.
+func serveWorker(ctx context.Context, in io.Reader, out io.Writer, draw func(context.Context, request) Result) error {
+	done := make(chan struct{})
+	defer close(done)
+	if closer, ok := in.(io.Closer); ok {
+		defer func() { _ = closer.Close() }()
+	}
+	requests := readWorkerRequests(in, done)
+	results := make(chan Result, 1)
+	var active, settled uint64
+	var cancel context.CancelFunc
+	defer func() {
+		if active != 0 {
+			cancel()
+			<-results // finish before the runtime is closed
+		}
+	}()
 	for {
-		p, err := readFrame(in, maxRequest)
-		if errors.Is(err, io.EOF) {
+		if requests == nil && active == 0 {
 			return nil
 		}
-		if err != nil {
-			return err
-		}
-		var req request
-		if strictJSON(p, &req) != nil || !req.valid() {
-			return errors.New("invalid Mermaid request")
-		}
-		method, _ := widthMethod(req.Method)
-		result := render(ctx, runtime, compiled, req, method, limits)
-		if err := writeFrame(out, response{protocol, moduleHash(), result}, maxResponse); err != nil {
-			return err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case frame, ok := <-requests:
+			if !ok {
+				requests = nil
+				continue
+			}
+			if frame.err != nil {
+				return frame.err
+			}
+			req := frame.request
+			if req.Cancel {
+				switch req.ID {
+				case active:
+					cancel()
+				case settled:
+					// The terminal result may already be on its way to the client.
+				default:
+					return errors.New("invalid Mermaid cancellation")
+				}
+				continue
+			}
+			if active != 0 || req.ID <= settled {
+				return errors.New("unexpected Mermaid render request")
+			}
+			renderCtx, stop := context.WithCancel(ctx)
+			cancel = stop
+			active = req.ID
+			go func() {
+				defer stop()
+				result := draw(renderCtx, req)
+				if renderCtx.Err() != nil {
+					result = Result{Status: canceled}
+				}
+				results <- result
+			}()
+		case result := <-results:
+			cancel()
+			settled, active = active, 0
+			if err := writeFrame(out, response{protocol, moduleHash(), result, settled}, maxResponse); err != nil {
+				return err
+			}
 		}
 	}
 }
