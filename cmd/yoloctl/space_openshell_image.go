@@ -52,15 +52,16 @@ func checkSpaceOpenShellImage(ctx context.Context, boot *spaceconfig.Bootstrap) 
 	if err != nil {
 		return err
 	}
-	cmd := spaceOpenShellInitCommand(read, boot.Name, "sudo", "/sbin/yoloctl-init", "unit")
+	args := []string{"sudo", "/sbin/yoloctl-init", "unit"}
+	cmd := spaceOpenShellInitCommand(read, boot.Name, args...)
 	cmd.Stdin = bytes.NewReader(raw)
 	cmd.Stdout = io.Discard
 	var stderr spaceOpenShellInitError
 	cmd.Stderr = &stderr
 	cmd.WaitDelay = 250 * time.Millisecond
 	err = cmd.Run()
-	if read.Err() != nil {
-		return fmt.Errorf("check VM image OpenShell support: %w", read.Err())
+	if cause := read.Err(); cause != nil {
+		return spaceOpenShellCheckContextError("check VM image OpenShell support", cause, args, stderr)
 	}
 	if err == nil && !stderr.overflow {
 		return nil
@@ -80,14 +81,15 @@ func checkRunningLimaNFT(ctx context.Context, boot *spaceconfig.Bootstrap) error
 	read, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	const probe = "if ! test -x /usr/sbin/nft || ! /usr/sbin/nft --version >/dev/null 2>&1; then exit 78; fi"
-	cmd := spaceOpenShellInitCommand(read, boot.Name, "sudo", "sh", "-c", probe)
+	args := []string{"sudo", "sh", "-c", probe}
+	cmd := spaceOpenShellInitCommand(read, boot.Name, args...)
 	cmd.Stdout = io.Discard
 	var stderr spaceOpenShellInitError
 	cmd.Stderr = &stderr
 	cmd.WaitDelay = 250 * time.Millisecond
 	err := cmd.Run()
-	if read.Err() != nil {
-		return fmt.Errorf("check Lima OpenShell nft support: %w", read.Err())
+	if cause := read.Err(); cause != nil {
+		return spaceOpenShellCheckContextError("check Lima OpenShell nft support", cause, args, stderr)
 	}
 	if stderr.overflow {
 		return errors.Join(errors.New("guest nft diagnostic exceeded capture bound"), err)
@@ -102,6 +104,22 @@ func checkRunningLimaNFT(ctx context.Context, boot *spaceconfig.Bootstrap) error
 	return nil
 }
 
+func spaceOpenShellCheckContextError(check string, cause error, args []string, stderr spaceOpenShellInitError) error {
+	if !errors.Is(cause, context.DeadlineExceeded) {
+		return fmt.Errorf("%s: %w", check, cause)
+	}
+	output := "no stderr output"
+	switch {
+	case stderr.overflow:
+		output = fmt.Sprintf("stderr (first %d bytes) %q", spaceOpenShellDiagnosticLimit, stderr.data)
+	case len(stderr.data) != 0:
+		output = fmt.Sprintf("stderr %q", stderr.data)
+	}
+	return fmt.Errorf("%s: %w (guest command %s, %s)", check, cause, remoteCommandString(args), output)
+}
+
+const spaceOpenShellDiagnosticLimit = 512
+
 // Named storage avoids promoted ReaderFrom bypasses during exec's io.Copy.
 type spaceOpenShellInitError struct {
 	data     []byte
@@ -110,7 +128,7 @@ type spaceOpenShellInitError struct {
 
 func (w *spaceOpenShellInitError) Write(p []byte) (int, error) {
 	n := len(p)
-	keep := 512 - len(w.data)
+	keep := spaceOpenShellDiagnosticLimit - len(w.data)
 	if keep > len(p) {
 		keep = len(p)
 	}

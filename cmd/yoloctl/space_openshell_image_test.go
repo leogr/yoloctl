@@ -6,8 +6,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/lima"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
@@ -154,5 +156,59 @@ func TestSpaceOpenShellImageRunningLimaRequiresActualNft(t *testing.T) {
 				t.Fatalf("guest probe count=%d, want %d", calls, expected)
 			}
 		})
+	}
+}
+
+func TestSpaceOpenShellCheckTimeoutReportsGuestCommand(t *testing.T) {
+	const stdout = "fixture-inventory-stdout"
+	const warning = "guest startup warning\x1b[31m\n"
+	const excess = "beyond capture bound"
+	const nftCommand = "'sudo' 'sh' '-c' 'if ! test -x /usr/sbin/nft || ! /usr/sbin/nft --version >/dev/null 2>&1; then exit 78; fi'"
+	first := strings.Repeat("x", 512)
+	for _, tc := range []struct {
+		name       string
+		backend    string
+		check      func(context.Context, *spaceconfig.Bootstrap) error
+		command    string
+		stderr     string
+		wantOutput string
+	}{
+		{"init diagnostic", "firecracker", checkSpaceOpenShellImage,
+			"'sudo' '/sbin/yoloctl-init' 'unit'", warning, "stderr " + strconv.Quote(warning)},
+		{"nft silent", "lima", checkRunningLimaNFT, nftCommand, "", "no stderr output"},
+		{"nft truncated", "lima", checkRunningLimaNFT, nftCommand, first + excess, "stderr (first 512 bytes) " + strconv.Quote(first)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			old := spaceOpenShellInitCommand
+			t.Cleanup(func() { spaceOpenShellInitCommand = old })
+			spaceOpenShellInitCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+				return exec.CommandContext(ctx, "sh", "-c", `printf '%s' "$1" >&2; printf '%s' "$2"; exec sleep 60`, "probe", tc.stderr, stdout)
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			boot := &spaceconfig.Bootstrap{Name: "fixture", VM: spaceconfig.VMSettings{Backend: tc.backend}}
+			err := tc.check(ctx, boot)
+			var mismatch *spaceVMCompatibilityError
+			if !errors.Is(err, context.DeadlineExceeded) || errors.As(err, &mismatch) {
+				t.Fatalf("wanted deadline error, got %v", err)
+			}
+			text := err.Error()
+			if !strings.Contains(text, "guest command "+tc.command) || !strings.Contains(text, tc.wantOutput) {
+				t.Fatalf("timeout is missing the command or diagnostic: %v", err)
+			}
+			for _, unexpected := range []string{stdout, excess, "exec sleep", "\x1b"} {
+				if strings.Contains(text, unexpected) {
+					t.Fatalf("timeout exposed %q: %v", unexpected, err)
+				}
+			}
+		})
+	}
+}
+
+func TestSpaceOpenShellCheckCancellationKeepsContextError(t *testing.T) {
+	capture := spaceOpenShellInitError{data: []byte("guest diagnostic")}
+	err := spaceOpenShellCheckContextError("check guest", context.Canceled, []string{"sudo", "probe"}, capture)
+	if !errors.Is(err, context.Canceled) || err.Error() != "check guest: context canceled" {
+		t.Fatal(err)
 	}
 }

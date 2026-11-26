@@ -128,6 +128,10 @@ mutation. An explicit Lima recreate selects the current build, so no
 no whole name or alias already matches it case-insensitively. Existing VMs
 adopt the provision change through explicit recreation. [30](#source-30) [31](#source-31)
 
+[FACT] A deadline error from either OpenShell VM check includes the guest
+command and quoted stderr. The capture retains the first 512 bytes and
+indicates empty or truncated output. Both checks discard stdout. [32](#source-32)
+
 ## Sources
 
 1. <a id="source-1"></a> [Installer](../../internal/firecracker/images_linux.go#L33) — `ResolveImage`, `resolveImage`, `copyImageFile`, `copySparse`.
@@ -161,3 +165,4 @@ adopt the provision change through explicit recreation. [30](#source-30) [31](#s
 29. <a id="source-29"></a> [Init link](../../Makefile#L112-L117) — `build-vm-init` with `-buildid=`, the same flags in `scripts/vm/firecracker/build.py`; `TestBoxOnlyAssetEditKeepsVMImageIdentity` in `internal/firecracker/init_identity_linux_test.go`.
 30. <a id="source-30"></a> [Lima hostname provisioning](../../assets/lima/yoloctl.yaml.tmpl#L49-L74) — `add_local_hostname`.
 31. <a id="source-31"></a> [Retained Lima configuration](../../internal/lima/lima.go#L142-L173) — `SetInstanceMounts` preserves provisioning.
+32. <a id="source-32"></a> [OpenShell check diagnostics](../../cmd/yoloctl/space_openshell_image.go#L55-L139) — both guest invocations, context errors and bounded stderr.
