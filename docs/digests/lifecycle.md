@@ -90,7 +90,8 @@ changes no declaration or host directory. Box starts remain explicit afterward.
 session-aware cleanup with up to eight boxes stopping concurrently, then stops
 the selected VM adapter. Per-box holder/port/container/state ordering is preserved and orphan netns
 are reaped once afterward. The two-minute graceful budget reserves 30 seconds
-for VM poweroff after draining/cleanup; failure uses a bounded forced stop.
+for VM poweroff after draining/cleanup; failure uses a forced stop that follows
+the command's own deadline and Ctrl+C, with no fixed bound of its own.
 [14](#source-14) Runtime deletion verifies termination
 before guarded forced metadata removal. `recreate` preserves the data disk and
 native declarations/accounts but loses system-disk images, containers, sessions

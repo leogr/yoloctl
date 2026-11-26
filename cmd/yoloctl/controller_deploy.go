@@ -404,9 +404,7 @@ func stopControllerSpace(ctx context.Context, boot *spaceconfig.Bootstrap, errw 
 		return ctx.Err()
 	}
 	cliWarn(logging.Host, "graceful shutdown failed; forcing VM stop; unflushed writes may be lost")
-	forced, stop := context.WithTimeout(ctx, 30*time.Second)
-	defer stop()
-	return cliRunStep(forced, "Forcing VM stop", func(ctx context.Context) error { return vmhost.New().ForceStop(ctx, boot.Name, true) })
+	return cliRunStep(ctx, "Forcing VM stop", func(ctx context.Context) error { return forceVMStop(ctx, boot.Name) })
 }
 
 // drainBeforeDeployment drains the running controller before this build is

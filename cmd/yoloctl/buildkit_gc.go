@@ -14,6 +14,10 @@ import (
 	"github.com/leogr/yoloctl/internal/storagegc"
 )
 
+// buildkitRollbackFailSafe bounds the detached rollback restart after a failed
+// policy activation; a failed deployment must not leave BuildKit broken.
+var buildkitRollbackFailSafe = 2 * time.Minute
+
 func configureBuildkitAt(ctx context.Context, dir, unitsDir string, totalMemory uint64, run func(context.Context, ...string) ([]byte, error)) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -102,7 +106,9 @@ func configureBuildkitAt(ctx context.Context, dir, unitsDir string, totalMemory 
 	}
 	if err := activate(); err != nil {
 		// A failed deployment must not leave a broken BuildKit configuration.
-		rollback, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		// Detached on purpose: nothing else can end this one rollback, so it
+		// has one fail-safe.
+		rollback, cancel := context.WithTimeout(context.WithoutCancel(ctx), buildkitRollbackFailSafe)
 		defer cancel()
 		var restoreErr error
 		for _, f := range files {

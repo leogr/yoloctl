@@ -243,9 +243,14 @@ func stopSpaceRuntime(ctx context.Context, space string, notice io.Writer) error
 		return ctx.Err()
 	}
 	cliWarn(logging.Host, "graceful shutdown failed; forcing VM stop; unflushed writes may be lost")
-	forced, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	return vmhost.New().ForceStop(forced, space, true)
+	return forceVMStop(ctx, space)
+}
+
+// forceVMStop is the forced VM stop after a failed graceful stop. It follows
+// the caller's context (its deadline or Ctrl+C), never a fixed bound of its
+// own. Tests replace it.
+var forceVMStop = func(ctx context.Context, name string) error {
+	return vmhost.New().ForceStop(ctx, name, true)
 }
 
 func deleteSpaceRuntime(ctx context.Context, space string, notice io.Writer) error {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/resources"
 )
@@ -125,5 +126,51 @@ func TestConfigureBuildkitRestartsOnlyForChangeAndRollsBack(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The rollback restart after a failed activation is detached from its caller
+// on purpose, so one fail-safe bounds it: a rollback restart that hangs ends at
+// the fail-safe, and its error is kept beside the activation failure.
+func TestConfigureBuildkitRollbackHasOneFailSafe(t *testing.T) {
+	old := buildkitRollbackFailSafe
+	buildkitRollbackFailSafe = 200 * time.Millisecond
+	t.Cleanup(func() { buildkitRollbackFailSafe = old })
+	dir := t.TempDir()
+	units := t.TempDir()
+	raw := []byte("# admin comment\n[worker.containerd]\nenabled=true\nnamespace='default'\n")
+	if err := os.WriteFile(filepath.Join(dir, "buildkitd.toml"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	restarts := 0
+	var rollbackDeadline time.Time
+	run := func(ctx context.Context, args ...string) ([]byte, error) {
+		switch args[0] {
+		case "buildkitd":
+			return []byte("buildkitd v0.31.2"), nil
+		case "cat":
+			b, _ := resources.Workloads(4 * resources.GiB)
+			return []byte(fmt.Sprintf("%d\nmax\n0\nMemTotal: 4194304 kB\nMemAvailable: 100 kB\n", b.Max)), nil
+		case "systemctl":
+			if args[1] != "restart" {
+				return nil, nil
+			}
+			restarts++
+			if restarts == 1 {
+				return nil, errors.New("restart failed")
+			}
+			rollbackDeadline, _ = ctx.Deadline()
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+		return nil, nil
+	}
+	start := time.Now()
+	err := configureBuildkitAt(t.Context(), dir, units, 4*resources.GiB, run)
+	if err == nil || !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "restart failed") {
+		t.Fatalf("hung rollback lost the activation failure or its own expiry: %v", err)
+	}
+	if restarts != 2 || rollbackDeadline.IsZero() || rollbackDeadline.Sub(start) > buildkitRollbackFailSafe+time.Second {
+		t.Fatalf("rollback restart not bounded by its fail-safe: restarts=%d deadline=%v", restarts, rollbackDeadline)
 	}
 }

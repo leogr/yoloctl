@@ -99,7 +99,7 @@ cancellation; the orphan ledger is separate from receipt retention. See
 
 1. <a id="source-1"></a> [buildkit.go](../../internal/storagegc/buildkit.go#L16) — policy.
 2. <a id="source-2"></a> [BuildKit 0.17 GCPolicy](https://github.com/moby/buildkit/blob/v0.17.0/cmd/buildkitd/config/config.go#L160-L184) — targets.
-3. <a id="source-3"></a> [buildkit_gc.go](../../cmd/yoloctl/buildkit_gc.go#L17) — activation/rollback.
+3. <a id="source-3"></a> [buildkit_gc.go](../../cmd/yoloctl/buildkit_gc.go#L21) — activation/rollback.
 4. <a id="source-4"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L165) — install-service.
 5. <a id="source-5"></a> [controller_storage.go](../../cmd/yoloctl/controller_storage.go#L29) — scheduler/worker.
 6. <a id="source-6"></a> [maintenance.go](../../internal/controller/maintenance.go#L9) — admission.
@@ -115,7 +115,7 @@ cancellation; the orphan ledger is separate from receipt retention. See
 16. <a id="source-16"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L720) — build guard.
 17. <a id="source-17"></a> [image_prune_test.go](../../cmd/yoloctl/image_prune_test.go#L93) — complete inventories.
 18. <a id="source-18"></a> [storage_gc_test.go](../../cmd/yoloctl/storage_gc_test.go#L16) — pressure/remeasurement.
-19. <a id="source-19"></a> [buildkit_gc_test.go](../../cmd/yoloctl/buildkit_gc_test.go#L15) — rollback/markers.
+19. <a id="source-19"></a> [buildkit_gc_test.go](../../cmd/yoloctl/buildkit_gc_test.go#L16) — rollback/markers.
 20. <a id="source-20"></a> [maintenance tests](../../internal/controller/maintenance_test.go#L10) — admission/cancellation.
 21. <a id="source-21"></a> [OCI 1.1.1 ChainID](https://github.com/opencontainers/image-spec/blob/v1.1.1/identity/chainid.go#L23-L61).
 22. <a id="source-22"></a> [containerd 2.1.4 withNewSnapshot](https://github.com/containerd/containerd/blob/v2.1.4/client/container_opts.go#L237-L267).
