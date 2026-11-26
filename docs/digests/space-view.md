@@ -115,7 +115,7 @@ and local PTYs; they do not establish live-VM or proxy-confined chat coverage.
 4. <a id="source-4"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L120-L121) — `space.inventory` and `space.telemetry` registry entries.
 5. <a id="source-5"></a> [controller_views.go](../../cmd/yoloctl/controller_views.go#L244-L256) — typed internal views.
 6. <a id="source-6"></a> [controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L83-L111) — `checkControllerSpace`.
-7. <a id="source-7"></a> [server.go](../../internal/controller/server.go#L108-L115) — reads are admitted without active-work accounting.
+7. <a id="source-7"></a> [server.go](../../internal/controller/server.go#L112-L119) — reads are admitted without active-work accounting.
 8. <a id="source-8"></a> [run.go](../../internal/tui/spaceview/run.go#L20-L78) — `Run`, `keepConnected`.
 9. <a id="source-9"></a> [telemetry.go](../../internal/spacetelemetry/telemetry.go#L25-L253) — frame types, limits and decoder.
 10. <a id="source-10"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L27) — cadences, `telemetryAccounts`, inventory (managed room at L200, launch evidence at L192-L195) and `streamTelemetry`.

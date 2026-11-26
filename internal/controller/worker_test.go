@@ -354,6 +354,36 @@ func TestMain(m *testing.M) {
 			finishExit(94)
 		case "test.log":
 			logWorker(work, finishExit)
+		case "test.small":
+			// Fits the pipe and PTY buffers: the worker exits at once and only
+			// its output remains to be delivered.
+			_, _ = os.Stdout.Write(bytes.Repeat([]byte("small-"), 170))
+			finishExit(9)
+		case "test.inherit-stdout", "test.escape-stdout", "test.escape-checkpoint":
+			// A transient child outlives its worker, holding stdout (or the
+			// checkpoint descriptor), in the worker's group or outside it.
+			// Only the descriptor under test reaches the child: the worker's
+			// inherited private descriptors are not close-on-exec.
+			for fd := 3; fd < 64; fd++ {
+				syscall.CloseOnExec(fd)
+			}
+			child := exec.Command("/bin/sleep", "3")
+			if work.Request.Method != "test.escape-checkpoint" {
+				child.Stdout = os.Stdout
+			} else {
+				child.ExtraFiles = []*os.File{released}
+			}
+			if work.Request.Method != "test.inherit-stdout" {
+				child.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+			}
+			if err := child.Start(); err != nil {
+				finishExit(91)
+			}
+			_, _ = os.Stdout.Write([]byte("parent done"))
+			if work.Request.Method == "test.escape-stdout" {
+				finishExit(0) // only a successful worker is reported interrupted
+			}
+			finishExit(7)
 		default:
 			finishExit(95)
 		}

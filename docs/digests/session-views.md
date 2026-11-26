@@ -119,8 +119,8 @@ holder view are unaffected. [24](#source-24)
 6. <a id="source-6"></a> [view.go](../../internal/session/view.go#L20) — subscription, `Relay`, snapshot/event validation and clipboard framing.
 7. <a id="source-7"></a> [protocol.go](../../internal/session/protocol.go#L25) — session version, frame bounds and status.
 8. <a id="source-8"></a> [channel.go](../../internal/termio/channel.go#L12) — private pollable socket pair and inherited descriptor validation.
-9. <a id="source-9"></a> [server.go](../../internal/controller/server.go#L304) — separate view queues, worker streams and receipt completion; client counterpart in `client.go`.
-10. <a id="source-10"></a> [worker.go](../../internal/controller/worker.go#L24) — private worker descriptor and bounded output drain; request validation in `protocol.go`.
+9. <a id="source-9"></a> [server.go](../../internal/controller/server.go#L318) — separate view queues, worker streams and receipt completion; client counterpart in `client.go`.
+10. <a id="source-10"></a> [worker.go](../../internal/controller/worker.go#L25) — private worker descriptor and bounded output drain; request validation in `protocol.go`.
 11. <a id="source-11"></a> [managed.go](../../internal/tui/term/managed.go#L26) — private attachment and replica publication; PTY ownership in `session.go` and `emulator.go`.
 12. <a id="source-12"></a> [view_test.go](../../internal/controller/view_test.go#L17) — real RPC/worker/PTY stream, status and cancellation tests.
 13. <a id="source-13"></a> [managed_process_test.go](../../internal/tui/term/managed_process_test.go#L20) — inherited-channel fixture, `TestManagedExitFitsLocalViewport`, PTY forgery and typeahead; state contracts in `managed_test.go`.

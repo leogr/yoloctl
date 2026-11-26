@@ -49,6 +49,10 @@ type Streams struct {
 	BeginEffects func(context.Context, EffectIntent) error
 	// RecordEvidence durably extends the receipt after permission.
 	RecordEvidence EffectRecorder
+	// DrainDeadline bounds every client write from the given time on; the zero
+	// time clears it. A worker sets it when it exits, so a client that stopped
+	// reading cannot hold a finished command. Nil means no bound.
+	DrainDeadline func(time.Time)
 }
 
 type Handler func(context.Context, Principal, Request, Streams) (int, error)
@@ -262,9 +266,19 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		}
 	}()
 	wire := NewWire(conn, conn)
-	fail := func(err error) { _ = wire.Write(Frame{Type: "exit", Status: 2, Error: err.Error()}) }
-	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
-	frame, err := wire.Read()
+	// Each single wait of the opening exchange has its own fail-safe: a slow
+	// client finishes, a silent one is dropped. An exit frame written here
+	// gets the same bound.
+	readFrame := func() (Frame, error) {
+		_ = conn.SetReadDeadline(time.Now().Add(controllerFailSafe))
+		return wire.Read()
+	}
+	writeFrame := func(f Frame) error {
+		_ = conn.SetWriteDeadline(time.Now().Add(controllerFailSafe))
+		return wire.Write(f)
+	}
+	fail := func(err error) { _ = writeFrame(Frame{Type: "exit", Status: 2, Error: err.Error()}) }
+	frame, err := readFrame()
 	if err != nil {
 		return
 	}
@@ -280,10 +294,10 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		fail(err)
 		return
 	}
-	if err := wire.Write(Frame{Type: "hello", Hello: &s.Hello}); err != nil {
+	if err := writeFrame(Frame{Type: "hello", Hello: &s.Hello}); err != nil {
 		return
 	}
-	frame, err = wire.Read()
+	frame, err = readFrame()
 	if err != nil {
 		return
 	}
@@ -855,6 +869,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		Resize: sizes, Signals: signals, Release: setupDone, View: viewWorker,
 		BeginEffects: beginEffects, RecordEvidence: evidence, Image: imageCall, Advisory: advisoryCall, NativeNonce: nativeNonceCall, OperatorRetire: operatorRetire,
 		PIDAnchor: pidAnchor, PIDAnchorCheck: pidAnchorCheck,
+		DrainDeadline: func(t time.Time) { _ = conn.SetWriteDeadline(t) },
 	})
 	nativeNonces.close() // actual Execute/RunWorker has ended: no retained allocation grant
 	imageProgressOutput.finish()
@@ -941,7 +956,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 		exit.Error = runErr.Error()
 	}
 
-	_ = wire.Write(exit)
+	_ = writeFrame(exit)
 }
 
 // receiptEvidence extends one admitted receipt after its effect permission.

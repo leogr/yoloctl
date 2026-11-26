@@ -87,7 +87,7 @@ Lima behavior. [5](#source-5) [9](#source-9)
 ## Sources
 
 1. <a id="source-1"></a> [Preparation driver](../../cmd/yoloctl/controller_images.go#L164) — `imageWarmState.prepare`, `warmBoxBeforeEffects`, `warmingPath`.
-2. <a id="source-2"></a> [Request transport](../../internal/controller/server.go#L361) — `ServeConn`, private `preparing` action (`log` frame sender), acquire callback, `prepared` drain and finalization.
+2. <a id="source-2"></a> [Request transport](../../internal/controller/server.go#L375) — `ServeConn`, private `preparing` action (`log` frame sender), acquire callback, `prepared` drain and finalization.
 3. <a id="source-3"></a> [Solve steps](../../internal/controller/image_solve_progress.go#L1) — `solveImageWithProgress`, `solveSteps.apply`, `detailLines`, `finish`.
 4. <a id="source-4"></a> [Bounded fanout](../../internal/controller/image_progress.go#L1) — `imageProgress.fromJob`/`pushLocked`/`resyncOne`/`next`/`run`, `encodeReplay`, `imageBuildLog.Logger`/`publish`/`replayLocked`/`subscribe`.
 5. <a id="source-5"></a> [Progress regressions](../../internal/controller/image_progress_test.go#L1) — scheduler/fanout/steps and wire fixtures.

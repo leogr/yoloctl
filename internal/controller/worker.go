@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -156,10 +157,10 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 		work.LogFD = logIndex
 	}
 	cmd.ExtraFiles = append(cmd.ExtraFiles, logWrite)
-	cmd.WaitDelay = 5 * time.Second
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	var terminal *os.File
 	var stdinRead, stdinWrite *os.File
+	var stdoutRead, stdoutWrite, stderrRead, stderrWrite *os.File
 	if req.Terminal {
 		terminal, err = pty.StartWithSize(cmd, &pty.Winsize{Cols: req.Cols, Rows: req.Rows})
 	} else {
@@ -170,7 +171,21 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 			return 2, err
 		}
 		defer func() { _ = stdinRead.Close(); _ = stdinWrite.Close() }()
-		cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinRead, streams.Out, streams.Err
+		// The worker writes into pipes this function owns, so os/exec starts no
+		// copier and Wait returns when the worker itself exits. Its output is
+		// joined after the group is killed, so a transient child that inherited
+		// stdout cannot hold a finished command.
+		stdoutRead, stdoutWrite, err = os.Pipe()
+		if err != nil {
+			return 2, err
+		}
+		defer func() { _ = stdoutRead.Close(); _ = stdoutWrite.Close() }()
+		stderrRead, stderrWrite, err = os.Pipe()
+		if err != nil {
+			return 2, err
+		}
+		defer func() { _ = stderrRead.Close(); _ = stderrWrite.Close() }()
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinRead, stdoutWrite, stderrWrite
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		err = cmd.Start()
 	}
@@ -205,6 +220,11 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 	if stdinWrite != nil {
 		_ = stdinRead.Close()
 		go func() { _, _ = io.Copy(stdinWrite, streams.In); _ = stdinWrite.Close() }()
+	}
+	if stdoutWrite != nil {
+		// Only the worker and its descendants keep the write ends now.
+		_ = stdoutWrite.Close()
+		_ = stderrWrite.Close()
 	}
 	if terminal != nil {
 		defer func() { _ = terminal.Close() }()
@@ -255,13 +275,25 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 		}
 	}()
 	var outputs sync.WaitGroup
+	// writing counts copies blocked in a write to the client, so an expired
+	// output join can tell a client that stopped reading from a source that a
+	// process outside the worker's group still holds open.
+	var writing atomic.Int32
+	copyOut := func(dst io.Writer, src io.Reader) {
+		defer outputs.Done()
+		if dst == nil {
+			dst = io.Discard
+		}
+		_, _ = io.Copy(trackedWriter{dst, &writing}, src)
+	}
 	if terminal != nil {
 		outputs.Add(1)
-		go func() {
-			defer outputs.Done()
-			_, _ = io.Copy(streams.Out, terminal)
-		}()
+		go copyOut(streams.Out, terminal)
 		go func() { _, _ = io.Copy(terminal, streams.In) }()
+	} else {
+		outputs.Add(2)
+		go copyOut(streams.Out, stdoutRead)
+		go copyOut(streams.Err, stderrRead)
 	}
 	go func() {
 		defer close(controlsDone)
@@ -291,12 +323,25 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 	exited := time.Now()
 	observation.Exited()
 	cancelWorker()
+	// From the worker's exit on, a client that stopped reading must not hold
+	// the finished command: every client write is bounded by the fail-safe.
+	// The deadline stays through the log join and is cleared on return; the
+	// caller bounds its own exit frame.
+	drainUntil := func(t time.Time) {
+		if streams.DrainDeadline != nil {
+			streams.DrainDeadline(t)
+		}
+	}
+	drainUntil(exited.Add(controllerFailSafe))
+	defer drainUntil(time.Time{})
 	// Terminate transient children before joining their inherited checkpoint
 	// descriptors. A killed worker cannot leave a child keeping this read open.
 	signalGroup(syscall.SIGKILL)
+	checkpointWait := time.NewTimer(controllerFailSafe)
+	defer checkpointWait.Stop()
 	select {
 	case <-releaseDone:
-	case <-time.After(time.Second):
+	case <-checkpointWait.C:
 		_ = releasedRead.Close()
 		<-releaseDone
 		if checkpointErr == nil {
@@ -316,20 +361,42 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 	stopControls() // no ioctl may race the terminal close below
 	drained := make(chan struct{})
 	go func() { outputs.Wait(); close(drained) }()
+	// The output join has its own fail-safe, and so do the client writes in it.
+	drainUntil(time.Now().Add(controllerFailSafe))
+	outputWait := time.NewTimer(controllerFailSafe)
+	defer outputWait.Stop()
 	select {
 	case <-drained:
-	case <-time.After(5 * time.Second):
+	case <-outputWait.C:
+		// A copy blocked on a client that stopped reading is released by the
+		// expired write; that client is then detached like after any failed
+		// write. A copy still waiting on its source means a process outside
+		// the worker's group holds the output open.
+		heldOpen := writing.Load() == 0
+		drainUntil(time.Now())
 		if terminal != nil {
 			_ = terminal.Close()
+		} else {
+			_ = stdoutRead.Close()
+			_ = stderrRead.Close()
 		}
 		<-drained
-		if err == nil {
-			err = errors.New("worker exited with an inherited terminal still open")
+		if err == nil && heldOpen {
+			if terminal != nil {
+				err = errors.New("worker exited with an inherited terminal still open")
+			} else {
+				err = errors.New("worker exited with its output still open")
+			}
 		}
 	}
 	// Every record the worker wrote precedes its result: the controller sends
-	// the exit frame only after this join.
-	joinWorkerLog(logRead, logDone, &logErr, exited, logSink)
+	// the exit frame only after this join. As when os/exec joined the output
+	// inside Wait, a pipe-mode worker's log join starts after its output join.
+	logFrom := exited
+	if terminal == nil {
+		logFrom = time.Now()
+	}
+	joinWorkerLog(logRead, logDone, &logErr, logFrom, logSink)
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
 		code := exit.ExitCode()
@@ -354,4 +421,17 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 		return 2, &WorkerInterrupted{Cause: err}
 	}
 	return 0, nil
+}
+
+// trackedWriter counts its writes in flight, so the output join can see
+// whether a copy is blocked on its client or on its source.
+type trackedWriter struct {
+	w       io.Writer
+	writing *atomic.Int32
+}
+
+func (t trackedWriter) Write(p []byte) (int, error) {
+	t.writing.Add(1)
+	defer t.writing.Add(-1)
+	return t.w.Write(p)
 }

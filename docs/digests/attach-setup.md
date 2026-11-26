@@ -80,7 +80,7 @@ the standalone `smoke-attach-interrupt` stage is the live gate.
 
 1. <a id="source-1"></a> [cmd/yoloctl/controller_internal.go](../../cmd/yoloctl/controller_internal.go#L86) — `controllerOperations["box.attach"]`.
 2. <a id="source-2"></a> [internal/controller/protocol.go](../../internal/controller/protocol.go#L164) — `Operation.OwnedSetup`; the `detached` frame (`Frame.Owned`).
-3. <a id="source-3"></a> [internal/controller/server.go](../../internal/controller/server.go#L470) — `ServeConn` execution context, input holding, signals, `setupDone`, gate and finalization.
+3. <a id="source-3"></a> [internal/controller/server.go](../../internal/controller/server.go#L484) — `ServeConn` execution context, input holding, signals, `setupDone`, gate and finalization.
 4. <a id="source-4"></a> [internal/controller/ownership.go](../../internal/controller/ownership.go#L1) — `setupOwner` (`detach`: `goneAtHandoff`), `clientOutput`, `clientSink`, `ErrClientDetached`, `ClientDetached`.
 5. <a id="source-5"></a> [internal/controller/effects.go](../../internal/controller/effects.go#L90) — acknowledged `WorkerCheckpoints.Release`, `serveWorkerCheckpoints`.
 6. <a id="source-6"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L29) — `releaseSpaceOperation`, wrapper gate order; operation_scope.go `beginOperationEffects` (L430).

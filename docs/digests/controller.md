@@ -2,6 +2,7 @@
 
 Verification: `272abb082790962572505495756706d40d73f06c` and accompanying N1/N2 changes; acknowledgment removal re-read at `433a380405cd3f5dc4b1b12b2ed06a6c4ed4a96e` and accompanying changes; re-read cited sources when changing behavior. Exec-preflight re-read at `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes.
 Caller and request deadlines re-read at `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes.
+Worker drain and opening-exchange fail-safes verified on `608fe76786cd0cd7bfa4ea8ad3c436d60c048356` and accompanying changes.
 
 Catalog load reuse verified on `5a4b9acf13bce7f18501300ad49117613ee08a91` and accompanying changes.
 
@@ -67,6 +68,15 @@ a partial or corrupt tail is reported, not parsed. An exit frame names an
 `interrupted` receipt state (also accepting legacy states); the client exposes it, and
 whether it already rendered a failed/unknown outcome record, on `ExitError`.
 [35](#source-35) [36](#source-36)
+
+[FACT] A pipe-mode worker writes into pipes the controller owns, so waiting for
+it ends at its exit. The controller then kills the worker's group and joins the
+checkpoint descriptor and the output, each within a two-minute fail-safe; from
+that exit on every client write has the same bound. A client that stopped
+reading is detached and the command keeps its result; output that a process
+outside the group still holds after the fail-safe reports the command
+interrupted. Each wait of the opening exchange (hello read and write, request
+read) has its own two-minute fail-safe. [44](#source-44) [45](#source-45) [46](#source-46)
 Bridge closure permits a bounded graceful exit before killing a stuck process.
 [17](#source-17) [18](#source-18) [2](#source-2) [7](#source-7) [8](#source-8)
 
@@ -147,11 +157,11 @@ this test seam does not change server authorization. [19](#source-19)
 5. <a id="source-5"></a> [internal/manifestio/io.go](../../internal/manifestio/io.go#L26) — Read, Write, Remove.
 6. <a id="source-6"></a> [internal/safepath/safepath.go](../../internal/safepath/safepath.go#L159) — WriteFile, ReadFileInfo, RemoveFile.
 7. <a id="source-7"></a> [internal/controller/protocol.go](../../internal/controller/protocol.go#L17) — framing, MatchHello, Authorize, Request.Validate.
-8. <a id="source-8"></a> [internal/controller/worker.go](../../internal/controller/worker.go#L28) — RunWorker process/PTY lifecycle.
+8. <a id="source-8"></a> [internal/controller/worker.go](../../internal/controller/worker.go#L29) — RunWorker process/PTY lifecycle.
 9. <a id="source-9"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L29) — native mutation guard and fast attach.
 10. <a id="source-10"></a> [cmd/yoloctl/controller_documents.go](../../cmd/yoloctl/controller_documents.go#L47) — revision checks and editor apply.
 11. <a id="source-11"></a> [internal/controller/catalogs.go](../../internal/controller/catalogs.go#L16) — CatalogSnapshot.
-12. <a id="source-12"></a> [internal/controller/server.go](../../internal/controller/server.go#L62) — Drain, admission, recovery refusal, receipts and stream dispatch.
+12. <a id="source-12"></a> [internal/controller/server.go](../../internal/controller/server.go#L66) — Drain, admission, recovery refusal, receipts and stream dispatch.
 13. <a id="source-13"></a> [internal/controller/receipts.go](../../internal/controller/receipts.go#L79) — authorizedCommand, interrupt, Recover, Begin, retention.
 14. <a id="source-14"></a> [internal/controller/protocol_test.go](../../internal/controller/protocol_test.go#L22) — recovery, framing, stream, drain and publication regressions.
 15. <a id="source-15"></a> [internal/controller/worker_test.go](../../internal/controller/worker_test.go#L90) — worker byte streams, PTY and cancellation regressions.
@@ -182,7 +192,7 @@ this test seam does not change server authorization. [19](#source-19)
 
 34. <a id="source-34"></a> [SDK original source borrow](../../internal/openshell/worker_process_source_linux.go#L1) — concrete original handoff, sticky context selection, phase-bound parent checks before final local process view and owned-only observer cleanup; no source installer.
 
-35. <a id="source-35"></a> [Worker log pipe](../../internal/controller/worker.go#L73) — log pipe creation, last-slot `LogFD`/`LogPipe`, relay goroutine and `joinWorkerLog` before return; `OpenWorkerLog` in worker_log_linux.go; intake claim in cmd/yoloctl/controller_worker_intake.go and `InitWorker` in controller_internal.go `runControllerWorker`.
+35. <a id="source-35"></a> [Worker log pipe](../../internal/controller/worker.go#L74) — log pipe creation, last-slot `LogFD`/`LogPipe`, relay goroutine and `joinWorkerLog` before return; `OpenWorkerLog` in worker_log_linux.go; intake claim in cmd/yoloctl/controller_worker_intake.go and `InitWorker` in controller_internal.go `runControllerWorker`.
 36. <a id="source-36"></a> [Log frames](../../internal/controller/log_transport.go#L1) — `LogVerbosity`, `frameLog`, `relayWorkerLog`, `joinWorkerLog`; client.go `case "log"`/`"exit"`, `ExitError.Rendered`/`State`, `OutcomeRendered`; server.go exit `State`.
 
 37. <a id="source-37"></a> [Deployment readiness](../../cmd/yoloctl/controller_deploy.go#L349) — `controllerReadyTimeout`, `waitControllerReady`.
@@ -193,3 +203,6 @@ this test seam does not change server authorization. [19](#source-19)
 
 42. <a id="source-42"></a> [Routed read](../../cmd/yoloctl/controller_client.go#L352) — `callControllerTerminal`.
 43. <a id="source-43"></a> [VM lookup](../../cmd/yoloctl/controller_deploy.go#L88) — `checkControllerSpace`.
+44. <a id="source-44"></a> [Worker drain](../../internal/controller/worker.go#L322-L399) — `drainUntil`, checkpoint and output joins after the group kill, own output pipes (L174), `trackedWriter` (L428).
+45. <a id="source-45"></a> [Opening exchange](../../internal/controller/server.go#L272-L300) — `readFrame`, `writeFrame`; `DrainDeadline` on the connection (L872) and the exit frame (L959).
+46. <a id="source-46"></a> [Fail-safe](../../internal/controller/failsafe.go#L9) — `controllerFailSafe`.
