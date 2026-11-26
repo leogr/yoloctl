@@ -136,7 +136,7 @@ func testControllerReadPTY(t *testing.T, mode string) {
 		t.Fatal(err)
 	}
 	defer func() { _ = childRelease.Close(); _ = release.Close() }()
-	var stderr bytes.Buffer
+	var stderr lockedBuffer
 	child := exec.Command(os.Args[0], "-test.run=^TestControllerReadTerminal$", "-test.timeout=10s")
 	child.Env = append(os.Environ(), "YOLOCTL_TEST_CONTROLLER_READ_PTY="+mode, "YOLOCTL_HOME="+t.TempDir(), "YOLOCTL_TUI=", "TERM=xterm-256color")
 	child.Stdin, child.Stdout, child.Stderr = slave, slave, &stderr
@@ -152,8 +152,16 @@ func testControllerReadPTY(t *testing.T, mode string) {
 	waited := false
 	defer func() {
 		if !waited {
+			// Release the tty before reaping a child that may be blocked
+			// in the controlling terminal's exit-time drain on Darwin.
+			_ = master.Close()
+			_ = slave.Close()
 			_ = child.Process.Kill()
-			<-done
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+				t.Errorf("could not reap PTY child after closing the terminal")
+			}
 		}
 	}()
 	readMarker := func(want byte) {
@@ -163,9 +171,6 @@ func testControllerReadPTY(t *testing.T, mode string) {
 		}
 		var marker [1]byte
 		if _, err := io.ReadFull(progress, marker[:]); err != nil || marker[0] != want {
-			_ = child.Process.Kill()
-			<-done
-			waited = true
 			t.Fatalf("progress = %q, %v, want %q, child stderr %q", marker[0], err, want, stderr.String())
 		}
 	}
@@ -185,18 +190,24 @@ func testControllerReadPTY(t *testing.T, mode string) {
 		}
 	}
 	readMarker('C')
+	fd, err := syscall.Dup(int(master.Fd()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	syscall.CloseOnExec(fd)
+	if err := syscall.SetNonblock(fd, true); err != nil {
+		_ = syscall.Close(fd)
+		t.Fatal(err)
+	}
+	reader := os.NewFile(uintptr(fd), "read-PTY-output")
+	var drained chan struct{}
+	defer func() {
+		_ = reader.Close()
+		if drained != nil {
+			<-drained
+		}
+	}()
 	if mode == "resize" {
-		fd, err := syscall.Dup(int(master.Fd()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		syscall.CloseOnExec(fd)
-		if err := syscall.SetNonblock(fd, true); err != nil {
-			_ = syscall.Close(fd)
-			t.Fatal(err)
-		}
-		reader := os.NewFile(uintptr(fd), "read-PTY-output")
-		defer func() { _ = reader.Close() }()
 		if err := reader.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
 			t.Fatal(err)
 		}
@@ -204,12 +215,21 @@ func testControllerReadPTY(t *testing.T, mode string) {
 		if _, err := io.ReadFull(reader, got); err != nil || string(got) != controllerReadPTYOutput {
 			t.Fatalf("PTY output %q, %v, want exactly %q", got, err, controllerReadPTYOutput)
 		}
+		if err := reader.SetReadDeadline(time.Time{}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	after, err := term.GetState(int(slave.Fd()))
 	if err != nil || !reflect.DeepEqual(before, after) {
 		t.Fatalf("terminal state not preserved: %v", err)
 	}
-	// Retain the child until termios has been checked on Darwin as well.
+	// The child can now exit. Keep reading its test runner output while Darwin
+	// drains and revokes the session leader's controlling terminal.
+	drained = make(chan struct{})
+	go func() {
+		defer close(drained)
+		_, _ = io.Copy(io.Discard, reader)
+	}()
 	if _, err := release.Write([]byte{1}); err != nil {
 		t.Fatal(err)
 	}
