@@ -105,6 +105,48 @@ a native run. Browser quarantine, Developer ID signing and notarization are
 outside this curl flow; Intel (amd64) execution remains a separate host/CI
 acceptance gate.
 
+### Recover a Lima OpenShell nft check timeout
+
+If `check Lima OpenShell nft support` times out after the VM boots, check
+whether the running guest's own hostname is missing from `/etc/hosts`. A
+missing entry can delay `sudo` while it resolves the name. VMs created with
+the updated Lima template add the entry during boot.
+
+Repair the entry in the running guest for either an initialized space or an
+unfinished `space create`. The command adds the hostname only if it is
+missing. Replace `NAME` with your space name in this host command.
+
+```sh
+yoloctl space ssh NAME --root -- sh -s <<'SH'
+set -eu
+name=$(hostname)
+mapped=$(LC_ALL=C awk -v name="$name" '
+  BEGIN { name = tolower(name) }
+  {
+    sub(/#.*/, "")
+    for (i = 2; i <= NF; i++) {
+      if (tolower($i) == name) { found = 1; exit }
+    }
+  }
+  END { print found ? "yes" : "no" }
+' /etc/hosts)
+if [ "$mapped" = no ]; then
+  printf '\n127.0.1.1 %s\n' "$name" >> /etc/hosts
+fi
+SH
+```
+
+For an initialized space, retry the command that timed out. If `space create`
+stopped before initializing the account disk, run `yoloctl space start NAME`
+with the build that created the space, or
+`yoloctl space start NAME --update-controller` with the newer build.
+
+To adopt the updated boot provisioning on an initialized space, you can
+instead run `yoloctl space recreate NAME` with the new build. Back up files
+stored only inside containers first. Recreation keeps the native account
+disk, accounts, box declarations and host workdirs. It discards containers,
+sessions and VM-local workdirs.
+
 ## Making a release (maintainers)
 
 `make dist VERSION=vX.Y.Z` builds the four archives and `SHA256SUMS`. Pushing

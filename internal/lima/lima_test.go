@@ -1,8 +1,13 @@
 package lima
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestParseInstances(t *testing.T) {
@@ -60,6 +65,58 @@ func TestDefaultTemplateRenders(t *testing.T) {
 		if strings.Contains(s, retired) {
 			t.Errorf("rendered template still provisions retired runtime %q", retired)
 		}
+	}
+}
+
+func TestTemplateAddsLocalHostnameOnce(t *testing.T) {
+	var template struct {
+		Provision []struct {
+			Mode   string `yaml:"mode"`
+			Script string `yaml:"script"`
+		} `yaml:"provision"`
+	}
+	if err := yaml.Unmarshal(TemplateWithAccountDisk(nil, "", false), &template); err != nil {
+		t.Fatal(err)
+	}
+	if len(template.Provision) == 0 || template.Provision[0].Mode != "system" {
+		t.Fatal("missing initial system provision script")
+	}
+	const declaration = "add_local_hostname() {\n"
+	const invocation = "\n}\nvm_hostname=$(hostname)\nadd_local_hostname \"$vm_hostname\" /etc/hosts\n"
+	_, body, hasDeclaration := strings.Cut(template.Provision[0].Script, declaration)
+	body, _, hasInvocation := strings.Cut(body, invocation)
+	if !hasDeclaration || !hasInvocation {
+		t.Fatal("missing local hostname function or invocation")
+	}
+	script := "set -euo pipefail\n" + declaration + body + "\n}\nadd_local_hostname \"$1\" \"$2\"\n"
+
+	for _, tc := range []struct {
+		name, initial, want string
+	}{
+		{"mixed-case alias", "192.0.2.7 canonical LiMa-WoRk\n", "192.0.2.7 canonical LiMa-WoRk\n"},
+		{"unterminated line", "127.0.0.1 localhost", "127.0.0.1 localhost\n127.0.1.1 lima-work\n"},
+		{"unterminated comment", "# lima-work", "# lima-work\n127.0.1.1 lima-work\n"},
+		{"different aliases", "192.0.2.7 lima-work-other # lima-work\n", "192.0.2.7 lima-work-other # lima-work\n127.0.1.1 lima-work\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "hosts")
+			if err := os.WriteFile(path, []byte(tc.initial), 0600); err != nil {
+				t.Fatal(err)
+			}
+			for boot := 1; boot <= 2; boot++ {
+				cmd := exec.CommandContext(t.Context(), "bash", "-c", script, "hosts-fixture", "lima-work", path)
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("boot %d: %v\n%s", boot, err, out)
+				}
+				got, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(got) != tc.want {
+					t.Fatalf("boot %d: hosts = %q, want %q", boot, got, tc.want)
+				}
+			}
+		})
 	}
 }
 

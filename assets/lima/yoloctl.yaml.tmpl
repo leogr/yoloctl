@@ -41,11 +41,37 @@ containerd:
 
 provision:
 
-# 1. Sandbox user (UID/GID 2000), /tmp permissions, yoloctl directory layout.
+# 1. Local hostname, sandbox user, /tmp permissions and yoloctl directories.
 - mode: system
   script: |
     #!/bin/bash
     set -eux -o pipefail
+    # Resolve the guest's own name locally before a sudo command needs it.
+    add_local_hostname() {
+      local name=$1 hosts=$2 mapped last_byte
+      mapped=$(LC_ALL=C awk -v name="$name" '
+        BEGIN { name = tolower(name) }
+        {
+          sub(/#.*/, "")
+          for (i = 2; i <= NF; i++) {
+            if (tolower($i) == name) { found = 1; exit }
+          }
+        }
+        END { print found ? "yes" : "no" }
+      ' "$hosts")
+      if [ "$mapped" = yes ]; then
+        return
+      fi
+      last_byte=$(tail -c 1 "$hosts")
+      {
+        if [ -n "$last_byte" ]; then
+          printf '\n'
+        fi
+        printf '127.0.1.1 %s\n' "$name"
+      } >> "$hosts"
+    }
+    vm_hostname=$(hostname)
+    add_local_hostname "$vm_hostname" /etc/hosts
     chmod 1777 /tmp
     if ! getent group sandbox >/dev/null; then
       groupadd -g 2000 sandbox

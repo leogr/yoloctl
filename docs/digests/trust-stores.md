@@ -76,7 +76,7 @@ boxes change only through an explicit rebuild/recreate.
 7. <a id="source-7"></a> [Reference builder](../../assets/vm/firecracker/build.py#L198) — `drop_managed_certificates`, `rebuild_trust_store` at L235.
 8. <a id="source-8"></a> [Reference builder tests](../../scripts/vm/firecracker/test_build.py#L42) — `TrustStoreTests`.
 9. <a id="source-9"></a> [Real-input check](../../internal/firecracker/assemble_linux_test.go#L127) — `verifyImageTrustStore` from `TestPortableImageAssembly`.
-10. <a id="source-10"></a> [Lima provisioning](../../assets/lima/yoloctl.yaml.tmpl#L69-L96) — minimum CA release, upgrade and failure.
+10. <a id="source-10"></a> [Lima provisioning](../../assets/lima/yoloctl.yaml.tmpl#L93-L120) — minimum CA release, upgrade and failure.
 11. <a id="source-11"></a> [Provisioning tests](../../internal/lima/provision_test.go#L129) — `TestCACertificatesProvisioningUpgrade`.
 12. <a id="source-12"></a> [Lima templates](../../cmd/yoloctl/space.go#L592) — create-time template; a missing instance is created at L681.
 13. <a id="source-13"></a> [nerdctl v2.3.5 Dockerfile](https://github.com/containerd/nerdctl/blob/v2.3.5/Dockerfile#L20-L46) — containerd v2.3.3, BuildKit v0.31.2, Go 1.26.

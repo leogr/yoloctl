@@ -124,6 +124,10 @@ once); scripts receive the exact `space recreate NAME` instruction and no
 mutation. An explicit Lima recreate selects the current build, so no
 `--update-controller` loop follows. [28](#source-28)
 
+[FACT] The Lima template adds the guest hostname to `/etc/hosts` at boot if
+no whole name or alias already matches it case-insensitively. Existing VMs
+adopt the provision change through explicit recreation. [30](#source-30) [31](#source-31)
+
 ## Sources
 
 1. <a id="source-1"></a> [Installer](../../internal/firecracker/images_linux.go#L33) — `ResolveImage`, `resolveImage`, `copyImageFile`, `copySparse`.
@@ -155,3 +159,5 @@ mutation. An explicit Lima recreate selects the current build, so no
 27. <a id="source-27"></a> [cmd/yoloctl](../../cmd/yoloctl/controller_deploy.go#L1) — `checkSpaceOpenShellImage` in `space_openshell_image.go`, called from `controller_deploy.go` (sol2 space-old-image-refusal tree `f9260ea0`).
 28. <a id="source-28"></a> [cmd/yoloctl](../../cmd/yoloctl/controller_deploy.go#L1) — `space_vm_compatibility.go`, `internal/lima/openshell_compatibility.go`, Lima template marker (sol lima-vm-preflight tree `84a754b7`; nftables package and marker v2 from lima-nft-package tree `f018d8b8`).
 29. <a id="source-29"></a> [Init link](../../Makefile#L112-L117) — `build-vm-init` with `-buildid=`, the same flags in `scripts/vm/firecracker/build.py`; `TestBoxOnlyAssetEditKeepsVMImageIdentity` in `internal/firecracker/init_identity_linux_test.go`.
+30. <a id="source-30"></a> [Lima hostname provisioning](../../assets/lima/yoloctl.yaml.tmpl#L49-L74) — `add_local_hostname`.
+31. <a id="source-31"></a> [Retained Lima configuration](../../internal/lima/lima.go#L142-L173) — `SetInstanceMounts` preserves provisioning.
