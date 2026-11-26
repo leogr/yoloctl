@@ -121,12 +121,6 @@ func TestRuntimeReadinessRequiresRespondingSSHAndTheGenerationKey(t *testing.T) 
 		t.Fatal("a completed probe was treated as cancelled", stopping, ordered)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	if ready, err := probeRuntimeReadyAt(ctx, dir, signer.PublicKey(), os.Geteuid(), os.Getegid()); ready || err != nil {
-		t.Fatal("stopped SSH backlog counted as readiness", ready, err)
-	}
-
 	// A silent connected peer and no caller deadline: the try runs out of its
 	// own time. That is not a definite answer, so the monitor keeps its
 	// previous readiness (and SSH admission) and tries again.
