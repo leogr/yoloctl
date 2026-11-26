@@ -1,6 +1,6 @@
 # VT rendering and PTY child lifecycle
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; keep-history reset on `003c44131ad5ea54194391b96821ddf3cbfd0aba` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; slave retention on `0d2ab61` and accompanying changes; core memory allocator on `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; keep-history reset on `003c44131ad5ea54194391b96821ddf3cbfd0aba` and accompanying changes; split-terminator fix `a062b10` and accompanying changes; slave retention on `0d2ab61` and accompanying changes; core memory allocator on `c6eca54e3cbaaba438bc3cd130a6d19e115ff5c5` and accompanying changes; re-read cited sources when changing behavior. Sources 6 and 28 verified on `ea2f6d0b`.
 
 [FACT] Each terminal owns an isolated libghostty-vt WebAssembly instance under
 wazero; its compiled core may come from an on-disk cache ([terminal core compile cache](terminal-core-cache.md)). The embedded artifact pins
@@ -37,7 +37,7 @@ cursor position and Kitty keyboard stacks. The bridge enables grapheme mode
 line count. Rows are formatted as text/SGR/OSC 8 without forwarding terminal
 modes, queries or clipboard effects. The TUI captures styled grid/history and
 cursor state together; synchronized output, anchored history and focus are
-covered by the display adapter. [2](#source-2) [4](#source-4) [13](#source-13)
+covered by the display adapter. [2](#source-2) [4](#source-4) [6](#source-6) [13](#source-13) [28](#source-28)
 
 [FACT] OSC 52 interception precedes core parsing. Measured host foreground and
 background become virtual defaults; pending OSC 10/11 queries are answered once
@@ -45,7 +45,7 @@ colors arrive. Child color changes remain local; unmodified palette entries
 inherit host SGR colors. Live bells cross the host boundary, while native snapshot restoration is quiet and compatibility replay neutralizes
 retained bells. These are bounded adapter contracts, not proof of
 complete host-terminal fidelity. [1](#source-1) [2](#source-2)
-[4](#source-4) [5](#source-5) [6](#source-6) [14](#source-14)
+[4](#source-4) [5](#source-5) [14](#source-14)
 
 [FACT] Bubble Tea uses the pinned local Ultraviolet copy with color, mouse,
 text-input and split-terminator fixes; a nonexpired read of 7-bit input
@@ -99,7 +99,7 @@ or native application parity. [12](#source-12)
 3. <a id="source-3"></a> [build-terminal.py](../../scripts/build-terminal.py#L1-L80) — pins, hashes, regeneration, reproduction.
 4. <a id="source-4"></a> [emulator.go](../../internal/tui/term/emulator.go#L1-L249) — synchronization, interception, reset, close.
 5. <a id="source-5"></a> [handler.go](../../internal/tui/term/handler.go#L10) — `SetColors`; shared query handling in `internal/terminal/colors.go`.
-6. <a id="source-6"></a> [tui.go](../../internal/tui/tui.go#L1643) — `View`, `hostCursor`, `runningCursor`.
+6. <a id="source-6"></a> [Display frames](../../internal/tui/tui.go#L1907-L1927) — `View` captures the console and visible pane frames and selects the focused frame.
 7. <a id="source-7"></a> [input.go](../../internal/tui/term/input.go#L11) — queue bounds, prepared input, failures, close.
 8. <a id="source-8"></a> [pty_test.go](../../internal/tui/term/pty_test.go#L1-L52) — PTY close with blocked I/O, retained slave.
 9. <a id="source-9"></a> [session.go](../../internal/tui/term/session.go#L69) — `Start`, pumps, reset/banner, `Wait`, `Close`.
@@ -121,3 +121,4 @@ or native application parity. [12](#source-12)
 25. <a id="source-25"></a> [native.patch](../../internal/terminal/wasm/native.patch#L65-L342) — `resetKeepHistory`, `resetTransient`; bridge `yolo_vt_reset_keep_history`; reset_keep_history_test.go and term handler_test.go `TestClearKeepHistoryKeepsRowsResetsState`.
 26. <a id="source-26"></a> [native.patch](../../internal/terminal/wasm/native.patch#L388-L420) — the embedded Unicode width table uses uucode’s width flag for appended skin-tone modifiers.
 27. <a id="source-27"></a> [core_memory_unix.go](../../internal/terminal/core_memory_unix.go#L1) — wazero experimental allocator, reservation, commit, heap fallback; maintenance in third_party/README.md.
+28. <a id="source-28"></a> [Frame cursors](../../internal/tui/tui.go#L2134-L2182) — `hostCursor` uses the focused tab frame and `runningCursor` uses the console frame.

@@ -1,6 +1,6 @@
 # Tracked agent launches and settlement
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; resume-file preflight on `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; resume-file preflight on `f5928f39223f8851c230b898d6eb2fcfab16cc2c` and accompanying changes; re-read cited sources when changing behavior. Sources 10 and 13 verified on `ea2f6d0b`.
 
 [FACT] A tracked start requires the command wrapper's native space-operation
 lock to be still held (a context witness) and takes only the box lock, kept
@@ -49,7 +49,7 @@ port changes and chat `--recreate`. A restart or recreate records it at its
 proved session cleanup, before the container operation, so a later failure
 still leaves a closed, resumable launch; a created container records it
 afterwards. An unproved cleanup or in-sync reconcile records nothing.
-[10](#source-10) [11](#source-11) [12](#source-12)
+[10](#source-10) [11](#source-11) [12](#source-12) [13](#source-13)
 
 ## Sources
 
@@ -62,6 +62,7 @@ afterwards. An unproved cleanup or in-sync reconcile records nothing.
 7. <a id="source-7"></a> [unit.go](../../internal/session/unit.go#L33-L150) — `UnitSpec.LaunchToken`, `--launch-token`, `HolderUnitState`, `ProbeVMMarker`; parsed in session_hold.go L47.
 8. <a id="source-8"></a> [session_identity.go](../../cmd/yoloctl/session_identity.go#L412) — `applySessionStart`, `recordSessionEnded`.
 9. <a id="source-9"></a> [agentbox.go](../../cmd/yoloctl/agentbox.go#L725) — `startAgentbox`; `recreateAgentbox` at L2572; `removeAgentboxConfig` at L2467.
-10. <a id="source-10"></a> [agentbox_reconcile.go](../../cmd/yoloctl/agentbox_reconcile.go#L771) — `reconcileManaged`, its callers and `onSessionEnded` wiring; operator apply in `runControllerDocument`, controller_documents.go L97.
+10. <a id="source-10"></a> [Managed reconcile](../../cmd/yoloctl/agentbox_reconcile.go#L780-L805) — `reconcileManaged` wires `onSessionEnded` before reconcile and passes the creation result to `applySessionStart`.
 11. <a id="source-11"></a> [replacement_settlement_test.go](../../cmd/yoloctl/replacement_settlement_test.go#L124-L331) — seam regressions, the policy restart, failures after a proved cleanup, an unproved cleanup, missing-member creation and negatives; `recreateChatMember` in chat_runtime.go L417-L440.
 12. <a id="source-12"></a> [managed_applier.go](../../cmd/yoloctl/managed_applier.go#L127-L169) — `endSession`, `cleanupManagedSession`, the restart and recreate close details.
+13. <a id="source-13"></a> [Controller edit apply](../../cmd/yoloctl/controller_documents.go#L247-L250) — `runControllerDocument` saves the box manifest and calls `reconcileAndPrint`.

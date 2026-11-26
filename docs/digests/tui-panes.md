@@ -1,6 +1,6 @@
 # TUI panes
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited symbols when changing behavior. Sources 5 and 14 verified on `ea2f6d0b`.
 
 [FACT] A tab holds a binary split tree of panes. Each pane hosts exactly one
 palette subprocess under a PTY, the unit a tab hosts. A tab with one pane is a
@@ -26,7 +26,7 @@ window-level fact:
 - focus reports, which go to that pane only.
 
 Other panes show **no cursor**. The host cursor is the focused pane's frame
-cursor, offset by its pane's rectangle. [4](#source-4) [5](#source-5)
+cursor, offset by its pane's rectangle. [4](#source-4) [14](#source-14)
 
 [FACT] Each visible pane's session is resized to its own rectangle with the
 shared measured cell pixels; unknown pixels stay unknown per pane. A zoomed
@@ -80,7 +80,7 @@ without a PTY (`fs.pty.allocate`). [3](#source-3) [6](#source-6) [8](#source-8)
 2. <a id="source-2"></a> [Tabs](../../internal/tui/tabs/tabs.go#L1-L238) — `Tab.Layout`, `Focused`, `CloseCurrent`, `ClosePane`, `Owner`, `Select`.
 3. <a id="source-3"></a> [Layout tests](../../internal/tui/panes/layout_test.go#L1) — geometry, refusal, focus, resize, removal, hit-testing.
 4. <a id="source-4"></a> [Per-pane geometry and focus](../../internal/tui/host_geometry.go#L57-L91) — `resizeSurfaces`, `laidOut` (pane rectangles on demand), `layoutTab` (also resizes sessions); `syncFocus` and `eachPane` in frames.go; `closeFocusedPane`, `startPane` in tui.go.
-5. <a id="source-5"></a> [View](../../internal/tui/tui.go#L1743-L1837) — `composePanes`, `View`; `hostCursor` at L1952.
+5. <a id="source-5"></a> [Pane composition](../../internal/tui/tui.go#L1905-L1956) — `composePanes` and the divided and undivided rendering paths in `View`.
 6. <a id="source-6"></a> [Composer](../../internal/tui/panes/compose.go#L1-L349) — `Compose`, `placeRow`, `drawBorders`, `renderRow`; goldens in panes/testdata via compose_test.go.
 7. <a id="source-7"></a> [Selection rows](../../internal/tui/selection.go#L120) — `selectionLines` per pane frame.
 8. <a id="source-8"></a> [Model tests](../../internal/tui/panes_view_test.go#L1) — undivided path seam, divided composition, cursor, title, benchmarks.
@@ -89,3 +89,4 @@ without a PTY (`fs.pty.allocate`). [3](#source-3) [6](#source-6) [8](#source-8)
 11. <a id="source-11"></a> [Mouse routing](../../internal/tui/mouse.go#L23-L169) — `mouseOwner`, `tabTop`, `paneAt`, `paneOwner`, `focusPaneAt`, `dropPaneOwners`, `mouseTarget`, `deliverMouse`; press, hover and wheel in `handleMouse`.
 12. <a id="source-12"></a> [Selection](../../internal/tui/selection.go#L21-L81) — `selectionScrollDirection`, `selectionTarget`, `selectMouse`.
 13. <a id="source-13"></a> [Host mouse mode](../../internal/tui/host_mouse_encoding.go#L56-L96) — `wantedMouseTracking`, `wantedMousePixels` from the focused pane.
+14. <a id="source-14"></a> [Focused pane cursor](../../internal/tui/tui.go#L2152-L2164) — `hostCursor` reads the focused frame and offsets its cursor by the pane rectangle.
