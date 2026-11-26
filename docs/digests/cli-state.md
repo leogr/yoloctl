@@ -1,6 +1,6 @@
 # CLI selection, runtime views, and output
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; completion registration re-read at `63b8a5be7896a88f5ecddf6159e2911fbc512fa1` and accompanying changes; space help initialization verified at `64117765f5206b36cab025c10250229f3eb59b78` and accompanying changes; re-read cited sources when changing behavior. nerdctl identifier rules re-read at `fcd4a112` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; completion registration re-read at `63b8a5be7896a88f5ecddf6159e2911fbc512fa1` and accompanying changes; space help initialization verified at `64117765f5206b36cab025c10250229f3eb59b78` and accompanying changes; re-read cited sources when changing behavior. nerdctl identifier rules re-read at `fcd4a112` and accompanying changes. Space aggregation waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] Flag/context space selection is centralized: explicit flag, nonempty
 `YOLOCTL_SPACE`, global context pin, then `default`; explicit positional targets
@@ -53,7 +53,8 @@ soon as its own resolution ends, in order and on the read's context.
 declarations. The top-level `declarations_available` boolean is always present.
 When false, workdirs and box inventories are null and their counts are -1,
 rather than presenting unavailable declarations as empty. [4](#source-4)
-`--all-spaces` emits available results plus diagnostics and a nonzero status
+`--all-spaces` allows two minutes per space's request and reply.
+Caller cancellation stops the walk. It emits available results plus diagnostics and a nonzero status
 when any space is unavailable. [14](#source-14)
 
 [FACT] `space list --json` lists VM runtime metadata, not that full
@@ -129,7 +130,7 @@ adding a new command. [3](#source-3) [11](#source-11)
 11. <a id="source-11"></a> [cmd/yoloctl/space_operation.go](../../cmd/yoloctl/space_operation.go#L29) — native mutation guard.
 12. <a id="source-12"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L95) — public execution routing.
 13. <a id="source-13"></a> [cmd/yoloctl/controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L82) — running/build checks.
-14. <a id="source-14"></a> [cmd/yoloctl/controller_views.go](../../cmd/yoloctl/controller_views.go#L52) — aggregation and space metadata views.
+14. <a id="source-14"></a> [cmd/yoloctl/controller_views.go](../../cmd/yoloctl/controller_views.go#L56) — aggregation and space metadata views.
 15. <a id="source-15"></a> [cmd/yoloctl/controller_completion.go](../../cmd/yoloctl/controller_completion.go#L34) — completion routing.
 16. <a id="source-16"></a> [cmd/yoloctl/run.go](../../cmd/yoloctl/run.go#L43) — `applyAgentProfileDefaults` preserves explicit image selection.
 17. <a id="source-17"></a> [cmd/yoloctl/box_run_removed_test.go](../../cmd/yoloctl/box_run_removed_test.go#L1) — actual CLI/help/completion and controller removal regressions; supported agentless session flags.

@@ -1,6 +1,6 @@
 # VM image preparation and replacement
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; OpenShell retirement `1d265df3` and accompanying changes; grow capability `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; audit kernel `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes; init build ID `6fa0a8ced0566ecd2f18066a0fe3a442946b632b` and accompanying changes; re-read cited sources when changing behavior.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; OpenShell retirement `1d265df3` and accompanying changes; grow capability `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; audit kernel `580ea0471331b097af890ea5d69502b9d1468f03` and accompanying changes; init build ID `6fa0a8ced0566ecd2f18066a0fe3a442946b632b` and accompanying changes; re-read cited sources when changing behavior. OpenShell probe drainage re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 Guest kernel and container stack verified on `fcd4a112bc26c8316d9ecf9c0e216a5fee9c0f22`
 and accompanying changes.
@@ -140,8 +140,10 @@ adopt the provision change through explicit recreation. [30](#source-30) [31](#s
 
 [FACT] Both OpenShell VM checks use the calling command's context. A deadline
 error includes the guest command and quoted stderr. The capture retains the
-first 512 bytes and indicates empty or truncated output. Both checks discard
-stdout. [32](#source-32)
+first 512 bytes and indicates empty or truncated output. Both checks send
+discarded stdout directly to the null device. After child exit, inherited
+stderr has a two-minute drain fail-safe. Caller cancellation ends the drain
+earlier. [32](#source-32)
 
 ## Sources
 
@@ -176,6 +178,6 @@ stdout. [32](#source-32)
 29. <a id="source-29"></a> [Init link](../../Makefile#L112-L117) — `build-vm-init` with `-buildid=`, the same flags in `scripts/vm/firecracker/build.py`; `TestBoxOnlyAssetEditKeepsVMImageIdentity` in `internal/firecracker/init_identity_linux_test.go`.
 30. <a id="source-30"></a> [Lima hostname provisioning](../../assets/lima/yoloctl.yaml.tmpl#L49-L74) — `add_local_hostname`.
 31. <a id="source-31"></a> [Retained Lima configuration](../../internal/lima/lima.go#L142-L173) — `SetInstanceMounts` preserves provisioning.
-32. <a id="source-32"></a> [OpenShell check context and diagnostics](../../cmd/yoloctl/space_openshell_image.go#L49-L135) — both guest invocations, context errors and bounded stderr.
+32. <a id="source-32"></a> [OpenShell check context and diagnostics](../../cmd/yoloctl/space_openshell_image.go#L28-L130) — both guest invocations, context errors and bounded stderr.
 33. <a id="source-33"></a> [VM pins](../../assets/vm/firecracker/pins.json#L10-L13) — `nerdctl.tgz` URL and digest.
 34. <a id="source-34"></a> [Assembly](../../internal/firecracker/assemble_linux.go#L702) — remaps the archive without `bin/buildg`.

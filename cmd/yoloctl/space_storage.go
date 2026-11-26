@@ -17,7 +17,6 @@ import (
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/spacetelemetry"
 	"github.com/leogr/yoloctl/internal/storagegc"
-	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +26,7 @@ const spaceStorageMethod = "space.storage"
 
 // spaceStorageTimeout bounds one measurement inside the VM, below the space
 // view's popup deadline. containerd walks only the boxes' writable layers.
-const spaceStorageTimeout = 20 * time.Second
+const spaceStorageTimeout = time.Minute
 
 // Disposable runtime directories on the system disk, beside the snapshots.
 const (
@@ -467,14 +466,17 @@ critical below 2 GiB (10%) or from 95%.
 			if err != nil {
 				return err
 			}
-			ctx, cancel := context.WithTimeout(cmd.Context(), spaceStorageTimeout+2*vmhost.GuestProbeTimeout)
-			defer cancel()
+			ctx := cmd.Context()
 			boot, err := checkControllerSpace(ctx, space)
 			if err != nil {
 				return err
 			}
 			var report storageReport
-			if err := controllerJSON(ctx, boot, spaceStorageMethod, nil, nil, &report, cmd.ErrOrStderr()); err != nil {
+			err = controllerJSON(ctx, boot, spaceStorageMethod, nil, nil, &report, cmd.ErrOrStderr())
+			if cause := ctx.Err(); cause != nil {
+				return cause
+			}
+			if err != nil {
 				return err
 			}
 			if asJSON {

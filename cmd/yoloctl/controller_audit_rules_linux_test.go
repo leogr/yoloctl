@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/audit"
 	"github.com/leogr/yoloctl/internal/container"
@@ -242,6 +244,27 @@ func TestAuditRulesNativeTransaction(t *testing.T) {
 			if !workerEffectsUncertain(err) {
 				t.Fatal("stale readiness became success or a certain failure", err)
 			}
+			synctest.Test(t, func(t *testing.T) {
+				start := time.Now()
+				polls := 0
+				auditServiceState = func(ctx context.Context, _ *container.Client, _ string) (string, error) {
+					polls++
+					<-ctx.Done()
+					return "", ctx.Err()
+				}
+				go func() {
+					time.Sleep(4 * time.Second)
+					ready, _ := json.Marshal(audit.Health{Epoch: expected.Epoch, Version: expected.Version,
+						RulesSHA256: expected.RulesSHA256, RulesGeneration: expected.RulesGeneration,
+						EffectiveSHA256: expected.EffectiveSHA256, State: "running", Loaded: true})
+					if err := safepath.WriteFile(auditRuntimeDir(), "health.json", ready, 0600); err != nil {
+						t.Error(err)
+					}
+				}()
+				if err := waitAuditReadyFor(t.Context(), expected); err != nil || time.Since(start) != 5*time.Second || polls != 1 {
+					t.Fatal("stalled service probe hid matching health", err, time.Since(start), polls)
+				}
+			})
 		}
 
 	}

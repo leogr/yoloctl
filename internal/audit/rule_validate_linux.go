@@ -6,6 +6,9 @@ import (
 	"errors"
 	"regexp"
 	"strconv"
+	"time"
+
+	"github.com/leogr/yoloctl/internal/processio"
 )
 
 var falcoWarnings = regexp.MustCompile(`(?m)^([0-9]+) Warnings?:\s*$`)
@@ -16,8 +19,7 @@ var falcoWarnings = regexp.MustCompile(`(?m)^([0-9]+) Warnings?:\s*$`)
 func ValidateRuleSet(ctx context.Context, binary, config string) (Validation, error) {
 	cmd := falcoCommand(ctx, binary, "-c", config, "--dry-run")
 	var output bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &output, &output
-	err := cmd.Run()
+	err := processio.Capture(ctx, cmd, &output, true, 2*time.Minute)
 	result := Validation{Diagnostics: output.String()}
 	// These are Falco's own per-load header counts, not yoloctl rule parsing or
 	// an assertion that all rules remain active after subsequent loads/selections.

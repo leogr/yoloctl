@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/installmigration"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
@@ -35,8 +34,6 @@ func readInstallConsent(ctx context.Context, space string) (installmigration.Sna
 	if err != nil {
 		return installmigration.Snapshot{}, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	inst, found, err := findSpaceInstance(ctx, space)
 	if err != nil {
 		return installmigration.Snapshot{}, err

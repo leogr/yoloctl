@@ -1,14 +1,15 @@
 # Configurable image-build admission reserve
 
-Verification: `1ea4713a87d08ef6ef50528cde2aff060bcde72b` and accompanying changes; reread cited code when changing behavior.
+Verification: `1ea4713a87d08ef6ef50528cde2aff060bcde72b` and accompanying changes; reread cited code when changing behavior. Preflight and reclamation waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] Build/pull preflight's final free-space test requires
 `min(Disk.TargetFree(), cap)`, with `TargetFree = total/5`. The default cap is
 10 GiB. The reserve does not change `Low`, `TargetFree`, `CacheBudget`, idle
 cleanup or BuildKit's GC targets. Low space still triggers cleanup, even when
-the capped final admission would succeed; existing cleanup errors, its 30 s
-budget, parent cancellation and reclamation wait remain. `0GiB` bypasses only
-the final free-space refusal. It is not a quota or a limit on running writers.
+the capped final admission would succeed. Cleanup follows the operation
+context. After a successful pass, measured space can satisfy the reserve
+for up to two minutes, subject to earlier cancellation. `0GiB` bypasses only
+the final free-space refusal. Running writes remain unrestricted by this reserve.
 [1](#source-1) [2](#source-2) [3](#source-3)
 
 [FACT] `storage.build_reserve_max` belongs to controller-owned native settings
@@ -38,7 +39,7 @@ works again. Optional human notices use the same effective requirement.
 `space storage` prints it and emits `build_reserve: {required, fraction_free,
 cap}` in JSON (byte counts; `cap: null` means uncapped). Unknown disk capacity
 leaves this observation null; failed settings reads have an explicit error.
-Measurements and C's partial-result budget/unknown rules remain unchanged.
+Storage measurements retain their [partial-result rules](space-view-disks.md).
 [2](#source-2) [8](#source-8) [9](#source-9) [10](#source-10)
 
 [FACT] Fixture tests cover default/none/zero/size round trips, boundary
@@ -59,7 +60,7 @@ are source controls, not live VM or macOS validation. [11](#source-11)
    [dispatch](../../cmd/yoloctl/controller_internal.go#L731-L733).
 8. <a id="source-8"></a> [build_reserve.go](../../cmd/yoloctl/build_reserve.go#L1) — observation, formatting and fallback.
 9. <a id="source-9"></a> [storage_warning.go](../../cmd/yoloctl/storage_warning.go#L1) — effective threshold and preserved filtering.
-10. <a id="source-10"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L80) — optional reserve source, JSON and human output.
+10. <a id="source-10"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L79) — optional reserve source, JSON and human output.
 11. <a id="source-11"></a> [reserve_test.go](../../internal/storagegc/reserve_test.go#L1) — boundary/parser/cleanup invariants.
 12. <a id="source-12"></a> [storage_test.go](../../internal/spaceconfig/storage_test.go#L1) — distinct persistence and bootstrap separation.
 13. <a id="source-13"></a> [build_reserve_test.go](../../cmd/yoloctl/build_reserve_test.go#L1) — preflight cancellation/fallback and warning/report controls.

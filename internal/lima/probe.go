@@ -2,12 +2,12 @@ package lima
 
 import "time"
 
-// GuestProbeTimeout includes starting limactl, its SSH transport, sudo and the
-// guest interpreter. The in-guest socket deadline remains one second. Ten
-// seconds accommodates cold transport while keeping diagnostic reads bounded.
+// GuestProbeTimeout bounds a short VM observation attempt, including the
+// limactl and SSH overhead. Command-owned reads that can wait for a reply use
+// the caller context.
 const GuestProbeTimeout = 10 * time.Second
 
 // BinaryInstallProbeTimeout bounds silent full-file hashes and loader checks
 // during executable installation. It is a total budget, not output inactivity;
-// ordinary diagnostic readers continue to use GuestProbeTimeout.
+// it is separate from the short observation attempt.
 const BinaryInstallProbeTimeout = 2 * time.Minute

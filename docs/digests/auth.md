@@ -1,6 +1,6 @@
 # Account authentication and mutation safety
 
-Verification: `cae7f0d106ee85c3193168becc12a3ee8fdc25c6` and accompanying changes; re-read cited sources when changing behavior. Source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`.
+Verification: `cae7f0d106ee85c3193168becc12a3ee8fdc25c6` and accompanying changes; re-read cited sources when changing behavior. Source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`. Native auth and account-view waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] Account secrets and native state are separate delivery paths. At container
 creation, `userEnvironmentJSON` reloads the selected account and projects only
@@ -79,15 +79,20 @@ Stored Pi credentials precede environment keys. [13](#source-13)
 secrets and persists XDG state in one leaf. Its optional auth.import_home_dir
 selects a home-relative host import directory; custom XDG roots use --file. [14](#source-14)
 
+[FACT] `account auth status` follows the caller context through its native
+read. `account show` gives optional state-leaf discovery one minute. An
+unavailable leaf inventory differs from a successful empty list. Caller
+cancellation ends either request. [5](#source-5) [7](#source-7)
+
 ## Sources
 
 1. <a id="source-1"></a> [internal/agentbox/secret_injection.go](../../internal/agentbox/secret_injection.go#L44-L73) — `userEnvironmentJSON`.
 2. <a id="source-2"></a> [internal/agentprofile/builtin/claude.yaml](../../internal/agentprofile/builtin/claude.yaml#L46-L116) — `launch_env`, `auth`, `secret_injection`.
 3. <a id="source-3"></a> [internal/agentprofile/builtin/codex.yaml](../../internal/agentprofile/builtin/codex.yaml#L13) — `command`, `requires_features`, `auth` (line 89).
 4. <a id="source-4"></a> [cmd/yoloctl/launchenv.go](../../cmd/yoloctl/launchenv.go#L26-L42) — `applyLaunchEnv`.
-5. <a id="source-5"></a> [cmd/yoloctl/account_auth.go](../../cmd/yoloctl/account_auth.go#L132-L403) — `resolveAccountAuthTarget`, `defaultHostAuthPaths`, `newAccountAuthImportCmd`, `importSecretIntoAccount`, `accountAuthStatus`.
+5. <a id="source-5"></a> [cmd/yoloctl/account_auth.go](../../cmd/yoloctl/account_auth.go#L131-L437) — `resolveAccountAuthTarget`, `defaultHostAuthPaths`, `newAccountAuthImportCmd`, `importSecretIntoAccount`, `accountAuthStatus`.
 6. <a id="source-6"></a> [cmd/yoloctl/space_lifecycle.go](../../cmd/yoloctl/space_lifecycle.go#L80) — authoritative consumer matching.
-7. <a id="source-7"></a> [cmd/yoloctl/account.go](../../cmd/yoloctl/account.go#L210) — show, edit, deletion, secret commands.
+7. <a id="source-7"></a> [cmd/yoloctl/account.go](../../cmd/yoloctl/account.go#L212) — show, edit, deletion, secret commands.
 8. <a id="source-8"></a> [internal/agentbox/diff.go](../../internal/agentbox/diff.go#L214) — account-reference drift.
 9. <a id="source-9"></a> [cmd/yoloctl/controller_documents.go](../../cmd/yoloctl/controller_documents.go#L231) — native import and profile digest validation.
 10. <a id="source-10"></a> [cmd/yoloctl/controller_client.go](../../cmd/yoloctl/controller_client.go#L181) — caller secret capture and local editor.

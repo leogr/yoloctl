@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/leogr/yoloctl/internal/layout"
+	"github.com/leogr/yoloctl/internal/processio"
 	"github.com/leogr/yoloctl/internal/safepath"
 )
 
@@ -87,14 +88,14 @@ func Collect(parent context.Context, root, run, tools string, service ServiceCon
 	// Legacy built-in-only services retain their existing preflight. Managed
 	// generations were already validated by one dry-run before publication.
 	if service.RulesGeneration == "" {
-		validate, cancelValidate := context.WithTimeout(ctx, 15*time.Second)
+		validate, cancelValidate := context.WithTimeout(ctx, 2*time.Minute)
 		err := runFalcoPhase(validate, "rules validation", binary, append(append([]string{}, args...), "-V", filepath.Join(root, "rules.yaml"))...)
 		cancelValidate()
 		if err != nil {
 			return err
 		}
 	}
-	probe, cancelProbe := context.WithTimeout(ctx, 15*time.Second)
+	probe, cancelProbe := context.WithTimeout(ctx, 2*time.Minute)
 	err := runFalcoPhase(probe, "modern eBPF preflight", binary, append(append([]string{}, args...), "-M", "2")...)
 	cancelProbe()
 	if err != nil {
@@ -110,12 +111,14 @@ func Collect(parent context.Context, root, run, tools string, service ServiceCon
 		}
 	}()
 	cmd := falcoCommand(ctx, binary, args...)
+	prefix := &stderrPrefix{}
+	cmd.Stderr = prefix
 	output, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
 	if err := cmd.Start(); err != nil {
-		return falcoFailure(ctx, "collection start", cmd, err)
+		return falcoFailure(ctx, "collection start", prefix, err)
 	}
 	health.State, health.Loaded = "running", true
 	if err := save(); err != nil {
@@ -160,7 +163,7 @@ func Collect(parent context.Context, root, run, tools string, service ServiceCon
 				if ctx.Err() != nil {
 					return nil
 				}
-				return falcoFailure(ctx, "collection", cmd, errors.Join(errors.New("process stopped while auditing remained enabled"), waitErr))
+				return falcoFailure(ctx, "collection", prefix, errors.Join(errors.New("process stopped while auditing remained enabled"), waitErr))
 			}
 			if item.bad {
 				if err := writer.Dropped(); err != nil {
@@ -240,7 +243,6 @@ func readCollector(ctx context.Context, output io.Reader, out chan<- collectorIn
 
 func falcoCommand(ctx context.Context, binary string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, binary, args...)
-	cmd.Stderr = &stderrPrefix{}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = 2 * time.Second
@@ -249,20 +251,16 @@ func falcoCommand(ctx context.Context, binary string, args ...string) *exec.Cmd 
 
 func runFalcoPhase(ctx context.Context, phase, binary string, args ...string) error {
 	cmd := falcoCommand(ctx, binary, args...)
-	if err := cmd.Run(); err != nil {
-		return falcoFailure(ctx, phase, cmd, err)
+	prefix := &stderrPrefix{}
+	if err := processio.Capture(ctx, cmd, prefix, false, 0); err != nil {
+		return falcoFailure(ctx, phase, prefix, err)
 	}
 	return nil
 }
 
-func falcoFailure(ctx context.Context, phase string, cmd *exec.Cmd, err error) error {
+func falcoFailure(ctx context.Context, phase string, prefix *stderrPrefix, err error) error {
 	if ctx.Err() != nil {
 		err = errors.Join(err, ctx.Err())
 	}
-	prefix, _ := cmd.Stderr.(*stderrPrefix)
-	detail := ""
-	if prefix != nil {
-		detail = prefix.summary()
-	}
-	return fmt.Errorf("falco %s failed: %w%s", phase, err, detail)
+	return fmt.Errorf("falco %s failed: %w%s", phase, err, prefix.summary())
 }

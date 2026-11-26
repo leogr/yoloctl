@@ -41,6 +41,9 @@ func autoupdateAgentboxIfNeeded(ctx context.Context, c *container.Client, agentb
 		return nil
 	}
 	latest, err := preparedAgentLatest(ctx, profile)
+	if cause := ctx.Err(); cause != nil {
+		return cause
+	}
 	if err != nil {
 		cliNotice(logging.Box, "autoupdate skipped (release source unreachable: %v)", err)
 		return nil

@@ -1,6 +1,6 @@
 # VM-native Falco auditing
 
-Verification: `1f70a4ce74a6c3979ef7838f5748175f56c1bc0d` and accompanying changes.
+Verification: `1f70a4ce74a6c3979ef7838f5748175f56c1bc0d` and accompanying changes. Audit observation, readiness and preflight waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] Auditing is opt-in and initially disabled. The host's `audit` command
 opens a read-only view; `status`, `enable`, `disable`, `logs`, `export` and
@@ -31,10 +31,14 @@ are installed. [7](#source-7) [8](#source-8)
 systemd with control-group teardown and a ten-second stop timeout; Firecracker
 uses PID-1 owned cgroups/reaping with exact launcher/environment validation,
 without automatic restart. The collector
-checks kernel BTF, validates its pinned rule/config and performs a bounded real
-modern-eBPF capture before reporting loaded health. There is no kmod fallback.
-The controller applies certain enabled desired state after verified startup;
-a reserved/uncertain audit operation prevents that reconciliation. Disable
+checks kernel BTF and runs its applicable pinned preflight phases before
+reporting loaded health. Each phase has a separate two-minute fail-safe,
+including the real modern-eBPF preflight. There is no kmod fallback.
+Foreground readiness follows the caller and rechecks health after a failed
+service-state attempt. The controller applies certain enabled desired state
+after verified startup. Startup reconciliation independently bounds each lock
+or service request at two minutes and yields to controller cancellation. A
+reserved or uncertain audit operation prevents reconciliation. Disable
 requires acknowledged service stop and retains logs/tools. Falco failure does
 not stop workloads; control uncertainty uses a separate audit receipt domain.
 The controller's ordinary global storage-uncertainty rules still apply. The
@@ -45,10 +49,14 @@ diagnostic; it is absent from log/export records. Non-Falco failures retain
 their own cause instead of a blanket kernel explanation.
 [2](#source-2) [9](#source-9) [10](#source-10) [11](#source-11) [19](#source-19)
 
-[FACT] Firecracker audit first makes a bounded read-only PID-1 support query;
-old images are refused before toggle effects, with an explicit
-`space recreate NAME --update-vm-image` hint. Audit commands never replace
-media. The bundled kernel includes BTF/JIT/tracing; this is not live load proof.
+[FACT] Firecracker audit first makes a read-only PID-1 support query.
+A foreground toggle uses the caller context and refuses old images before
+effects, with an explicit `space recreate NAME --update-vm-image` hint.
+Status gives capability and service-state observations one minute. A
+broken connection or unanswered query keeps known fields and reports
+unavailable. A recognized old-init rejection or an incompatible reply
+reports unsupported. Audit commands never replace media. The bundled kernel
+includes BTF/JIT/tracing; this is not live load proof.
 [19](#source-19) [20](#source-20) [21](#source-21)
 
 [FACT] Pinned rules cover runtime/admin sockets, infrastructure, workload
@@ -114,7 +122,7 @@ health is bound to the selected generation. [24](#source-24)
 6. <a id="source-6"></a> [Archive selection](../../internal/spacearchive/state.go#L74) — `WriteState` includes selected rule sources, excluding infrastructure/enablement.
 7. <a id="source-7"></a> [Pinned artifacts](../../internal/audit/artifacts.go#L1) — `Pinned`, `Fetch`, `Install`, `VerifyInstalled`.
 8. <a id="source-8"></a> [Falco 0.45.2 release](https://github.com/falcosecurity/falco/releases/tag/0.45.2) — official architecture tarballs.
-9. <a id="source-9"></a> [Guest service adapter](../../internal/vmservice/service.go#L58) — `Start`, `StopAcknowledged`.
+9. <a id="source-9"></a> [Guest service adapter](../../internal/vmservice/service.go#L103) — `Start`, `StopAcknowledged`.
 10. <a id="source-10"></a> [Collector](../../internal/audit/collector_linux.go#L1) — modern-eBPF qualification, owned child and health.
 11. <a id="source-11"></a> [Audit holds](../../internal/controller/holds.go#L1) — `CheckAuditReconcile`, independent resource conflicts.
 12. <a id="source-12"></a> [Pinned config/rule](../../internal/audit/config.go#L1) — `Configuration`, `Rules`, `ServiceConfig`.
@@ -128,7 +136,7 @@ health is bound to the selected generation. [24](#source-24)
 18. <a id="source-18"></a> [Metadata extraction](audit-metadata.md) — C ABI, generation/freshness/identity bounds, packaging and limits.
 
 19. <a id="source-19"></a> [Fixed PID-1 audit unit](../../internal/vmguest/units_linux.go#L39) — `validateUnit`, `manageUnit`; closed launch/query regressions in audit_unit_linux_test.go.
-20. <a id="source-20"></a> [Firecracker support query](../../internal/vmservice/service.go#L170) — `AuditSupported`; old-image pre-effect regression in cmd/yoloctl/audit_image_linux_test.go.
+20. <a id="source-20"></a> [Firecracker support query](../../internal/vmservice/service.go#L211-L253) — `AuditSupported`; old-image pre-effect regression in cmd/yoloctl/audit_image_linux_test.go.
 21. <a id="source-21"></a> [Kernel recipe](../../assets/vm/firecracker/inputs.py#L38) — `KERNEL_EXTRAS`, `publish_kernel`; cross-host ELF/config regression in assets/audit_kernel_test.go.
 
 22. <a id="source-22"></a> [Selected rendering](../../internal/audit/output.go#L1) — `SelectedFields`, `RenderOutput`.

@@ -233,7 +233,10 @@ func (c storageCollector) collect(ctx context.Context, extra []string) error {
 	return nil
 }
 
-func (c storageCollector) beforeBuild(ctx context.Context, refs []string, out io.Writer) (result error) {
+func (c storageCollector) beforeBuild(ctx context.Context, refs []string, out io.Writer) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	disk, err := c.disk()
 	if err != nil {
 		return fmt.Errorf("measure VM storage before build: %w", err)
@@ -249,21 +252,11 @@ func (c storageCollector) beforeBuild(ctx context.Context, refs []string, out io
 		return nil
 	}
 	cliNotice(logging.Storage, "VM disk space is low; cleaning unused images and build cache before the build")
-	parent := ctx
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	defer func() {
-		if result == nil {
-			return
-		}
-		if parent.Err() != nil {
-			result = parent.Err()
-		} else if ctx.Err() != nil {
-			result = fmt.Errorf("VM system disk has %.1f GiB free (20%% cleanup target %.1f GiB; build reserve %.1f GiB; %s); storage cleanup exceeded its 30s preflight budget; build/pull not started; allow idle cleanup to finish or free space (%s): %w",
-				gib(disk.Available), gib(disk.TargetFree()), gib(reserve.Reserve.AdmissionFree(disk)), reserve.description(), storageCacheRemedy, ctx.Err())
-		}
-	}()
-	if err := c.collect(ctx, refs); err != nil {
+	err = c.collect(ctx, refs)
+	if cause := ctx.Err(); cause != nil {
+		return cause
+	}
+	if err != nil {
 		return err
 	}
 	disk, err = c.disk()
@@ -271,13 +264,13 @@ func (c storageCollector) beforeBuild(ctx context.Context, refs []string, out io
 		return err
 	}
 	// containerd can release snapshots shortly after tag/cache deletion. Give
-	// that reclamation a bounded chance to show up in actual filesystem usage.
-	deadline := time.NewTimer(3 * time.Second)
+	// that reclamation one wait to reach the measured admission reserve.
+	deadline := time.NewTimer(2 * time.Minute)
 	defer deadline.Stop()
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
 waiting:
-	for disk.Low() {
+	for !reserve.Reserve.Admits(disk) {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -289,6 +282,9 @@ waiting:
 				return err
 			}
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if !reserve.Reserve.Admits(disk) {
 		return fmt.Errorf("VM system disk has %.1f GiB free after cleanup; at least %.1f GiB is required before a build or pull (%s); retained images and box data were preserved; see yoloctl space storage, adjust the cap with yoloctl space storage set, or increase the VM system disk; %s", gib(disk.Available), gib(reserve.Reserve.AdmissionFree(disk)), reserve.description(), storageCacheRemedy)

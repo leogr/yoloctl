@@ -73,7 +73,7 @@ conversation resumes or validate login/provider behavior.
 5. <a id="source-5"></a> [Restricted pattern](../../internal/agentprofile/resume_file.go#L11) — `validateResumeFile`.
 6. <a id="source-6"></a> [Tracked launch](../../cmd/yoloctl/session_identity.go#L283) — `launch`, owner/preflight ordering and ordinary allocation/settlement.
 7. <a id="source-7"></a> [Presence request](../../cmd/yoloctl/session_resume_file.go#L15) — `resumeFilePresent`.
-8. <a id="source-8"></a> [Probe deadline](../../internal/lima/probe.go#L5) — `GuestProbeTimeout`, re-exported by `internal/vm`.
+8. <a id="source-8"></a> [Probe deadline](../../internal/lima/probe.go#L8) — `GuestProbeTimeout`, re-exported by `internal/vm`.
 9. <a id="source-9"></a> [Native helper](../../internal/accountstate/guest.py#L236) — `resume_file_present`, `run`, descriptor helpers.
 10. <a id="source-10"></a> [Conversation record](../../internal/agentsession/record.go#L72) — replacement reason, validation, `retire`, `save`.
 11. <a id="source-11"></a> [Shared status](../../internal/agentsession/status.go#L181) — `PreviousView.Text`, `Describe` note.

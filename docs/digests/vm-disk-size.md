@@ -65,7 +65,7 @@ grow-only set with its refusals and notice, and the show/list wording.
 
 1. <a id="source-1"></a> [Sizes](../../internal/spaceconfig/disk.go#L1-L48) — `VMDiskBytes`, `AutoVMDisk`, `DiskSize`; `Validate` and `Split` in bootstrap.go; import copies `m.Bootstrap.VM` in cmd/yoloctl/space_archive.go.
 2. <a id="source-2"></a> [CLI](../../cmd/yoloctl/space_disk.go#L1-L129) — `selectSpaceDisk`, `resolveSpaceDisk`, `diskCapacityNotice`, `growSpaceDisk`, `pendingDiskNote`, `diskShown`; `createControllerSpace` in controller_lifecycle.go.
-3. <a id="source-3"></a> [Set and edit](../../cmd/yoloctl/space_resources.go#L32-L248) — `spaceResourceDocument.Disk`, `changeSpaceResources`, `editSpaceResources`.
+3. <a id="source-3"></a> [Set and edit](../../cmd/yoloctl/space_resources.go#L31-L248) — `spaceResourceDocument.Disk`, `changeSpaceResources`, `editSpaceResources`.
 4. <a id="source-4"></a> [Format estimate](../../internal/vmapi/storage.go#L9-L31) — `HostStorageStartFree`, `FormatInodeRatio`, `FormatAllocation`; `requireHostStorageFor` in internal/firecracker/host_storage_linux.go, used by `Driver.Create`.
 5. <a id="source-5"></a> [Measured cost](../../cmd/yoloctl/space_disk_test.go#L57-L67) — `TestFormatAllocationMatchesTheMeasuredCost` holds the 2026-10-28 measurement (go-diskfs `ext4.Create`, `SectorsPerBlock: 8, InodeRatio: 16384`, sparse file); the format notice precedes `CreateWithSpec` in cmd/yoloctl/controller_deploy.go.
 6. <a id="source-6"></a> [Views and recreate](../../cmd/yoloctl/space.go#L1125-L1590) — `spaceShowData.SavedDisk`, `writeSpaceShow`, `writeSpaceShowJSON`, `printInstances`; `controllerSpaceShow`/`controllerSpaceList` in controller_views.go; the recreate line in controller_lifecycle.go.

@@ -1,6 +1,6 @@
 # Native rule generations and host management
 
-Verification: `1aceb626b9a21aacebda708a06e266205a2be704` and accompanying changes.
+Verification: `1aceb626b9a21aacebda708a06e266205a2be704` and accompanying changes. Rule validation output handling re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] Host-only `audit rules list`, `import FILE`, `remove NAME --sha256 PREFIX`
 and `edit` use the running matching controller. List creates nothing and never
@@ -29,9 +29,10 @@ paths; a missing selected generation is an error, never a fallback.
 [1](#source-1) [4](#source-4)
 
 [FACT] Preparation writes an unselected generation and invokes the same Falco
-once with `-c CONFIG --dry-run`; there is no companion collector, `-V` pass or
-validation timer. Falco's own per-load warning headers and full diagnostics are
-returned. Exit zero may still skip unknown-source rules; it is not a claim that
+once with `-c CONFIG --dry-run` under the caller context. After the
+process exits, inherited output has a two-minute drain fail-safe. Earlier
+caller cancellation closes the read. Complete combined diagnostics include
+Falco's own per-load warning headers. Exit zero may still skip unknown-source rules; it is not a claim that
 every rule is active. The host shows them as one
 `audit` record (error when refused, warning with Falco's warning count, else
 notice) with the complete, escaped native text as its indented body; a failed

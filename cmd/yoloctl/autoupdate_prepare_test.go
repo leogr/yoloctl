@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/agentprofile"
 )
@@ -77,5 +79,53 @@ func TestCancelledNpmProbeCannotPopulateOrConsumeResult(t *testing.T) {
 	ctx = context.WithValue(ctx, warmKey{}, state)
 	if _, err := preparedAgentLatest(ctx, &needed.profile); !errors.Is(err, context.Canceled) {
 		t.Fatal("cancelled apply may use result", err)
+	}
+}
+
+func TestPreparedRegistryWaitIsOptional(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	old := probeNpmLatest
+	t.Cleanup(func() { probeNpmLatest = old })
+	for _, tc := range []struct {
+		name  string
+		delay time.Duration
+	}{
+		{name: "after old deadline", delay: 6 * time.Second},
+		{name: "silent registry", delay: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				state := &imageWarmState{probeEnabled: true, snapshot: "snapshot"}
+				ctx := context.WithValue(t.Context(), warmKey{}, state)
+				var needed *npmProbeNeeded
+				if err := state.requireNpmProbe("codex"); !errors.As(err, &needed) {
+					t.Fatal(err)
+				}
+				probeNpmLatest = func(ctx context.Context, _ string) (*agentLatestInfo, error) {
+					if tc.delay == 0 {
+						<-ctx.Done()
+						return nil, ctx.Err()
+					}
+					select {
+					case <-time.After(tc.delay):
+						return &agentLatestInfo{Latest: "1.2.3"}, nil
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					}
+				}
+				start := time.Now()
+				if err := state.prepareNpmProbe(ctx, needed); err != nil || ctx.Err() != nil {
+					t.Fatal("optional discovery failed the operation", err, ctx.Err())
+				}
+				info, err := preparedAgentLatest(ctx, &needed.profile)
+				if tc.delay == 0 {
+					if time.Since(start) != time.Minute || err == nil || !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) {
+						t.Fatal("silent registry did not become a recorded skip", time.Since(start), info, err)
+					}
+				} else if err != nil || info == nil || info.Latest != "1.2.3" || time.Since(start) != tc.delay {
+					t.Fatal("late reply was lost", time.Since(start), info, err)
+				}
+			})
+		})
 	}
 }

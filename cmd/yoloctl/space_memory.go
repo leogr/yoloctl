@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/resources"
@@ -26,8 +25,6 @@ func resolveSpaceMemory(ctx context.Context, value string, errw io.Writer) (stri
 		}
 		return value, nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
 	host, err := resources.ReadHostMemory(ctx)
 	if err != nil {
 		return "", fmt.Errorf("measure host memory (or pass --memory explicitly): %w", err)

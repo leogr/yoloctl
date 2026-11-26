@@ -77,7 +77,7 @@ func TestSpaceStorageSlowLayerDoesNotStarveOtherBoxes(t *testing.T) {
 
 func TestSpaceStorageViewDeliversPartialBeforeCallerDeadline(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		parent, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		parent, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 		defer cancel()
 		old := storageViewSource
 		defer func() { storageViewSource = old }()

@@ -1,6 +1,6 @@
 # Installation, releases and host homes
 
-Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes (CI runner/publication selection); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); CLI log routing re-read at `58d3f37b76e6509d8587dec36a7a4b6814a42f10` and accompanying changes; checkout log parsing re-read at `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes; other sections at `1d265df3`. Install update advice re-read at `7ad3dd8677b44567186c76221439bbe11e0d7f0d` and accompanying changes.
+Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes (CI runner/publication selection); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); CLI log routing re-read at `58d3f37b76e6509d8587dec36a7a4b6814a42f10` and accompanying changes; checkout log parsing re-read at `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes; other sections at `1d265df3`. Install update advice re-read at `7ad3dd8677b44567186c76221439bbe11e0d7f0d` and accompanying changes. Space advice waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] Coordinated builds stamp hosts and Linux companions with one version and
 random bundle. Only strict `vMAJOR.MINOR.PATCH[-PRERELEASE]` selects release;
@@ -106,7 +106,9 @@ an optional recreate; unprovable configuration is `✗`. A Firecracker image
 equal to this build's default needs nothing; an absent or known different
 default adds an optional `space recreate S --update-vm-image`, never calling
 the image current or obsolete; other read errors are `✗`. Pending checkpoints
-show only recovery guidance. [9](#source-9)
+show only recovery guidance. Each optional inventory read gets one minute.
+If it expires, advice reports that space as unavailable. Earlier cancellation
+ends the remaining advice walk. [9](#source-9)
 
 ## Sources
 
@@ -138,8 +140,8 @@ show only recovery guidance. [9](#source-9)
    [destination boundary](../../internal/installer/paths.go#L1-L87), `ValidatePaths`;
    [fault/concurrency regressions](../../internal/installer/engine_test.go#L1-L307), `TestLockRetriesOnlySpuriousENOENT` in lock_retry_test.go;
    [overlap regressions](../../internal/installer/paths_test.go#L1-L193).
-9. <a id="source-9"></a> [Space advice](../../cmd/yoloctl/install_migration.go#L1-L342), `installSpaceAdvice`, `printSpaceAdvice`, `installLimaAdvice`, `firecrackerImageState`, `readLimaStackState` (shared with `space upgrade`);
-   [inventory](../../cmd/yoloctl/install_inventory.go#L1-L48), `consentSnapshot`, `readInstallConsent`;
+9. <a id="source-9"></a> [Space advice](../../cmd/yoloctl/install_migration.go#L1-L351), `installSpaceAdvice`, `printSpaceAdvice`, `installLimaAdvice`, `firecrackerImageState`, `readLimaStackState` (shared with `space upgrade`);
+   [inventory](../../cmd/yoloctl/install_inventory.go#L1-L45), `consentSnapshot`, `readInstallConsent`;
    [default metadata](../../internal/firecracker/recipe_linux.go#L60-L88), `ReadDefaultImage`.
 10. <a id="source-10"></a> [Install shell setup](install-shell-setup.md).
 

@@ -17,6 +17,7 @@ import (
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
 	"github.com/leogr/yoloctl/internal/spacetelemetry"
+	vmhost "github.com/leogr/yoloctl/internal/vm"
 )
 
 // spaceTelemetryMethod is the internal read stream behind `space view`. It is
@@ -85,7 +86,9 @@ func nativeTelemetrySource(space string) telemetrySource {
 				return nil, err
 			}
 			return telemetryAccounts(names, func(name string) []accountStateLeaf {
-				return accountStateLeaves(ctx, space, name)
+				attempt, cancel := context.WithTimeout(ctx, vmhost.GuestProbeTimeout)
+				defer cancel()
+				return accountStateLeaves(attempt, space, name)
 			})
 		},
 		presence: nativeChatPresence(),

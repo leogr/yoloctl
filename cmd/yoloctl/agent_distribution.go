@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -16,6 +17,42 @@ import (
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/nativerelease"
 )
+
+var doAgentRegistryRequest = func(req *http.Request) (*http.Response, error) {
+	dialer := &net.Dialer{KeepAlive: 30 * time.Second}
+	client := &http.Client{Transport: agentRegistryTransport(req.Context(), dialer.DialContext)}
+	return client.Do(req)
+}
+
+func agentRegistryTransport(ctx context.Context, dial func(context.Context, string, string) (net.Conn, error)) *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSHandshakeTimeout = 0
+	transport.DisableKeepAlives = true
+	transport.DialContext = func(_ context.Context, network, address string) (net.Conn, error) {
+		// net/http normally detaches speculative setup from the request. This
+		// transport serves one request, so the original context owns the dial
+		// and the connection during TLS or proxy negotiation.
+		conn, err := dial(ctx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		return &agentRegistryConn{
+			Conn: conn,
+			stop: context.AfterFunc(ctx, func() { _ = conn.Close() }),
+		}, nil
+	}
+	return transport
+}
+
+type agentRegistryConn struct {
+	net.Conn
+	stop func() bool
+}
+
+func (c *agentRegistryConn) Close() error {
+	c.stop()
+	return c.Conn.Close()
+}
 
 func fetchAgentLatest(ctx context.Context, p *agentprofile.Profile) (*agentLatestInfo, error) {
 	if p.NativeRelease == "" {
@@ -29,13 +66,11 @@ func fetchAgentLatest(ctx context.Context, p *agentprofile.Profile) (*agentLates
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doAgentRegistryRequest(req)
 	if err != nil {
 		return nil, err
 	}

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/account"
 	"github.com/leogr/yoloctl/internal/accountstate"
@@ -19,7 +20,6 @@ import (
 	"github.com/leogr/yoloctl/internal/logging"
 	"github.com/leogr/yoloctl/internal/manifestio"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
-	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -238,7 +238,12 @@ VALUES are never printed.
 			if err != nil {
 				return err
 			}
-			leaves := accountStateLeaves(cmd.Context(), space, name)
+			ctx, cancel := context.WithTimeout(cmd.Context(), time.Minute)
+			defer cancel()
+			leaves := accountStateLeaves(ctx, space, name)
+			if err := cmd.Context().Err(); err != nil {
+				return err
+			}
 			if asJSON {
 				return writeAccountShowJSON(cmd.OutOrStdout(), c, stateHome, leaves)
 			}
@@ -260,10 +265,8 @@ type accountStateLeaf struct {
 // identity home, sorted by agent. Best-effort read: a missing home (no leaf
 // materialized yet) is an empty list; unreadable entries are skipped.
 func accountStateLeaves(ctx context.Context, space, name string) []accountStateLeaf {
-	ctx, cancel := context.WithTimeout(ctx, vmhost.GuestProbeTimeout)
-	defer cancel()
 	result, err := accountStateOperation(ctx, space, accountstate.Request{Action: "list", Account: name})
-	if err != nil {
+	if err != nil || ctx.Err() != nil {
 		return nil
 	}
 	home, _ := account.StateHome(name)

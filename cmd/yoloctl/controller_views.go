@@ -10,6 +10,7 @@ import (
 	"io"
 	"slices"
 	"sort"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/agentbox"
 	"github.com/leogr/yoloctl/internal/boxstate"
@@ -29,10 +30,12 @@ type controllerBoxView struct {
 	Container *container.Container `json:"container,omitempty"`
 }
 
+var callControllerView = callHostController
+
 func controllerJSON(ctx context.Context, boot *spaceconfig.Bootstrap, method string, args []string, flags map[string][]string, dst any, errw io.Writer) error {
 	raw := boundedBuffer{Limit: 64 << 20}
 	req := controller.Request{ID: rand.Text(), Method: method, Space: boot.Name, Args: args, Flags: flags, Dash: -1}
-	if err := callHostController(ctx, boot, req, controller.ClientIO{Out: &raw, Err: errw}); err != nil {
+	if err := callControllerView(ctx, boot, req, controller.ClientIO{Out: &raw, Err: errw}); err != nil {
 		return err
 	}
 	return decodeBoundedJSON(&raw.Buffer, dst, raw.Limit)
@@ -70,7 +73,7 @@ func controllerAllSpaces(cmd *cobra.Command, method string) error {
 	asJSON, _ := cmd.Flags().GetBool("json")
 	warnedDisk := false
 	for _, name := range names {
-		readCtx, cancel := context.WithTimeout(cmd.Context(), 2*vmhost.GuestProbeTimeout)
+		readCtx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
 		boot, err := checkControllerSpace(readCtx, name)
 		if err == nil {
 			switch method {
@@ -104,6 +107,9 @@ func controllerAllSpaces(cmd *cobra.Command, method string) error {
 			}
 		}
 		cancel()
+		if cause := cmd.Context().Err(); cause != nil {
+			return cause
+		}
 		if err != nil {
 			unavailable = append(unavailable, fmt.Errorf("space %s unavailable: %w", name, err))
 			cliWarn(logging.Host, "space %s unavailable: %v", name, err)
@@ -165,9 +171,7 @@ func controllerSpaceShow(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	view := spaceShowData{AccountDiskID: boot.DiskID, AccountDiskUUID: boot.DiskUUID, MetadataOnly: true}
-	readCtx, cancel := context.WithTimeout(cmd.Context(), 2*vmhost.GuestProbeTimeout)
-	defer cancel()
-	view.Instance, _, err = findSpaceInstance(readCtx, space)
+	view.Instance, _, err = findSpaceInstance(cmd.Context(), space)
 	if err != nil {
 		return err
 	}
@@ -178,6 +182,8 @@ func controllerSpaceShow(cmd *cobra.Command, args []string) error {
 		}
 		view.Instance = vmhost.Instance{Name: space, Status: "Absent", CPUs: boot.VM.CPUs, Dir: dir}
 	}
+	readCtx, cancel := context.WithTimeout(cmd.Context(), time.Minute)
+	defer cancel()
 	selected, selectedErr := checkControllerSpace(readCtx, space)
 	if selectedErr == nil {
 		var native spaceShowData
@@ -187,6 +193,9 @@ func controllerSpaceShow(cmd *cobra.Command, args []string) error {
 		} else {
 			selectedErr = err
 		}
+	}
+	if cause := cmd.Context().Err(); cause != nil {
+		return cause
 	}
 	if selectedErr != nil {
 		view.RuntimeStatus, view.RuntimeError = "unavailable", selectedErr.Error()
@@ -217,9 +226,7 @@ func controllerSpaceShow(cmd *cobra.Command, args []string) error {
 }
 
 func controllerSpaceList(cmd *cobra.Command, _ []string) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), vmhost.GuestProbeTimeout)
-	defer cancel()
-	instances, err := vmhost.New().List(ctx)
+	instances, err := vmhost.New().List(cmd.Context())
 	if err != nil {
 		return err
 	}

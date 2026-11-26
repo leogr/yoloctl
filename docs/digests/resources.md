@@ -1,6 +1,6 @@
 # VM resource settings
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; disk field `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; disk field `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Host and VM observation waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] Host `space create` accepts `--memory auto` (default) or a positive
 integer size in KiB, MiB or GiB. Automatic selection happens before image
@@ -17,11 +17,11 @@ and configured RAM of other live yoloctl VMs. The result rounds down to whole
 GiB; insufficient room for 4 GiB is an error with an explicit-override hint.
 Paused and uncertain VM states count as allocated; stopped VMs do not. Only
 adapters represented by existing space declarations are consulted, once each,
-under a ten-second measurement budget. [1](#source-1) [4](#source-4)
+under the caller context. [1](#source-1) [4](#source-4)
 [5](#source-5)
 
 [FACT] Linux reads `MemTotal` and `MemAvailable`. macOS reads `hw.memsize` and
-the free, inactive and speculative page counts printed by a bounded `vm_stat`
+the free, inactive and speculative page counts printed by `vm_stat` under that context
 command. That command prints free pages with speculative pages subtracted;
 adding speculative pages once restores them. Purgeable and compressed pages
 are not added separately. Invalid or missing counters fail automatic
@@ -84,17 +84,17 @@ Firecracker/Lima resizing or restart behavior. [16](#source-16) [17](#source-17)
 
 ## Sources
 
-1. <a id="source-1"></a> [cmd/yoloctl/space_memory.go](../../cmd/yoloctl/space_memory.go#L18) — `selectSpaceMemory`, `resolveSpaceMemory`, bounded inventory and explicit override.
+1. <a id="source-1"></a> [cmd/yoloctl/space_memory.go](../../cmd/yoloctl/space_memory.go#L17) — `selectSpaceMemory`, `resolveSpaceMemory`, caller-owned inventory and explicit override.
 2. <a id="source-2"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L316-L373) — `createControllerSpace` selection and persisted bootstrap.
 3. <a id="source-3"></a> [cmd/yoloctl/space_archive.go](../../cmd/yoloctl/space_archive.go#L260) — `prepareImportedSpace` retains VM settings; import `--no-start` stops after restore.
 4. <a id="source-4"></a> [internal/resources/memory.go](../../internal/resources/memory.go#L22) — sizing policy, units and measurement decoders.
 5. <a id="source-5"></a> [cmd/yoloctl/space_memory_test.go](../../cmd/yoloctl/space_memory_test.go#L11) — live-state accounting and override tests.
 6. <a id="source-6"></a> [internal/resources/host_linux.go](../../internal/resources/host_linux.go#L10) — Linux memory measurement.
-7. <a id="source-7"></a> [internal/resources/host_darwin.go](../../internal/resources/host_darwin.go#L13) — macOS memory measurement.
+7. <a id="source-7"></a> [internal/resources/host_darwin.go](../../internal/resources/host_darwin.go#L12) — macOS memory measurement.
 8. <a id="source-8"></a> [Apple vm_stat at 2085a5d15f370b5580365275555afd313e845550](https://github.com/apple-opensource/system_cmds/blob/2085a5d15f370b5580365275555afd313e845550/vm_stat.tproj/vm_stat.c#L125) — printed page categories.
 9. <a id="source-9"></a> [scripts/smoke/common.sh](../../scripts/smoke/common.sh#L228-L230) — smoke_create_space explicit memory/CPU budget.
 10. <a id="source-10"></a> [internal/resources/memory_test.go](../../internal/resources/memory_test.go#L8) — policy, decoder and explicit-unit tests.
-11. <a id="source-11"></a> [cmd/yoloctl/space_resources.go](../../cmd/yoloctl/space_resources.go#L43) — `newSpaceSetCmd`, `newSpaceEditCmd`, stopped guard, snapshots, editor and desired-first publication.
+11. <a id="source-11"></a> [cmd/yoloctl/space_resources.go](../../cmd/yoloctl/space_resources.go#L42) — `newSpaceSetCmd`, `newSpaceEditCmd`, stopped guard, snapshots, editor and desired-first publication.
 12. <a id="source-12"></a> [cmd/yoloctl/controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L151) — `startControllerSpaceImpl` synchronizes saved resources before an existing stopped VM starts.
 13. <a id="source-13"></a> [internal/vmapi/resources.go](../../internal/vmapi/resources.go#L23) — `ValidateResources` adapter bounds and stopped-state error.
 14. <a id="source-14"></a> [internal/firecracker/driver_linux.go](../../internal/firecracker/driver_linux.go#L168) — `SetResources` stopped/identity checks and narrow configuration update.

@@ -79,3 +79,22 @@ func TestRuleValidationCancellationReapsProcess(t *testing.T) {
 		t.Fatalf("validator remains after cancellation: %v", err)
 	}
 }
+
+func TestRuleValidationKeepsLateInheritedWarnings(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "falco")
+	// The leader returns success before its descendant reports the rest of the
+	// combined diagnostics, beyond the old two-second pipe drain limit.
+	script := `#!/bin/sh
+printf '1 Warnings:\nfirst warning\n'
+(sleep 2.1; printf '2 Warnings:\nlate warning\n' >&2) &
+`
+	if err := os.WriteFile(binary, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	validation, err := ValidateRuleSet(ctx, binary, "/fixed.json")
+	if err != nil || validation.Warnings != 3 || !strings.Contains(validation.Diagnostics, "late warning") {
+		t.Fatal(validation, err)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/lima"
@@ -59,6 +60,9 @@ func installSpaceAdvice(ctx context.Context, target string) []spaceAdvice {
 	}
 	var advice []spaceAdvice
 	for _, entry := range entries {
+		if ctx.Err() != nil {
+			break
+		}
 		name := entry.Name()
 		if strings.HasPrefix(name, ".") {
 			continue
@@ -80,7 +84,12 @@ func installSpaceAdvice(ctx context.Context, target string) []spaceAdvice {
 			advice = append(advice, a)
 			continue
 		}
-		snapshot, err := observeInstallConsent(ctx, name)
+		observeCtx, cancel := context.WithTimeout(ctx, time.Minute)
+		snapshot, err := observeInstallConsent(observeCtx, name)
+		cancel()
+		if ctx.Err() != nil {
+			break
+		}
 		if err != nil {
 			a.Problem = "could not check this space: " + err.Error()
 			advice = append(advice, a)

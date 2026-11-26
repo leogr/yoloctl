@@ -1,6 +1,6 @@
 # VM disks in space view and `space storage`
 
-Verification: `c96dca31f1075b7912859faab06c9a53b3c14b78` and accompanying changes; re-read cited sources when changing behavior. nerdctl list source re-read at `fcd4a112` and accompanying changes.
+Verification: `c96dca31f1075b7912859faab06c9a53b3c14b78` and accompanying changes; re-read cited sources when changing behavior. nerdctl list source re-read at `fcd4a112` and accompanying changes. Storage deadlines re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] Each telemetry sample reads `statfs` of the data disk mount (`disk`) and
 of the VM root `/` (`system_disk`): total and `Bavail` bytes. Failed reads leave the field absent. On Firecracker `/` is an overlay
@@ -24,12 +24,12 @@ on the title. [7](#source-7) [8](#source-8)
 
 [FACT] `space.storage` is a registered non-mutating, host-only read (box
 operators are refused). Host `space storage [SPACE] [--json]` runs the usual
-bundle/running-VM check and asks the controller, whose collector has a 20 s
-budget inside the CLI/popup deadlines, without a lock. It delivers completed
-measurements even when that inner budget expires; caller cancellation remains
-an error. It reports both disks, every container's writable layer
+bundle/running-VM check and asks the controller under the caller context.
+The lock-free collector has a one-minute measurement budget. It returns
+completed measurements when that budget expires. Caller cancellation still
+ends the request. It reports both disks, every container's writable layer
 (stopped and non-box containers included), images, BuildKit and the
-remainder. [9](#source-9) [10](#source-10) [11](#source-11)
+remainder. [9](#source-9) [10](#source-10) [11](#source-11) [24](#source-24)
 
 [FACT] Containers are listed and keyed before any size walk. Each unique box
 key is measured with `ctr snapshots usage -b -- KEY` in namespace `default`,
@@ -73,16 +73,16 @@ hover and popups with fixtures. No live VM measurement is established by them.
 ## Sources
 
 1. <a id="source-1"></a> [collect.go](../../internal/spacetelemetry/collect.go#L89-L98) — `Sample` disk reads; `SystemDisk` in `telemetry.go` at L151-L154.
-2. <a id="source-2"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L93-L100) — native collector with `SystemMount: "/"`.
+2. <a id="source-2"></a> [space_telemetry.go](../../cmd/yoloctl/space_telemetry.go#L96-L103) — native collector with `SystemMount: "/"`.
 3. <a id="source-3"></a> [init_linux.go](../../internal/vmguest/init_linux.go#L268-L292) — runtime directories bound from `/run/system`; root overlay at L638-L646.
 4. <a id="source-4"></a> [disk.go](../../internal/spacetelemetry/disk.go#L1-L56) — `DiskLevel`, thresholds, `Used`, `WarnFree`, `CriticalFree`, `Pressure`.
 5. <a id="source-5"></a> [disks.go](../../internal/tui/spaceview/disks.go#L14-L166) — `disks`, `levelGauge`, `diskBlock`, `diskBand`; popups at L234-L278.
 6. <a id="source-6"></a> [layout.go](../../internal/tui/spaceview/layout.go#L411-L421) — disk hover hints; `tSystemDisk` at L29; click in `popup.go` at L164.
 7. <a id="source-7"></a> [disks.go](../../internal/tui/spaceview/disks.go#L168-L230) — `diskAlerts`, `diskEvents`; title slot in `layout.go` at L255-L270.
 8. <a id="source-8"></a> [data.go](../../internal/tui/spaceview/data.go#L168) — disk events per sample.
-9. <a id="source-9"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L122) — `space.storage` entry; view in `controller_views.go` at L277.
-10. <a id="source-10"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L308) — `newSpaceStorageCmd`; registered in `controller_lifecycle.go` at L45.
-11. <a id="source-11"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L22-L306) — report types, `collectSpaceStorage`, `runSpaceStorageView`.
+9. <a id="source-9"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L122) — `space.storage` entry; view in `controller_views.go` at L284-L285.
+10. <a id="source-10"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L400) — `newSpaceStorageCmd`; registered in `controller_lifecycle.go` at L45.
+11. <a id="source-11"></a> [collectSpaceStorage](../../cmd/yoloctl/space_storage.go#L149) — measurement budget and partial results.
 12. <a id="source-12"></a> [storage.go](../../internal/container/storage.go#L129-L245) — keyed/global snapshot measurements and strict parsers.
 13. <a id="source-13"></a> [storage_usage_linux.go](../../cmd/yoloctl/storage_usage_linux.go#L15-L70) — `diskUsage`.
 14. <a id="source-14"></a> [containerd v2.3.3 ctr snapshots](https://github.com/containerd/containerd/blob/v2.3.3/cmd/ctr/commands/snapshots/snapshots.go) — `usageCommand`.
@@ -95,3 +95,4 @@ hover and popups with fixtures. No live VM measurement is established by them.
 21. <a id="source-21"></a> [workdir.go](../../internal/agentbox/workdir.go#L131-L135) — `NewEphemeralWorkdir`; `AgentboxDirHost` in `internal/sandbox/sandbox.go` at L84-L86.
 22. <a id="source-22"></a> [nerdctl v2.4.2 container list](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/cmd/container/list.go) — `ListItem.ID` truncated to 12 characters unless `--no-trunc`.
 23. <a id="source-23"></a> [space_storage_budget_test.go](../../cmd/yoloctl/space_storage_budget_test.go#L1) — starvation, slow key, shared key and actual view-delivery controls.
+24. <a id="source-24"></a> [runSpaceStorageView](../../cmd/yoloctl/space_storage.go#L392) — partial reply and cancellation.

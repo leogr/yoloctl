@@ -147,7 +147,7 @@ physical power loss.
 28. <a id="source-28"></a> [Interrupted-outcome recovery](controller-recovery.md) — durable proofs, interrupted closing without holds and deferred records.
 29. <a id="source-29"></a> [nerdctl v2.4.2 container walker](https://github.com/containerd/nerdctl/blob/v2.4.2/pkg/idutil/containerwalker/containerwalker.go#L47-L74) — `Walk` matches the name label or an ID prefix; `container inspect` returns every match.
 30. <a id="source-30"></a> [Runtime target](../../internal/container/target.go#L1) — `ValidateContainerID`, `ResolveContainerID`; `Client.Start/Stop/Remove` in container.go; collision/refusal/fixed-ID/error controls in target_test.go; named SSH with retained CID in sandbox/stop.go `StopContainerID`.
-31. <a id="source-31"></a> [Maintenance](../../cmd/yoloctl/autoupdate.go#L97) — npm/version helpers; native install in agent_distribution.go and process probe in agent.go; container_target_test.go covers target argv and refusals.
+31. <a id="source-31"></a> [Maintenance](../../cmd/yoloctl/autoupdate.go#L100) — npm/version helpers; native install in agent_distribution.go and process probe in agent.go; container_target_test.go covers target argv and refusals.
 32. <a id="source-32"></a> [Legacy forwarding](../../internal/port/port.go#L94-L172) — inspected bridge/CID and `dnatExecArgs`; `legacyDNATTarget` verifies cleanup routing, and `TestLegacyDNATUsesSystemPathAndExactSelectedID` checks argv, mode and refusals.
 
 33. <a id="source-33"></a> [Saved apply errors](../../cmd/yoloctl/privileged_operator.go#L192) — `savedDeclarationError`.

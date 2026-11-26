@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -25,6 +26,8 @@ import (
 )
 
 const npmLatestCacheTTL = time.Hour
+
+var agentStatusInstalledVersion = fetchInstalledAgentVersion
 
 func newAgentStatusCmd() *cobra.Command {
 	var (
@@ -79,6 +82,9 @@ for an offline view that only probes installed versions.
 				LatestTTL:   npmLatestCacheTTL,
 				Stderr:      cmd.ErrOrStderr(),
 			})
+			if err := cmd.Context().Err(); err != nil {
+				return err
+			}
 			if asJSON {
 				return writeAgentStatusJSON(cmd.OutOrStdout(), statusRows)
 			}
@@ -117,10 +123,13 @@ func buildAgentStatusRows(ctx context.Context, rows []agentboxRow, opts agentSta
 	if opts.Stderr == nil {
 		opts.Stderr = io.Discard
 	}
-	latestByPackage := map[string]*agentLatestInfo{}
-	latestErrByPackage := map[string]error{}
+	latest := make(map[string]*agentStatusLookup)
+	warnings := make(map[int]string)
 	out := make([]agentStatusRow, 0, len(rows))
 	for _, r := range rows {
+		if ctx.Err() != nil {
+			return out
+		}
 		if !containerStatusRunning(r.Container.Status) {
 			continue
 		}
@@ -139,7 +148,7 @@ func buildAgentStatusRows(ctx context.Context, rows []agentboxRow, opts agentSta
 		profile, err := agentprofile.Lookup(agentName)
 		if err != nil {
 			row.Error = fmt.Sprintf("load agent: %v", err)
-			cliWarn(logging.Box, "%s/%s: %v", r.Space, r.Container.Name, row.Error)
+			warnings[len(out)] = fmt.Sprintf("%s/%s: %v", r.Space, r.Container.Name, row.Error)
 			out = append(out, row)
 			continue
 		}
@@ -150,34 +159,51 @@ func buildAgentStatusRows(ctx context.Context, rows []agentboxRow, opts agentSta
 			continue
 		}
 		c := container.New(r.Space)
-		installed, err := fetchInstalledAgentVersion(ctx, c, r.Container.Name, profile)
+		installed, err := agentStatusInstalledVersion(ctx, c, r.Container.Name, profile)
 		if err != nil {
 			row.Error = fmt.Sprintf("read installed version: %v", err)
-			cliWarn(logging.Box, "%s/%s: read installed %s version: %v", r.Space, r.Container.Name, profile.Distribution(), err)
+			warnings[len(out)] = fmt.Sprintf("%s/%s: read installed %s version: %v", r.Space, r.Container.Name, profile.Distribution(), err)
 		} else {
 			row.InstalledVersion = installed
 		}
-		if opts.CheckLatest {
-			latest, ok := latestByPackage[profile.Distribution()]
-			latestErr, hadErr := latestErrByPackage[profile.Distribution()]
-			if !ok && !hadErr {
-				latest, latestErr = fetchAgentLatestCached(ctx, profile, opts.LatestTTL)
-				if latestErr != nil {
-					latestErrByPackage[profile.Distribution()] = latestErr
-					cliWarn(logging.Box, "query %s: %v", profile.Distribution(), latestErr)
-				} else {
-					latestByPackage[profile.Distribution()] = latest
+		if opts.CheckLatest && latest[row.Package] == nil {
+			latest[row.Package] = &agentStatusLookup{profile: profile, firstRow: len(out)}
+		}
+		out = append(out, row)
+	}
+	if len(latest) != 0 && ctx.Err() == nil {
+		// Every distribution shares the view deadline. A silent registry must
+		// not prevent another distribution from reporting its latest version.
+		lookupCtx, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+		var pending sync.WaitGroup
+		for _, lookup := range latest {
+			pending.Go(func() {
+				lookup.info, lookup.err = fetchAgentLatestCached(lookupCtx, lookup.profile, opts.LatestTTL)
+			})
+		}
+		pending.Wait()
+	}
+	for i := range out {
+		row := &out[i]
+		if warning := warnings[i]; warning != "" {
+			cliWarn(logging.Box, "%s", warning)
+		}
+		if lookup := latest[row.Package]; lookup != nil {
+			if lookup.info != nil {
+				row.LatestVersion = lookup.info.Latest
+			} else if lookup.err != nil {
+				if i == lookup.firstRow {
+					cliWarn(logging.Box, "query %s: %v", row.Package, lookup.err)
 				}
-			}
-			if latest != nil {
-				row.LatestVersion = latest.Latest
-			} else if latestErr != nil && row.Error == "" {
-				row.Error = fmt.Sprintf("query latest: %v", latestErr)
+				if row.Error == "" {
+					row.Error = fmt.Sprintf("query latest: %v", lookup.err)
+				}
 			}
 		}
 		row.Drift = agentVersionDrift(row.InstalledVersion, row.LatestVersion)
-		out = append(out, row)
 	}
+
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Space != out[j].Space {
 			return out[i].Space < out[j].Space
@@ -185,6 +211,13 @@ func buildAgentStatusRows(ctx context.Context, rows []agentboxRow, opts agentSta
 		return out[i].Name < out[j].Name
 	})
 	return out
+}
+
+type agentStatusLookup struct {
+	profile  *agentprofile.Profile
+	firstRow int
+	info     *agentLatestInfo
+	err      error
 }
 
 func printAgentStatus(w io.Writer, rows []agentStatusRow, withSpace bool) error {

@@ -34,7 +34,7 @@ func TestBuildReservePreflightKeepsCleanupAndCancellation(t *testing.T) {
 		{name: "uncapped-refuses", value: reserveValue("none"), free: 15, refused: true},
 		{name: "zero-admits-empty", value: reserveValue("0GiB"), free: 0},
 		{name: "zero-keeps-cleanup-error", value: reserveValue("0GiB"), free: 0, cleanupErr: true, refused: true},
-		{name: "zero-keeps-budget", value: reserveValue("0GiB"), free: 0, timeout: true, refused: true},
+		{name: "zero-keeps-caller-deadline", value: reserveValue("0GiB"), free: 0, timeout: true, refused: true},
 		{name: "zero-keeps-cancellation", value: reserveValue("0GiB"), free: 0, cancel: true, refused: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -43,6 +43,11 @@ func TestBuildReservePreflightKeepsCleanupAndCancellation(t *testing.T) {
 				reads, cleanups := 0, 0
 				parent, cancel := context.WithCancel(t.Context())
 				defer cancel()
+				if tc.timeout {
+					var stop context.CancelFunc
+					parent, stop = context.WithTimeout(parent, 40*time.Second)
+					defer stop()
+				}
 				collector := storageCollector{
 					disk: func() (storagegc.Disk, error) {
 						return storagegc.Disk{Total: 145 * testGiB, Available: tc.free * testGiB}, nil
@@ -76,7 +81,7 @@ func TestBuildReservePreflightKeepsCleanupAndCancellation(t *testing.T) {
 						}
 					}
 				}
-				if tc.timeout && (!errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "30s preflight budget")) {
+				if tc.timeout && !errors.Is(err, context.DeadlineExceeded) {
 					t.Fatal(err)
 				}
 				if tc.cancel && (!errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "budget")) {

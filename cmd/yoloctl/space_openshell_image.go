@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/leogr/yoloctl/internal/lima"
+	"github.com/leogr/yoloctl/internal/processio"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/leogr/yoloctl/internal/vmwire"
@@ -53,11 +53,8 @@ func checkSpaceOpenShellImage(ctx context.Context, boot *spaceconfig.Bootstrap) 
 	args := []string{"sudo", "/sbin/yoloctl-init", "unit"}
 	cmd := spaceOpenShellInitCommand(ctx, boot.Name, args...)
 	cmd.Stdin = bytes.NewReader(raw)
-	cmd.Stdout = io.Discard
 	var stderr spaceOpenShellInitError
-	cmd.Stderr = &stderr
-	cmd.WaitDelay = 250 * time.Millisecond
-	err = cmd.Run()
+	err = processio.Capture(ctx, cmd, &stderr, false, 2*time.Minute)
 	if cause := ctx.Err(); cause != nil {
 		return spaceOpenShellCheckContextError("check VM image OpenShell support", cause, args, stderr)
 	}
@@ -79,11 +76,8 @@ func checkRunningLimaNFT(ctx context.Context, boot *spaceconfig.Bootstrap) error
 	const probe = "if ! test -x /usr/sbin/nft || ! /usr/sbin/nft --version >/dev/null 2>&1; then exit 78; fi"
 	args := []string{"sudo", "sh", "-c", probe}
 	cmd := spaceOpenShellInitCommand(ctx, boot.Name, args...)
-	cmd.Stdout = io.Discard
 	var stderr spaceOpenShellInitError
-	cmd.Stderr = &stderr
-	cmd.WaitDelay = 250 * time.Millisecond
-	err := cmd.Run()
+	err := processio.Capture(ctx, cmd, &stderr, false, 2*time.Minute)
 	if cause := ctx.Err(); cause != nil {
 		return spaceOpenShellCheckContextError("check Lima OpenShell nft support", cause, args, stderr)
 	}

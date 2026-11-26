@@ -290,3 +290,32 @@ func TestSpaceOpenShellLimaCheckCanCancelWithoutDeadline(t *testing.T) {
 		t.Fatalf("wanted cancellation, got %v", err)
 	}
 }
+
+func TestOpenShellChecksIgnoreInheritedDiscardedStdout(t *testing.T) {
+	for _, backend := range []string{"lima", "firecracker"} {
+		t.Run(backend, func(t *testing.T) {
+			input, release, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = input.Close(); _ = release.Close() }()
+			old := spaceOpenShellInitCommand
+			t.Cleanup(func() { spaceOpenShellInitCommand = old })
+			spaceOpenShellInitCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+				cmd := exec.CommandContext(ctx, "sh", "-c", `cat <&3 2>/dev/null &`)
+				cmd.ExtraFiles = []*os.File{input}
+				return cmd
+			}
+			ctx, stop := context.WithTimeout(t.Context(), 5*time.Second)
+			defer stop()
+			boot := &spaceconfig.Bootstrap{Name: "test", VM: spaceconfig.VMSettings{Backend: backend}}
+			check := checkSpaceOpenShellImage
+			if backend == "lima" {
+				check = checkRunningLimaNFT
+			}
+			if err := check(ctx, boot); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

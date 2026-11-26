@@ -110,7 +110,7 @@ fixtures. No AWS account was available for live provider testing.
 3. <a id="source-3"></a> [Auth status](../../cmd/yoloctl/account_auth.go#L1-L430) — value-free summary through `awsSecretsPresent` and retained native errors.
 4. <a id="source-4"></a> [Verified installer](../../internal/features/aws-install.sh#L1-L36) — signing-key fingerprint, architecture selection and verification before execution.
 5. <a id="source-5"></a> [AWS invalidation test](../../internal/agentboximage/aws_recipe_test.go#L1-L56) — installer/key bytes in the recipe consumed by `composedImageRef`.
-6. <a id="source-6"></a> [Secret input](../../cmd/yoloctl/account.go#L673) — `newAccountSecretSetCmd`, private stdin/from-env.
+6. <a id="source-6"></a> [Secret input](../../cmd/yoloctl/account.go#L671) — `newAccountSecretSetCmd`, private stdin/from-env.
 7. <a id="source-7"></a> [Example validation](../../cmd/yoloctl/account_auth_aws_test.go#L1-L128) — actual Cobra flags, strict custom-grant loading and policy composition; implementations in `agentbox.go`, `internal/capabilities/user.go` and `internal/agentbox/compose.go`.
 8. <a id="source-8"></a> [Official OpenAI Bedrock guidance](https://learn.chatgpt.com/docs/amazon-bedrock) — documented provider/region configuration, checked 2026-11-06; not installed-provider execution proof.
 9. <a id="source-9"></a> [Codex profile](../../internal/agentprofile/builtin/codex.yaml#L1-L118) — four-key AWS declarations; OpenAI auth remains native.

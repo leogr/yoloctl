@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/agentprofile"
 )
@@ -50,7 +51,9 @@ func (s *imageWarmState) prepareNpmProbe(ctx context.Context, p *npmProbeNeeded)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	info, err := probeNpmLatest(ctx, p.profile.NpmPackage)
+	lookupCtx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	info, err := probeNpmLatest(lookupCtx, p.profile.NpmPackage)
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -88,7 +91,9 @@ func preparedAgentLatest(ctx context.Context, p *agentprofile.Profile) (*agentLa
 		}
 		return entry.info, nil
 	}
-	return fetchAgentLatest(ctx, p)
+	lookupCtx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	return fetchAgentLatest(lookupCtx, p)
 }
 func npmProbeMethod(method string) bool {
 	switch method {

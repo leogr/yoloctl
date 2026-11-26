@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/layout"
 	"github.com/leogr/yoloctl/internal/logging"
@@ -175,9 +174,10 @@ func requireResourceSpaceStopped(ctx context.Context, boot *spaceconfig.Bootstra
 }
 
 func requireResourceVMStopped(ctx context.Context, boot *spaceconfig.Bootstrap) error {
-	probe, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	instance, found, err := lookupResourceSpace(probe, boot.Name)
+	instance, found, err := lookupResourceSpace(ctx, boot.Name)
+	if err == nil {
+		err = ctx.Err()
+	}
 	if err != nil {
 		return fmt.Errorf("cannot establish stopped VM state: %w", err)
 	}

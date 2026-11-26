@@ -1,6 +1,6 @@
 # Automatic VM storage cleanup
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. nerdctl image identity re-read at `fcd4a112` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; re-read cited sources when changing behavior. nerdctl image identity re-read at `fcd4a112` and accompanying changes. Build preflight waiting re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] Lima deployment and Firecracker guest boot configure the rootful BuildKit containerd worker
 in namespace `default`. GC targets 10% of root capacity, capped at 4 GiB,
@@ -61,12 +61,13 @@ is diagnostic; it does not block foreground builds. [5](#source-5)
 
 [FACT] Cleanup removes only obsolete composed tags and unused BuildKit cache.
 No boxes, volumes, workdirs, account data or declarations are pruned. Before
-builds/pulls, root free space below 20% triggers a bounded 30-second cleanup
-retaining that build's input/output references. Its timeout reports shortage
-and incomplete cleanup, separately from user cancellation. Pressure may discard
-all unused cache. Free bytes are remeasured for up to three seconds afterward;
-persistent shortage below the [build admission reserve](build-reserve.md) refuses
-the build. Cleanup targets stay uncapped. Shared-layer totals are not physical
+builds/pulls, root free space below 20% triggers one cleanup pass under the
+operation context while preserving that build's input/output references.
+Pressure may discard all unused cache. After the pass, free bytes are
+remeasured until they reach the [build admission reserve](build-reserve.md)
+or two minutes elapse. Persistent shortage reports measured free and required
+space and releases the cleanup guard. Caller cancellation ends the wait
+earlier. Cleanup targets stay uncapped. Shared-layer totals are not physical
 recovery measurements. [7](#source-7) [9](#source-9) [16](#source-16)
 
 [FACT] A returned image-preflight refusal reaches the requesting client with

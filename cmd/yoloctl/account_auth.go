@@ -14,7 +14,6 @@ import (
 	"github.com/leogr/yoloctl/internal/accountstate"
 	"github.com/leogr/yoloctl/internal/agentprofile"
 	"github.com/leogr/yoloctl/internal/logging"
-	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/spf13/cobra"
 )
 
@@ -377,6 +376,9 @@ Inaccessible native storage is reported unavailable.
 			out := cmd.OutOrStdout()
 			aws := awsSecretsPresent(t.profile, acct)
 			findings, err := accountAuthStatus(cmd.Context(), t)
+			if cause := cmd.Context().Err(); cause != nil {
+				return cause
+			}
 			if err != nil {
 				_, _ = fmt.Fprintf(out, "%s: unavailable (space stopped or native state inaccessible)", t.display())
 				if aws {
@@ -408,8 +410,6 @@ Inaccessible native storage is reported unavailable.
 // accountAuthStatus returns only native classifications; credential bytes never
 // leave the verified VM helper. A missing disk/read failure remains unavailable.
 func accountAuthStatus(ctx context.Context, t accountAuthTarget) ([]accountstate.AuthFinding, error) {
-	ctx, cancel := context.WithTimeout(ctx, vmhost.GuestProbeTimeout)
-	defer cancel()
 	if t.profile.Auth.Format == "" {
 		result, err := accountStateOperation(ctx, t.space, accountstate.Request{Action: "exists", Account: t.name, Agent: t.profile.Name, Path: t.profile.Auth.CredentialFile})
 		if err != nil {

@@ -1,6 +1,6 @@
 # Agent maintenance and the managed npm prefix
 
-Verification: `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; old-box install message `6fa0a8ced0566ecd2f18066a0fe3a442946b632b` and accompanying changes.
+Verification: `8a5e840af94251837f9ad6e9bded0b026b458070` and accompanying changes; old-box install message `6fa0a8ced0566ecd2f18066a0fe3a442946b632b` and accompanying changes. Release discovery and status waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
 
 [FACT] npm is split by role. The package a box's agent profile names
 (`npm_package`, built-in or custom) is installed in `/opt/yoloctl/npm`, owned by
@@ -60,6 +60,15 @@ so boxes without an npm agent keep their image names. [13](#source-13)
 the forced update and the maintenance cache owner. [17](#source-17)
 [18](#source-18)
 
+[FACT] Autoupdate allows one minute for optional release discovery. An
+unanswered lookup produces the existing skip notice and the lifecycle
+operation continues. In `agent status`, installed rows are collected first.
+Latest lookups start together and share a one-minute budget, with one lookup
+per distribution. The reply retains installed rows and completed latest
+values. `--no-check-latest` skips those lookups. The request context
+governs registry dial, TLS and response reads. [21](#source-21)
+[22](#source-22) [23](#source-23) [24](#source-24)
+
 ## Sources
 
 1. <a id="source-1"></a> [internal/agentnpm/agentnpm.go](../../internal/agentnpm/agentnpm.go#L1-L37) — `Prefix`, `User`, `Home`, `Cache`, `PackageJSON`.
@@ -69,8 +78,8 @@ the forced update and the maintenance cache owner. [17](#source-17)
 5. <a id="source-5"></a> [internal/features/agentnpm.go](../../internal/features/agentnpm.go#L1-L134) — runtime feature name, `LookupRuntime`, `npmInstaller`, `recipe`, `agentNpmInstallDockerfile`, `agentNpmFinalPath`.
 6. <a id="source-6"></a> [internal/features/features.go](../../internal/features/features.go#L390-L451) — `renderDockerfile`.
 7. <a id="source-7"></a> [Rendering regressions](../../internal/features/agentnpm_test.go#L1-L150) — tool vs agent, first supplier, appended/pinned/duplicate, OpenCode check, names.
-8. <a id="source-8"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L97-L174) — `agentMaintenanceExecArgs`, `npmInstallGlobalAtLatest`, `predatesAgentNpm`, `npmInstallGlobalAtLatestArgs`, `fetchInstalledNpmVersion`.
-9. <a id="source-9"></a> [Native install argv](../../cmd/yoloctl/agent_distribution.go#L101-L119) — `nativeInstallArgs` uses the shared exec builder.
+8. <a id="source-8"></a> [cmd/yoloctl/autoupdate.go](../../cmd/yoloctl/autoupdate.go#L100-L177) — `agentMaintenanceExecArgs`, `npmInstallGlobalAtLatest`, `predatesAgentNpm`, `npmInstallGlobalAtLatestArgs`, `fetchInstalledNpmVersion`.
+9. <a id="source-9"></a> [Native install argv](../../cmd/yoloctl/agent_distribution.go#L137-L154) — `nativeInstallArgs` uses the shared exec builder.
 10. <a id="source-10"></a> [Maintenance argv regression](../../cmd/yoloctl/autoupdate_test.go#L11-L64) — `TestNpmAgentMaintenanceUsesExplicitConfigPaths`, `TestNpmAgentMaintenanceEndsOptionsBeforeThePackage`.
 11. <a id="source-11"></a> [Target and failure regressions](../../cmd/yoloctl/container_target_test.go#L65-L203) — `TestMaintenanceExecsUseSystemPathAndExactlySelectedContainer`, `TestNpmMaintenanceFailureExplainsSystemPathAndAutoupdateOptOut`, `TestNpmMaintenanceOnABoxWithoutTheManagedFolderNamesRecreate`.
 12. <a id="source-12"></a> [Explicit update](../../cmd/yoloctl/agent.go#L144-L166) — selected ID, probe and same-version install.
@@ -83,3 +92,7 @@ the forced update and the maintenance cache owner. [17](#source-17)
 18. <a id="source-18"></a> [scripts/smoke/common.sh](../../scripts/smoke/common.sh#L105-L128) — `smoke_check_image_identity` managed-prefix owner and mode.
 19. <a id="source-19"></a> [Package names](../../internal/agentnpm/agentnpm.go#L39-L59) — `ValidatePackage`, `ShellQuote`; used by `Profile.Validate` and the runtime-name parser; regressions in agentnpm_test.go and profile_test.go `TestValidate`.
 20. <a id="source-20"></a> [OCI alias check](../../internal/ocifeature/runtime_env.go#L316-L337) — `networkToolPrefixes`; regression `TestAliasGuardLeavesTheManagedNpmPrefixToLinkGuard`.
+21. <a id="source-21"></a> [Prepared lookups](../../cmd/yoloctl/autoupdate_prepare.go#L50) — optional npm preparation and fallback.
+22. <a id="source-22"></a> [Status rows and shared latest budget](../../cmd/yoloctl/agent_status.go#L119).
+23. <a id="source-23"></a> [Registry transport](../../cmd/yoloctl/agent_distribution.go#L21-L55) — request ownership and cancellation.
+24. <a id="source-24"></a> [Autoupdate skip](../../cmd/yoloctl/autoupdate.go#L43) — soft lookup errors and earlier caller cancellation.

@@ -2,13 +2,15 @@ package main
 
 import (
 	"context"
-	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/leogr/yoloctl/internal/audit"
 	"github.com/leogr/yoloctl/internal/container"
@@ -16,6 +18,7 @@ import (
 	"github.com/leogr/yoloctl/internal/safepath"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	"github.com/leogr/yoloctl/internal/spaceenv"
+	"github.com/leogr/yoloctl/internal/vmservice"
 	"gopkg.in/yaml.v3"
 )
 
@@ -45,7 +48,7 @@ func TestAuditOldImageRefusedBeforeEffects(t *testing.T) {
 		t.Fatal(err)
 	}
 	auditBackendSupport = func(context.Context, *container.Client) error {
-		return errors.New("old image; explicitly recreate with --update-vm-image")
+		return vmservice.ErrAuditUnsupported
 	}
 	auditAcquire = func(context.Context, string, bool) (func(), error) {
 		t.Fatal("old-image refusal acquired mutation guard")
@@ -66,6 +69,26 @@ func TestAuditOldImageRefusedBeforeEffects(t *testing.T) {
 	if err != nil || string(after) != string(raw) {
 		t.Fatal("old-image refusal changed settings", err)
 	}
+	known := status
+	auditBackendSupport = func(context.Context, *container.Client) error { return syscall.ECONNRESET }
+	status, err = nativeAuditStatus(t.Context())
+	if err != nil || status.State != "unavailable" || !strings.Contains(status.Error, "connection reset") || strings.Contains(status.Error, "--update-vm-image") {
+		t.Fatal("broken capability query was classified as old", status, err)
+	}
+	if status.Desired != known.Desired || status.Rules != known.Rules || status.Drops != known.Drops || status.MetadataGaps != known.MetadataGaps {
+		t.Fatal("broken capability query lost known audit state", status, known)
+	}
+	synctest.Test(t, func(t *testing.T) {
+		auditBackendSupport = func(ctx context.Context, _ *container.Client) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}
+		start := time.Now()
+		status, err := nativeAuditStatus(t.Context())
+		if err != nil || status.State != "unavailable" || strings.Contains(status.Error, "--update-vm-image") || time.Since(start) != time.Minute {
+			t.Fatal("unanswered capability query was classified as old", status, err, time.Since(start))
+		}
+	})
 	for _, rel := range []string{"audit", ".controller"} {
 		if _, err := os.Lstat(filepath.Join(disk, rel)); !os.IsNotExist(err) {
 			t.Fatal("old-image refusal wrote infrastructure", rel, err)

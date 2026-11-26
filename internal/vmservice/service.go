@@ -9,9 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/leogr/yoloctl/internal/container"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
@@ -96,7 +96,7 @@ func request(ctx context.Context, c *container.Client, r vmwire.UnitRequest) (st
 	var out, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &stderr
 	if e = cmd.Run(); e != nil {
-		return "", fmt.Errorf("guest service: %w: %s", e, stderr.String())
+		return "", unitRequestError(r.Action, e, stderr.String())
 	}
 	return strings.TrimSpace(out.String()), nil
 }
@@ -208,6 +208,22 @@ func List(ctx context.Context, c *container.Client, prefix string) (string, erro
 	return c.ShellOutput(ctx, "sudo", "systemctl", "list-units", "--no-legend", "--plain", "--type=service", "--state=running", prefix+"*")
 }
 
+// ErrAuditUnsupported identifies a reply from an init without audit support.
+var ErrAuditUnsupported = errors.New("the running Firecracker image lacks audit service support; explicitly recreate the space with --update-vm-image")
+
+func unitRequestError(action string, err error, stderr string) error {
+	var exit *exec.ExitError
+	if action == vmwire.AuditCapabilityAction && errors.As(err, &exit) && exit.ExitCode() == 1 {
+		// The pre-audit init rejected the unit identity before dispatch. An
+		// init that recognizes the unit may reject the capability action.
+		switch diagnostic := strings.TrimSpace(stderr); diagnostic {
+		case "microVM: invalid managed service identity", "microVM: unknown guest service action " + strconv.Quote(vmwire.AuditCapabilityAction):
+			return fmt.Errorf("%w: %w: %s", ErrAuditUnsupported, err, diagnostic)
+		}
+	}
+	return fmt.Errorf("guest service: %w: %s", err, stderr)
+}
+
 var auditCapabilityRequest = request
 
 // AuditSupported is a read-only compatibility query. Older init images reject
@@ -220,14 +236,18 @@ func AuditSupported(ctx context.Context, c *container.Client) error {
 	if !native {
 		return nil
 	}
-	bounded, stop := context.WithTimeout(ctx, 5*time.Second)
-	defer stop()
-	answer, err := auditCapabilityRequest(bounded, c, vmwire.UnitRequest{Action: vmwire.AuditCapabilityAction, Unit: Unit{Name: vmwire.AuditUnitName}})
+	answer, err := auditCapabilityRequest(ctx, c, vmwire.UnitRequest{Action: vmwire.AuditCapabilityAction, Unit: Unit{Name: vmwire.AuditUnitName}})
+	if cause := ctx.Err(); cause != nil {
+		return fmt.Errorf("cannot confirm Firecracker audit service support: %w", cause)
+	}
 	if err != nil {
-		return fmt.Errorf("cannot confirm Firecracker audit service support (older images need explicit recreation with --update-vm-image): %w", err)
+		return fmt.Errorf("cannot confirm Firecracker audit service support: %w", err)
+	}
+	if answer == "" {
+		return errors.New("cannot confirm Firecracker audit service support: the guest returned no capability")
 	}
 	if answer != vmwire.AuditCapability {
-		return errors.New("the running Firecracker image lacks audit service support; explicitly recreate the space with --update-vm-image")
+		return ErrAuditUnsupported
 	}
 	return nil
 }

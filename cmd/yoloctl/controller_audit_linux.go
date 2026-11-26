@@ -73,8 +73,17 @@ func nativeAuditStatus(ctx context.Context) (audit.Status, error) {
 		return status, err
 	}
 	status.Drops, status.MetadataGaps = summary.Drops, summary.MetadataGaps
-	if err := auditBackendSupport(ctx, container.New(c.Space)); err != nil {
-		status.State, status.Error = "unsupported", audit.Clean(err.Error())
+	readCtx, stopRead := context.WithTimeout(ctx, time.Minute)
+	defer stopRead()
+	client := container.New(c.Space)
+	if err := auditBackendSupport(readCtx, client); err != nil {
+		if cause := ctx.Err(); cause != nil {
+			return status, cause
+		}
+		status.State, status.Error = "unavailable", audit.Clean(err.Error())
+		if readCtx.Err() == nil && errors.Is(err, vmservice.ErrAuditUnsupported) {
+			status.State = "unsupported"
+		}
 		return status, nil
 	}
 	if c.ServiceManager == "microvm" {
@@ -83,11 +92,12 @@ func nativeAuditStatus(ctx context.Context) (audit.Status, error) {
 			return status, nil
 		}
 	}
-	readCtx, stopRead := context.WithTimeout(ctx, 5*time.Second)
-	defer stopRead()
-	state, err := auditServiceState(readCtx, container.New(c.Space), audit.ServiceName)
+	state, err := auditServiceState(readCtx, client, audit.ServiceName)
+	if cause := ctx.Err(); cause != nil {
+		return status, cause
+	}
 	status.State = state
-	if err != nil {
+	if err != nil || readCtx.Err() != nil {
 		status.State, status.Error = "unavailable", "could not observe the audit service"
 		return status, nil
 	}
@@ -338,11 +348,9 @@ func waitAuditReady(ctx context.Context, epoch string) error {
 }
 
 func waitAuditReadyFor(ctx context.Context, expected audit.ServiceConfig) error {
-	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
-	for {
+	for ctx.Err() == nil {
 		raw, err := safepath.ReadFile(auditRuntimeDir(), "health.json", 4096)
 		var health audit.Health
 		if err == nil && json.Unmarshal(raw, &health) == nil && health.Epoch == expected.Epoch {
@@ -354,16 +362,21 @@ func waitAuditReadyFor(ctx context.Context, expected audit.ServiceConfig) error 
 			}
 		}
 
-		state, observeErr := auditServiceState(ctx, container.New(spaceenv.Current().Space), audit.ServiceName)
+		attempt, stop := context.WithTimeout(ctx, 5*time.Second)
+		state, observeErr := auditServiceState(attempt, container.New(spaceenv.Current().Space), audit.ServiceName)
+		if observeErr == nil {
+			observeErr = attempt.Err()
+		}
+		stop()
 		if observeErr == nil && (state == "inactive" || state == "failed" || state == "unknown") {
 			return errors.New("audit service stopped before reporting a verified modern eBPF load")
 		}
 		select {
 		case <-ctx.Done():
-			return &controller.EffectsUncertain{Cause: errors.New("audit service did not report a verified load result; inspect its operation receipt")}
 		case <-ticker.C:
 		}
 	}
+	return &controller.EffectsUncertain{Cause: errors.New("audit service did not report a verified load result; inspect its operation receipt")}
 }
 
 func collectNativeAudit(ctx context.Context) error {
@@ -420,7 +433,9 @@ func reconcileNativeAudit(ctx context.Context, check func() error) error {
 	if c == nil {
 		return errors.New("audit reconciliation needs native storage")
 	}
-	release, err := auditAcquire(ctx, c.Space, true)
+	lockCtx, cancelLock := context.WithTimeout(ctx, 2*time.Minute)
+	release, err := auditAcquire(lockCtx, c.Space, true)
+	cancelLock()
 	if err != nil {
 		return err
 	}
@@ -435,17 +450,25 @@ func reconcileNativeAudit(ctx context.Context, check func() error) error {
 	if err != nil || cfg.Audit == nil || !cfg.Audit.Enabled {
 		return err
 	}
-	if err := auditBackendSupport(ctx, container.New(c.Space)); err != nil {
+	client := container.New(c.Space)
+	capabilityCtx, cancelCapability := context.WithTimeout(ctx, 2*time.Minute)
+	err = auditBackendSupport(capabilityCtx, client)
+	cancelCapability()
+	if err != nil {
 		return err
 	}
-	state, err := auditServiceState(ctx, container.New(c.Space), audit.ServiceName)
+	stateCtx, cancelState := context.WithTimeout(ctx, 2*time.Minute)
+	state, err := auditServiceState(stateCtx, client, audit.ServiceName)
+	cancelState()
 	if err != nil {
 		return err
 	}
 	if state == "active" || state == "activating" {
 		return nil
 	}
-	return auditServiceStart(ctx, container.New(c.Space), auditUnit())
+	startCtx, cancelStart := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancelStart()
+	return auditServiceStart(startCtx, client, auditUnit())
 }
 
 func startAuditRetention(parent context.Context, server *controller.Server) func() {
@@ -453,9 +476,7 @@ func startAuditRetention(parent context.Context, server *controller.Server) func
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		startup, stopStartup := context.WithTimeout(ctx, 5*time.Second)
-		_, startupErr := server.RunMaintenance(startup, func(ctx context.Context) error { return reconcileNativeAudit(ctx, server.CheckAuditReconcile) })
-		stopStartup()
+		_, startupErr := server.RunMaintenance(ctx, func(ctx context.Context) error { return reconcileNativeAudit(ctx, server.CheckAuditReconcile) })
 		if startupErr != nil && ctx.Err() == nil {
 			cliWarn(logging.Audit, "Reconciliation deferred")
 		}

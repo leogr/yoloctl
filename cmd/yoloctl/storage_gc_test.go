@@ -29,6 +29,7 @@ func TestStorageBeforeBuild(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				defer bindCLITestLogger(t, io.Discard)()
+				start := time.Now()
 				available := test.initial
 				cleaned, pruned := false, false
 				refs := []string{"local/from:latest", "local/output:latest"}
@@ -39,8 +40,8 @@ func TestStorageBeforeBuild(t *testing.T) {
 						if !reflect.DeepEqual(extra, refs) {
 							t.Fatal("lost build inputs", extra)
 						}
-						if _, ok := ctx.Deadline(); !ok {
-							t.Fatal("unbounded cleanup")
+						if _, ok := ctx.Deadline(); ok {
+							t.Fatal("cleanup invented a deadline")
 						}
 						if test.inventoryErr {
 							return 0, errors.New("uncertain")
@@ -63,8 +64,8 @@ func TestStorageBeforeBuild(t *testing.T) {
 				if test.inventoryErr && pruned {
 					t.Fatal("pruned despite uncertain inventory")
 				}
-				if test.name == "shared cache did not free disk" && !strings.Contains(err.Error(), "20%") {
-					t.Fatal(err)
+				if test.name == "shared cache did not free disk" && (time.Since(start) != 2*time.Minute || !strings.Contains(err.Error(), "20%")) {
+					t.Fatal(time.Since(start), err)
 				}
 			})
 		})
@@ -80,7 +81,7 @@ func TestStorageBeforeBuildDelayedReclamation(t *testing.T) {
 			disk: func() (storagegc.Disk, error) {
 				measures++
 				free := uint64(5)
-				if time.Since(start) >= 250*time.Millisecond {
+				if time.Since(start) >= 3250*time.Millisecond {
 					free = 30
 				}
 				return storagegc.Disk{Total: 100, Available: free}, nil
@@ -91,13 +92,13 @@ func TestStorageBeforeBuildDelayedReclamation(t *testing.T) {
 		if err := c.beforeBuild(t.Context(), nil, io.Discard); err != nil {
 			t.Fatal(err)
 		}
-		if measures < 5 || time.Since(start) != 300*time.Millisecond {
+		if measures < 5 || time.Since(start) != 3300*time.Millisecond {
 			t.Fatalf("did not remeasure delayed recovery: %d reads in %s", measures, time.Since(start))
 		}
 	})
 }
 
-func TestStorageBeforeBuildTimeoutDiagnostic(t *testing.T) {
+func TestStorageBeforeBuildInheritsCallerDeadline(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		defer bindCLITestLogger(t, io.Discard)()
 		c := storageCollector{
@@ -108,9 +109,12 @@ func TestStorageBeforeBuildTimeoutDiagnostic(t *testing.T) {
 			},
 			cache: func(context.Context, uint64) error { t.Fatal("pruned incomplete inventory"); return nil },
 		}
-		err := c.beforeBuild(t.Context(), nil, io.Discard)
-		if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "30s preflight budget") || !strings.Contains(err.Error(), "20%") {
-			t.Fatal(err)
+		caller, stop := context.WithTimeout(t.Context(), 45*time.Second)
+		defer stop()
+		start := time.Now()
+		err := c.beforeBuild(caller, nil, io.Discard)
+		if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) != 45*time.Second {
+			t.Fatal(time.Since(start), err)
 		}
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()

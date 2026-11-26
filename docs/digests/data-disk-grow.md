@@ -63,6 +63,6 @@ fallback, stopped-only reads and extends, the boot record and the log check.
 4. <a id="source-4"></a> [Superblock](../../internal/ext4sb/ext4sb.go#L1-L46) — `Read`; adapter interface `DataDiskGrower` and `ErrNoReflink` in internal/vmapi/storage.go; `CreateAccountDisk` sizes in internal/vm/vm.go.
 5. <a id="source-5"></a> [Guest grow](../../internal/vmguest/datadisk_linux.go#L1-L87) — `growDataDisk`; called before the data disk mount in init_linux.go `boot`.
 6. <a id="source-6"></a> [Boot record](../../internal/vmwire/boot.go#L18-L43) — `Boot.DataDiskGrow`, `GrownLine`; `bootImage` and the format guard in internal/firecracker/helper_linux.go.
-7. <a id="source-7"></a> [Views](../../cmd/yoloctl/controller_views.go#L152-L215) — `controllerSpaceShow` data disk fields; `writeSpaceShow`/`writeSpaceShowJSON` in space.go.
+7. <a id="source-7"></a> [Views](../../cmd/yoloctl/controller_views.go#L164-L226) — `controllerSpaceShow` data disk fields; `writeSpaceShow`/`writeSpaceShowJSON` in space.go.
 8. <a id="source-8"></a> [Image](../../internal/firecracker/config.go#L28-L43) — `Image.DataDiskGrow`, `DataDiskGrowVersion`; `verifyRuntime` and the manifest in assemble_linux.go; `imageRecipeVersion` in recipe_linux.go.
 9. <a id="source-9"></a> [Regressions](../../cmd/yoloctl/space_disk_test.go#L145-L306) — CLI grow, refusals, views and export; internal/vmguest/datadisk_linux_test.go, internal/firecracker/datadisk_linux_test.go and superblock_test.go, internal/spaceconfig/disk_test.go; scripts/smoke/disk.sh.

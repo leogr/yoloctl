@@ -359,9 +359,8 @@ in place across every matching running box, or
 ` + "`yoloctl box reconcile <name> --rebuild`" + ` to rebuild that box's
 feature-composed image and recreate it.
 
-Network call timeout is 5s per package; per-package failures log to
-stderr but don't fail the command — useful information is still
-emitted for the packages that did respond.`,
+Each package lookup allows up to one minute. Failed lookups are reported
+on stderr and responding packages still appear in the result.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentVersions(cmd.Context(), cmd.OutOrStdout())
@@ -394,7 +393,12 @@ func runAgentVersions(ctx context.Context, out io.Writer) error {
 	for _, n := range names {
 		profile := profiles[n]
 		pkg := profile.Distribution()
-		info, err := fetchAgentLatest(ctx, &profile)
+		lookupCtx, cancel := context.WithTimeout(ctx, time.Minute)
+		info, err := fetchAgentLatest(lookupCtx, &profile)
+		cancel()
+		if cause := ctx.Err(); cause != nil {
+			return cause
+		}
 		if err != nil {
 			cliWarn(logging.Box, "query %s: %v", pkg, err)
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t(error)\t-\n", n, pkg)
@@ -423,15 +427,12 @@ type agentLatestInfo struct {
 func fetchNpmLatest(ctx context.Context, pkg string) (*agentLatestInfo, error) {
 	url := "https://registry.npmjs.org/" + pkg
 
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doAgentRegistryRequest(req)
 	if err != nil {
 		return nil, err
 	}
