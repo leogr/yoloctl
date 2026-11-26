@@ -19,6 +19,11 @@ import (
 
 func fixtureBundle(t *testing.T, version, id string) string {
 	t.Helper()
+	return fixtureBundleForSchema(t, version, id, releasebundle.CurrentSchema)
+}
+
+func fixtureBundleForSchema(t *testing.T, version, id string, schema int) string {
+	t.Helper()
 	dir := t.TempDir()
 	source := filepath.Join(t.TempDir(), "fixture.go")
 	if err := os.WriteFile(source, []byte("package main\nfunc main(){}\n"), 0600); err != nil {
@@ -52,11 +57,16 @@ func fixtureBundle(t *testing.T, version, id string) string {
 	if osname == "linux" && runtime.GOARCH == "amd64" {
 		osname = "darwin"
 	}
-	names, err := releasebundle.Payload(osname, runtime.GOARCH)
+	m := releasebundle.Manifest{Schema: schema, Version: version, Channel: "release", Bundle: id, OS: osname, Arch: runtime.GOARCH, Files: files}
+	names, err := m.Payload()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"LICENSE", "INSTALL.txt"} {
+	textFiles := []string{"LICENSE", "INSTALL.txt"}
+	if schema == releasebundle.CurrentSchema {
+		textFiles = append(textFiles, releasebundle.NoticesFile)
+	}
+	for _, name := range textFiles {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -68,7 +78,6 @@ func fixtureBundle(t *testing.T, version, id string) string {
 		}
 		files[name] = fmt.Sprintf("%x", sha256.Sum256(raw))
 	}
-	m := releasebundle.Manifest{Schema: 1, Version: version, Channel: "release", Bundle: id, OS: osname, Arch: runtime.GOARCH, Files: files}
 	raw, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		t.Fatal(err)
@@ -81,6 +90,62 @@ func fixtureBundle(t *testing.T, version, id string) string {
 		t.Fatal(err)
 	}
 	return dir
+}
+
+func TestPublishNoticesOverLegacySelection(t *testing.T) {
+	legacy := fixtureBundleForSchema(t, "v1.0.0", strings.Repeat("a", 32), releasebundle.LegacySchema)
+	source := fixtureBundle(t, "v1.1.0", strings.Repeat("b", 32))
+	root := physicalTemp(t)
+	options := Options{Source: legacy, Store: filepath.Join(root, "store"), BinDir: filepath.Join(root, "bin")}
+	if _, err := Publish(t.Context(), options); err == nil || !strings.Contains(err.Error(), "schema 2 is required") {
+		t.Fatalf("legacy-format install source: %v", err)
+	}
+	if _, err := os.Stat(options.Store); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("rejected install wrote a store: %v", err)
+	}
+	previous, err := releasebundle.Verify(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundles := filepath.Join(options.Store, "bundles")
+	for _, dir := range []string{bundles, options.BinDir} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldKey := filepath.Join(bundles, previous.Key())
+	if err := os.Rename(legacy, oldKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(oldKey, "yoloctl"), filepath.Join(options.BinDir, "yoloctl")); err != nil {
+		t.Fatal(err)
+	}
+	options.Expected, err = Inspect(options.BinDir, options.Store)
+	if err != nil || options.Expected.Manifest == nil || options.Expected.Manifest.Schema != releasebundle.LegacySchema {
+		t.Fatalf("inspect old selection: %+v, %v", options.Expected, err)
+	}
+
+	options.Source = source
+	result, err := Publish(t.Context(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := filepath.EvalSymlinks(result.Link)
+	if err != nil || selected != result.Executable {
+		t.Fatalf("upgrade selection: %s, %v", selected, err)
+	}
+	noticePath := filepath.Join(filepath.Dir(selected), releasebundle.NoticesFile)
+	raw, err := os.ReadFile(noticePath)
+	if err != nil || string(raw) != releasebundle.NoticesFile {
+		t.Fatalf("installed notices: %q, %v", raw, err)
+	}
+	info, err := os.Stat(noticePath)
+	if err != nil || info.Mode().Perm() != 0444 {
+		t.Fatalf("installed notice mode: %v, %v", info, err)
+	}
+	if _, err := releasebundle.Verify(oldKey); err != nil {
+		t.Fatalf("retained legacy bundle: %v", err)
+	}
 }
 
 func physicalTemp(t *testing.T) string {

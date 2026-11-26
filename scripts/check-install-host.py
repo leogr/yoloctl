@@ -12,6 +12,7 @@ import tarfile
 
 def verify(root):
     manifest = json.loads((root / 'MANIFEST.json').read_text())
+    assert manifest['schema'] == 2 and 'NOTICES' in manifest['files']
     for name, expected in manifest['files'].items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == expected
     return manifest
@@ -43,6 +44,17 @@ def main():
             shutil.copy2(source / 'yoloctl', bad / 'yoloctl')
             rejected = subprocess.run([str(bad / 'yoloctl'), 'install', '--dry-run', '--bin-dir', str(bindir)], env=env, capture_output=True, text=True)
             assert rejected.returncode != 0 and 'bundle verification' in rejected.stderr, rejected
+            notices = source / 'NOTICES'
+            body = notices.read_bytes()
+            mode = notices.stat().st_mode & 0o777
+            notices.chmod(0o644)
+            try:
+                notices.write_bytes(body + b'\n')
+                rejected = subprocess.run(command + ['--dry-run'], env=env, capture_output=True, text=True)
+                assert rejected.returncode != 0 and 'checksum mismatch: NOTICES' in rejected.stderr, rejected
+            finally:
+                notices.write_bytes(body)
+                notices.chmod(mode)
             assert not bindir.exists() and not (output / 'home').exists()
             before = subprocess.run(command + ['--dry-run'], env=env, capture_output=True, text=True, check=True)
             assert not bindir.exists() and not (output / 'home').exists() and not (output / 'state').exists(), before

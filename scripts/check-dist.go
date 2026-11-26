@@ -6,6 +6,7 @@ package main
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"debug/elf"
@@ -31,6 +32,10 @@ func run() error {
 		return fmt.Errorf("usage: check-dist DIST_DIR")
 	}
 	dir := os.Args[1]
+	notices, err := releasebundle.BuildNotices(os.DirFS("."))
+	if err != nil {
+		return err
+	}
 	sums, err := os.ReadFile(filepath.Join(dir, "SHA256SUMS"))
 	if err != nil {
 		return err
@@ -57,9 +62,16 @@ func run() error {
 		if err := extract(filepath.Join(dir, fields[1]), strings.TrimSuffix(fields[1], ".tar.gz"), stage); err != nil {
 			return err
 		}
-		m, err := releasebundle.Verify(stage)
+		m, err := releasebundle.VerifyCurrent(stage)
 		if err != nil {
 			return err
+		}
+		archivedNotices, err := os.ReadFile(filepath.Join(stage, releasebundle.NoticesFile))
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(archivedNotices, notices) {
+			return fmt.Errorf("%s differs from the source notices in %s", releasebundle.NoticesFile, fields[1])
 		}
 		if fields[1] != fmt.Sprintf("yoloctl-%s-%s.tar.gz", m.OS, m.Arch) {
 			return fmt.Errorf("archive filename identity mismatch")
@@ -133,6 +145,7 @@ func run() error {
 	}
 	return nil
 }
+
 // extract accepts only regular files directly inside the archive's single
 // folder (its version-less name) and writes them flat into dir.
 func extract(path, folder, dir string) error {

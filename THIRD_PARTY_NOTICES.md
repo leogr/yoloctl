@@ -70,9 +70,15 @@ Some terms need particular care:
 
 ## Binary and VM distributions
 
-This is a source notice index, not certification of final binary or VM notice
-packaging. Firecracker, nerdctl/containerd/BuildKit, OpenShell, Ubuntu packages
-and other runtime tools retain their own terms and transitive obligations.
+Every platform download archive includes `NOTICES` alongside `LICENSE`.
+It includes the retained dependency texts and index, pinned OpenShell runtime
+attributions, the embedded Falco, Mermaid and terminal notices, the Linux
+kernel licence and Go toolchain notices. The installer keeps `NOTICES` in
+the verified bundle directory. The [packager](scripts/dist.go) uses
+the [notice assembler](internal/releasebundle/notices.go).
+
+Firecracker, nerdctl/containerd/BuildKit, OpenShell, Ubuntu packages and
+other runtime tools retain their own terms and transitive obligations.
 For each distributed artifact, include its applicable license/copyright/NOTICE
 texts and any required covered or corresponding source. In particular, the
 kernel's exact source archive, configuration, recipe and license must accompany

@@ -255,7 +255,7 @@ func Publish(ctx context.Context, o Options) (result Result, err error) {
 		return result, err
 	}
 	phase = "verify source"
-	m, err := releasebundle.Verify(o.Source)
+	m, err := releasebundle.VerifyCurrent(o.Source)
 	if err != nil {
 		return result, err
 	}

@@ -38,17 +38,21 @@ func run() error {
 	if !buildinfo.IsRelease(version) {
 		return fmt.Errorf("invalid release version")
 	}
+	notices, err := releasebundle.BuildNotices(os.DirFS("."))
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(out, 0755); err != nil {
 		return err
 	}
 	sums := ""
 	for _, platform := range [][2]string{{"linux", "amd64"}, {"linux", "arm64"}, {"darwin", "arm64"}, {"darwin", "amd64"}} {
-		m := releasebundle.Manifest{Schema: 1, Version: version, Channel: "release", Bundle: bundle, OS: platform[0], Arch: platform[1], Files: map[string]string{}}
-		names, err := releasebundle.Payload(m.OS, m.Arch)
+		m := releasebundle.Manifest{Schema: releasebundle.CurrentSchema, Version: version, Channel: "release", Bundle: bundle, OS: platform[0], Arch: platform[1], Files: map[string]string{}}
+		names, err := m.Payload()
 		if err != nil {
 			return err
 		}
-		data := map[string][]byte{}
+		data := map[string][]byte{releasebundle.NoticesFile: notices}
 		for _, name := range names {
 			src := filepath.Join(bin, name)
 			switch name {
@@ -62,12 +66,14 @@ func run() error {
 			case "INSTALL.txt":
 				src = "scripts/INSTALL.txt"
 			}
-			body, err := os.ReadFile(src)
-			if err != nil {
-				return err
+			if name != releasebundle.NoticesFile {
+				body, err := os.ReadFile(src)
+				if err != nil {
+					return err
+				}
+				data[name] = body
 			}
-			data[name] = body
-			m.Files[name] = fmt.Sprintf("%x", sha256.Sum256(body))
+			m.Files[name] = fmt.Sprintf("%x", sha256.Sum256(data[name]))
 		}
 		if err := m.Validate(); err != nil {
 			return err
@@ -91,7 +97,7 @@ func run() error {
 		if err := os.WriteFile(filepath.Join(stage, "MANIFEST.json"), data["MANIFEST.json"], 0600); err != nil {
 			return err
 		}
-		if _, err := releasebundle.Verify(stage); err != nil {
+		if _, err := releasebundle.VerifyCurrent(stage); err != nil {
 			return err
 		}
 		// Keep staging evidence on failure; remove only this known private tree.

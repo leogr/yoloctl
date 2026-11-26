@@ -20,6 +20,12 @@ import (
 	"github.com/leogr/yoloctl/internal/strictyaml"
 )
 
+const (
+	LegacySchema  = 1
+	CurrentSchema = 2
+	NoticesFile   = "NOTICES"
+)
+
 type Manifest struct {
 	Schema  int               `json:"schema" yaml:"schema"`
 	Version string            `json:"version" yaml:"version"`
@@ -30,12 +36,19 @@ type Manifest struct {
 	Files   map[string]string `json:"files" yaml:"files"`
 }
 
-func Payload(osname, arch string) ([]string, error) {
-	if (osname != "linux" && osname != "darwin") || (arch != "amd64" && arch != "arm64") {
-		return nil, fmt.Errorf("unsupported release platform %s/%s", osname, arch)
+func (m Manifest) Payload() ([]string, error) {
+	if (m.OS != "linux" && m.OS != "darwin") || (m.Arch != "amd64" && m.Arch != "arm64") {
+		return nil, fmt.Errorf("unsupported release platform %s/%s", m.OS, m.Arch)
 	}
 	names := []string{"INSTALL.txt", "LICENSE", "yoloctl", "yoloctl-linux-amd64", "yoloctl-linux-arm64"}
-	if osname == "linux" && arch == "amd64" {
+	switch m.Schema {
+	case LegacySchema:
+	case CurrentSchema:
+		names = append(names, NoticesFile)
+	default:
+		return nil, fmt.Errorf("unsupported release manifest schema %d", m.Schema)
+	}
+	if m.OS == "linux" && m.Arch == "amd64" {
 		names = append(names, "yoloctl-vm-init-linux-amd64")
 	}
 	slices.Sort(names)
@@ -43,14 +56,14 @@ func Payload(osname, arch string) ([]string, error) {
 }
 
 func (m Manifest) Validate() error {
-	if m.Schema != 1 || !identity.IsRelease(m.Version) || len(m.Version) > 128 || m.Channel != "release" {
+	if !identity.IsRelease(m.Version) || len(m.Version) > 128 || m.Channel != "release" {
 		return fmt.Errorf("invalid release manifest identity")
 	}
 	b, err := hex.DecodeString(m.Bundle)
 	if err != nil || len(b) != 16 || strings.ToLower(m.Bundle) != m.Bundle {
 		return fmt.Errorf("invalid bundle identity")
 	}
-	names, err := Payload(m.OS, m.Arch)
+	names, err := m.Payload()
 	if err != nil {
 		return err
 	}
@@ -68,8 +81,17 @@ func (m Manifest) Validate() error {
 
 func (m Manifest) Key() string { return m.Version + "-" + m.OS + "-" + m.Arch + "-" + m.Bundle }
 
-// Verify reads only bounded regular files; links and extra entries are errors.
+// Verify accepts current and legacy installed bundles. Links and extra entries are errors.
 func Verify(dir string) (Manifest, error) {
+	return verify(dir, false)
+}
+
+// VerifyCurrent requires the notice-bearing format for new installation and release inputs.
+func VerifyCurrent(dir string) (Manifest, error) {
+	return verify(dir, true)
+}
+
+func verify(dir string, current bool) (Manifest, error) {
 	var m Manifest
 	raw, err := safepath.ReadFile(dir, "MANIFEST.json", 1<<20)
 	if err != nil {
@@ -84,6 +106,9 @@ func Verify(dir string) (Manifest, error) {
 	if err := m.Validate(); err != nil {
 		return m, err
 	}
+	if current && m.Schema != CurrentSchema {
+		return m, fmt.Errorf("release manifest schema %d is required (with %s)", CurrentSchema, NoticesFile)
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return m, err
@@ -95,6 +120,9 @@ func Verify(dir string) (Manifest, error) {
 		data, err := safepath.ReadFile(dir, name, 512<<20)
 		if err != nil {
 			return m, err
+		}
+		if name == NoticesFile && len(data) == 0 {
+			return m, fmt.Errorf("%s is empty", name)
 		}
 		if fmt.Sprintf("%x", sha256.Sum256(data)) != sum {
 			return m, fmt.Errorf("checksum mismatch: %s", name)

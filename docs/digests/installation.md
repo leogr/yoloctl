@@ -1,6 +1,6 @@
 # Installation, releases and host homes
 
-Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes (CI runner/publication selection); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); CLI log routing re-read at `58d3f37b76e6509d8587dec36a7a4b6814a42f10` and accompanying changes; checkout log parsing re-read at `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes; other sections at `1d265df3`. Install update advice re-read at `7ad3dd8677b44567186c76221439bbe11e0d7f0d` and accompanying changes. Space advice waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
+Verification: `62581f36477d3036d3883123b85e5f8570776066` and accompanying changes (CI runner/publication selection); `4bc09137374e91d374ba6454cd8cef3d3da44240` and accompanying changes (installer output and space advice); CLI log routing re-read at `58d3f37b76e6509d8587dec36a7a4b6814a42f10` and accompanying changes; checkout log parsing re-read at `351da19df8eb0c537435095db835d13678bc5372` and accompanying changes; other sections at `1d265df3`. Install update advice re-read at `7ad3dd8677b44567186c76221439bbe11e0d7f0d` and accompanying changes. Space advice waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes. Archive notices verified at `ea8d20939eca67c2533296507723e9be84efa5cf` with accompanying changes.
 
 [FACT] Coordinated builds stamp hosts and Linux companions with one version and
 random bundle. Only strict `vMAJOR.MINOR.PATCH[-PRERELEASE]` selects release;
@@ -30,12 +30,17 @@ Hostile-home script checks use a sentinel, without a VM. [4](#source-4)
 [FACT] `make dist VERSION=vX.Y.Z` produces four archives in one invocation,
 named `yoloctl-<os>-<arch>.tar.gz` without the version (so
 `releases/latest/download/<name>` resolves); each extracts to one
-`yoloctl-<os>-<arch>/` folder that contains both Linux companions, `LICENSE`,
-`INSTALL.txt`, `MANIFEST.json` and host `yoloctl`; linux/amd64 adds VM init. Main’s `native-embed` prepares
+`yoloctl-<os>-<arch>/` folder containing both Linux companions, `LICENSE`,
+`NOTICES`, `INSTALL.txt`, `MANIFEST.json` and host `yoloctl`. Linux/amd64
+adds VM init. Main’s `native-embed` prepares
 OpenShell helper/runtime archives inside every CLI. The helper source closure
 includes `buildinfo`, imported by layout. Manifest payload hashes exclude
 itself; `SHA256SUMS` covers final archives. Verification rejects extra entries,
-symlinks, missing files and linked identity/hash mismatches. [5](#source-5)
+symlinks, missing files and linked identity/hash mismatches. Schema 2
+requires `NOTICES` for new archives and install sources. The archive check
+matches its bytes against the assembled source texts on every platform.
+Verification of an existing schema 1 installation keeps its historical file
+set. [5](#source-5) [6](#source-6) [8](#source-8)
 
 [FACT] Manual release runs are read-only QA. Strict tags gate the same commit
 and host installer tests. Only publication has write/OIDC and Actions-read
@@ -123,22 +128,24 @@ ends the remaining advice walk. [9](#source-9)
    [sentinel regression](../../scripts/test_vm_smoke.py#L101-L130);
    [Lima gate](../../scripts/smoke/lima_stack.py#L390), `identity`, `setup`, `check`;
    [gate regressions](../../scripts/test_lima_stack.py#L1).
-5. <a id="source-5"></a> [Manifest](../../internal/releasebundle/manifest.go#L1-L156), `Validate`, `Verify`, `VerifyLinked`;
-   [packager](../../scripts/dist.go#L1-L146), `run`;
+5. <a id="source-5"></a> [Manifest](../../internal/releasebundle/manifest.go#L27-L184), `Payload`, `Validate`, `Verify`, `VerifyCurrent`, `VerifyLinked`;
+   [packager](../../scripts/dist.go#L27-L152), `run`;
+   [notice assembler](../../internal/releasebundle/notices.go#L13-L111), `BuildNotices`;
    [native preparation](../../Makefile#L48-L112), `native-embed`;
    [helper inputs](../../helperinputs.go#L27-L33), production closure.
 6. <a id="source-6"></a> [Toolchain setup](../../scripts/ci-openshell-toolchain.sh#L1);
    [Workflow](../../.github/workflows/release.yml#L1-L212), OpenShell cache in `install-smoke`;
    [CI](../../.github/workflows/ci.yml#L16-L56), OpenShell cache in `build`;
    [publication](../../scripts/publish-release.py#L1-L199), `identity`, `verify_artifact`, `main`;
-   [archive checks](../../scripts/check-dist.go#L1-L172), `run`, `extract`.
+   [archive checks](../../scripts/check-dist.go#L30-L185), `run`, `extract`.
 7. <a id="source-7"></a> [CLI](../../cmd/yoloctl/install.go#L1-L279), `newInstallCmd`, `installDecision`, `installPathHint`, `plainPathRune`; `installContainerSignal` in install_host_linux.go;
    [output](../../cmd/yoloctl/install_output.go#L1-L107), `installOut`, `installCommand`.
 8. <a id="source-8"></a> [Publication engine](../../internal/installer/engine.go#L1-L496), `Inspect`, `Publish`, `lock`, `publishDirectory`
    (platform `renameNoReplace`/`noReplaceUnsupported` in rename_linux.go and rename_darwin.go);
    [no-replace fallback regressions](../../internal/installer/publish_fallback_test.go#L1);
    [destination boundary](../../internal/installer/paths.go#L1-L87), `ValidatePaths`;
-   [fault/concurrency regressions](../../internal/installer/engine_test.go#L1-L307), `TestLockRetriesOnlySpuriousENOENT` in lock_retry_test.go;
+   [publication regressions](../../internal/installer/engine_test.go#L95-L372), `TestPublishNoticesOverLegacySelection` and fault/concurrency tests;
+   `TestLockRetriesOnlySpuriousENOENT` in lock_retry_test.go;
    [overlap regressions](../../internal/installer/paths_test.go#L1-L193).
 9. <a id="source-9"></a> [Space advice](../../cmd/yoloctl/install_migration.go#L1-L351), `installSpaceAdvice`, `printSpaceAdvice`, `installLimaAdvice`, `firecrackerImageState`, `readLimaStackState` (shared with `space upgrade`);
    [inventory](../../cmd/yoloctl/install_inventory.go#L1-L45), `consentSnapshot`, `readInstallConsent`;

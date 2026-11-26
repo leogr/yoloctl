@@ -13,9 +13,9 @@ release (GitHub's `releases/latest/download/` link points at the newest
 release that is neither a draft nor a pre-release), `tar` unpacks it into a
 folder of the same name, and `yoloctl install` inside that folder installs the
 bundle. Each archive holds the host `yoloctl`, the Linux companions used inside
-the VM, `LICENSE`, `INSTALL.txt` and `MANIFEST.json`; the linux/amd64 archive
-also carries the VM init. Keep the unpacked folder together until `install`
-has finished.
+the VM, `LICENSE`, `NOTICES`, `INSTALL.txt` and `MANIFEST.json`. The
+linux/amd64 archive also carries the VM init. Keep the unpacked folder
+together until `install` has finished.
 
 `install` verifies the whole bundle against its manifest before writing
 anything and refuses extra, missing or symlinked files. It also refuses to run
@@ -23,6 +23,13 @@ from a development build, inside a box or VM, or as a space operator. It then
 copies the bundle into `~/.local/share/yoloctl/bundles/<version>-<os>-<arch>-<bundle>`,
 an immutable directory that is never replaced or pruned, and atomically points
 `~/.local/bin/yoloctl` (or `--bin-dir DIR`) at it.
+
+`NOTICES` contains third-party licence and attribution texts. It is included
+in the manifest checksum and remains alongside `LICENSE` in the installed
+bundle. The new installer recognises an existing v0.4.1 installation when
+upgrading. The v0.4.1 installer cannot read the newer manifest and stops before
+its normal downgrade prompt. To run a retained v0.4.1 build, invoke its
+`yoloctl` directly from its versioned bundle directory.
 
 For bash, zsh or fish (from `$SHELL`), `install` can add one marked block to
 your shell's startup file: the bin directory on PATH when it is missing, and

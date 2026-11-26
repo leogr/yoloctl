@@ -52,7 +52,7 @@ func newInstallCmd() *cobra.Command {
 			return err
 		}
 		source := filepath.Dir(self)
-		manifest, err := releasebundle.Verify(source)
+		manifest, err := releasebundle.VerifyCurrent(source)
 		if err != nil {
 			return fmt.Errorf("release bundle verification: %w", err)
 		}

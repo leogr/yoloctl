@@ -3,6 +3,8 @@ yoloctl release bundle (macOS / Linux)
 Download and install the latest release (pick your os/arch):
   curl -fsSL https://github.com/leogr/yoloctl/releases/latest/download/yoloctl-linux-amd64.tar.gz | tar xzf - && ./yoloctl-linux-amd64/yoloctl install
 install verifies the bundle before installing anything.
+LICENSE covers yoloctl. NOTICES contains third-party licences and
+attributions and is kept alongside the installed executable.
 
 Optional: verify a download first with SHA256SUMS from the same release:
   awk -v name='<archive>' '$2 == name' SHA256SUMS | shasum -a 256 -c -

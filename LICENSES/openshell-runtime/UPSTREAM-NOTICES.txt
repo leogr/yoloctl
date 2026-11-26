@@ -1,0 +1,64 @@
+OpenShell v0.1.10 runtime notices
+
+The root OpenShell licence is in LICENSES/OpenShell-v0.1.10-LICENSE.txt.
+The following attribution is on the pinned NVIDIA sandbox policy and
+the policy adapted by yoloctl.
+
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+The following crates ship without standalone licence texts in their
+published crate archives. The upstream sources and the applicable retained
+texts are listed here. A hash identifies the exact byte sequence in the
+LICENSES/THIRD_PARTY_LICENSES.txt section.
+
+tonic-prost 0.14.6 and tonic-prost-build 0.14.6
+https://github.com/hyperium/tonic/blob/6cb6056b5a748bc5a29bd48f4602dbc4e552bb7d/LICENSE
+MIT, SHA-256 e24a56698aa6feaf3a02272b3624f9dc255d982970c5ed97ac4525a95056a5b3
+
+opentelemetry, opentelemetry-http, opentelemetry-otlp and opentelemetry_sdk 0.33.1
+https://github.com/open-telemetry/opentelemetry-rust/blob/372ebbc74d4dba71bb9820732f57f7316b4e7a1e/LICENSE
+Apache-2.0, SHA-256 c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
+
+spiffe 0.15.1
+https://github.com/maxlambrecht/rust-spiffe/blob/bc7456603f8bdc9e6c072e4aeec7588f2f822b79/LICENSE
+Apache-2.0, SHA-256 c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
+
+russh 0.65.2
+https://github.com/warp-tech/russh/blob/56a999871aa134072e4f2a7395fe2de313870e21/LICENSE.txt
+russh-cryptovec 0.62.0
+https://github.com/warp-tech/russh/blob/907c732562c5732aad6c140dba958eafddc41ba0/LICENSE.txt
+russh-util 0.52.0
+https://github.com/warp-tech/russh/blob/3d09c20c52a542ffa327723d3a44cb1edd9b0ca4/LICENSE-2.0.txt
+Apache-2.0 for all three, SHA-256 cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30
+russh and russh-cryptovec source attribution
+Copyright 2016 Pierre-Étienne Meunier
+
+base64-simd and vsimd 0.8.0
+https://github.com/Nugine/simd/blob/d74c030d9dc4f3cae02146d1f497ff62726ef09a/LICENSE
+MIT, see nugine-simd-0.8.0-LICENSE in this document.
+
+asn1-rs-impl 0.2.0
+https://github.com/rusticata/asn1-rs/tree/a20e5f7319c896737ad0f2557037817b91ad854f
+MIT, SHA-256 a5c61b93b6ee1d104af9920cf020ff3c7efe818e31fe562c72261847a728f513
+Apache-2.0, SHA-256 a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2
+
+delegate 0.13.5
+https://github.com/kobzol/rust-delegate/tree/b129d4cbf4cc499eff7743365dcb0fe5d8d2e820
+MIT, see delegate-0.13.5-LICENSE-MIT in this document.
+Apache-2.0, SHA-256 b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1
+
+backtrace-ext 0.2.1
+https://github.com/gankra/backtrace-ext/blob/043c95350875a36be6cd755dcef21a44a52ec2cc/Cargo.toml
+The versioned manifest declares MIT OR Apache-2.0. The pinned revision has
+no standalone licence or notice. The Apache-2.0 text is in LICENSES/Apache-2.0.txt.
+
+Toolchain inputs
+
+Rust 1.95.0 standard library notices also cover the library used by the
+embedded Mermaid renderer. See its COPYRIGHT-library.html section.
+
+Zig 0.15.2 and its musl sources for the OpenShell runtime
+https://github.com/ziglang/zig/blob/0.15.2/LICENSE
+https://github.com/ziglang/zig/blob/0.15.2/lib/libc/musl/COPYRIGHT
+See zig-0.15.2-LICENSE and zig-0.15.2-musl-COPYRIGHT in this document.
