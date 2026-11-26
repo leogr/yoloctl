@@ -402,9 +402,15 @@ func TestMain(m *testing.M) {
 				holdFor = "30" // kept alive until the test has seen the worker return
 			}
 			child := exec.Command("/bin/sleep", holdFor)
+			var gate *os.File
 			if work.Request.Method == "test.escape-writer" {
-				// A holder that keeps producing output for as long as it lives.
-				child = exec.Command("/bin/sh", "-c", "while :; do echo writer-line; done")
+				// A holder that keeps producing output for as long as it lives,
+				// starting only once the worker printed its PID marker.
+				child = exec.Command("/bin/sh", "-c", "read gate; while :; do echo writer-line; done")
+				var err error
+				if child.Stdin, gate, err = os.Pipe(); err != nil {
+					finishExit(92)
+				}
 			}
 			if work.Request.Method != "test.escape-checkpoint" {
 				child.Stdout = os.Stdout
@@ -418,6 +424,9 @@ func TestMain(m *testing.M) {
 				finishExit(91)
 			}
 			_, _ = fmt.Fprintf(os.Stdout, "holder=%d parent done", child.Process.Pid)
+			if gate != nil {
+				_ = gate.Close() // the marker is out: let the writer start
+			}
 			if work.Request.Method == "test.escape-stdout" || work.Request.Method == "test.escape-writer" {
 				finishExit(0) // only a successful worker is reported interrupted
 			}

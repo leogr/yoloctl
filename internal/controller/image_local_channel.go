@@ -54,3 +54,15 @@ func localImageCheckpointContext(ctx context.Context, ownedSetup bool) (context.
 	}
 	return ctx, func() {}
 }
+
+// localImageRead serves the two local image read checkpoints of an execution
+// (resolve-local, and validate of its retained pin) under the context that
+// actual setup ownership selects.
+func (s *Server) localImageRead(ctx context.Context, owner *setupOwner, r ImageRequest, pin *RetainedImage) (ImageReply, error) {
+	read, done := localImageCheckpointContext(ctx, owner.owned())
+	defer done()
+	if r.Action == "validate" {
+		return ImageReply{}, s.Images.backend.Validate(read, pin.PinnedImage)
+	}
+	return resolveLocalImageCheckpoint(read, s.Images.backend, r)
+}

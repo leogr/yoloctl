@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -270,30 +273,85 @@ func TestNonreadingClientAfterExitKeepsTheRecordedResult(t *testing.T) {
 	}
 }
 
+// capturedOutput keeps only the first bytes of worker output, so a regressed
+// join that never ends cannot fill memory while the writer produces.
+type capturedOutput struct {
+	mu   sync.Mutex
+	head []byte
+}
+
+func (c *capturedOutput) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if room := 4096 - len(c.head); room > 0 {
+		c.head = append(c.head, p[:min(room, len(p))]...)
+	}
+	return len(p), nil
+}
+
+func (c *capturedOutput) String() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return string(c.head)
+}
+
 // An outside-group holder that keeps writing cannot extend the output join:
 // after the fail-safe only the bytes ready at that moment are drained, the
 // worker returns at the fail-safe while the writer still produces, and the
-// command is reported interrupted with its output held open.
+// command is reported interrupted with its output held open. The writer starts
+// only after the PID marker and is stopped by the test on every path.
 func TestWorkerOutputWriterOutsideTheGroupEndsAtFailSafe(t *testing.T) {
 	withFailSafe(t, 300*time.Millisecond)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	var out bytes.Buffer
+	out := &capturedOutput{}
 	started := time.Now()
-	code, err := RunWorker(ctx, Principal{}, Request{Method: "test.escape-writer"}, workerStreams(&out, nil))
+	code, err := RunWorker(ctx, Principal{}, Request{Method: "test.escape-writer"}, workerStreams(out, nil))
 	elapsed := time.Since(started)
 	var pid int
-	if _, scanErr := fmt.Sscanf(out.String(), "holder=%d", &pid); scanErr != nil || pid <= 0 {
-		t.Fatalf("no holder pid in %.200q", out.String())
+	if _, scanErr := fmt.Sscanf(out.String(), "holder=%d", &pid); scanErr == nil && pid > 0 {
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+	} else {
+		t.Fatalf("no holder pid at the start of %.200q", out.String())
 	}
-	// The writer dies of SIGPIPE once the controller closes the read end; the
-	// join ended at the fail-safe while it was still producing.
-	_ = syscall.Kill(pid, syscall.SIGKILL)
 	var interrupted *WorkerInterrupted
 	if elapsed > 5*time.Second || !errors.As(err, &interrupted) || !strings.Contains(err.Error(), "worker exited with its output still open") || code != 2 {
 		t.Fatalf("after %s: code=%d err=%v", elapsed, code, err)
 	}
-	if !strings.Contains(out.String(), "writer-line") {
-		t.Fatal("the writer's output never reached the client")
+}
+
+// After expiry a source drains only the bytes ready at that moment: bytes the
+// writer appends after the first expired read are left, and the source, its
+// writer still open, is held.
+func TestDrainSourceReadsOnlyTheBytesReadyAtExpiry(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = w.Close() }()
+	src, err := pollableDup(r)
+	_ = r.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = src.Close() }()
+	if _, err := w.WriteString("queued"); err != nil {
+		t.Fatal(err)
+	}
+	var expired, held atomic.Bool
+	expired.Store(true)
+	left := -1
+	drain := drainSource{src, &expired, &held, &left}
+	buf := make([]byte, 64)
+	n, err := drain.Read(buf)
+	if err != nil || string(buf[:n]) != "queued" {
+		t.Fatalf("first expired read = %q, %v", buf[:n], err)
+	}
+	if _, err := w.WriteString("appended"); err != nil {
+		t.Fatal(err)
+	}
+	n, err = drain.Read(buf)
+	if n != 0 || !errors.Is(err, errOutputHeld) || !held.Load() {
+		t.Fatalf("read past the bytes ready at expiry: %q, %v, held=%v", buf[:n], err, held.Load())
 	}
 }

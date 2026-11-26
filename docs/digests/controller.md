@@ -206,6 +206,6 @@ this test seam does not change server authorization. [19](#source-19)
 
 42. <a id="source-42"></a> [Routed read](../../cmd/yoloctl/controller_client.go#L352) — `callControllerTerminal`.
 43. <a id="source-43"></a> [VM lookup](../../cmd/yoloctl/controller_deploy.go#L88) — `checkControllerSpace`.
-44. <a id="source-44"></a> [Worker drain](../../internal/controller/worker.go#L340-L417) — `drainUntil`, checkpoint and output joins after the group kill, own output pipes (L176), `drainSource` (L449), `pollableDup` (L495).
+44. <a id="source-44"></a> [Worker drain](../../internal/controller/worker.go#L340-L417) — `drainUntil`, checkpoint and output joins after the group kill, own output pipes (L176), `drainSource` (L449), `pollableDup` (L515).
 45. <a id="source-45"></a> [Opening exchange](../../internal/controller/server.go#L278-L306) — `readFrame`, `writeFrame`; `DrainDeadline` and `Exited` on the connection (L886–L887), the cancellation before exit in finalization (L931–L936), the exit frame write (L978).
 46. <a id="source-46"></a> [Fail-safe](../../internal/controller/failsafe.go#L9) — `controllerFailSafe`.
