@@ -166,8 +166,9 @@ func newPortListCmd() *cobra.Command {
 		asJSON    bool
 	)
 	cmd := &cobra.Command{
-		Use:   "list [BOX]",
-		Short: "List managed port forwards",
+		Use:     "list [BOX]",
+		Aliases: []string{"ls"},
+		Short:   "List managed port forwards",
 		Long: `Lists every yoloctl-managed port forward in the space. With
 BOX, the list is filtered to that box's forwards. The matching VM supervisor
 includes retained and restarting services; a listed service does not prove

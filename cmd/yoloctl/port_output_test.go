@@ -39,3 +39,13 @@ func TestPortOutputRetainsActualUnitsForMixedTransports(t *testing.T) {
 		}
 	}
 }
+
+// `port ls` is an alias of `port list`, like the other list commands.
+func TestPortListLsAlias(t *testing.T) {
+	for _, name := range []string{"list", "ls"} {
+		cmd, args, err := newRootCmd().Find([]string{"port", name})
+		if err != nil || len(args) != 0 || cmd.Name() != "list" || cmd.Parent() == nil || cmd.Parent().Name() != "port" {
+			t.Fatalf("port %s unavailable: %v", name, err)
+		}
+	}
+}
