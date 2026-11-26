@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -274,12 +273,25 @@ func TestNativeStartExplicitCallerLaunchesSavedPolicyThenReconcilesWithoutRestar
 	}
 }
 
-// An attach to an already stopped native box: the qualification inventory
-// completes, the forward-withdrawal inventory is never answered and no client
-// remains to cancel it (attach's owned setup). Its fail-safe ends the read,
-// nothing is started, and the attach returns, so the caller's space lock is
-// released for the next operation.
-func TestNativeAttachToStoppedBoxEndsSilentWithdrawalInventoryAtFailSafe(t *testing.T) {
+// The real attach wrapper owns the space lock. The fixture substitutes
+// the native checkpoint and VM command. It withholds either the first
+// qualification read or the separate withdrawal read, in call order.
+func TestNativeAttachToStoppedBoxEndsSilentInventoryAtFailSafe(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		blockRead int
+	}{
+		{"qualification", 1},
+		{"withdrawal", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			testStoppedNativeAttachInventory(t, tc.blockRead)
+		})
+	}
+}
+
+func testStoppedNativeAttachInventory(t *testing.T, blockRead int) {
+	t.Helper()
 	f := newIdentityFixture(t)
 	cfg := claudeBox()
 	cfg.SchemaVersion = agentbox.SchemaVersion
@@ -292,26 +304,23 @@ func TestNativeAttachToStoppedBoxEndsSilentWithdrawalInventoryAtFailSafe(t *test
 	t.Setenv("LIMA_HOME", t.TempDir())
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("ATTACH_TEST_FIXTURE", bin)
+	t.Setenv("ATTACH_TEST_BLOCK_READ", strconv.Itoa(blockRead))
 	script := `#!/bin/sh
+set -eu
 printf '%s\n' "$*" >> "$ATTACH_TEST_FIXTURE/calls"
 case "$*" in
  *'systemctl list-units'*'--no-pager --full'*)
-  # Only the bounded withdrawal read passes these flags; it is never answered.
-  sleep 30 & echo $! > "$ATTACH_TEST_FIXTURE/silent"; wait;;
- *'systemctl list-units'*) ;;
+  printf '%s\n' "$*" >> "$ATTACH_TEST_FIXTURE/inventory-reads"
+  if [ "$(wc -l < "$ATTACH_TEST_FIXTURE/inventory-reads")" -eq "$ATTACH_TEST_BLOCK_READ" ]; then
+   : > "$ATTACH_TEST_FIXTURE/silent"
+   exec sleep 10
+  fi;;
  *) exit 42;;
 esac
 `
 	if err := os.WriteFile(filepath.Join(bin, "limactl"), []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		if raw, err := os.ReadFile(filepath.Join(bin, "silent")); err == nil {
-			if pid, err := strconv.Atoi(strings.TrimSpace(string(raw))); err == nil {
-				_ = syscall.Kill(pid, syscall.SIGKILL)
-			}
-		}
-	})
 	previousResolver := newBoxStateResolver
 	t.Cleanup(func() { newBoxStateResolver = previousResolver })
 	newBoxStateResolver = func() boxstate.Resolver {
@@ -333,7 +342,7 @@ esac
 		}
 	}
 	previousFailSafe := vmservice.InventoryFailSafe
-	vmservice.InventoryFailSafe = 300 * time.Millisecond
+	vmservice.InventoryFailSafe = 600 * time.Millisecond
 	t.Cleanup(func() { vmservice.InventoryFailSafe = previousFailSafe })
 	previousPrepare := prepareNativeExistingStart
 	t.Cleanup(func() { prepareNativeExistingStart = previousPrepare })
@@ -342,23 +351,26 @@ esac
 	launches := 0
 	prepared.start = func() error { launches++; return nil }
 	prepareNativeExistingStart = func(ctx context.Context, _ *container.Client, _ *agentbox.Config, observed bool) (nativePreparedStart, bool, error) {
-		// The qualification inventory is a separate, unbounded read; it is answered
-		// here (archyAstra: it does not inherit the withdrawal read's fail-safe).
-		if _, err := port.Inventory(ctx, client, cfg.Name); err != nil {
-			t.Fatal("qualification inventory failed", err)
+		if !observed {
+			t.Fatal("attach did not request previously observed forwards")
+		}
+		if _, err := port.InventoryBounded(ctx, client, ""); err != nil {
+			return nil, true, err
 		}
 		return prepared, true, nil
 	}
 	// The attach runs through the real command wrapper, which takes the
-	// space-operation lock and releases it when the command returns. While the
-	// withdrawal read is withheld, another operation finds the lock busy; after
+	// space-operation lock and releases it when the command returns. While a read is
+	// withheld, another operation finds the lock busy; after
 	// the command returns, the same lock is free again.
 	previousSync := syncNativeChatRolesFn
 	t.Cleanup(func() { syncNativeChatRolesFn = previousSync })
 	syncNativeChatRolesFn = func(context.Context, string) error { return nil }
 	busy := make(chan error, 1)
+	observeCtx, stopObserving := context.WithCancel(t.Context())
+	defer stopObserving()
 	go func() {
-		for {
+		for observeCtx.Err() == nil {
 			if _, err := os.Stat(filepath.Join(bin, "silent")); err == nil {
 				release, err := spacelock.TryAcquire(t.Context(), cfg.Space, true)
 				if release != nil {
@@ -383,7 +395,10 @@ esac
 	boxCmd.AddCommand(attach)
 	root.AddCommand(boxCmd)
 	registerSpaceOperations(root)
-	ctx := context.WithValue(t.Context(), controllerRequestKey{}, "request-0123456789abcdef")
+	caller, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	ctx := context.WithValue(agentbox.WithOwnedStartInventory(caller), controllerRequestKey{}, "request-0123456789abcdef")
+	ctx = context.WithValue(ctx, controllerOwnedSetupKey{}, true)
 	ctx = controller.WithEffectGate(ctx, func(context.Context, controller.EffectIntent) error { return nil })
 	ctx = context.WithValue(ctx, controllerReleaseKey{}, func() error { return nil })
 	root.SetArgs([]string{"box", "attach", cfg.Name, "--space", cfg.Space})
@@ -396,21 +411,25 @@ esac
 			t.Fatal("the withheld read did not hold the space lock", busyErr)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("the withdrawal read was never withheld")
+		t.Fatal("the inventory read was never withheld")
 	}
 	again, againErr := spacelock.TryAcquire(t.Context(), cfg.Space, true)
 	if againErr != nil {
 		t.Fatal("the attach's space lock was not released on return", againErr)
 	}
 	again()
-	if !errors.Is(err, context.DeadlineExceeded) || launches != 0 || len(f.starts) != starts {
-		t.Fatal("silent withdrawal inventory did not end the attach before any start", err, launches, len(f.starts)-starts)
+	if !errors.Is(err, context.DeadlineExceeded) || caller.Err() != nil || launches != 0 || len(f.starts) != starts {
+		t.Fatal("silent inventory did not end the attach before any start", err, launches, len(f.starts)-starts)
 	}
-	if elapsed < vmservice.InventoryFailSafe || elapsed > 5*time.Second {
-		t.Fatal("withdrawal inventory followed something other than its fail-safe", elapsed)
+	if elapsed < vmservice.InventoryFailSafe {
+		t.Fatal("inventory returned before its fail-safe", elapsed)
 	}
-	raw, _ := os.ReadFile(filepath.Join(bin, "calls"))
-	if strings.Count(string(raw), "--no-pager --full") != 1 || strings.Contains(string(raw), "nerdctl start") || strings.Contains(string(raw), "systemd-run") {
-		t.Fatal("attach reached the engine or a session after the silent inventory", string(raw))
+	raw, err := os.ReadFile(filepath.Join(bin, "calls"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(raw), "--no-pager --full") != blockRead || strings.Contains(string(raw), "nerdctl start") ||
+		strings.Contains(string(raw), "systemctl stop") || strings.Contains(string(raw), "systemd-run") {
+		t.Fatal("attach crossed the withheld inventory boundary", string(raw))
 	}
 }

@@ -113,7 +113,7 @@ cancellation; the orphan ledger is separate from receipt retention. See
 13. <a id="source-13"></a> [controller_deploy.go](../../cmd/yoloctl/controller_deploy.go#L151) — deployment.
 14. <a id="source-14"></a> [server.go](../../internal/controller/server.go#L71) — drain/mutations.
 15. <a id="source-15"></a> [storage.go](../../internal/container/storage.go#L27) — snapshot/batch inspection.
-16. <a id="source-16"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L724) — build guard.
+16. <a id="source-16"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L725) — build guard.
 17. <a id="source-17"></a> [image_prune_test.go](../../cmd/yoloctl/image_prune_test.go#L93) — complete inventories.
 18. <a id="source-18"></a> [storage_gc_test.go](../../cmd/yoloctl/storage_gc_test.go#L16) — pressure/remeasurement.
 19. <a id="source-19"></a> [buildkit_gc_test.go](../../cmd/yoloctl/buildkit_gc_test.go#L16) — rollback/markers.

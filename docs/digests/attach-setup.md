@@ -1,6 +1,6 @@
 # Owned attach setup and client loss
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; late detach at `658ead276` and accompanying changes; re-read cited sources when changing behavior. Source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; late detach at `658ead276` and accompanying changes; re-read cited sources when changing behavior. Source symbols re-read at `eddfb42a14f31c9f8d85069f2a861931367da86d`. Native start inventory re-read at `44534e62` and accompanying changes.
 
 [FACT] `box.attach` (box attach/use, root attach, managed, passthrough and
 guarded chat attachments) is the only operation registered as `EffectGated`
@@ -66,6 +66,13 @@ nothing, as when it is observed before, so the receipt stays `complete`.
 A client still attached at handoff is cancelled by its later departure.
 [3](#source-3) [4](#source-4) [8](#source-8) [9](#source-9)
 
+[FACT] For a stopped native box, owned attach setup gives each start
+qualification inventory read a fresh two-minute fail-safe. Each read covers
+all boxes' forwards for port conflict checks. An earlier execution deadline
+wins. Incomplete inventory fails qualification before the engine or session
+starts, and the wrapper releases its lock. Foreground start uses the caller's
+context. [14](#source-14) [15](#source-15) [16](#source-16) [17](#source-17) [6](#source-6)
+
 [FACT] Real worker and client-process regressions kill the client (SIGTERM,
 SIGKILL), close its stdout consumer (client SIGPIPE), send cancel, signal,
 malformed and overflowing frames, race detach with permission, keep typeahead
@@ -91,3 +98,7 @@ the standalone `smoke-attach-interrupt` stage is the live gate.
 11. <a id="source-11"></a> [scripts/smoke/attach-interrupt.sh](../../scripts/smoke/attach-interrupt.sh#L1) — live kill and closed-pipe gate with receipt-traced phases; opt-in after-handoff stage.
 12. <a id="source-12"></a> [cmd/yoloctl/attach_signal_test.go](../../cmd/yoloctl/attach_signal_test.go#L1) — CLI-path signal regressions before and after handoff; `reportClientDetached`, `exitDetached` in `controller_client.go`/`main.go`.
 13. <a id="source-13"></a> [cmd/yoloctl/signals.go](../../cmd/yoloctl/signals.go#L20) — `commandSignalContext`: first signal forwarded, second cancels.
+14. <a id="source-14"></a> [Worker setup marker](../../cmd/yoloctl/controller_internal.go#L594-L599) — owned attach budget selection.
+15. <a id="source-15"></a> [Start inventory selector](../../internal/agentbox/openshell_start_inventory.go#L12-L24) — all-box inventory and caller context.
+16. <a id="source-16"></a> [Initial and repeated qualification](../../internal/agentbox/openshell_policy_restart_linux.go#L79-L120) — saved-policy qualification reused by `NativePreparedStart`.
+17. <a id="source-17"></a> [Generation start preflight](../../internal/agentbox/openshell_generation_start_linux.go#L154-L181) — independent read; `readServiceInventory` in vmservice owns the two-minute capture.

@@ -90,7 +90,7 @@ func (a LiveApplier) qualifyNativePolicyRestart(check context.Context, c *Config
 	if err := a.Client.RequireWorkloadPool(check); err != nil {
 		return nil, err
 	}
-	known, err := port.Inventory(check, a.Client, "")
+	known, err := nativeStartForwardInventory(check, a.Client)
 	if err != nil {
 		return nil, err
 	}

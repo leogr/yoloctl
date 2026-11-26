@@ -57,7 +57,7 @@ are source controls, not live VM or macOS validation. [11](#source-11)
 5. <a id="source-5"></a> [native.go](../../internal/spaceconfig/native.go#L1) — load/save; `Settings` split/compose in `bootstrap.go`.
 6. <a id="source-6"></a> [space_storage_set.go](../../cmd/yoloctl/space_storage_set.go#L1) — host CLI and native mutation handler.
 7. <a id="source-7"></a> [controller_internal.go](../../cmd/yoloctl/controller_internal.go#L124) — host-only gated registration and
-   [dispatch](../../cmd/yoloctl/controller_internal.go#L735-L737).
+   [dispatch](../../cmd/yoloctl/controller_internal.go#L736-L738).
 8. <a id="source-8"></a> [build_reserve.go](../../cmd/yoloctl/build_reserve.go#L1) — observation, formatting and fallback.
 9. <a id="source-9"></a> [storage_warning.go](../../cmd/yoloctl/storage_warning.go#L1) — effective threshold and preserved filtering.
 10. <a id="source-10"></a> [space_storage.go](../../cmd/yoloctl/space_storage.go#L79) — optional reserve source, JSON and human output.

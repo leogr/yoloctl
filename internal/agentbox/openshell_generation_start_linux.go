@@ -159,7 +159,7 @@ func (a LiveApplier) startNativeStoppedGenerationWithCheckpoint(ctx context.Cont
 			if err := a.Client.RequireWorkloadPool(check); err != nil {
 				return err
 			}
-			known, err := port.Inventory(check, a.Client, "")
+			known, err := nativeStartForwardInventory(check, a.Client)
 			if err != nil {
 				return err
 			}

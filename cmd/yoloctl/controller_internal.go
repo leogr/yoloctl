@@ -595,6 +595,7 @@ func runControllerWorker(ctx context.Context) error {
 	if operation.OwnedSetup {
 		ctx = context.WithValue(ctx, controllerOwnedSetupKey{}, true)
 		ctx = boxstate.WithHolderStatsAttempt(ctx, ownedSessionProbeFailSafe)
+		ctx = agentbox.WithOwnedStartInventory(ctx)
 	}
 	if operation.EffectGated {
 		checkpoints.Gate()
