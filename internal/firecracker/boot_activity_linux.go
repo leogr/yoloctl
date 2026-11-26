@@ -11,7 +11,10 @@ import (
 	"github.com/leogr/yoloctl/internal/rotatelog"
 )
 
-const bootIdleTimeout = 2 * time.Minute
+const (
+	bootIdleTimeout       = 2 * time.Minute
+	bootReadyProbeTimeout = 10 * time.Second
+)
 
 // bootActivity observes validated current log generations without replaying
 // retained history. Rotation is coarse activity, never proof of readiness.

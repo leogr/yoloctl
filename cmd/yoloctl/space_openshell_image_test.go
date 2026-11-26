@@ -212,3 +212,81 @@ func TestSpaceOpenShellCheckCancellationKeepsContextError(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSpaceOpenShellChecksInheritCommandDeadline(t *testing.T) {
+	for _, backend := range []struct {
+		name  string
+		check func(context.Context, *spaceconfig.Bootstrap) error
+	}{
+		{"firecracker", checkSpaceOpenShellImage},
+		{"lima", checkRunningLimaNFT},
+	} {
+		t.Run(backend.name, func(t *testing.T) {
+			for _, tc := range []struct {
+				name   string
+				budget time.Duration
+			}{
+				{"no deadline", 0},
+				{"short deadline", 3 * time.Second},
+				{"long deadline", 30 * time.Second},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					ctx := t.Context()
+					if tc.budget != 0 {
+						var cancel context.CancelFunc
+						ctx, cancel = context.WithTimeout(ctx, tc.budget)
+						defer cancel()
+					}
+					want, wantSet := ctx.Deadline()
+					old := spaceOpenShellInitCommand
+					t.Cleanup(func() { spaceOpenShellInitCommand = old })
+					spaceOpenShellInitCommand = func(probe context.Context, _ string, _ ...string) *exec.Cmd {
+						got, gotSet := probe.Deadline()
+						if gotSet != wantSet || !got.Equal(want) {
+							t.Fatalf("probe deadline %v (%t), want %v (%t)", got, gotSet, want, wantSet)
+						}
+						return exec.CommandContext(probe, "sh", "-c", "exit 0")
+					}
+					boot := &spaceconfig.Bootstrap{Name: "fixture", VM: spaceconfig.VMSettings{Backend: backend.name}}
+					if err := backend.check(ctx, boot); err != nil {
+						t.Fatal(err)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestSpaceOpenShellLimaCheckCanCancelWithoutDeadline(t *testing.T) {
+	started, signalStart, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = started.Close() }()
+	defer func() { _ = signalStart.Close() }()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	signalResult := make(chan error, 1)
+	go func() {
+		var signal [1]byte
+		_, err := started.Read(signal[:])
+		cancel()
+		signalResult <- err
+	}()
+	old := spaceOpenShellInitCommand
+	t.Cleanup(func() { spaceOpenShellInitCommand = old })
+	spaceOpenShellInitCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+		cmd := exec.CommandContext(ctx, "sh", "-c", "printf x >&3; exec sleep 30")
+		cmd.ExtraFiles = []*os.File{signalStart}
+		return cmd
+	}
+	boot := &spaceconfig.Bootstrap{Name: "fixture", VM: spaceconfig.VMSettings{Backend: "lima"}}
+	err = checkRunningLimaNFT(ctx, boot)
+	_ = signalStart.Close()
+	if startErr := <-signalResult; startErr != nil {
+		t.Fatalf("probe did not start: %v", startErr)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("wanted cancellation, got %v", err)
+	}
+}

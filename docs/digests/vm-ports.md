@@ -16,6 +16,10 @@ dials guest loopback. TCP negotiates framed streams; UDP uses length-prefixed
 datagrams. The inventory SSH connection does not carry forwarded traffic.
 [1](#source-1) [2](#source-2) [3](#source-3)
 
+[FACT] Background port setup gives the vsock and forwarding acknowledgments
+one two-minute budget, shortened by caller cancellation or deadline. It clears
+the setup deadline before forwarding traffic. [11](#source-11)
+
 [FACT] New peers negotiate a bounded TCP byte-stream protocol with an in-band
 end-of-write marker. The duplex bridge waits for both directions before closing,
 so either endpoint can send a reply after receiving EOF. Cancellation or transport
@@ -34,7 +38,7 @@ that pipe, while `Run` waits for the session before closing its SSH client.
 
 ## Sources
 
-1. <a id="source-1"></a> [Host forwarding](../../internal/firecracker/ports_linux.go#L44) — `portInventory.query`, `forwardPorts`, `exposePort`.
+1. <a id="source-1"></a> [Host forwarding](../../internal/firecracker/ports_linux.go#L56) — `portInventory.query`, `forwardPorts`, `exposePort`.
 2. <a id="source-2"></a> [Guest discovery and bridge](../../internal/vmguest/ports_linux.go#L22) — `portInventory`, `forwardBridge`, `copyDatagrams`.
 3. <a id="source-3"></a> [Guest vsock endpoints](../../internal/vmguest/transport_linux.go#L13) — `hostPeer`, `listenForward`.
 4. <a id="source-4"></a> [Host vsock carrier](../../internal/firecracker/api.go#L44) — `DialGuest`, `bufferedConn.CloseWrite`.
@@ -44,3 +48,4 @@ that pipe, while `Run` waits for the session before closing its SSH client.
 8. <a id="source-8"></a> [Pinned guest identity](../../internal/firecracker/ssh_linux.go#L64) — `guestClientConfig` reads the selected VM's private client key and pinned host key.
 9. <a id="source-9"></a> [TCP framing](../../internal/vmwire/tcp.go#L11) — `ForwardRequest`, `TCPStream`, `BridgeTCP`.
 10. <a id="source-10"></a> [Half-close tests](../../internal/vmwire/tcp_test.go#L13) — replies after EOF in either direction, frame validation and cancellation.
+11. <a id="source-11"></a> [Port setup](../../internal/firecracker/ports_linux.go#L23) — `portSetupTimeout`, `dialPort`.

@@ -220,6 +220,28 @@ func TestHostStorageStatusIsReadOnlyAndBounded(t *testing.T) {
 	}
 }
 
+func TestHostStorageAllowsSlowSnapshot(t *testing.T) {
+	dir, err := os.MkdirTemp("", "yfc-storage-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	want := hostStorageState{Paused: true, Reason: "fixture low host capacity"}
+	guard := &hostStorageGuard{state: want}
+	guard.mu.Lock()
+	if err := guard.serve(ctx, dir); err != nil {
+		guard.mu.Unlock()
+		t.Fatal(err)
+	}
+	time.AfterFunc(1100*time.Millisecond, guard.mu.Unlock)
+	state, err := readHostStorage(ctx, dir)
+	if err != nil || state != want {
+		t.Fatalf("slow storage status: %+v, %v", state, err)
+	}
+}
+
 func TestHostStorageRejectsInvalidAndStalledStatus(t *testing.T) {
 	for _, payload := range []string{`{}`, `{"paused":null}`, `{"paused":true}`, `{"paused":false,"reason":"bad"}`, `{"paused":false,"unknown":1}`, strings.Repeat("x", 16385), "stalled"} {
 		t.Run(fmt.Sprintf("%.40s", payload), func(t *testing.T) {

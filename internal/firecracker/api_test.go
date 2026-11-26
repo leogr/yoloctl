@@ -104,3 +104,36 @@ func TestVSockHandshakeCancellation(t *testing.T) {
 		t.Fatal("handshake ignored cancellation")
 	}
 }
+
+func TestVSockHandshakeAllowsSlowAcknowledgment(t *testing.T) {
+	path := testVSockPath(t)
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+	done := make(chan error, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			done <- err
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		if _, err = bufio.NewReader(conn).ReadString('\n'); err == nil {
+			time.Sleep(5100 * time.Millisecond)
+			_, err = io.WriteString(conn, "OK 42\n")
+		}
+		done <- err
+	}()
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	conn, err := DialGuest(ctx, path, 5253)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.Close()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}

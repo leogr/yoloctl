@@ -46,21 +46,26 @@ func DialGuest(ctx context.Context, path string, port uint32) (net.Conn, error) 
 	if e != nil {
 		return nil, e
 	}
-	until := time.Now().Add(5 * time.Second)
-	if limit, ok := ctx.Deadline(); ok && limit.Before(until) {
-		until = limit
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = c.SetDeadline(deadline)
 	}
-	_ = c.SetDeadline(until)
 	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
 	defer stop()
 	if _, e = fmt.Fprintf(c, "CONNECT %d\n", port); e != nil {
 		_ = c.Close()
+		if cause := ctx.Err(); cause != nil {
+			return nil, cause
+		}
 		return nil, e
 	}
 	// Read exactly through the newline: do not discard SSH greeting bytes that
 	// can arrive in the same Unix stream read as Firecracker's acknowledgment.
 	r := bufio.NewReaderSize(c, 128)
 	raw, e := r.ReadSlice('\n')
+	if cause := ctx.Err(); cause != nil {
+		_ = c.Close()
+		return nil, cause
+	}
 	line := string(raw)
 	if e != nil || len(line) > 128 || len(line) < 4 || line[:3] != "OK " {
 		_ = c.Close()

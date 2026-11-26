@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -121,20 +122,51 @@ func TestCommandCanFinishWithOpenInput(t *testing.T) {
 }
 
 func TestCancellationBoundsHandshake(t *testing.T) {
-	conn, peer := net.Pipe()
-	defer func() { _ = peer.Close() }()
-	in, err := os.Open(os.DevNull)
+	for _, tc := range []struct {
+		name string
+		run  func(context.Context, net.Conn, *ssh.ClientConfig, string, bool, *os.File, io.Writer, io.Writer) error
+	}{
+		{"default", Run},
+		{"caller context", RunWithContextDeadline},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			conn, peer := net.Pipe()
+			defer func() { _ = peer.Close() }()
+			in, err := os.Open(os.DevNull)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = in.Close() }()
+			ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+			defer cancel()
+			start := time.Now()
+			err = tc.run(ctx, conn, &ssh.ClientConfig{User: "test", HostKeyCallback: ssh.InsecureIgnoreHostKey()}, "true", false, in, io.Discard, io.Discard)
+			if err == nil || time.Since(start) > time.Second {
+				t.Fatalf("unbounded handshake: %v", err)
+			}
+		})
+	}
+}
+
+type slowHandshakeRead struct {
+	net.Conn
+	once sync.Once
+}
+
+func (c *slowHandshakeRead) Read(p []byte) (int, error) {
+	c.once.Do(func() { time.Sleep(10100 * time.Millisecond) })
+	return c.Conn.Read(p)
+}
+
+func TestConnectWithContextDeadlineAllowsSlowHandshake(t *testing.T) {
+	conn, config := testServer(t, func(c ssh.Channel, _ <-chan *ssh.Request) { _ = c.Close() })
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	client, err := ConnectWithContextDeadline(ctx, &slowHandshakeRead{Conn: conn}, config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = in.Close() }()
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	start := time.Now()
-	err = Run(ctx, conn, &ssh.ClientConfig{User: "test", HostKeyCallback: ssh.InsecureIgnoreHostKey()}, "true", false, in, io.Discard, io.Discard)
-	if err == nil || time.Since(start) > time.Second {
-		t.Fatalf("unbounded handshake: %v", err)
-	}
+	_ = client.Close()
 }
 
 func TestConnectCarriesSequentialSessions(t *testing.T) {

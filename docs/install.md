@@ -105,12 +105,12 @@ a native run. Browser quarantine, Developer ID signing and notarization are
 outside this curl flow; Intel (amd64) execution remains a separate host/CI
 acceptance gate.
 
-### Recover a Lima OpenShell nft check timeout
+### Fix slow sudo in an existing Lima VM
 
-If `check Lima OpenShell nft support` times out after the VM boots, check
-whether the running guest's own hostname is missing from `/etc/hosts`. A
-missing entry can delay `sudo` while it resolves the name. VMs created with
-the updated Lima template add the entry during boot.
+If a Lima command waits while `sudo` resolves the guest's own hostname,
+check whether that name is missing from `/etc/hosts`. Older yoloctl builds
+could report this as a `check Lima OpenShell nft support` timeout. VMs
+created with the updated template add the entry during boot.
 
 Repair the entry in the running guest for either an initialized space or an
 unfinished `space create`. The command adds the hostname only if it is
@@ -136,7 +136,7 @@ fi
 SH
 ```
 
-For an initialized space, retry the command that timed out. If `space create`
+For an initialized space, retry the affected command. If `space create`
 stopped before initializing the account disk, run `yoloctl space start NAME`
 with the build that created the space, or
 `yoloctl space start NAME --update-controller` with the newer build.

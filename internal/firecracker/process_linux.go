@@ -175,13 +175,17 @@ func bootVMAlive(dir string, owner process, published *bool) error {
 // that child, then only stop a runtime it actually published. After publication
 // losing ownership is uncertain, so retain it rather than signal a peer.
 func settleBootFailure(ctx context.Context, dir string, owner process, published bool, terminate func() error, stop func(context.Context) error) error {
+	// The caller shields settlement from cancellation. Share this budget across
+	// both status reads so a silent helper cannot keep settlement running forever.
+	storage, cancelStorage := context.WithTimeout(ctx, bootIdleTimeout)
+	defer cancelStorage()
 	s, err := readState(dir)
 	if err != nil && (!errors.Is(err, os.ErrNotExist) || published) {
 		return err
 	}
 	if err == nil {
 		if s.Helper == owner {
-			if err := checkHostStoragePause(ctx, s); err != nil {
+			if err := checkHostStoragePause(storage, s); err != nil {
 				return err
 			}
 			published = true
@@ -207,7 +211,7 @@ func settleBootFailure(ctx context.Context, dir string, owner process, published
 		}
 		return nil
 	}
-	if err := checkHostStoragePause(ctx, s); err != nil {
+	if err := checkHostStoragePause(storage, s); err != nil {
 		return err
 	}
 	cleanup, cancel := context.WithTimeout(ctx, 5*time.Second)

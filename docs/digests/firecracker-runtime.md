@@ -12,11 +12,13 @@ PTY requests preserve measured window pixels, including unknown zero values.
 [3](#source-3) No host service, autostart, TAP device or privileged network setup is installed.
 Private sockets and pinned SSH keys authenticate transport.
 [1](#source-1) [4](#source-4) [2](#source-2) [5](#source-5) [6](#source-6)
+The Firecracker vsock acknowledgment and SSH login use the caller's deadline
+and cancellation. [5](#source-5) [6](#source-6) [17](#source-17)
 `box exec` uses the same native client over its controller-authorized OpenShell
 proxy. [7](#source-7)
 
-[FACT] Firecracker start waits for the guest ready-file probe, with a two-minute
-output inactivity window instead of a total boot deadline. Validated current
+[FACT] Firecracker start retries the guest ready-file probe with ten seconds
+per attempt and a two-minute output inactivity window. Validated current
 private log growth or a nonempty rotated generation renews it; retained history,
 empty replacement and truncation alone do not. Helper exit, a proved dead VMM
 owned by this launch, and caller cancellation remain distinct failures. Storage
@@ -64,3 +66,4 @@ mounts, controller bundle and generation. [8](#source-8) [15](#source-15) [16](#
 14. <a id="source-14"></a> [Guest maintenance](../../cmd/yoloctl/controller_storage.go#L1) — `collectControllerStorage`, `trimGuestStorage`.
 15. <a id="source-15"></a> [disk safety](../../internal/firecracker/disk_linux.go#L1) — `blank`, `formatDisk`
 16. <a id="source-16"></a> [deployment](../../cmd/yoloctl/controller_deploy.go#L139) — `startControllerSpace`.
+17. <a id="source-17"></a> [Vsock acknowledgment](../../internal/firecracker/api.go#L44) — `DialGuest`.

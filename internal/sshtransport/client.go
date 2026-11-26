@@ -16,10 +16,21 @@ import (
 // Run owns conn. The caller supplies the endpoint identity and authentication;
 // this layer never looks at host SSH configuration, agents, or user identities.
 func Run(ctx context.Context, conn net.Conn, config *ssh.ClientConfig, command string, pty bool, stdin *os.File, stdout, stderr io.Writer) error {
+	return run(ctx, conn, config, command, pty, stdin, stdout, stderr, handshakeDeadline(ctx))
+}
+
+// RunWithContextDeadline uses the caller's deadline for the SSH handshake.
+// A context without a deadline can still cancel a blocked handshake.
+func RunWithContextDeadline(ctx context.Context, conn net.Conn, config *ssh.ClientConfig, command string, pty bool, stdin *os.File, stdout, stderr io.Writer) error {
+	deadline, _ := ctx.Deadline()
+	return run(ctx, conn, config, command, pty, stdin, stdout, stderr, deadline)
+}
+
+func run(ctx context.Context, conn net.Conn, config *ssh.ClientConfig, command string, pty bool, stdin *os.File, stdout, stderr io.Writer, deadline time.Time) error {
 	defer func() { _ = conn.Close() }()
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 	defer stop()
-	client, err := handshake(ctx, conn, config)
+	client, err := handshake(conn, config, deadline)
 	if err != nil {
 		return err
 	}
@@ -100,8 +111,19 @@ func RunClientWithStartGate(ctx context.Context, client *ssh.Client, command str
 // sessions over one authenticated connection. ctx and the same ten-second
 // limit as Run bound only the handshake; closing the client closes conn.
 func Connect(ctx context.Context, conn net.Conn, config *ssh.ClientConfig) (*ssh.Client, error) {
+	return connect(ctx, conn, config, handshakeDeadline(ctx))
+}
+
+// ConnectWithContextDeadline bounds the SSH handshake by the caller's
+// context and leaves the returned connection available for later sessions.
+func ConnectWithContextDeadline(ctx context.Context, conn net.Conn, config *ssh.ClientConfig) (*ssh.Client, error) {
+	deadline, _ := ctx.Deadline()
+	return connect(ctx, conn, config, deadline)
+}
+
+func connect(ctx context.Context, conn net.Conn, config *ssh.ClientConfig, deadline time.Time) (*ssh.Client, error) {
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	client, err := handshake(ctx, conn, config)
+	client, err := handshake(conn, config, deadline)
 	if !stop() && err == nil {
 		_ = client.Close()
 		err = ctx.Err()
@@ -113,11 +135,15 @@ func Connect(ctx context.Context, conn net.Conn, config *ssh.ClientConfig) (*ssh
 	return client, nil
 }
 
-func handshake(ctx context.Context, conn net.Conn, config *ssh.ClientConfig) (*ssh.Client, error) {
+func handshakeDeadline(ctx context.Context) time.Time {
 	deadline := time.Now().Add(10 * time.Second)
 	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
-		deadline = d
+		return d
 	}
+	return deadline
+}
+
+func handshake(conn net.Conn, config *ssh.ClientConfig, deadline time.Time) (*ssh.Client, error) {
 	if err := conn.SetDeadline(deadline); err != nil {
 		return nil, err
 	}

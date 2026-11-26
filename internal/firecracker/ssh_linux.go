@@ -44,11 +44,11 @@ func SSH(ctx context.Context, name, workdir string, args []string, pty bool) err
 	if err != nil {
 		return err
 	}
-	return sshtransport.Run(ctx, conn, config, remoteCommand(workdir, args), pty, os.Stdin, os.Stdout, os.Stderr)
+	return sshtransport.RunWithContextDeadline(ctx, conn, config, remoteCommand(workdir, args), pty, os.Stdin, os.Stdout, os.Stderr)
 }
 
 // dialGuestSSH is the helper's in-process connection to the VM it owns. It
-// uses the same pinned identity and bounded handshake as SSH.
+// uses the same pinned identity and caller context as SSH.
 func dialGuestSSH(ctx context.Context, dir, runtime string) (*ssh.Client, error) {
 	config, err := guestClientConfig(dir)
 	if err != nil {
@@ -58,7 +58,7 @@ func dialGuestSSH(ctx context.Context, dir, runtime string) (*ssh.Client, error)
 	if err != nil {
 		return nil, err
 	}
-	return sshtransport.Connect(ctx, conn, config)
+	return sshtransport.ConnectWithContextDeadline(ctx, conn, config)
 }
 
 func guestClientConfig(dir string) (*ssh.ClientConfig, error) {

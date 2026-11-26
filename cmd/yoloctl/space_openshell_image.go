@@ -46,21 +46,19 @@ func checkSpaceOpenShellImage(ctx context.Context, boot *spaceconfig.Bootstrap) 
 		}
 		return checkRunningLimaNFT(ctx, boot)
 	}
-	read, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	raw, err := json.Marshal(vmwire.UnitRequest{Action: "inventory", Unit: vmwire.Unit{Name: vmwire.LegacyPortUnitPrefix}})
 	if err != nil {
 		return err
 	}
 	args := []string{"sudo", "/sbin/yoloctl-init", "unit"}
-	cmd := spaceOpenShellInitCommand(read, boot.Name, args...)
+	cmd := spaceOpenShellInitCommand(ctx, boot.Name, args...)
 	cmd.Stdin = bytes.NewReader(raw)
 	cmd.Stdout = io.Discard
 	var stderr spaceOpenShellInitError
 	cmd.Stderr = &stderr
 	cmd.WaitDelay = 250 * time.Millisecond
 	err = cmd.Run()
-	if cause := read.Err(); cause != nil {
+	if cause := ctx.Err(); cause != nil {
 		return spaceOpenShellCheckContextError("check VM image OpenShell support", cause, args, stderr)
 	}
 	if err == nil && !stderr.overflow {
@@ -78,17 +76,15 @@ func checkSpaceOpenShellImage(ctx context.Context, boot *spaceconfig.Bootstrap) 
 // Lima may report Running even when its system provision failed. Check the
 // fixed guest executable before controller/box effects, without installing it.
 func checkRunningLimaNFT(ctx context.Context, boot *spaceconfig.Bootstrap) error {
-	read, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	const probe = "if ! test -x /usr/sbin/nft || ! /usr/sbin/nft --version >/dev/null 2>&1; then exit 78; fi"
 	args := []string{"sudo", "sh", "-c", probe}
-	cmd := spaceOpenShellInitCommand(read, boot.Name, args...)
+	cmd := spaceOpenShellInitCommand(ctx, boot.Name, args...)
 	cmd.Stdout = io.Discard
 	var stderr spaceOpenShellInitError
 	cmd.Stderr = &stderr
 	cmd.WaitDelay = 250 * time.Millisecond
 	err := cmd.Run()
-	if cause := read.Err(); cause != nil {
+	if cause := ctx.Err(); cause != nil {
 		return spaceOpenShellCheckContextError("check Lima OpenShell nft support", cause, args, stderr)
 	}
 	if stderr.overflow {

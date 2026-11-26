@@ -36,6 +36,13 @@ the live VM for recovery. Free host space and wait for automatic continuation
 before ordinary lifecycle work. [1](#source-1) [3](#source-3) [6](#source-6)
 [7](#source-7)
 
+[FACT] Host status reads use the caller's context. Boot supervision gives
+each repeated status observation one second. Cancellation-shielded boot
+failure settlement shares two minutes across both status reads and retains
+uncertain runtime. The helper's serial writer takes a snapshot first, then
+gives a non-reading peer up to two minutes to consume it. [11](#source-11)
+[12](#source-12) [3](#source-3)
+
 [FACT] The guard changes only the Linux amd64 Firecracker host adapter. It
 requires neither a new guest protocol/image nor another host daemon. An already
 running older helper has no status socket; updating the CLI/controller alone
@@ -72,3 +79,5 @@ not establish that host exhaustion can never race the monitor.
 8. <a id="source-8"></a> [Guard tests](../../internal/firecracker/host_storage_linux_test.go#L26) — capacity, state transitions, socket and real child process.
 9. <a id="source-9"></a> [Unavailable declarations view](../../cmd/yoloctl/space_storage_test.go#L11) — pause diagnostics without native data.
 10. <a id="source-10"></a> [Storage runtime smoke](../../scripts/smoke/storage-gc.sh#L18) — isolated helper-status check and existing GC/data checks.
+11. <a id="source-11"></a> [Status socket](../../internal/firecracker/host_storage_linux.go#L181) — `serve`, `readHostStorage`.
+12. <a id="source-12"></a> [Boot failure settlement](../../internal/firecracker/process_linux.go#L173) — `settleBootFailure`.

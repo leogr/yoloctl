@@ -192,8 +192,12 @@ func (g *hostStorageGuard) serve(ctx context.Context, runtime string) error {
 			if err != nil {
 				return
 			}
-			_ = c.SetWriteDeadline(time.Now().Add(time.Second))
-			_ = json.NewEncoder(c).Encode(g.snapshot())
+			stop := context.AfterFunc(ctx, func() { _ = c.Close() })
+			state := g.snapshot()
+			// A peer that stops reading must eventually release the serial server.
+			_ = c.SetWriteDeadline(time.Now().Add(2 * time.Minute))
+			_ = json.NewEncoder(c).Encode(state)
+			stop()
 			_ = c.Close()
 		}
 	}()
@@ -202,8 +206,6 @@ func (g *hostStorageGuard) serve(ctx context.Context, runtime string) error {
 
 func readHostStorage(ctx context.Context, runtime string) (hostStorageState, error) {
 	var state hostStorageState
-	ctx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
 	c, err := (&net.Dialer{}).DialContext(ctx, "unix", filepath.Join(runtime, hostStorageSocket))
 	if errors.Is(err, os.ErrNotExist) {
 		return state, nil // Older running helpers acquire the guard on VM restart.
@@ -215,6 +217,9 @@ func readHostStorage(ctx context.Context, runtime string) (hostStorageState, err
 	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
 	defer stop()
 	raw, err := io.ReadAll(io.LimitReader(c, 16385))
+	if cause := ctx.Err(); cause != nil {
+		return state, cause
+	}
 	if err != nil {
 		return state, err
 	}

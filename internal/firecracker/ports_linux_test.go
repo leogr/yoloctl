@@ -296,7 +296,7 @@ func TestForwardRoundTripAndCancellation(t *testing.T) {
 				}
 				done <- nil
 			}()
-			binding, err := exposePort(ctx, runtime, port)
+			binding, err := exposePort(ctx, runtime, port, portSetupTimeout)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -333,4 +333,97 @@ func TestForwardRoundTripAndCancellation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUDPForwardResumesAfterStalledPeerSetup(t *testing.T) {
+	runtime := t.TempDir()
+	guest, err := net.ListenUnix("unix", &net.UnixAddr{Name: filepath.Join(runtime, "vsock"), Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = guest.Close() }()
+	deadline := time.Now().Add(5 * time.Second)
+	_ = guest.SetDeadline(deadline)
+	reservation, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := reservation.LocalAddr().(*net.UDPAddr)
+	_ = reservation.Close()
+	port := vmwire.Port{Protocol: "udp", Number: uint16(address.Port)}
+	binding, err := exposePort(t.Context(), runtime, port, 750*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = binding.Close() }()
+	client, err := net.DialUDP("udp", nil, address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = client.Close() }()
+	_ = client.SetDeadline(deadline)
+	if _, err := client.Write([]byte("first")); err != nil {
+		t.Fatal(err)
+	}
+	connected, err := guest.AcceptUnix()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = connected.Close() }()
+	_ = connected.SetDeadline(deadline)
+	reader := bufio.NewReader(connected)
+	if line, err := reader.ReadString('\n'); err != nil || line != "CONNECT 5254\n" {
+		t.Fatalf("vsock request: %q, %v", line, err)
+	}
+	if _, err := io.WriteString(connected, "OK 1\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reader.ReadString('\n'); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := connected.Write([]byte{vmwire.ForwardOK}); err != nil {
+		t.Fatal(err)
+	}
+	roundTrip := func(payload string) {
+		t.Helper()
+		frame := append([]byte{0, byte(len(payload))}, payload...)
+		guestPayload := make([]byte, len(frame))
+		if _, err := io.ReadFull(reader, guestPayload); err != nil || string(guestPayload) != string(frame) {
+			t.Fatalf("guest datagram: %q, %v", guestPayload, err)
+		}
+		if _, err := connected.Write(frame); err != nil {
+			t.Fatal(err)
+		}
+		hostPayload := make([]byte, len(payload))
+		if _, err := io.ReadFull(client, hostPayload); err != nil || string(hostPayload) != payload {
+			t.Fatalf("host datagram: %q, %v", hostPayload, err)
+		}
+	}
+	roundTrip("first")
+
+	other, err := net.DialUDP("udp", nil, address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = other.Close() }()
+	if _, err := other.Write([]byte("stall")); err != nil {
+		t.Fatal(err)
+	}
+	stalled, err := guest.AcceptUnix()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = stalled.Close() }()
+	_ = stalled.SetDeadline(deadline)
+	stalledReader := bufio.NewReader(stalled)
+	if line, err := stalledReader.ReadString('\n'); err != nil || line != "CONNECT 5254\n" {
+		t.Fatalf("stalled vsock request: %q, %v", line, err)
+	}
+	if _, err := stalledReader.ReadByte(); err != io.EOF {
+		t.Fatalf("stalled peer did not expire: %v", err)
+	}
+	if _, err := client.Write([]byte("second")); err != nil {
+		t.Fatal(err)
+	}
+	roundTrip("second")
 }

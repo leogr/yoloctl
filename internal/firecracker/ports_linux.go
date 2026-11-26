@@ -20,14 +20,19 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func dialPort(ctx context.Context, runtime string, p vmwire.Port) (net.Conn, error) {
+const portSetupTimeout = 2 * time.Minute
+
+func dialPort(ctx context.Context, runtime string, p vmwire.Port, setupTimeout time.Duration) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(ctx, setupTimeout)
+	defer cancel()
 	c, e := DialGuest(ctx, filepath.Join(runtime, "vsock"), vmwire.ForwardPort)
 	if e != nil {
 		return nil, e
 	}
 	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
 	defer stop()
-	_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+	deadline, _ := ctx.Deadline()
+	_ = c.SetDeadline(deadline)
 	if e = json.NewEncoder(c).Encode(vmwire.ForwardRequest{Port: p, TCPStream: p.Protocol == "tcp"}); e != nil {
 		_ = c.Close()
 		return nil, e
@@ -36,6 +41,10 @@ func dialPort(ctx context.Context, runtime string, p vmwire.Port) (net.Conn, err
 	if _, e = io.ReadFull(c, ack[:]); e != nil || (ack[0] != vmwire.ForwardOK && (ack[0] != vmwire.ForwardStreamOK || p.Protocol != "tcp")) {
 		_ = c.Close()
 		return nil, errors.New("guest loopback port is unavailable")
+	}
+	if cause := ctx.Err(); cause != nil {
+		_ = c.Close()
+		return nil, cause
 	}
 	_ = c.SetDeadline(time.Time{})
 	if ack[0] == vmwire.ForwardStreamOK {
@@ -162,7 +171,7 @@ func forwardPorts(ctx context.Context, dir, runtime string, paused func() bool) 
 			if active[p] != nil {
 				continue
 			}
-			closer, e := exposePort(ctx, runtime, p)
+			closer, e := exposePort(ctx, runtime, p, portSetupTimeout)
 			if e != nil {
 				if !warned[p] {
 					slog.Warn(fmt.Sprintf("Cannot forward guest %s/%d on host loopback", p.Protocol, p.Number), "actor", "vm", "executor", "firecracker", "err", e)
@@ -193,7 +202,7 @@ func (p portBinding) Close() error {
 	return p.Closer.Close()
 }
 
-func exposePort(ctx context.Context, runtime string, p vmwire.Port) (io.Closer, error) {
+func exposePort(ctx context.Context, runtime string, p vmwire.Port, setupTimeout time.Duration) (io.Closer, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(int(p.Number)))
 	if p.Protocol == "tcp" {
@@ -213,7 +222,7 @@ func exposePort(ctx context.Context, runtime string, p vmwire.Port) (io.Closer, 
 					defer func() { _ = host.Close() }()
 					stop := context.AfterFunc(ctx, func() { _ = host.Close() })
 					defer stop()
-					guest, e := dialPort(ctx, runtime, p)
+					guest, e := dialPort(ctx, runtime, p, setupTimeout)
 					if e != nil {
 						return
 					}
@@ -257,7 +266,7 @@ func exposePort(ctx context.Context, runtime string, p vmwire.Port) (io.Closer, 
 			mu.Lock()
 			c := peers[key]
 			if c == nil && len(peers) < 128 {
-				c, e = dialPort(ctx, runtime, p)
+				c, e = dialPort(ctx, runtime, p, setupTimeout)
 				if e == nil {
 					peers[key] = c
 					go func(c net.Conn, peer *net.UDPAddr, key string) {

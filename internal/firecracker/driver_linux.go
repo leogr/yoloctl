@@ -312,7 +312,7 @@ func (d Driver) Start(ctx context.Context, name string) error {
 		if err := bootVMAlive(dir, owner, &published); err != nil {
 			cancel(err)
 		}
-		probe, stop := context.WithTimeout(ready, time.Second)
+		probe, stop := context.WithTimeout(ready, bootReadyProbeTimeout)
 		out, err := d.Shell(probe, name, "", []string{"test", "-f", "/run/yoloctl-vm/ready"}).CombinedOutput()
 		stop()
 		select {
@@ -331,7 +331,11 @@ func (d Driver) Start(ctx context.Context, name string) error {
 		// A paused boot remains live with its RAM intact. Never turn storage
 		// pressure into forced termination at the normal readiness deadline.
 		if s, err := readState(dir); err == nil {
-			if err = checkHostStoragePause(ctx, s); errors.Is(err, vmapi.ErrHostStoragePaused) {
+			// An unanswered observation must let the supervision loop recheck.
+			storageProbe, stop := context.WithTimeout(ctx, time.Second)
+			err = checkHostStoragePause(storageProbe, s)
+			stop()
+			if errors.Is(err, vmapi.ErrHostStoragePaused) {
 				return err
 			}
 		}
