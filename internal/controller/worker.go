@@ -302,7 +302,8 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 		}
 		go func() {
 			defer outputs.Done()
-			_, _ = io.Copy(dst, drainSource{src, &expired, &heldOpen})
+			left := -1
+			_, _ = io.Copy(dst, drainSource{src, &expired, &heldOpen, &left})
 		}()
 	}
 	if terminal != nil {
@@ -445,19 +446,31 @@ func RunWorker(ctx context.Context, p Principal, req Request, streams Streams) (
 var errOutputHeld = errors.New("worker output held open")
 
 // drainSource reads a worker output source. Once the output join expired it
-// reads only what is ready (data or the end), so it never waits again.
+// reads only the bytes that were ready at that moment, then the source has
+// ended or is held: a writer outside the group that keeps producing cannot
+// extend the join. Each copier owns its left counter.
 type drainSource struct {
 	f       *os.File
 	expired *atomic.Bool
 	held    *atomic.Bool
+	left    *int // bytes still to drain after expiry; -1 until expiry is seen
 }
 
 func (s drainSource) Read(p []byte) (int, error) {
 	for {
 		if s.expired.Load() {
-			if !readable(s.f) {
+			if *s.left < 0 {
+				*s.left = available(s.f)
+			}
+			if *s.left == 0 {
+				if ended(s.f) {
+					return 0, io.EOF
+				}
 				s.held.Store(true)
 				return 0, errOutputHeld
+			}
+			if len(p) > *s.left {
+				p = p[:*s.left]
 			}
 			_ = s.f.SetReadDeadline(time.Time{})
 		}
@@ -465,17 +478,24 @@ func (s drainSource) Read(p []byte) (int, error) {
 		if n == 0 && errors.Is(err, os.ErrDeadlineExceeded) {
 			continue // woken at expiry: the source's own state decides above
 		}
+		if *s.left > 0 {
+			*s.left -= min(n, *s.left)
+		}
 		return n, err
 	}
 }
 
-// readable reports, without waiting, whether f has data or reached its end.
-func readable(f *os.File) bool {
+// ended reports, without waiting, whether f reached its end with nothing
+// left to read: its writer side is closed.
+func ended(f *os.File) bool {
+	if available(f) != 0 {
+		return false
+	}
 	raw, err := f.SyscallConn()
 	if err != nil {
 		return false
 	}
-	ready := false
+	hup := false
 	_ = raw.Control(func(fd uintptr) {
 		for {
 			fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
@@ -483,11 +503,11 @@ func readable(f *os.File) bool {
 			if errors.Is(err, unix.EINTR) {
 				continue
 			}
-			ready = err == nil && n > 0 && fds[0].Revents&(unix.POLLIN|unix.POLLHUP|unix.POLLERR) != 0
+			hup = err == nil && n > 0 && fds[0].Revents&(unix.POLLHUP|unix.POLLERR) != 0
 			return
 		}
 	})
-	return ready
+	return hup
 }
 
 // pollableDup returns a non-blocking duplicate of f that the runtime poller

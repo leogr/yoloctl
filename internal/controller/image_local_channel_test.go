@@ -127,3 +127,46 @@ func TestLocalImageCheckpointOwnedSetupHasFailSafe(t *testing.T) {
 		t.Fatal("an ordinary local read gained a fixed bound")
 	}
 }
+
+// The local image read checkpoints follow actual setup ownership: before
+// effect permission the viewer is present and the read follows its caller;
+// once the setup is owned (the viewer may have left) a stalled read ends at the
+// fail-safe; after handoff it follows its caller again.
+func TestLocalImageReadsFollowSetupOwnership(t *testing.T) {
+	old := controllerFailSafe
+	controllerFailSafe = 200 * time.Millisecond
+	t.Cleanup(func() { controllerFailSafe = old })
+	conn, cancelConn := context.WithCancel(t.Context())
+	defer cancelConn()
+	owner := newSetupOwner(true, conn, func() {}, &clientOutput{})
+	bounded := func() bool {
+		read, done := localImageCheckpointContext(t.Context(), owner.owned())
+		defer done()
+		_, has := read.Deadline()
+		return has
+	}
+	if bounded() {
+		t.Fatal("a read before effect permission gained the fail-safe")
+	}
+	if err := owner.authorize(t.Context(), func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	owner.detach() // the viewer leaves: the owned setup continues
+	read, done := localImageCheckpointContext(t.Context(), owner.owned())
+	stalled := localResolverFixture{read: func(ctx context.Context, ref string) (imagejob.LocalTarget, string, error) {
+		<-ctx.Done()
+		return imagejob.LocalTarget{}, "", ctx.Err()
+	}}
+	start := time.Now()
+	_, err := resolveLocalImageCheckpoint(read, stalled, ImageRequest{Action: "resolve-local", Reference: "custom/image:one"})
+	done()
+	if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 10*time.Second {
+		t.Fatal("a stalled read in the owned setup did not end at its fail-safe", err, time.Since(start))
+	}
+	if _, err := owner.handoff(func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if bounded() {
+		t.Fatal("a read after handoff kept the owned-setup fail-safe")
+	}
+}

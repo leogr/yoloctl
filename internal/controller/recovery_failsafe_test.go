@@ -243,3 +243,57 @@ func TestResumeAfterDrainWakesRecovery(t *testing.T) {
 		t.Fatal("resume did not wake recovery")
 	}
 }
+
+// The running scheduler across a drain longer than its first retry: the check
+// the drain cancelled before observation records nothing, no pass observes
+// while draining, and the resume starts the pass that records exactly one
+// observation.
+func TestRecoverySchedulerObservesOnceAfterADrainSpansItsRetry(t *testing.T) {
+	oldBackoff := recoveryBackoff
+	recoveryBackoff = []time.Duration{100 * time.Millisecond}
+	t.Cleanup(func() { recoveryBackoff = oldBackoff })
+	s := storeServer(t)
+	r, want := provenReceipt(t, s, "secret: new")
+	var calls atomic.Int32
+	entered := make(chan struct{}, 1)
+	s.Verify = func(ctx context.Context, got Receipt) ([]DocumentIntent, error) {
+		if calls.Add(1) == 1 {
+			entered <- struct{}{}
+			<-ctx.Done()
+			return nil, errors.Join(errObservationNotStarted, ctx.Err())
+		}
+		return []DocumentIntent{want}, nil
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go s.RunRecovery(ctx)
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the scheduler never started its first check")
+	}
+	if err := s.Drain(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond) // longer than the first retry
+	if calls.Load() != 1 {
+		t.Fatal("a pass observed during the drain", calls.Load())
+	}
+	if stored, err := s.Receipts.Read(r.ID); err != nil || stored.Observation != nil {
+		t.Fatal("the cancelled check was recorded", stored.Observation, err)
+	}
+	if err := s.Resume(); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if stored, err := s.Receipts.Read(r.ID); err == nil && stored.Observation != nil {
+			if calls.Load() != 2 {
+				t.Fatal("the resume observed more than once", calls.Load())
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("no observation after the resume", calls.Load())
+}

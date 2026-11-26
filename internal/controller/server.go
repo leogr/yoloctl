@@ -788,7 +788,7 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			s.mu.Unlock()
 			return ImageReply{}, err
 		case "resolve-local":
-			read, done := localImageCheckpointContext(ctx, operation.OwnedSetup)
+			read, done := localImageCheckpointContext(ctx, owner.owned())
 			defer done()
 			return resolveLocalImageCheckpoint(read, s.Images.backend, r)
 		case "resolve":
@@ -824,7 +824,9 @@ func (s *Server) ServeConn(parent context.Context, conn net.Conn, principal Prin
 			if p == nil {
 				return ImageReply{}, errors.New("execution does not own this image")
 			}
-			return ImageReply{}, s.Images.backend.Validate(ctx, p.PinnedImage)
+			read, done := localImageCheckpointContext(ctx, owner.owned())
+			defer done()
+			return ImageReply{}, s.Images.backend.Validate(read, p.PinnedImage)
 		case "publish":
 			p := pins[r.JobID]
 			if p == nil {

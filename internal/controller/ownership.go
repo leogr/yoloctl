@@ -117,6 +117,14 @@ func (o *setupOwner) authorize(exec context.Context, save func() error) error {
 	return nil
 }
 
+// owned reports whether the setup is owned right now: authorized, not yet
+// handed off, so its viewer's departure no longer cancels it.
+func (o *setupOwner) owned() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.policy && o.state == setupOwned
+}
+
 // handoff records durable setup completion and reports whether an owned
 // setup's client is still attached. Held input is released only to it.
 // Other operations keep streaming until the departed client cancels them.

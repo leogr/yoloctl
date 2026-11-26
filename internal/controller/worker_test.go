@@ -389,7 +389,7 @@ func TestMain(m *testing.M) {
 			// its output remains to be delivered.
 			_, _ = os.Stdout.Write(bytes.Repeat([]byte("small-"), 170))
 			finishExit(9)
-		case "test.inherit-stdout", "test.escape-stdout", "test.escape-checkpoint":
+		case "test.inherit-stdout", "test.escape-stdout", "test.escape-writer", "test.escape-checkpoint":
 			// A transient child outlives its worker, holding stdout (or the
 			// checkpoint descriptor), in the worker's group or outside it.
 			// Only the descriptor under test reaches the child: the worker's
@@ -398,10 +398,14 @@ func TestMain(m *testing.M) {
 				syscall.CloseOnExec(fd)
 			}
 			holdFor := "3"
-			if work.Request.Method == "test.escape-stdout" {
+			if work.Request.Method == "test.escape-stdout" || work.Request.Method == "test.escape-writer" {
 				holdFor = "30" // kept alive until the test has seen the worker return
 			}
 			child := exec.Command("/bin/sleep", holdFor)
+			if work.Request.Method == "test.escape-writer" {
+				// A holder that keeps producing output for as long as it lives.
+				child = exec.Command("/bin/sh", "-c", "while :; do echo writer-line; done")
+			}
 			if work.Request.Method != "test.escape-checkpoint" {
 				child.Stdout = os.Stdout
 			} else {
@@ -414,7 +418,7 @@ func TestMain(m *testing.M) {
 				finishExit(91)
 			}
 			_, _ = fmt.Fprintf(os.Stdout, "holder=%d parent done", child.Process.Pid)
-			if work.Request.Method == "test.escape-stdout" {
+			if work.Request.Method == "test.escape-stdout" || work.Request.Method == "test.escape-writer" {
 				finishExit(0) // only a successful worker is reported interrupted
 			}
 			finishExit(7)

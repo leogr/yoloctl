@@ -44,9 +44,10 @@ func resolveLocalImageCheckpoint(ctx context.Context, backend any, request Image
 	return ImageReply{LocalTarget: &target, Digest: target.Digest, Platform: platform}, nil
 }
 
-// localImageCheckpointContext is the context of one resolve-local read. It
-// follows the worker context, except in an owned setup: that setup outlives
-// its viewer, so nothing but one fail-safe can end the read.
+// localImageCheckpointContext is the context of one local image read
+// checkpoint (resolve-local, validate). It follows the worker context, except
+// while the setup is actually owned (after effect permission, before handoff):
+// then it outlives its viewer, so nothing but one fail-safe ends the read.
 func localImageCheckpointContext(ctx context.Context, ownedSetup bool) (context.Context, context.CancelFunc) {
 	if ownedSetup {
 		return context.WithTimeout(ctx, controllerFailSafe)
