@@ -317,6 +317,15 @@ user-owned local inputs without a concrete reason: plans, reviews and findings
 must not require or invent such bounds, and "unbounded" is a finding only with
 a concrete harm shown.
 
+Never let a command fail because a short fixed timeout expired. A wait follows
+its caller's deadline and Ctrl+C. A short limit is allowed only for one try
+inside a loop that keeps rechecking. Where nothing else can end a single wait
+(no client, detached, in-box or server work), use a two-minute fail-safe for
+that one wait, never for the whole operation. An optional source in a view that
+shows several gets one minute, then only that source is shown as unavailable.
+Helpers that fail nothing (Tab completion, a Mermaid drawing shown as source)
+may keep short limits but must never block the user.
+
 Before every commit or push, run `make check` (docs, script tests, vet,
 darwin cross-vet, tests, lint, native artifact reproducibility). Use the
 CI-pinned lint fallback when no local linter exists. Run the relevant isolated
