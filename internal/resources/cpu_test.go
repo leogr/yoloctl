@@ -37,15 +37,18 @@ func TestVMCPUsUsesVisibleCapacityAndRoundsBandwidthUp(t *testing.T) {
 	}
 }
 
-func TestHostCPUDescribeNamesExactBandwidth(t *testing.T) {
-	got := HostCPU{Logical: 16, Quota: 250000, Period: 100000}.Describe()
-	for _, want := range []string{"16 available logical CPUs", "caller-visible cgroup CPU bandwidth 2.5", "250000/100000µs"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("%q lacks %q", got, want)
+func TestHostCPUDescribeExplainsTheBindingQuota(t *testing.T) {
+	for _, tc := range []struct {
+		host HostCPU
+		want string
+	}{
+		{HostCPU{Logical: 16, Quota: 250000, Period: 100000}, "16 logical CPUs, limited to 3 by this process's CPU quota (rounded up)"},
+		{HostCPU{Logical: 4, Quota: 800000, Period: 100000}, "4 available logical CPUs"},
+		{HostCPU{Logical: 4}, "4 available logical CPUs"},
+	} {
+		if got := tc.host.Describe(); got != tc.want {
+			t.Errorf("%+v: got %q; want %q", tc.host, got, tc.want)
 		}
-	}
-	if got := (HostCPU{Logical: 4}).Describe(); strings.Contains(got, "bandwidth") {
-		t.Fatal(got)
 	}
 }
 

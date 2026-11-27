@@ -31,11 +31,7 @@ func VMCPUs(host HostCPU, maximum int) (n int, clipped bool, err error) {
 	}
 	n = host.Logical
 	if host.Period != 0 {
-		slots := host.Quota / host.Period
-		if host.Quota%host.Period != 0 {
-			slots++
-		}
-		if slots < uint64(n) {
+		if slots := host.quotaSlots(); slots < uint64(n) {
 			n = int(slots)
 		}
 	}
@@ -45,14 +41,30 @@ func VMCPUs(host HostCPU, maximum int) (n int, clipped bool, err error) {
 	return n, false, nil
 }
 
-// Describe names the measured basis for a selection message.
-func (h HostCPU) Describe() string {
-	s := fmt.Sprintf("%d available logical CPUs", h.Logical)
-	if h.Period != 0 {
-		share := strconv.FormatFloat(float64(h.Quota)/float64(h.Period), 'g', 4, 64)
-		s += fmt.Sprintf(", caller-visible cgroup CPU bandwidth %s (%d/%dµs)", share, h.Quota, h.Period)
+// quotaSlots rounds a measured quota up to whole vCPUs.
+func (h HostCPU) quotaSlots() uint64 {
+	slots := h.Quota / h.Period
+	if h.Quota%h.Period != 0 {
+		slots++
 	}
-	return s
+	return slots
+}
+
+// Describe explains the measured capacity before applying an adapter limit.
+func (h HostCPU) Describe() string {
+	if h.Period != 0 {
+		if slots := h.quotaSlots(); slots < uint64(h.Logical) {
+			reason := fmt.Sprintf("%d logical CPUs, limited to %d by this process's CPU quota", h.Logical, slots)
+			if h.Quota%h.Period != 0 {
+				reason += " (rounded up)"
+			}
+			return reason
+		}
+	}
+	if h.Logical == 1 {
+		return "1 available logical CPU"
+	}
+	return fmt.Sprintf("%d available logical CPUs", h.Logical)
 }
 
 // tighter reports whether quota a/pa permits less CPU time than b/pb.

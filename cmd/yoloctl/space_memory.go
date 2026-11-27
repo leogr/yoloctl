@@ -15,7 +15,13 @@ import (
 
 func selectSpaceMemory(cmd *cobra.Command) (string, error) {
 	value, _ := cmd.Flags().GetString("memory")
-	return resolveSpaceMemory(cmd.Context(), value, cmd.ErrOrStderr())
+	selected, err := resolveSpaceMemory(cmd.Context(), value, cmd.ErrOrStderr())
+	if err == nil && value != "auto" {
+		// VMBytes accepts KiB, MiB and GiB. Keep the supplied unit in the notice.
+		unit := len(selected) - len("GiB")
+		cliInfo(logging.Host, "VM memory: %s %s", selected[:unit], selected[unit:])
+	}
+	return selected, err
 }
 
 func resolveSpaceMemory(ctx context.Context, value string, errw io.Writer) (string, error) {
@@ -33,13 +39,17 @@ func resolveSpaceMemory(ctx context.Context, value string, errw io.Writer) (stri
 	if err != nil {
 		return "", fmt.Errorf("measure existing VM allocations (or pass --memory explicitly): %w", err)
 	}
-	allocation, err := resources.VMDefault(host, reserved)
+	return selectAutomaticSpaceMemory(host, reserved)
+}
+
+func selectAutomaticSpaceMemory(host resources.HostMemory, reserved uint64) (string, error) {
+	allocation, reason, err := resources.VMDefault(host, reserved)
 	if err != nil {
 		return "", err
 	}
-	value = fmt.Sprintf("%dGiB", allocation/resources.GiB)
-	cliInfo(logging.Host, "VM memory: %s (automatic; override with --memory)", value)
-	return value, nil
+	gib := allocation / resources.GiB
+	cliInfo(logging.Host, "VM memory: %d GiB (auto: %s; override with --memory)", gib, reason)
+	return fmt.Sprintf("%dGiB", gib), nil
 }
 
 func liveSpaceMemory(ctx context.Context) (uint64, error) {

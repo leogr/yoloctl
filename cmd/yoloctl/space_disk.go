@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/leogr/yoloctl/internal/logging"
+	"github.com/leogr/yoloctl/internal/resources"
 	"github.com/leogr/yoloctl/internal/spaceconfig"
 	vmhost "github.com/leogr/yoloctl/internal/vm"
 	"github.com/leogr/yoloctl/internal/vmapi"
@@ -32,22 +33,33 @@ func selectSpaceDisk(cmd *cobra.Command, backend, space string) (string, error) 
 }
 
 func resolveSpaceDisk(value, backend string, available uint64, path string, errw io.Writer) (string, error) {
-	gib := func(n uint64) string { return fmt.Sprintf("%.1f GiB", float64(n)/float64(spaceconfig.GiB)) }
+	free := resources.FormatGiB(available)
 	var size uint64
 	if value == "" || value == "auto" {
 		size = spaceconfig.AutoVMDisk(available)
-		cliInfo(logging.Host, "system disk %d GiB (half of %d GiB free)", size/spaceconfig.GiB, available/spaceconfig.GiB)
+		reason := "half of " + free + " free"
+		half := available / (2 * spaceconfig.GiB)
+		switch {
+		case size/spaceconfig.GiB > half:
+			reason += fmt.Sprintf(", raised to the %s minimum", diskBytesLabel(size))
+		case size/spaceconfig.GiB < half:
+			reason += fmt.Sprintf(", capped at %s", diskBytesLabel(size))
+		case available%(2*spaceconfig.GiB) != 0:
+			reason += ", rounded down to whole GiB"
+		}
+		cliInfo(logging.Host, "VM system disk: %s (auto: %s; override with --disk)", diskBytesLabel(size), reason)
 	} else {
 		n, err := spaceconfig.VMDiskBytes(value)
 		if err != nil {
 			return "", asUserError(err)
 		}
 		size = n
+		cliInfo(logging.Host, "VM system disk: %s", diskBytesLabel(size))
 	}
 	if backend == "firecracker" {
 		if need := vmapi.HostStorageStartFree + vmapi.FormatAllocation(backend, size); available < need {
-			return "", asUserError(fmt.Errorf("cannot create space: %s free on %s, at least %s is needed to format a %d GiB system disk; free space or choose another config root",
-				gib(available), path, gib(need), size/spaceconfig.GiB))
+			return "", asUserError(fmt.Errorf("cannot create space: %s free on %s, at least %.1f GiB is needed to format a %d GiB system disk; free space or choose another config root",
+				free, path, float64(need)/float64(spaceconfig.GiB), size/spaceconfig.GiB))
 		}
 	}
 	diskCapacityNotice(backend, size, available)
@@ -64,7 +76,7 @@ func diskCapacityNotice(backend string, size, available uint64) {
 	if backend == "firecracker" {
 		pause = ", and the host pauses the VM at 2 GiB free"
 	}
-	cliWarn(logging.Host, "the host filesystem has %.1f GiB free; the VM's %d GiB disk cannot be filled%s", float64(available)/float64(spaceconfig.GiB), size/spaceconfig.GiB, pause)
+	cliWarn(logging.Host, "the host filesystem has %s free; the VM's %d GiB disk cannot be filled%s", resources.FormatGiB(available), size/spaceconfig.GiB, pause)
 }
 
 // growSpaceDisk validates a requested system disk size for a saved space:

@@ -18,22 +18,22 @@ type HostMemory struct {
 // VMDefault chooses a one-time allocation, not a reservation or balloon target.
 // The host keeps at least 2 GiB or 1/8 of RAM. Both current available memory and
 // the full configured capacity of other live yoloctl VMs bound the choice. We
-// use the tighter bound instead of counting their resident memory twice.
-func VMDefault(host HostMemory, otherVMs uint64) (uint64, error) {
+// use the tighter bound and return the reason alongside the allocation.
+func VMDefault(host HostMemory, otherVMs uint64) (uint64, string, error) {
 	if host.Total == 0 || host.Available > host.Total {
-		return 0, errors.New("invalid host memory measurement")
+		return 0, "", errors.New("invalid host memory measurement")
 	}
 	reserve := max(2*GiB, host.Total/8)
 	if host.Available < reserve || host.Total < reserve || otherVMs > host.Total-reserve {
-		return 0, errors.New("insufficient host memory for an automatic 4 GiB VM; free memory or choose --memory explicitly")
+		return 0, "", errors.New("insufficient host memory for an automatic 4 GiB VM; free memory or choose --memory explicitly")
 	}
 	headroom := min(host.Available-reserve, host.Total-reserve-otherVMs)
-	target := min(max(host.Total/4, 4*GiB), 16*GiB, headroom)
-	target = target / GiB * GiB
+	desired := min(max(host.Total/4, 4*GiB), 16*GiB)
+	target := min(desired, headroom) / GiB * GiB
 	if target < 4*GiB {
-		return 0, errors.New("insufficient host memory for an automatic 4 GiB VM; free memory or choose --memory explicitly")
+		return 0, "", errors.New("insufficient host memory for an automatic 4 GiB VM; free memory or choose --memory explicitly")
 	}
-	return target, nil
+	return target, describeVMDefault(host, otherVMs, reserve, desired, headroom), nil
 }
 
 // VMBytes uses the units accepted by both VM adapters. Explicit allocations
@@ -119,4 +119,36 @@ func parseVMStat(raw string, total uint64) (HostMemory, error) {
 		available += n * pageSize
 	}
 	return HostMemory{Total: total, Available: available}, nil
+}
+
+func describeVMDefault(host HostMemory, otherVMs, reserve, desired, headroom uint64) string {
+	var reason string
+	switch {
+	case headroom < desired && headroom == host.Available-reserve:
+		reason = fmt.Sprintf("%s free, %s kept for the host", FormatGiB(host.Available), FormatGiB(reserve))
+	case headroom < desired:
+		reason = fmt.Sprintf("other spaces use %s of %s, %s kept for the host", FormatGiB(otherVMs), FormatGiB(host.Total), FormatGiB(reserve))
+	default:
+		reason = fmt.Sprintf("a quarter of %s host memory", FormatGiB(host.Total))
+		quarter := host.Total / 4
+		switch {
+		case quarter < desired:
+			reason += fmt.Sprintf(", raised to the %s minimum", FormatGiB(desired))
+		case quarter > desired:
+			reason += fmt.Sprintf(", capped at %s", FormatGiB(desired))
+		}
+	}
+	if min(desired, headroom)%GiB != 0 {
+		reason += ", rounded down to whole GiB"
+	}
+	return reason
+}
+
+// FormatGiB shows whole GiB or truncates a fractional measurement to tenths.
+func FormatGiB(n uint64) string {
+	whole, remainder := n/GiB, n%GiB
+	if remainder == 0 {
+		return fmt.Sprintf("%d GiB", whole)
+	}
+	return fmt.Sprintf("%d.%d GiB", whole, remainder*10/GiB)
 }

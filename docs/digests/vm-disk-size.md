@@ -1,14 +1,18 @@
 # VM system disk size
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; first-start seeding at `c2dc6726` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; first-start seeding at `c2dc6726` and accompanying changes. Size notices checked at `6bf4c485693b6493d689da3cebc74d52c246be42` and accompanying changes.
 
 [FACT] A new space's system disk is `--disk SIZE` or, by default, `auto`:
 half of the bytes available on the host filesystem that will hold the VM
 (the directory above its instance directory, Firecracker's instances
 directory or Lima's home, or its nearest existing ancestor), rounded down to
-whole GiB and clamped to 30–50 GiB. It prints `system disk 40 GiB (half of
-80 GiB free)` and saves the size in the bootstrap; nothing measures it again.
-An explicit size is whole GiB of at least 20 GiB with no cap. A saved size
+whole GiB and clamped to 30–50 GiB. The notice shows fractional free space
+in GiB rounded down to one decimal, any cap, floor or rounding that changed
+the result, and the override. For 804 GiB free it
+prints `VM system disk: 50 GiB (auto: half of 804 GiB free, capped at 50 GiB;
+override with --disk)`. An explicit size is whole GiB of at least 20 GiB with
+no cap and prints only the chosen size, for example `VM system disk: 60 GiB`.
+Create saves the resolved size in the bootstrap. A saved size
 below 20 GiB or not whole GiB fails bootstrap validation; existing spaces keep
 their saved 30 GiB. Import keeps the archive's size. [1](#source-1)
 [2](#source-2) [3](#source-3)
@@ -17,7 +21,8 @@ their saved 30 GiB. Import keeps the archive's size. [1](#source-1)
 space, create prints that the VM cannot fill its disk (and, on Firecracker,
 that the host pauses it at 2 GiB free). Firecracker refuses before anything is
 written when the free space is below the 4 GiB start headroom plus the format
-allocation, naming both amounts. [2](#source-2) [4](#source-4)
+allocation, naming both amounts. The notice, sparse disk warning and refusal display
+free space with the same rounding. [2](#source-2) [4](#source-4)
 
 [FACT] Firecracker formats system disks with one inode per 16 KiB at every
 size, so formatting allocates the zeroed inode tables at once: measured with
@@ -55,8 +60,8 @@ format allocation and the binary on the host for a moment; its stages report
 completed work to vm.log (see [Firecracker host runtime](firecracker-runtime.md)). After boot,
 `EnsureVMBinary` still installs the starting build. [8](#source-8)
 
-[FACT] Regressions cover the sizing table (80→40, 120→50, 50→30, 20→30 with
-the notice, 4.2 GiB refused, 200→50, explicit sizes and floors), the format
+[FACT] Regressions cover the sizing table and notices (80→40, 804→50, 50→30, 20→30 with
+the notice, 4300 MiB refused on Firecracker, explicit sizes and floors), the format
 estimate against the measurements, the metadata-aware create headroom,
 grow-only set with its refusals and notice, and the show/list wording.
 [7](#source-7)
@@ -64,10 +69,10 @@ grow-only set with its refusals and notice, and the show/list wording.
 ## Sources
 
 1. <a id="source-1"></a> [Sizes](../../internal/spaceconfig/disk.go#L1-L48) — `VMDiskBytes`, `AutoVMDisk`, `DiskSize`; `Validate` and `Split` in bootstrap.go; import copies `m.Bootstrap.VM` in cmd/yoloctl/space_archive.go.
-2. <a id="source-2"></a> [CLI](../../cmd/yoloctl/space_disk.go#L1-L129) — `selectSpaceDisk`, `resolveSpaceDisk`, `diskCapacityNotice`, `growSpaceDisk`, `pendingDiskNote`, `diskShown`; `createControllerSpace` in controller_lifecycle.go.
+2. <a id="source-2"></a> [CLI](../../cmd/yoloctl/space_disk.go#L26-L143) — `selectSpaceDisk`, `resolveSpaceDisk`, `diskCapacityNotice`, `growSpaceDisk`, `pendingDiskNote`, `diskShown`; `createControllerSpace` in controller_lifecycle.go.
 3. <a id="source-3"></a> [Set and edit](../../cmd/yoloctl/space_resources.go#L31-L248) — `spaceResourceDocument.Disk`, `changeSpaceResources`, `editSpaceResources`.
 4. <a id="source-4"></a> [Format estimate](../../internal/vmapi/storage.go#L9-L31) — `HostStorageStartFree`, `FormatInodeRatio`, `FormatAllocation`; `requireHostStorageFor` in internal/firecracker/host_storage_linux.go, used by `Driver.Create`.
-5. <a id="source-5"></a> [Measured cost](../../cmd/yoloctl/space_disk_test.go#L57-L67) — `TestFormatAllocationMatchesTheMeasuredCost` holds the 2026-10-28 measurement (go-diskfs `ext4.Create`, `SectorsPerBlock: 8, InodeRatio: 16384`, sparse file); the format notice precedes `CreateWithSpec` in cmd/yoloctl/controller_deploy.go.
+5. <a id="source-5"></a> [Measured cost](../../cmd/yoloctl/space_disk_test.go#L76-L86) — `TestFormatAllocationMatchesTheMeasuredCost` holds the 2026-10-28 measurement (go-diskfs `ext4.Create`, `SectorsPerBlock: 8, InodeRatio: 16384`, sparse file); the format notice precedes `CreateWithSpec` in cmd/yoloctl/controller_deploy.go.
 6. <a id="source-6"></a> [Views and recreate](../../cmd/yoloctl/space.go#L1128-L1593) — `spaceShowData.SavedDisk`, `writeSpaceShow`, `writeSpaceShowJSON`, `printInstances`; `controllerSpaceShow`/`controllerSpaceList` in controller_views.go; the recreate line in controller_lifecycle.go.
-7. <a id="source-7"></a> [Regressions](../../cmd/yoloctl/space_disk_test.go#L1-L139) — CLI sizing, set and views; internal/spaceconfig/disk_test.go; `TestCreateHeadroomCountsTheFormatAllocation` in internal/firecracker/host_storage_linux_test.go.
+7. <a id="source-7"></a> [Regressions](../../cmd/yoloctl/space_disk_test.go#L23-L160) — CLI sizing, set and views; internal/spaceconfig/disk_test.go; `TestCreateHeadroomCountsTheFormatAllocation` in internal/firecracker/host_storage_linux_test.go.
 8. <a id="source-8"></a> [First-start seeding](../../internal/firecracker/seed_linux.go#L1) — `recordPristine`, `seedSystemDisk`, `buildSeed`, `verifySeed`, `invalidatePristine`; called from `Driver.Create` (driver_linux.go) and `Helper` (helper_linux.go, before `openBackingStorage` and before the VMM start); `session.EnsureVMBinary` in cmd/yoloctl/controller_deploy.go; tests in internal/firecracker/seed_linux_test.go.

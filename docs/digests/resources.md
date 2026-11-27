@@ -1,14 +1,19 @@
 # VM resource settings
 
-Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; disk field `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Host and VM observation waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes.
+Verification: `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes; disk field `1d265df3cfae49026ec4202fe88e9cce83ad1ca9` and accompanying changes. Host and VM observation waits re-read at `df8bb23207bf44b3c42ac46aa4d023f59049f207` and accompanying changes. Size notices checked at `6bf4c485693b6493d689da3cebc74d52c246be42` and accompanying changes.
 
 [FACT] Host `space create` accepts `--memory auto` (default) or a positive
 integer size in KiB, MiB or GiB. Automatic selection happens before image
 preparation and persists a concrete allocation in the bootstrap; starting or
 recreating that space uses the saved value. Import retains the archived VM
 settings. An explicit size bypasses automatic measurement and its 4–16 GiB
-range, subject to the selected adapter's constraints. [1](#source-1)
-[2](#source-2) [3](#source-3)
+range, subject to the selected adapter's constraints. Create prints the
+chosen memory size. An automatic notice also names the deciding constraint
+and `--memory` override. Fractional measurements are shown in GiB rounded
+down to one decimal. The notice explains whole-GiB rounding of the selected
+size when it applies. [1](#source-1)
+[4](#source-4) [23](#source-23)
+[2](#source-2) [3](#source-3) [21](#source-21)
 
 [FACT] The target is one quarter of host RAM, clamped to 4–16 GiB. The host
 reserve is the larger of 2 GiB and one eighth of RAM. The allocation must fit
@@ -26,7 +31,7 @@ command. That command prints free pages with speculative pages subtracted;
 adding speculative pages once restores them. Purgeable and compressed pages
 are not added separately. Invalid or missing counters fail automatic
 selection. macOS available memory is an estimate, not Linux's MemAvailable
-calculation. [4](#source-4) [6](#source-6) [7](#source-7) [8](#source-8)
+calculation. [22](#source-22) [6](#source-6) [7](#source-7) [8](#source-8)
 
 [FACT] Selection takes one measurement and saves a boot setting. It does not
 reserve host memory, balloon existing VMs or change saved box memory limits.
@@ -84,10 +89,10 @@ Firecracker/Lima resizing or restart behavior. [16](#source-16) [17](#source-17)
 
 ## Sources
 
-1. <a id="source-1"></a> [cmd/yoloctl/space_memory.go](../../cmd/yoloctl/space_memory.go#L17) — `selectSpaceMemory`, `resolveSpaceMemory`, caller-owned inventory and explicit override.
+1. <a id="source-1"></a> [cmd/yoloctl/space_memory.go](../../cmd/yoloctl/space_memory.go#L16-L54) — `selectSpaceMemory`, `resolveSpaceMemory`, caller-owned inventory and explicit override.
 2. <a id="source-2"></a> [cmd/yoloctl/controller_lifecycle.go](../../cmd/yoloctl/controller_lifecycle.go#L316-L373) — `createControllerSpace` selection and persisted bootstrap.
 3. <a id="source-3"></a> [cmd/yoloctl/space_archive.go](../../cmd/yoloctl/space_archive.go#L260) — `prepareImportedSpace` retains VM settings; import `--no-start` stops after restore.
-4. <a id="source-4"></a> [internal/resources/memory.go](../../internal/resources/memory.go#L22) — sizing policy, units and measurement decoders.
+4. <a id="source-4"></a> [internal/resources/memory.go](../../internal/resources/memory.go#L22-L37) — memory sizing policy.
 5. <a id="source-5"></a> [cmd/yoloctl/space_memory_test.go](../../cmd/yoloctl/space_memory_test.go#L11) — live-state accounting and override tests.
 6. <a id="source-6"></a> [internal/resources/host_linux.go](../../internal/resources/host_linux.go#L10) — Linux memory measurement.
 7. <a id="source-7"></a> [internal/resources/host_darwin.go](../../internal/resources/host_darwin.go#L12) — macOS memory measurement.
@@ -105,3 +110,6 @@ Firecracker/Lima resizing or restart behavior. [16](#source-16) [17](#source-17)
 19. <a id="source-19"></a> [Automatic VM CPUs](vm-cpus.md) — creation-time CPU selection digest.
 
 20. <a id="source-20"></a> [Nested preference recovery](../../cmd/yoloctl/space_resources.go#L1) — `changeSpaceResources`, `onlyNestedOffRequested`, verified with accompanying changes on fb374a73.
+21. <a id="source-21"></a> [Explicit memory units](../../internal/resources/memory.go#L41-L55) — `VMBytes`.
+22. <a id="source-22"></a> [Host memory decoders](../../internal/resources/memory.go#L57-L122) — `parseMemInfo` and `parseVMStat`.
+23. <a id="source-23"></a> [Automatic memory reasons](../../internal/resources/memory.go#L124-L154) — `describeVMDefault` and `FormatGiB`.

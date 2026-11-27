@@ -25,7 +25,7 @@ func TestVMDefaultRespectsCapacityHeadroomAndLiveBudgets(t *testing.T) {
 		{"unmeasured", 0, 0, 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := VMDefault(HostMemory{tc.total * GiB, tc.available * GiB}, tc.others*GiB)
+			got, _, err := VMDefault(HostMemory{tc.total * GiB, tc.available * GiB}, tc.others*GiB)
 			if tc.want == 0 {
 				if err == nil {
 					t.Fatalf("expected refusal, got %d", got)
@@ -35,7 +35,7 @@ func TestVMDefaultRespectsCapacityHeadroomAndLiveBudgets(t *testing.T) {
 			}
 		})
 	}
-	got, err := VMDefault(HostMemory{32 * GiB, 11*GiB + GiB/2}, 0)
+	got, _, err := VMDefault(HostMemory{32 * GiB, 11*GiB + GiB/2}, 0)
 	if err != nil || got != 7*GiB {
 		t.Fatalf("headroom must round down to whole GiB: %d, %v", got, err)
 	}
@@ -65,6 +65,24 @@ func TestHostMemoryDecoders(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestFormatGiBTruncatesFractionalMeasurements(t *testing.T) {
+	for _, tc := range []struct {
+		bytes uint64
+		label string
+	}{
+		{0, "0 GiB"},
+		{80 * GiB, "80 GiB"},
+		{80*GiB - (8 << 20), "79.9 GiB"},
+		{80*GiB - (4 << 10), "79.9 GiB"},
+		{4*GiB + (1 << 20), "4.0 GiB"},
+		{GiB - 1, "0.9 GiB"},
+	} {
+		if got := FormatGiB(tc.bytes); got != tc.label {
+			t.Errorf("%d: got %q; want %q", tc.bytes, got, tc.label)
+		}
+	}
 }
 
 func TestVMBytesExplicitUnits(t *testing.T) {

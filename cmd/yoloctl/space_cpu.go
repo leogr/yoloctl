@@ -27,7 +27,7 @@ func resolveSpaceCPUs(ctx context.Context, backend, value string) (int, error) {
 		if err != nil || n == 0 {
 			return 0, asUserError(fmt.Errorf("invalid --cpus %q; use auto or a positive integer", value))
 		}
-		cliInfo(logging.Host, "VM CPUs: %d (explicit)", n)
+		cliInfo(logging.Host, "VM CPUs: %d", n)
 		return int(n), nil
 	}
 	host, err := readHostCPU(ctx)
@@ -41,8 +41,8 @@ func resolveSpaceCPUs(ctx context.Context, backend, value string) (int, error) {
 	}
 	basis := host.Describe()
 	if clipped {
-		basis += fmt.Sprintf(", %s maximum %d", backend, maximum)
+		basis += fmt.Sprintf(", capped at %d on Firecracker", maximum)
 	}
-	cliInfo(logging.Host, "VM CPUs: %d (automatic: %s; override with --cpus)", n, basis)
+	cliInfo(logging.Host, "VM CPUs: %d (auto: %s; override with --cpus)", n, basis)
 	return n, nil
 }

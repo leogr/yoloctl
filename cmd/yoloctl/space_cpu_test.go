@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -50,23 +49,29 @@ func TestSpaceCreateDefaultsToAutomaticCPUs(t *testing.T) {
 
 func TestAutomaticSpaceCPUsUseMeasuredCapacity(t *testing.T) {
 	for _, tc := range []struct {
+		name    string
 		backend string
 		host    resources.HostCPU
 		want    int
-		basis   string
+		message string
 	}{
-		{"lima", resources.HostCPU{Logical: 16, Quota: 250000, Period: 100000}, 3, "bandwidth 2.5"},
-		{"firecracker", resources.HostCPU{Logical: 64}, 32, "firecracker maximum 32"},
-		{"lima", resources.HostCPU{Logical: 64}, 64, "64 available logical CPUs"},
-		{"firecracker", resources.HostCPU{Logical: 1}, 1, "1 available logical CPUs"},
+		{"available", "lima", resources.HostCPU{Logical: 18}, 18, "VM CPUs: 18 (auto: 18 available logical CPUs; override with --cpus)"},
+		{"cap", "firecracker", resources.HostCPU{Logical: 48}, 32, "VM CPUs: 32 (auto: 48 available logical CPUs, capped at 32 on Firecracker; override with --cpus)"},
+		{"quota", "firecracker", resources.HostCPU{Logical: 18, Quota: 400000, Period: 100000}, 4, "VM CPUs: 4 (auto: 18 logical CPUs, limited to 4 by this process's CPU quota; override with --cpus)"},
+		{"fractional quota", "lima", resources.HostCPU{Logical: 16, Quota: 250000, Period: 100000}, 3, "VM CPUs: 3 (auto: 16 logical CPUs, limited to 3 by this process's CPU quota (rounded up); override with --cpus)"},
+		{"quota and cap", "firecracker", resources.HostCPU{Logical: 48, Quota: 4000000, Period: 100000}, 32, "VM CPUs: 32 (auto: 48 logical CPUs, limited to 40 by this process's CPU quota, capped at 32 on Firecracker; override with --cpus)"},
+		{"Lima has no cap", "lima", resources.HostCPU{Logical: 64}, 64, "VM CPUs: 64 (auto: 64 available logical CPUs; override with --cpus)"},
+		{"single CPU", "firecracker", resources.HostCPU{Logical: 1}, 1, "VM CPUs: 1 (auto: 1 available logical CPU; override with --cpus)"},
 	} {
-		calls := stubHostCPU(t, tc.host, nil)
-		var out bytes.Buffer
-		t.Cleanup(bindCLITestLogger(t, &out))
-		got, err := resolveSpaceCPUs(t.Context(), tc.backend, "auto")
-		if err != nil || got != tc.want || *calls != 1 || !strings.Contains(out.String(), "automatic") || !strings.Contains(out.String(), tc.basis) {
-			t.Fatalf("%s %+v: %d, %v, %q", tc.backend, tc.host, got, err, out.String())
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			calls := stubHostCPU(t, tc.host, nil)
+			wire, _ := captureCLIRecords(t)
+			got, err := resolveSpaceCPUs(t.Context(), tc.backend, "auto")
+			records := readCLIRecords(t, wire)
+			if err != nil || got != tc.want || *calls != 1 || len(records) != 1 || records[0].Message != tc.message {
+				t.Fatalf("%s %+v: %d, %v, log %+v; want %q", tc.backend, tc.host, got, err, records, tc.message)
+			}
+		})
 	}
 	stubHostCPU(t, resources.HostCPU{}, errors.New("cgroup unreadable"))
 	if _, err := resolveSpaceCPUs(t.Context(), "lima", "auto"); err == nil || !strings.Contains(err.Error(), "--cpus") {
@@ -76,10 +81,20 @@ func TestAutomaticSpaceCPUsUseMeasuredCapacity(t *testing.T) {
 
 func TestExplicitSpaceCPUsNeverProbe(t *testing.T) {
 	calls := stubHostCPU(t, resources.HostCPU{Logical: 2}, nil)
-	var out bytes.Buffer
-	t.Cleanup(bindCLITestLogger(t, &out))
-	if got, err := resolveSpaceCPUs(t.Context(), "lima", "48"); err != nil || got != 48 || !strings.Contains(out.String(), "explicit") {
-		t.Fatalf("explicit oversubscription must be kept: %d, %v, %q", got, err, out.String())
+	wire, _ := captureCLIRecords(t)
+	for _, tc := range []struct {
+		value string
+		want  int
+		line  string
+	}{
+		{"4", 4, "VM CPUs: 4"},
+		{"48", 48, "VM CPUs: 48"},
+	} {
+		got, err := resolveSpaceCPUs(t.Context(), "lima", tc.value)
+		records := readCLIRecords(t, wire)
+		if err != nil || got != tc.want || len(records) != 1 || records[0].Message != tc.line {
+			t.Fatalf("explicit CPUs %s: %d, %v, log %+v", tc.value, got, err, records)
+		}
 	}
 	for _, value := range []string{"0", "-1", "+2", "1.5", "", " 4", "auto ", "2147483648"} {
 		if _, err := resolveSpaceCPUs(t.Context(), "lima", value); err == nil {

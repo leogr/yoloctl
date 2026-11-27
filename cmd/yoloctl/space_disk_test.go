@@ -28,34 +28,48 @@ func TestSpaceCreateSizesTheSystemDisk(t *testing.T) {
 		want    string
 		refused string
 		notice  string
+		warning string
 	}{
-		{"auto", "firecracker", 80 << 10, "40GiB", "", "system disk 40 GiB (half of 80 GiB free)"},
-		{"auto", "firecracker", 120 << 10, "50GiB", "", "system disk 50 GiB (half of 120 GiB free)"},
-		{"auto", "firecracker", 50 << 10, "30GiB", "", "system disk 30 GiB (half of 50 GiB free)"},
-		{"auto", "firecracker", 200 << 10, "50GiB", "", "(half of 200 GiB free)"},
-		{"auto", "firecracker", 20 << 10, "30GiB", "", "the host filesystem has 20.0 GiB free; the VM's 30 GiB disk cannot be filled, and the host pauses the VM at 2 GiB free"},
-		{"", "firecracker", 6 << 10, "30GiB", "", "6.0 GiB free; the VM's 30 GiB disk cannot be filled"},
-		{"auto", "firecracker", 4300, "", "cannot create space: 4.2 GiB free on /host, at least 4.6 GiB is needed to format a 30 GiB system disk", ""},
-		{"auto", "lima", 4300, "30GiB", "", "the VM's 30 GiB disk cannot be filled\n"},
-		{"60GiB", "firecracker", 200 << 10, "60GiB", "", ""},
-		{"100GiB", "firecracker", 40 << 10, "100GiB", "", "40.0 GiB free; the VM's 100 GiB disk cannot be filled"},
-		{"20GiB", "firecracker", 30 << 10, "20GiB", "", ""},
-		{"10GiB", "firecracker", 200 << 10, "", "below the 20GiB minimum", ""},
-		{"40G", "firecracker", 200 << 10, "", "must use KiB, MiB or GiB", ""},
+		{"auto", "firecracker", 80 << 10, "40GiB", "", "VM system disk: 40 GiB (auto: half of 80 GiB free; override with --disk)", ""},
+		{"auto", "firecracker", (80 << 10) - 8, "39GiB", "", "VM system disk: 39 GiB (auto: half of 79.9 GiB free, rounded down to whole GiB; override with --disk)", ""},
+		{"auto", "firecracker", 804 << 10, "50GiB", "", "VM system disk: 50 GiB (auto: half of 804 GiB free, capped at 50 GiB; override with --disk)", ""},
+		{"auto", "firecracker", 50 << 10, "30GiB", "", "VM system disk: 30 GiB (auto: half of 50 GiB free, raised to the 30 GiB minimum; override with --disk)", ""},
+		{"auto", "firecracker", 101 << 10, "50GiB", "", "VM system disk: 50 GiB (auto: half of 101 GiB free, rounded down to whole GiB; override with --disk)", ""},
+		{"auto", "firecracker", 20 << 10, "30GiB", "", "VM system disk: 30 GiB (auto: half of 20 GiB free, raised to the 30 GiB minimum; override with --disk)", "the host filesystem has 20 GiB free; the VM's 30 GiB disk cannot be filled, and the host pauses the VM at 2 GiB free"},
+		{"", "firecracker", 6 << 10, "30GiB", "", "VM system disk: 30 GiB (auto: half of 6 GiB free, raised to the 30 GiB minimum; override with --disk)", "the host filesystem has 6 GiB free; the VM's 30 GiB disk cannot be filled, and the host pauses the VM at 2 GiB free"},
+		{"auto", "firecracker", 4300, "", "cannot create space: 4.1 GiB free on /host, at least 4.6 GiB is needed to format a 30 GiB system disk", "VM system disk: 30 GiB (auto: half of 4.1 GiB free, raised to the 30 GiB minimum; override with --disk)", ""},
+		{"auto", "lima", 4300, "30GiB", "", "VM system disk: 30 GiB (auto: half of 4.1 GiB free, raised to the 30 GiB minimum; override with --disk)", "the host filesystem has 4.1 GiB free; the VM's 30 GiB disk cannot be filled"},
+		{"60GiB", "firecracker", 200 << 10, "60GiB", "", "VM system disk: 60 GiB", ""},
+		{"100GiB", "firecracker", 40 << 10, "100GiB", "", "VM system disk: 100 GiB", "the host filesystem has 40 GiB free; the VM's 100 GiB disk cannot be filled, and the host pauses the VM at 2 GiB free"},
+		{"20GiB", "firecracker", 30 << 10, "20GiB", "", "VM system disk: 20 GiB", ""},
+		{"10GiB", "firecracker", 200 << 10, "", "below the 20GiB minimum", "", ""},
+		{"40G", "firecracker", 200 << 10, "", "must use KiB, MiB or GiB", "", ""},
 	} {
-		var out bytes.Buffer
-		t.Cleanup(bindCLITestLogger(t, &out))
-		got, err := resolveSpaceDisk(tc.value, tc.backend, tc.free<<20, "/host", &out)
-		switch {
-		case tc.refused != "":
-			if err == nil || !strings.Contains(err.Error(), tc.refused) {
-				t.Errorf("%s %s %d MiB: want refusal %q, got %q %v", tc.value, tc.backend, tc.free, tc.refused, got, err)
+		t.Run(fmt.Sprintf("%s/%s/%dMiB", tc.backend, tc.value, tc.free), func(t *testing.T) {
+			wire, _ := captureCLIRecords(t)
+			got, err := resolveSpaceDisk(tc.value, tc.backend, tc.free<<20, "/host", io.Discard)
+			if tc.refused != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.refused) {
+					t.Errorf("want refusal %q, got %q, %v", tc.refused, got, err)
+				}
+			} else if err != nil || got != tc.want {
+				t.Fatalf("got %q, %v; want %q", got, err, tc.want)
 			}
-		case err != nil || got != tc.want || !strings.Contains(out.String(), tc.notice):
-			t.Errorf("%s %s %d MiB: %q %v, notice %q", tc.value, tc.backend, tc.free, got, err, out.String())
-		case tc.notice == "" && out.Len() > 0:
-			t.Errorf("%s: unexpected notice %q", tc.value, out.String())
-		}
+			var want []string
+			if tc.notice != "" {
+				want = append(want, tc.notice)
+			}
+			if tc.warning != "" {
+				want = append(want, tc.warning)
+			}
+			var messages []string
+			for _, record := range readCLIRecords(t, wire) {
+				messages = append(messages, record.Message)
+			}
+			if !reflect.DeepEqual(messages, want) {
+				t.Errorf("got %q; want %q", messages, want)
+			}
+		})
 	}
 }
 
@@ -106,7 +120,7 @@ func TestSpaceSetDiskGrowsForTheNextRecreate(t *testing.T) {
 		t.Fatalf("changed more than the disk: %+v", after)
 	}
 	if out.Len() != 0 || !strings.Contains(errw.String(), "disk 50GiB saved; it applies at the next yoloctl space recreate dev") ||
-		!strings.Contains(errw.String(), "40.0 GiB free; the VM's 50 GiB disk cannot be filled") {
+		!strings.Contains(errw.String(), "40 GiB free; the VM's 50 GiB disk cannot be filled") {
 		t.Fatalf("output %q, notice %q", out.String(), errw.String())
 	}
 	if len(*applied) != 1 || (*applied)[0] != (vmapi.Resources{CPUs: 4, Memory: "4GiB"}) {

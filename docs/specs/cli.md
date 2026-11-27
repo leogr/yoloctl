@@ -98,9 +98,11 @@ RAM, while CPU count remains explicit. `space create --cpus` defaults to `auto`
 and saves a concrete count; set/edit never reselect it. `space create --disk`
 defaults to `auto` (half of the free host space, 30–50 GiB); `space set --disk`
 and edit's `disk:` only grow it, saved for the next `space recreate`, and
-show/list name a saved size not yet applied [14](#source-14). `--data-disk`
-on create and set (with `--no-backup`) sizes and grows the data disk; a
-grow finishes at the next start and is recorded at the next stop
+show/list name a saved size not yet applied [14](#source-14). Create
+prints the selected CPU, memory and system disk sizes. Each automatic
+selection includes its reason and override flag. [12](#source-12)
+[14](#source-14) `--data-disk` on create and set (with `--no-backup`) sizes
+and grows the data disk; a grow finishes at the next start and is recorded at the next stop
 [15](#source-15). `space set --image-layer-compression none|gzip` (set only)
 chooses how newly built image layers are stored in the VM from the next start;
 none is the default and is saved as an omitted field [17](#source-17). [12](#source-12)
