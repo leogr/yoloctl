@@ -180,8 +180,14 @@ func TestLocalPinPostBuildValidationHasFailSafe(t *testing.T) {
 	if readErr != nil || len(all) != 1 || all[0].Completion != nil || !all[0].abandonedImage() {
 		t.Fatal("validation timeout became successful/replayed image completion", all, readErr)
 	}
-	if f.leases.creates != 1 || f.images.creates != 1 || f.images.updates != 0 {
-		t.Fatal("validation refusal retried creation or published an image", f.leases.creates, f.images.creates, f.images.updates)
+	f.leases.mu.Lock()
+	leaseCreates := f.leases.creates
+	f.leases.mu.Unlock()
+	f.images.mu.Lock()
+	imageCreates, imageUpdates := f.images.creates, f.images.updates
+	f.images.mu.Unlock()
+	if leaseCreates != 1 || imageCreates != 1 || imageUpdates != 0 {
+		t.Fatal("validation refusal retried creation or published an image", leaseCreates, imageCreates, imageUpdates)
 	}
 }
 

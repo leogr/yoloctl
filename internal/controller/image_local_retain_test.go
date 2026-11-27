@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,9 +30,12 @@ const localRetainSource = "docker.io/library/cached:latest"
 // These finite services use containerd's supported in-process client adapter,
 // with real digest-checked OCI content in BuildKit's memory content store.
 // The image/lease services reject unexpected namespaces. Reads follow their
-// caller's context: none adds its own fixed bound.
+// caller's context: none adds its own fixed bound. Service methods serialize
+// maps and counters because abandoned jobs can release them concurrently.
+// Tests that configure or inspect fields directly do so outside async work.
 type localRetainImages struct {
 	images.Store
+	mu          sync.Mutex
 	values      map[string]images.Image
 	gets        int
 	sourceGets  int
@@ -39,7 +43,7 @@ type localRetainImages struct {
 	updates     int
 	getError    error
 	createError error
-	beforeGet   func(string, int)
+	beforeGet   func(string, int) // Runs with mu held so it can change values between reads.
 }
 
 func localRetainCall(ctx context.Context) error {
@@ -54,6 +58,8 @@ func localRetainCall(ctx context.Context) error {
 }
 
 func (s *localRetainImages) Get(ctx context.Context, name string) (images.Image, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.gets++
 	if err := localRetainCall(ctx); err != nil {
 		return images.Image{}, err
@@ -74,6 +80,8 @@ func (s *localRetainImages) Get(ctx context.Context, name string) (images.Image,
 	return i, nil
 }
 func (s *localRetainImages) Create(ctx context.Context, image images.Image) (images.Image, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.creates++
 	if err := localRetainCall(ctx); err != nil {
 		return images.Image{}, err
@@ -88,10 +96,14 @@ func (s *localRetainImages) Create(ctx context.Context, image images.Image) (ima
 	return image, s.createError
 }
 func (s *localRetainImages) Update(context.Context, images.Image, ...string) (images.Image, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.updates++
 	return images.Image{}, errors.New("local retain must not update a public source or adopt an alias")
 }
 func (s *localRetainImages) List(ctx context.Context, _ ...string) ([]images.Image, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := localRetainCall(ctx); err != nil {
 		return nil, err
 	}
@@ -102,6 +114,8 @@ func (s *localRetainImages) List(ctx context.Context, _ ...string) ([]images.Ima
 	return all, nil
 }
 func (s *localRetainImages) Delete(ctx context.Context, name string, _ ...images.DeleteOpt) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := localRetainCall(ctx); err != nil {
 		return err
 	}
@@ -114,6 +128,7 @@ func (s *localRetainImages) Delete(ctx context.Context, name string, _ ...images
 
 type localRetainLeases struct {
 	leases.Manager
+	mu          sync.Mutex
 	values      map[string]map[leases.Resource]bool
 	creates     int
 	adds        int
@@ -125,6 +140,8 @@ type localRetainLeases struct {
 }
 
 func (s *localRetainLeases) Create(ctx context.Context, options ...leases.Opt) (leases.Lease, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.creates++
 	if err := localRetainCall(ctx); err != nil {
 		return leases.Lease{}, err
@@ -145,6 +162,8 @@ func (s *localRetainLeases) Create(ctx context.Context, options ...leases.Opt) (
 	return lease, s.createError
 }
 func (s *localRetainLeases) AddResource(ctx context.Context, lease leases.Lease, resource leases.Resource) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.adds++
 	if err := localRetainCall(ctx); err != nil {
 		return err
@@ -159,6 +178,8 @@ func (s *localRetainLeases) AddResource(ctx context.Context, lease leases.Lease,
 	return s.addError
 }
 func (s *localRetainLeases) ListResources(ctx context.Context, lease leases.Lease) ([]leases.Resource, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.reads++
 	if err := localRetainCall(ctx); err != nil {
 		return nil, err
@@ -174,6 +195,8 @@ func (s *localRetainLeases) ListResources(ctx context.Context, lease leases.Leas
 	return all, nil
 }
 func (s *localRetainLeases) Delete(ctx context.Context, lease leases.Lease, _ ...leases.DeleteOpt) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := localRetainCall(ctx); err != nil {
 		return err
 	}

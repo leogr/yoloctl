@@ -17,6 +17,8 @@ import (
 // List is deliberately bounded and namespace checked like the other finite
 // in-process containerd methods in image_local_retain_test.go.
 func (s *localRetainLeases) List(ctx context.Context, _ ...string) ([]leases.Lease, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := localRetainCall(ctx); err != nil {
 		return nil, err
 	}
